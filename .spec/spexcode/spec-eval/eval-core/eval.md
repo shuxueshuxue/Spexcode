@@ -186,6 +186,20 @@ scenarios:
       review-chrome reports exactly paged-review-desktop-yatu and paged-review-mobile-yatu — the two scenarios
       anchored to reviewPage.js — and none of its other seven pre-existing stale scenarios. The node-level
       malformed/missing/coverage classes remain selected by own node files plus node code.
+  - name: changed-scan-proves-its-scope
+    tags: [cli]
+    code: [spec-eval/src/cli.ts]
+    description: >-
+      Through the real `spex eval lint --changed` CLI in one temporary Git repository and linked worktree,
+      run a scan from a non-empty merge-base with a committed README edit plus an untracked source file,
+      then rename a governed source file. Delete the worktree config for a defaults scan; finally make the
+      main checkout's branch config unresolved and its local overlay malformed. Capture each exit status and
+      stderr.
+    expected: >-
+      Valid scans exit zero and name the exact merge base, changed-path count, and current-worktree config
+      path (or `defaults`) before findings. A rename counts both old and new paths, and the old governed path
+      still selects its node. An unresolved branch and a malformed overlay each exit non-zero, name the
+      configuration/ref failure, and emit no zero-finding summary; missing scope can never look clean.
   - name: canonical-scenario-index
     tags: [cli]
     description: >-

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -66,4 +66,75 @@ test('real eval lint shares tracked-text algebra and compiled extension compatib
   assert.match(rustOnly.out, /eval-coverage: 'rust' governs source code/)
   for (const id of ['python', 'backend', 'frontend', 'docs', 'config'])
     assert.ok(!rustOnly.out.includes(`eval-coverage: '${id}'`), rustOnly.out)
+})
+
+test('real changed eval lint proves its scope and fails loud when the base is unavailable', { skip }, () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-eval-changed-scope-'))
+  const candidate = join(root, 'candidate')
+  const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const write = (path: string, content: string) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), content)
+  }
+  const writeCandidate = (path: string, content: string) => {
+    mkdirSync(dirname(join(candidate, path)), { recursive: true })
+    writeFileSync(join(candidate, path), content)
+  }
+  const lint = () => {
+    const result = spawnSync(TSX, [CLI, 'eval', 'lint', '--changed'], { cwd: candidate, encoding: 'utf8' })
+    return { code: result.status ?? -1, out: `${result.stdout}${result.stderr}` }
+  }
+
+  git('init', '-q', '-b', 'main')
+  git('config', 'user.email', 'test@example.com')
+  git('config', 'user.name', 'Test')
+  write('.spec/project/spec.md', '---\ntitle: project\n---\n# project\n')
+  write('.spec/project/calc/spec.md', '---\ntitle: calc\ncode:\n  - src/calc.ts\n---\n# calc\n')
+  write('.spec/project/calc/eval.md', '---\nscenarios:\n  - name: calc\n    tags: [cli]\n    description: add\n    expected: adds\n---\n')
+  write('src/calc.ts', 'export const add = (a: number, b: number) => a + b\n')
+  write('spexcode.json', JSON.stringify({ mainBranch: 'main', lint: { governedRoots: ['src'] } }) + '\n')
+  git('add', '-A')
+  git('commit', '-qm', 'seed')
+  const base = git('rev-parse', 'HEAD')
+  git('worktree', 'add', '-q', '-b', 'node/calc', candidate, 'main')
+  writeCandidate('README.md', '# candidate\n')
+  execFileSync('git', ['-C', candidate, 'add', 'README.md'])
+  execFileSync('git', ['-C', candidate, 'commit', '-qm', 'candidate change'])
+  writeCandidate('src/extra.ts', 'export const extra = true\n')
+
+  const valid = lint()
+  assert.equal(valid.code, 0, valid.out)
+  assert.match(
+    valid.out,
+    new RegExp(`spex eval lint --changed scope: base=${base} paths=2 config=${candidate.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}/spexcode\\.json`),
+    valid.out,
+  )
+
+  execFileSync('git', ['-C', candidate, 'mv', 'src/calc.ts', 'src/renamed.ts'])
+  const renamed = lint()
+  assert.equal(renamed.code, 0, renamed.out)
+  assert.match(renamed.out, /paths=4/, renamed.out)
+  assert.match(renamed.out, /eval-schema: 'calc'.*src\/calc\.ts/, renamed.out)
+
+  unlinkSync(join(candidate, 'spexcode.json'))
+  const defaults = lint()
+  assert.equal(defaults.code, 0, defaults.out)
+  assert.match(
+    defaults.out,
+    /paths=5 config=defaults/,
+    defaults.out,
+  )
+
+  write('spexcode.json', JSON.stringify({ mainBranch: 'missing-main', lint: { governedRoots: ['src'] } }) + '\n')
+  const missing = lint()
+  assert.notEqual(missing.code, 0, missing.out)
+  assert.match(missing.out, /cannot establish changed scope against 'missing-main'/, missing.out)
+  assert.doesNotMatch(missing.out, /node\(s\) flagged/, missing.out)
+
+  write('spexcode.local.json', '{ malformed\n')
+  write('spexcode.json', JSON.stringify({ mainBranch: 'main', lint: { governedRoots: ['src'] } }) + '\n')
+  const malformed = lint()
+  assert.notEqual(malformed.code, 0, malformed.out)
+  assert.match(malformed.out, /malformed .*spexcode\.local\.json/, malformed.out)
+  assert.doesNotMatch(malformed.out, /node\(s\) flagged/, malformed.out)
 })

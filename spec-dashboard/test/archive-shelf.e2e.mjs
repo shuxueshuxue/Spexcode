@@ -15,12 +15,13 @@ const base = process.env.BASE || 'http://127.0.0.1:5175'
 const sessionId = process.env.SESSION
 const siblingId = process.env.SIBLING
 const guardId = process.env.GUARD_SESSION
+const noPaneId = process.env.NO_PANE_SESSION
 const capacityId = process.env.CAPACITY_SESSION
 const dist = process.env.DIST
 const out = resolve(process.env.OUT || '/tmp/archive-shelf-e2e')
 const spex = resolve(process.env.SPEX || 'spec-cli/bin/spex.mjs')
-if (!sessionId || !siblingId || !guardId) throw new Error('SESSION=<real Codex target>, SIBLING=<real Codex sibling>, and GUARD_SESSION=<blocked archive leg> are required')
-for (const name of ['SPEXCODE_TMUX', 'TARGET_PID_FILE', 'GUARD_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE']) {
+if (!sessionId || !siblingId || !guardId || !noPaneId) throw new Error('SESSION=<real Codex target>, SIBLING=<real Codex sibling>, GUARD_SESSION=<blocked archive leg>, and NO_PANE_SESSION=<idle interactive Codex control> are required')
+for (const name of ['SPEXCODE_TMUX', 'TARGET_PID_FILE', 'NO_PANE_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE']) {
   if (!process.env[name]) throw new Error(`${name} is required for runtime/resource evidence`)
 }
 if (!dist || !existsSync(dist)) throw new Error('DIST=<prebuilt dashboard dist> is required')
@@ -208,25 +209,19 @@ try {
 
   narrate('▶ no-pane-no-leaf liveness · stale record/shared thread cannot project working or online')
   const guardResourceBeforeKill = await get('/api/resources')
-  const guardRefBeforeKill = (guardResourceBeforeKill.owners || []).flatMap((owner) => owner.references || []).find((ref) => ref.sessionId === guardId && ref.threadId)
-  assert.ok(guardRefBeforeKill, 'guard must retain its exact shared thread before the no-pane proof')
-  if (guardRefBeforeKill.turnPresence === 'active') {
-    const interrupted = await post(`/api/sessions/${guardId}/interrupt`)
-    assert.equal(interrupted?.ok, true, 'public interrupt must settle the guard before exact pane removal')
-  }
-  await waitFor(async () => {
-    const report = await get('/api/resources')
-    return (report.owners || []).flatMap((owner) => owner.references || []).find((ref) => ref.sessionId === guardId && ref.threadId === guardRefBeforeKill.threadId)
-  }, (ref) => ref?.turnPresence === 'idle', 'guard native turn to settle before exact pane removal')
-  execFileSync('tmux', ['-L', process.env.SPEXCODE_TMUX, 'kill-session', '-t', guardId])
-  await waitFor(() => ({ tmux: tmuxPresent(process.env.SPEXCODE_TMUX, guardId), pid: processMarker(process.env.GUARD_PID_FILE) }), (runtime) => runtime.tmux === false && runtime.pid === null, 'guard target-owned pane and leaf absence')
+  const guardRefBeforeKill = (guardResourceBeforeKill.owners || []).flatMap((owner) => owner.references || []).find((ref) => ref.sessionId === noPaneId && ref.threadId)
+  assert.ok(guardRefBeforeKill && guardRefBeforeKill.turnPresence === 'idle', 'no-pane control must retain one exact idle shared thread')
+  const noPaneBefore = (await get(true)).find((candidate) => candidate.id === noPaneId)
+  assert.ok(noPaneBefore?.harness === 'codex' && noPaneBefore?.liveness === 'online', 'no-pane control must begin as online interactive Codex')
+  execFileSync('tmux', ['-L', process.env.SPEXCODE_TMUX, 'kill-session', '-t', noPaneId])
+  await waitFor(() => ({ tmux: tmuxPresent(process.env.SPEXCODE_TMUX, noPaneId), pid: processMarker(process.env.NO_PANE_PID_FILE) }), (runtime) => runtime.tmux === false && runtime.pid === null, 'no-pane target-owned pane and leaf absence')
   const noPaneGuard = await waitFor(() => get(true), (rows) => {
-    const row = rows.find((candidate) => candidate.id === guardId)
+    const row = rows.find((candidate) => candidate.id === noPaneId)
     return row?.liveness === 'offline' && row?.status === 'offline' ? row : null
   }, 'no-pane/no-leaf public offline projection')
   assert.equal(noPaneGuard.archived, false, 'external pane loss preserves the ordinary record rather than archiving it')
   const noPaneResources = await get('/api/resources')
-  assert.ok((noPaneResources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.sessionId === guardId && ref.threadId === guardRefBeforeKill.threadId), 'shared thread metadata remains while target pane/leaf absence projects offline')
+  assert.ok((noPaneResources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.sessionId === noPaneId && ref.threadId === guardRefBeforeKill.threadId), 'shared thread metadata remains while target pane/leaf absence projects offline')
   assert.equal(processMarker(process.env.SHARED_PID_FILE), sharedPidBefore, 'no-pane projection leaves shared app-server PID/start unchanged')
   assert.equal(socketMarker(process.env.SHARED_SOCKET), sharedSocketBefore, 'no-pane projection leaves shared app-server socket unchanged')
   assert.ok((noPaneResources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.sessionId === siblingId && ref.threadId === siblingBeforeRef.threadId), 'no-pane projection leaves sibling reference unchanged')

@@ -166,7 +166,7 @@ try {
   const defaultRows = await get(false)
   assert.equal(defaultRows.some((s) => s.id === sessionId), false, 'cold target must leave default sessions')
   assert.equal(defaultRows.length, defaultCountBefore - 1, 'cold target must leave the default session count')
-  const graph = await get('/api/graph')
+  const graph = await waitFor(() => get('/api/graph'), (candidate) => Array.isArray(candidate.sessions) && !candidate.sessions.some((s) => s.id === sessionId), 'default graph archive exclusion')
   assert.ok(Array.isArray(graph.sessions), 'graph must expose structured sessions')
   assert.equal(graph.sessions.some((s) => s.id === sessionId), false, 'cold target must leave default graph sessions')
   assert.equal(graph.sessions.length, graphCountBefore - 1, 'cold target must leave the default graph count')

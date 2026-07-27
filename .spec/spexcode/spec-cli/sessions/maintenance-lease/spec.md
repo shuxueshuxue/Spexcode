@@ -3,7 +3,10 @@ title: session maintenance lease
 status: active
 hue: 280
 desc: A project-scoped admission barrier that drains in-flight session writes, blocks ordinary mutation, and admits only a finite exact stop/resume maintenance plan.
+code:
+  - spec-cli/test/session-maintenance-http-fixture.mjs
 related:
+  - spec-cli/test/session-maintenance-cas-fixture.ts
   - spec-cli/src/session-maintenance.test.ts
   - spec-cli/src/session-maintenance.integration.test.ts
   - spec-cli/src/sessions.ts
@@ -119,9 +122,19 @@ state/epoch/deadlines/capability states and sanitized ticket owners, never beare
 the same finite TTL range. The wrapper keeps the bearer in memory, heartbeats while its command runs, and
 releases in `finally`; it never prints or exports the bearer.
 
+A `202 draining` response is ownership of the closed admission epoch, NOT permission to execute. The wrapper
+creates no command process and no broker FD while draining; it may only heartbeat that exact epoch and poll
+sanitized status. Only observing `active` at the same epoch permits it to create the broker and execute the
+command exactly once. Expiry, owner loss, an epoch change, status failure, heartbeat failure, or a transition
+back to `open` fails the wrapper without executing the command. Its best-effort cleanup cannot revive or release
+a stale epoch. The acquire request body is the canonical immutable capability list resolved from the wrapper's
+flags; duplicates, wrong selectors, and any server response whose capabilities differ fail before execution.
+
 Nested `spex` clients receive only two inherited anonymous broker file descriptors (request/response) plus
 their non-secret FD numbers. The parent wrapper serializes exact capability requests on that bounded channel,
-checks them against its copied plan, and is the only process that adds the dedicated HTTP header. No child or
+checks operation, session id, and resume force against its copied plan, and is the only process that adds the
+dedicated HTTP header. A wrong session, wrong operation, wrong force, duplicate/replayed capability, or request
+after EOF/epoch completion is rejected locally and never reaches HTTP. No child or
 grandchild receives the bearer through argv, stdout/stderr, environment, file, or socket path. EOF closes the
 broker; after wrapper release its FDs authorize nothing. This inherited-FD mechanism is part of the future
 implementation acceptance bar: if the supported Node/Unix launch path cannot preserve it exactly through the

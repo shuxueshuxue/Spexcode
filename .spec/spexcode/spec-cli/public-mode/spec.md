@@ -11,6 +11,7 @@ related:
   - spec-cli/src/cli.ts
   - spec-cli/src/layout.ts
   - spec-cli/src/login-page.ts
+  - spec-cli/src/gateway.test.ts
 ---
 # public-mode
 

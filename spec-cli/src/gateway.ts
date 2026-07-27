@@ -230,16 +230,84 @@ const wantsGzip = (req: http.IncomingMessage) => /\bgzip\b/.test(String(req.head
 // `path` overrides the upstream path (the host gateway strips its /p/:projectId prefix); default = as-is.
 // Exported: the host gateway ([[host-gateway]]) proxies per-project traffic through this same function.
 export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string) {
-  const up = http.request({ host: '127.0.0.1', port: upstreamPort, path: path ?? req.url, method: req.method, headers: req.headers }, (upRes) => {
-    const type = String(upRes.headers['content-type'] || '')
-    const skip = !wantsGzip(req) || upRes.headers['content-encoding'] || !COMPRESSIBLE.test(type) || type.startsWith('text/event-stream')
-    if (skip) { res.writeHead(upRes.statusCode || 502, upRes.headers); upRes.pipe(res); return }
-    const headers = { ...upRes.headers, 'content-encoding': 'gzip', vary: 'Accept-Encoding' }
+  let upstreamResponse: http.IncomingMessage | null = null
+  let transform: ReturnType<typeof createGzip> | null = null
+  let settled = false
+
+  const removeDownstreamListeners = () => {
+    req.off('aborted', abortFromDownstream)
+    req.off('error', abortFromDownstream)
+    req.off('close', onRequestClose)
+    res.off('error', abortFromDownstream)
+    res.off('close', onResponseClose)
+    res.off('finish', finish)
+  }
+  const destroyUpstream = () => {
+    req.unpipe(up)
+    if (upstreamResponse && transform) {
+      upstreamResponse.unpipe(transform)
+      transform.unpipe(res)
+      transform.destroy()
+    } else if (upstreamResponse) {
+      upstreamResponse.unpipe(res)
+    }
+    upstreamResponse?.destroy()
+    up.destroy()
+  }
+  const finish = () => {
+    if (settled) return
+    settled = true
+    removeDownstreamListeners()
+  }
+  const abortFromDownstream = () => {
+    if (settled) return
+    settled = true
+    removeDownstreamListeners()
+    destroyUpstream()
+  }
+  const onRequestClose = () => {
+    if (!req.complete) abortFromDownstream()
+  }
+  const onResponseClose = () => {
+    if (!res.writableFinished) abortFromDownstream()
+  }
+  const failFromUpstream = () => {
+    if (settled) return
+    settled = true
+    removeDownstreamListeners()
+    destroyUpstream()
+    if (res.destroyed) return
+    if (!res.headersSent) { res.writeHead(502); res.end('upstream unreachable') }
+    else res.destroy()
+  }
+
+  const up = http.request({ host: '127.0.0.1', port: upstreamPort, path: path ?? req.url, method: req.method, headers: req.headers }, (received) => {
+    upstreamResponse = received
+    received.once('aborted', failFromUpstream)
+    received.once('error', failFromUpstream)
+    received.once('close', () => { if (!received.complete) failFromUpstream() })
+
+    const type = String(received.headers['content-type'] || '')
+    const skip = !wantsGzip(req) || received.headers['content-encoding'] || !COMPRESSIBLE.test(type) || type.startsWith('text/event-stream')
+    if (skip) {
+      res.writeHead(received.statusCode || 502, received.headers)
+      received.pipe(res)
+      return
+    }
+    const headers = { ...received.headers, 'content-encoding': 'gzip', vary: 'Accept-Encoding' }
     delete headers['content-length']   // streamed; the encoded length isn't knowable up front
-    res.writeHead(upRes.statusCode || 502, headers)
-    upRes.pipe(createGzip()).pipe(res)
+    res.writeHead(received.statusCode || 502, headers)
+    transform = createGzip()
+    transform.once('error', failFromUpstream)
+    received.pipe(transform).pipe(res)
   })
-  up.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end('upstream unreachable') })
+  up.once('error', failFromUpstream)
+  req.once('aborted', abortFromDownstream)
+  req.once('error', abortFromDownstream)
+  req.once('close', onRequestClose)
+  res.once('error', abortFromDownstream)
+  res.once('close', onResponseClose)
+  res.once('finish', finish)
   req.pipe(up)
 }
 

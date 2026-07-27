@@ -353,9 +353,13 @@ test('Codex cold retirement proves only target collections and never thread/read
     }
     throw new Error(`unexpected RPC ${message.method}`)
   })
-  const socket = codexAppServerSock(runtimeRoot())
+  const root = runtimeRoot()
+  const socket = codexAppServerSock(root)
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    writeFileSync(codexAppServerPid(root), `${process.pid}\n`)
+    writeFileSync(codexAppServerIsolation(root), `fixture ${process.pid}\n`)
     assert.deepEqual(await codexHarness.coldRetirementPreflight?.({ session: 'cold-session', harnessSessionId: target }), { ok: true, alreadyCold: true })
     assert.equal(threadReads, 0, 'cold retirement does not wait on or read the unrelated loaded sibling')
   } finally {

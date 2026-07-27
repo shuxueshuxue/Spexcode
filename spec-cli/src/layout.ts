@@ -113,12 +113,16 @@ export function gitCommonDir(): string {
 }
 
 export function mainBranch(): string {
+  let checkout: string
   try {
-    const override = readConfig(mainCheckout()).mainBranch?.trim()
-    if (override) return override
-    const cur = git(['-C', mainCheckout(), 'symbolic-ref', '--short', 'HEAD']).trim()
+    checkout = mainCheckout()
+  } catch { return 'main' }
+  const override = readConfig(checkout).mainBranch?.trim()
+  if (override) return override
+  try {
+    const cur = git(['-C', checkout, 'symbolic-ref', '--short', 'HEAD']).trim()
     if (cur) return cur
-  } catch { /* fall through to the conventional default */ }
+  } catch { /* detached/bare checkout: use the documented conventional default */ }
   return 'main'
 }
 

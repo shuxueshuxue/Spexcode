@@ -20,7 +20,7 @@ const dist = process.env.DIST
 const out = resolve(process.env.OUT || '/tmp/archive-shelf-e2e')
 const spex = resolve(process.env.SPEX || 'spec-cli/bin/spex.mjs')
 if (!sessionId || !siblingId || !guardId) throw new Error('SESSION=<real Codex target>, SIBLING=<real Codex sibling>, and GUARD_SESSION=<blocked archive leg> are required')
-for (const name of ['SPEXCODE_TMUX', 'TARGET_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE']) {
+for (const name of ['SPEXCODE_TMUX', 'TARGET_PID_FILE', 'GUARD_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE']) {
   if (!process.env[name]) throw new Error(`${name} is required for runtime/resource evidence`)
 }
 if (!dist || !existsSync(dist)) throw new Error('DIST=<prebuilt dashboard dist> is required')
@@ -205,6 +205,32 @@ try {
   await post(`/api/sessions/${siblingId}/input`, { kind: 'text', text: `Compute the SHA-256 of this nonce: ${nonce}. Then make your final tool call: spex session ask --note <digest>, replacing <digest> with only the exact lowercase digest. Stop after that declaration.` })
   await siblingTrace
   await waitFor(() => get(`/api/sessions/${siblingId}/timeline?limit=20`), (body) => body?.events?.some((entry) => entry.kind === 'status' && entry.note === derived), 'sibling exact agent-authored digest note while target is cold')
+
+  narrate('▶ no-pane-no-leaf liveness · stale record/shared thread cannot project working or online')
+  const guardResourceBeforeKill = await get('/api/resources')
+  const guardRefBeforeKill = (guardResourceBeforeKill.owners || []).flatMap((owner) => owner.references || []).find((ref) => ref.sessionId === guardId && ref.threadId)
+  assert.ok(guardRefBeforeKill, 'guard must retain its exact shared thread before the no-pane proof')
+  if (guardRefBeforeKill.turnPresence === 'active') {
+    const interrupted = await post(`/api/sessions/${guardId}/interrupt`)
+    assert.equal(interrupted?.ok, true, 'public interrupt must settle the guard before exact pane removal')
+  }
+  await waitFor(async () => {
+    const report = await get('/api/resources')
+    return (report.owners || []).flatMap((owner) => owner.references || []).find((ref) => ref.sessionId === guardId && ref.threadId === guardRefBeforeKill.threadId)
+  }, (ref) => ref?.turnPresence === 'idle', 'guard native turn to settle before exact pane removal')
+  execFileSync('tmux', ['-L', process.env.SPEXCODE_TMUX, 'kill-session', '-t', guardId])
+  await waitFor(() => ({ tmux: tmuxPresent(process.env.SPEXCODE_TMUX, guardId), pid: processMarker(process.env.GUARD_PID_FILE) }), (runtime) => runtime.tmux === false && runtime.pid === null, 'guard target-owned pane and leaf absence')
+  const noPaneGuard = await waitFor(() => get(true), (rows) => {
+    const row = rows.find((candidate) => candidate.id === guardId)
+    return row?.liveness === 'offline' && row?.status === 'offline' ? row : null
+  }, 'no-pane/no-leaf public offline projection')
+  assert.equal(noPaneGuard.archived, false, 'external pane loss preserves the ordinary record rather than archiving it')
+  const noPaneResources = await get('/api/resources')
+  assert.ok((noPaneResources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.sessionId === guardId && ref.threadId === guardRefBeforeKill.threadId), 'shared thread metadata remains while target pane/leaf absence projects offline')
+  assert.equal(processMarker(process.env.SHARED_PID_FILE), sharedPidBefore, 'no-pane projection leaves shared app-server PID/start unchanged')
+  assert.equal(socketMarker(process.env.SHARED_SOCKET), sharedSocketBefore, 'no-pane projection leaves shared app-server socket unchanged')
+  assert.ok((noPaneResources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.sessionId === siblingId && ref.threadId === siblingBeforeRef.threadId), 'no-pane projection leaves sibling reference unchanged')
+  frame('📷 no session-owned pane/leaf projects offline despite retained record and shared thread metadata')
 
   narrate('resume same conversation through starting to online')
   await page.locator(`.si-item[data-sid="${sessionId}"]`).click()

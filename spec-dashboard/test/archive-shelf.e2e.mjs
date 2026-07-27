@@ -65,8 +65,12 @@ const tmuxPresent = (socket, id) => {
 const getTarget = async (all = true) => (await get(all ? '/api/sessions?all=1' : '/api/sessions')).find((s) => s.id === sessionId)
 const events = []
 const started = Date.now()
-const narrate = (label) => events.push({ atMs: Date.now() - started, kind: 'narrate', label })
-const frame = (label) => events.push({ atMs: Date.now() - started, kind: 'frame', label })
+const event = (kind, label) => {
+  events.push({ atMs: Date.now() - started, kind, label })
+  console.error(`[archive-e2e] ${kind}: ${label}`)
+}
+const narrate = (label) => event('narrate', label)
+const frame = (label) => event('frame', label)
 
 const before = await getTarget(false)
 const beforeAll = await getTarget(true)
@@ -100,7 +104,16 @@ const startMonitor = (verb) => {
   child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
   return { child, text: () => ({ stdout, stderr }) }
 }
-const waitClosed = async (child) => { if (child.exitCode == null) await once(child, 'close') }
+const waitClosed = async (child) => {
+  if (child.exitCode != null || child.signalCode != null) return
+  let timer
+  try {
+    await Promise.race([
+      once(child, 'close'),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`monitor PID ${child.pid} did not close within 10s`)), 10_000) }),
+    ])
+  } finally { clearTimeout(timer) }
+}
 const watch = startMonitor('watch')
 const wait = startMonitor('wait')
 await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))

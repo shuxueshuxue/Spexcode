@@ -55,6 +55,13 @@ under `related:`, so a change here attributes its drift and eval staleness to th
 (see [[governed-related]]). That several features hold no code of their own is the honest signal that
 `sessions.ts` is a monolith — a future code split into per-feature modules would let each reclaim ownership.
 
+All side-effectful functions in this shared layer enter [[maintenance-lease]] at their lowest common boundary,
+not only at one HTTP caller: create/new (including fallback), send, raw-key input, interrupt, rename, persisted
+sort, lifecycle transition, queue drain, stop/resume/archive/close, and merge dispatch. This makes one durable
+barrier cover API, CLI, hooks, dashboard and in-process fallback without route-by-route policy. The admission
+operation is one member of the lease's closed union; arbitrary strings cannot invent a write class. Reads and
+selector resolution remain outside the ticket set.
+
 ### Record integrity — one writer, three readings, no revival
 
 **Every field of `session.json` is produced by ONE writer here**, by serializing the typed record and landing

@@ -70,6 +70,19 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
 
 export type SpecLintOptions = { tip?: string }
 
+function untrackedAdoptionFiles(root: string): string[] {
+  const status = git([
+    '-C', root,
+    '-c', 'core.quotePath=false',
+    'status', '--porcelain=v1', '-z', '--untracked-files=all',
+    '--', '.spec', 'spexcode.json',
+  ])
+  return status.split('\0')
+    .filter((entry) => entry.startsWith('?? '))
+    .map((entry) => entry.slice(3))
+    .filter(Boolean)
+}
+
 function pendingChangedPaths(root: string, tip: string): string[] {
   try {
     git(['-C', root, 'rev-parse', `${tip}^{commit}`])
@@ -127,6 +140,16 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
     : statSync(join(root, path)).isDirectory()
   const textAtTip = (path: string) => pending ? treeFileText(root, tip, path) : readFileSync(join(root, path), 'utf8')
   const cfg = loadConfig(root, pending ? treeFileText(root, tip, 'spexcode.json') : undefined)
+  const untracked = untrackedAdoptionFiles(root)
+  if (untracked.length) {
+    const shown = untracked.slice(0, 6)
+    const suffix = untracked.length > shown.length ? ` (+${untracked.length - shown.length} more)` : ''
+    return [{
+      level: 'error',
+      rule: 'integrity',
+      msg: `project source of truth is untracked: ${shown.join(', ')}${suffix} — add it with \`git add .spec spexcode.json\` and commit it; generated harness files such as .codex/, .claude/, and AGENTS.md are machine-local`,
+    }]
+  }
   const governed = trackedSourceFiles(root, cfg.governedRoots, cfg, tip)
   const [didx, hidx] = await Promise.all([driftIndex(root, tip), historyIndex(root, tip)])
   const specs = await loadSpecs(root, { tip, history: hidx, drift: didx })

@@ -9,6 +9,7 @@ import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexApp
 import { shQuote } from './sh.js'
 import { runtimeRoot } from './layout.js'
 
+const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
 const codexRpcFixture = (handler: (message: any) => unknown) => createServer((socket) => {
   let buffer = Buffer.alloc(0)
   let upgraded = false
@@ -22,7 +23,10 @@ const codexRpcFixture = (handler: (message: any) => unknown) => createServer((so
   const handle = (message: any) => {
     if (message.method === 'initialize') return send({ id: message.id, result: {} })
     if (message.method === 'initialized') return
-    try { send({ id: message.id, result: handler(message) ?? {} }) }
+    try {
+      const result = handler(message)
+      if (result !== NO_RPC_RESPONSE) send({ id: message.id, result: result ?? {} })
+    }
     catch (error) { send({ id: message.id, error: { message: error instanceof Error ? error.message : String(error) } }) }
   }
   socket.on('data', (chunk) => {
@@ -52,6 +56,89 @@ const codexRpcFixture = (handler: (message: any) => unknown) => createServer((so
       handle(JSON.parse(payload.toString('utf8')))
     }
   })
+})
+
+test('Codex archive ignores a non-returning unrelated read when the exact target is unloaded and descendant-free', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-target-scoped-archive-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const target = 'unloaded-archive-target'
+  let archived = false
+  let unrelatedReads = 0
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: [{ id: 'slow-unrelated-sibling' }], nextCursor: null }
+    if (message.method === 'thread/read') { unrelatedReads++; return NO_RPC_RESPONSE }
+    if (message.method === 'thread/archive') { archived = true; return {} }
+    if (message.method === 'thread/unarchive') { archived = false; return {} }
+    if (message.method === 'thread/list') {
+      const data = message.params.ancestorThreadId ? [] : message.params.archived === archived ? [{ id: target }] : []
+      return { data, nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const root = runtimeRoot()
+  const socket = codexAppServerSock(root)
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    writeFileSync(codexAppServerPid(root), `${process.pid}\n`)
+    writeFileSync(codexAppServerIsolation(root), `fixture ${process.pid}\n`)
+    assert.deepEqual(await codexHarness.coldRuntime?.({ session: 'target-scoped-session', harnessSessionId: target }), { ok: true })
+    assert.equal(unrelatedReads, 0, 'mutation proof never waits on or reads the unrelated sibling')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('Codex archive refuses an unknown exact loaded target and any archived native descendant', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-target-guard-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const target = 'guarded-archive-target'
+  let targetUnknown = true
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: [{ id: target }, { id: 'unrelated-sibling' }], nextCursor: null }
+    if (message.method === 'thread/read') {
+      if (message.params.threadId === target) throw new Error('exact target read unavailable')
+      return { thread: { turns: [] } }
+    }
+    if (message.method === 'thread/list') {
+      if (message.params.ancestorThreadId) return { data: !targetUnknown && message.params.archived ? [{ id: 'archived-native-child' }] : [], nextCursor: null }
+      return { data: message.params.archived ? [] : [{ id: target }], nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const root = runtimeRoot()
+  const socket = codexAppServerSock(root)
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    writeFileSync(codexAppServerPid(root), `${process.pid}\n`)
+    writeFileSync(codexAppServerIsolation(root), `fixture ${process.pid}\n`)
+    const unknown = await codexHarness.coldPreflight?.({ session: 'guarded-session', harnessSessionId: target })
+    assert.equal(unknown?.ok, false)
+    if (unknown && !unknown.ok) assert.match(unknown.reason, /target read unavailable|turn state is unknown/)
+    targetUnknown = false
+    const descendant = await codexHarness.coldPreflight?.({ session: 'guarded-session', harnessSessionId: target })
+    assert.equal(descendant?.ok, false)
+    if (descendant && !descendant.ok) assert.match(descendant.reason, /owned descendants \(archived-native-child\)/)
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
 })
 
 test('shQuote preserves a single quote through a POSIX shell', () => {

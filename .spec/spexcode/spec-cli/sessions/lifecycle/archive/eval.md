@@ -51,6 +51,22 @@ scenarios:
       Archive is nonzero/HTTP 409, record remains projected archived:false/visible (or explicit archiveHazard),
       and target/shared-root/worktree/branch are unchanged. No read projection performs an automatic repair.
     tags: [backend-api, cli]
+  - name: target-scoped-shared-runtime-mutation-proof
+    description: >
+      On one real shared Codex app-server, preserve several loaded governed and unowned sibling references while
+      archiving an exact unloaded target with no native descendants, then close its resulting cold row. In
+      refusal controls, retry an exact target that owns native descendants and a loaded target whose own fresh
+      turn state cannot be proven. Capture the shared process generation and protected reference IDs before and
+      after every public mutation.
+    expected: >
+      The unloaded descendant-free target archives and then closes without waiting for or thread-reading unrelated
+      loaded siblings, even when the complete resource report times out on those siblings. Its record becomes cold
+      before close and its record/worktree/branch disappear only on close. Shared PID/start/isolation/socket and
+      every protected sibling reference remain unchanged. A target-only read that is unknown, a loaded active
+      target, any active or archived native descendant, duplicate ownership, collection ambiguity, or generation
+      mismatch refuses nonzero/409 with target and shared evidence unchanged. The full resources projection remains
+      available and honestly reports any unrelated probe timeout; mutation does not obtain authority from it.
+    tags: [backend-api, cli]
   - name: close-proven-cold-archive
     test: spec-dashboard/test/archive-shelf.e2e.mjs
     description: >

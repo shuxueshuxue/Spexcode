@@ -4,7 +4,7 @@ import { watch, mkdirSync, readdirSync, readFileSync, type FSWatcher } from 'nod
 import { join, dirname, relative, resolve } from 'node:path'
 import { sessionsRoot, gitCommonDir } from './layout.js'
 import { hotSignature, warmSignature, listSessions } from './sessions.js'
-import { getBoard, invalidateBoard } from './graphCache.js'
+import { getBoard, invalidateBoard, patrolBoard } from './graphCache.js'
 import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
 import {
   holdSessionEvalProjectionObserver,
@@ -260,19 +260,29 @@ let lastTag = ''
 let lastFullFrame: Frame | null = null
 let building = false
 let dirty = false
+let patrolPending = false
 
-async function rebuildAndBroadcast(): Promise<void> {
+async function rebuildAndBroadcast(patrol = false): Promise<void> {
+  if (patrol) patrolPending = true
   if (building) { dirty = true; return }
   building = true
   try {
     do {
       dirty = false
+      const validate = patrolPending
+      patrolPending = false
       let board: unknown
       // share the route's single-flight build ([[graph-cache]]); fireChanged() already invalidated the
       // cache (at the accumulated scope), so this gets a fresh build/splice (or joins one a concurrent poll
-      // already started).
+      // already started). The patrol instead asks that same cache flight to validate its input revision;
+      // equal inputs return the anchor without invoking a producer.
       const t0 = Date.now()
-      try { board = await getBoard() } catch { for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }; continue }
+      try { board = await (validate ? patrolBoard() : getBoard()) }
+      catch {
+        triggerTags.clear()
+        for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }
+        continue
+      }
       const buildMs = Date.now() - t0
       const boardJson = JSON.stringify(board)
       const { units, ok } = unitize(board as Record<string, unknown>)
@@ -839,19 +849,17 @@ function ensurePollers(): void {
 }
 
 // ---- event source 5: the cold-tick PATROL — the server-side replacement for every client's slow fallback
-// poll, AND the self-heal authority. Rebuild+diff on a relaxed timer so what NO watcher saw (an uncommitted
-// worktree spec edit a registry watch missed, a forge issue refresh) still lands. It INVALIDATES FULL first
-// — otherwise getBoard() serves the stale cache and the patrol is a no-op (the real bug this fixes) — and
-// tags the window 'patrol' so the repair accounting can flag a change only it caught. Delta-gated: plain-only
-// clients keep their own client-side fallback, so without delta subscribers this must not burn builds.
+// poll, AND the self-heal authority. A relaxed tick asks graph-cache's ONE flight to compare its board-input
+// revision: unchanged state returns the anchor without assembly, while an unobserved ref/worktree/store move
+// escalates there to a full rebuild. The 'patrol' tag keeps that repair accountable. Delta-gated: plain-only
+// clients keep their own client-side fallback, so without delta subscribers this does no validation work.
 let coldTick: ReturnType<typeof setInterval> | null = null
 function ensureColdTick(): void {
   if (coldTick) return
   coldTick = setInterval(() => {
     if (!deltaSubs.size) return
-    invalidateBoard('full')
     triggerTags.add('patrol')
-    void rebuildAndBroadcast()
+    void rebuildAndBroadcast(true)
   }, 15000)
 }
 
@@ -860,7 +868,7 @@ function stopSourcesIfIdle(): void {
   // never rebuild, so lastFullFrame would drift arbitrarily far from the real board — and the next era's
   // first subscriber would be anchored on it (its warm-terminal set then drops live sessions' panes, and the
   // client's recovery lanes can latch each other out — issue #70). A new era opens on a fresh build instead.
-  if (deltaSubs.size === 0) { lastUnits = null; lastTag = ''; lastFullFrame = null }
+  if (deltaSubs.size === 0) { lastUnits = null; lastTag = ''; lastFullFrame = null; patrolPending = false }
   if (deltaSubs.size === 0) setSessionEvalProjectionWarmup(false)
   if (plainSubs.size + deltaSubs.size > 0) return
   if (hotPoller) { clearInterval(hotPoller); hotPoller = null; lastHot = '' }

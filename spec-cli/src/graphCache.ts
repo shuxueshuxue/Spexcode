@@ -1,5 +1,14 @@
+import { createHash } from 'node:crypto'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { isAbsolute, join, resolve } from 'node:path'
 import { buildBoard, spliceSessions } from './graph.js'
-import { withGitAbortSignal } from './git.js'
+import { headSha, repoRoot, withGitAbortSignal } from './git.js'
+import { listSessionIds, mainBranch, mainCheckout, readRawRecord, sessionArtifactPath, sessionRecordPath } from './layout.js'
+import { boardThreads } from './issues.js'
+import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
+import { residentForgeState } from '../../spec-forge/src/resident.js'
+import { resolveProjectIdentity } from './project-identity.js'
+import { sessionEvalProjection } from '../../spec-eval/src/sessioneval.js'
 
 // @@@ graph-cache — single-flight + cache for the hot /api/graph build ([[graph-lean]]). Assembling the
 // board is expensive (two full-history git-log walks cold, a full `.spec` fs walk every build), so the
@@ -8,14 +17,197 @@ import { withGitAbortSignal } from './git.js'
 // starved the event loop — one real user could wedge the backend. Here ONE build is shared by all
 // concurrent callers (a promise memo — this IS the max-concurrent-builds cap: at most one runs) and its
 // result is cached until a REAL change invalidates it. The cache is invalidated by the SAME freshness
-// signals [[graph-stream]] already watches (session-store writes, git-ref moves, the cold tick), via
-// invalidateBoard(). So a poll storm costs ONE build, a quiet stretch costs ZERO, and the SSE rebuild and
-// the route share the very same in-flight build.
+// signals [[graph-stream]] already watches (session-store writes, git-ref/worktree moves); the cold patrol
+// enters this cache's input-revision validation flight instead of manufacturing a change. So a poll storm
+// costs ONE build, a quiet stretch costs ZERO, and the SSE rebuild and the route share the same operation.
 
 export type Board = Awaited<ReturnType<typeof buildBoard>>
 export type BoardConsistency = 'fresh' | 'stale-ok'
 export type BoardRead = { board: Board; freshness: 'fresh' | 'stale'; refreshing: boolean; error?: string }
 export type BoardJsonRead = BoardRead & { json: string }
+
+type BoardInputRevision = {
+  full: string
+  sessions: string
+  projections: string
+  combined: string
+  fullParts: Record<string, string>
+  projectionIds: string[]
+}
+const DEBUG = process.env.SPEXCODE_BOARD_DEBUG === '1'
+
+function textOrNull(path: string): string | null {
+  try { return readFileSync(path, 'utf8') }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
+function gitDirOf(root: string): string {
+  const dotgit = join(root, '.git')
+  try { if (statSync(dotgit).isDirectory()) return dotgit }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ''
+    throw error
+  }
+  const dotgitText = textOrNull(dotgit)
+  if (dotgitText === null) return ''
+  const match = dotgitText.match(/^gitdir:\s*(.+)$/m)
+  if (!match) throw new Error(`unparseable gitdir pointer at ${dotgit}`)
+  const dir = match[1].trim()
+  return isAbsolute(dir) ? dir : resolve(root, dir)
+}
+
+function commonDirOf(root: string): string {
+  const gitDir = gitDirOf(root)
+  if (!gitDir) return ''
+  const common = textOrNull(join(gitDir, 'commondir'))
+  if (common === null) return gitDir
+  const dir = common.trim()
+  if (!dir) throw new Error(`empty commondir pointer at ${join(gitDir, 'commondir')}`)
+  return isAbsolute(dir) ? dir : resolve(gitDir, dir)
+}
+
+function refSha(root: string, ref: string): string {
+  if (/^[0-9a-f]{40}$/.test(ref)) return ref
+  const common = commonDirOf(root)
+  if (!common) return '<missing>'
+  const names = ref.startsWith('refs/') ? [ref] : [`refs/heads/${ref}`, `refs/remotes/${ref}`]
+  for (const name of names) {
+    const loose = textOrNull(join(common, name))
+    if (loose !== null) return loose.trim() || '<missing>'
+  }
+  const packed = textOrNull(join(common, 'packed-refs'))
+  if (packed !== null) {
+    for (const line of packed.split('\n')) {
+      if (!line || line[0] === '#' || line[0] === '^') continue
+      const space = line.indexOf(' ')
+      if (space > 0 && names.includes(line.slice(space + 1).trim())) return line.slice(0, space).trim()
+    }
+  }
+  return '<missing>'
+}
+
+function headRevision(root: string): string {
+  if (!gitDirOf(root)) return '<missing>'
+  return headSha(root)
+}
+
+// Patrol validation needs a stronger contract than the overlay cache's best-effort mtime key: ctime catches
+// a same-size edit whose mtime was restored, and every non-ENOENT read failure is loud instead of collapsing an
+// unreadable subtree into a stable "unchanged" revision. A path that vanishes during the sample is represented
+// by its absence and is rechecked by the producer fence.
+function strictSpecTreeRevision(wtPath: string): string {
+  const root = join(wtPath, '.spec')
+  try { statSync(root) }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ''
+    throw error
+  }
+  const parts: string[] = []
+  const stack = [root]
+  while (stack.length) {
+    const dir = stack.pop()!
+    let entries
+    try { entries = readdirSync(dir, { withFileTypes: true }) }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      continue
+    }
+    for (const entry of entries) {
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) { stack.push(path); continue }
+      try {
+        const stat = statSync(path)
+        parts.push(`${path}:${stat.mtimeMs}:${stat.ctimeMs}:${stat.size}`)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+    }
+  }
+  return parts.sort().join('\n')
+}
+
+function worktreeRevision(root: string): unknown {
+  return {
+    root,
+    head: headRevision(root),
+    spec: strictSpecTreeRevision(root),
+  }
+}
+
+function digest(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex')
+}
+
+// The patrol's cheap authority check. These are exactly the mutable inputs a board assembly reads, folded
+// without doing the assembly: HEAD/config + `.spec`, governed records and active governed worktree state,
+// the issue-store carrier, and the already-resident session-eval projections. It intentionally does not call
+// listSessions or sessionEvalProjections: verification must neither poll tmux again nor mint/schedule eval work.
+// The hot/warm liveness signatures and eval generations remain graph-stream's canonical event-owned axes.
+function boardInputRevision(board: Board | null): BoardInputRevision {
+  const root = repoRoot()
+  const ids = listSessionIds().sort()
+  // listSessions projects both the structured record and the separately-stored originating prompt into each
+  // board row. Fold both exact artifacts so a missed store event cannot leave a stale label/prompt forever.
+  const sessionInputs = ids.map((id) => [
+    id,
+    textOrNull(sessionRecordPath(id)),
+    textOrNull(sessionArtifactPath(id, 'prompt')),
+  ] as const)
+  const records = ids.map(readRawRecord).filter((record): record is NonNullable<typeof record> => !!record)
+  const governed = records.filter((record) => record.governed).sort((a, b) => a.session_id.localeCompare(b.session_id))
+  const activeRoots = [...new Set(governed.filter((record) => !record.archived).map((record) => record.worktree_path))].sort()
+  const main = mainCheckout()
+  const base = mainBranch()
+  const mainTip = refSha(main, base)
+
+  const nodeIds = (board?.nodes ?? []).map((node) => node.id)
+  const issuesStamp = boardThreads({ host: resolveForgeHost(), state: residentForgeState() }, nodeIds).stamp
+  const fullInputs = {
+    root: worktreeRevision(root),
+    config: [
+      [join(root, 'spexcode.json'), textOrNull(join(root, 'spexcode.json'))],
+      [join(root, 'spexcode.local.json'), textOrNull(join(root, 'spexcode.local.json'))],
+      [join(main, 'spexcode.json'), textOrNull(join(main, 'spexcode.json'))],
+      [join(main, 'spexcode.local.json'), textOrNull(join(main, 'spexcode.local.json'))],
+    ],
+    main: { root: main, branch: base, tip: mainTip },
+    worktrees: activeRoots.map((worktree) => worktreeRevision(worktree)),
+    issuesStamp,
+    identity: resolveProjectIdentity(root, root),
+  }
+  const fullParts = Object.fromEntries(Object.entries(fullInputs).map(([key, value]) => [key, digest(value)]))
+  const full = digest(fullParts)
+  const sessions = digest(sessionInputs)
+
+  // Every board row carries an evalSummary, including non-governed sessions. Governed filtering owns only
+  // worktree observation; projection identity follows the whole store enumeration so a blind observer cannot
+  // strand a non-governed row on an older resident phase/value.
+  const projectionIds = ids
+  const projections = digest(projectionIds.map((id) => [id, sessionEvalProjection(id)]))
+  return { full, sessions, projections, combined: digest([full, sessions, projections]), fullParts, projectionIds }
+}
+
+// Bind an input sample to what the completed board actually carries. The sample supplies the graph/session
+// revision observed immediately after the producer; issue and projection values come from the returned board
+// itself. Re-reading all inputs here would create a certification race: a blind change after the producer's
+// after-sample could otherwise be mistaken for an input the already-built board contains.
+function revisionCarriedByBoard(sample: BoardInputRevision, board: Board): BoardInputRevision {
+  const fullParts = { ...sample.fullParts, issuesStamp: digest(board.issuesStamp) }
+  const full = digest(fullParts)
+  const boardProjections = new Map(board.sessions.map((session) => [session.id, session.evalSummary ?? null]))
+  const projections = digest(sample.projectionIds.map((id) => [id, boardProjections.get(id) ?? null]))
+  return {
+    full,
+    sessions: sample.sessions,
+    projections,
+    combined: digest([full, sample.sessions, projections]),
+    fullParts,
+    projectionIds: sample.projectionIds,
+  }
+}
 
 // a build slower than this is LOGGED, never silently tolerated — the fail-loud regression alarm. Sized
 // above a warm build (~sub-second once the fs walks yield) but below the cold two-walk first build, so a
@@ -39,15 +231,16 @@ const BACKGROUND_START_DELAY_MS = Number(process.env.SPEXCODE_BOARD_BACKGROUND_S
 // the cache's staleness has a DOMAIN, not just a bit: a 'sessions' change (a lifecycle write, a
 // liveness/activity poll flip) touches only the session rows, so the next read can SPLICE fresh sessions
 // onto the still-valid node/meta units instead of re-walking git+`.spec`; a 'full' change (a ref move, a
-// worktree `.spec` edit, the cold-tick patrol) can reshape anything, so the next read does the whole
-// buildBoard(). 'none' = clean.
+// worktree `.spec` edit, or a changed graph-domain patrol revision) can reshape anything, so the next read
+// does the whole buildBoard(). 'none' = clean.
 type Scope = 'sessions' | 'full'
 let cached: Board | null = null   // last completed build; served while `dirty === 'none'`
 let cachedJson: string | null = null   // JSON.stringify(cached), serialized ONCE per build (see getBoardJson)
+let cachedRevision: BoardInputRevision | null = null // input revision represented by `cached`
 let dirty: Scope | 'none' = 'full'   // no cached board yet → the first read builds fully
 type Flight = { wait: Promise<Board>; settle: Promise<Board> }
 let inflight: Flight | null = null
-let gen = 0                       // bumped on every invalidation — detects a change that landed MID-build
+let gen = 0                       // bumped on invalidation so patrol validation cannot certify across an event
 let retryAt = 0
 let lastFailure: Error | null = null
 
@@ -57,33 +250,36 @@ let lastFailure: Error | null = null
 // 'sessions' signal arriving while 'full' is already pending stays 'full' (a full rebuild subsumes a
 // sessions splice). The last-good JSON stays intact while dirty so stale readers can return it without
 // paying serialization again; a successful replacement clears it.
-export function invalidateBoard(scope: Scope = 'full'): void {
-  gen++
+function mergeDirty(scope: Scope): void {
   if (scope === 'full' || dirty === 'full') dirty = 'full'
   else dirty = 'sessions'
+}
+
+export function invalidateBoard(scope: Scope = 'full'): void {
+  gen++
+  mergeDirty(scope)
   retryAt = 0
   lastFailure = null
 }
 
-// the coalesced board read the route and the SSE rebuild both go through. A concurrent caller during a
-// build shares the in-flight promise; a caller after a completed build gets the cached value until the
-// next invalidation. A 'sessions'-scoped dirty with a cached board takes the SPLICE path (spliceSessions —
-// fresh session rows onto the cached node/meta units) under the SAME single-flight promise + watchdog +
-// generation rules; anything else (dirty 'full', or no cache to splice onto) does a full buildBoard(). A
-// change that lands WHILE a build runs (gen moved) leaves the cache dirty so the NEXT read rebuilds — a
-// 'full' invalidation landing mid-splice leaves it dirty 'full' for the next read. The just-finished build
-// still returns to its waiters (freshest available when they asked), never cached as current. Mirrors
-// [[graph-stream]]'s building/dirty loop.
-function startBuild(): Flight | null {
+// One flight owns BOTH patrol validation and a producer. A patrol first folds the cheap input revision; an
+// exact match resolves to `cached` without calling either producer. A mismatch derives the changed domain and
+// falls through to the same build path an explicit watcher invalidation takes. An invalidation during validation
+// also falls through under this flight, so validation can never race a second producer into existence.
+type FlightMode = 'dirty' | 'patrol'
+function startBuild(mode: FlightMode = 'dirty'): Flight | null {
   if (inflight) return inflight
   if (Date.now() < retryAt) return null
-  const startGen = gen
-  const sessionsOnly = dirty === 'sessions' && cached !== null
-  const prev = cached
+  const flightStartGen = gen
   const controller = new AbortController()
-  const t0 = Date.now()
   let watchdog: ReturnType<typeof setTimeout> | undefined
   let timedOut = false
+  let built = false
+  let buildStartedAt = 0
+  let buildScope: Scope = 'full'
+  let buildFullStable = true
+  let buildSessionsStable = true
+  let completedRevision: BoardInputRevision | null = null
   // Do not invoke the producer inline. buildBoard() has an asynchronous signature but performs a sizeable
   // synchronous setup before its first await (Promise.all evaluates its arguments immediately). A stale HTTP
   // caller must be able to return its last-good bytes before that setup runs; first-cold/fresh callers still
@@ -102,12 +298,71 @@ function startBuild(): Flight | null {
       return
     }
     try {
-      Promise.resolve(withGitAbortSignal(controller.signal, () => sessionsOnly ? spliceSessions(prev!) : buildBoard()))
+      Promise.resolve(withGitAbortSignal(controller.signal, async () => {
+        if (mode === 'patrol' && dirty === 'none' && cached && cachedRevision) {
+          const anchorRevision = cachedRevision
+          const observed = await boardInputRevision(cached)
+          if (controller.signal.aborted)
+            throw Object.assign(new Error('graph patrol aborted'), { name: 'AbortError' })
+          if (gen === flightStartGen && dirty === 'none' && observed.combined === anchorRevision.combined)
+            return cached
+          // A changed revision with no watcher event is the patrol doing its repair job. If an explicit event
+          // arrived meanwhile it already set the correct (possibly sessions-only) scope, which we must not
+          // overwrite. An otherwise-clean mismatch derives its scope from the moved input domain.
+          if (gen === flightStartGen && dirty === 'none') {
+            gen++
+            if (DEBUG) {
+              const moved = Object.keys(observed.fullParts)
+                .filter((key) => observed.fullParts[key] !== anchorRevision.fullParts[key])
+              console.warn(`spec-cli: graph patrol revision moved — scope=${observed.full === anchorRevision.full ? 'sessions' : 'full'} inputs=[${moved.join(', ')}]`)
+            }
+            dirty = observed.full === anchorRevision.full ? 'sessions' : 'full'
+          }
+        }
+
+        const prev = cached
+        const before = await boardInputRevision(prev)
+        if (controller.signal.aborted)
+          throw Object.assign(new Error('graph build aborted before producer start'), { name: 'AbortError' })
+        // A session signal cannot vouch for the graph domain. Before splicing, compare the current full inputs
+        // to the revision the cached node/meta units actually carry; a missed graph watcher promotes this same
+        // flight to full instead of certifying old nodes under a new revision.
+        if (dirty === 'sessions' && prev && cachedRevision && before.full !== cachedRevision.full) {
+          if (DEBUG) console.warn('spec-cli: session refresh found moved graph inputs — promoting to full')
+          dirty = 'full'
+        }
+        const sessionsOnly = dirty === 'sessions' && prev !== null
+        buildScope = sessionsOnly ? 'sessions' : 'full'
+        // Consume the scope this producer is satisfying. Invalidation after this point starts a NEW dirty
+        // window with its own domain: a session completion during a long full build owes one splice, not
+        // another full build. The occupied `inflight` slot keeps fresh/stale readers joined while dirty is clean.
+        dirty = 'none'
+        built = true
+        buildStartedAt = Date.now()
+        const board = await (sessionsOnly ? spliceSessions(prev!) : buildBoard())
+        const after = await boardInputRevision(prev)
+        const carried = revisionCarriedByBoard(after, board)
+        const movedFull = Object.keys(after.fullParts)
+          .filter((key) => after.fullParts[key] !== before.fullParts[key])
+        // The first build can initialize the resident forge carrier that it then returns. That movement is
+        // stable only when the finished board carries the after-sample's exact issue stamp. Every other cold
+        // movement remains dirty just like a warm one; cold start is not a blanket race exemption.
+        const coldIssueInitialization = prev === null
+          && movedFull.every((key) => key === 'issuesStamp')
+          && after.fullParts.issuesStamp === carried.fullParts.issuesStamp
+        buildFullStable = before.full === after.full || coldIssueInitialization
+        buildSessionsStable = before.sessions === after.sessions
+        if (DEBUG && (!buildFullStable || !buildSessionsStable)) {
+          console.warn(`spec-cli: graph inputs moved during ${buildScope} producer — next=${buildFullStable ? 'sessions' : 'full'} inputs=[${movedFull.join(', ')}] sessions=${buildSessionsStable ? 'stable' : 'moved'}`)
+        }
+        completedRevision = carried
+        return board
+      }))
         .then(resolveBuild, rejectBuild)
     } catch (error) {
       rejectBuild(error)
     }
-  }, BACKGROUND_START_DELAY_MS).unref?.()
+  }, mode === 'patrol' ? 0 : BACKGROUND_START_DELAY_MS).unref?.()
   const timeoutError = () => new Error(`graph build did not settle within ${BUILD_TIMEOUT_MS}ms`)
 
   // `settle` owns the real builder. The watchdog only rejects `wait`; the slot remains occupied until this
@@ -115,14 +370,19 @@ function startBuild(): Flight | null {
   let settle!: Promise<Board>
   settle = build.then((board) => {
     if (timedOut) throw timeoutError()
-    cached = board
-    cachedJson = null
-    if (gen === startGen) dirty = 'none'
+    if (built) {
+      cached = board
+      cachedJson = null
+      cachedRevision = completedRevision
+      if (!buildFullStable) mergeDirty('full')
+      else if (!buildSessionsStable) mergeDirty('sessions')
+    }
     retryAt = 0
     lastFailure = null
     return board
   }).catch((error) => {
     const failure = error instanceof Error ? error : new Error(String(error))
+    if (built) mergeDirty(buildScope)
     lastFailure = failure
     retryAt = Date.now() + RETRY_BACKOFF_MS
     console.warn(`spec-cli: /api/graph build failed — ${failure.message}`)
@@ -130,9 +390,9 @@ function startBuild(): Flight | null {
   }).finally(() => {
     clearTimeout(watchdog)
     if (inflight?.settle === settle) inflight = null
-    const ms = Date.now() - t0
-    if (ms > BUDGET_MS)
-      console.warn(`spec-cli: /api/graph build took ${ms}ms (budget ${BUDGET_MS}ms) — hot path is slow`)
+    const ms = built ? Date.now() - buildStartedAt : 0
+    if (built && ms > BUDGET_MS)
+      console.warn(`spec-cli: /api/graph build took ${ms}ms (budget ${BUDGET_MS}ms) — ${buildScope} path is slow`)
   })
 
   const wait = new Promise<Board>((resolve, reject) => {
@@ -143,7 +403,7 @@ function startBuild(): Flight | null {
       reject(timeoutError())
     }, BUILD_TIMEOUT_MS)
     watchdog.unref?.()
-    build.then((board) => {
+    settle.then((board) => {
       if (!timedOut) resolve(board)
     }, (error) => {
       if (!timedOut) reject(error)
@@ -159,16 +419,28 @@ function startBuild(): Flight | null {
 }
 
 export function getBoard(): Promise<Board> {
+  // A clean-looking cache can be under patrol validation. Fresh readers join that flight before taking the
+  // cache fast path, otherwise one can return stale bytes while the flight is discovering a missed change.
+  if (inflight) return inflight.wait
   if (dirty === 'none' && cached) return Promise.resolve(cached)
-  const flight = startBuild()
+  const flight = startBuild('dirty')
   if (flight) return flight.wait
   return Promise.reject(lastFailure ?? new Error('graph build retry is temporarily backing off'))
 }
 
+// The delta-gated cold tick calls this instead of invalidating. Equal inputs resolve to the cached object;
+// changed inputs repair through the same flight and full producer as a watcher-owned invalidation.
+export function patrolBoard(): Promise<Board> {
+  if (!cached) return getBoard()
+  const flight = startBuild('patrol')
+  if (flight) return flight.wait
+  return Promise.reject(lastFailure ?? new Error('graph patrol retry is temporarily backing off'))
+}
+
 export async function readBoard(consistency: BoardConsistency = 'fresh'): Promise<BoardRead> {
   if (consistency === 'stale-ok' && cached) {
-    const stale = dirty !== 'none'
-    const flight = stale ? startBuild() : null
+    const stale = dirty !== 'none' || inflight !== null
+    const flight = stale ? startBuild('dirty') : null
     return { board: cached, freshness: stale ? 'stale' : 'fresh', refreshing: !!flight, ...(lastFailure ? { error: lastFailure.message } : {}) }
   }
   const board = await getBoard()

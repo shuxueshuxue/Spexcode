@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, driftIndex, driftIndexFull, historyIndex, historyIndexFull, rowsFor, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, driftIndex, driftIndexFull, historyIndex, historyIndexFull, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -462,6 +462,30 @@ test('reusing an old path after a rename starts a separate history', async () =>
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('a repeated-result merge rename keeps the side hit on the new lineage', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-rename-merge-peers-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const oldPath = 'src/old.ts', newPath = 'src/new.ts'
+  const body = (value: number) => `export function f() { return ${value} }\n`
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'test@example.com'); run('config', 'user.name', 'test')
+    mkdirSync(join(root, 'src'), { recursive: true }); writeFileSync(join(root, oldPath), body(0))
+    run('add', '.'); run('commit', '-qm', 'base'); const base = run('rev-parse', 'HEAD')
+
+    run('switch', '-qc', 'side')
+    writeFileSync(join(root, oldPath), body(1)); run('add', oldPath); run('commit', '-qm', 'side anchored hit')
+    const hit = run('rev-parse', 'HEAD')
+    writeFileSync(join(root, oldPath), body(0)); run('add', oldPath); run('commit', '-qm', 'side restores old content')
+
+    run('switch', '-q', 'main'); run('merge', '--no-ff', '--no-commit', 'side')
+    renameSync(join(root, oldPath), join(root, newPath)); run('add', '-A'); run('commit', '-qm', 'merge authored rename')
+    const idx = await driftIndex(root)
+    const events = pathRangeEvents(idx, base, newPath)
+    assert.ok(events?.some((event) => event.commit === hit), 'side hit must follow the repeated-result rename')
+    assert.equal(driftFor(idx, base, newPath), 2, 'the hit and its restoring commit remain in the new lineage')
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
 // ---- worktreeSpecDelta ([[worktree-linker]]): an op = differs-from-main-tip AND branch-touched-since-fork ----

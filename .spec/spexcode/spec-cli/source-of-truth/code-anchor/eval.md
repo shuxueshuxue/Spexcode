@@ -2,6 +2,7 @@
 scenarios:
   - name: fold-project-boundary
     tags: [cli]
+    code: [spec-cli/src/git.ts#canonicalPathProjector]
     test:
       path: scripts/anchor-drift-fold-proof.mjs
       name: fold/project lower bound and pinned-history equivalence proof
@@ -28,11 +29,13 @@ scenarios:
       reported as zero coverage rather than described as an anchor test.
   - name: anchor-hit-blocks
     tags: [cli]
+    code: [spec-cli/src/git.ts#canonicalPathProjector, spec-cli/src/anchors.ts#anchorHitCommits]
     description: >
       In disposable fixture repos, a node's code: entry anchors applyRate. Exercise a direct edit, an edit
       under the file's historical name followed by a rename, a delete followed by a self-acked restore, and
       a merge-authored deletion whose two parents call the file by different names. Finally, let a merge
-      author only old.py->new.py after a side-branch hit; and let incomparable hit/rename branches merge with
+      author only old.py->new.py after a side-branch hit, including a repeated-result (`RR`) merge rename;
+      and let incomparable hit/rename branches merge with
       both old.py and new.py surviving. Run `spex spec lint` after each shape.
     expected: >
       Each `anchor-drift` ERROR names the anchor, the spec version, and only the offending edit/deletion sha;

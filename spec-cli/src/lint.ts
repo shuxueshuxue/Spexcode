@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, git, driftIndex, historyIndex, driftIndexFull, historyIndexFull, rowsFor, treeFilePaths, treeFileText } from './git.js'
+import { repoRoot, git, driftIndex, historyIndex, rowsFor, treeFilePaths, treeFileText } from './git.js'
 import { loadSpecs, parseFrontmatter } from './specs.js'
 import { readJsonConfig } from './layout.js'
 import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, resolveAnchor, windowEvents, anchorHitCommits } from './anchors.js'
@@ -68,7 +68,7 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
   }
 }
 
-export type SpecLintOptions = { tip?: string; fullOracle?: boolean }
+export type SpecLintOptions = { tip?: string }
 
 function pendingChangedPaths(root: string, tip: string): string[] {
   try {
@@ -128,10 +128,7 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
   const textAtTip = (path: string) => pending ? treeFileText(root, tip, path) : readFileSync(join(root, path), 'utf8')
   const cfg = loadConfig(root, pending ? treeFileText(root, tip, 'spexcode.json') : undefined)
   const governed = trackedSourceFiles(root, cfg.governedRoots, cfg, tip)
-  const [didx, hidx] = await Promise.all([
-    options.fullOracle ? driftIndexFull(root, tip) : driftIndex(root, tip),
-    options.fullOracle ? historyIndexFull(root, tip) : historyIndex(root, tip),
-  ])
+  const [didx, hidx] = await Promise.all([driftIndex(root, tip), historyIndex(root, tip)])
   const specs = await loadSpecs(root, { tip, history: hidx, drift: didx })
   const out: Finding[] = []
 

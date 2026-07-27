@@ -130,6 +130,32 @@ test('session stop proof reads only the exact governed target and fails closed o
     })
     assert.equal(fullSiblingReads, 0, 'stop safety never enters the full sibling turn projection')
 
+    const restoreIdentity = () => {
+      writeFileSync(pidFile, `${identity.pid}\n`)
+      writeIsolationStamp(identity.pid, isolationFile)
+    }
+    const refuseIdentity = async (name: string, setup: () => void, reason: RegExp) => {
+      restoreIdentity()
+      setup()
+      const proofCallsBefore = loadedIdCensuses
+      await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), reason)
+      assert.equal(loadedIdCensuses, proofCallsBefore, `${name} refuses before the adapter proof`)
+      assert.equal(processStartToken(identity.pid), identity.startToken, `${name} sends no signal to the shared root`)
+      assert.equal(processStartToken(targetLeaf.pid!), targetLeafStart, `${name} sends no signal to the target leaf`)
+    }
+    await refuseIdentity('missing PID', () => rmSync(pidFile, { force: true }), /no readable owner PID/)
+    await refuseIdentity('dead PID', () => writeFileSync(pidFile, '999999999\n'), /no readable process-start identity/)
+    await refuseIdentity('missing scope', () => rmSync(isolationFile, { force: true }), /no matching live detached process-boundary record/)
+    await refuseIdentity('mismatched start', () => writeFileSync(isolationFile, `detached-v3 ${identity.pid} wrong ${identity.pid} ${identity.pid}\n`), /no matching live detached process-boundary record/)
+    await refuseIdentity('arbitrary scope', () => writeFileSync(isolationFile, `fixture ${identity.pid}\n`), /no matching live detached process-boundary record/)
+    await refuseIdentity('non-detached topology', () => {
+      const pid = targetLeaf.pid!
+      const start = processStartToken(pid)!
+      writeFileSync(pidFile, `${pid}\n`)
+      writeFileSync(isolationFile, `detached-v3 ${pid} ${start} ${pid} ${pid}\n`)
+    }, /no matching live detached process-boundary record/)
+    restoreIdentity()
+
     for (const [next, reason] of [['unknown', /target turn state is unknown/], ['active', /active turn/], ['descendant', /owned descendants.*owned-native-child/]] as const) {
       mode = next
       await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), reason)
@@ -258,9 +284,9 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
       mkdirSync(dir, { recursive: true })
       writeFileSync(join(dir, 'session.json'), `${JSON.stringify(record(id, thread, terminal), null, 2)}\n`)
     }
-    const fixtureSharedRuntimes = (runtimeDir: string) => originalSharedRuntimes!(runtimeDir).map((descriptor) => ({ ...descriptor, mutationProof: undefined, probe: async () => probe }))
-    codexHarness.sharedRuntimes = fixtureSharedRuntimes
-    codexHeadlessHarness.sharedRuntimes = fixtureSharedRuntimes
+    const fallbackSharedRuntimes = (runtimeDir: string) => originalSharedRuntimes!(runtimeDir).map((descriptor) => ({ ...descriptor, mutationProof: undefined, probe: async () => probe }))
+    codexHarness.sharedRuntimes = fallbackSharedRuntimes
+    codexHeadlessHarness.sharedRuntimes = fallbackSharedRuntimes
 
     sharedRoot = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
       stdio: 'ignore',

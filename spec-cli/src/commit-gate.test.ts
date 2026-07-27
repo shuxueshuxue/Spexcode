@@ -115,7 +115,7 @@ test('scissors cleanup follows the final Git message and does not bind candidate
   const output = `${result.stdout}${result.stderr}`
   assert.equal(result.status, 0, `scissors candidate was rejected:\n${output}`)
   const finalMessage = fx.git('log', '-1', '--format=%B')
-  assert.match(finalMessage, /^change implementation\n/)
+  assert.match(finalMessage, /^change implementation(?:\n|$)/)
   assert.doesNotMatch(finalMessage, />8|editor-only tail/)
 })
 

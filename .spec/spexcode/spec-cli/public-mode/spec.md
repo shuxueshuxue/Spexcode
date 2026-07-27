@@ -47,6 +47,12 @@ know compression exists. Three exclusions are load-bearing: an SSE stream is
 never buffered (event latency), an already-encoded response is not re-encoded, and binary media
 (video/image evidence) passes through untouched — it gains nothing and would fight Range requests.
 
+**A proxied exchange owns both network halves for exactly one lifetime.** Ordinary HTTP completion releases
+the downstream and upstream normally; when either side aborts or closes before completion, the gateway
+deterministically tears down the other request, response, socket, and any transform stream. Long-lived SSE
+therefore lives only as long as its browser subscriber, never as an orphaned upstream connection after a tab
+closes. The terminal WebSocket follows the same paired-half rule at its upgrade seam.
+
 **With a password, the gate is a designed login, not the browser's Basic dialog.** An unauthenticated
 visitor gets a styled login page; the posted password is compared in constant time and, on success, mints
 a signed `httpOnly` cookie that survives a gateway restart with no server-side session, **named per public

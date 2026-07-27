@@ -372,32 +372,32 @@ const sessionStopBlocker = async (
     const targetThread = entry.recs.find((rec) => rec.session_id === id)?.harness_session_id
     if (targetThread && ownerCounts.get(targetThread) !== 1)
       return `${descriptor.label} target thread ${targetThread} has no one exact governed session owner`
-    if (!knownProbes && descriptor.mutationProof) {
+    if (!knownProbes && descriptor.mutationGuard) {
       if (!targetThread) return `${descriptor.label} target has no exact governed thread identity`
-      if (!pid) return `${descriptor.label} target-scoped mutation proof has no readable owner PID`
-      if (!startToken) return `${descriptor.label} PID ${pid} target-scoped mutation proof has no readable process-start identity`
+      if (!pid) return `${descriptor.label} target-scoped mutation guard has no readable owner PID`
+      if (!startToken) return `${descriptor.label} PID ${pid} target-scoped mutation guard has no readable process-start identity`
       const topologyBefore = processTopology(pid)
       let stampBefore = ''
       try { stampBefore = readFileSync(descriptor.isolationFile, 'utf8').trim() } catch { /* legacy unsafe runtime */ }
       if (!topologyBefore || topologyBefore.startToken !== startToken || topologyBefore.processGroupId !== pid || topologyBefore.sessionId !== pid ||
         stampBefore !== `detached-v3 ${pid} ${startToken} ${pid} ${pid}`)
         return `${descriptor.label} PID ${pid}@${startToken} has no matching live detached process-boundary record`
-      let proof
-      try { proof = await descriptor.mutationProof(targetThread) }
-      catch (error) { return `${descriptor.label} target-scoped mutation proof failed: ${(error as Error).message}` }
+      let guard
+      try { guard = await descriptor.mutationGuard(targetThread) }
+      catch (error) { return `${descriptor.label} target-scoped mutation guard failed: ${(error as Error).message}` }
       const startAfter = processStartToken(pid)
       const topologyAfter = processTopology(pid)
       let stampAfter = ''
       try { stampAfter = readFileSync(descriptor.isolationFile, 'utf8').trim() } catch { /* changed/missing identity */ }
       if (startAfter !== startToken || !topologyAfter || topologyAfter.startToken !== startToken ||
         topologyAfter.processGroupId !== pid || topologyAfter.sessionId !== pid || stampAfter !== stampBefore)
-        return `${descriptor.label} PID/start/isolation identity changed during target-scoped mutation proof`
-      if (proof.descendantIds.length)
-        return `${descriptor.label} target thread ${targetThread} has owned descendants (${proof.descendantIds.join(', ')})`
-      if (!proof.healthy)
-        return `${descriptor.label} target thread ${targetThread} is unknown: ${proof.error || 'target-scoped mutation proof failed'}`
-      if (proof.targetTurnPresence === 'active') return `${descriptor.label} target thread ${targetThread} has an active turn`
-      if (proof.targetTurnPresence === 'unknown') return `${descriptor.label} target thread ${targetThread} turn state is unknown`
+        return `${descriptor.label} PID/start/isolation identity changed during target-scoped mutation guard`
+      if (guard.descendantIds.length)
+        return `${descriptor.label} target thread ${targetThread} has owned descendants (${guard.descendantIds.join(', ')})`
+      if (!guard.healthy)
+        return `${descriptor.label} target thread ${targetThread} is unknown: ${guard.error || 'target-scoped mutation guard failed'}`
+      if (guard.targetTurnPresence === 'active') return `${descriptor.label} target thread ${targetThread} has an active turn`
+      if (guard.targetTurnPresence === 'unknown') return `${descriptor.label} target thread ${targetThread} turn state is unknown`
       continue
     }
     const probe = knownProbes?.get(descriptor.key) ?? await probeRuntime(descriptor)

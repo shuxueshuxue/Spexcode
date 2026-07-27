@@ -52,12 +52,12 @@ export type SharedRuntimeDescriptor = {
   // Lightweight project-wide resident census used by read projections. It must return exact loaded IDs without
   // per-thread reads; the full probe remains the resource/lifecycle surface that also reads turn state.
   residency?: () => Promise<{ healthy: boolean; referenceIds: string[]; error?: string; rootAbsent?: boolean }>
-  // Lifecycle mutation proof is deliberately narrower than the full resource projection: census every loaded
+  // Lifecycle mutation guard is deliberately narrower than the full resource projection: census every loaded
   // ID, but read only the exact governed target when it is loaded, plus both target descendant collections.
-  mutationProof?: (targetReferenceId: string) => Promise<SharedRuntimeMutationProof>
+  mutationGuard?: (targetReferenceId: string) => Promise<SharedRuntimeMutationGuard>
   probe(): Promise<SharedRuntimeProbe>
 }
-export type SharedRuntimeMutationProof = {
+export type SharedRuntimeMutationGuard = {
   healthy: boolean
   referenceIds: string[]
   targetTurnPresence: 'none' | 'idle' | 'active' | 'unknown'
@@ -962,7 +962,7 @@ export function codexThreadList(sock: string, params: Record<string, unknown>): 
   }, 'thread/list')
 }
 
-async function codexTargetMutationProof(threadId: string, dir = runtimeRoot()): Promise<SharedRuntimeMutationProof> {
+async function codexTargetMutationGuard(threadId: string, dir = runtimeRoot()): Promise<SharedRuntimeMutationGuard> {
   const generationBefore = codexRuntimeGeneration(dir)
   if (!generationBefore) return { healthy: false, referenceIds: [], targetTurnPresence: 'unknown', descendantIds: [], error: 'Codex shared app-server generation is unproven' }
   const sock = codexAppServerSock(dir)
@@ -978,39 +978,39 @@ async function codexTargetMutationProof(threadId: string, dir = runtimeRoot()): 
   if (!loaded.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: loaded.error }
   if (!activeDescendants.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: activeDescendants.error }
   if (!archivedDescendants.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: archivedDescendants.error }
-  let targetTurnPresence: SharedRuntimeMutationProof['targetTurnPresence'] = 'none'
+  let targetTurnPresence: SharedRuntimeMutationGuard['targetTurnPresence'] = 'none'
   if (referenceIds.includes(threadId)) {
     const target = await codexTargetTurnPresence(sock, threadId)
     if (!target.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: target.error }
     targetTurnPresence = target.turnPresence
   }
   if (codexRuntimeGeneration(dir) !== generationBefore)
-    return { healthy: false, referenceIds, targetTurnPresence, descendantIds, error: 'shared Codex app-server generation changed during target proof' }
+    return { healthy: false, referenceIds, targetTurnPresence, descendantIds, error: 'shared Codex app-server generation changed during target guard' }
   return { healthy: true, referenceIds, targetTurnPresence, descendantIds }
 }
 
-type CodexColdPreflight = { ok: true; alreadyCold?: boolean; proof: SharedRuntimeMutationProof } | { ok: false; reason: string }
+type CodexColdPreflight = { ok: true; alreadyCold?: boolean; guard: SharedRuntimeMutationGuard } | { ok: false; reason: string }
 async function codexColdPreflight(threadId: string, dir = runtimeRoot()): Promise<CodexColdPreflight> {
   const sock = codexAppServerSock(dir)
-  const [proof, archivedList, activeList] = await Promise.all([
-    codexTargetMutationProof(threadId, dir),
+  const [guard, archivedList, activeList] = await Promise.all([
+    codexTargetMutationGuard(threadId, dir),
     codexThreadList(sock, { archived: true, sourceKinds: [] }),
     codexThreadList(sock, { archived: false, sourceKinds: [] }),
   ])
-  if (proof.descendantIds.length)
-    return { ok: false, reason: `Codex thread ${threadId} has owned descendants (${proof.descendantIds.join(', ')}); subtree archive is not proven safe` }
-  if (!proof.healthy) return { ok: false, reason: proof.error || `Codex thread ${threadId} target state is unknown` }
+  if (guard.descendantIds.length)
+    return { ok: false, reason: `Codex thread ${threadId} has owned descendants (${guard.descendantIds.join(', ')}); subtree archive is not proven safe` }
+  if (!guard.healthy) return { ok: false, reason: guard.error || `Codex thread ${threadId} target state is unknown` }
   if (!archivedList.ok) return { ok: false, reason: archivedList.error }
   if (!activeList.ok) return { ok: false, reason: activeList.error }
   const inArchived = archivedList.ids.includes(threadId)
   const inActive = activeList.ids.includes(threadId)
   if (inArchived === inActive) return { ok: false, reason: `Codex thread ${threadId} has ambiguous disk collection state (archived=${inArchived}, active=${inActive})` }
-  if (proof.targetTurnPresence === 'active') return { ok: false, reason: `Codex thread ${threadId} has an active turn; interrupt/terminal proof is required before archive` }
-  if (proof.targetTurnPresence === 'unknown') return { ok: false, reason: `Codex thread ${threadId} turn state is unknown; refusing to archive without a terminal proof` }
-  if (proof.targetTurnPresence === 'none')
-    return inArchived ? { ok: true, alreadyCold: true, proof } : { ok: true, proof }
+  if (guard.targetTurnPresence === 'active') return { ok: false, reason: `Codex thread ${threadId} has an active turn; terminal-state confirmation is required before archive` }
+  if (guard.targetTurnPresence === 'unknown') return { ok: false, reason: `Codex thread ${threadId} turn state is unknown; refusing to archive without terminal-state confirmation` }
+  if (guard.targetTurnPresence === 'none')
+    return inArchived ? { ok: true, alreadyCold: true, guard } : { ok: true, guard }
   if (inArchived) return { ok: false, reason: `Codex thread ${threadId} is archived but remains loaded` }
-  return { ok: true, proof }
+  return { ok: true, guard }
 }
 
 // Read a loaded thread id off the app-server via `thread/loaded/list`. With the backend now OWNING the thread
@@ -1779,7 +1779,7 @@ export const claudeHeadlessHarness: Harness = {
   deliver: deliverViaClaudeHeadless,
   interrupt: interruptClaudeHeadless,
   cleanupRuntime: (rec) => unlinkSocks(claudeHeadlessSock(rec.session)),
-  coldRuntime: async () => ({ ok: false, reason: 'claude-headless has no exact resident unload proof' }),
+  coldRuntime: async () => ({ ok: false, reason: 'claude-headless has no exact resident unload verification' }),
   deliveryBlockedBy: undefined,
 }
 
@@ -1858,18 +1858,18 @@ export const codexHarness: Harness = {
     const generationBefore = codexRuntimeGeneration(dir)
     if (!generationBefore) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
     const sock = codexAppServerSock(dir)
-    const [proof, archivedList, activeList] = await Promise.all([
-      codexTargetMutationProof(threadId, dir),
+    const [guard, archivedList, activeList] = await Promise.all([
+      codexTargetMutationGuard(threadId, dir),
       codexThreadList(sock, { archived: true, sourceKinds: [] }),
       codexThreadList(sock, { archived: false, sourceKinds: [] }),
     ])
     if (codexRuntimeGeneration(dir) !== generationBefore)
-      return { ok: false, reason: 'shared Codex app-server generation changed during cold retirement proof' }
-    if (proof.descendantIds.length) return { ok: false, reason: `Codex thread ${threadId} has owned descendants (${proof.descendantIds.join(', ')}); cold retirement is not proven safe` }
-    if (!proof.healthy) return { ok: false, reason: proof.error || `Codex thread ${threadId} target state is unknown` }
+      return { ok: false, reason: 'shared Codex app-server generation changed during cold retirement guard' }
+    if (guard.descendantIds.length) return { ok: false, reason: `Codex thread ${threadId} has owned descendants (${guard.descendantIds.join(', ')}); cold retirement is not proven safe` }
+    if (!guard.healthy) return { ok: false, reason: guard.error || `Codex thread ${threadId} target state is unknown` }
     if (!archivedList.ok) return { ok: false, reason: archivedList.error }
     if (!activeList.ok) return { ok: false, reason: activeList.error }
-    if (proof.targetTurnPresence !== 'none') return { ok: false, reason: `Codex thread ${threadId} is still loaded` }
+    if (guard.targetTurnPresence !== 'none') return { ok: false, reason: `Codex thread ${threadId} is still loaded` }
     const inArchived = archivedList.ids.includes(threadId)
     const inActive = activeList.ids.includes(threadId)
     if (!inArchived || inActive) return { ok: false, reason: `Codex thread ${threadId} is not uniquely in the archived collection (archived=${inArchived}, active=${inActive})` }
@@ -1888,24 +1888,24 @@ export const codexHarness: Harness = {
     if (!generationBefore) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
     const preflight = await codexColdPreflight(threadId)
     if (preflight && !preflight.ok) return preflight
-    if (codexRuntimeGeneration(runtimeRoot()) !== generationBefore) return { ok: false, reason: 'shared Codex app-server generation changed during target proof' }
+    if (codexRuntimeGeneration(runtimeRoot()) !== generationBefore) return { ok: false, reason: 'shared Codex app-server generation changed during target guard' }
     if (preflight?.ok && preflight.alreadyCold) return { ok: true }
-    const siblingBefore = preflight.proof.referenceIds.filter((referenceId) => referenceId !== threadId)
+    const siblingBefore = preflight.guard.referenceIds.filter((referenceId) => referenceId !== threadId)
     const coldCheck = async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
-      const [proof, archivedList, activeList] = await Promise.all([
-        codexTargetMutationProof(threadId),
+      const [guard, archivedList, activeList] = await Promise.all([
+        codexTargetMutationGuard(threadId),
         codexThreadList(sock, { archived: true, sourceKinds: [] }),
         codexThreadList(sock, { archived: false, sourceKinds: [] }),
       ])
       if (codexRuntimeGeneration(runtimeRoot()) !== generationBefore) return { ok: false, reason: 'shared Codex app-server generation changed during archive' }
-      if (proof.descendantIds.length) return { ok: false, reason: `Codex thread ${threadId} acquired owned descendants during archive (${proof.descendantIds.join(', ')})` }
-      if (!proof.healthy) return { ok: false, reason: proof.error || 'Codex post-archive target proof is unhealthy' }
+      if (guard.descendantIds.length) return { ok: false, reason: `Codex thread ${threadId} acquired owned descendants during archive (${guard.descendantIds.join(', ')})` }
+      if (!guard.healthy) return { ok: false, reason: guard.error || 'Codex post-archive target guard is unhealthy' }
       if (!archivedList.ok) return { ok: false, reason: archivedList.error }
       if (!activeList.ok) return { ok: false, reason: activeList.error }
-      if (proof.targetTurnPresence !== 'none') return { ok: false, reason: `Codex thread ${threadId} remains loaded after thread/archive` }
+      if (guard.targetTurnPresence !== 'none') return { ok: false, reason: `Codex thread ${threadId} remains loaded after thread/archive` }
       if (!archivedList.ids.includes(threadId)) return { ok: false, reason: `Codex thread ${threadId} is absent from both loaded and archived collections` }
       if (activeList.ids.includes(threadId)) return { ok: false, reason: `Codex thread ${threadId} remains in the non-archived collection` }
-      const afterIds = new Set(proof.referenceIds.filter((referenceId) => referenceId !== threadId))
+      const afterIds = new Set(guard.referenceIds.filter((referenceId) => referenceId !== threadId))
       if (siblingBefore.some((referenceId) => !afterIds.has(referenceId))) return { ok: false, reason: 'a pre-existing shared Codex sibling reference disappeared during archive' }
       return { ok: true }
     }
@@ -1927,7 +1927,7 @@ export const codexHarness: Harness = {
       }
       return { ok: false, reason: archivedList.ok && activeList.ok ? archived.error : `${archived.error}; archive state is unknown and could not be reconciled` }
     }
-    let verified: { ok: true } | { ok: false; reason: string } = { ok: false, reason: 'Codex archive proof timed out' }
+    let verified: { ok: true } | { ok: false; reason: string } = { ok: false, reason: 'Codex archive verification timed out' }
     const verifyDeadline = Date.now() + 30_000
     for (let attempt = 0; attempt < 6 && Date.now() < verifyDeadline; attempt++) {
       verified = await coldCheck()
@@ -1980,7 +1980,7 @@ export const codexHarness: Harness = {
       const result = await codexLoadedReferenceIds(sock)
       return result.ok ? { healthy: true, referenceIds: result.referenceIds } : { healthy: false, referenceIds: [], error: result.error }
     },
-    mutationProof: (targetReferenceId) => codexTargetMutationProof(targetReferenceId, runtimeDir),
+    mutationGuard: (targetReferenceId) => codexTargetMutationGuard(targetReferenceId, runtimeDir),
     probe: () => codexSharedRuntimeProbe(runtimeDir),
   }],
   // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
@@ -2072,7 +2072,7 @@ export const piHeadlessHarness: Harness = {
   liveness: recordOnline,
   deliver: deliverViaPiHeadless,
   cleanupRuntime: (rec) => unlinkSocks(piHeadlessSock(rec.session), rvSock(rec.session)),
-  coldRuntime: async () => ({ ok: false, reason: 'pi-headless has no exact resident unload proof' }),
+  coldRuntime: async () => ({ ok: false, reason: 'pi-headless has no exact resident unload verification' }),
   deliveryBlockedBy: undefined,
   resumeArg: (rec) => `--session ${rec.session}`,
 }
@@ -2135,7 +2135,7 @@ export const opencodeHeadlessHarness: Harness = {
   // A sleeping native conversation is still addressable by its non-stopped record. Transport breakage belongs
   // to the next delivery, where the live rendezvous or pane wake reports it loudly.
   liveness: recordOnline,
-  coldRuntime: async () => ({ ok: false, reason: 'opencode-headless has no exact resident unload proof' }),
+  coldRuntime: async () => ({ ok: false, reason: 'opencode-headless has no exact resident unload verification' }),
   deliver: async (rec, text) => {
     return deliverViaSocketOrWake(
       rec.session,

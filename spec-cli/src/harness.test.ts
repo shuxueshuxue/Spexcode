@@ -164,7 +164,7 @@ test('Codex archive ignores a non-returning unrelated read when the exact target
     assert.equal(unarchiveCalls, 0, 'the successful path does not compensate')
     assert.deepEqual(activeFinal, { ok: true, ids: [] })
     assert.deepEqual(archivedFinal, { ok: true, ids: [target] })
-    assert.equal(unrelatedReads, 0, 'mutation proof never waits on or reads the unrelated sibling')
+    assert.equal(unrelatedReads, 0, 'mutation guard never waits on or reads the unrelated sibling')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await stopCodexOwner(owner)
@@ -176,7 +176,7 @@ test('Codex archive ignores a non-returning unrelated read when the exact target
   }
 })
 
-test('Codex archive refuses a shared generation swap during exact target proof before mutation', async () => {
+test('Codex archive refuses a shared generation swap during exact target guard before mutation', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   const home = mkdtempSync(join(tmpdir(), 'spex-codex-generation-fence-'))
@@ -212,7 +212,7 @@ test('Codex archive refuses a shared generation swap during exact target proof b
     owner = startCodexOwner(root)
     const result = await codexHarness.coldRuntime?.({ session: 'generation-fence-session', harnessSessionId: target })
     assert.equal(result?.ok, false)
-    if (result && !result.ok) assert.match(result.reason, /generation changed during target proof/)
+    if (result && !result.ok) assert.match(result.reason, /generation changed during target guard/)
     assert.equal(archiveCalls, 0, 'a generation swap never reaches thread/archive')
     assert.equal(archived, false)
   } finally {
@@ -502,7 +502,7 @@ test('Codex cold retirement rejects missing or non-detached shared owner identit
   }
 })
 
-test('Codex cold retirement rejects a generation swap after target proof while collection lists are pending', async () => {
+test('Codex cold retirement rejects a generation swap after target guard while collection lists are pending', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   const home = mkdtempSync(join(tmpdir(), 'spex-codex-cold-retirement-generation-'))
@@ -541,7 +541,7 @@ test('Codex cold retirement rejects a generation swap after target proof while c
     for (const pending of pendingLists) pending.resolve({ data: pending.archived ? [{ id: target }] : [], nextCursor: null })
     const result = await retirement
     assert.equal(result?.ok, false)
-    if (result && !result.ok) assert.match(result.reason, /generation changed during cold retirement proof/)
+    if (result && !result.ok) assert.match(result.reason, /generation changed during cold retirement guard/)
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await stopCodexOwner(owner)

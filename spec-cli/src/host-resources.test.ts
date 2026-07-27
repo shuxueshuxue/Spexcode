@@ -54,7 +54,7 @@ test('shared runtime spawn records an observed detached process boundary', async
   }
 })
 
-test('session stop proof reads only the exact governed target and fails closed on target ambiguity', async () => {
+test('session stop guard reads only the exact governed target and fails closed on target ambiguity', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalSharedRuntimes = codexHarness.sharedRuntimes
   const home = mkdtempSync(join(tmpdir(), 'spex-target-scoped-stop-home-'))
@@ -99,7 +99,7 @@ test('session stop proof reads only the exact governed target and fails closed o
     pidFile,
     isolationFile,
     residency: async () => ({ healthy: true, referenceIds: [targetThread, 'slow-unrelated-sibling'] }),
-    mutationProof: async (threadId: string | null) => {
+    mutationGuard: async (threadId: string | null) => {
       assert.equal(threadId, targetThread)
       loadedIdCensuses++
       exactTargetReads++
@@ -139,7 +139,7 @@ test('session stop proof reads only the exact governed target and fails closed o
       setup()
       const proofCallsBefore = loadedIdCensuses
       await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), reason)
-      assert.equal(loadedIdCensuses, proofCallsBefore, `${name} refuses before the adapter proof`)
+      assert.equal(loadedIdCensuses, proofCallsBefore, `${name} refuses before the adapter guard`)
       assert.equal(processStartToken(identity.pid), identity.startToken, `${name} sends no signal to the shared root`)
       assert.equal(processStartToken(targetLeaf.pid!), targetLeafStart, `${name} sends no signal to the target leaf`)
     }
@@ -284,7 +284,7 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
       mkdirSync(dir, { recursive: true })
       writeFileSync(join(dir, 'session.json'), `${JSON.stringify(record(id, thread, terminal), null, 2)}\n`)
     }
-    const fallbackSharedRuntimes = (runtimeDir: string) => originalSharedRuntimes!(runtimeDir).map((descriptor) => ({ ...descriptor, mutationProof: undefined, probe: async () => probe }))
+    const fallbackSharedRuntimes = (runtimeDir: string) => originalSharedRuntimes!(runtimeDir).map((descriptor) => ({ ...descriptor, mutationGuard: undefined, probe: async () => probe }))
     codexHarness.sharedRuntimes = fallbackSharedRuntimes
     codexHeadlessHarness.sharedRuntimes = fallbackSharedRuntimes
 

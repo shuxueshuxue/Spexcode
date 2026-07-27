@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, existsSync } from 'node:fs'
 import { createServer } from 'node:http'
 
 const resultPath = process.env.RESULT_PATH
@@ -28,8 +28,9 @@ const server = createServer(async (req, res) => {
   if (req.method === 'POST' && req.url === '/api/session-maintenance/acquire') {
     const input = await body(req)
     record({ step: 'acquire', input })
-    res.statusCode = 202
-    return res.end(JSON.stringify({ state: 'draining', epoch, token, capabilities: input.capabilities }))
+    const active = mode === 'heartbeat-loss' || mode === 'broker-concurrent'
+    res.statusCode = active ? 201 : 202
+    return res.end(JSON.stringify({ state: active ? 'active' : 'draining', epoch, token, capabilities: input.capabilities }))
   }
   if (req.method === 'GET' && req.url === '/api/session-maintenance') {
     statusReads++
@@ -48,6 +49,10 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === 'POST' && req.url === '/api/session-maintenance/heartbeat') {
     record({ step: 'heartbeat', header: req.headers['x-spexcode-session-maintenance'] ?? null, input: await body(req) })
+    if (mode === 'heartbeat-loss') {
+      res.statusCode = 409
+      return res.end(JSON.stringify({ code: 'maintenance_conflict', error: 'fixture epoch lost' }))
+    }
     return res.end(JSON.stringify({ ok: true }))
   }
   if (req.method === 'POST' && req.url === '/api/session-maintenance/release') {
@@ -57,7 +62,17 @@ const server = createServer(async (req, res) => {
   const match = req.url?.match(/^\/api\/sessions\/([^/]+)\/(stop|resume|input)$/)
   if (req.method === 'POST' && match) {
     record({ step: 'operation', sessionId: match[1], op: match[2], header: req.headers['x-spexcode-session-maintenance'] ?? null, input: await body(req) })
+    if (mode === 'broker-concurrent' && match[2] === 'stop') {
+      const releasePath = process.env.BROKER_RELEASE_PATH
+      if (!releasePath) throw new Error('BROKER_RELEASE_PATH is required')
+      while (!existsSync(releasePath)) await new Promise((resolve) => setTimeout(resolve, 5))
+    }
     return res.end(JSON.stringify({ ok: true }))
+  }
+  if (req.method === 'POST' && req.url === '/api/sessions') {
+    record({ step: 'operation', op: 'create', header: req.headers['x-spexcode-session-maintenance'] ?? null, input: await body(req) })
+    res.statusCode = 201
+    return res.end(JSON.stringify(rows[3]))
   }
   res.statusCode = 404
   res.end(JSON.stringify({ error: 'not found' }))

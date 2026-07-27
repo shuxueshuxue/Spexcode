@@ -409,4 +409,166 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       assert.equal(JSON.stringify(f.events).includes(delegate), false)
     } finally { f.cleanup() }
   })
+
+  await t.test('explicit maintenance authority never degrades to ordinary admission', async () => {
+    const f = makeFixture()
+    try {
+      const gate = f.create()
+      const callbacks: string[] = []
+      await expectCode(gate.runOperation({
+        op: 'stop', sessionId: 's-1', authorization: { token: '00'.repeat(32), epoch: 0 },
+      }, async () => { callbacks.push('stale-open-stop') }), 'maintenance_conflict')
+      assert.deepEqual(callbacks, [])
+      assert.equal(gate.readState().tickets.length, 0)
+    } finally { f.cleanup() }
+  })
+
+  await t.test('ordinary parent admission cannot bypass privileged operations', async () => {
+    const f = makeFixture()
+    try {
+      const gate = f.create()
+      const entered = deferred(); const inspect = deferred()
+      const callbacks: string[] = []
+      const parent = gate.runOperation({ op: 'send', sessionId: 's-parent' }, async () => {
+        entered.resolve(); await inspect.promise
+        for (const operation of [
+          { op: 'stop', sessionId: 's-1' },
+          { op: 'resume', sessionId: 's-1', force: false },
+          { op: 'shared-spawn', sessionId: 's-1', delegate: 'ff'.repeat(32) },
+        ] as Operation[]) {
+          await expectCode(gate.runOperation(operation, async () => { callbacks.push(operation.op) }), 'maintenance_active')
+        }
+      })
+      await entered.promise
+      const lease = await gate.acquireLease({
+        capabilities: [{ op: 'stop', sessionId: 's-1' }, { op: 'resume', sessionId: 's-1', force: false }],
+        owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+      })
+      assert.equal(lease.state, 'draining')
+      inspect.resolve(); await parent
+      assert.deepEqual(callbacks, [])
+    } finally { f.cleanup() }
+  })
+
+  await t.test('refused maintenance result leaves exact capability retryable', async () => {
+    const f = makeFixture()
+    try {
+      const gate = f.create()
+      const lease = await gate.acquireLease({
+        capabilities: [{ op: 'stop', sessionId: 's-1' }],
+        owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+      })
+      const authorization = { token: lease.token, epoch: lease.epoch }
+      const refused = await gate.runOperation({ op: 'stop', sessionId: 's-1', authorization }, async () => ({ ok: false, refused: true }))
+      assert.deepEqual(refused, { ok: false, refused: true })
+      assert.equal(gate.readState().capabilities[0]?.state, 'unused')
+      let retries = 0
+      await gate.runOperation({ op: 'stop', sessionId: 's-1', authorization }, async () => { retries++ })
+      assert.equal(retries, 1)
+    } finally { f.cleanup() }
+  })
+
+  await t.test('release authenticates before disclosing live ticket state', async () => {
+    const f = makeFixture()
+    try {
+      const gate = f.create()
+      const entered = deferred(); const finish = deferred()
+      const live = gate.runOperation({ op: 'send', sessionId: 's-live' }, async () => {
+        entered.resolve(); await finish.promise
+      })
+      await entered.promise
+      const lease = await gate.acquireLease({
+        capabilities: [], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+      })
+      assert.equal(lease.state, 'draining')
+      await expectCode(gate.releaseLease({ token: '00'.repeat(32), epoch: lease.epoch }), 'maintenance_token_invalid')
+      finish.resolve(); await live
+      await gate.releaseLease({ token: lease.token, epoch: lease.epoch })
+    } finally { f.cleanup() }
+  })
+
+  await t.test('lock publication cannot wedge when a creator crashes before publishing an owner', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'spex-maintenance-lock-a-'))
+    const lock = join(root, '.session-maintenance.lock')
+    try {
+      mkdirSync(lock)
+      const start = Date.now()
+      await assert.doesNotReject(async () => {
+        const gate = (await import('./session-maintenance.js') as MaintenanceModule).createSessionMaintenance({
+          runtimeRoot: root, now: () => Date.now(), randomBytes: (size) => Buffer.alloc(size, 0x6b),
+          processIdentity: () => null, selfIdentity: () => ({ pid: process.pid, startToken: 'self' }), ticketReportMs: 1_000,
+        })
+        assert.equal(gate.readState().state, 'open')
+      })
+      assert.ok(Date.now() - start < 500, 'a crash before owner publication cannot wedge the coordinator lock')
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
+
+  await t.test('a stale reaper cannot remove a replacement lock owner after its proof', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'spex-maintenance-lock-aba-a-'))
+    const lock = join(root, '.session-maintenance.lock')
+    const observed = join(root, 'stale-observed')
+    const release = join(root, 'release-stale-reaper')
+    const result = join(root, 'result.json')
+    const preload = join(root, 'preload.cjs')
+    const runner = join(root, 'runner.mts')
+    try {
+      mkdirSync(lock)
+      writeFileSync(join(lock, 'owner.json'), JSON.stringify({ pid: 999_999_991, startToken: 'dead-owner' }))
+      writeFileSync(preload, `
+const fs = require('node:fs')
+const { syncBuiltinESMExports } = require('node:module')
+const original = fs.rmSync
+let intercepted = false
+fs.rmSync = function(path, options) {
+  if (!intercepted && path === process.env.SPEX_LOCK_RACE_PATH) {
+    intercepted = true
+    fs.writeFileSync(process.env.SPEX_LOCK_OBSERVED, '')
+    while (!fs.existsSync(process.env.SPEX_LOCK_RELEASE)) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5)
+  }
+  return original.call(this, path, options)
+}
+syncBuiltinESMExports()
+`)
+      writeFileSync(runner, `
+import { writeFileSync } from 'node:fs'
+import { processStartToken } from ${JSON.stringify(new URL('./process-identity.js', import.meta.url).href)}
+import { createSessionMaintenance } from ${JSON.stringify(new URL('./session-maintenance.js', import.meta.url).href)}
+const [runtimeRoot, resultPath] = process.argv.slice(2)
+const startToken = processStartToken(process.pid)
+try {
+  createSessionMaintenance({ runtimeRoot, now: () => Date.now(), randomBytes: (size) => Buffer.alloc(size, 0x6c),
+    processIdentity: (pid) => { const token = processStartToken(pid); return token ? { pid, startToken: token } : null },
+    selfIdentity: () => ({ pid: process.pid, startToken }), ticketReportMs: 1000 })
+  writeFileSync(resultPath, JSON.stringify({ ok: true }))
+} catch (error) { writeFileSync(resultPath, JSON.stringify({ ok: false, code: error?.code ?? 'unknown' })) }
+`)
+      const child = spawn(tsx, [runner, root, result], {
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''}--require=${preload}`,
+          SPEX_LOCK_RACE_PATH: lock,
+          SPEX_LOCK_OBSERVED: observed,
+          SPEX_LOCK_RELEASE: release,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      let stderr = ''; child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+      const closed = once(child, 'close') as Promise<[number | null]>
+      await waitUntil(() => {
+        if (existsSync(observed)) return true
+        if (child.exitCode !== null) throw new Error(`stale reaper exited before barrier (${child.exitCode}): ${stderr}`)
+        return false
+      }, 'stale reaper read barrier')
+      rmSync(lock, { recursive: true, force: true })
+      mkdirSync(lock)
+      const parentStart = processStartToken(process.pid); assert.ok(parentStart)
+      writeFileSync(join(lock, 'owner.json'), JSON.stringify({ pid: process.pid, startToken: parentStart }))
+      writeFileSync(release, '')
+      const [code] = await bounded(closed, 'stale reaper exit')
+      assert.equal(code, 0, stderr)
+      assert.deepEqual(JSON.parse(readFileSync(result, 'utf8')), { ok: false, code: 'maintenance_conflict' })
+      assert.deepEqual(JSON.parse(readFileSync(join(lock, 'owner.json'), 'utf8')), { pid: process.pid, startToken: parentStart })
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
 })

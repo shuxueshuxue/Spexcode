@@ -338,7 +338,7 @@ test('public close cancels a clean never-launched queue without entering the unr
     assert.equal(existsSync(sessionRecordPath(pidArtifact.id)), true, 'unreadable PID ambiguity preserves the queued record')
 
     const ahead = prepare('ahead')
-    execFileSync('git', ['-C', ahead.path, 'commit', '--allow-empty', '-q', '-m', 'fixture: owned queue work'])
+    execFileSync('git', ['-c', 'user.name=Queue Close Fixture', '-c', 'user.email=queue-close@example.test', '-C', ahead.path, 'commit', '--allow-empty', '-q', '-m', 'fixture: owned queue work'])
     await assert.rejects(closeSession(ahead.id), /prepared branch is 1 commit\(s\) ahead/)
     assert.equal(existsSync(sessionRecordPath(ahead.id)), true, 'ahead-work ambiguity preserves the queued record')
 

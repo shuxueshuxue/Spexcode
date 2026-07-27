@@ -930,7 +930,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
         : resident?.loaded
           ? 'archived runtime hazard: target adapter thread is still loaded'
           : `archived runtime hazard: record says archived but physical liveness is ${physical}`
-      : 'archived runtime hazard: record has no durable cold proof; exact adapter unload is unproven'
+      : 'archived runtime hazard: record has no durable cold witness; exact adapter unload is unproven'
     if (rec.adapterRecovery) s.archiveHazard = `archive adapter recovery required: ${rec.adapterRecovery}`
     lastKnownSession.set(id, s)
     return s
@@ -2396,7 +2396,7 @@ async function archiveSessionUnarchive(id: string): Promise<boolean> {
 // This is read-only: no signal, adapter mutation, or shared-root cleanup belongs on the cold path.
 async function assertColdRetirementSafe(id: string, rec: SessRec): Promise<void> {
   if (!rec.archived || !rec.stopped || !hasValidColdProof(rec))
-    throw new ResourceConflict(`refusing to close archived session ${id}: target-bound cold proof is missing or stale`)
+    throw new ResourceConflict(`refusing to close archived session ${id}: target-bound cold witness is missing or stale`)
   if (rec.adapterRecovery)
     throw new ResourceConflict(`refusing to close archived session ${id}: adapter recovery is pending (${rec.adapterRecovery})`)
 

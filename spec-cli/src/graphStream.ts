@@ -31,9 +31,9 @@ import {
 // worktree REGISTRY (+ each live worktree root and gitdir index) — dirty source/spec/sidecar/rename/stage → 'full';
 // (4) two subscriber-gated pollers of the tmux-derived signatures ([[sessions]]) that never touch a file —
 // a 100ms HOT syscall poll and a 1s WARM tmux poll, both → 'sessions'; (5) a delta-gated ~15s cold-tick
-// PATROL that invalidates FULL, rebuilds and diffs — the self-heal authority that catches whatever every
-// leaf watcher missed (and is loud when it has to: see the repair accounting below) → 'full'. Plain mode
-// without delta subscribers keeps its zero-build behavior: sources just fan out `graph-changed`.
+// PATROL that asks graph-cache to validate its owned input revision — unchanged inputs reuse the anchor,
+// while moved inputs select sessions/full there and missed leaf signals stay loud through repair accounting.
+// Plain mode without delta subscribers keeps its zero-build behavior: sources just fan out `graph-changed`.
 
 type Scope = 'sessions' | 'full'
 type EvalTarget = 'all' | { id?: string; path?: string }
@@ -279,7 +279,10 @@ async function rebuildAndBroadcast(patrol = false): Promise<void> {
       const t0 = Date.now()
       try { board = await (validate ? patrolBoard() : getBoard()) }
       catch {
-        triggerTags.clear()
+        // A failed refresh consumes no cause: graph-cache restores the producer scope, so its stream-side
+        // attribution must remain owed too. This also retains watcher causes that arrived while the failed
+        // flight was occupied. A later patrol may recover the work, but it is then one cause alongside those
+        // healthy leaf signals rather than a false patrol-only blind-watcher repair.
         for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }
         continue
       }

@@ -111,7 +111,7 @@ test('dirty stale readers are immediate while one fresh flight owns completion',
   await assert.rejects(cache.getBoard(), (error: unknown) => /did not settle|aborting|aborted/i.test(String((error as Error)?.message || error)))
   await delay(250)
   assert.equal(shimPids().length, 0, 'watchdog left a git child running')
-  cache.invalidateBoard('full')
+  // No second invalidation: the failed producer itself restores the full scope it consumed.
   const recovered = await cache.getBoard()
   assert.equal(recovered.nodes.length, 1)
   assert.equal((await cache.getBoardJson('fresh')).freshness, 'fresh')

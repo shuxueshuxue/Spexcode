@@ -15,10 +15,11 @@ const base = process.env.BASE || 'http://127.0.0.1:5175'
 const sessionId = process.env.SESSION
 const siblingId = process.env.SIBLING
 const guardId = process.env.GUARD_SESSION
+const capacityId = process.env.CAPACITY_SESSION
 const dist = process.env.DIST
 const out = resolve(process.env.OUT || '/tmp/archive-shelf-e2e')
 const spex = resolve(process.env.SPEX || 'spec-cli/bin/spex.mjs')
-if (!sessionId || !siblingId || !guardId) throw new Error('SESSION=<real Codex target>, SIBLING=<real Codex sibling>, and GUARD_SESSION=<blocked archive leg> are required')
+if (!sessionId || !siblingId || !guardId || !capacityId) throw new Error('SESSION=<real Codex target>, SIBLING=<real Codex sibling>, GUARD_SESSION=<blocked archive leg>, and CAPACITY_SESSION=<queued control> are required')
 for (const name of ['SPEXCODE_TMUX', 'TARGET_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE']) {
   if (!process.env[name]) throw new Error(`${name} is required for runtime/resource evidence`)
 }
@@ -73,6 +74,10 @@ assert.ok(before && beforeAll, 'target must be a real existing session')
 assert.equal(before.archived, false, 'target must begin unarchived')
 assert.equal(beforeAll.harness, 'codex', 'archive YATU requires a real Codex target')
 const beforeResources = await get('/api/resources')
+const defaultCountBefore = (await get(false)).length
+const graphCountBefore = (await get('/api/graph')).sessions.length
+const capacityBefore = (await get(true)).find((s) => s.id === capacityId)
+assert.deepEqual({ status: capacityBefore?.status, liveness: capacityBefore?.liveness }, { status: 'queued', liveness: 'offline' }, 'capacity control must be queued before archive')
 const dirtyHashBefore = hashBytes(readFileSync(process.env.DIRTY_SENTINEL))
 const recordBeforeBytes = JSON.parse(readFileSync(process.env.RECORD_FILE, 'utf8'))
 const recordIdentityBefore = hashBytes(JSON.stringify({ worktree_path: recordBeforeBytes.worktree_path, branch: recordBeforeBytes.branch, harness_session_id: recordBeforeBytes.harness_session_id }))
@@ -140,9 +145,11 @@ try {
   assert.doesNotMatch(waitTranscript.stdout + waitTranscript.stderr, /gone|no such \(living\)/i)
   const defaultRows = await get(false)
   assert.equal(defaultRows.some((s) => s.id === sessionId), false, 'cold target must leave default sessions')
+  assert.equal(defaultRows.length, defaultCountBefore - 1, 'cold target must leave the default session count')
   const graph = await get('/api/graph')
   assert.ok(Array.isArray(graph.sessions), 'graph must expose structured sessions')
   assert.equal(graph.sessions.some((s) => s.id === sessionId), false, 'cold target must leave default graph sessions')
+  assert.equal(graph.sessions.length, graphCountBefore - 1, 'cold target must leave the default graph count')
   const edges = await get('/api/sessions/edges')
   assert.equal((edges.edges || []).some((edge) => edge.from === sessionId || edge.to === sessionId), false, 'cold target must leave graph edges')
   const resources = await get('/api/resources')
@@ -155,6 +162,11 @@ try {
   assert.equal(processMarker(process.env.SHARED_PID_FILE), sharedPidBefore, 'shared app-server PID/start must be unchanged')
   assert.equal(socketMarker(process.env.SHARED_SOCKET), sharedSocketBefore, 'shared app-server socket identity must be unchanged')
   assert.equal((resources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.threadId === beforeThread), false, 'target thread is not still loaded after archive')
+  const capacityAfter = await waitFor(() => get(true), (rows) => {
+    const control = rows.find((s) => s.id === capacityId)
+    return control?.status !== 'queued' && control?.liveness === 'online' ? control : null
+  }, 'queued capacity control to launch after archive')
+  assert.notEqual(capacityAfter.status, 'queued', 'archived target must release its maxActive slot')
   const shelf = page.locator('.si-pill.shelf'); await shelf.click(); await page.waitForFunction(() => document.querySelector('.si-pill.shelf')?.getAttribute('aria-pressed') === 'true')
   assert.equal(await page.locator('.si-zone').count(), 0, 'archive shelf must be flat with no status zones')
   frame('flat offline shelf; default graph/resources omit target; target runtime gone and shared sibling retained')
@@ -212,6 +224,6 @@ const video = page.video(); await context.close(); const videoPath = await video
 const browserErrors = [...pageErrors, ...consoleErrors]
 if (browserErrors.length && !failure) failure = new Error(`browser errors: ${browserErrors.join('\\n')}`)
 writeFileSync(join(out, 'archive-shelf.timeline.json'), `${JSON.stringify({ events, pageErrors, consoleErrors }, null, 2)}\n`)
-writeFileSync(join(out, 'result.json'), `${JSON.stringify({ ok: !failure, sessionId, siblingId, video: videoPath, browserErrors }, null, 2)}\n`)
+writeFileSync(join(out, 'result.json'), `${JSON.stringify({ ok: !failure, sessionId, siblingId, capacityId, video: videoPath, browserErrors }, null, 2)}\n`)
 if (failure) throw failure
 console.log(JSON.stringify({ ok: true, video: videoPath, timeline: join(out, 'archive-shelf.timeline.json') }))

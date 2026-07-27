@@ -42,6 +42,12 @@ test('archive door stays icon-only regardless of archived session count', () => 
   assert.doesNotMatch(source, /si-pill-count/)
 })
 
+test('archive refresh cannot override a human shelf toggle without a selection transition', () => {
+  assert.match(source, /const selectedArchived = active !== 'new'[\s\S]{0,160}\.archived/)
+  assert.match(source, /setShowShelf\(selectedArchived\)[\s\S]{0,100}\}, \[open, active, selectedArchived\]\)/)
+  assert.doesNotMatch(source, /setShowShelf\(!!allSessions\.find[\s\S]{0,120}\[open, active, allSessions\]/)
+})
+
 test('cold archive rows render without paying for a git ops projection', () => {
   assert.match(sessionWindow, /if \(!ops\?\.length\) return null/)
 })

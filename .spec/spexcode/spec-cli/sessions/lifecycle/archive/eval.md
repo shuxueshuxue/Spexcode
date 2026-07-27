@@ -88,6 +88,17 @@ scenarios:
       The monitor uses active-only events plus all-record presence and never infers existence from the default
       active-only projection. The in-memory helper is only a narrow unit regression, not a YATU reading.
     tags: [backend-api, cli]
+  - name: shelf-refresh-preserves-human-view
+    description: >
+      In a real Chromium session console, select an ordinary working row, open the archive star, and serve
+      several equivalent history refreshes that replace the archived-row objects without changing the selected
+      session id or either row's archived state. Then select the exact archived row through the rendered list.
+    expected: >
+      The star remains on with aria-pressed true across every refresh; the exact archived row stays uniquely
+      visible and clickable with no status-zone or ops chrome; selecting it keeps the shelf open, marks that row
+      selected, and renders one separate archive card with one resume action. A real selected-id or selected-row
+      archived-state transition still automatically chooses the side that owns that selection.
+    tags: [frontend-e2e]
 ---
 
 # eval — archive

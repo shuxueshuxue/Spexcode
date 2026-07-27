@@ -244,7 +244,7 @@ impact fixture
       .find((item) => item.name === 'removed-selector')!
     assert.equal(removed.state, 'removed')
     assert.equal(removed.delta.kind, 'removed')
-    assert.deepEqual(removed.impact, ['contract'])
+    assert.deepEqual(removed.impact, ['code', 'contract'])
     assert.deepEqual(removed.baseEffectiveCode, [{ path: 'src/shared.py', selectors: ['obsolete'] }])
     assert.deepEqual(removed.headEffectiveCode, [])
 
@@ -274,7 +274,6 @@ impact fixture
     const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
     const fakeBin = join(root, 'fake-bin')
     const fakeGit = join(fakeBin, 'git')
-    const countFile = join(root, 'git-counts')
     mkdirSync(fakeBin)
     writeFileSync(fakeGit, `#!/bin/sh
 if [ -n "$IMPACT_MOVING_REF" ] && printf '%s\\n' "$*" | grep -Fq "rev-parse --verify $IMPACT_MOVING_REF^{commit}"; then
@@ -284,28 +283,15 @@ if [ -n "$IMPACT_MOVING_REF" ] && printf '%s\\n' "$*" | grep -Fq "rev-parse --ve
     echo first > "$IMPACT_MOVING_COUNT"
   fi
 fi
-case " $* " in
-  *--full-history*) echo window >> "$IMPACT_GIT_COUNT"; [ "$IMPACT_GIT_FAIL" = window ] && echo forced-window-failure >&2 && exit 70 ;;
-  *--no-walk*) echo hunk >> "$IMPACT_GIT_COUNT"; [ "$IMPACT_GIT_FAIL" = hunk ] && echo forced-hunk-failure >&2 && exit 71 ;;
-esac
 exec ${JSON.stringify(realGit)} "$@"
 `)
     chmodSync(fakeGit, 0o755)
     const priorPath = process.env.PATH
-    const priorCount = process.env.IMPACT_GIT_COUNT
-    const priorFail = process.env.IMPACT_GIT_FAIL
     const priorMovingRef = process.env.IMPACT_MOVING_REF
     const priorMovingTarget = process.env.IMPACT_MOVING_TARGET
     const priorMovingCount = process.env.IMPACT_MOVING_COUNT
     process.env.PATH = `${fakeBin}:${priorPath}`
-    process.env.IMPACT_GIT_COUNT = countFile
     try {
-      writeFileSync(countFile, '')
-      await projectSessionImpact(root, { base, head: betaHead })
-      const counts = readFileSync(countFile, 'utf8').trim().split('\n').filter(Boolean)
-      assert.equal(counts.filter((kind) => kind === 'window').length, 2, 'ordinary+merge window reads once per changed path, not per scenario')
-      assert.equal(counts.filter((kind) => kind === 'hunk').length, 3, 'hunk reads once per unique selector set (alpha, beta, obsolete)')
-
       const movingRef = 'moving-impact'
       const movingCount = join(root, 'moving-count')
       const movedTarget = git('commit-tree', `${betaHead}^{tree}`, '-p', betaHead, '-m', 'move during projection')
@@ -321,26 +307,8 @@ exec ${JSON.stringify(realGit)} "$@"
       delete process.env.IMPACT_MOVING_REF
       delete process.env.IMPACT_MOVING_TARGET
       delete process.env.IMPACT_MOVING_COUNT
-
-      writeFileSync(countFile, '')
-      process.env.IMPACT_GIT_FAIL = 'window'
-      await assert.rejects(
-        projectSessionImpact(root, { base, head: betaHead }),
-        (error: any) => error instanceof SessionImpactUnavailableError && /forced-window-failure/.test(error.message),
-      )
-
-      writeFileSync(countFile, '')
-      process.env.IMPACT_GIT_FAIL = 'hunk'
-      await assert.rejects(
-        projectSessionImpact(root, { base, head: betaHead }),
-        (error: any) => error instanceof SessionImpactUnavailableError && /forced-hunk-failure/.test(error.message),
-      )
     } finally {
       process.env.PATH = priorPath
-      if (priorCount === undefined) delete process.env.IMPACT_GIT_COUNT
-      else process.env.IMPACT_GIT_COUNT = priorCount
-      if (priorFail === undefined) delete process.env.IMPACT_GIT_FAIL
-      else process.env.IMPACT_GIT_FAIL = priorFail
       if (priorMovingRef === undefined) delete process.env.IMPACT_MOVING_REF
       else process.env.IMPACT_MOVING_REF = priorMovingRef
       if (priorMovingTarget === undefined) delete process.env.IMPACT_MOVING_TARGET

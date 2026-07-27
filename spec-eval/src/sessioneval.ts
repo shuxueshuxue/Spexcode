@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import {
   batchBlobTexts,
@@ -7,10 +8,13 @@ import {
   git,
   gitA,
   gitTry,
+  pathRangeEvents,
   repoRoot,
   driftIndex,
   historyIndex,
   treeTextFiles,
+  type DriftIndex,
+  type DriftPathEvent,
   type ReviewDiffFile,
 } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
@@ -18,14 +22,13 @@ import { mainBranch } from '../../spec-cli/src/layout.js'
 import { reviewPayload } from '../../spec-cli/src/sessions.js'
 import { loadEvalRemarkTracks } from '../../spec-cli/src/issues.js'
 import {
-  AnchorUnavailableError,
   anchorHitCommits,
   diffHunkRanges,
   extOf,
   extractorFor,
   extractors,
   parseRelation,
-  pendingWindowCommits,
+  relationClaimsPath,
   resolveAnchor,
   selectorsHitRanges,
   type AnchorHit,
@@ -123,11 +126,38 @@ async function impactGit(root: string, args: string[], operation: string): Promi
   return result.stdout
 }
 
+async function impactIndexGit(root: string, indexFile: string, args: string[], operation: string): Promise<string> {
+  const result = await gitTry(['-C', root, ...args], { indexFile })
+  if (!result.ok) {
+    const detail = result.stderr.trim() || `${result.failure ?? 'git'} failure`
+    throw new SessionImpactUnavailableError(`session impact cannot ${operation}: ${detail}`)
+  }
+  return result.stdout
+}
+
 async function impactCommit(root: string, selector: string): Promise<string> {
   const out = await impactGit(root, ['rev-parse', '--verify', `${selector}^{commit}`], `resolve revision '${selector}'`)
   const oid = out.trim()
   if (!oid) throw new SessionImpactUnavailableError(`session impact revision '${selector}' resolved to no commit`)
   return oid
+}
+
+type NameStatusChange = { status: string; before: string; after: string }
+function parseNameStatusChanges(out: string): NameStatusChange[] {
+  const records = out.split('\0')
+  const changes: NameStatusChange[] = []
+  for (let index = 0; index < records.length;) {
+    const status = records[index++]
+    if (!status) continue
+    const first = records[index++]
+    if (!first) throw new SessionImpactUnavailableError(`session impact diff emitted '${status}' without a path`)
+    if (/^[RC]/.test(status)) {
+      const second = records[index++]
+      if (!second) throw new SessionImpactUnavailableError(`session impact diff emitted '${status}' without both rename paths`)
+      changes.push({ status, before: first, after: second })
+    } else changes.push({ status, before: first, after: first })
+  }
+  return changes
 }
 
 async function revisionFile(root: string, revision: string, path: string): Promise<string | null> {
@@ -161,8 +191,9 @@ type ImpactReadContext = {
   changedPaths: ReadonlySet<string>
   overlay?: SessionImpactOverlay
   regs: ReturnType<typeof extractors>
+  didx: DriftIndex | null
   entryImpacts: Map<string, Promise<{ paths: string[]; selectorHits: SessionImpactSelectorHit[] }>>
-  windows: Map<string, Promise<string[]>>
+  windows: Map<string, DriftPathEvent[]>
   sources: Map<string, Promise<string | null>>
   units: Map<string, Promise<{ extractor: Extractor; units: Unit[] }>>
 }
@@ -289,24 +320,25 @@ async function impactForEntry(
     // Resolution is a validity claim about the selected HEAD, independent of whether the file moved.
     // Validating first prevents a dead selector from becoming a vacuous no-hit/fresh answer.
     if (!changed.length && !options.validateUnchanged) return { paths: [], selectorHits: [] }
-    const { extractor, units } = await validateSelectorEntry(context, revision, entry, sourceView)
+    const { units } = await validateSelectorEntry(context, revision, entry, sourceView)
     if (!changed.length) return { paths: [], selectorHits: [] }
     const selectorHits: SessionImpactSelectorHit[] = []
     const committed = [...context.committedPaths].some((path) => codeClaims([entry.path], path))
     if (committed) {
-      let window = context.windows.get(entry.path)
+      if (!context.didx) throw new SessionImpactUnavailableError('session impact has committed paths but no exact event index')
+      const windowKey = `${revision}\0${entry.path}`
+      let window = context.windows.get(windowKey)
       if (!window) {
-        window = pendingWindowCommits(context.root, context.base, context.head, entry.path, undefined, { loud: true })
-        context.windows.set(entry.path, window)
+        const projected = pathRangeEvents(context.didx, context.base, entry.path, revision)
+        if (!projected) throw new SessionImpactUnavailableError(`session impact cannot place base ${context.base.slice(0, 8)} in the exact event topology`)
+        window = projected
+        context.windows.set(windowKey, window)
       }
       try {
-        const hits = await anchorHitCommits(context.root, await window, entry.path, [...entry.selectors], extractor, { loud: true })
+        const hits = await anchorHitCommits(context.root, window, [...entry.selectors], context.regs)
         for (const hit of hits) selectorHits.push({ path: entry.path, ...hit })
       } catch (error: any) {
-        if (error instanceof AnchorUnavailableError) {
-          throw new SessionImpactUnavailableError(`session impact selector '${entry.path}#${entry.selectors.join(',#')}' is unavailable: ${error.message}`)
-        }
-        throw error
+        throw new SessionImpactUnavailableError(`session impact selector '${entry.path}#${entry.selectors.join(',#')}' is unavailable: ${error?.message ?? String(error)}`)
       }
     }
     if (context.overlay && context.overlay.paths.some((path) => codeClaims([entry.path], path))) {
@@ -402,11 +434,19 @@ export async function projectSessionImpact(root: string, options: SessionImpactO
       ? Promise.resolve(options.overlay.specs)
       : loadSpecs(root, { tip: head, history: null, drift: null, snapshot: { tip: head, files: headTree! } }),
   ])
-  const committedPaths = new Set((await impactGit(
+  const committedChanges = parseNameStatusChanges(await impactGit(
     root,
-    ['-c', 'core.quotePath=false', 'diff', '--name-only', '-z', '-M', base, head],
+    ['-c', 'core.quotePath=false', 'diff', '--name-status', '-z', '-M', base, head],
     `diff ${base.slice(0, 8)}..${head.slice(0, 8)}`,
-  )).split('\0').filter(Boolean))
+  ))
+  const committedPaths = new Set(committedChanges.flatMap((change) => [change.before, change.after]))
+  let didx: DriftIndex | null = null
+  if (committedPaths.size) {
+    try { didx = await driftIndex(root, head) }
+    catch (error: any) {
+      throw new SessionImpactUnavailableError(`session impact cannot derive the exact ${base.slice(0, 8)}..${head.slice(0, 8)} event window: ${error?.message ?? String(error)}`)
+    }
+  }
   const changedPaths = new Set([...committedPaths, ...(options.overlay?.paths ?? [])])
   const context: ImpactReadContext = {
     root,
@@ -416,6 +456,7 @@ export async function projectSessionImpact(root: string, options: SessionImpactO
     changedPaths,
     overlay: options.overlay,
     regs: extractors(root),
+    didx,
     entryImpacts: new Map(),
     windows: new Map(),
     sources: new Map(),
@@ -490,16 +531,29 @@ export async function projectSessionImpact(root: string, options: SessionImpactO
 
     const baseNodeCodeRows = loadedRelationRows(baseSpec, 'code')
     const headNodeCodeRows = loadedRelationRows(headSpec, 'code')
-    const nodeCodeRows = headSpec ? headNodeCodeRows : baseNodeCodeRows
-    const nodeCode = scenarioCodeAxis(undefined, nodeCodeRows)
-    if (nodeCode.problems.length) {
-      throw new SessionImpactUnavailableError(`session impact node '${id}' has invalid code: ${nodeCode.problems.join('; ')}`)
+    const baseNodeCode = scenarioCodeAxis(undefined, baseNodeCodeRows)
+    const headNodeCode = scenarioCodeAxis(undefined, headNodeCodeRows)
+    if (baseNodeCode.problems.length || headNodeCode.problems.length) {
+      throw new SessionImpactUnavailableError(`session impact node '${id}' has invalid code: ${[
+        ...baseNodeCode.problems, ...headNodeCode.problems,
+      ].join('; ')}`)
     }
-    const nodeCodeImpact = await impactForEntries(context, nodeCode.entries, {
-      validateUnchanged: !baseSpec || !headSpec || JSON.stringify(baseNodeCodeRows) !== JSON.stringify(headNodeCodeRows),
-      validationRevision: headSpec ? head : base,
-      validationSide: headSpec ? 'head' : 'base',
-    })
+    const nodeCodeMoved = !!baseSpec && !!headSpec
+      && JSON.stringify(baseNodeCode.entries) !== JSON.stringify(headNodeCode.entries)
+    const nodeCodeReads = nodeCodeMoved
+      ? await Promise.all([
+        impactForEntries(context, baseNodeCode.entries, { validateUnchanged: true, validationRevision: base, validationSide: 'base' }),
+        impactForEntries(context, headNodeCode.entries, { validateUnchanged: true, validationRevision: head, validationSide: 'head' }),
+      ])
+      : [await impactForEntries(context, (headSpec ? headNodeCode : baseNodeCode).entries, {
+        validateUnchanged: !baseSpec || !headSpec,
+        validationRevision: headSpec ? head : base,
+        validationSide: headSpec ? 'head' : 'base',
+      })]
+    const nodeCodeImpact = {
+      paths: [...new Set(nodeCodeReads.flatMap((read) => read.paths))].sort(),
+      selectorHits: nodeCodeReads.flatMap((read) => read.selectorHits),
+    }
     if (nodeCodeImpact.paths.length) pushNodeCause(causes, 'code', nodeCodeImpact.paths, [], nodeCodeImpact.selectorHits)
 
     // Related declarations belong to their own owners. Combine their parsed DATA entries after validation;
@@ -513,13 +567,22 @@ export async function projectSessionImpact(root: string, options: SessionImpactO
     ]
     const baseRelatedEntries = relatedFor(baseSpec, baseScenarios)
     const headRelatedEntries = relatedFor(headSpec, headScenarios)
-    const relatedEntries = headSpec ? headRelatedEntries : baseRelatedEntries
-    const relatedImpact = await impactForEntries(context, relatedEntries, {
-      validateUnchanged: !baseSpec || !headSpec
-        || JSON.stringify(baseRelatedEntries) !== JSON.stringify(headRelatedEntries),
-      validationRevision: headSpec ? head : base,
-      validationSide: headSpec ? 'head' : 'base',
-    })
+    const relatedMoved = !!baseSpec && !!headSpec
+      && JSON.stringify(baseRelatedEntries) !== JSON.stringify(headRelatedEntries)
+    const relatedReads = relatedMoved
+      ? await Promise.all([
+        impactForEntries(context, baseRelatedEntries, { validateUnchanged: true, validationRevision: base, validationSide: 'base' }),
+        impactForEntries(context, headRelatedEntries, { validateUnchanged: true, validationRevision: head, validationSide: 'head' }),
+      ])
+      : [await impactForEntries(context, headSpec ? headRelatedEntries : baseRelatedEntries, {
+        validateUnchanged: !baseSpec || !headSpec,
+        validationRevision: headSpec ? head : base,
+        validationSide: headSpec ? 'head' : 'base',
+      })]
+    const relatedImpact = {
+      paths: [...new Set(relatedReads.flatMap((read) => read.paths))].sort(),
+      selectorHits: relatedReads.flatMap((read) => read.selectorHits),
+    }
     if (relatedImpact.paths.length) pushNodeCause(causes, 'related', relatedImpact.paths, [], relatedImpact.selectorHits)
 
     const baseByName = new Map(baseScenarios.map((scenario) => [scenario.name, scenario]))
@@ -940,13 +1003,7 @@ function nodeForFile(file: string, specs: Awaited<ReturnType<typeof loadSpecs>>,
 }
 
 function codeClaims(code: string[], file: string): boolean {
-  return code.some((cf) => {
-    if (cf === file) return true
-    const dir = cf.replace(/\/+$/, '') + '/'
-    if (file.startsWith(dir)) return true
-    if (cf.includes('*')) return new RegExp('^' + cf.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$').test(file)
-    return false
-  })
+  return code.some((claim) => relationClaimsPath(claim, file))
 }
 
 // ---- worktree resolution (no sessions.ts edit: read git's own worktree list) ----
@@ -989,8 +1046,8 @@ async function worktreeDirtyState(wtPath: string): Promise<{ paths: Set<string>;
   return { paths: parsePorcelainPaths(out), status: out }
 }
 
-// Capture one immutable description of the live worktree overlay. Git supplies the zero-context patch for
-// tracked/staged/rename changes; untracked files are wholly new result ranges. The canonical anchor parser
+// Capture one immutable description of the live worktree overlay. One rename-aware change set supplies both
+// path images; untracked files are wholly new result ranges. The canonical anchor parser
 // turns those patches into ranges, and projectSessionImpact consumes the snapshot beside base..HEAD. The
 // outer session content double-read fences concurrent edits before this result can publish.
 export async function sessionImpactOverlay(
@@ -1004,29 +1061,47 @@ export async function sessionImpactOverlay(
   const ranges: Record<string, [number, number][]> = {}
   const files: Record<string, string | null> = {}
   const fingerprints: string[] = []
+  const bytesByPath = new Map<string, Buffer | null>()
   for (const path of paths) {
     let bytes: Buffer | null = null
     try { bytes = await readFile(join(wtPath, path)) }
     catch (error: any) {
       if (error?.code !== 'ENOENT') throw new SessionImpactUnavailableError(`session impact cannot snapshot '${path}': ${error?.message ?? String(error)}`)
     }
+    bytesByPath.set(path, bytes)
     files[path] = bytes?.toString('utf8') ?? null
-    if (untracked.has(path)) {
-      const lines = bytes ? bytes.toString('utf8').split('\n').length : 0
-      baseRanges[path] = []
-      ranges[path] = lines > 0 ? [[1, lines]] : []
-      fingerprints.push(`${path}\0untracked\0${bytes ? createHash('sha256').update(bytes).digest('hex') : '<gone>'}`)
-      continue
-    }
-    const patch = await impactGit(
-      wtPath,
-      ['-c', 'core.quotePath=false', 'diff', 'HEAD', '--unified=0', '--no-ext-diff', '--', path],
-      `snapshot worktree patch '${path}'`,
-    )
-    baseRanges[path] = diffHunkRanges(patch, 'old')
-    ranges[path] = diffHunkRanges(patch, 'new')
-    fingerprints.push(`${path}\0${createHash('sha256').update(patch).digest('hex')}\0${bytes ? createHash('sha256').update(bytes).digest('hex') : '<gone>'}`)
+    baseRanges[path] = []
+    ranges[path] = []
+    fingerprints.push(`${path}\0${bytes ? createHash('sha256').update(bytes).digest('hex') : '<gone>'}`)
   }
+  const indexDir = await mkdtemp(join(tmpdir(), 'spex-impact-index-'))
+  const indexFile = join(indexDir, 'index')
+  try {
+    await impactIndexGit(wtPath, indexFile, ['read-tree', 'HEAD'], 'seed the isolated worktree index')
+    await impactIndexGit(wtPath, indexFile, ['add', '-A', '--', ...paths], 'snapshot dirty paths in the isolated worktree index')
+    const trackedChanges = parseNameStatusChanges(await impactIndexGit(
+      wtPath,
+      indexFile,
+      ['-c', 'core.quotePath=false', 'diff', '--cached', 'HEAD', '--name-status', '-z', '-M'],
+      'snapshot worktree change identities',
+    ))
+    for (const change of trackedChanges) {
+      if (!Object.hasOwn(baseRanges, change.before) || !Object.hasOwn(ranges, change.after))
+        throw new SessionImpactUnavailableError(`session impact dirty snapshot omitted '${change.before}' -> '${change.after}'`)
+      const patch = await impactIndexGit(
+        wtPath,
+        indexFile,
+        ['-c', 'core.quotePath=false', 'diff', '--cached', 'HEAD', '--unified=0', '--no-ext-diff', '-M', '--', ...new Set([change.before, change.after])],
+        `snapshot worktree patch '${change.before}' -> '${change.after}'`,
+      )
+      baseRanges[change.before] = diffHunkRanges(patch, 'old')
+      ranges[change.after] = diffHunkRanges(patch, 'new')
+      fingerprints.push(`${change.status}\0${change.before}\0${change.after}\0${createHash('sha256').update(patch).digest('hex')}`)
+    }
+  } finally {
+    await rm(indexDir, { recursive: true, force: true })
+  }
+  for (const path of untracked) fingerprints.push(`untracked\0${path}\0${bytesByPath.get(path)?.length ?? 0}`)
   const loaded = await loadSpecs(wtPath, { history: null, drift: null })
   const specs: SessionImpactSpecSnapshot[] = loaded.map((spec) => ({
     id: spec.id,

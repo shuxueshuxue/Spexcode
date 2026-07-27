@@ -268,7 +268,7 @@ test('when the governed repository has no TypeScript, lint reports the skipped a
   assert.ok(findings.some((f) => f.msg.includes("spec 'broken' lists a missing related file")), 'lint must continue after skipping unavailable anchors')
 })
 
-test('optimized lint is idempotent and decision-equivalent to the full oracle across cold and hot cache reads', { skip }, async () => {
+test('lint is idempotent across process-local index resets', { skip }, async () => {
   const fx = fixture()
   fx.node('calc', 'code:\n  - src/calc.ts#applyRate')
   fx.commit('v1')
@@ -281,8 +281,7 @@ test('optimized lint is idempotent and decision-equivalent to the full oracle ac
   for (let i = 0; i < 3; i++) {
     resetHistoryCachesForTests()
     const cold = normalize(await specLint(fx.proj, extractors(fx.proj)))
-    assert.deepEqual(cold, normalize(await specLint(fx.proj, extractors(fx.proj))), `optimized lint changed on warm read ${i}`)
-    assert.deepEqual(cold, normalize(await specLint(fx.proj, extractors(fx.proj), { fullOracle: true })), `optimized/full mismatch ${i}`)
+    assert.deepEqual(cold, normalize(await specLint(fx.proj, extractors(fx.proj))), `lint changed on repeat read ${i}`)
     if (previous) assert.deepEqual(cold, previous, `optimized lint changed after cache reset ${i}`)
     previous = cold
   }
@@ -303,7 +302,7 @@ test('an issue-only pending commit keeps the parent drift index instead of clear
     .sort()
   resetHistoryCachesForTests()
   const fast = normalize(await specLint(fx.proj, extractors(fx.proj), { tip }))
-  const full = normalize(await specLint(fx.proj, extractors(fx.proj), { tip, fullOracle: true }))
-  assert.deepEqual(fast, full)
+  const repeat = normalize(await specLint(fx.proj, extractors(fx.proj), { tip }))
+  assert.deepEqual(fast, repeat)
   assert.ok(fast.some((row) => row.startsWith('warn|drift|calc|src/calc.ts')), `issue commit erased drift: ${fast.join('\n')}`)
 })

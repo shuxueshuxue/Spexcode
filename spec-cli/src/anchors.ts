@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitA, gitTry, batchRevisionOids, batchBlobTexts, combinedDiffOwnedRanges, type DriftIndex, ancestorsOf, inAncestors, ackCoverFor, selfAckCovers } from './git.js'
+import { git, gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, type DiffLineRange, type DriftIndex, type DriftPathEvent } from './git.js'
 
 const RS = '\x1e'
 
@@ -14,10 +14,6 @@ const RS = '\x1e'
 //     which language it is measuring.
 
 export type Unit = { name: string; kind: string; start: number; end: number; typeOnly?: boolean }
-
-export class AnchorUnavailableError extends Error {
-  override name = 'AnchorUnavailableError'
-}
 
 export type Extractor = {
   id: string
@@ -50,6 +46,13 @@ export function parseCodeEntry(raw: string): CodeEntry {
 // this parser never touches fs.
 export type RelationEntry = { path: string; selectors: string[] }
 export type RelationParse = { entries: RelationEntry[]; problems: string[] }
+export function relationClaimsPath(claim: string, file: string): boolean {
+  if (claim === file) return true
+  if (file.startsWith(claim.replace(/\/+$/, '') + '/')) return true
+  if (!claim.includes('*')) return false
+  const pattern = claim.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
+  return new RegExp(`^${pattern}$`).test(file)
+}
 export function parseRelation(raws: string[], relation: 'code' | 'related'): RelationParse {
   const order: string[] = []
   const byPath = new Map<string, { bare: boolean; selectors: string[] }>()
@@ -386,8 +389,7 @@ export function resolveAnchor(units: Unit[], symbol: string): AnchorResolution {
   return { ok: hits[0] }
 }
 
-// The ONE selector/range intersection used by historical commits and a pinned worktree overlay. Keeping
-// this beside resolveAnchor prevents session impact from growing a second spatial matcher.
+// The one selector/range intersection used by historical commits and a pinned worktree overlay.
 export function selectorsHitRanges(units: readonly Unit[], symbols: readonly string[], ranges: readonly [number, number][]): string[] {
   return symbols.filter((symbol) => {
     const matching = units.filter((unit) => unit.name === symbol)
@@ -395,15 +397,14 @@ export function selectorsHitRanges(units: readonly Unit[], symbols: readonly str
   })
 }
 
-// Ordinary zero-context result ranges. Both commit hunks and worktree overlay patches use this parser; a
-// caller must never parse @@ headers again in its own domain module.
+// Ordinary zero-context ranges. The side chooses the immutable image whose units the caller resolved.
 export function diffHunkRanges(patch: string, side: 'old' | 'new' = 'new'): [number, number][] {
   const ranges: [number, number][] = []
   for (const match of patch.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)) {
     const offset = side === 'old' ? 1 : 3
     const start = +match[offset]
     const count = match[offset + 1] === undefined ? 1 : +match[offset + 1]
-    ranges.push(count > 0 ? [start, start + count - 1] : [Math.max(1, start), Math.max(1, start)])
+    if (count > 0) ranges.push([start, start + count - 1])
   }
   return ranges
 }
@@ -416,23 +417,13 @@ export function diffHunkRanges(patch: string, side: 'old' | 'new' = 'new'): [num
 // 'absent' = no file at that commit; 'unparseable' = the extractor rejected that revision's content.
 type FileRevisionUnits = { units: Unit[] } | { absent: true } | { unparseable: string }
 const fileRevisionUnitMemo = new Map<string, FileRevisionUnits>()
-const objectFormatMemo = new Map<string, Promise<string>>()
 const MEMO_MAX = 4096
-async function objectFormatFor(root: string): Promise<string> {
-  let format = objectFormatMemo.get(root)
-  if (!format) {
-    format = gitA(['-C', root, 'rev-parse', '--show-object-format=storage']).then((value) => value.trim() || `unknown\0${root}`)
-    objectFormatMemo.set(root, format)
-  }
-  return format
-}
-async function unitsAtFileRevision(root: string, commit: string, path: string, x: Extractor, objectFormat: string, knownOid?: string | null, knownText?: string): Promise<FileRevisionUnits> {
-  const oid = knownOid ?? (await gitA(['-C', root, 'rev-parse', `${commit}:${path}`])).trim()
+async function unitsAtFileRevision(commit: string, path: string, x: Extractor, objectFormat: string, oid: string | null, text?: string): Promise<FileRevisionUnits> {
   if (!oid) return { absent: true }
   const key = `${objectFormat}\0${oid}\0${x.memoKey(path)}`
   const hit = fileRevisionUnitMemo.get(key)
   if (hit) return hit
-  const text = knownText ?? await gitA(['-C', root, 'cat-file', 'blob', oid]) // dead-words-ok: git plumbing — 'blob' is Git's object type, not product vocabulary
+  if (text === undefined) throw new Error(`git cat-file --batch omitted object ${oid} for ${commit}:${path}`)
   let result: FileRevisionUnits
   try { result = { units: x.extract(text, path) } } catch (e: any) { result = { unparseable: e?.message ?? String(e) } }
   if (fileRevisionUnitMemo.size >= MEMO_MAX) fileRevisionUnitMemo.clear()
@@ -440,55 +431,61 @@ async function unitsAtFileRevision(root: string, commit: string, path: string, x
   return result
 }
 
-// Post-image line ranges of one commit's diff to one file. Ordinary commits use the `@@` result range.
-// Merges use the combined parser's exact all-parent result lines/deletion points; an owned line never
-// widens to adjacent side-inherited lines merely because Git placed both in one `@@@` hunk.
-const hunkMemo = new Map<string, [number, number][]>()
-async function hunksAt(root: string, commit: string, path: string, loud = false): Promise<[number, number][]> {
-  // A fail-soft caller may have observed an unavailable git child as an empty patch. A loud exact consumer
-  // must never inherit that cache provenance, so verified and soft reads occupy distinct memo identities.
-  const key = `${loud ? 'verified' : 'soft'}\0${commit}\0${path}`
+// Changed line ranges on both sides of one commit's diff. Ordinary commits have one parent image. Merges
+// retain one before-image per parent and only all-parent authored rows; an owned line never widens to an
+// adjacent inherited line merely because Git placed both in one `@@@` hunk.
+type HunkRanges = { after: DiffLineRange[]; before: DiffLineRange[][] }
+const hunkMemo = new Map<string, HunkRanges>()
+async function hunksAt(root: string, event: DriftPathEvent): Promise<HunkRanges> {
+  const paths = [...new Set([event.historicalPath, ...event.parents.map((parent) => parent.historicalPath)])]
+  const key = `${event.commit}\0${paths.join('\x1e')}`
   const hit = hunkMemo.get(key)
   if (hit) return hit
-  let out: string
-  if (loud) {
-    const result = await gitTry(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--unified=0', '--format=', commit, '--', path])
-    if (!result.ok) throw new AnchorUnavailableError(`anchor hunk read failed for ${commit.slice(0, 8)}:${path}: ${result.stderr.trim() || result.failure}`)
-    out = result.stdout
-  } else {
-    out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--unified=0', '--format=', commit, '--', path])
-  }
-  const ranges: [number, number][] = []
+  const merge = event.parents.length > 1
+  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--combined-all-paths', '--unified=0', '-M', '--format=', event.commit,
+    ...(merge ? [] : ['--', ...paths])],
+    `cannot derive anchor hunks for ${event.commit}:${event.historicalPath}`)
+  let ranges: HunkRanges = { after: [], before: [[]] }
   if (/^@@@/m.test(out)) {
-    for (const owned of combinedDiffOwnedRanges(out).values()) ranges.push(...owned)
-  } else ranges.push(...diffHunkRanges(out))
+    const owned = combinedDiffOwnedChanges(out).get(event.historicalPath)
+    if (!owned) throw new Error(`combined diff for ${event.commit} did not expose owned ranges for '${event.historicalPath}'`)
+    ranges = owned
+  } else {
+    for (const m of out.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)) {
+      const oldStart = +m[1], oldCount = m[2] === undefined ? 1 : +m[2]
+      const newStart = +m[3], newCount = m[4] === undefined ? 1 : +m[4]
+      if (oldCount > 0) ranges.before[0].push([oldStart, oldStart + oldCount - 1])
+      if (newCount > 0) ranges.after.push([newStart, newStart + newCount - 1])
+    }
+  }
   if (hunkMemo.size >= MEMO_MAX) hunkMemo.clear()
   hunkMemo.set(key, ranges)
   return ranges
 }
 
-// Ordinary commits in one anchor window share a single path-limited log. Merge commits deliberately stay
-// on hunksAt's `show --cc` path because their dense combined ownership is a different predicate.
-async function hunksAtMany(root: string, commits: string[], path: string, loud = false): Promise<Map<string, [number, number][]>> {
-  const result = new Map<string, [number, number][]>()
+// Ordinary commits whose two images keep one path share a single query. Renames and merges retain distinct
+// image paths, so they stay on hunksAt's exact event-shaped query.
+async function hunksAtMany(root: string, commits: string[], path: string): Promise<Map<string, HunkRanges>> {
+  const result = new Map<string, HunkRanges>()
   const ordinary = [...new Set(commits)]
   if (!ordinary.length) return result
-  const args = ['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0',
-    `--format=${RS}%H`, ...ordinary, '--', path]
-  let out = ''
-  if (loud) {
-    const read = await gitTry(args)
-    if (!read.ok) throw new AnchorUnavailableError(`anchor hunk batch failed for '${path}': ${read.stderr.trim() || read.failure}`)
-    out = read.stdout
-  } else out = await gitA(args)
+  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0', '-M',
+    `--format=${RS}%H`, ...ordinary, '--', path], `cannot derive anchor hunks for ${path}`)
   for (const rec of out.split(RS)) {
     const normalized = rec.replace(/^\n/, '')
     if (!normalized) continue
     const newline = normalized.indexOf('\n')
     const hash = (newline < 0 ? normalized : normalized.slice(0, newline)).trim()
-    if (!/^[0-9a-f]{7,40}$/.test(hash)) continue
+    if (!isGitObjectId(root, hash)) throw new Error(`anchor hunk query returned malformed object id '${hash || 'empty'}'`)
     const patch = newline < 0 ? '' : normalized.slice(newline + 1)
-    result.set(hash, diffHunkRanges(patch))
+    const ranges: HunkRanges = { after: [], before: [[]] }
+    for (const m of patch.matchAll(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm)) {
+      const oldStart = +m[1], oldCount = m[2] === undefined ? 1 : +m[2]
+      const newStart = +m[3], newCount = m[4] === undefined ? 1 : +m[4]
+      if (oldCount > 0) ranges.before[0].push([oldStart, oldStart + oldCount - 1])
+      if (newCount > 0) ranges.after.push([newStart, newStart + newCount - 1])
+    }
+    result.set(hash, ranges)
   }
   return result
 }
@@ -497,102 +494,74 @@ async function hunksAtMany(root: string, commits: string[], path: string, loud =
 // and not covered by a valid Spec-OK ack — the SAME set driftFor counts, exposed as commits so the
 // anchor engine can probe each one. Ordinary file commits and merge-authored dense-combined paths are
 // indexed separately so clean merge transport is never charged twice.
-export function windowCommits(idx: DriftIndex, sinceHash: string, path: string, nodeId?: string): string[] {
+export function windowEvents(idx: DriftIndex, sinceHash: string, path: string, nodeId?: string): DriftPathEvent[] {
   if (!sinceHash) return []
-  if (idx.lazy) {
-    const key = `${nodeId ?? ''}\0${sinceHash}\0${path}`
-    const hit = idx.lazy.windows.get(key)
-    if (hit) return hit
-    const targets = nodeId ? new Set([nodeId]) : idx.lazy.specNodes.get(sinceHash) ?? new Set<string>()
-    const excludes = [...new Set([...targets].flatMap((node) => idx.lazy!.ackByNode.get(node) ?? []))]
-    const args = ['-C', idx.lazy.root, 'rev-list', '--no-merges', `${sinceHash}..${idx.tip ?? 'HEAD'}`, ...excludes.map((hash) => `^${hash}`), '--', path]
-    let commits: string[] = []
-    try {
-      commits = git(args).split('\n').map((s) => s.trim()).filter(Boolean)
-      const pathResolutions = idx.lazy.resolutionCommits?.get(path) ?? []
-      if (pathResolutions.length) {
-        const mergeArgs = ['-C', idx.lazy.root, 'rev-list', '--merges', `${sinceHash}..${idx.tip ?? 'HEAD'}`, ...excludes.map((hash) => `^${hash}`)]
-        const reachableMerges = new Set(git(mergeArgs).split('\n').map((s) => s.trim()).filter(Boolean))
-        commits.push(...pathResolutions.filter((hash) => reachableMerges.has(hash)))
-      }
-    } catch { commits = [] }
-    commits = commits.filter((hash) => !selfAckCovers(idx, sinceHash, hash, nodeId))
-    idx.lazy.windows.set(key, commits)
-    return commits
-  }
-  const base = ancestorsOf(idx, sinceHash)
-  if (!base) return []
-  const cover = ackCoverFor(idx, sinceHash, nodeId)
-  return [...(idx.fileCommits.get(path) ?? []), ...(idx.resolutionCommits?.get(path) ?? [])].filter((h) => !inAncestors(idx, base, h)
-    && !cover.some((a) => inAncestors(idx, a, h)) && !selfAckCovers(idx, sinceHash, h, nodeId))
+  return driftPathWindow(idx, sinceHash, path, nodeId) ?? []
 }
 
-// Candidate lint's history window is deliberately path-scoped. The reference hook only needs the commits
-// that can affect the candidate's changed governed files; rebuilding the repository-wide drift index here
-// would put the gate back on the old history-length slope. Git owns rename traversal for this short query.
-export async function pendingWindowCommits(
-  root: string,
-  sinceHash: string,
-  tip: string,
-  path: string,
-  nodeId?: string,
-  options: { loud?: boolean } = {},
-): Promise<string[]> {
-  if (!sinceHash || !tip || sinceHash === tip) return []
-  const format = `%H\x1f%(trailers:key=Spec-OK,valueonly,separator=%x2c)`
-  const run = async (extra: string[]) => {
-    const args = ['-C', root, '-c', 'core.quotePath=false', 'log', '--full-history', '--follow', ...extra,
-      `--format=${format}`, `${sinceHash}..${tip}`, '--', path]
-    let out = ''
-    if (options.loud) {
-      const read = await gitTry(args)
-      if (!read.ok) throw new AnchorUnavailableError(`anchor window read failed for '${path}': ${read.stderr.trim() || read.failure}`)
-      out = read.stdout
-    } else out = await gitA(args)
-    return out.split('\n').map((line) => {
-      const separator = line.indexOf('\x1f')
-      if (separator < 0) return ''
-      const hash = line.slice(0, separator).trim()
-      if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(hash)) return ''
-      const trailers = line.slice(separator + 1).trim()
-      return !nodeId || !trailers.split(',').map((v) => v.trim()).includes(nodeId) ? hash : ''
-    }).filter(Boolean)
-  }
-  const ordinary = await run(['--no-merges'])
-  const merges = await run(['--merges', '--cc', '--unified=0', '--no-color', '--no-ext-diff', '-M'])
-  return [...new Set([...ordinary, ...merges])]
-}
-
-// which window commits TOUCHED any of the anchored units: the commit's --unified=0 hunks intersect a
-// unit's line range extracted from the file AS IT EXISTED AT THAT COMMIT (never from HEAD — units later
-// renamed or moved still attribute correctly). Several selectors are OR — a commit appears ONCE, with
-// `selectors` naming exactly which units its hunks intersected (so diagnostics can attribute the hit).
-// A version whose content the extractor cannot parse is a CONSERVATIVE hit for every selector
-// (`unparseable` set) — over-warn, never silently skip.
+// Which window commits touched an anchored unit. Added lines intersect the result-image unit; deleted lines
+// intersect the parent-image unit. A merge owns a deletion only when every parent-side range belongs to the
+// selector. This is why events retain their immutable post/preimage paths instead of resolving every blob
+// through the current filename. Several selectors are OR'd and one commit still produces one hit row.
+// An historical image the designated extractor cannot parse is a conservative hit (`unparseable`).
 export type AnchorHit = { commit: string; selectors: string[]; unparseable?: string }
-export async function anchorHitCommits(
-  root: string,
-  win: string[],
-  path: string,
-  symbols: string[],
-  x: Extractor,
-  options: { loud?: boolean } = {},
-): Promise<AnchorHit[]> {
-  const hits: AnchorHit[] = []
-  const objectFormat = await objectFormatFor(root)
-  const revisions = win.map((commit) => `${commit}:${path}`)
-  const oids = batchRevisionOids(root, revisions)
-  const blobs = batchBlobTexts(root, oids.filter((oid): oid is string => !!oid))
-  const ordinaryHunks = await hunksAtMany(root, win, path, options.loud)
-  for (let index = 0; index < win.length; index++) {
-    const c = win[index]
-    const oid = oids[index]
-    const at = await unitsAtFileRevision(root, c, path, x, objectFormat, oid, oid ? blobs.get(oid) : undefined)
-    if ('absent' in at) continue // file not in that commit's tree — nothing of the anchor to touch
-    if ('unparseable' in at) { hits.push({ commit: c, selectors: [...symbols], unparseable: at.unparseable }); continue }
-    const hunks = ordinaryHunks.get(c) ?? await hunksAt(root, c, path, options.loud)
-    const touched = selectorsHitRanges(at.units, symbols, hunks)
-    if (touched.length) hits.push({ commit: c, selectors: touched })
+export async function anchorHitCommits(root: string, win: DriftPathEvent[], symbols: string[], regs: Extractor[]): Promise<AnchorHit[]> {
+  const hits = new Map<string, { selectors: Set<string>; unparseable?: string }>()
+  const objectFormat = gitObjectFormat(root)
+  type Revision = { commit: string; path: string }
+  const revisionKey = ({ commit, path }: Revision) => `${commit}\0${path}`
+  const revisions = new Map<string, Revision>()
+  for (const event of win) {
+    const refs = [{ commit: event.commit, path: event.historicalPath }, ...event.parents.map(({ commit, historicalPath }) => ({ commit, path: historicalPath }))]
+    for (const ref of refs) revisions.set(revisionKey(ref), ref)
   }
-  return hits
+  const refs = [...revisions.values()]
+  const oids = batchRevisionOids(root, refs.map(({ commit, path }) => `${commit}:${path}`))
+  const blobs = batchBlobTexts(root, oids.filter((oid): oid is string => !!oid))
+  const units = new Map<string, FileRevisionUnits>()
+  for (let index = 0; index < refs.length; index++) {
+    const ref = refs[index], oid = oids[index]
+    const x = extractorFor(regs, extOf(ref.path))
+    const ready = x?.ready()
+    if (!x || ready !== true) {
+      units.set(revisionKey(ref), { unparseable: !x ? `no designated extractor for ${ref.path}` : String(ready) })
+      continue
+    }
+    units.set(revisionKey(ref), await unitsAtFileRevision(ref.commit, ref.path, x, objectFormat, oid, oid ? blobs.get(oid) : undefined))
+  }
+  const byPath = new Map<string, string[]>()
+  for (const event of win) {
+    if (event.parents.length > 1 || event.parents.some((parent) => parent.historicalPath !== event.historicalPath)) continue
+    const commits = byPath.get(event.historicalPath) ?? []
+    commits.push(event.commit)
+    byPath.set(event.historicalPath, commits)
+  }
+  const ordinaryHunks = new Map<string, Map<string, HunkRanges>>()
+  for (const [path, commits] of byPath) ordinaryHunks.set(path, await hunksAtMany(root, commits, path))
+  const intersects = (ranges: DiffLineRange[], candidates: Unit[]) =>
+    ranges.some(([start, end]) => candidates.some((unit) => start <= unit.end && unit.start <= end))
+  for (const event of win) {
+    const after = units.get(revisionKey({ commit: event.commit, path: event.historicalPath }))!
+    const before = event.parents.map(({ commit, historicalPath }) => units.get(revisionKey({ commit, path: historicalPath }))!)
+    const ranges = ordinaryHunks.get(event.historicalPath)?.get(event.commit)
+      ?? await hunksAt(root, event)
+    if (event.parents.length && ranges.before.length !== before.length)
+      throw new Error(`anchor diff for ${event.commit}:${event.historicalPath} has ${ranges.before.length} parent ranges for ${before.length} parents`)
+    const hit = hits.get(event.commit) ?? { selectors: new Set<string>() }
+    const broken = [after, ...before].find((image) => 'unparseable' in image)
+    if (broken && 'unparseable' in broken) {
+      for (const symbol of symbols) hit.selectors.add(symbol)
+      hit.unparseable = broken.unparseable
+    } else {
+      for (const symbol of symbols) {
+        const afterUnits = 'units' in after ? after.units.filter((unit) => unit.name === symbol) : []
+        const authoredAfter = intersects(ranges.after, afterUnits)
+        const authoredBefore = before.length > 0 && before.every((image, parent) =>
+          'units' in image && intersects(ranges.before[parent], image.units.filter((unit) => unit.name === symbol)))
+        if (authoredAfter || authoredBefore) hit.selectors.add(symbol)
+      }
+    }
+    if (hit.selectors.size) hits.set(event.commit, hit)
+  }
+  return [...hits].map(([commit, hit]) => ({ commit, selectors: [...hit.selectors], ...(hit.unparseable ? { unparseable: hit.unparseable } : {}) }))
 }

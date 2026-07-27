@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -187,6 +187,12 @@ test('real init refreshes exact legacy Spex hooks, preserves a custom commit-msg
   assert.equal(readFileSync(join(hooks, 'commit-msg'), 'utf8'), custom, 'custom commit-msg was overwritten')
   assert.equal(readFileSync(join(hooks, 'reference-transaction'), 'utf8'), readFileSync(join(HOOK_TEMPLATES, 'reference-transaction'), 'utf8'))
   assert.ok(!existsSync(calls), 'init executed the custom hook as an identity probe')
+
+  const localBin = join(proj, 'node_modules', '.bin')
+  mkdirSync(localBin, { recursive: true })
+  const localSpex = join(localBin, 'spex')
+  writeFileSync(localSpex, `#!/bin/sh\nexec ${JSON.stringify(TSX)} ${JSON.stringify(CLI)} "$@"\n`)
+  chmodSync(localSpex, 0o755)
 
   const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
   cfg.mainBranch = 'main'

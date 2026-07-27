@@ -96,6 +96,12 @@ moving during direct projection is an explicit retry error; session routes pass 
 existing outer content-revision fence to retry live HEAD movement. Neither condition may publish zero impact
 or certify a falsely current result.
 
+Committed code impact reads the same complete Git-derived event fold as anchor drift, but projects a plain ancestry
+window without acknowledgement filtering. Base and head declarations each bind their path identity at that
+revision, so deletion, rename chains, path reuse, and incomparable forks retain the same meaning as the gate.
+The live overlay derives both path images from one rename-aware change set; a pure rename owns no line, while
+a rename with edits intersects the old and new units on their respective sides.
+
 This is the **one product predicate**. Scoped `/api/evals`, its list/detail model, summaries, and export consume
 the same projection; none retain a path-only scenario candidate fallback. Each projection reads the base/head
 changed-path set once, batch-reads each distinct exact `.spec` tree once for both spec and eval declarations,

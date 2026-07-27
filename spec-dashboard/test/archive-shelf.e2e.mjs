@@ -190,7 +190,9 @@ try {
     }, 'queued capacity control to launch after archive')
     assert.notEqual(capacityAfter.status, 'queued', 'archived target must release its maxActive slot')
   }
-  const shelf = page.locator('.si-pill.shelf'); await shelf.click(); await page.waitForFunction(() => document.querySelector('.si-pill.shelf')?.getAttribute('aria-pressed') === 'true')
+  const shelf = page.locator('.si-pill.shelf')
+  if (await shelf.getAttribute('aria-pressed') !== 'true') await shelf.click()
+  await page.waitForFunction(() => document.querySelector('.si-pill.shelf')?.getAttribute('aria-pressed') === 'true')
   assert.equal(await page.locator('.si-zone').count(), 0, 'archive shelf must be flat with no status zones')
   frame('📷 flat offline shelf; default graph/resources omit target; target runtime gone and shared sibling retained')
 

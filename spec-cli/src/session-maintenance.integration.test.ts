@@ -140,19 +140,19 @@ test('actual create/send/raw-key/xterm/hook-state/queue/sort seams refuse active
   const hookState = await capture(() => sessions.markState('parked', { sessionId: ID, note: 'must-not-land' }))
   const queue = await capture(() => sessions.drainQueue())
   const sort = await capture(() => sessions.setSessionSort(ID, 1234))
-  const rawTransports = lines(tmuxCalls).filter((line) => line.includes('send-keys')).length
+  const tmuxTransports = lines(tmuxCalls)
   const terminalWrites = existsSync(terminalInput) ? readFileSync(terminalInput, 'utf8').length : 0
   pty.detachViewer(ID, viewer)
 
   const actual = {
     codes: [create.code, send.code, rawKey.code, terminal.code, hookState.code, queue.code, sort.code],
-    createEffects, rawTransports, terminalWrites,
+    createEffects, tmuxTransports, terminalWrites,
     leaseUnchanged: readFileSync(leasePath, 'utf8') === leaseBefore,
     recordUnchanged: readFileSync(recordPath, 'utf8') === recordBefore,
   }
   rmSync(worktree, { recursive: true, force: true })
   assert.deepEqual(actual, {
-    codes: Array(7).fill('maintenance_active'), createEffects: 0, rawTransports: 0, terminalWrites: 0,
+    codes: Array(7).fill('maintenance_active'), createEffects: 0, tmuxTransports: [], terminalWrites: 0,
     leaseUnchanged: true, recordUnchanged: true,
   })
 })
@@ -357,6 +357,8 @@ exit 0
   const acquire = activeEvents.find((event) => event.step === 'acquire')
   const activeAt = activeEvents.find((event) => event.step === 'status' && event.state === 'active')?.at ?? Infinity
   const operationEvents = activeEvents.filter((event) => event.step === 'operation')
+  const heartbeatEvents = activeEvents.filter((event) => event.step === 'heartbeat')
+  const releaseEvent = activeEvents.find((event) => event.step === 'release')
   const codeRows = Object.fromEntries(lines(codes).map((line) => line.split('=')))
   const envText = existsSync(childEnv) ? readFileSync(childEnv, 'utf8') : ''
   const markerAt = existsSync(marker) ? statSync(marker).mtimeMs : 0
@@ -373,13 +375,16 @@ exit 0
     status: result.code, executedWhileDraining, brokeredWhileDraining,
     acquireCapabilities: acquire?.input?.capabilities,
     acquireTtl: acquire?.input?.ttlMs, acquireWait: acquire?.input?.waitMs,
-    heartbeatBeforeActive: activeEvents.some((event) => event.step === 'heartbeat' && event.at <= activeAt),
+    heartbeatObserved: heartbeatEvents.length > 0,
+    heartbeatBeforeActive: heartbeatEvents.some((event) => event.at <= activeAt),
+    heartbeatBearerExact: heartbeatEvents.every((event) => event.header === TOKEN),
+    heartbeatBodyExact: heartbeatEvents.every((event) => JSON.stringify(event.input) === JSON.stringify({ epoch: 7, ttlMs: 5_000 })),
     commandAfterActive: markerAt >= activeAt,
     forwarded: operationEvents.map((event) => ({ op: event.op, sessionId: event.sessionId, header: event.header })),
     codes: codeRows,
     tokenInOutput: (result.stdout + result.stderr + fixture.output()).includes(TOKEN),
     tokenInEnv: envText.includes(TOKEN), brokerFds: /SPEXCODE_MAINTENANCE_BROKER_FDS=/.test(envText),
-    released: activeEvents.some((event) => event.step === 'release' && event.header === TOKEN),
+    release: releaseEvent ? { header: releaseEvent.header, input: releaseEvent.input } : null,
     expiryStatus: expired.code, expiryExecuted: existsSync(expiryMarker), expiryForwarded: events(expiryEvents).some((event) => event.step === 'operation'),
   }
   rmSync(dir, { recursive: true, force: true })
@@ -388,10 +393,13 @@ exit 0
     acquireCapabilities: [
       { op: 'stop', sessionId: ID }, { op: 'resume', sessionId: RESUME_ONE, force: false }, { op: 'resume', sessionId: RESUME_FORCE, force: true },
     ],
-    acquireTtl: 5000, acquireWait: 0, heartbeatBeforeActive: true, commandAfterActive: true,
+    acquireTtl: 5000, acquireWait: 0,
+    heartbeatObserved: true, heartbeatBeforeActive: true, heartbeatBearerExact: true, heartbeatBodyExact: true,
+    commandAfterActive: true,
     forwarded: [{ op: 'stop', sessionId: ID, header: TOKEN }],
     codes: { allowed: '0', wrong_session: '1', wrong_op: '1', wrong_force: '1' },
-    tokenInOutput: false, tokenInEnv: false, brokerFds: true, released: true,
+    tokenInOutput: false, tokenInEnv: false, brokerFds: true,
+    release: { header: TOKEN, input: { epoch: 7 } },
     expiryStatus: 1, expiryExecuted: false, expiryForwarded: false,
   })
 })
@@ -446,6 +454,7 @@ test('real isolated backend admits exact stop plus two resumes under one active 
   const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-backend-a-'))
   const projectPath = join(dir, 'project'); mkdirSync(projectPath); const project = realpathSync(projectPath)
   const apiHome = join(dir, 'home'); const tmux = `spex-maintenance-backend-${process.pid}-${Date.now()}`; const port = await freePort()
+  const runtime = join(apiHome, 'projects', project.replace(/[/.]/g, '-'))
   mkdirSync(join(project, '.spec'), { recursive: true })
   cpSync(join(pkgRoot, 'templates', 'spec', 'project'), join(project, '.spec', 'project'), { recursive: true })
   writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
@@ -463,7 +472,7 @@ test('real isolated backend admits exact stop plus two resumes under one active 
   let token = ''; let actual: any
   try {
     const created = [] as any[]
-    for (const prompt of ['stop target', 'resume one', 'resume two']) {
+    for (const prompt of ['stop target', 'resume one', 'resume two', 'wrong-session control']) {
       const response = await fetch(`${base}/api/sessions`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, parent: null, launcher: 'fake' }) })
       created.push(await response.json())
     }
@@ -472,7 +481,7 @@ test('real isolated backend admits exact stop plus two resumes under one active 
       return created.every((createdRow) => rows.some((row) => row.id === createdRow.id && row.liveness === 'online'))
     }, 'all backend fixtures online', 3000)
     const preStop = [] as Array<{ status: number; ok: boolean; offline: boolean }>
-    for (const row of created.slice(1)) {
+    for (const row of created.slice(1, 3)) {
       const response = await fetch(`${base}/api/sessions/${row.id}/stop`, { method: 'POST' })
       const body = await response.json() as any
       await waitFor(async () => {
@@ -481,36 +490,115 @@ test('real isolated backend admits exact stop plus two resumes under one active 
       }, `${row.id} stopped offline`, 3000)
       preStop.push({ status: response.status, ok: body.ok, offline: true })
     }
+    const exactTargets = async () => {
+      const rows = await fetch(`${base}/api/sessions?all=1`).then((response) => response.json()) as any[]
+      return created.map((createdRow) => {
+        const row = rows.find((candidate) => candidate.id === createdRow.id)
+        return {
+          id: createdRow.id,
+          lifecycle: row?.lifecycle ?? null,
+          status: row?.status ?? null,
+          liveness: row?.liveness ?? null,
+          archived: row?.archived ?? null,
+          proposal: row?.proposal ?? null,
+          record: readFileSync(join(runtime, 'sessions', createdRow.id, 'session.json'), 'utf8'),
+        }
+      })
+    }
     const capabilities = [
       { op: 'stop', sessionId: created[0].id },
       { op: 'resume', sessionId: created[1].id, force: false },
-      { op: 'resume', sessionId: created[2].id, force: false },
+      { op: 'resume', sessionId: created[2].id, force: true },
     ]
     const acquire = await fetch(`${base}/api/session-maintenance/acquire`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ capabilities, ttlMs: 30_000, waitMs: 10_000 }) })
     const lease = await acquire.json().catch(() => ({})) as any; token = lease.token || ''
+    let heartbeat = { status: 0, ok: false }
+    const negatives: Array<{ name: string; refused: boolean; code: string | null; targetsUnchanged: boolean }> = []
     let operationCodes: number[] = []; let operationBodies: any[] = []; let releaseCode = 0
+    let finalLiveness: Record<string, string | null> = {}
     if (acquire.status === 201) {
       const headers = { 'content-type': 'application/json', 'x-spexcode-session-maintenance': token }
-      const requests = [
-        fetch(`${base}/api/sessions/${created[0].id}/stop`, { method: 'POST', headers }),
-        fetch(`${base}/api/sessions/${created[1].id}/resume`, { method: 'POST', headers, body: JSON.stringify({ force: false }) }),
-        fetch(`${base}/api/sessions/${created[2].id}/resume`, { method: 'POST', headers, body: JSON.stringify({ force: false }) }),
-      ]
-      const responses = await Promise.all(requests)
+      const heartbeatResponse = await fetch(`${base}/api/session-maintenance/heartbeat`, {
+        method: 'POST', headers, body: JSON.stringify({ epoch: lease.epoch, ttlMs: 30_000 }),
+      })
+      const heartbeatBody = await heartbeatResponse.json()
+      heartbeat = { status: heartbeatResponse.status, ok: heartbeatBody.ok === true }
+
+      const refuse = async (name: string, path: string, requestHeaders: Record<string, string>, body: unknown, expectedCode: string) => {
+        const before = await exactTargets()
+        const response = await fetch(`${base}${path}`, { method: 'POST', headers: requestHeaders, body: JSON.stringify(body) })
+        const responseBody = await response.json().catch(() => ({})) as any
+        const after = await exactTargets()
+        negatives.push({
+          name,
+          refused: !response.ok,
+          code: responseBody.code ?? null,
+          targetsUnchanged: JSON.stringify(after) === JSON.stringify(before),
+        })
+        assert.equal(responseBody.code, expectedCode, `${name} returns the exact structured refusal`)
+      }
+      await refuse('missing-token', `/api/sessions/${created[0].id}/stop`, { 'content-type': 'application/json' }, {}, 'maintenance_token_invalid')
+      await refuse('wrong-token', `/api/sessions/${created[0].id}/stop`, { ...headers, 'x-spexcode-session-maintenance': '00'.repeat(32) }, {}, 'maintenance_token_invalid')
+      await refuse('wrong-session', `/api/sessions/${created[3].id}/stop`, headers, {}, 'maintenance_capability_missing')
+      await refuse('wrong-force', `/api/sessions/${created[2].id}/resume`, headers, { force: false }, 'maintenance_capability_missing')
+
+      const stopResponse = await fetch(`${base}/api/sessions/${created[0].id}/stop`, { method: 'POST', headers })
+      const stopBody = await stopResponse.json()
+      await waitFor(async () => {
+        const rows = await fetch(`${base}/api/sessions?all=1`).then((response) => response.json()) as any[]
+        return rows.some((row) => row.id === created[0].id && row.liveness === 'offline')
+      }, 'authorized stop target offline', 3000)
+      const replayBefore = await exactTargets()
+      const replayResponse = await fetch(`${base}/api/sessions/${created[0].id}/stop`, { method: 'POST', headers })
+      const replayBody = await replayResponse.json().catch(() => ({})) as any
+      const replayAfter = await exactTargets()
+      negatives.push({
+        name: 'replay', refused: !replayResponse.ok, code: replayBody.code ?? null,
+        targetsUnchanged: JSON.stringify(replayAfter) === JSON.stringify(replayBefore),
+      })
+      assert.equal(replayBody.code, 'maintenance_capability_used', 'replay returns the exact structured refusal')
+
+      const resumeOne = await fetch(`${base}/api/sessions/${created[1].id}/resume`, { method: 'POST', headers, body: JSON.stringify({ force: false }) })
+      const resumeOneBody = await resumeOne.json()
+      const resumeTwo = await fetch(`${base}/api/sessions/${created[2].id}/resume`, { method: 'POST', headers, body: JSON.stringify({ force: true }) })
+      const resumeTwoBody = await resumeTwo.json()
+      const responses = [stopResponse, resumeOne, resumeTwo]
       operationCodes = responses.map((response) => response.status)
-      operationBodies = await Promise.all(responses.map((response) => response.json()))
+      operationBodies = [stopBody, resumeOneBody, resumeTwoBody]
+      await waitFor(async () => {
+        const rows = await fetch(`${base}/api/sessions?all=1`).then((response) => response.json()) as any[]
+        return rows.some((row) => row.id === created[1].id && row.liveness === 'online')
+          && rows.some((row) => row.id === created[2].id && row.liveness === 'online')
+      }, 'authorized resume targets online', 3000)
+      const rows = await fetch(`${base}/api/sessions?all=1`).then((response) => response.json()) as any[]
+      finalLiveness = Object.fromEntries(created.map((createdRow, index) => [
+        ['stop', 'resumeOne', 'resumeTwo', 'control'][index],
+        rows.find((row) => row.id === createdRow.id)?.liveness ?? null,
+      ]))
       releaseCode = (await fetch(`${base}/api/session-maintenance/release`, { method: 'POST', headers, body: JSON.stringify({ epoch: lease.epoch }) })).status
     }
-    actual = { created: created.length, preStop, acquire: acquire.status, tokenBytes: token.length / 2, operationCodes, operationOk: operationBodies.map((result) => result.ok), releaseCode }
+    actual = {
+      created: created.length, preStop, acquire: acquire.status, tokenBytes: token.length / 2,
+      heartbeat, negatives, operationCodes, operationOk: operationBodies.map((result) => result.ok), finalLiveness, releaseCode,
+    }
   } finally {
     try { execFileSync('tmux', ['-L', tmux, 'kill-server'], { stdio: 'ignore', env: { ...process.env, PATH: process.env.PATH?.split(':').filter((part) => part !== transportBin).join(':') } }) } catch {}
     child.kill('SIGTERM'); await backendDone()
     rmSync(dir, { recursive: true, force: true })
   }
   assert.deepEqual(actual, {
-    created: 3,
+    created: 4,
     preStop: [{ status: 200, ok: true, offline: true }, { status: 200, ok: true, offline: true }],
     acquire: 201, tokenBytes: 32,
+    heartbeat: { status: 200, ok: true },
+    negatives: [
+      { name: 'missing-token', refused: true, code: 'maintenance_token_invalid', targetsUnchanged: true },
+      { name: 'wrong-token', refused: true, code: 'maintenance_token_invalid', targetsUnchanged: true },
+      { name: 'wrong-session', refused: true, code: 'maintenance_capability_missing', targetsUnchanged: true },
+      { name: 'wrong-force', refused: true, code: 'maintenance_capability_missing', targetsUnchanged: true },
+      { name: 'replay', refused: true, code: 'maintenance_capability_used', targetsUnchanged: true },
+    ],
     operationCodes: [200, 200, 200], operationOk: [true, true, true], releaseCode: 200,
+    finalLiveness: { stop: 'offline', resumeOne: 'online', resumeTwo: 'online', control: 'online' },
   })
 })

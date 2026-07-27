@@ -401,7 +401,7 @@ app.post('/api/uploads', async (c) => {
 
 // sessions: real tmux-backed Claude Code sessions. List + spawn, stream the live pane (WebSocket),
 // forward keystrokes, and close.
-app.get('/api/sessions', async (c) => c.json(await listSessions()))
+app.get('/api/sessions', async (c) => c.json(await listSessions(c.req.query('all') === '1' || c.req.query('all') === 'true')))
 app.get('/api/resources', async (c) => c.json(await collectResourceReport()))
 // edges derived live from `spex session watch` monitors (A→B = agent A is watching B), not a stored subscription;
 // watch/unwatch register + heartbeat. A literal `edges` segment so it never collides with the `:id` routes.
@@ -459,7 +459,7 @@ app.get('/api/sessions/:id/timeline', (c) => {
 // the CLI's show; 404 for an unknown id.
 app.get('/api/sessions/:id', async (c) => {
   const id = c.req.param('id')
-  const row = (await listSessions()).find((s) => s.id === id)
+  const row = (await listSessions(true)).find((s) => s.id === id)
   if (!row) return c.json({ error: 'no such session' }, 404)
   return c.json({ ...row, prompt: await sessionPrompt(id) })
 })
@@ -590,8 +590,8 @@ app.post('/api/sessions/:id/interrupt', async (c) => {
   return c.json(result, result.ok ? 200 : 502)
 })
 app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
-// shelve / unshelve ([[archive]]) — a record-only write: the agent, its tmux, and the worktree are untouched,
-// so this composes with stop rather than implying it. Body `{on:false}` unshelves. {ok:false} = no such session.
+// archive / legacy unarchive signpost ([[archive]]) — archive proves exact cold/offline ownership before filing;
+// `{on:false}` enters the same resume transition and recreates the preserved conversation. {ok:false}=no such session.
 app.post('/api/sessions/:id/archive', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   return c.json({ ok: await archiveSession(c.req.param('id'), body?.on !== false) })

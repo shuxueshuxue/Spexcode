@@ -182,7 +182,9 @@ export type RawRecord = {
   status: string; proposal: string | null; merges: number; note: string | null
   sortkey: number | null; createdAt: number; harness?: string; harness_session_id?: string
   stopped?: boolean
-  archived?: boolean  // the human ARCHIVED this session ([[archive]]) — a view property orthogonal to both lifecycle and liveness, and independent of `stopped`; absent → false on old records
+  archived?: boolean  // the human ARCHIVED this session ([[archive]]) — only a proven cold/offline row; absent → false on old records
+  cold_proof?: string  // durable exact leaf + adapter cold proof; absent on legacy archives, which remain visible hazards
+  adapter_recovery?: string // explicit lifecycle recovery required after a partial adapter mutation; absent on old records
   launcher?: string   // the launcher profile this session was created under ([[launcher-select]]); absent/empty only on old records predating launchers
   launch_cmd?: string // the RESOLVED base launcher command PINNED at creation, so a resume replays the EXACT launcher (and its config-dir env) that made the conversation, never a since-changed default ([[launcher-select]] resume-launcher-pin); absent → old record, fall back to the launcher name / ambient
 }

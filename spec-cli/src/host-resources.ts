@@ -204,6 +204,9 @@ const sharedDescriptors = (recs: RawRecord[], retainRegistry = false): Map<strin
     if (!out.has(descriptor.key)) out.set(descriptor.key, { descriptor, recs: [] })
   }
   for (const rec of recs) {
+    // Keep archived records in the adapter join so a stale loaded thread is attributed to its real record and
+    // reported as an archive hazard. Clean archived records carry stopped:true and no loaded reference, so they
+    // contribute nothing to the active set while still preserving exact ownership if the invariant is violated.
     if (!rec.governed) continue
     const harness = harnessById(rec.harness || defaultHarness.id)
     for (const descriptor of harness.sharedRuntimes?.(runtimeRoot()) ?? []) {
@@ -262,8 +265,15 @@ type Inventory = { procs: Map<number, Proc>; recs: RawRecord[]; ownership: Map<n
 
 const buildInventory = (procs: Map<number, Proc>): Inventory => {
   const recs = records()
-  const byId = new Map(recs.map((rec) => [rec.session_id, rec.session_id]))
-  for (const rec of recs) if (rec.harness_session_id) byId.set(rec.harness_session_id, rec.session_id)
+  const activeRecs = recs.filter((rec) => {
+    if (!rec.archived) return true
+    // A legacy archived row with a resident leaf is a visible hazard, not clean cold storage. Keep charging
+    // that exact process until an explicit archive repair succeeds; truly cold records stay out of the active set.
+    const pid = runtimePid(join(runtimeRoot(), 'sessions', rec.session_id, 'agent.pid'))
+    return !!pid && procs.has(pid)
+  })
+  const byId = new Map(activeRecs.map((rec) => [rec.session_id, rec.session_id]))
+  for (const rec of activeRecs) if (rec.harness_session_id) byId.set(rec.harness_session_id, rec.session_id)
   const ownership = new Map<number, string>()
   const adapterVars = sessionIdentityEnvVars().filter((v) => v !== 'SPEXCODE_SESSION_ID')
   const actingSession = (p: Proc): string | undefined => {
@@ -276,7 +286,7 @@ const buildInventory = (procs: Map<number, Proc>): Inventory => {
     const sid = acting ?? (fallback ? byId.get(fallback) : undefined)
     if (sid) ownership.set(p.pid, `session:${sid}`)
   }
-  for (const rec of recs) {
+  for (const rec of activeRecs) {
     const root = runtimePid(join(runtimeRoot(), 'sessions', rec.session_id, 'agent.pid'))
     if (root && procs.has(root)) for (const pid of descendants(root, procs)) if (!ownership.has(pid)) ownership.set(pid, `session:${rec.session_id}`)
   }
@@ -358,19 +368,16 @@ const sessionStopBlocker = async (
     const pid = runtimePid(descriptor.pidFile)
     const startToken = pid ? processStartToken(pid) : null
     const probe = knownProbes?.get(descriptor.key) ?? await probeRuntime(descriptor)
-    if (!probe.healthy) {
-      const identity = pid ? `PID ${pid}${startToken ? `@${startToken}` : ' with unreadable process-start identity'}` : 'with no readable owner PID'
-      return `${descriptor.label} ${identity} could not prove its live references: ${probe.error || 'unknown probe failure'}`
-    }
     const ownerCounts = new Map<string, number>()
     for (const rec of entry.recs) if (rec.harness_session_id) ownerCounts.set(rec.harness_session_id, (ownerCounts.get(rec.harness_session_id) ?? 0) + 1)
-    const unowned = probe.references.filter((reference) => ownerCounts.get(reference.referenceId) !== 1)
-    if (unowned.length) return `${descriptor.label} has ${unowned.length} loaded thread(s) without one exact governed session owner: ${unowned.map((reference) => reference.referenceId).join(', ')}`
     const targetThread = entry.recs.find((rec) => rec.session_id === id)?.harness_session_id
-    const siblings = probe.references.filter((reference) => !targetThread || reference.referenceId !== targetThread)
+    const targetRef = probe.healthy && targetThread ? probe.references.find((reference) => reference.referenceId === targetThread) : undefined
+    if (targetRef && ownerCounts.get(targetRef.referenceId) !== 1)
+      return `${descriptor.label} target thread ${targetRef.referenceId} has no one exact governed session owner`
+    const siblings = probe.healthy ? probe.references.filter((reference) => !targetThread || reference.referenceId !== targetThread) : []
     const liveReason = siblings.length
       ? `${siblings.length} live sibling thread(s)`
-      : `${probe.references.length} live thread reference(s)`
+      : probe.healthy ? `${probe.references.length} live thread reference(s)` : 'an unproven live reference set'
     if (!pid) return `${descriptor.label} has ${liveReason} but no readable owner PID`
     if (!startToken) return `${descriptor.label} PID ${pid} has ${liveReason} but no readable process-start identity`
     const topology = processTopology(pid)
@@ -381,6 +388,8 @@ const sessionStopBlocker = async (
       const refs = probe.references.map((reference) => reference.referenceId).join(', ') || 'no loaded threads'
       return `${descriptor.label} PID ${pid}@${startToken} serves ${refs} and has no matching live detached process-boundary proof`
     }
+    if (!probe.healthy)
+      return `${descriptor.label} PID ${pid}@${startToken} has an unproven live reference set: ${probe.error || 'unknown probe failure'}`
   }
   return null
 }
@@ -484,6 +493,7 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
       kind = 'session'; id = owner.slice(8); label = `session ${id.slice(0, 8)}`
       const rec = bySession.get(id); status = rec?.status; rssBudget = budgets.sessionRssMiB; idleBudget = budgets.idleCpuPercent
       if (rec) lifecycle = { proposal: rec.proposal, worktreePath: rec.worktree_path, branch: rec.branch, stopped: rec.stopped, archived: rec.archived }
+      if (rec?.archived) findings.push('archived-runtime-hazard:leaf-still-resident')
       if (totals.rssMiB > rssBudget) findings.push(`rss-over-budget:${Math.round((totals.rssMiB - rssBudget) * 10) / 10}MiB`)
       if (status !== 'active' && status !== 'queued' && totals.cpuPercent > idleBudget) findings.push(`idle-cpu-over-budget:${Math.round((totals.cpuPercent - idleBudget) * 10) / 10}%`)
       const stopBlocker = rec ? await sessionStopBlocker(id, rec.harness || defaultHarness.id, inv.recs, sharedProbes) : null
@@ -495,6 +505,7 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
       const shared = inv.shared.get(id)!; label = shared.descriptor.label; rssBudget = budgets.backendRssMiB; idleBudget = budgets.idleCpuPercent
       const probe = sharedProbes.get(id)!
       references = projectReferences(shared, probe)
+      if (references.some((reference) => reference.sessionId && bySession.get(reference.sessionId)?.archived)) findings.push('archived-runtime-hazard:loaded-thread')
       controlPlane = { healthy: probe.healthy, refCount: probe.healthy ? probe.references.length : null, ...(probe.error ? { error: probe.error } : {}) }
       if (totals.rssMiB > rssBudget) findings.push(`rss-over-budget:${Math.round((totals.rssMiB - rssBudget) * 10) / 10}MiB`)
       const protectedReferences = references.filter((reference) => reference.protectsControlPlane)

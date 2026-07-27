@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync } from 'node:fs'
+import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
@@ -16,6 +16,7 @@ import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless } from '.
 import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath } from './layout.js'
 import { git } from './git.js'
 import { shQuote } from './sh.js'
+import { processStartToken } from './process-identity.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -30,7 +31,7 @@ import { shQuote } from './sh.js'
 // (materialize writes every harness's artifacts).
 
 export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless' | 'codex-headless' | 'opencode-headless' | 'pi-headless'
-export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null; stopped?: boolean }
+export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null; stopped?: boolean; archived?: boolean }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
 // one whole-box pid→(ppid, comm) table (a single `ps` spawn).
@@ -48,6 +49,9 @@ export type SharedRuntimeDescriptor = {
   label: string
   pidFile: string
   isolationFile: string
+  // Lightweight project-wide resident census used by read projections. It must return exact loaded IDs without
+  // per-thread reads; the full probe remains the resource/lifecycle surface that also reads turn state.
+  residency?: () => Promise<{ healthy: boolean; referenceIds: string[]; error?: string; rootAbsent?: boolean }>
   probe(): Promise<SharedRuntimeProbe>
 }
 export type SharedRuntimeProbe = {
@@ -55,8 +59,55 @@ export type SharedRuntimeProbe = {
   references: Array<{
     referenceId: string
     turnPresence: 'idle' | 'active' | 'unknown'
+    turnId?: string
   }>
   error?: string
+}
+
+export type AdapterLoadedReferenceState = {
+  healthy: boolean
+  loaded: boolean
+  error?: string
+}
+
+// One project-wide resident-reference census for read projections. A shared app-server descriptor is probed
+// once per call, then its result is joined to every record that names that adapter/thread. Product readers must
+// not turn this into one RPC per row: a loaded thread can be externally reloaded after its cold proof was filed.
+export async function adapterLoadedReferenceState(
+  records: readonly (HarnessLivenessRecord & { harness?: string })[],
+  runtimeDir = runtimeRoot(),
+): Promise<Map<string, AdapterLoadedReferenceState>> {
+  const descriptors = new Map<string, SharedRuntimeDescriptor>()
+  const recordKeys = new Map<string, string[]>()
+  for (const rec of records) {
+    if (!rec.harnessSessionId) continue
+    const keys = (harnessById(rec.harness || defaultHarness.id).sharedRuntimes?.(runtimeDir) ?? []).map((descriptor) => {
+      descriptors.set(descriptor.key, descriptor)
+      return descriptor.key
+    })
+    recordKeys.set(`${rec.harness || defaultHarness.id}:${rec.harnessSessionId}`, keys)
+  }
+  const probes = await Promise.all([...descriptors.entries()].map(async ([key, descriptor]) => {
+    try {
+      const result = descriptor.residency
+        ? await descriptor.residency()
+        : await descriptor.probe().then((probe) => ({ healthy: probe.healthy, referenceIds: probe.references.map((reference) => reference.referenceId), error: probe.error }))
+      return [key, result] as const
+    }
+    catch (error) { return [key, { healthy: false, referenceIds: [] as string[], error: (error as Error).message }] as const }
+  }))
+  const byKey = new Map(probes)
+  const result = new Map<string, AdapterLoadedReferenceState>()
+  for (const [recordKey, keys] of recordKeys) {
+    const refs = keys.map((key) => byKey.get(key)!).filter(Boolean)
+    if (!refs.length) continue
+    const unhealthy = refs.find((probe) => !probe.healthy)
+    const threadId = recordKey.slice(recordKey.indexOf(':') + 1)
+    result.set(recordKey, unhealthy
+      ? { healthy: false, loaded: false, error: unhealthy.error || 'adapter resident-reference census is unhealthy' }
+      : { healthy: true, loaded: refs.some((probe) => probe.referenceIds.includes(threadId)) })
+  }
+  return result
 }
 
 export interface Harness {
@@ -67,6 +118,8 @@ export interface Harness {
   // whether the launch command intentionally exits after its first turn instead of owning a resident process.
   // One-shot adapters must not be mistaken for a failed fast boot and retried with a duplicate prompt.
   readonly launchOneShot?: boolean
+  // Adapter-owned runtime shape: headless controllers/shared threads have no interactive TUI leaf to signal.
+  readonly runtimeOwnership?: 'leaf' | 'adapter'
   // @@@ fatalLaunchOutput - extended regexes matching THIS harness's own report of a launch failure that
   // RUNNING IT AGAIN CANNOT FIX: a conversation that does not exist, a rejected credential, a broken config.
   // A launcher that exits within the boot window tells us only that it exited fast, which is why the transport
@@ -172,6 +225,10 @@ export interface Harness {
   // to the shell). A missing probe (tmux/ps couldn't report) is not-live. The 'starting' boot
   // grace lives in the caller (sessions.ts liveness), so a still-booting pane reads starting, not offline.
   liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string, pane?: PaneProbe, socketLive?: boolean): 'online' | 'offline'
+  // Exact leaf ownership evidence consumed by lifecycle teardown. The adapter returns the one argv identity
+  // token it registered for this record (session id, harness thread/generation, or null when unprovable);
+  // product lifecycle code never branches on harness names to invent this identity.
+  leafOwnerNeedle?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): string | null
   // deliver a follow-up prompt to a LIVE session and report whether it landed. claude: through the rendezvous
   // control socket — an ATOMIC reply+repaint chunk whose `repaint-done` proves the reply was PARSED; a close
   // before it proves a concurrent connect kicked the chunk (the daemon is single-connection) → resend; a wall
@@ -190,6 +247,13 @@ export interface Harness {
   // Async because removal is CONDITIONAL on proof: a transport is only ours to remove once its listener is
   // proven dead (see unlinkSocks), and that proof is a connect probe.
   cleanupRuntime(rec: HarnessLivenessRecord): Promise<void>
+  // Archive preflight runs BEFORE any leaf signal. It may inspect shared references to refuse an active or
+  // unknown target turn, but it must not mutate the shared runtime; coldRuntime is the sole commit primitive.
+  coldPreflight?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): Promise<{ ok: true; alreadyCold?: boolean } | { ok: false; reason: string }>
+  // Optional cold-storage proof/cleanup. A harness with a per-session loaded reference must remove exactly that
+  // reference or return a loud reason; adapters without such a resident reference return {ok:true}.
+  coldRuntime?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): Promise<{ ok: true } | { ok: false; reason: string }>
+  restoreRuntime?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): Promise<{ ok: true } | { ok: false; reason: string }>
   // Project-scoped runtimes are adapter facts. Resource governance consumes these descriptors to report
   // references and protect a sibling-owned control plane without learning harness command names.
   sharedRuntimes?(runtimeDir: string): readonly SharedRuntimeDescriptor[]
@@ -332,6 +396,15 @@ export const codexAppServerSock = (dir = runtimeRoot()) => {
 }
 export const codexAppServerPid = (dir = runtimeRoot()) => join(dir, 'codex-app-server.pid')
 export const codexAppServerIsolation = (dir = runtimeRoot()) => join(dir, 'codex-app-server.scope')
+function codexRuntimeGeneration(dir = runtimeRoot()): string | null {
+  try {
+    const pid = Number(readFileSync(codexAppServerPid(dir), 'utf8').trim())
+    const start = processStartToken(pid)
+    const scope = readFileSync(codexAppServerIsolation(dir), 'utf8').trim()
+    const socket = statSync(codexAppServerSock(dir))
+    return pid > 0 && start ? `${pid}|${start}|${scope}|${socket.dev}:${socket.ino}` : null
+  } catch { return null }
+}
 
 // the spex launcher (bin/spex.mjs), baked into the codex launch script (mirrors materialize.ts's SPEX) so
 // the launch shell can call back into `spex codex-launch` to own the thread + fire the first turn before it
@@ -691,6 +764,119 @@ function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => vo
 const WS_UPGRADE = (key: string) => `GET /rpc HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n\r\n`
 const wsInitialize: JsonRpc = { id: 1, method: 'initialize', params: { clientInfo: { name: 'spexcode', title: 'SpexCode', version: '0.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } } }
 
+// Protocol-verified cold/restore seam. The Codex schema (`codex app-server generate-json-schema --experimental`)
+// defines thread/archive and thread/unarchive with {threadId}; no guessed method or process command is used.
+function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/unarchive', threadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  return new Promise((resolve) => {
+    const conn: Socket = createConnection(sock)
+    const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
+    let upgraded = false, settled = false
+    const done = (r: { ok: true } | { ok: false; error: string }) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      try { conn.destroy() } catch {}
+      resolve(r)
+    }
+    // thread/archive may wait up to 10s in shutdown_and_wait before the server commits; keep a margin so a
+    // legitimate late response is not turned into an early commit-unknown race.
+    const timer = setTimeout(() => done({ ok: false, error: `Codex ${method} timed out after 15s` }), 15000)
+    conn.on('error', (e) => done({ ok: false, error: `Codex ${method} connection failed: ${rpcError(e)}` }))
+    conn.on('close', () => { if (!settled) done({ ok: false, error: `Codex app-server closed during ${method}` }) })
+    const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
+    conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
+    const handle = (json: string) => {
+      let m: JsonRpc
+      try { m = JSON.parse(json) } catch { return }
+      if (m.error) return done({ ok: false, error: `Codex ${method} failed: ${m.error.message || JSON.stringify(m.error)}` })
+      if (m.id === 1 && m.result) { send({ method: 'initialized', params: {} }); return send({ id: 2, method, params: { threadId } }) }
+      if (m.id === 2 && m.result) return done({ ok: true })
+    }
+    conn.on('data', (chunk: Buffer) => {
+      fs.buf = Buffer.concat([fs.buf, chunk])
+      if (!upgraded) {
+        const i = fs.buf.indexOf('\r\n\r\n')
+        if (i < 0) return
+        const head = fs.buf.slice(0, i).toString('utf8')
+        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `Codex app-server refused WebSocket upgrade for ${method}` })
+        upgraded = true
+        fs.buf = fs.buf.slice(i + 4)
+        send(wsInitialize)
+      }
+      if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: `Codex app-server closed during ${method}` })
+    })
+  })
+}
+
+type CodexPagedIdsResult = { ok: true; ids: string[] } | { ok: false; error: string }
+function codexPagedIds(sock: string, method: 'thread/list' | 'thread/loaded/list', params: Record<string, unknown>, extractId: (item: unknown) => string | null, label: string): Promise<CodexPagedIdsResult> {
+  return new Promise((resolve) => {
+    const conn: Socket = createConnection(sock)
+    const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
+    let upgraded = false, settled = false, requestId = 2, cursor: string | null = null
+    const ids = new Set<string>()
+    const done = (result: CodexPagedIdsResult) => {
+      if (settled) return
+      settled = true; clearTimeout(timer); try { conn.destroy() } catch {}; resolve(result)
+    }
+    const timer = setTimeout(() => done({ ok: false, error: `Codex ${label} timed out` }), 5000)
+    conn.on('error', (error) => done({ ok: false, error: `Codex ${label} failed: ${rpcError(error)}` }))
+    conn.on('close', () => { if (!settled) done({ ok: false, error: `Codex app-server closed during ${label}` }) })
+    const send = (message: JsonRpc) => conn.write(wsText(JSON.stringify(message)))
+    const requestPage = () => send({ id: requestId, method, params: { ...params, ...(cursor ? { cursor } : {}), limit: 100 } })
+    conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
+    const handle = (json: string) => {
+      let message: JsonRpc
+      try { message = JSON.parse(json) } catch { return }
+      if (message.error) return done({ ok: false, error: `Codex ${label} failed: ${message.error.message || JSON.stringify(message.error)}` })
+      if (message.id === 1 && message.result) { send({ method: 'initialized', params: {} }); return requestPage() }
+      if (message.id !== requestId || !message.result) return
+      const page = message.result as { data?: unknown; nextCursor?: unknown }
+      if (Array.isArray(page.data)) for (const item of page.data) {
+        const id = extractId(item)
+        if (typeof id === 'string') ids.add(id)
+      }
+      cursor = typeof page.nextCursor === 'string' && page.nextCursor ? page.nextCursor : null
+      if (!cursor) return done({ ok: true, ids: [...ids] })
+      requestId++
+      requestPage()
+    }
+    conn.on('data', (chunk: Buffer) => {
+      fs.buf = Buffer.concat([fs.buf, chunk])
+      if (!upgraded) {
+        const i = fs.buf.indexOf('\r\n\r\n')
+        if (i < 0) return
+        const head = fs.buf.slice(0, i).toString('utf8')
+        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `Codex app-server refused loaded-reference census: ${head.split('\r\n')[0]}` })
+        upgraded = true; fs.buf = fs.buf.slice(i + 4)
+        send(wsInitialize)
+      }
+      if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: `Codex app-server closed during ${label}` })
+    })
+  })
+}
+
+// Lightweight resident census: unlike the full shared-runtime probe, this scans only paginated manager IDs
+// and never issues thread/read includeTurns for each loaded reference.
+export async function codexLoadedReferenceIds(sock: string): Promise<{ ok: true; referenceIds: string[] } | { ok: false; error: string }> {
+  const result = await codexPagedIds(sock, 'thread/loaded/list', {}, (item) => {
+    if (typeof item === 'string') return item
+    const value = item as { id?: unknown; threadId?: unknown } | null
+    return typeof value?.id === 'string' ? value.id : typeof value?.threadId === 'string' ? value.threadId : null
+  }, 'loaded-reference census')
+  return result.ok ? { ok: true, referenceIds: result.ids } : result
+}
+
+// The app-server's loaded/list is cursor-paginated. Archive proof must scan every page; a first page that omits
+// a sibling/descendant is not a cold proof. This helper is also used by the descendant guard below.
+function codexThreadList(sock: string, params: Record<string, unknown>): Promise<{ ok: true; ids: string[] } | { ok: false; error: string }> {
+  return codexPagedIds(sock, 'thread/list', params, (item) => {
+    if (typeof item === 'string') return item
+    const id = (item as { id?: unknown } | null)?.id
+    return typeof id === 'string' ? id : null
+  }, 'thread/list')
+}
+
 // Read a loaded thread id off the app-server via `thread/loaded/list`. With the backend now OWNING the thread
 // id at launch (codexStartThread → stored on the record), this is only the DELIVERY FALLBACK for a pre-existing
 // session whose id was never stored: it returns the first loaded thread. On a shared per-project server several
@@ -744,11 +930,25 @@ export function codexThreadId(sock: string): Promise<{ ok: true; threadId: strin
 // thread/read result distinguishes an active turn from an addressable idle one.
 export function codexSharedRuntimeProbe(dir = runtimeRoot()): Promise<SharedRuntimeProbe> {
   const sock = codexAppServerSock(dir)
-  return new Promise((resolve) => {
+  return (async () => {
+    // File presence is not process identity. A dead PID plus a stale socket file is the normal crash residue;
+    // only a live PID and a live listener establish a resident control plane. This keeps a deliberately absent
+    // root a healthy empty census while leaving live-but-ambiguous roots loud and visible.
+    let pid = 0
+    try { pid = Number(readFileSync(codexAppServerPid(dir), 'utf8').trim()) } catch { /* absent/stale */ }
+    const pidLive = pid > 0 && !!processStartToken(pid)
+    const listener = await listenerAt(sock, 800)
+    if (!pidLive && listener === 'dead') return { healthy: true, references: [] }
+    if (!pidLive || listener !== 'live') return { healthy: false, references: [], error: 'Codex shared root state is unknown (PID/listener identity is not proven)' }
+    return new Promise<SharedRuntimeProbe>((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
     const references = new Map<string, SharedRuntimeProbe['references'][number]>()
     const requests = new Map<number, string>()
+    const loadedRequests = new Set<number>()
+    const loadedIds = new Set<string>()
+    let loadedRequestId = 2
+    let loadedCursor: string | null = null
     let upgraded = false
     let settled = false
     let timer: NodeJS.Timeout
@@ -769,6 +969,7 @@ export function codexSharedRuntimeProbe(dir = runtimeRoot()): Promise<SharedRunt
       let m: JsonRpc
       try { m = JSON.parse(json) } catch { return }
       if (m.error) {
+        if (typeof m.id === 'number' && loadedRequests.has(m.id)) return fail(`codex app-server loaded/list failed: ${m.error.message || JSON.stringify(m.error)}`)
         const request = typeof m.id === 'number' ? requests.get(m.id) : undefined
         if (request) {
           requests.delete(m.id!)
@@ -779,33 +980,41 @@ export function codexSharedRuntimeProbe(dir = runtimeRoot()): Promise<SharedRunt
       }
       if (m.id === 1 && m.result) {
         send({ method: 'initialized', params: {} })
-        return send({ id: 2, method: 'thread/loaded/list', params: {} })
+        loadedRequests.add(loadedRequestId)
+        return send({ id: loadedRequestId, method: 'thread/loaded/list', params: { limit: 100 } })
       }
-      if (m.id === 2 && m.result) {
+      if (typeof m.id === 'number' && loadedRequests.has(m.id) && m.result) {
+        loadedRequests.delete(m.id)
         const data = (m.result as { data?: unknown }).data
         const ids = [...new Set(Array.isArray(data) ? data.flatMap((item) => {
           if (typeof item === 'string') return [item]
           const id = (item as { id?: unknown; threadId?: unknown })?.id ?? (item as { threadId?: unknown })?.threadId
           return typeof id === 'string' ? [id] : []
         }) : [])]
-        if (!ids.length) return done({ healthy: true, references: [] })
-        // loaded/list is the ownership proof. thread/read only enriches it with active-turn state; one stale
-        // loaded thread must not make the healthy control plane unknown forever.
-        clearTimeout(timer)
-        timer = setTimeout(() => done({ healthy: true, references: [...references.values()] }), 5000)
-        ids.forEach((threadId, index) => {
-          const id = 100 + index
+        for (const threadId of ids) loadedIds.add(threadId)
+        const next = (m.result as { nextCursor?: unknown }).nextCursor
+        loadedCursor = typeof next === 'string' && next ? next : null
+        if (loadedCursor) {
+          loadedRequestId++
+          loadedRequests.add(loadedRequestId)
+          return send({ id: loadedRequestId, method: 'thread/loaded/list', params: { cursor: loadedCursor, limit: 100 } })
+        }
+        // Continue with the complete paginated set, not just the first manager page.
+        if (!loadedIds.size) return done({ healthy: true, references: [] })
+        loadedIds.forEach((threadId) => {
+          const id = 100 + requests.size
           references.set(threadId, { referenceId: threadId, turnPresence: 'unknown' })
           requests.set(id, threadId)
-          send({ id, method: 'thread/read', params: { threadId, includeTurns: false } })
+          send({ id, method: 'thread/read', params: { threadId, includeTurns: true } })
         })
         return
       }
       if (typeof m.id === 'number' && requests.has(m.id) && m.result) {
         const threadId = requests.get(m.id)!
         requests.delete(m.id)
-        const thread = (m.result as { thread?: { status?: { type?: unknown } } }).thread
-        references.set(threadId, { referenceId: threadId, turnPresence: thread?.status?.type === 'active' ? 'active' : 'idle' })
+        const thread = (m.result as { thread?: { status?: { type?: unknown }; turns?: Array<{ id?: string; status?: string }> } }).thread
+        const activeTurn = Array.isArray(thread?.turns) ? thread.turns.find((turn) => turn?.status === 'inProgress') : undefined
+        references.set(threadId, { referenceId: threadId, turnPresence: thread?.status?.type === 'active' || activeTurn ? 'active' : 'idle', ...(activeTurn?.id ? { turnId: activeTurn.id } : {}) })
         if (!requests.size) done({ healthy: true, references: [...references.values()] })
       }
     }
@@ -822,7 +1031,8 @@ export function codexSharedRuntimeProbe(dir = runtimeRoot()): Promise<SharedRunt
       }
       if (drainWsFrames(fs, conn, handle)) fail('codex app-server closed during ownership probe')
     })
-  })
+    })
+  })()
 }
 
 // @@@ codexStartThread - the BACKEND owns the thread. On the shared PER-PROJECT app-server we `thread/start
@@ -1391,8 +1601,10 @@ export const claudeHarness: Harness = {
   // the caller) — NOT the mere existence of a stale socket FILE a crashed claude leaves behind (the 30-min
   // dead-pane-reads-working bug). See rendezvousListening.
   liveness: socketListenerLiveness,
+  leafOwnerNeedle: (rec) => rec.session,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
+  coldRuntime: async () => ({ ok: true }),
   // the TUI's sessions panel ("← for agents"): a reply injected here is parsed + enqueued to the PANEL context
   // and never drained (verified live: `queue-operation: enqueue` with no dequeue, no turn, daemon silent), so
   // the parse-confirmed delivery above would still report a false success into it. Matched on the panel's own
@@ -1416,6 +1628,7 @@ export const claudeHeadlessHarness: Harness = {
   ...claudeHarness,
   id: 'claude-headless',
   headless: true,
+  runtimeOwnership: 'adapter',
   ownsRendezvous: false,
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => claudeHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), claudeBaseCmd(cmd)),
@@ -1426,6 +1639,7 @@ export const claudeHeadlessHarness: Harness = {
   deliver: deliverViaClaudeHeadless,
   interrupt: interruptClaudeHeadless,
   cleanupRuntime: (rec) => unlinkSocks(claudeHeadlessSock(rec.session)),
+  coldRuntime: async () => ({ ok: false, reason: 'claude-headless has no exact resident unload proof' }),
   deliveryBlockedBy: undefined,
 }
 
@@ -1494,13 +1708,136 @@ export const codexHarness: Harness = {
     if (pane?.pidAlive !== undefined) return pane.pidAlive ? 'online' : 'offline'
     return paneTreeRunsCodex(pane) ? 'online' : 'offline'
   },
+  leafOwnerNeedle: (rec) => rec.harnessSessionId ?? null,
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   cleanupRuntime: async () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
+  coldPreflight: async (rec) => {
+    if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
+    const sock = codexAppServerSock(runtimeRoot())
+    const [activeDescendants, archivedDescendants] = await Promise.all([
+      codexThreadList(sock, { ancestorThreadId: rec.harnessSessionId, archived: false, sourceKinds: [] }),
+      codexThreadList(sock, { ancestorThreadId: rec.harnessSessionId, archived: true, sourceKinds: [] }),
+    ])
+    if (!activeDescendants.ok) return { ok: false, reason: activeDescendants.error }
+    if (!archivedDescendants.ok) return { ok: false, reason: archivedDescendants.error }
+    const descendants = [...new Set([...activeDescendants.ids, ...archivedDescendants.ids])]
+    if (descendants.length) return { ok: false, reason: `Codex thread ${rec.harnessSessionId} has owned descendants (${descendants.join(', ')}); subtree archive is not proven safe` }
+    const [probe, archivedList, activeList] = await Promise.all([
+      codexSharedRuntimeProbe(runtimeRoot()),
+      codexThreadList(sock, { archived: true, sourceKinds: [] }),
+      codexThreadList(sock, { archived: false, sourceKinds: [] }),
+    ])
+    if (!archivedList.ok) return { ok: false, reason: archivedList.error }
+    if (!activeList.ok) return { ok: false, reason: activeList.error }
+    if (!probe.healthy) return { ok: false, reason: probe.error || 'Codex shared-runtime probe is unhealthy' }
+    const target = probe.references.find((reference) => reference.referenceId === rec.harnessSessionId)
+    const inArchived = archivedList.ids.includes(rec.harnessSessionId)
+    const inActive = activeList.ids.includes(rec.harnessSessionId)
+    if (inArchived === inActive) return { ok: false, reason: `Codex thread ${rec.harnessSessionId} has ambiguous disk collection state (archived=${inArchived}, active=${inActive})` }
+    if (!target && inArchived && !inActive) return { ok: true, alreadyCold: true }
+    if (!target && inActive && !inArchived) return { ok: true } // active rollout is unloaded/notLoaded; archive RPC is still required
+    if (!target) return { ok: false, reason: `Codex thread ${rec.harnessSessionId} has no loaded turn but its collection state is unresolved` }
+    if (target.turnPresence === 'active') return { ok: false, reason: `Codex thread ${rec.harnessSessionId} has an active turn; interrupt/terminal proof is required before archive` }
+    if (target.turnPresence === 'unknown') return { ok: false, reason: `Codex thread ${rec.harnessSessionId} turn state is unknown; refusing to archive without a terminal proof` }
+    return { ok: true }
+  },
+  coldRuntime: async (rec) => {
+    if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
+    const threadId = rec.harnessSessionId
+    const sock = codexAppServerSock(runtimeRoot())
+    const preflight = await codexHarness.coldPreflight?.(rec)
+    if (preflight && !preflight.ok) return preflight
+    if (preflight?.ok && preflight.alreadyCold) return { ok: true }
+    const before = await codexSharedRuntimeProbe(runtimeRoot())
+    if (!before.healthy) return { ok: false, reason: before.error || 'Codex shared-runtime probe is unhealthy' }
+    const generationBefore = codexRuntimeGeneration(runtimeRoot())
+    if (!generationBefore) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
+    const siblingBefore = before.references.filter((reference) => reference.referenceId !== threadId)
+    const coldCheck = async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
+      const [probe, archivedList, activeList] = await Promise.all([
+        codexSharedRuntimeProbe(runtimeRoot()),
+        codexThreadList(sock, { archived: true, sourceKinds: [] }),
+        codexThreadList(sock, { archived: false, sourceKinds: [] }),
+      ])
+      if (!probe.healthy) return { ok: false, reason: probe.error || 'Codex post-archive runtime probe is unhealthy' }
+      if (codexRuntimeGeneration(runtimeRoot()) !== generationBefore) return { ok: false, reason: 'shared Codex app-server generation changed during archive' }
+      if (!archivedList.ok) return { ok: false, reason: archivedList.error }
+      if (!activeList.ok) return { ok: false, reason: activeList.error }
+      if (probe.references.some((reference) => reference.referenceId === threadId)) return { ok: false, reason: `Codex thread ${threadId} remains loaded after thread/archive` }
+      if (!archivedList.ids.includes(threadId)) return { ok: false, reason: `Codex thread ${threadId} is absent from both loaded and archived collections` }
+      if (activeList.ids.includes(threadId)) return { ok: false, reason: `Codex thread ${threadId} remains in the non-archived collection` }
+      const siblingAfter = probe.references.filter((reference) => reference.referenceId !== threadId)
+      const key = (reference: { referenceId: string }) => reference.referenceId
+      const afterIds = new Set(siblingAfter.map(key))
+      if (siblingBefore.some((reference) => !afterIds.has(key(reference)))) return { ok: false, reason: 'a pre-existing shared Codex sibling reference disappeared during archive' }
+      return { ok: true }
+    }
+    const archived = await codexThreadMutation(sock, 'thread/archive', rec.harnessSessionId)
+    if (!archived.ok) {
+      // RPC transport failure is commit-unknown. Reconcile collections before deciding whether compensation is needed.
+      const [archivedList, activeList] = await Promise.all([
+        codexThreadList(sock, { archived: true, sourceKinds: [] }),
+        codexThreadList(sock, { archived: false, sourceKinds: [] }),
+      ])
+      if (archivedList.ok && archivedList.ids.includes(rec.harnessSessionId)) {
+        const restored = await codexThreadMutation(sock, 'thread/unarchive', rec.harnessSessionId)
+        const stillActive = await codexThreadList(sock, { archived: false, sourceKinds: [] })
+        const suffix = restored.ok && stillActive.ok && stillActive.ids.includes(rec.harnessSessionId) ? '' : '; compensation/reconciliation failed'
+        return { ok: false, reason: `${archived.error}${suffix}` }
+      }
+      return { ok: false, reason: archivedList.ok && activeList.ok ? archived.error : `${archived.error}; archive state is unknown and could not be reconciled` }
+    }
+    let verified: { ok: true } | { ok: false; reason: string } = { ok: false, reason: 'Codex archive proof timed out' }
+    const verifyDeadline = Date.now() + 30_000
+    for (let attempt = 0; attempt < 6 && Date.now() < verifyDeadline; attempt++) {
+      verified = await coldCheck()
+      if (verified.ok) break
+      if (Date.now() < verifyDeadline) await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    if (verified.ok) return verified
+    const restored = await codexThreadMutation(sock, 'thread/unarchive', rec.harnessSessionId)
+    const active = await codexThreadList(sock, { archived: false, sourceKinds: [] })
+    const suffix = restored.ok && active.ok && active.ids.includes(rec.harnessSessionId) ? '' : '; compensation failed or archive state is unknown'
+    return { ok: false, reason: `${verified.reason}${suffix}` }
+  },
+  restoreRuntime: async (rec) => {
+    if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
+    const sock = codexAppServerSock(runtimeRoot())
+    const reconcile = async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
+      const [active, archived] = await Promise.all([
+        codexThreadList(sock, { archived: false, sourceKinds: [] }),
+        codexThreadList(sock, { archived: true, sourceKinds: [] }),
+      ])
+      if (!active.ok || !archived.ok) return { ok: false, reason: 'Codex restore state could not be reconciled' }
+      const inActive = active.ids.includes(rec.harnessSessionId!)
+      const inArchived = archived.ids.includes(rec.harnessSessionId!)
+      if (inActive && !inArchived) return { ok: true }
+      if (inArchived && !inActive) return { ok: false, reason: 'Codex thread remains archived; restore can be retried' }
+      return { ok: false, reason: 'Codex restore state is ambiguous (thread in both or neither collection)' }
+    }
+    const restored = await codexThreadMutation(sock, 'thread/unarchive', rec.harnessSessionId)
+    if (!restored.ok) return reconcile()
+    return reconcile()
+  },
   sharedRuntimes: (runtimeDir) => [{
     key: 'codex-app-server',
     label: 'Codex app-server',
     pidFile: codexAppServerPid(runtimeDir),
     isolationFile: codexAppServerIsolation(runtimeDir),
+    residency: async () => {
+      const sock = codexAppServerSock(runtimeDir)
+      let pid = 0
+      try { pid = Number(readFileSync(codexAppServerPid(runtimeDir), 'utf8').trim()) } catch { /* stale/missing pid */ }
+      const pidLive = pid > 0 && !!processStartToken(pid)
+      const listener = await listenerAt(sock, 800)
+      if (!pidLive && listener === 'dead') return { healthy: true, referenceIds: [], rootAbsent: true }
+      if (pidLive && (!codexRuntimeGeneration(runtimeDir) || listener !== 'live'))
+        return { healthy: false, referenceIds: [], error: 'Codex shared root identity/socket generation is not proven' }
+      if (!pidLive || listener !== 'live')
+        return { healthy: false, referenceIds: [], error: 'Codex shared root state is unknown' }
+      const result = await codexLoadedReferenceIds(sock)
+      return result.ok ? { healthy: true, referenceIds: result.referenceIds } : { healthy: false, referenceIds: [], error: result.error }
+    },
     probe: () => codexSharedRuntimeProbe(runtimeDir),
   }],
   // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
@@ -1520,6 +1857,7 @@ export const codexHeadlessHarness: Harness = {
   ...codexHarness,
   id: 'codex-headless',
   headless: true,
+  runtimeOwnership: 'adapter',
   launchOneShot: true,
   launchCmd: (id, runtimeDir, cmd) => codexHeadlessLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),
   // Record-backed liveness is the family contract for sleeping headless threads. An explicit stop is the one
@@ -1568,8 +1906,10 @@ export const piHarness: Harness = {
   // claude's exact liveness: the window is up AND a live LISTENER answers on the rendezvous socket — the
   // socket the generated extension binds. socketLive is already probed for every windowed session.
   liveness: socketListenerLiveness,
+  leafOwnerNeedle: (rec) => rec.session,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
+  coldRuntime: async () => ({ ok: true }),
   // reopen the SAME conversation: `--session <id>` resumes the exact session we pinned at launch and FAILS
   // LOUD when its file is gone (unlike `--session-id`, which would silently mint a fresh empty session).
   resumeArg: (rec) => `--session ${rec.session}`,
@@ -1583,11 +1923,13 @@ export const piHeadlessHarness: Harness = {
   ...piHarness,
   id: 'pi-headless',
   headless: true,
+  runtimeOwnership: 'adapter',
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => piHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), piBaseCmd(cmd)),
   liveness: recordOnline,
   deliver: deliverViaPiHeadless,
   cleanupRuntime: (rec) => unlinkSocks(piHeadlessSock(rec.session), rvSock(rec.session)),
+  coldRuntime: async () => ({ ok: false, reason: 'pi-headless has no exact resident unload proof' }),
   deliveryBlockedBy: undefined,
   resumeArg: (rec) => `--session ${rec.session}`,
 }
@@ -1628,8 +1970,10 @@ export const opencodeHarness: Harness = {
   // (the plugin is alive), FALL BACK to the launch-registered agent.pid (kill-0) so a plugin that failed to
   // load still reads honestly from the process signal instead of a false offline.
   liveness: socketListenerOrPidAliveLiveness,
+  leafOwnerNeedle: (rec) => rec.session,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
+  coldRuntime: async () => ({ ok: true }),
   // owned opencode session id → `--resume <id>` marker (the launch script re-attaches `--session <id>`, the
   // SAME conversation); never captured → `--continue` marker (opencode's own "last session in this directory",
   // which in a dedicated worktree is this worker's). The discriminator is sound for the same reason codex's
@@ -1643,10 +1987,12 @@ export const opencodeHeadlessHarness: Harness = {
   ...opencodeHarness,
   id: 'opencode-headless',
   headless: true,
+  runtimeOwnership: 'adapter',
   launchCmd: (_id, _runtimeDir, cmd) => opencodeHeadlessLaunchCommand(opencodeBaseCmd(cmd)),
   // A sleeping native conversation is still addressable by its non-stopped record. Transport breakage belongs
   // to the next delivery, where the live rendezvous or pane wake reports it loudly.
   liveness: recordOnline,
+  coldRuntime: async () => ({ ok: false, reason: 'opencode-headless has no exact resident unload proof' }),
   deliver: async (rec, text) => {
     return deliverViaSocketOrWake(
       rec.session,

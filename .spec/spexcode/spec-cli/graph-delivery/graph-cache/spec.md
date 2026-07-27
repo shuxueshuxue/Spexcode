@@ -32,28 +32,41 @@ The graph is built **once per change, not once per poll — and only as much of 
 
 - **Single-flight.** One assembly runs at a time; concurrent callers share the in-flight promise. This IS
   the max-concurrent-builds cap — a poll storm can never fan out into N builds, it joins the one.
-- **Patrol stability.** A cold/full board build must remain materially below graph-stream's ~15s patrol
-  interval ([[graph-stream]]). Patrol is a last-resort self-healing invalidation; if a build outlives that
-  interval, the next patrol can invalidate the in-flight build and amplify latency through repeated full
-  rebuilds. The shared `historyIndex`/`driftIndex` cost therefore has to keep full builds below the patrol
-  cadence; moving the cadence alone only moves the livelock threshold.
+- **Patrol verification is cache-owned.** Graph-stream's existing ~15s patrol does not manufacture a full
+  invalidation. It asks the cache for the same single-flight refresh every other fresh reader uses. On a clean
+  cache that refresh first compares one compact board-input revision: the served checkout's HEAD, `.spec` tree
+  and config; the main branch tip; exact session records and originating prompt artifacts; each
+  non-archived governed worktree's HEAD and `.spec` tree; the whole issue/remark-store stamp; and the current
+  session-eval projection states. An equal revision returns the cached board and starts no assembly. A moved session record or
+  projection revision takes the existing `sessions` splice; a moved graph/config/worktree/issue revision takes
+  the existing `full` producer, so a blinded observer is still repaired and reported by [[graph-stream]]. This
+  is the existing patrol timer's validation step, not a second poller or TTL. The revision is sampled around a
+  real build; input movement while it runs leaves the result dirty for
+  the next read even when the corresponding watcher event was missed. The completed board's own issue and
+  projection values become the cache anchor, so verification never certifies a value the board did not carry.
+  A slow validation or producer stays inside the same watchdog/abort/backoff path, and a patrol arriving during
+  another refresh joins it rather than queueing a second operation.
 - **Scoped invalidation (the dirty bit carries a domain).** `invalidateBoard(scope)` marks the cache
   'sessions'-dirty or 'full'-dirty, escalating (sessions∪full=full) and never downgrading. A
   'sessions'-dirty read with a cached graph takes the SPLICE path — `spliceSessions(prev)`: one fresh
   `listSessions()`, prev's per-path ops reused, every node/eval/issue unit returned byte-identical — so a
   lifecycle write never re-walks 180 spec files to ship a 1KB patch (the measured waste this scoping
-  removed: ~250ms of unrelated fs work per push). A 'full' dirty (a ref move, a worktree/.spec event, the
-  patrol) runs the whole `buildBoard()`. The splice runs under the SAME single-flight promise, watchdog
-  and generation rules as a full build; a 'full' invalidation landing mid-splice leaves the cache
-  full-dirty for the next read. The equivalence obligation — at one fixed eval-projection generation, a
+  removed: ~250ms of unrelated fs work per push). A 'full' dirty (a ref move or worktree/.spec event) runs the
+  whole `buildBoard()`. Before any nominal session splice, the cache compares current full inputs to the revision
+  its node/meta anchor carries; a moved full domain promotes that same flight rather than binding stale nodes to
+  a new revision. The producer consumes its starting scope, so a later event opens a new dirty window in that
+  event's own domain: a session completion during a long full build owes one follow-up splice, not another full
+  build, while a full invalidation landing mid-splice still leaves the cache full-dirty. Failure restores the
+  consumed producer scope. The splice runs under the SAME single-flight promise and watchdog as a full build.
+  The equivalence obligation — at one fixed eval-projection generation, a
   splice is indistinguishable from a full rebuild whenever only session state moved — is pinned by test,
   and the patrol's repair accounting
   ([[graph-stream]]) is the live alarm if it ever breaks.
 - **Cache until change.** A completed build is served verbatim until a real change invalidates it, so a
   quiet poll storm costs ZERO builds (100 cached reads measured at ~0.1ms total). Invalidation is called
   by the EXACT signals [[graph-stream]] watches, before their debounce fires, so the cache can never lag
-  a change the stream would push; a change landing MID-build leaves the cache dirty (generation counter)
-  so the next read rebuilds, while the just-finished build still answers its own waiters. The stream and
+  a change the stream would push; a change landing MID-build opens the next dirty window so the next read
+  rebuilds, while the just-finished build still answers its own waiters. The stream and
   the route share ONE build: `rebuildAndBroadcast` calls `getBoard()`.
 
 - **Truthful stale-while-revalidate.** The cache has one explicit consistency seam with two policies. A

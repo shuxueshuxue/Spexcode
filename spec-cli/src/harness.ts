@@ -16,7 +16,7 @@ import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless } from '.
 import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath } from './layout.js'
 import { git } from './git.js'
 import { shQuote } from './sh.js'
-import { processStartToken } from './process-identity.js'
+import { processStartToken, processTopology } from './process-identity.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -414,8 +414,11 @@ function codexRuntimeGeneration(dir = runtimeRoot()): string | null {
     const pid = Number(readFileSync(codexAppServerPid(dir), 'utf8').trim())
     const start = processStartToken(pid)
     const scope = readFileSync(codexAppServerIsolation(dir), 'utf8').trim()
+    const topology = processTopology(pid)
     const socket = statSync(codexAppServerSock(dir))
-    return pid > 0 && start ? `${pid}|${start}|${scope}|${socket.dev}:${socket.ino}` : null
+    if (!(pid > 0) || !start || !topology || topology.startToken !== start || topology.processGroupId !== pid || topology.sessionId !== pid ||
+      scope !== `detached-v3 ${pid} ${start} ${pid} ${pid}` || !socket.isSocket()) return null
+    return `${pid}|${start}|${scope}|${socket.dev}:${socket.ino}`
   } catch { return null }
 }
 
@@ -779,7 +782,13 @@ const wsInitialize: JsonRpc = { id: 1, method: 'initialize', params: { clientInf
 
 // Protocol-verified cold/restore seam. The Codex schema (`codex app-server generate-json-schema --experimental`)
 // defines thread/archive and thread/unarchive with {threadId}; no guessed method or process command is used.
-function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/unarchive', threadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+type CodexGenerationFence = { dir: string; generation: string }
+function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/unarchive', threadId: string, fence?: CodexGenerationFence): Promise<{ ok: true } | { ok: false; error: string }> {
+  const generationError = () => fence && codexRuntimeGeneration(fence.dir) !== fence.generation
+    ? `Codex ${method} refused because the shared app-server generation changed`
+    : null
+  const before = generationError()
+  if (before) return Promise.resolve({ ok: false, error: before })
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
@@ -793,17 +802,29 @@ function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/un
     }
     // thread/archive may wait up to 10s in shutdown_and_wait before the server commits; keep a margin so a
     // legitimate late response is not turned into an early commit-unknown race.
-    const timer = setTimeout(() => done({ ok: false, error: `Codex ${method} timed out after 15s` }), 15000)
-    conn.on('error', (e) => done({ ok: false, error: `Codex ${method} connection failed: ${rpcError(e)}` }))
+    const timer = setTimeout(() => done({ ok: false, error: generationError() || `Codex ${method} timed out after 15s` }), 15000)
+    conn.on('error', (e) => done({ ok: false, error: generationError() || `Codex ${method} connection failed: ${rpcError(e)}` }))
     conn.on('close', () => { if (!settled) done({ ok: false, error: `Codex app-server closed during ${method}` }) })
     const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
-    conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
+    conn.on('connect', () => {
+      const changed = generationError()
+      if (changed) return done({ ok: false, error: changed })
+      conn.write(WS_UPGRADE(randomBytes(16).toString('base64')))
+    })
     const handle = (json: string) => {
       let m: JsonRpc
       try { m = JSON.parse(json) } catch { return }
-      if (m.error) return done({ ok: false, error: `Codex ${method} failed: ${m.error.message || JSON.stringify(m.error)}` })
-      if (m.id === 1 && m.result) { send({ method: 'initialized', params: {} }); return send({ id: 2, method, params: { threadId } }) }
-      if (m.id === 2 && m.result) return done({ ok: true })
+      if (m.error) return done({ ok: false, error: generationError() || `Codex ${method} failed: ${m.error.message || JSON.stringify(m.error)}` })
+      if (m.id === 1 && m.result) {
+        const changed = generationError()
+        if (changed) return done({ ok: false, error: changed })
+        send({ method: 'initialized', params: {} })
+        return send({ id: 2, method, params: { threadId } })
+      }
+      if (m.id === 2 && m.result) {
+        const changed = generationError()
+        return changed ? done({ ok: false, error: changed }) : done({ ok: true })
+      }
     }
     conn.on('data', (chunk: Buffer) => {
       fs.buf = Buffer.concat([fs.buf, chunk])
@@ -1883,15 +1904,18 @@ export const codexHarness: Harness = {
       if (siblingBefore.some((referenceId) => !afterIds.has(referenceId))) return { ok: false, reason: 'a pre-existing shared Codex sibling reference disappeared during archive' }
       return { ok: true }
     }
-    const archived = await codexThreadMutation(sock, 'thread/archive', rec.harnessSessionId)
+    const fence = { dir: runtimeRoot(), generation: generationBefore }
+    const archived = await codexThreadMutation(sock, 'thread/archive', rec.harnessSessionId, fence)
     if (!archived.ok) {
+      if (codexRuntimeGeneration(runtimeRoot()) !== generationBefore)
+        return { ok: false, reason: `${archived.error}; shared Codex app-server generation changed, so archive state is unknown and no compensation was attempted` }
       // RPC transport failure is commit-unknown. Reconcile collections before deciding whether compensation is needed.
       const [archivedList, activeList] = await Promise.all([
         codexThreadList(sock, { archived: true, sourceKinds: [] }),
         codexThreadList(sock, { archived: false, sourceKinds: [] }),
       ])
       if (archivedList.ok && archivedList.ids.includes(rec.harnessSessionId)) {
-        const restored = await codexThreadMutation(sock, 'thread/unarchive', rec.harnessSessionId)
+        const restored = await codexThreadMutation(sock, 'thread/unarchive', rec.harnessSessionId, fence)
         const stillActive = await codexThreadList(sock, { archived: false, sourceKinds: [] })
         const suffix = restored.ok && stillActive.ok && stillActive.ids.includes(rec.harnessSessionId) ? '' : '; compensation/reconciliation failed'
         return { ok: false, reason: `${archived.error}${suffix}` }
@@ -1906,7 +1930,9 @@ export const codexHarness: Harness = {
       if (Date.now() < verifyDeadline) await new Promise((resolve) => setTimeout(resolve, 100))
     }
     if (verified.ok) return verified
-    const restored = await codexThreadMutation(sock, 'thread/unarchive', rec.harnessSessionId)
+    if (codexRuntimeGeneration(runtimeRoot()) !== generationBefore)
+      return { ok: false, reason: `${verified.reason}; shared Codex app-server generation changed, so no compensation was attempted` }
+    const restored = await codexThreadMutation(sock, 'thread/unarchive', rec.harnessSessionId, fence)
     const active = await codexThreadList(sock, { archived: false, sourceKinds: [] })
     const suffix = restored.ok && active.ok && active.ids.includes(rec.harnessSessionId) ? '' : '; compensation failed or archive state is unknown'
     return { ok: false, reason: `${verified.reason}${suffix}` }

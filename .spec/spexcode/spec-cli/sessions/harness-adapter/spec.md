@@ -208,7 +208,10 @@ surface:
   presence, while lifecycle mutation uses the paginated loaded-ID set, both exact target descendant collections,
   and an exact target read only when that target is loaded. The mutation proof fences the shared PID/start/isolation/
   socket generation across those reads; an unrelated slow sibling remains a protective loaded ID but cannot block
-  an isolated target leaf. Unknown/active target state, descendants, or a generation change fail closed. The Codex app-server is spawned
+  an isolated target leaf. That generation exists only for a live `detached-v3` PID/start whose observed process
+  group and session, isolation stamp, and socket inode all agree. Unknown/active target state, descendants, or a
+  generation change fail closed, and compensating mutation is permitted only on the unchanged original generation.
+  The Codex app-server is spawned
   as a detached child in its own operating-system process group and session, not merely wrapped in `nohup`
   (`nohup` did not survive the real Codex Node launcher resetting signal behavior). Its PID/start and observed
   process-group/session are recorded, then re-read live by teardown; an artifact alone never proves isolation.

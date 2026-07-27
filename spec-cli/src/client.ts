@@ -29,7 +29,8 @@ const guarded = (verb: string) => assertProjectMatch(`spex ${verb}`)
 const post = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 const seg = (id: string) => encodeURIComponent(id)
 type BrokerRequest = { op: string; sessionId?: string; force?: boolean }
-type BrokerResponse = { ok: boolean; status?: number; body?: any; code?: string; error?: string }
+type BrokerOutcome = 'committed' | 'refused' | 'indeterminate'
+type BrokerResponse = { ok: boolean; outcome?: BrokerOutcome; status?: number; body?: any; code?: string; error?: string }
 function brokerRequest(request: BrokerRequest): BrokerResponse | null {
   const fds = maintenanceBrokerDescriptors()
   if (!fds) return null
@@ -90,11 +91,45 @@ export async function clientMaintenanceRelease(token: string, epoch: number): Pr
   const r = await apiFetch('/api/session-maintenance/release', { method: 'POST', headers: maintenanceHeaders(token), body: JSON.stringify({ epoch }) })
   if (!r.ok) throw new BackendError(`backend refused maintenance release (${r.status}): ${await r.text()}`, r.status)
 }
-export async function clientMaintenanceOperation(token: string, request: { op: 'stop' | 'resume'; sessionId: string; force?: boolean }): Promise<BrokerResponse> {
+export async function clientMaintenanceOperation(
+  token: string,
+  request: { op: 'stop' | 'resume'; sessionId: string; force?: boolean },
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<BrokerResponse> {
   const path = `/api/sessions/${seg(request.sessionId)}/${request.op}`
-  const r = await apiFetch(path, { method: 'POST', headers: maintenanceHeaders(token), body: JSON.stringify(request.op === 'resume' ? { force: request.force === true } : {}) })
-  const body = await r.json().catch(() => ({}))
-  return { ok: r.ok, status: r.status, body, ...(!r.ok ? { code: body?.code, error: body?.error || `status ${r.status}` } : {}) }
+  const controller = new AbortController()
+  const abort = () => controller.abort(options.signal?.reason)
+  if (options.signal?.aborted) abort()
+  else options.signal?.addEventListener('abort', abort, { once: true })
+  const timer = setTimeout(() => controller.abort(new Error('maintenance operation timed out')), options.timeoutMs ?? 5_000)
+  timer.unref()
+  try {
+    const r = await apiFetch(path, {
+      method: 'POST', headers: maintenanceHeaders(token), signal: controller.signal,
+      body: JSON.stringify(request.op === 'resume' ? { force: request.force === true } : {}),
+    })
+    let body: any
+    try { body = await r.json() } catch {
+      return { ok: false, outcome: 'indeterminate', status: r.status, code: 'maintenance_response_malformed', error: 'maintenance operation returned malformed JSON' }
+    }
+    const committed = r.ok && body?.ok === true
+    const refused = body?.ok === false || (r.status >= 400 && r.status < 500 && typeof body?.code === 'string')
+    const outcome: BrokerOutcome = committed ? 'committed' : refused ? 'refused' : 'indeterminate'
+    const code = typeof body?.code === 'string' ? body.code
+      : refused ? 'session_operation_refused'
+        : committed ? undefined : 'maintenance_operation_indeterminate'
+    return {
+      ok: committed,
+      outcome,
+      status: r.status,
+      body,
+      ...(code ? { code } : {}),
+      ...(!committed ? { error: body?.error || `status ${r.status}` } : {}),
+    }
+  } finally {
+    clearTimeout(timer)
+    options.signal?.removeEventListener('abort', abort)
+  }
 }
 
 // GET /api/sessions — the board, used by `spex session ls`, and by `spex session watch`/`wait` as their poll source.

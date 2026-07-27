@@ -604,4 +604,71 @@ try {
       assert.equal(JSON.parse(readFileSync(join(root, 'session-maintenance.json'), 'utf8')).state, 'open')
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
+
+  await t.test('a dead reaper marker owner is reclaimed before the next exact contender acquires', async (t) => {
+    for (const crashPoint of ['before-canonical-unlink', 'after-canonical-unlink'] as const) await t.test(crashPoint, async () => {
+    const root = mkdtempSync(join(tmpdir(), 'spex-maintenance-reaper-crash-a-'))
+    const lock = join(root, '.session-maintenance.lock')
+    const observed = join(root, 'marker-published')
+    const preload = join(root, 'preload.cjs')
+    const runner = join(root, 'runner.mts')
+    const firstResult = join(root, 'first.json')
+    const nextResult = join(root, 'next.json')
+    try {
+      writeFileSync(lock, JSON.stringify({ version: 1, nonce: 'crashed-reaper-target', owner: { pid: 999_999_991, startToken: 'dead-owner' } }))
+      writeFileSync(preload, `
+const fs = require('node:fs')
+const { syncBuiltinESMExports } = require('node:module')
+const original = fs.unlinkSync
+fs.unlinkSync = function(path) {
+  if (path === process.env.SPEX_LOCK_RACE_PATH) {
+    if (process.env.SPEX_LOCK_CRASH_POINT === 'after-canonical-unlink') original.call(this, path)
+    fs.writeFileSync(process.env.SPEX_LOCK_OBSERVED, '')
+    while (true) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000)
+  }
+  return original.call(this, path)
+}
+syncBuiltinESMExports()
+`)
+      writeFileSync(runner, `
+import { writeFileSync } from 'node:fs'
+import { processStartToken } from ${JSON.stringify(new URL('./process-identity.js', import.meta.url).href)}
+import { createSessionMaintenance } from ${JSON.stringify(new URL('./session-maintenance.js', import.meta.url).href)}
+const [root, result] = process.argv.slice(2)
+const startToken = processStartToken(process.pid)
+try {
+  createSessionMaintenance({ runtimeRoot: root, now: () => Date.now(), randomBytes: (size) => Buffer.alloc(size, 0x9c),
+    processIdentity: (pid) => { const token = processStartToken(pid); return token ? { pid, startToken: token } : null },
+    selfIdentity: () => ({ pid: process.pid, startToken }), ticketReportMs: 1000 })
+  writeFileSync(result, JSON.stringify({ ok: true }))
+} catch (error) { writeFileSync(result, JSON.stringify({ ok: false, code: error?.code ?? 'unknown' })) }
+`)
+      const reaper = spawn(tsx, [runner, root, firstResult], {
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''}--require=${preload}`,
+          SPEX_LOCK_RACE_PATH: lock,
+          SPEX_LOCK_OBSERVED: observed,
+          SPEX_LOCK_CRASH_POINT: crashPoint,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      await waitUntil(() => existsSync(observed), 'reaper marker publication')
+      const marker = join(root, '.session-maintenance.lock.reap-crashed-reaper-target')
+      const markerRow = JSON.parse(readFileSync(marker, 'utf8'))
+      assert.deepEqual(processStartToken(markerRow.owner.pid), markerRow.owner.startToken)
+      process.kill(markerRow.owner.pid, 'SIGKILL')
+      await bounded(once(reaper, 'close') as Promise<[number | null]>, 'crashed reaper exit')
+      assert.notEqual(processStartToken(markerRow.owner.pid), markerRow.owner.startToken)
+
+      const next = spawn(tsx, [runner, root, nextResult], { stdio: ['ignore', 'pipe', 'pipe'] })
+      let stderr = ''; next.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+      const [code] = await bounded(once(next, 'close') as Promise<[number | null]>, 'next contender exit', 10_000)
+      assert.equal(code, 0, stderr)
+      assert.deepEqual(JSON.parse(readFileSync(nextResult, 'utf8')), { ok: true })
+      assert.equal(existsSync(marker), false)
+      assert.equal(existsSync(lock), false)
+    } finally { rmSync(root, { recursive: true, force: true }) }
+    })
+  })
 })

@@ -307,7 +307,7 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
   }
 })
 
-async function startHttpFixture(mode: 'draining-active' | 'expiry' | 'heartbeat-loss' | 'broker-concurrent' | 'broker-transport-loss', resultPath: string, extraEnv: Record<string, string> = {}) {
+async function startHttpFixture(mode: 'draining-active' | 'expiry' | 'heartbeat-loss' | 'broker-concurrent' | 'broker-transport-loss' | 'broker-pending-transport-loss' | 'resume-refused-retry' | 'post-acquire-validation', resultPath: string, extraEnv: Record<string, string> = {}) {
   const child = spawn(process.execPath, [httpFixture], { env: { ...process.env, MODE: mode, RESULT_PATH: resultPath, ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe'] })
   const closed = once(child, 'close') as Promise<[number]>
   let stdout = ''; let stderr = ''; let port = 0
@@ -471,6 +471,79 @@ touch ${JSON.stringify(completed)}
   assert.deepEqual(actual, { status: 1, entered: true, terminated: true, completed: false, bounded: true, released: false })
 })
 
+test('live broker transport loss aborts a pending HTTP operation before bounded wrapper exit', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-broker-pending-loss-a-'))
+  const resultPath = join(dir, 'events.ndjson'); const entered = join(dir, 'entered'); const terminated = join(dir, 'terminated'); const completed = join(dir, 'completed')
+  const fixture = await startHttpFixture('broker-pending-transport-loss', resultPath)
+  const script = join(dir, 'operator.sh')
+  writeFileSync(script, `#!/usr/bin/env bash
+trap 'touch ${JSON.stringify(terminated)}; exit 75' TERM
+touch ${JSON.stringify(entered)}
+${JSON.stringify(process.execPath)} --import tsx ${JSON.stringify(cli)} session stop ${ID} --api ${JSON.stringify(fixture.base)} & request=$!
+while ! grep -q '"step":"operation"' ${JSON.stringify(resultPath)}; do sleep 0.01; done
+exec 3>&- 4>&- 5>&-
+kill "$request" 2>/dev/null || true
+sleep 3
+touch ${JSON.stringify(completed)}
+`)
+  chmodSync(script, 0o755)
+  const started = Date.now()
+  const wrapper = spawn(process.execPath, ['--import', 'tsx', cli, 'session', 'maintain', '--allow-stop', ID, '--ttl-ms', '5000', '--wait-ms', '0', '--api', fixture.base, '--', script], {
+    cwd: pkgRoot, env: { ...process.env, SPEXCODE_API_URL: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const done = collect(wrapper)
+  let result: Awaited<ReturnType<typeof done>> | null = null
+  try {
+    result = await Promise.race([done(), sleep(2_500).then(() => null)])
+  } finally {
+    if (wrapper.exitCode === null) {
+      wrapper.kill('SIGKILL')
+      await once(wrapper, 'close')
+    }
+    await fixture.stop()
+  }
+  const actual = {
+    status: result?.code ?? null,
+    entered: existsSync(entered),
+    requestReachedBackend: events(resultPath).some((event) => event.step === 'operation'),
+    terminated: existsSync(terminated),
+    completed: existsSync(completed),
+    bounded: result !== null && Date.now() - started < 2_500,
+    released: events(resultPath).some((event) => event.step === 'release'),
+  }
+  rmSync(dir, { recursive: true, force: true })
+  assert.deepEqual(actual, {
+    status: 1, entered: true, requestReachedBackend: true, terminated: true,
+    completed: false, bounded: true, released: false,
+  })
+})
+
+test('post-acquire validation failure safely releases the exact lease before command spawn', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-post-acquire-cleanup-a-'))
+  const resultPath = join(dir, 'events.ndjson'); const marker = join(dir, 'command-ran')
+  const fixture = await startHttpFixture('post-acquire-validation', resultPath)
+  const wrapper = spawn(tsx, [cli, 'session', 'maintain', '--allow-stop', ID, '--ttl-ms', '5000', '--wait-ms', '0', '--api', fixture.base, '--', 'bash', '-c', `touch ${JSON.stringify(marker)}`], {
+    cwd: pkgRoot, env: { ...process.env, SPEXCODE_API_URL: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const result = await collect(wrapper)()
+  const status = await fetch(`${fixture.base}/api/session-maintenance`).then((response) => response.json()) as any
+  await fixture.stop()
+  const release = events(resultPath).find((event) => event.step === 'release')
+  const actual = {
+    status: result.code,
+    commandRan: existsSync(marker),
+    operations: events(resultPath).filter((event) => event.step === 'operation').length,
+    release: release ? { header: release.header, input: release.input } : null,
+    final: { state: status.state, owner: status.owner, capabilities: status.capabilities },
+  }
+  rmSync(dir, { recursive: true, force: true })
+  assert.deepEqual(actual, {
+    status: 1, commandRan: false, operations: 0,
+    release: { header: TOKEN, input: { epoch: 7 } },
+    final: { state: 'open', owner: null, capabilities: [] },
+  })
+})
+
 test('concurrent nested stop and resume receive only their own broker responses', { timeout: 15_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-broker-concurrent-a-'))
   const resultPath = join(dir, 'events.ndjson'); const release = join(dir, 'release'); const codes = join(dir, 'codes')
@@ -504,6 +577,34 @@ exit 0
   }
   rmSync(dir, { recursive: true, force: true })
   assert.deepEqual(actual, { wrapper: 0, codes: { first: '0', second: '0' }, operations: [`stop:${ID}`, `resume:${RESUME_ONE}`] })
+})
+
+test('HTTP resume refusal leaves the exact broker capability retryable until a completed attempt', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-resume-retry-a-'))
+  const resultPath = join(dir, 'events.ndjson'); const codes = join(dir, 'codes')
+  const fixture = await startHttpFixture('resume-refused-retry', resultPath)
+  const script = join(dir, 'operator.sh')
+  writeFileSync(script, `#!/usr/bin/env bash
+set +e
+${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session resume ${RESUME_ONE} --api ${JSON.stringify(fixture.base)}; first=$?
+${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session resume ${RESUME_ONE} --api ${JSON.stringify(fixture.base)}; second=$?
+printf 'first=%s\nsecond=%s\n' "$first" "$second" > ${JSON.stringify(codes)}
+exit 0
+`)
+  chmodSync(script, 0o755)
+  const wrapper = spawn(tsx, [cli, 'session', 'maintain', '--allow-resume', RESUME_ONE, '--ttl-ms', '5000', '--wait-ms', '0', '--api', fixture.base, '--', script], {
+    cwd: pkgRoot, env: { ...process.env, SPEXCODE_API_URL: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const result = await collect(wrapper)()
+  await fixture.stop()
+  const actual = {
+    wrapper: result.code,
+    codes: Object.fromEntries(lines(codes).map((line) => line.split('='))),
+    operations: events(resultPath).filter((event) => event.step === 'operation' && event.op === 'resume').length,
+    released: events(resultPath).some((event) => event.step === 'release'),
+  }
+  rmSync(dir, { recursive: true, force: true })
+  assert.deepEqual(actual, { wrapper: 0, codes: { first: '1', second: '0' }, operations: 2, released: true })
 })
 
 test('actual session attach is refused before tmux while active and holds an open ticket for its foreground lifetime', async () => {

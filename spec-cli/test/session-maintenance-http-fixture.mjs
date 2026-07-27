@@ -9,6 +9,8 @@ const epoch = 7
 const owner = { instanceId: 'fixture-supervisor-generation', pid: process.pid, startToken: 'fixture-supervisor-start' }
 let statusReads = 0
 let acquiredCapabilities = []
+let resumeAttempts = 0
+let released = false
 const record = (event) => appendFileSync(resultPath, `${JSON.stringify({ at: Date.now(), ...event })}\n`)
 const body = async (req) => {
   const chunks = []
@@ -29,14 +31,19 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/api/sessions?all=1') return res.end(JSON.stringify(rows))
   if (req.method === 'POST' && req.url === '/api/session-maintenance/acquire') {
     const input = await body(req)
-    acquiredCapabilities = input.capabilities
+    acquiredCapabilities = mode === 'post-acquire-validation' ? [] : input.capabilities
     record({ step: 'acquire', input })
     const active = mode === 'heartbeat-loss' || mode === 'broker-concurrent' || mode === 'broker-transport-loss'
+      || mode === 'broker-pending-transport-loss' || mode === 'resume-refused-retry' || mode === 'post-acquire-validation'
     res.statusCode = active ? 201 : 202
-    return res.end(JSON.stringify({ state: active ? 'active' : 'draining', epoch, token, owner, capabilities: input.capabilities }))
+    return res.end(JSON.stringify({ state: active ? 'active' : 'draining', epoch, token, owner, capabilities: acquiredCapabilities }))
   }
   if (req.method === 'GET' && req.url === '/api/session-maintenance') {
     statusReads++
+    if (mode === 'post-acquire-validation' && released) {
+      record({ step: 'status', state: 'open', epoch: epoch + 1 })
+      return res.end(JSON.stringify({ state: 'open', epoch: epoch + 1, owner: null, capabilities: [] }))
+    }
     if (mode === 'expiry' && statusReads >= 2) {
       record({ step: 'status', state: 'open', epoch: epoch + 1 })
       return res.end(JSON.stringify({ state: 'open', epoch: epoch + 1, owner: null, capabilities: [] }))
@@ -56,15 +63,21 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === 'POST' && req.url === '/api/session-maintenance/release') {
     record({ step: 'release', header: req.headers['x-spexcode-session-maintenance'] ?? null, input: await body(req) })
+    released = true
     return res.end(JSON.stringify({ ok: true }))
   }
   const match = req.url?.match(/^\/api\/sessions\/([^/]+)\/(stop|resume|input)$/)
   if (req.method === 'POST' && match) {
     record({ step: 'operation', sessionId: match[1], op: match[2], header: req.headers['x-spexcode-session-maintenance'] ?? null, input: await body(req) })
+    if (mode === 'broker-pending-transport-loss') return
     if (mode === 'broker-concurrent' && match[2] === 'stop') {
       const releasePath = process.env.BROKER_RELEASE_PATH
       if (!releasePath) throw new Error('BROKER_RELEASE_PATH is required')
       while (!existsSync(releasePath)) await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    if (mode === 'resume-refused-retry' && match[2] === 'resume' && ++resumeAttempts === 1) {
+      res.statusCode = 409
+      return res.end(JSON.stringify({ ok: false, refused: true, error: 'target liveness refused this attempt' }))
     }
     return res.end(JSON.stringify({ ok: true }))
   }

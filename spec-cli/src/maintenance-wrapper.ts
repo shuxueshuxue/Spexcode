@@ -64,53 +64,61 @@ export async function runMaintenanceWrapper(input: {
 }): Promise<number> {
   const acquired = await clientMaintenanceAcquire(input.capabilities, input.ttlMs, input.waitMs)
   const { token, epoch, owner } = acquired.lease
-  if (!token || !/^[0-9a-f]{64}$/i.test(token) || !Number.isSafeInteger(epoch)) throw new Error('maintenance acquire returned malformed private authority')
-  if (!owner || typeof owner.instanceId !== 'string' || !Number.isInteger(owner.pid) || typeof owner.startToken !== 'string')
-    throw new Error('maintenance acquire returned malformed supervisor authority')
-  if (!sameCapabilities(capabilityList(acquired.lease.capabilities), input.capabilities)) throw new Error('maintenance acquire returned a different capability plan')
-
-  let state = acquired.lease.state
-  const activationDeadline = Date.now() + input.ttlMs
-  while (state === 'draining') {
-    const heartbeat = await clientMaintenanceHeartbeat(token, epoch, input.ttlMs)
-    assertLeaseView(heartbeat, epoch, owner, input.capabilities, true)
-    const status = await clientMaintenanceStatus()
-    assertLeaseView(status, epoch, owner, input.capabilities, true)
-    state = status.state as 'draining' | 'active'
-    if (state !== 'active') {
-      if (Date.now() >= activationDeadline) throw new Error('maintenance acquisition did not become active before its ttl')
-      await sleep(50)
-    }
-  }
-  if (state !== 'active') throw new Error(`maintenance acquisition entered unexpected state ${state}`)
-  if (!input.command.length) throw new Error('maintenance wrapper needs a command after --')
-
-  const plan: PlannedCapability[] = input.capabilities.map((capability) => ({ capability: { ...capability }, state: 'unused' }))
+  const releaseable = typeof token === 'string' && /^[0-9a-f]{64}$/i.test(token) && Number.isSafeInteger(epoch)
   let released = false
   let authorityLost = false
-  let heartbeatFailure: Error | null = null
-  let heartbeatBusy = false
-  let failAuthority!: (error: Error) => void
-  const authorityFailure = new Promise<never>((_, reject) => {
-    failAuthority = (error) => {
-      if (heartbeatFailure) return
-      heartbeatFailure = error
-      reject(error)
-    }
-  })
-  const heartbeat = setInterval(() => {
-    if (heartbeatBusy || heartbeatFailure) return
-    heartbeatBusy = true
-    void clientMaintenanceHeartbeat(token, epoch, input.ttlMs)
-      .then((current) => assertLeaseView(current, epoch, owner, input.capabilities))
-      .catch((error) => failAuthority(error instanceof Error ? error : new Error(String(error))))
-      .finally(() => { heartbeatBusy = false })
-  }, Math.max(250, Math.min(1_000, Math.floor(input.ttlMs / 3))))
-  heartbeat.unref()
-
+  let heartbeat: ReturnType<typeof setInterval> | null = null
   let child: ReturnType<typeof spawn> | null = null
+  const pendingOperations = new Set<AbortController>()
   let closeAdmission = () => {}
   try {
+    if (!releaseable) throw new Error('maintenance acquire returned malformed private authority')
+    if (!owner || typeof owner.instanceId !== 'string' || !Number.isInteger(owner.pid) || typeof owner.startToken !== 'string')
+      throw new Error('maintenance acquire returned malformed supervisor authority')
+    if (!sameCapabilities(capabilityList(acquired.lease.capabilities), input.capabilities)) throw new Error('maintenance acquire returned a different capability plan')
+
+    let state = acquired.lease.state
+    const activationDeadline = Date.now() + input.ttlMs
+    try {
+      while (state === 'draining') {
+        const current = await clientMaintenanceHeartbeat(token, epoch, input.ttlMs)
+        assertLeaseView(current, epoch, owner, input.capabilities, true)
+        const status = await clientMaintenanceStatus()
+        assertLeaseView(status, epoch, owner, input.capabilities, true)
+        state = status.state as 'draining' | 'active'
+        if (state !== 'active') {
+          if (Date.now() >= activationDeadline) throw new Error('maintenance acquisition did not become active before its ttl')
+          await sleep(50)
+        }
+      }
+      if (state !== 'active') throw new Error(`maintenance acquisition entered unexpected state ${state}`)
+    } catch (error) {
+      authorityLost = true
+      throw error
+    }
+    if (!input.command.length) throw new Error('maintenance wrapper needs a command after --')
+
+    const plan: PlannedCapability[] = input.capabilities.map((capability) => ({ capability: { ...capability }, state: 'unused' }))
+    let heartbeatFailure: Error | null = null
+    let heartbeatBusy = false
+    let failAuthority!: (error: Error) => void
+    const authorityFailure = new Promise<never>((_, reject) => {
+      failAuthority = (error) => {
+        if (heartbeatFailure) return
+        heartbeatFailure = error
+        reject(error)
+      }
+    })
+    heartbeat = setInterval(() => {
+      if (heartbeatBusy || heartbeatFailure) return
+      heartbeatBusy = true
+      void clientMaintenanceHeartbeat(token, epoch, input.ttlMs)
+        .then((current) => assertLeaseView(current, epoch, owner, input.capabilities))
+        .catch((error) => failAuthority(error instanceof Error ? error : new Error(String(error))))
+        .finally(() => { heartbeatBusy = false })
+    }, Math.max(250, Math.min(1_000, Math.floor(input.ttlMs / 3))))
+    heartbeat.unref()
+
     child = spawn(input.command[0], input.command.slice(1), {
       stdio: ['inherit', 'inherit', 'inherit', 'pipe', 'pipe', 'pipe'],
       env: { ...process.env, SPEXCODE_MAINTENANCE_BROKER_FDS: '3,4,5' },
@@ -145,6 +153,7 @@ export async function runMaintenanceWrapper(input: {
     closeAdmission = () => {
       if (!brokerOpen) return
       brokerOpen = false
+      for (const controller of pendingOperations) controller.abort(new Error('maintenance broker admission closed'))
       if (transportLossTimer) clearTimeout(transportLossTimer)
       transportLossTimer = null
       try { requestPipe.destroy() } catch { /* already closed */ }
@@ -186,18 +195,19 @@ export async function runMaintenanceWrapper(input: {
       }
       planned.state = 'inflight'
       planned.requestId = request.id
+      const controller = new AbortController()
+      pendingOperations.add(controller)
       try {
-        const result = await clientMaintenanceOperation(token, candidate!)
-        const committed = result.ok && result.body?.ok === true
-        const retryable = (!result.ok && (result.status ?? 0) >= 400 && (result.status ?? 0) < 500 && typeof result.code === 'string')
-          || (result.ok && result.body?.ok === false)
-        planned.state = committed ? 'committed' : retryable ? 'unused' : 'indeterminate'
+        const result = await clientMaintenanceOperation(token, candidate!, { signal: controller.signal, timeoutMs: Math.min(5_000, input.ttlMs) })
+        planned.state = result.outcome === 'committed' ? 'committed' : result.outcome === 'refused' ? 'unused' : 'indeterminate'
         delete planned.requestId
         reply(request.id, result)
       } catch (error) {
         planned.state = 'indeterminate'
         delete planned.requestId
         reply(request.id, { ok: false, code: 'maintenance_broker_failed', error: error instanceof Error ? error.message : String(error) })
+      } finally {
+        pendingOperations.delete(controller)
       }
     }
     requestPipe.on('data', (chunk: Buffer | string) => {
@@ -232,12 +242,12 @@ export async function runMaintenanceWrapper(input: {
     }
     return outcome.code ?? (outcome.signal ? 1 : 0)
   } finally {
-    clearInterval(heartbeat)
+    if (heartbeat) clearInterval(heartbeat)
     closeAdmission()
     try { child?.stdio[3]?.destroy() } catch { /* child already closed */ }
     try { child?.stdio[4]?.destroy() } catch { /* child already closed */ }
     try { (child?.stdio as Array<Readable | Writable | null | undefined> | undefined)?.[5]?.destroy() } catch { /* child already closed */ }
-    if (!released && !authorityLost) {
+    if (releaseable && !released && !authorityLost) {
       await clientMaintenanceRelease(token, epoch)
       released = true
     }

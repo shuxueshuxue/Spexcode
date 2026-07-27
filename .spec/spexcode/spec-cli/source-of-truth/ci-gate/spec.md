@@ -30,7 +30,11 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   The matrix builds and installs the npm tarball, proves the installed `spex` starts, then crosses Python and
   TypeScript projects with Claude-only and Codex-only delivery in disposable real git repositories. Every row
   goes through the actual `spex init` and `spex materialize` CLI surfaces and checks the whole deterministic
-  self-launch boundary: git-tracked source is visible to coverage while untracked source is not; init's receipt
+  self-launch boundary. After init, it follows the printed adoption repair with ordinary Git: stage exactly
+  `.spec` and `spexcode.json`, commit them through the installed hooks (the documented main-seeding allowance,
+  never `--no-verify` or a lint bypass), and prove that commit reaches every project source asset while the
+  local-only source and generated harness files remain untracked. Then git-tracked source is visible to coverage
+  while untracked source is not; init's receipt
   names only artifacts it actually planted for the selected harness; the starter launcher is that harness's
   plain command with no automatic-permission flags; the seeded plugin tree is the canonical [[init-preset]]
   projection byte-for-byte and mode-for-mode; no held-back, private-machine, or SpexCode-project text leaks into

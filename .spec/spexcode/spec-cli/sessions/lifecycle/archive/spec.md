@@ -134,7 +134,11 @@ record flips, and a session can be restored from the CLI or another tab while yo
 CAN end up looking at an archive that just emptied. That is harmless as long as the star still works; it was
 a trap only while the star was inert, because then the one way out did not respond. Guarding the view instead
 of the exit fixed the symptom and produced a worse bug — a visible control that does nothing. The human's
-toggle is therefore authoritative, and an emptied archive is simply somewhere you can leave.
+toggle is therefore authoritative, and an emptied archive is simply somewhere you can leave. Replacing the
+archive/history rows during a refresh must not override that toggle while the selected session id and that
+session's archived state are unchanged. Automatic side selection still follows a real selection change or a
+change in the selected session's archived state, so deep links and external archive/resume transitions land on
+the side that actually owns the selected row without turning ordinary refreshes into navigation.
 
 Selecting an archived session shows the **archive card**, which is an offline cold-storage card with restore as
 its only lifecycle exit. There is no relaunch action while archived; `resume` first clears `archived`, then

@@ -54,6 +54,12 @@ when the handler wrote its `decision:block` to stdout and left stderr empty, the
 `reason` and forwards it to stderr; else codex would see exit 2 with no continuation. A handler that did not
 declare blocking can never block its event; a missing manifest dispatches nothing.
 
+Before invoking the first handler, the dispatcher enters one [[maintenance-lease]] `hook-state` scoped
+operation owned by the dispatcher PID/start and holds it across every matching handler. When maintenance has
+closed admission it emits the structured `maintenance_active` block through the harness's native blocking
+channel and invokes zero handlers; no handler stdout, file write, lifecycle write, or event is produced. The
+scope always releases its ticket on normal exit, handler failure, or dispatcher interruption.
+
 This is the substrate the spec-aware injections ([[inject-spec-first]], [[inject-spec-of-file]]) and the lifecycle gates
 ride on. Which nodes plug in is a [[surface]] field decision, not a code change here; adding or retiring a
 hook is a spec edit. The contract text (the `surface: system` bodies) is materialized by the same pass

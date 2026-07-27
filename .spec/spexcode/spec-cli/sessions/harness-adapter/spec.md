@@ -217,8 +217,10 @@ surface:
   process-group/session are recorded, then re-read live by teardown; an artifact alone never proves isolation.
   Killing the pane that happened to launch the daemon therefore cannot HUP unrelated turns.
   Shared-runtime spawn also acquires [[maintenance-lease]] admission. During active maintenance it is allowed
-  only as a child of the exact admitted resume ticket; a direct launch, fallback, or queue drain cannot use the
-  operator token to start a shared root.
+  only by consuming the resume ticket's opaque one-use delegated capability, bound to that live ticket's
+  epoch/session/operation and inherited outside argv/logs; forged, stale, completed, mismatched, and replayed
+  delegates refuse before spawn. A direct launch, fallback, or queue drain never receives the lease bearer or
+  authority to start a shared root.
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **pane-title semantics** (`paneTitleIsSelfSummary`) — whether the harness's tmux pane title IS the agent's

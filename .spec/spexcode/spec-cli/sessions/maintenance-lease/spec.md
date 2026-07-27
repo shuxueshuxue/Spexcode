@@ -5,6 +5,7 @@ hue: 280
 desc: A project-scoped admission barrier that drains in-flight session writes, blocks ordinary mutation, and admits only a finite exact stop/resume maintenance plan.
 related:
   - spec-cli/src/session-maintenance.test.ts
+  - spec-cli/src/session-maintenance.integration.test.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/client.ts
   - spec-cli/src/index.ts
@@ -26,42 +27,106 @@ must close that race without becoming a second auth system or a general process 
 ## expanded spec
 
 The maintenance lease is scoped to one project's `runtimeRoot()`. Its durable state machine is exactly
-`open -> draining -> active -> open`. Every Spex-owned session operation that can write state or address a
-runtime first acquires an **operation ticket before any side effect**: session creation and its no-backend
-fallback, lifecycle transitions, hook-authored state, prompt dispatch/send, raw terminal input, interrupt,
-rename, stop/resume/archive/close, merge dispatch, queue draining, and shared-runtime spawn. Reads remain open.
-The future implementation belongs in one module, `spec-cli/src/session-maintenance.ts`; this spec becomes that
-file's sole `code:` governor in the implementation checkpoint, when the path exists. Until then its red contract
-suite is related here rather than legitimizing a product stub.
+`open -> draining -> active -> open`; the durable open row remains so its epoch never resets. The future
+implementation belongs in one module, `spec-cli/src/session-maintenance.ts`; this spec becomes that file's sole
+`code:` governor in the implementation checkpoint, when the path exists. Until then its red contract suites are
+related here rather than legitimizing a product stub.
 
-Acquiring a lease atomically changes `open` to `draining`, thereby closing ordinary admission, then waits for
-every ticket admitted under the preceding epoch to finish. A ticket cannot appear between that close and the
-drain census. Once the old ticket set is empty the same compare-and-swap advances to `active`. Any other write
-fails before its callback, transport, signal, record write, queue claim, or spawn with the structured code
-`maintenance_active`; callers preserve that code across HTTP/CLI instead of collapsing it into not-found or a
-generic transport failure. Releasing the exact active epoch returns to `open`.
+### One admission vocabulary
 
-An active lease admits only the finite capabilities fixed at acquisition. A capability is exactly
-`{op:"stop", sessionId}` or `{op:"resume", sessionId, force}`; session id and resume force must match. This is
-enough to quiesce several protected leaves and resume those same leaves before ordinary admission reopens.
-Capabilities cannot be added, widened, or transferred after acquisition. The shared-runtime spawn nested
-inside an admitted resume rides that resume's live ticket; it is not a separately grantable capability and a
-direct spawn during maintenance is refused. Thus the canonical launcher remains the one shared-root creator
-without opening unrelated launch or queue work.
+The operation type is a CLOSED discriminated union, never a caller-provided string:
 
-The bearer is an opaque 256-bit random token returned once. Only its cryptographic hash is persisted. HTTP
-carries it in one dedicated header; it never appears in a URL/query, argv, session record, timeline, comms
-edge, ordinary log, or error. The header is maintenance admission, **not authentication**: normal endpoint
-authentication and project binding run first and remain mandatory. A correct token cannot make an untrusted
-request trusted.
+```
+create | fallback-create | lifecycle-transition | hook-state | send | raw-key-input |
+terminal-input | interrupt | rename | sort | stop | resume | archive | close |
+merge-dispatch | queue-drain | attach | shared-spawn
+```
 
-The durable record carries a monotonically increasing epoch, token hash, exact immutable capability list,
-lease owner PID plus process-start identity, heartbeat deadline, and state. Heartbeat and release are epoch CAS
-operations: a delayed owner from an earlier generation cannot extend or release a replacement. Backend restart
-re-reads and honors `draining`/`active` before accepting a write. Tickets likewise persist owner PID/start,
-epoch, operation, optional target identity, and deadline. Recovery removes a ticket only when the exact owner is
-dead/reused or its bounded deadline elapsed; an ambiguous/live ticket stays a blocker. A lease expires only by
-its heartbeat/TTL rule or exact epoch release. There is no force-break of a live lease.
+Every Spex-owned entry that can write session state or address a session runtime acquires its operation ticket
+at the lowest shared side-effect boundary: API and fallback creation, lifecycle writes, hook dispatch, prompt
+send, CLI raw keys, browser/xterm input, interrupt, rename/sort, stop/resume/archive/close, merge dispatch,
+queue drain, `spex session attach`, and the internal shared-runtime spawn. Reads, including maintenance status,
+remain open. A new Spex attach holds one `attach` ticket for the whole foreground tmux client lifetime. An
+already-running Spex attach was admitted under the preceding epoch and must drain; a native tmux/Codex client
+that bypasses Spex is outside this barrier and remains an explicit runbook census boundary.
+
+Acquisition uses one atomic durable compare-and-swap to change `open` to `draining`, closing ordinary admission
+before it enumerates preceding-epoch tickets. Two backend/CLI instances sharing the same runtime root cannot
+both win. Once every preceding ticket is proven gone, the same epoch advances to `active`. A bounded acquire
+wait only limits how long the request waits and reports the still-live ticket identities; its deadline NEVER
+proves that a callback stopped. A ticket whose exact PID/start owner is live, or whose owner identity is
+ambiguous, blocks forever regardless of its ticket deadline. Recovery may reclaim only a proven-dead owner or
+a PID whose start identity proves reuse. A callback throw always removes its own ticket in `finally`, while
+recording that capability attempt as indeterminate; it never strands a falsely-live ticket and never licenses a
+retry that could duplicate an unknown side effect.
+
+Lease heartbeat expiry or owner death moves `active` to recovery-draining, invalidates its bearer, and closes
+all maintenance capabilities, but NEVER reopens ordinary admission while any live or ambiguous ticket remains.
+Only after those tickets drain or their exact owners are proven dead/reused may recovery advance to `open`.
+Explicit release likewise refuses while a live/ambiguous ticket exists. There is no force-break of a
+non-expired lease and no deadline-based ticket reap.
+
+Any unadmitted write fails before callback, handler, transport, signal, record/file write, queue claim, tmux
+client, or spawn. The structured error is exactly `maintenance_active` plus state, epoch, operation and optional
+session id; HTTP and CLI preserve it rather than collapsing it into not-found or generic transport failure.
+Refusal creates no ticket and changes no durable lease/capability/event state. A hook dispatcher emits the same
+structured fail-loud block and invokes zero handlers.
+
+### Exact finite authority
+
+An active lease admits only the finite capability set fixed at acquisition. Each immutable copied entry is
+exactly `{op:"stop", sessionId}` or `{op:"resume", sessionId, force}`; duplicate entries are rejected, and the
+caller cannot widen them by mutating its input after acquisition. Session id, operation, and resume force all
+match exactly. A capability is one-shot: its atomic claim creates at most one live ticket. A successful callback
+marks it completed; a repeated or concurrent request returns `maintenance_capability_used` without running the
+callback. A refusal before callback leaves it unused and may be retried. A callback throw marks it
+`indeterminate`; retry is refused because a side effect may already have happened. Release is still explicit,
+but never implies that unused/indeterminate work succeeded.
+
+Canonical shared spawn is not grantable directly. An admitted resume mints a separate opaque, one-use delegated
+capability bound to that live resume ticket, epoch, operation, and session id. The nested internal
+`shared-runtime-spawn` consumes it while the parent resume ticket is still live, scrubs it before exec, and never
+places it in argv, logs, records, events, or comms. Forged, stale-epoch, completed-parent, wrong-session,
+wrong-operation, and replayed delegates all fail before spawn. Thus the canonical spawn rides exactly one
+admitted resume without opening unrelated launch or queue work.
+
+### Bearer, durability, and public lifecycle
+
+The lease bearer is 32 cryptographically random bytes encoded opaquely and returned once. The durable row stores
+exactly `SHA-256(token)`; verification hashes the presented token and uses a length-normalized constant-time
+digest comparison. Neither the raw lease token nor a delegated bearer appears in tickets, events, errors,
+URLs/query, argv, session records, timelines, comms, or ordinary logs. HTTP carries the lease token only in
+`X-SpexCode-Session-Maintenance`. Normal endpoint authentication and project binding run first and remain
+mandatory: maintenance admission is not authentication.
+
+The durable row atomically stores version, state, monotonically increasing epoch, token hash, an immutable
+canonical capability copy plus each capability's claim state, exact owner PID/start, heartbeat deadline, and
+tickets containing only id, epoch, closed operation, optional target/force, exact owner PID/start, and reporting
+deadline. Release clears the lease material but preserves the epoch; every later acquire increments it. Backend
+restart reads and honors `draining`/`active` before serving any write. Heartbeat and release require the exact
+current epoch and token; missing token, wrong token, stale token/epoch, malformed TTL, and wrong project all
+fail without changing durable state or events.
+
+The public porcelain stays under the existing session noun: `spex session maintain --allow-stop <SEL> ...
+--allow-resume <SEL>[:force] ... -- <command...>` is one scoped wrapper, and `spex session maintain --status`
+is its sanitized read. There is no seventh CLI noun and no separately typeable acquire/heartbeat/release
+sequence that would make shell history the bearer store. The wrapper's authenticated HTTP lifecycle is
+`POST /api/session-maintenance/acquire`, `GET /api/session-maintenance`, and POST `heartbeat`/`release` children.
+Acquire accepts the finite capabilities, `ttlMs` in `[5000,300000]`, and `waitMs` in `[0,120000]` with
+`waitMs <= ttlMs`; it returns `201 active` or, when the bounded wait ends while tickets remain, `202 draining`,
+with epoch and the token exactly once to the wrapper's in-memory HTTP client. Status exposes
+state/epoch/deadlines/capability states and sanitized ticket owners, never bearer material. Heartbeat accepts
+the same finite TTL range. The wrapper keeps the bearer in memory, heartbeats while its command runs, and
+releases in `finally`; it never prints or exports the bearer.
+
+Nested `spex` clients receive only two inherited anonymous broker file descriptors (request/response) plus
+their non-secret FD numbers. The parent wrapper serializes exact capability requests on that bounded channel,
+checks them against its copied plan, and is the only process that adds the dedicated HTTP header. No child or
+grandchild receives the bearer through argv, stdout/stderr, environment, file, or socket path. EOF closes the
+broker; after wrapper release its FDs authorize nothing. This inherited-FD mechanism is part of the future
+implementation acceptance bar: if the supported Node/Unix launch path cannot preserve it exactly through the
+operator command, implementation stops rather than weakening secrecy. Auth/project failure precedes lease
+lookup. There is no private-import-only lifecycle and no force-break verb.
 
 This node owns session admission only. It is not auth, an archive/status, a process signal API, a shared-root
 replacement mechanism, or a Git/filesystem freeze. It does not stop native Codex clients that connect directly

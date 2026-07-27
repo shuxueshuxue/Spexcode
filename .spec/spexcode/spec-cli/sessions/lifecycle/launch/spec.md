@@ -93,7 +93,8 @@ carries the caller's env, no cap).
 Backend launch, that no-backend fallback, and every queue-drain attempt acquire a [[maintenance-lease]]
 operation ticket before preparing, claiming, or starting anything. During an active lease they fail with
 `maintenance_active`; a queued row is not claimed. The sole exception is a shared-runtime spawn nested inside
-an exactly admitted resume, which rides the resume ticket rather than reopening general launch admission.
+an exactly admitted resume, which consumes that still-live ticket's opaque one-use delegated capability rather
+than reopening general launch admission. Direct, stale, replayed, or identity-mismatched spawn attempts refuse.
 
 That ownership starts at prompt invocation, not after a client has already interpreted it. A raw leading
 `/<preset>` names a live `surface: command` plugin: the shared prompt resolver expands its body, fills `{{targets}}` from the

@@ -40,7 +40,7 @@ test('session eval text preserves result-first order and uses only the own-readi
   ]
   const server = createServer((req, res) => {
     res.setHeader('content-type', 'application/json')
-    if (req.url === '/api/sessions') {
+    if (req.url === '/api/sessions?all=1') {
       res.end(JSON.stringify([{ id }]))
       return
     }

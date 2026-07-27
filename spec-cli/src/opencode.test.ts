@@ -78,7 +78,12 @@ test('the REAL dispatch.sh consumes the `opencode` harness id and routes the cla
   writeFileSync(rec, JSON.stringify({ session_id: 'sid_OC', governed: true, status: 'idle', proposal: '', note: '' }, null, 2))
   const r = spawnSync('bash', [dispatch, 'opencode', 'PreToolUse'], {
     cwd: dir,
-    env: { ...process.env, SPEX_HOOK_MANIFEST: join(runtime, 'hooks-manifest'), SPEXCODE_HOME: home },
+    env: {
+      ...process.env,
+      SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
+      SPEX_HOOK_MANIFEST: join(runtime, 'hooks-manifest'),
+      SPEXCODE_HOME: home,
+    },
     input: '{"session_id":"sid_OC","cwd":"/x","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}',
     encoding: 'utf8',
   })

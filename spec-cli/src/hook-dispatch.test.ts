@@ -144,6 +144,7 @@ test('codex mark-active resolves by payload thread id despite contaminated SPEXC
     cwd: dir,
     env: {
       ...process.env,
+      SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
       SPEX_HOOK_MANIFEST: join(runtime, 'hooks-manifest'),
       SPEXCODE_HOME: home,
       SPEXCODE_SESSION_ID: 'id_A',
@@ -222,7 +223,12 @@ test('claude mark-active skips a subagent tool call but still flips on the paren
   }, null, 2)
   const fire = (payload: string) => spawnSync('bash', [dispatch, 'claude', 'PreToolUse'], {
     cwd: dir,
-    env: { ...process.env, SPEX_HOOK_MANIFEST: join(runtime, 'hooks-manifest'), SPEXCODE_HOME: home },
+    env: {
+      ...process.env,
+      SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
+      SPEX_HOOK_MANIFEST: join(runtime, 'hooks-manifest'),
+      SPEXCODE_HOME: home,
+    },
     input: payload,
     encoding: 'utf8',
   })

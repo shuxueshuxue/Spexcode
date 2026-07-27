@@ -1,9 +1,9 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
-import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftForAsync, fileDiffAt,
+import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor, fileDiffAt,
   treeTextFiles, type HistoryIndex, type DriftIndex } from './git.js'
-import { parseCodeEntry, parseRelation } from './anchors.js'
+import { parseCodeEntry, parseRelation, relationClaimsPath } from './anchors.js'
 
 // a node is any directory under .spec holding a spec.md; its parent is the nearest ancestor that also holds one.
 const ROOT = repoRoot()
@@ -179,12 +179,7 @@ async function rawsAsync(root: string, tip = 'HEAD', snapshot?: SpecTreeSnapshot
 // the claim rule shared by both relations (exact path, dir-prefix, or *-glob). See [[governed-related]].
 function claimMatcher(file: string): (cf: string) => boolean {
   const rel = file.startsWith('/') ? relative(ROOT, file) : file
-  return (cf: string): boolean => {
-    if (cf === rel) return true
-    if (rel.startsWith(cf.replace(/\/+$/, '') + '/')) return true
-    if (cf.includes('*')) return new RegExp('^' + cf.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$').test(rel)
-    return false
-  }
+  return (claim) => relationClaimsPath(claim, rel)
 }
 
 // spec node(s) that GOVERN a file (frontmatter `code:` — source of truth, drives drift + eval freshness); reads only
@@ -249,10 +244,8 @@ export type LoadSpecsOptions = {
   snapshot?: SpecTreeSnapshot
 }
 export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions = {}) {
-  // both indexes are one cached git walk each and independent — fetch them in parallel (async git, off
-  // the event loop). The ordinary DAG representation makes every node below a pure lookup; the large-history
-  // representation delegates path windows to synchronous Git, so yield between nodes rather than joining
-  // hundreds of short probes into one liveness-blocking event-loop wall.
+  // Both indexes are one cached event projection each and independent — fetch them in parallel (async git,
+  // off the event loop). Every node below is then a pure in-memory lookup.
   const tip = options.tip ?? 'HEAD'
   if (options.snapshot && options.snapshot.tip !== tip) {
     throw new Error(`loadSpecs snapshot tip '${options.snapshot.tip}' does not match requested tip '${tip}'`)
@@ -264,7 +257,6 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
   ])
   const loaded = []
   for (const r of allRaws) {
-    if (didx?.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
     const h = idx ? rowsFor(idx, r.relPath) : []
     // session = the Session: trailer of the node's latest version; frontmatter `session:` is the fallback.
     const fmSession = str(r.fm.session)
@@ -284,8 +276,7 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
     const S = h[0]?.hash || ''
     const driftFiles = []
     for (const f of code) {
-      if (didx?.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
-      const d = didx ? { file: f, behind: await driftForAsync(didx, S, f, r.id) } : { file: f, behind: 0 }
+      const d = didx ? { file: f, behind: driftFor(didx, S, f, r.id) } : { file: f, behind: 0 }
       if (d.behind > 0) driftFiles.push(d)
     }
     const drift = driftFiles.reduce((a, d) => a + d.behind, 0)
@@ -296,8 +287,7 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
     const relatedDriftFiles = []
     for (const e of relatedRel.entries) {
       if (e.selectors.length) continue
-      if (didx?.lazy) await new Promise<void>((resolve) => setImmediate(resolve))
-      const d = didx ? { file: e.path, behind: await driftForAsync(didx, S, e.path, r.id) } : { file: e.path, behind: 0 }
+      const d = didx ? { file: e.path, behind: driftFor(didx, S, e.path, r.id) } : { file: e.path, behind: 0 }
       if (d.behind > 0) relatedDriftFiles.push(d)
     }
     const fmStatus = str(r.fm.status, '') || null

@@ -15,6 +15,19 @@ scenarios:
       as drift because it is NOT an ancestor of the version commit, exactly matching
       `git rev-list V..HEAD -- <file>`. A linear-position/date compare that reads it as
       "older than the spec" and stays silent is the failure this scenario pins.
+  - name: treesame-path-history-retained
+    tags: [cli]
+    description: >-
+      In a disposable Git DAG, let R contain a governed file and its spec, let one branch change that
+      file at h, let the other branch re-version the spec at vA, and merge the h branch with an `ours`
+      result so the merge tree is TREESAME to vA while h becomes reachable. Exercise the product verdict
+      and compare it with the complete event index. Keep this as a hand-built
+      measurement fixture rather than a permanent sample test.
+    expected: >-
+      h remains in the vA..merge drift window and the product reports one governed change from the event
+      projection. Git's default simplified `rev-list --no-merges ... -- path`, which hides h in this DAG,
+      is the scenario's failing control and cannot be accepted as an implementation or oracle. A rename
+      variant must likewise retain a hit authored under the old path after the current node moves.
   - name: off-history-probe-repeat-cost
     tags: [cli]
     test: .spec/spexcode/spec-cli/source-of-truth/drift-by-ancestry/repro-39.ts

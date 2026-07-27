@@ -138,7 +138,7 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     writeFileSync(codexAppServerPid(root), '99999999\n')
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no readable process-start identity/)
     writeFileSync(codexAppServerPid(root), `${sharedRoot.pid}\n`)
-    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no matching live detached process-boundary proof/)
+    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no matching live detached process-boundary record/)
     writeIsolationStamp(sharedRoot.pid!, codexAppServerIsolation(root))
     await assert.doesNotReject(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }))
     probe = { healthy: true, references: [] }

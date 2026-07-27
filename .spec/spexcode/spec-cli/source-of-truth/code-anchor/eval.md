@@ -2,6 +2,7 @@
 scenarios:
   - name: fold-project-boundary
     tags: [cli]
+    code: [spec-cli/src/git.ts#canonicalPathProjector]
     test:
       path: scripts/anchor-drift-fold-proof.mjs
       name: fold/project lower bound and pinned-history equivalence proof
@@ -9,26 +10,57 @@ scenarios:
       On the pinned 4,266-commit / 217-node reference clone, fold the contract-defined spec-version
       events into maximal reachability antichains, project them through the product's rename identity,
       and independently filter retained anchor hits under walk-newest, any-frontier and all-frontier
-      rules. Re-run the 14 pinned drift points with golden.mjs's normalized triples, capturing both stdout
-      and stderr on every exit status.
+      rules. Then run the pinned baseline and candidate CLIs in separate clean checkouts/processes/homes at
+      the 14 fixed tips, capturing both stdout and stderr on every exit status; compare the candidate's
+      incremental result with its eager fetch-layer result separately.
     expected: >
-      The walk-newest version base equals the product oracle for all 217 current nodes, and the exact
+      The walk-newest version base equals the product-selected base for all 217 current nodes, and the exact
       walk-newest drift/related-drift triples equal the corrected 14-point oracle at every point. The
       minimal parallel-version DAG has clear parent verdicts but revives the losing branch's hit after the
       merge, proving that (v, D) cannot be joined after forgetting cleared hits. Hit identities derived from
-      the complete drift event index grow with events (202 / 466 / 756 at depths 1,002 / 2,497 / 4,200; 757
-      at the tip); a path-limited history query is rejected as a measuring proxy because it simplifies away
-      eight real indexed events. Rename projection stays empirically short (maximum 4, mean 1.51) without
-      being asymptotically O(1).
+      the complete drift event index grow with events (249 / 550 / 840 at depths 1,002 / 2,497 / 4,200; 841
+      at the tip). The proof rejects both known lossy proxies: path-limited history simplifies away eight
+      events, while reading historical blobs/ranges through the current name misses 86 pre-rename hits plus
+      one same-path deletion. It also rejects a result-only rename query that invents three full-addition
+      hits absent from the real two-image patches. Rename projection stays empirically short (maximum 4, mean 1.51) without
+      being asymptotically O(1). Before the 14-point comparison, a 13-anchor positive fixture blocks in both
+      immutable CLI implementations; deleting one actual normalized anchor row produces exactly that one
+      missing key. Per-rule coverage is printed for every historical point, and zero anchor rows there is
+      reported as zero coverage rather than described as an anchor test.
   - name: anchor-hit-blocks
     tags: [cli]
+    code: [spec-cli/src/git.ts#canonicalPathProjector, spec-cli/src/anchors.ts#anchorHitCommits]
     description: >
-      In a fixture repo, a node's code: entry anchors src/calc.ts#applyRate; after the spec's version
-      commit, one commit changes lines INSIDE applyRate. Run `spex spec lint` in that repo.
+      In disposable fixture repos, a node's code: entry anchors applyRate. Exercise a direct edit, an edit
+      under the file's historical name followed by a rename, a delete followed by a self-acked restore, and
+      a merge-authored deletion whose two parents call the file by different names. Finally, let a merge
+      author only old.py->new.py after a side-branch hit, including a repeated-result (`RR`) merge rename;
+      and let incomparable hit/rename branches merge with
+      both old.py and new.py surviving. Run `spex spec lint` after each shape.
     expected: >
-      An `anchor-drift` ERROR names the anchor, the spec version, and the offending commit sha(s);
-      exit code is 1 (the pre-commit shim blocks). A subsequent `spex spec ack <node> --reason "…"`
+      Each `anchor-drift` ERROR names the anchor, the spec version, and only the offending edit/deletion sha;
+      rename projection, a later self-ack, and combined parent paths never erase that historical hit.
+      The rename-only merge transports identity but is not itself charged as a hit. Exit code is 1 (the
+      pre-commit shim blocks). A subsequent `spex spec ack <node> --reason "…"`
       quiets it (the reason lands in the ack commit's message body) and lint returns to 0 errors.
+  - name: vacated-reuse-consumers
+    tags: [cli, backend-api]
+    test:
+      path: scripts/anchor-drift-vacated-reuse-proof.mjs
+      name: vacated path reuse stays isolated across every consumer and lint ack closes a real hit
+    code:
+      - spec-cli/src/git.ts#canonicalPathProjector
+      - spec-cli/src/anchors.ts#anchorHitCommits
+      - spec-eval/src/freshness.ts#codeDrift
+      - spec-eval/src/sessioneval.ts#projectSessionImpact
+    description: >
+      In two disposable real Git repositories, exercise A→B rename, recreate A, then A→C while an old
+      A-lineage edit exists, and separately run a real anchored hit through `spex spec lint` followed by
+      `spex spec ack`. The proof is a single executable scenario with assertions, not a copied unit fixture.
+    expected: >
+      History rows, drift events, anchor hits, freshness counts, and session-impact head selectors exclude
+      the old A-lineage edit while the base-side session declaration retains it. The lint command exits
+      non-zero with `anchor-drift`, the ack succeeds, and the next lint exits zero without that finding.
   - name: outside-change-warns
     tags: [cli]
     description: >
@@ -130,38 +162,6 @@ scenarios:
       The `.tsx` historical parse remains conservative-unparseable and the `.ts` parse remains valid in
       either order and on repeat; normalized results do not depend on directory or query order. A key must
       cover the complete extractor input, not only the Git blob oid and extractor label.
-  - name: event-ledger-test-unicode-worktree
-    tags: [backend-api]
-    test:
-      path: spec-cli/src/git.test.ts
-      name: concurrent different-tip builders share an atomic ledger and recover on reopen
-    code: spec-cli/src/git.test.ts
-    description: >
-      Check out the same committed tree into one ASCII path and one path containing non-ASCII characters,
-      with local dependencies present in both. In each worktree run only the real concurrent different-tip
-      event-ledger test, which starts child TypeScript processes importing the candidate git.ts.
-    expected: >
-      Both paths pass the same test. The child import resolves the exact candidate file in the worktree;
-      a file URL's percent escapes are decoded once at the URL-to-path boundary and never passed back as a
-      literal filesystem path or encoded a second time.
-  - name: event-ledger-content-integrity
-    tags: [backend-api]
-    test:
-      path: spec-cli/src/git.test.ts
-      name: a damaged event row invalidates the ledger instead of changing history verdicts
-    code:
-      - spec-cli/src/git.ts
-      - spec-cli/src/git.test.ts
-    description: >
-      Seed the persistent history event ledger from a real two-commit repository, corrupt one byte in the
-      latest numstat event row while leaving its stream tip marker and the remaining NDJSON parseable, clear
-      process memos, and compare the cached history projection with the uncached full-history implementation.
-      In the same fixture, corrupt the governed-code event row and invoke the real `spex spec lint` CLI.
-    expected: >
-      The complete ledger fails its content-integrity check, is discarded, and is rebuilt from immutable Git
-      objects. The cached and uncached version rows remain identical; a syntactically usable remainder is
-      never accepted as a partial truth merely because its tip marker survived. Product lint retains the
-      original drift finding after rebuilding instead of silently returning a cleaner verdict.
   - name: parallel-version-debt-reappears
     tags: [cli]
     test:

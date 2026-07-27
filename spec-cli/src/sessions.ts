@@ -2390,10 +2390,49 @@ async function archiveSessionUnarchive(id: string): Promise<boolean> {
   return true
 }
 
-// @@@ closeSession - the REMOVAL (human-confirmed): stop's soft kill PLUS removing the worktree + branch AND
-// the session's whole global-store record dir — the work is gone, not just stopped. Same stop primitive as
-// stopSession (no duplicate kill path), then the git worktree/branch teardown that stop deliberately skips,
-// then the store sweep (stop KEEPS the record so the session stays on the board offline; close discards it).
+// @@@ cold retirement - archive already returned the target's runtime, so closing a proven-cold row must not
+// re-enter the live stop guard and make unrelated shared-root references prove ownership again. Verify only
+// that the target-bound cold proof is still current and that no target PID/window/socket/thread has reappeared.
+// This is read-only: no signal, adapter mutation, or shared-root cleanup belongs on the cold path.
+async function assertColdRetirementSafe(id: string, rec: SessRec): Promise<void> {
+  if (!rec.archived || !rec.stopped || !hasValidColdProof(rec))
+    throw new ResourceConflict(`refusing to close archived session ${id}: target-bound cold proof is missing or stale`)
+  if (rec.adapterRecovery)
+    throw new ResourceConflict(`refusing to close archived session ${id}: adapter recovery is pending (${rec.adapterRecovery})`)
+
+  const snap = await liveSnapshot()
+  if (snap.probeFailed) throw new ResourceConflict(`refusing to close archived session ${id}: liveness probe failed; target runtime absence is unproven`)
+  if (snap.windows.has(id)) throw new ResourceConflict(`refusing to close archived session ${id}: target tmux window has reappeared`)
+  if (snap.sockets.has(id)) throw new ResourceConflict(`refusing to close archived session ${id}: target rendezvous transport has reappeared`)
+  if (snap.unproven.has(id)) throw new ResourceConflict(`refusing to close archived session ${id}: target rendezvous state is ambiguous`)
+  const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
+  if (Number.isFinite(pid) && pid > 0 && processStartToken(pid))
+    throw new ResourceConflict(`refusing to close archived session ${id}: target leaf PID ${pid} is live or recycled; ownership is ambiguous`)
+
+  const harness = harnessById(rec.harness || defaultHarness.id)
+  const descriptors = harness.sharedRuntimes?.(runtimeRoot()) ?? []
+  let everySharedRootAbsent = descriptors.length > 0
+  for (const descriptor of descriptors) {
+    const resident: { healthy: boolean; referenceIds: string[]; error?: string; rootAbsent?: boolean } = descriptor.residency
+      ? await descriptor.residency()
+      : await descriptor.probe().then((probe) => ({ healthy: probe.healthy, referenceIds: probe.references.map((reference) => reference.referenceId), error: probe.error }))
+    if (!resident.healthy)
+      throw new ResourceConflict(`refusing to close archived session ${id}: ${resident.error || `${descriptor.label} resident census is unhealthy`}`)
+    if (rec.harnessSessionId && resident.referenceIds.includes(rec.harnessSessionId))
+      throw new ResourceConflict(`refusing to close archived session ${id}: target adapter thread ${rec.harnessSessionId} is loaded`)
+    everySharedRootAbsent = everySharedRootAbsent && resident.rootAbsent === true
+  }
+  if (harness.coldPreflight && !everySharedRootAbsent) {
+    const proof = await harness.coldPreflight(rec)
+    if (!proof.ok) throw new ResourceConflict(`refusing to close archived session ${id}: ${proof.reason}`)
+    if (!proof.alreadyCold)
+      throw new ResourceConflict(`refusing to close archived session ${id}: target adapter collection is not proven cold`)
+  }
+}
+
+// @@@ closeSession - the REMOVAL (human-confirmed): a live row uses stop's exact kill, while a proven-cold
+// archive uses the read-only proof above. Both then remove the worktree + branch and the session's whole
+// global-store record dir — the work is gone, not just stopped. The git/store teardown remains one path.
 // The tree's materialize slot ([[runtime]] trees/<enc>) retires with the worktree — its key needs the live tree,
 // so it is resolved BEFORE the removal; both sweeps are best-effort (residue is swept at uninstall anyway).
 // A corrupt record proves no adapter, leaf, worktree, or branch owner. Close may copy those bytes to the
@@ -2415,7 +2454,8 @@ async function closeSessionUnlocked(id: string): Promise<boolean> {
       `refusing destructive close for ${id}: the unreadable record proves no adapter, leaf, worktree, or branch owner (${guard}). ${evidence}. Runtime remains at ${runtime}; worktree and branch ownership is unknown and was not touched; no process signal or deletion was attempted.`)
   }
   if (!wt) return false
-  await stopAgentProcess(id, wt.rec)
+  if (wt.rec.archived) await assertColdRetirementSafe(id, wt.rec)
+  else await stopAgentProcess(id, wt.rec)
   let slot: string | null = null
   try { slot = treeSlotDir(wt.path) } catch { /* tree already unresolvable — nothing to key the slot by */ }
   // a retired session's worktree/branch are already gone; removing them is a no-op to skip, not a failure.

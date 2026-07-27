@@ -19,7 +19,7 @@ const capacityId = process.env.CAPACITY_SESSION
 const dist = process.env.DIST
 const out = resolve(process.env.OUT || '/tmp/archive-shelf-e2e')
 const spex = resolve(process.env.SPEX || 'spec-cli/bin/spex.mjs')
-if (!sessionId || !siblingId || !guardId || !capacityId) throw new Error('SESSION=<real Codex target>, SIBLING=<real Codex sibling>, GUARD_SESSION=<blocked archive leg>, and CAPACITY_SESSION=<queued control> are required')
+if (!sessionId || !siblingId || !guardId) throw new Error('SESSION=<real Codex target>, SIBLING=<real Codex sibling>, and GUARD_SESSION=<blocked archive leg> are required')
 for (const name of ['SPEXCODE_TMUX', 'TARGET_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE']) {
   if (!process.env[name]) throw new Error(`${name} is required for runtime/resource evidence`)
 }
@@ -71,13 +71,16 @@ const frame = (label) => events.push({ atMs: Date.now() - started, kind: 'frame'
 const before = await getTarget(false)
 const beforeAll = await getTarget(true)
 assert.ok(before && beforeAll, 'target must be a real existing session')
+assert.ok(beforeAll.path && beforeAll.branch, 'target must retain an exact worktree and branch identity')
 assert.equal(before.archived, false, 'target must begin unarchived')
 assert.equal(beforeAll.harness, 'codex', 'archive YATU requires a real Codex target')
 const beforeResources = await get('/api/resources')
 const defaultCountBefore = (await get(false)).length
 const graphCountBefore = (await get('/api/graph')).sessions.length
-const capacityBefore = (await get(true)).find((s) => s.id === capacityId)
-assert.deepEqual({ status: capacityBefore?.status, liveness: capacityBefore?.liveness }, { status: 'queued', liveness: 'offline' }, 'capacity control must be queued before archive')
+if (capacityId) {
+  const capacityBefore = (await get(true)).find((s) => s.id === capacityId)
+  assert.deepEqual({ status: capacityBefore?.status, liveness: capacityBefore?.liveness }, { status: 'queued', liveness: 'offline' }, 'provided capacity control must be queued before archive')
+}
 const dirtyHashBefore = hashBytes(readFileSync(process.env.DIRTY_SENTINEL))
 const recordBeforeBytes = JSON.parse(readFileSync(process.env.RECORD_FILE, 'utf8'))
 const recordIdentityBefore = hashBytes(JSON.stringify({ worktree_path: recordBeforeBytes.worktree_path, branch: recordBeforeBytes.branch, harness_session_id: recordBeforeBytes.harness_session_id }))
@@ -110,6 +113,7 @@ page.on('pageerror', (error) => pageErrors.push(String(error)))
 page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()) })
 let failure
 try {
+  narrate('▶ archive-guard-failure-visible · active native turn refuses without mutation')
   const guardBefore = await get(true)
   const guardConsoleStart = consoleErrors.length
   await page.goto(`${base}/#/sessions/${guardId}`, { waitUntil: 'domcontentloaded' })
@@ -126,8 +130,9 @@ try {
   const guardAfter = (await get(true)).find((s) => s.id === guardId)
   const guardRowBefore = guardBefore.find((s) => s.id === guardId)
   assert.deepEqual({ archived: guardAfter?.archived, status: guardAfter?.status, liveness: guardAfter?.liveness }, { archived: guardRowBefore?.archived, status: guardRowBefore?.status, liveness: guardRowBefore?.liveness }, 'guard refusal must not mutate the guarded record projection')
+  frame('📷 guard refusal preserves runtime and record projection')
 
-  narrate('archive exact Codex target through the real browser surface')
+  narrate('▶ shelve-and-restore-round-trip · archive exact Codex target through the real browser surface')
   await page.goto(`${base}/#/sessions/${sessionId}`, { waitUntil: 'domcontentloaded' })
   const row = page.locator(`.si-item[data-sid="${sessionId}"]`)
   await row.waitFor({ state: 'visible', timeout: 30_000 })
@@ -162,14 +167,16 @@ try {
   assert.equal(processMarker(process.env.SHARED_PID_FILE), sharedPidBefore, 'shared app-server PID/start must be unchanged')
   assert.equal(socketMarker(process.env.SHARED_SOCKET), sharedSocketBefore, 'shared app-server socket identity must be unchanged')
   assert.equal((resources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.threadId === beforeThread), false, 'target thread is not still loaded after archive')
-  const capacityAfter = await waitFor(() => get(true), (rows) => {
-    const control = rows.find((s) => s.id === capacityId)
-    return control?.status !== 'queued' && control?.liveness === 'online' ? control : null
-  }, 'queued capacity control to launch after archive')
-  assert.notEqual(capacityAfter.status, 'queued', 'archived target must release its maxActive slot')
+  if (capacityId) {
+    const capacityAfter = await waitFor(() => get(true), (rows) => {
+      const control = rows.find((s) => s.id === capacityId)
+      return control?.status !== 'queued' && control?.liveness === 'online' ? control : null
+    }, 'queued capacity control to launch after archive')
+    assert.notEqual(capacityAfter.status, 'queued', 'archived target must release its maxActive slot')
+  }
   const shelf = page.locator('.si-pill.shelf'); await shelf.click(); await page.waitForFunction(() => document.querySelector('.si-pill.shelf')?.getAttribute('aria-pressed') === 'true')
   assert.equal(await page.locator('.si-zone').count(), 0, 'archive shelf must be flat with no status zones')
-  frame('flat offline shelf; default graph/resources omit target; target runtime gone and shared sibling retained')
+  frame('📷 flat offline shelf; default graph/resources omit target; target runtime gone and shared sibling retained')
 
   const nonce = `sibling-archive-proof-${Date.now()}`
   const derived = hashBytes(nonce)
@@ -199,17 +206,38 @@ try {
   assert.equal(hashBytes(readFileSync(process.env.DIRTY_SENTINEL)), dirtyHashBefore, 'dirty sentinel bytes survive archive/resume')
   const recordAfterBytes = JSON.parse(readFileSync(process.env.RECORD_FILE, 'utf8'))
   assert.equal(hashBytes(JSON.stringify({ worktree_path: recordAfterBytes.worktree_path, branch: recordAfterBytes.branch, harness_session_id: recordAfterBytes.harness_session_id })), recordIdentityBefore, 'record worktree/branch/conversation identity survives')
-  frame('resume returns the same thread through starting to online')
+  frame('📷 resume returns the same thread through starting to online')
 
+  narrate('▶ close-proven-cold-archive · archive again and permanently retire while cold')
+  await waitFor(async () => {
+    const report = await get('/api/resources')
+    return (report.owners || []).flatMap((owner) => owner.references || []).find((ref) => ref.sessionId === sessionId)
+  }, (ref) => ref?.turnPresence === 'idle', 'resumed target turn to settle before cold close')
+  await post(`/api/sessions/${sessionId}/archive`)
+  await waitFor(() => getTarget(true), (s) => s?.archived === true && s?.status === 'offline' && s?.liveness === 'offline', 'second cold archive before close')
+  assert.equal(tmuxPresent(process.env.SPEXCODE_TMUX, sessionId), false, 'cold-close target tmux must already be gone')
+  assert.equal(processMarker(process.env.TARGET_PID_FILE), null, 'cold-close target PID must already be gone')
+  assert.equal(existsSync(beforeAll.path), true, 'cold close must begin with the retained worktree present')
+  assert.equal(existsSync(process.env.RECORD_FILE), true, 'cold close must begin with the retained record present')
+  const branchBeforeClose = execFileSync('git', ['branch', '--list', beforeAll.branch], { encoding: 'utf8' }).trim()
+  assert.ok(branchBeforeClose, 'cold close must begin with the retained branch present')
   await post(`/api/sessions/${sessionId}/close`)
   await waitFor(() => get(true), (rows) => !rows.some((s) => s.id === sessionId), 'true close removal')
+  assert.equal(existsSync(beforeAll.path), false, 'cold close removes the retained worktree')
+  assert.equal(existsSync(process.env.RECORD_FILE), false, 'cold close removes the retained record')
+  assert.equal(execFileSync('git', ['branch', '--list', beforeAll.branch], { encoding: 'utf8' }).trim(), '', 'cold close removes the retained branch')
+  const afterCloseResources = await get('/api/resources')
+  assert.equal(processMarker(process.env.SHARED_PID_FILE), sharedPidBefore, 'cold close leaves shared app-server PID/start unchanged')
+  assert.equal(socketMarker(process.env.SHARED_SOCKET), sharedSocketBefore, 'cold close leaves shared app-server socket unchanged')
+  assert.ok((afterCloseResources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.sessionId === siblingId && ref.threadId === siblingBeforeRef.threadId), 'cold close leaves the sibling loaded reference unchanged')
+  await page.locator(`.si-item[data-sid="${sessionId}"]`).waitFor({ state: 'detached', timeout: 30_000 })
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
   watch.child.kill('SIGTERM'); await waitClosed(watch.child)
   const watchTranscript = watch.text()
   assert.equal((watchTranscript.stdout.match(/\[spex\] closed/g) ?? []).length, 1, watchTranscript.stdout)
   writeFileSync(join(out, 'watch.log'), watchTranscript.stdout + watchTranscript.stderr)
   writeFileSync(join(out, 'wait.log'), waitTranscript.stdout + waitTranscript.stderr)
-  frame('only true close removes the record')
+  frame('📷 cold close removes record, worktree, branch, and shelf row exactly once')
 } catch (error) { failure = error }
 finally {
   if (watch.child.exitCode == null) watch.child.kill('SIGTERM')
@@ -224,6 +252,6 @@ const video = page.video(); await context.close(); const videoPath = await video
 const browserErrors = [...pageErrors, ...consoleErrors]
 if (browserErrors.length && !failure) failure = new Error(`browser errors: ${browserErrors.join('\\n')}`)
 writeFileSync(join(out, 'archive-shelf.timeline.json'), `${JSON.stringify({ events, pageErrors, consoleErrors }, null, 2)}\n`)
-writeFileSync(join(out, 'result.json'), `${JSON.stringify({ ok: !failure, sessionId, siblingId, capacityId, video: videoPath, browserErrors }, null, 2)}\n`)
+writeFileSync(join(out, 'result.json'), `${JSON.stringify({ ok: !failure, error: failure ? String(failure.stack || failure) : null, sessionId, siblingId, capacityId: capacityId || null, video: videoPath, browserErrors }, null, 2)}\n`)
 if (failure) throw failure
 console.log(JSON.stringify({ ok: true, video: videoPath, timeline: join(out, 'archive-shelf.timeline.json') }))

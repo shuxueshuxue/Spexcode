@@ -11,7 +11,7 @@ import { Icon } from './icons.jsx'
 export const LockGlyph = ({ size = 12 }) => <Icon name="lock" size={size} />
 
 export function opSummary(ops) {
-  if (!ops.length) return null
+  if (!ops?.length) return null
   const by = {}
   ops.forEach((o) => { by[o.op] = (by[o.op] || 0) + 1 })
   return Object.entries(by).map(([op, n]) => `${GLYPH[op]}${n}`).join(' ')

@@ -6,6 +6,7 @@ import { inboxCommands, uiCommandsFor, UI_COMMANDS } from './sessionCommands.js'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
+const sessionWindow = readFileSync(new URL('./SessionWindow.jsx', import.meta.url), 'utf8')
 const timelineChat = readFileSync(new URL('./TimelineChat.jsx', import.meta.url), 'utf8')
 const feed = readFileSync(new URL('./EvalsFeed.jsx', import.meta.url), 'utf8')
 const reviewShell = readFileSync(new URL('./ReviewShell.jsx', import.meta.url), 'utf8')
@@ -39,6 +40,10 @@ test('archive door stays icon-only regardless of archived session count', () => 
   assert.match(source, /className=\{viewingShelf \? 'si-pill shelf on' : 'si-pill shelf'\}/)
   assert.match(source, /name=\{viewingShelf \? 'star-filled' : 'star'\}/)
   assert.doesNotMatch(source, /si-pill-count/)
+})
+
+test('cold archive rows render without paying for a git ops projection', () => {
+  assert.match(sessionWindow, /if \(!ops\?\.length\) return null/)
 })
 
 test('session eval glance reuses the graph summary projection and review-state visual', () => {

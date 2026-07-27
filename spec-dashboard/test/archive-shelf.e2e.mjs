@@ -215,10 +215,12 @@ try {
   assert.ok(noPaneBefore?.harness === 'codex' && noPaneBefore?.liveness === 'online', 'no-pane control must begin as online interactive Codex')
   execFileSync('tmux', ['-L', process.env.SPEXCODE_TMUX, 'kill-session', '-t', noPaneId])
   await waitFor(() => ({ tmux: tmuxPresent(process.env.SPEXCODE_TMUX, noPaneId), pid: processMarker(process.env.NO_PANE_PID_FILE) }), (runtime) => runtime.tmux === false && runtime.pid === null, 'no-pane target-owned pane and leaf absence')
-  const noPaneGuard = await waitFor(() => get(true), (rows) => {
+  const noPaneRows = await waitFor(() => get(true), (rows) => {
     const row = rows.find((candidate) => candidate.id === noPaneId)
     return row?.liveness === 'offline' ? row : null
   }, 'no-pane/no-leaf public offline projection')
+  const noPaneGuard = noPaneRows.find((candidate) => candidate.id === noPaneId)
+  assert.ok(noPaneGuard, 'no-pane control record remains addressable')
   assert.equal(noPaneGuard.archived, false, 'external pane loss preserves the ordinary record rather than archiving it')
   assert.equal(noPaneGuard.lifecycle, noPaneBefore.lifecycle, 'external pane loss preserves the agent-authored lifecycle axis')
   assert.notEqual(noPaneGuard.status, 'working', 'no-pane/no-leaf interactive session cannot remain compact-working')

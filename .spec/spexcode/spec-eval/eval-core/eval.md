@@ -204,6 +204,21 @@ scenarios:
       measurement block and fullIndexHash. A mode/type-only change leaves both scenario index hashes unchanged
       but changes the outer Git treeSha provenance. Scenario rename and add/remove are visible in sorted row
       bytes and both hashes. No evals.ndjson, verdict, evidence, freshness, GitLab, CR, or AGS data is read.
+  - name: canonical-measurement-metadata-writer
+    tags: [cli]
+    description: >-
+      Through the public library and real `spex eval` CLI, apply one exact `{path,name}` test mapping to a
+      named scenario in fixed-tree eval.md bytes containing comments, blank lines, block scalars, non-default
+      indentation, and CRLF; parse the proposed bytes through the canonical scenario projection, then delete
+      the inserted mapping through the same seam. Also attempt malformed YAML/schema, a duplicate or missing
+      scenario name, an absent-field deletion, and requests containing multiple scenarios or fields.
+    expected: >-
+      Both faces choose the same deterministic structural placement immediately after `tags`, preserve the
+      source indentation and line-ending convention, and expose normalized measurement metadata through the
+      existing parser identity without reading a runner, forge, or worktree. Insert followed by delete
+      reconstructs the authoritative input bytes exactly, including comments, scalar style, blank lines, final
+      newline, and CRLF. Every ambiguous, malformed, unknown, absent, or multi-target request fails loudly and
+      emits no proposed bytes; callers never provide byte offsets, line numbers, or text anchors.
 ---
 # eval.md — eval-core
 

@@ -175,6 +175,21 @@ scenarios:
       Each parent is locally clean, but the merged tip selects A's version and reports B's earlier code
       commit as drift because it is not reachable from A. The merge itself is not a version. This proves
       that a parent state which reset B's debt at B's version cannot supply the exact merged judgment.
+  - name: session-impact-merge-stream
+    tags: [backend-api]
+    test:
+      path: spec-eval/src/sessioneval.test.ts
+      name: exact impact accepts only commit headers from a merge patch stream
+    description: >
+      In a real Git fixture, create an anchored Python declaration, change that declaration while merging
+      a side branch, and call the public projectSessionImpact API across the base and merge commit. Also call
+      that same public API on the pinned live-session range 3894f016..5e685131, where a merge touches the
+      anchored spec-cli/src/anchors.ts path.
+    expected: >
+      Both projections succeed. The fixture reports the merge commit as the selector hit, and every reported
+      selector-hit commit is a valid Git object id. Combined-diff patch metadata and content lines are never
+      treated as revisions, so the live-session projection is available instead of failing with a bad-revision
+      error for a line such as "diff --cc spec-cli/src/anchors.ts".
   - name: candidate-tip-gate
     tags: [cli]
     description: >

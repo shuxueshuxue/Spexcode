@@ -50,6 +50,11 @@ served root before writing and REFUSES loudly on a provable same-host mismatch, 
 the explicit-routing remedy. An explicit `--api`/`--port` skips the guard (the flag IS the proof of intent);
 no local repo, an unreachable backend, or a genuinely remote root fall through to allow. Reads stay unguarded.
 
+Those writes also pass through [[maintenance-lease]] after normal authentication and project binding. An
+operator capability is carried only in the dedicated maintenance header; it never authenticates the caller or
+rides selector/query text. Ordinary callers receive structured `maintenance_active` before any remote side
+effect, while reads continue through the same endpoint ladder.
+
 **Every command speaks the same selector grammar.** A caller names a session by full id, id-prefix, node,
 branch, or `.` for the session owning the caller's current worktree (with the launched own-session id as the
 other exact anchor) — and not just the list verbs: the **control** verbs

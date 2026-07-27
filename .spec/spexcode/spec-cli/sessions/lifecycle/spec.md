@@ -33,4 +33,6 @@ The three concerns each own their detail:
 
 The shared guarantee: state is read from the global store every time (no in-memory map), so a session's life
 is reconstructed from disk after any backend restart — the durable worktree, its global state record, and its
-socket liveness are the whole truth.
+socket liveness are the whole truth. Every lifecycle write enters through [[maintenance-lease]] before its
+first side effect; a project maintenance drain can therefore quiesce hooks, transitions, and queue work without
+closing any lifecycle read.

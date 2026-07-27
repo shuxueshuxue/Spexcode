@@ -380,6 +380,7 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     SPEXCODE_HOME: spexHome,
     SPEXCODE_TMUX: `spex-fixture-${port}`,
     SPEXCODE_BOARD_DEBUG: '1',
+    SPEXCODE_BOARD_BUDGET_MS: '0',
     SPEXCODE_DISABLE_WATCHERS: 'refs',
   }
   delete env.SPEXCODE_API_URL
@@ -424,6 +425,15 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     // concurrent 'sessions' fire would absorb the commit and the patrol would have nothing left to repair.
     await waitForQuiet(frames, 2_000)
 
+    // Cross one unchanged cold tick first. With budget=0 every producer is visible in the log; validation
+    // itself must not add one. This is the exact production regression: the old patrol rebuilt here every 15s.
+    const buildCount = () => (serverLog.match(/\/api\/graph build took/g) ?? []).length
+    const buildsBeforeQuietPatrol = buildCount()
+    await new Promise((resolve) => setTimeout(resolve, 17_000))
+    assert.equal(buildCount(), buildsBeforeQuietPatrol,
+      `an unchanged patrol ran a board producer:\n${serverLog}`)
+    assert.doesNotMatch(serverLog, /PATROL-REPAIR/, 'an unchanged patrol cannot report a repair')
+
     // a real commit: with refs blinded no leaf watcher can see it (the main checkout is not a linked worktree)
     const framesBefore = frames.length
     appendFileSync(spec, '\nA commit no leaf watcher will see.\n')
@@ -433,6 +443,7 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     await waitFor(() => /PATROL-REPAIR/.test(serverLog),
       `the patrol never reported the repair it had to make:\n${serverLog}`, 60_000)
     assert.match(serverLog, /PATROL-REPAIR .*changed units: \[[^\]]+\]/, 'the repair must name the diverged units')
+    assert.ok(buildCount() > buildsBeforeQuietPatrol, 'the changed patrol revision must run one real producer')
     assert.ok(frames.length > framesBefore, 'the blinded change still reached the subscriber')
   } catch (error) {
     assert.fail(`${error instanceof Error ? error.stack : String(error)}\nframes:\n${frames.join(', ')}\nserver log:\n${serverLog}`)

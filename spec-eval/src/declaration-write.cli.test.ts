@@ -60,3 +60,34 @@ test('real spex eval scenario write fails loud and emits no proposed bytes for m
   assert.equal(result.stdout, '')
   assert.match(result.stderr, /exactly one measurement field.*test/i)
 })
+
+test('real spex eval scenario write emits no bytes for malformed indentation', () => {
+  const cases = [
+    {
+      name: 'inconsistent sibling scenario fields',
+      input: source.replace(
+        '      description: >-\r\n        measure one concrete case',
+        '        description: measure one concrete case',
+      ),
+      error: /inconsistent scenario field indentation/i,
+    },
+    {
+      name: 'space-tab block scalar content',
+      input: source.replace('        measure one concrete case', '      \tmeasure one concrete case'),
+      error: /tab indentation.*block scalar/i,
+    },
+    {
+      name: 'space-tab pseudo-blank block scalar content',
+      input: source.replace('        measure one concrete case', '      \t'),
+      error: /tab indentation.*block scalar/i,
+    },
+  ]
+  const mutation = { scenario: 'exact-case', insert: { test: 'spec-eval/src/scenarios.test.ts' } }
+
+  for (const fixture of cases) {
+    const result = run(fixture.input, mutation)
+    assert.notEqual(result.status, 0, fixture.name)
+    assert.equal(result.stdout, '', fixture.name)
+    assert.match(result.stderr, fixture.error, fixture.name)
+  }
+})

@@ -90,7 +90,10 @@ type RawItem = {
   duplicateKeys: string[]
   malformed: string[]
   locations: Partial<Record<ScenarioKey, RawFieldLocation>>
+  fieldIndent?: string
 }
+
+const leadingIndent = (line: string): string => line.match(/^[ \t]*/)?.[0] ?? ''
 
 // tiny indentation parser for eval.md's frontmatter `scenarios:` block (no YAML dep), shared by parseScenarios and validateScenarios so they can't disagree; reports hasFrontmatter/hasKey so the validator can tell "none declared" from "malformed"
 function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean; items: RawItem[]; malformed: string[] } {
@@ -107,18 +110,21 @@ function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean;
     : []
   let cur: RawItem | null = null
   let itemIndent = -1            // the indent of the `- ` that starts each scenario (set by the first one)
-  const indentOf = (l: string) => l.length - l.replace(/^\s+/, '').length
   for (i++; i < lines.length; i++) {
     const line = lines[i]
     if (!line.trim()) continue
-    if (/^ *\t/.test(line)) malformed.push(`line ${i + 2}: tab indentation is not valid in an eval.md scenario mapping`)
-    const indent = indentOf(line)
+    const prefix = leadingIndent(line)
+    if (prefix.includes('\t')) malformed.push(`line ${i + 2}: tab indentation is not valid in an eval.md scenario mapping`)
+    const indent = prefix.length
     if (indent === 0) break       // dedented to another top-level key — scenarios block is done
     const trimmed = line.trim()
     const dash = trimmed.startsWith('- ') || trimmed === '-'
     if (dash && (itemIndent < 0 || indent <= itemIndent)) {
       // a new scenario item. start fresh; the `- ` may carry the first field inline.
-      cur = { fields: {}, unknownKeys: [], duplicateKeys: [], malformed: [], locations: {} }
+      cur = {
+        fields: {}, unknownKeys: [], duplicateKeys: [], malformed: [], locations: {},
+        ...(trimmed.slice(1).trim() ? { fieldIndent: `${prefix}  ` } : {}),
+      }
       items.push(cur)
       itemIndent = indent
       const inline = trimmed.slice(1).trim()   // text after the dash
@@ -128,6 +134,12 @@ function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean;
     if (!cur) {
       if (!trimmed.startsWith('#')) malformed.push(`invalid scenarios entry \`${trimmed}\` before the first scenario`)
       continue
+    }
+    if (!trimmed.startsWith('#')) {
+      if (cur.fieldIndent === undefined) cur.fieldIndent = prefix
+      else if (prefix !== cur.fieldIndent) {
+        cur.malformed.push(`inconsistent scenario field indentation: expected ${cur.fieldIndent.length} spaces, got ${prefix.length}`)
+      }
     }
     i = assignField(cur, trimmed, lines, i, indent)
   }
@@ -153,7 +165,7 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
       else cur.locations[scenarioKey] = {
         startLine: idx,
         endLine: locationEnd,
-        indent: `${lines[idx].match(/^\s*/)?.[0] ?? ''}${inline ? '  ' : ''}`,
+        indent: `${leadingIndent(lines[idx])}${inline ? '  ' : ''}`,
       }
     }
     return parserEnd
@@ -168,8 +180,9 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
       for (; j < lines.length; j++) {
         const line = lines[j]
         if (!line.trim()) continue
-        if (/^ *\t/.test(line)) parsed.malformed.push(`tab indentation is not valid in nested \`test\` metadata`)
-        const indent = line.length - line.replace(/^\s+/, '').length
+        const prefix = leadingIndent(line)
+        if (prefix.includes('\t')) parsed.malformed.push(`tab indentation is not valid in nested \`test\` metadata`)
+        const indent = prefix.length
         if (indent <= keyIndent) break
         lastChild = j
         if (childIndent < 0) childIndent = indent
@@ -195,8 +208,9 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
     for (; j < lines.length; j++) {
       const l = lines[j]
       if (!l.trim()) continue
-      if (/^ *\t/.test(l)) cur.malformed.push(`tab indentation is not valid in \`${key}\` metadata`)
-      const ind = l.length - l.replace(/^\s+/, '').length
+      const prefix = leadingIndent(l)
+      if (prefix.includes('\t')) cur.malformed.push(`tab indentation is not valid in \`${key}\` metadata`)
+      const ind = prefix.length
       if (ind <= keyIndent) break
       const it = l.trim().match(/^-\s*(.+)$/)
       if (!it) break
@@ -214,10 +228,18 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
     let base = -1, j = idx + 1
     for (; j < lines.length; j++) {
       const l = lines[j]
-      if (!l.trim()) { body.push(''); continue }
-      const ind = l.length - l.replace(/^\s+/, '').length
+      const spaces = l.match(/^ */)?.[0] ?? ''
+      const tabBeforeContent = l[spaces.length] === '\t'
+      const requiredIndent = base < 0 ? keyIndent + 1 : base
+      const tabInIndent = tabBeforeContent && spaces.length < requiredIndent
+      if (tabInIndent) cur.malformed.push(`tab indentation is not valid in block scalar \`${key}\``)
+      if (!l.trim() && !tabBeforeContent) { body.push(''); continue }
+      // YAML indentation is spaces-only. Once the line is deeper than its key, a leading TAB belongs to the
+      // scalar content and must survive parsing; before the block's required depth it is illegal indentation.
+      const ind = tabInIndent ? leadingIndent(l).length : spaces.length
       if (ind <= keyIndent) break   // dedented to a sibling field / next item → the block is done
       if (base < 0) base = ind
+      else if (ind < base) cur.malformed.push(`inconsistent block scalar indentation in \`${key}\`: expected at least ${base} spaces, got ${ind}`)
       body.push(l.slice(base))
     }
     while (body.length && body[body.length - 1] === '') body.pop()   // strip trailing blanks

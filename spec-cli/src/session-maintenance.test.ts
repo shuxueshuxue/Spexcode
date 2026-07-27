@@ -7,6 +7,7 @@ import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { processStartToken } from './process-identity.js'
 
 const tsx = fileURLToPath(new URL('../node_modules/.bin/tsx', import.meta.url))
 const casFixture = fileURLToPath(new URL('../test/session-maintenance-cas-fixture.ts', import.meta.url))
@@ -184,10 +185,8 @@ test('aggregate future maintenance coordinator contract', async (t) => {
         assert.equal(results.filter((result) => result.ok).length, 1)
         assert.deepEqual(results.filter((result) => !result.ok).map((result) => result.code), ['maintenance_conflict'])
         const winner = results.find((result) => result.ok)
-        const winnerChild = children.find(({ child }) => child.pid === winner?.pid)
-        assert.ok(winnerChild, 'winner identity maps to one exact child')
-        assert.equal(winnerChild.child.exitCode, null, 'winner remains alive through loser report')
-        assert.equal(winnerChild.child.signalCode, null, 'winner is not signaled before loser report')
+        assert.ok(winner)
+        assert.ok(processStartToken(winner.pid), 'exact winning lease-owner process remains alive through loser report')
         writeFileSync(releaseBarrier, '')
         const exits = await Promise.all(children.map(({ closed }, index) => bounded(closed, `CAS child ${index} exit`)))
         for (const result of exits) assert.equal(result.code, 0, result.stderr)

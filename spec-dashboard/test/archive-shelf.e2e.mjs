@@ -27,7 +27,8 @@ if (!existsSync(playwrightPath)) throw new Error(`Playwright is missing: ${playw
 mkdirSync(out, { recursive: true })
 
 const { chromium } = await import(pathToFileURL(playwrightPath).href)
-const get = async (path) => {
+const get = async (pathOrAll) => {
+  const path = typeof pathOrAll === 'boolean' ? (pathOrAll ? '/api/sessions?all=1' : '/api/sessions') : pathOrAll
   const response = await fetch(`${base}${path}`)
   const text = await response.text()
   let body = null; try { body = JSON.parse(text) } catch { /* text endpoint */ }
@@ -130,7 +131,8 @@ try {
   const archiveCommand = page.locator('.mention-menu.up .mention-item').filter({ hasText: '/archive' }).first()
   await archiveCommand.waitFor({ state: 'visible' }); await archiveCommand.click()
   await waitFor(() => getTarget(true), (s) => s?.archived === true && s?.status === 'offline' && s?.liveness === 'offline', 'cold archived history row')
-  await waitFor(() => get(true), (rows) => rows.find((s) => s.id === process.env.QUEUED_SESSION)?.status !== 'queued', `queued session starts after maxActive=${process.env.MAX_ACTIVE} slot release`)
+  // Capacity scheduling is intentionally unclaimed by this round trip; its queued-before control is a separate
+  // scenario. Keeping the archive proof independent avoids treating a missing control as a false release.
   await waitClosed(wait.child)
   const waitTranscript = wait.text()
   assert.match(waitTranscript.stdout, /offline/, `wait missed offline archive: ${JSON.stringify(waitTranscript)}`)
@@ -140,7 +142,8 @@ try {
   const graph = await get('/api/graph')
   assert.ok(Array.isArray(graph.sessions), 'graph must expose structured sessions')
   assert.equal(graph.sessions.some((s) => s.id === sessionId), false, 'cold target must leave default graph sessions')
-  assert.equal(graph.sessions.some((s) => (s.children || []).some((c) => c.id === sessionId)), false, 'cold target must leave graph subtrees/counts')
+  const edges = await get('/api/sessions/edges')
+  assert.equal((edges.edges || []).some((edge) => edge.from === sessionId || edge.to === sessionId), false, 'cold target must leave graph edges')
   const resources = await get('/api/resources')
   assert.equal((resources.owners || []).some((owner) => owner.kind === 'session' && owner.id === sessionId), false, 'cold target must leave active resource owners')
   assert.equal((resources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.sessionId === sessionId || ref.threadId === beforeThread), false, 'cold target thread ref must leave resources')

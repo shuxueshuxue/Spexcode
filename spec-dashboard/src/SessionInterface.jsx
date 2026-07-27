@@ -251,6 +251,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const validIds = useMemo(() => new Set(['new', ...allSessions.map((s) => s.id)]), [allSessions])
   // content mode: 'new' or a session id (the issues list left for its own page — [[issues-view]] / [[side-nav]]).
   const active = validIds.has(sel) ? sel : 'new'
+  const selectedArchived = active !== 'new'
+    ? !!allSessions.find((session) => session.id === active)?.archived
+    : null
   // An external jump may select a descendant omitted from the collapsed forest. Reveal its full path before
   // paint when the page opens or the selected id changes. Board refreshes deliberately do not retrigger this:
   // once visible, a human may collapse the selected branch again and that local fold choice should stick.
@@ -258,13 +261,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (open && active !== 'new' && !viewingShelf) expandFolds(sessionAncestorIds(allSessions, active))
   }, [open, active, expandFolds, allSessions, viewingShelf])
   // Reaching a session from OUTSIDE the list (URL, search, an originator chip) must reveal its row wherever it
-  // lives — the same promise the ancestor-unfold above makes, extended across the shelf boundary: land the view
-  // on the side that actually holds it. Keyed on the SELECTION only. Shelving and restoring do not belong here:
-  // where the view goes afterwards is a property of those two acts, so each says it at its own call site rather
-  // than being re-derived by a reactive rule that would have to guess the direction.
+  // lives — the same promise the ancestor-unfold above makes, extended across the shelf boundary. An actual
+  // selection/archive transition chooses the side that owns the row; replacing equivalent archiveRows during
+  // refresh does not override the human's shelf toggle.
   useLayoutEffect(() => {
-    if (open && active !== 'new') setShowShelf(!!allSessions.find((s) => s.id === active)?.archived)
-  }, [open, active, allSessions])
+    if (open && selectedArchived !== null) setShowShelf(selectedArchived)
+  }, [open, active, selectedArchived])
   // a removed session (closed here, ended on its own, or closed elsewhere) leaves the tab unresolved: land
   // on New only if you're still on the now-gone tab. Mirrors `active`'s validity test. App gates Dashboard on
   // a loaded board, so `sessions` here is the REAL set — an id absent from it is genuinely gone (a dead deep

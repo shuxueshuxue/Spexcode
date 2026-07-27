@@ -939,8 +939,8 @@ export function codexThreadId(sock: string): Promise<{ ok: true; threadId: strin
 }
 
 // Resource ownership asks the adapter for what the shared server actually owns now. Records are joined later;
-// they are never treated as references by themselves. A loaded thread is a control-plane reference and a
-// thread/read result distinguishes an active turn from an addressable idle one.
+// they are never treated as references by themselves. A loaded thread is a control-plane reference and its
+// fresh inProgress turn (the same predicate used by delivery) distinguishes active from addressable-idle.
 export function codexSharedRuntimeProbe(dir = runtimeRoot()): Promise<SharedRuntimeProbe> {
   const sock = codexAppServerSock(dir)
   return (async () => {
@@ -1025,9 +1025,13 @@ export function codexSharedRuntimeProbe(dir = runtimeRoot()): Promise<SharedRunt
       if (typeof m.id === 'number' && requests.has(m.id) && m.result) {
         const threadId = requests.get(m.id)!
         requests.delete(m.id)
-        const thread = (m.result as { thread?: { status?: { type?: unknown }; turns?: Array<{ id?: string; status?: string }> } }).thread
-        const activeTurn = Array.isArray(thread?.turns) ? thread.turns.find((turn) => turn?.status === 'inProgress') : undefined
-        references.set(threadId, { referenceId: threadId, turnPresence: thread?.status?.type === 'active' || activeTurn ? 'active' : 'idle', ...(activeTurn?.id ? { turnId: activeTurn.id } : {}) })
+        const thread = (m.result as { thread?: { turns?: Array<{ id?: string; status?: string }> } }).thread
+        const turnId = activeTurnIdFromThread(m.result)
+        references.set(threadId, {
+          referenceId: threadId,
+          turnPresence: !Array.isArray(thread?.turns) ? 'unknown' : turnId ? 'active' : 'idle',
+          ...(turnId ? { turnId } : {}),
+        })
         if (!requests.size) done({ healthy: true, references: [...references.values()] })
       }
     }

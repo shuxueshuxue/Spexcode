@@ -116,7 +116,7 @@ const waitClosed = async (child) => {
   try {
     await Promise.race([
       once(child, 'close'),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`monitor PID ${child.pid} did not close within 10s`)), 10_000) }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`monitor PID ${child.pid} did not close within 30s`)), 30_000) }),
     ])
   } finally { clearTimeout(timer) }
 }

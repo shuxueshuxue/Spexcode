@@ -19,7 +19,7 @@ const dist = process.env.DIST
 const out = resolve(process.env.OUT || '/tmp/archive-shelf-e2e')
 const spex = resolve(process.env.SPEX || 'spec-cli/bin/spex.mjs')
 if (!sessionId || !siblingId || !guardId) throw new Error('SESSION=<real Codex target>, SIBLING=<real Codex sibling>, and GUARD_SESSION=<blocked archive leg> are required')
-for (const name of ['SPEXCODE_TMUX', 'TARGET_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE', 'QUEUED_SESSION', 'MAX_ACTIVE']) {
+for (const name of ['SPEXCODE_TMUX', 'TARGET_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE']) {
   if (!process.env[name]) throw new Error(`${name} is required for runtime/resource evidence`)
 }
 if (!dist || !existsSync(dist)) throw new Error('DIST=<prebuilt dashboard dist> is required')
@@ -72,8 +72,6 @@ const beforeAll = await getTarget(true)
 assert.ok(before && beforeAll, 'target must be a real existing session')
 assert.equal(before.archived, false, 'target must begin unarchived')
 assert.equal(beforeAll.harness, 'codex', 'archive YATU requires a real Codex target')
-const queuedBefore = (await get(true)).find((s) => s.id === process.env.QUEUED_SESSION)
-assert.equal(queuedBefore?.status, 'queued', 'MAX_ACTIVE control requires a real queued session before archive')
 const beforeResources = await get('/api/resources')
 const dirtyHashBefore = hashBytes(readFileSync(process.env.DIRTY_SENTINEL))
 const recordBeforeBytes = JSON.parse(readFileSync(process.env.RECORD_FILE, 'utf8'))

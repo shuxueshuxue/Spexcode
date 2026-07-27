@@ -100,6 +100,18 @@ scenarios:
       The default sidebar is 204px, remains user-resizable, and uses caption-size row text. Resting rows stay one
       line. Only the selected headline expands, to no more than three lines; its complete text remains in the
       tooltip/accessibility name and status metadata stays at the first-line top-right. No row overlap occurs.
+  - name: session-sidebar-viewport-scroll
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-sidebar-scroll.e2e.mjs
+    code: spec-dashboard/src/styles.css
+    related: spec-dashboard/src/SessionInterface.jsx
+    description: >-
+      Render enough visible live session rows to exceed a 420px desktop viewport, then inspect the real
+      SessionInterface sidebar's bounds and scroll geometry in Chromium.
+    expected: >-
+      The sidebar remains bounded inside the routed page and exposes its own vertical overflow: its bottom
+      stays within the viewport, its scrollHeight exceeds its clientHeight, and computed overflow-y is auto.
+      Rows remain reachable through that one sidebar scrollport instead of being clipped below the page.
   - name: triage-zones-and-status-colour
     tags: [frontend-e2e, desktop]
     description: >-

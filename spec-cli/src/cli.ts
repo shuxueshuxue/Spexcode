@@ -826,7 +826,9 @@ if (cmd === 'serve') {
       // the SOFT stop: kill the agent's tmux + socket but KEEP the worktree, so the session goes offline and
       // can be resumed (`session resume`). Distinct from `close`, which removes the worktree.
       const full = await resolveSelectorOrExit(id)
-      console.log(await c.clientStop(full) ? `stopped ${full} (worktree kept — resumable)` : `no such session ${full}`)
+      const stopped = await c.clientStop(full)
+      if (!stopped) { console.error(`spex session stop: no such session ${full} (no stop transition was committed)`); process.exit(1) }
+      console.log(`stopped ${full} (worktree kept — resumable)`)
     } else if (sub === 'interrupt') {
       const full = await resolveSelectorOrExit(id)
       const r = await c.clientInterrupt(full)

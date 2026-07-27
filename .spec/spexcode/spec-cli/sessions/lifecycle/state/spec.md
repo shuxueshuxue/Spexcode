@@ -9,6 +9,7 @@ related:
   - spec-cli/src/commit-gate.test.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
+  - spec-cli/src/watch-cli.api.test.ts
 ---
 
 # state
@@ -81,7 +82,9 @@ BOTH and owned by [[archive]] — it never reads as a status and never rewrites 
   existing (a crashed claude leaves its socket path on disk; a file check read a DEAD pane `online` indefinitely
   — it must read `offline` within seconds). Codex reads the hot tier's `agent.pid`; its old whole-box `ps`
   descendant walk is **demoted to a self-extinguishing legacy fallback** for a pre-registration session with no
-  `agent.pid`.
+  `agent.pid`. For every interactive adapter, the session-owned pane/leaf remains a necessary online witness:
+  stale record fields or a thread still addressable through a project-shared control plane cannot make a row
+  with no target pane and no target leaf read `online`/`working`; it converges to `offline`.
 
   **Board honesty under load — the probe can fail, and a failed probe is not a death.** The tmux snapshot is
   one bounded call; under heavy load it can time out — a timed-out probe means we **cannot tell** who is alive,
@@ -150,7 +153,9 @@ discarding the work. An unreadable record proves no adapter, leaf, worktree, or 
 the corrupt bytes to the control-plane quarantine but must then fail loudly before any signal or deletion and
 name the preserved residue. There is no fail-open cleanup path: a later exact recovery still enters through the
 same stop/close owner primitive, never a reclaim verb or second terminator. Both
-are human-only and direct (not agent proposals); stop is fully reversible (relaunch), close is not. The third
+are human-only and direct (not agent proposals); stop is fully reversible (relaunch), close is not. Their public
+CLI commands exit nonzero whenever the backend commits no target transition; printing “no such session” while
+returning success is a false state-machine result. The third
 human-only verb, **`archive`** ([[archive]]), is the reversible cold-storage attention action: it reuses the
 exact existing stop guard, stops only the adapter-registered session-owned leaf plus that session's tmux and
 rendezvous transport, then writes `archived:true`. Success therefore implies `archived => offline`; if ownership

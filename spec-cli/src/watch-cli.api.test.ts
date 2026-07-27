@@ -78,3 +78,27 @@ test('CLI watch/wait use active events plus all-record presence across archive a
     server.close(); await once(server, 'close')
   }
 })
+
+test('CLI stop and close exit nonzero when the backend commits no target transition', async () => {
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json')
+    if (req.method === 'GET' && req.url === '/api/sessions?all=1') { res.end(JSON.stringify([row('working')])); return }
+    if (req.method === 'POST' && (req.url === `/api/sessions/${ID}/stop` || req.url === `/api/sessions/${ID}/close`)) {
+      res.end(JSON.stringify({ ok: false })); return
+    }
+    res.statusCode = 404; res.end('{}')
+  })
+  server.listen(0, '127.0.0.1'); await once(server, 'listening')
+  const address = server.address(); assert.ok(address && typeof address === 'object')
+  const base = `http://127.0.0.1:${address.port}`
+  try {
+    const stopped = await runCli(['session', 'stop', ID], base)
+    assert.equal(stopped.code, 1)
+    assert.match(stopped.stderr, /no such session.*no stop transition was committed/)
+    const closed = await runCli(['session', 'close', ID], base)
+    assert.equal(closed.code, 1)
+    assert.match(closed.stderr, /no such session.*no close was committed/)
+  } finally {
+    server.close(); await once(server, 'close')
+  }
+})

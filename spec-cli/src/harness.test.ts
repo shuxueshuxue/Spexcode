@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerIsolation, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerIsolation, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 
 test('shQuote preserves a single quote through a POSIX shell', () => {
@@ -86,6 +86,57 @@ test('codex lightweight residency census performs initialize then paginated load
     assert.deepEqual(result, { ok: true, referenceIds: ['page-one', 'thread-a'] })
     assert.equal(loadedRequests.length, 2)
     assert.equal(loadedRequests[1].params.cursor, 'p2')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    rmSync(socketPath, { force: true })
+  }
+})
+
+test('codex native descendant census includes subAgent sources and follows every thread/list page', async () => {
+  const socketPath = join(tmpdir(), `spexcode-thread-list-${process.pid}-${Date.now()}.sock`)
+  const requests: any[] = []
+  const server = createServer((socket) => {
+    let buffer = Buffer.alloc(0); let upgraded = false
+    const send = (value: unknown) => {
+      const payload = Buffer.from(JSON.stringify(value)); const header = payload.length < 126
+        ? Buffer.from([0x81, payload.length]) : Buffer.from([0x81, 126, payload.length >> 8, payload.length & 0xff])
+      socket.write(Buffer.concat([header, payload]))
+    }
+    const handle = (message: any) => {
+      if (message.method === 'initialize') send({ id: message.id, result: {} })
+      else if (message.method === 'initialized') return
+      else if (message.method === 'thread/list') {
+        requests.push(message)
+        send({ id: message.id, result: requests.length === 1
+          ? { data: [], nextCursor: 'p2' }
+          : { data: [{ id: 'unowned-subagent-descendant' }], nextCursor: null } })
+      } else assert.fail(`unexpected RPC ${message.method}`)
+    }
+    socket.on('data', (chunk) => {
+      buffer = Buffer.concat([buffer, chunk])
+      if (!upgraded) {
+        const split = buffer.indexOf('\r\n\r\n'); if (split < 0) return
+        socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n')
+        upgraded = true; buffer = buffer.slice(split + 4)
+      }
+      while (buffer.length >= 2) {
+        const masked = (buffer[1] & 0x80) !== 0; let length = buffer[1] & 0x7f; let offset = 2
+        if (length === 126) { if (buffer.length < 4) return; length = buffer.readUInt16BE(2); offset = 4 }
+        const maskOffset = offset; const dataOffset = offset + (masked ? 4 : 0)
+        if (buffer.length < dataOffset + length) return
+        let payload = buffer.slice(dataOffset, dataOffset + length)
+        if (masked) { const mask = buffer.slice(maskOffset, maskOffset + 4); payload = Buffer.from(payload); for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i % 4] }
+        buffer = buffer.slice(dataOffset + length); handle(JSON.parse(payload.toString('utf8')))
+      }
+    })
+  })
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socketPath, () => resolve()) })
+    const result = await codexThreadList(socketPath, { ancestorThreadId: 'target-thread', archived: false, sourceKinds: [] })
+    assert.deepEqual(result, { ok: true, ids: ['unowned-subagent-descendant'] })
+    assert.equal(requests.length, 2)
+    assert.equal(requests[1].params.cursor, 'p2')
+    assert.deepEqual(requests[0].params.sourceKinds, CODEX_THREAD_SOURCE_KINDS)
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     rmSync(socketPath, { force: true })

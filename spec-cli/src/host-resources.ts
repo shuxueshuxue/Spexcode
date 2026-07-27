@@ -580,9 +580,9 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
 }
 
 export async function assertSessionStopSafe(id: string, rec: (HarnessLivenessRecord & { harness?: string }) | null): Promise<void> {
-  const blocker = await sessionStopBlocker(id, rec?.harness || null)
-  if (blocker) throw new ResourceConflict(`refusing to stop ${id}: ${blocker}`)
   if (!rec) throw new ResourceConflict(`refusing to stop ${id}: no readable session record proves the adapter or leaf owner`)
+  const blocker = await sessionStopBlocker(id, rec.harness || null)
+  if (blocker) throw new ResourceConflict(`refusing to stop ${id}: ${blocker}`)
 }
 
 export function formatResourceReport(report: ResourceReport): string {

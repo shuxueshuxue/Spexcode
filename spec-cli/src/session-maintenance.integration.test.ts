@@ -546,21 +546,31 @@ test('post-acquire validation failure safely releases the exact lease before com
 
 test('concurrent nested stop and resume receive only their own broker responses', { timeout: 15_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-broker-concurrent-a-'))
-  const resultPath = join(dir, 'events.ndjson'); const release = join(dir, 'release'); const codes = join(dir, 'codes')
+  const resultPath = join(dir, 'events.ndjson'); const release = join(dir, 'release'); const codes = join(dir, 'codes'); const turnAttempted = join(dir, 'turn-attempted'); const preload = join(dir, 'turn-preload.cjs')
   const fixture = await startHttpFixture('broker-concurrent', resultPath, { BROKER_RELEASE_PATH: release })
   const script = join(dir, 'operator.sh')
+  writeFileSync(preload, `
+const fs = require('node:fs')
+const { syncBuiltinESMExports } = require('node:module')
+const original = fs.readSync
+fs.readSync = function(fd, ...args) {
+  if (fd === 5 && process.env.SPEX_TEST_TURN_ATTEMPTED) fs.writeFileSync(process.env.SPEX_TEST_TURN_ATTEMPTED, '')
+  return original.call(this, fd, ...args)
+}
+syncBuiltinESMExports()
+`)
   writeFileSync(script, `#!/usr/bin/env bash
 set +e
-${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session stop ${ID} --api ${JSON.stringify(fixture.base)} & first=$!
+${JSON.stringify(process.execPath)} --import tsx ${JSON.stringify(cli)} session stop ${ID} --api ${JSON.stringify(fixture.base)} & first=$!
 while ! grep -q '"step":"operation".*"op":"stop"' ${JSON.stringify(resultPath)}; do sleep 0.01; done
-kill -STOP "$first"
-${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session resume ${RESUME_ONE} --api ${JSON.stringify(fixture.base)} & second=$!
-for _ in $(seq 1 300); do grep -q 'pipe_read' "/proc/$second/wchan" 2>/dev/null && break; sleep 0.01; done
+env NODE_OPTIONS=${JSON.stringify(`${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''}--require=${preload}`)} SPEX_TEST_TURN_ATTEMPTED=${JSON.stringify(turnAttempted)} ${JSON.stringify(process.execPath)} --import tsx ${JSON.stringify(cli)} session resume ${RESUME_ONE} --api ${JSON.stringify(fixture.base)} & second=$!
+while [ ! -f ${JSON.stringify(turnAttempted)} ]; do sleep 0.01; done
+resume_before_release=0
+for _ in $(seq 1 100); do grep -q '"step":"operation".*"op":"resume"' ${JSON.stringify(resultPath)} && { resume_before_release=1; break; }; sleep 0.01; done
 touch ${JSON.stringify(release)}
-wait "$second"; second_rc=$?
-kill -CONT "$first" 2>/dev/null
 wait "$first"; first_rc=$?
-printf 'first=%s\nsecond=%s\n' "$first_rc" "$second_rc" > ${JSON.stringify(codes)}
+wait "$second"; second_rc=$?
+printf 'first=%s\nsecond=%s\nturn_attempted=1\nresume_before_release=%s\n' "$first_rc" "$second_rc" "$resume_before_release" > ${JSON.stringify(codes)}
 exit 0
 `)
   chmodSync(script, 0o755)
@@ -576,7 +586,11 @@ exit 0
     operations: events(resultPath).filter((event) => event.step === 'operation').map((event) => `${event.op}:${event.sessionId}`),
   }
   rmSync(dir, { recursive: true, force: true })
-  assert.deepEqual(actual, { wrapper: 0, codes: { first: '0', second: '0' }, operations: [`stop:${ID}`, `resume:${RESUME_ONE}`] })
+  assert.deepEqual(actual, {
+    wrapper: 0,
+    codes: { first: '0', second: '0', turn_attempted: '1', resume_before_release: '0' },
+    operations: [`stop:${ID}`, `resume:${RESUME_ONE}`],
+  })
 })
 
 test('HTTP resume refusal leaves the exact broker capability retryable until a completed attempt', { timeout: 15_000 }, async () => {

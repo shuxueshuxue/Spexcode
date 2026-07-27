@@ -380,6 +380,7 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     SPEXCODE_HOME: spexHome,
     SPEXCODE_TMUX: `spex-fixture-${port}`,
     SPEXCODE_BOARD_DEBUG: '1',
+    SPEXCODE_BOARD_BUDGET_MS: '0',
     SPEXCODE_DISABLE_WATCHERS: 'refs',
   }
   delete env.SPEXCODE_API_URL
@@ -424,6 +425,15 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     // concurrent 'sessions' fire would absorb the commit and the patrol would have nothing left to repair.
     await waitForQuiet(frames, 2_000)
 
+    // Cross one unchanged cold tick first. With budget=0 every producer is visible in the log; validation
+    // itself must not add one. This is the exact production regression: the old patrol rebuilt here every 15s.
+    const buildCount = () => (serverLog.match(/\/api\/graph build took/g) ?? []).length
+    const buildsBeforeQuietPatrol = buildCount()
+    await new Promise((resolve) => setTimeout(resolve, 17_000))
+    assert.equal(buildCount(), buildsBeforeQuietPatrol,
+      `an unchanged patrol ran a board producer:\n${serverLog}`)
+    assert.doesNotMatch(serverLog, /PATROL-REPAIR/, 'an unchanged patrol cannot report a repair')
+
     // a real commit: with refs blinded no leaf watcher can see it (the main checkout is not a linked worktree)
     const framesBefore = frames.length
     appendFileSync(spec, '\nA commit no leaf watcher will see.\n')
@@ -433,10 +443,145 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     await waitFor(() => /PATROL-REPAIR/.test(serverLog),
       `the patrol never reported the repair it had to make:\n${serverLog}`, 60_000)
     assert.match(serverLog, /PATROL-REPAIR .*changed units: \[[^\]]+\]/, 'the repair must name the diverged units')
+    assert.ok(buildCount() > buildsBeforeQuietPatrol, 'the changed patrol revision must run one real producer')
     assert.ok(frames.length > framesBefore, 'the blinded change still reached the subscriber')
   } catch (error) {
     assert.fail(`${error instanceof Error ? error.stack : String(error)}\nframes:\n${frames.join(', ')}\nserver log:\n${serverLog}`)
   } finally {
+    abort.abort()
+    await streamRead?.catch(() => {})
+    await stopChild(child)
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
+test('a failed refresh keeps watcher causes through patrol recovery', { timeout: 60_000 }, async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-recovery-'))
+  const project = join(fixture, 'project')
+  const spexHome = join(fixture, 'home')
+  const spec = join(project, '.spec', 'project', 'spec.md')
+  const sessionId = '44444444-4444-4444-8444-444444444444'
+  mkdirSync(dirname(spec), { recursive: true })
+  writeFileSync(spec, [
+    '---', 'title: Before failure', 'status: active', 'hue: 180', 'desc: recovery fixture', '---',
+    '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
+  ].join('\n'))
+  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  git(project, 'init', '-q', '-b', 'main')
+  git(project, 'config', 'user.email', 'fixture@example.test')
+  git(project, 'config', 'user.name', 'fixture')
+  git(project, 'add', '.')
+  git(project, 'commit', '-qm', 'seed')
+  writeSessionRecord(spexHome, project, sessionId, project, 'main')
+
+  const bin = join(fixture, 'bin')
+  const hang = join(fixture, 'hang-history')
+  const argvLog = join(fixture, 'git-argv.log')
+  mkdirSync(bin, { recursive: true })
+  const realGit = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim()
+  assert.ok(realGit, 'fixture could not resolve the real git binary')
+  const shim = join(bin, 'git')
+  writeFileSync(shim, `#!/bin/sh
+printf '%s\\n' "$*" >> "${argvLog}"
+if [ -e "${hang}" ]; then
+  for arg in "$@"; do
+    if [ "$arg" = "log" ] || [ "$arg" = "rev-list" ]; then
+      printf 'HANG %s\\n' "$*" >> "${argvLog}"
+      while :; do sleep 1; done
+    fi
+  done
+fi
+exec "${realGit}" "$@"
+`)
+  chmodSync(shim, 0o755)
+
+  const port = await freePort()
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(port),
+    PATH: `${bin}:${process.env.PATH || ''}`,
+    SPEXCODE_HOME: spexHome,
+    SPEXCODE_TMUX: `spex-recovery-${port}`,
+    SPEXCODE_BOARD_DEBUG: '1',
+    SPEXCODE_BOARD_BUDGET_MS: '0',
+    SPEXCODE_BOARD_BUILD_TIMEOUT_MS: '1500',
+    SPEXCODE_BOARD_RETRY_BACKOFF_MS: '100',
+    SPEXCODE_GIT_TIMEOUT_MS: '5000',
+  }
+  delete env.SPEXCODE_API_URL
+  delete env.SPEXCODE_DISABLE_WATCHERS
+  const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
+    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let serverLog = ''
+  child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
+  child.stderr?.on('data', (chunk) => { serverLog += String(chunk) })
+  const base = `http://127.0.0.1:${port}`
+  const abort = new AbortController()
+  let streamRead: Promise<void> | null = null
+  const frames: string[] = []
+
+  try {
+    await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
+      `backend did not become healthy:\n${serverLog}`)
+    const response = await fetch(`${base}/api/graph/stream?mode=delta`, { signal: abort.signal })
+    assert.equal(response.status, 200)
+    streamRead = (async () => {
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffered = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) return
+        buffered += decoder.decode(value, { stream: true })
+        let boundary: number
+        while ((boundary = buffered.indexOf('\n\n')) >= 0) {
+          const block = buffered.slice(0, boundary)
+          buffered = buffered.slice(boundary + 2)
+          const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
+          if (event) frames.push(event)
+        }
+      }
+    })().catch((error) => { if (!abort.signal.aborted) throw error })
+    await waitFor(() => frames.includes('graph-full'), `the delta subscriber never anchored:\n${serverLog}`)
+    await waitForQuiet(frames, 2_000)
+
+    const dataFramesBefore = frames.filter((event) => event === 'graph-full' || event === 'graph-delta').length
+    writeFileSync(hang, 'hang\n')
+    writeFileSync(spec, readFileSync(spec, 'utf8').replace('Before failure', 'After recovery'))
+    git(project, 'add', '.spec/project/spec.md')
+    git(project, 'commit', '-qm', 'move graph input')
+    await waitFor(() => existsSync(argvLog) && /HANG /.test(readFileSync(argvLog, 'utf8')),
+      `the graph producer never entered the controlled wedge:\n${serverLog}`)
+
+    const sessionPath = join(spexHome, 'projects', project.replace(/[/.]/g, '-'), 'sessions', sessionId, 'session.json')
+    const record = JSON.parse(readFileSync(sessionPath, 'utf8'))
+    record.name = 'Changed during failed flight'
+    writeFileSync(sessionPath, JSON.stringify(record, null, 2) + '\n')
+
+    await waitFor(() => /graph build did not settle .*aborting/.test(serverLog),
+      `the board watchdog did not abort the wedged producer:\n${serverLog}`, 10_000)
+    rmSync(hang, { force: true })
+
+    await waitFor(() => frames.filter((event) => event === 'graph-full' || event === 'graph-delta').length > dataFramesBefore,
+      `the next patrol did not recover and broadcast the failed work:\n${serverLog}`, 25_000)
+    const graph = await fetch(`${base}/api/graph`).then((result) => result.json()) as {
+      nodes: Array<{ title: string }>
+      sessions: Array<{ id: string; raw?: { name?: string } }>
+    }
+    assert.equal(graph.nodes[0]?.title, 'After recovery', 'the recovered stream swallowed the graph change')
+    assert.equal(graph.sessions.find((session) => session.id === sessionId)?.raw?.name, 'Changed during failed flight',
+      'the recovered stream swallowed the session event that arrived during the failed flight')
+    assert.doesNotMatch(serverLog, /PATROL-REPAIR/,
+      `a producer failure with healthy watcher causes is not a blind-watcher repair:\n${serverLog}`)
+    const recoveryBroadcast = [...serverLog.matchAll(/graph broadcast .*triggers \{([^}]*)\}/g)].at(-1)?.[1] ?? ''
+    assert.match(recoveryBroadcast, /full/, `the failed full cause was not retained: {${recoveryBroadcast}}`)
+    assert.match(recoveryBroadcast, /sessions/, `the in-flight session cause was not retained: {${recoveryBroadcast}}`)
+    assert.match(recoveryBroadcast, /patrol/, `the recovering patrol was not recorded: {${recoveryBroadcast}}`)
+  } catch (error) {
+    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nframes:\n${frames.join(', ')}\nserver log:\n${serverLog}`)
+  } finally {
+    rmSync(hang, { force: true })
     abort.abort()
     await streamRead?.catch(() => {})
     await stopChild(child)

@@ -49,6 +49,22 @@ scenarios:
       and the JS bundle both under a third); the SSE stream carries NO content-encoding (the exclusion —
       an event must never sit in a zlib buffer) and the triggered event still arrives on the debounce
       scale. The upstream is untouched: only the gateway compresses.
+  - name: proxy-connection-reclamation
+    tags: [backend-api, frontend-e2e, desktop]
+    code: spec-cli/src/gateway.ts
+    description: >
+      Launch an isolated real backend plus `spex serve ui` from the prebuilt candidate dist, then use real
+      Chromium to render the full dashboard and close it abruptly. Count the exact UI proxy process group's
+      file descriptors and ESTABLISHED sockets to the upstream before opening, immediately after
+      `browser.close()`, and after a bounded settle; repeat the cycle at least five times. In the same run,
+      drive an ordinary proxied HTTP response to normal completion and a raw SSE subscription through an
+      abrupt downstream disconnect.
+    expected: |
+      The full dashboard renders with zero request or page errors. Ordinary HTTP completes without truncation.
+      Every closed Chromium/SSE subscriber reclaims its upstream request, response, socket, and stream by the
+      bounded settle: ESTABLISHED upstream sockets and proxy-group FDs return to a stable baseline instead of
+      retaining a permanent +1 per cycle. Repeated cycles form a plateau, and both isolated backend and UI
+      proxy PIDs remain alive throughout.
   - name: stale-chunk-recovery
     tags: [backend-api]
     code: spec-cli/src/gateway.ts

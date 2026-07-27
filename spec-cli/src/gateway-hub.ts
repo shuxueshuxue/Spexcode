@@ -30,6 +30,7 @@ import { installConnectionReaper } from './reaper.js'
 import { spexcodeHome, encodeProject } from './layout.js'
 import { readEndpointRecord } from './host.js'
 import { readGatewayIdentity, type ResolvedIdentity } from './project-identity.js'
+import { proxyHttp } from './gateway.js'
 
 export type HubProject = { id: string; identity: ResolvedIdentity; url: string; port: number; gated: boolean }
 // @@@ extension seam - the hub stays the ONE routing+authorization server; a host-level caller
@@ -351,10 +352,5 @@ function proxyTo(req: http.IncomingMessage, res: http.ServerResponse, upstreamPo
   const headers: http.OutgoingHttpHeaders = { ...req.headers }
   const kept = stripGatewayCookies(req.headers.cookie)
   if (kept) headers.cookie = kept; else delete headers.cookie
-  const up = http.request({ host: '127.0.0.1', port: upstreamPort, path, method: req.method, headers }, (upRes) => {
-    res.writeHead(upRes.statusCode || 502, upRes.headers)
-    upRes.pipe(res)
-  })
-  up.on('error', () => { if (!res.headersSent) res.writeHead(502, { 'Content-Type': 'text/plain' }); res.end('project backend unreachable') })
-  req.pipe(up)
+  proxyHttp(req, res, upstreamPort, path, headers)
 }

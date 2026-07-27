@@ -22,6 +22,7 @@ let hubWidePort = 0
 const servers: http.Server[] = []
 let adminCookie = ''   // captured as the story progresses
 let projACookie = ''
+let activeSseConnections = 0
 
 function freePort(): Promise<number> {
   return new Promise((res) => {
@@ -34,6 +35,13 @@ function freePort(): Promise<number> {
 // WebSocket-style upgrades reporting the Cookie header it received.
 function fakeBackend(who: string, port: number): http.Server {
   const s = http.createServer((req, res) => {
+    if (req.url === '/api/stream') {
+      activeSseConnections++
+      req.socket.once('close', () => { activeSseConnections-- })
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' })
+      res.write('data: ready\n\n')
+      return
+    }
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ who, method: req.method, path: req.url, cookie: req.headers.cookie ?? null }))
   })
@@ -45,6 +53,14 @@ function fakeBackend(who: string, port: number): http.Server {
   s.listen(port, '127.0.0.1')
   servers.push(s)
   return s
+}
+
+async function waitFor(predicate: () => boolean, label: string, timeoutMs = 1500): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error(`timed out waiting for ${label}`)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
 }
 
 function registerProject(id: string, url: string): void {
@@ -100,6 +116,26 @@ test('an open project (no password) is served straight through — and gateway c
   assert.equal(body.who, 'A')
   assert.equal(body.path, '/api/thing?x=1', 'the /p/:id prefix is stripped, query preserved')
   assert.equal(body.cookie, 'theme=dark', 'spex_* cookies are stripped; foreign cookies pass')
+})
+
+test('scoped HTTP completes and an abrupt SSE downstream close reclaims the backend socket', async () => {
+  const ordinary = await hub('/p/projA/api/lifecycle?x=1')
+  assert.equal(ordinary.status, 200)
+  assert.equal(((await ordinary.json()) as any).path, '/api/lifecycle?x=1')
+
+  await new Promise<void>((resolve, reject) => {
+    const request = http.get({ host: '127.0.0.1', port: hubPort, path: '/p/projA/api/stream' }, (response) => {
+      response.once('data', () => {
+        response.destroy()
+        request.destroy()
+        resolve()
+      })
+    })
+    request.on('error', (error) => {
+      if ((error as NodeJS.ErrnoException).code !== 'ECONNRESET') reject(error)
+    })
+  })
+  await waitFor(() => activeSseConnections === 0, 'the hub SSE upstream socket to close')
 })
 
 test('no admin password: /projects is implicit from loopback, LOCKED from non-loopback (headers cannot spoof)', async (t) => {

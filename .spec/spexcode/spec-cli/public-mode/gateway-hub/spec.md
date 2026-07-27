@@ -52,6 +52,12 @@ membership) before any lookup; unknown or hostile ids answer 404 before any upst
 proxied request and upgrade — a visitor's other cookies pass through untouched. Combined with
 [[gateway-auth]]'s store, no password material ever crosses into a repo, a backend, or a backend log.
 
+**HTTP and SSE use [[public-mode]]'s one proxied-exchange lifecycle.** Prefix removal and gateway-cookie
+stripping are routing inputs to that shared transport, not reasons to own a second pipe. Ordinary HTTP
+completion releases both halves normally; an abrupt downstream close tears down the upstream request,
+response, socket, and transform, so a scoped SSE subscription cannot survive its visitor as an orphan.
+The raw WebSocket upgrade keeps its existing paired FIN/close/error lifecycle at the upgrade seam.
+
 **Launch seam.** `startHubGateway({port, host, tls})` is the engine, TLS-capable via the same
 resolved-cert posture as [[public-mode]]. The operator verb is `spex dashboard` ([[host-gateway]]), which
 mounts the host registry/catalog/operations onto the hub's **extension seam** — three optional hooks, all

@@ -307,7 +307,7 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
   }
 })
 
-async function startHttpFixture(mode: 'draining-active' | 'expiry' | 'heartbeat-loss' | 'broker-concurrent' | 'broker-transport-loss' | 'broker-pending-transport-loss' | 'resume-refused-retry' | 'post-acquire-validation', resultPath: string, extraEnv: Record<string, string> = {}) {
+async function startHttpFixture(mode: 'draining-active' | 'expiry' | 'heartbeat-loss' | 'broker-concurrent' | 'broker-transport-loss' | 'broker-pending-transport-loss' | 'resume-refused-retry' | 'resume-500-indeterminate' | 'post-acquire-validation', resultPath: string, extraEnv: Record<string, string> = {}) {
   const child = spawn(process.execPath, [httpFixture], { env: { ...process.env, MODE: mode, RESULT_PATH: resultPath, ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe'] })
   const closed = once(child, 'close') as Promise<[number]>
   let stdout = ''; let stderr = ''; let port = 0
@@ -518,6 +518,50 @@ touch ${JSON.stringify(completed)}
   })
 })
 
+test('operator exit with a pending broker HTTP operation is indeterminate and never releases the lease', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-child-exit-pending-a-'))
+  const resultPath = join(dir, 'events.ndjson'); const identityPath = join(dir, 'request-identity.json'); const preload = join(dir, 'identity-preload.cjs')
+  const fixture = await startHttpFixture('broker-pending-transport-loss', resultPath)
+  writeFileSync(preload, `
+const fs = require('node:fs')
+const raw = fs.readFileSync('/proc/' + process.pid + '/stat', 'utf8')
+const close = raw.lastIndexOf(')')
+const startToken = raw.slice(close + 2).split(' ')[19]
+fs.writeFileSync(process.env.SPEX_TEST_IDENTITY_PATH, JSON.stringify({ pid: process.pid, startToken }))
+`)
+  const script = join(dir, 'operator.mjs')
+  writeFileSync(script, `import { spawn } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+const child = spawn(${JSON.stringify(process.execPath)}, ['--import', 'tsx', ${JSON.stringify(cli)}, 'session', 'stop', ${JSON.stringify(ID)}, '--api', ${JSON.stringify(fixture.base)}], {
+  env: { ...process.env, NODE_OPTIONS: ${JSON.stringify(`${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''}--require=${preload}`)}, SPEX_TEST_IDENTITY_PATH: ${JSON.stringify(identityPath)} },
+  stdio: ['ignore', 'ignore', 'ignore', 3, 4, 5],
+})
+child.unref()
+const timer = setInterval(() => {
+  const reached = existsSync(${JSON.stringify(resultPath)}) && readFileSync(${JSON.stringify(resultPath)}, 'utf8').includes('"step":"operation"')
+  if (existsSync(${JSON.stringify(identityPath)}) && reached) { clearInterval(timer); process.exit(0) }
+}, 10)
+`)
+  const started = Date.now()
+  const wrapper = spawn(process.execPath, ['--import', 'tsx', cli, 'session', 'maintain', '--allow-stop', ID, '--ttl-ms', '5000', '--wait-ms', '0', '--api', fixture.base, '--', process.execPath, script], {
+    cwd: pkgRoot, env: { ...process.env, SPEXCODE_API_URL: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const result = await collect(wrapper)()
+  const elapsed = Date.now() - started
+  const requestIdentity = json(identityPath)
+  const { processStartToken } = await import('./process-identity.js')
+  await fixture.stop()
+  const actual = {
+    status: result.code,
+    requestReachedBackend: events(resultPath).some((event) => event.step === 'operation'),
+    requestReaped: processStartToken(requestIdentity.pid) !== requestIdentity.startToken,
+    bounded: elapsed < 2_500,
+    released: events(resultPath).some((event) => event.step === 'release'),
+  }
+  rmSync(dir, { recursive: true, force: true })
+  assert.deepEqual(actual, { status: 1, requestReachedBackend: true, requestReaped: true, bounded: true, released: false })
+})
+
 test('post-acquire validation failure safely releases the exact lease before command spawn', { timeout: 15_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-post-acquire-cleanup-a-'))
   const resultPath = join(dir, 'events.ndjson'); const marker = join(dir, 'command-ran')
@@ -619,6 +663,34 @@ exit 0
   }
   rmSync(dir, { recursive: true, force: true })
   assert.deepEqual(actual, { wrapper: 0, codes: { first: '1', second: '0' }, operations: 2, released: true })
+})
+
+test('HTTP 500 with ok false leaves the exact broker capability indeterminate and not retryable', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-resume-indeterminate-a-'))
+  const resultPath = join(dir, 'events.ndjson'); const codes = join(dir, 'codes'); const secondError = join(dir, 'second-error')
+  const fixture = await startHttpFixture('resume-500-indeterminate', resultPath)
+  const script = join(dir, 'operator.sh')
+  writeFileSync(script, `#!/usr/bin/env bash
+set +e
+${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session resume ${RESUME_ONE} --api ${JSON.stringify(fixture.base)} >/dev/null 2>&1; first=$?
+${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session resume ${RESUME_ONE} --api ${JSON.stringify(fixture.base)} >/dev/null 2>${JSON.stringify(secondError)}; second=$?
+printf 'first=%s\nsecond=%s\n' "$first" "$second" > ${JSON.stringify(codes)}
+exit 0
+`)
+  chmodSync(script, 0o755)
+  const wrapper = spawn(tsx, [cli, 'session', 'maintain', '--allow-resume', RESUME_ONE, '--ttl-ms', '5000', '--wait-ms', '0', '--api', fixture.base, '--', script], {
+    cwd: pkgRoot, env: { ...process.env, SPEXCODE_API_URL: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const result = await collect(wrapper)()
+  await fixture.stop()
+  const actual = {
+    wrapper: result.code,
+    codes: Object.fromEntries(lines(codes).map((line) => line.split('='))),
+    operations: events(resultPath).filter((event) => event.step === 'operation' && event.op === 'resume').length,
+    secondRefusedLocally: /maintenance_capability_used/.test(readFileSync(secondError, 'utf8')),
+  }
+  rmSync(dir, { recursive: true, force: true })
+  assert.deepEqual(actual, { wrapper: 0, codes: { first: '1', second: '1' }, operations: 1, secondRefusedLocally: true })
 })
 
 test('actual session attach is refused before tmux while active and holds an open ticket for its foreground lifetime', async () => {

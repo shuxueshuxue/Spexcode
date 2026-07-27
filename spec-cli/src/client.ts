@@ -113,7 +113,8 @@ export async function clientMaintenanceOperation(
       return { ok: false, outcome: 'indeterminate', status: r.status, code: 'maintenance_response_malformed', error: 'maintenance operation returned malformed JSON' }
     }
     const committed = r.ok && body?.ok === true
-    const refused = body?.ok === false || (r.status >= 400 && r.status < 500 && typeof body?.code === 'string')
+    const refused = (r.status >= 400 && r.status < 500 && (body?.ok === false || typeof body?.code === 'string'))
+      || (r.ok && body?.ok === false && body?.refused === true)
     const outcome: BrokerOutcome = committed ? 'committed' : refused ? 'refused' : 'indeterminate'
     const code = typeof body?.code === 'string' ? body.code
       : refused ? 'session_operation_refused'

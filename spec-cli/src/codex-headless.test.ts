@@ -24,11 +24,25 @@ test('codex-headless composes Codex materialization and shared-runtime ownership
   assert.equal(codexHeadlessHarness.sharedRuntimes, codexHarness.sharedRuntimes)
   const headlessRuntime = codexHeadlessHarness.sharedRuntimes?.('/tmp/runtime') ?? []
   const interactiveRuntime = codexHarness.sharedRuntimes?.('/tmp/runtime') ?? []
-  assert.deepEqual(
-    headlessRuntime.map(({ probe: _probe, residency: _residency, ...descriptor }) => descriptor),
-    interactiveRuntime.map(({ probe: _probe, residency: _residency, ...descriptor }) => descriptor),
-  )
-  assert.ok(headlessRuntime.every((descriptor) => typeof descriptor.probe === 'function' && typeof descriptor.residency === 'function'))
+  const descriptorContract = (descriptor: (typeof headlessRuntime)[number]) => ({
+    key: descriptor.key,
+    label: descriptor.label,
+    pidFile: descriptor.pidFile,
+    isolationFile: descriptor.isolationFile,
+    capabilities: {
+      probe: typeof descriptor.probe,
+      residency: typeof descriptor.residency,
+      mutationGuard: typeof descriptor.mutationGuard,
+    },
+  })
+  assert.deepEqual(headlessRuntime.map(descriptorContract), interactiveRuntime.map(descriptorContract))
+  assert.deepEqual(headlessRuntime.map(descriptorContract), [{
+    key: 'codex-app-server',
+    label: 'Codex app-server',
+    pidFile: '/tmp/runtime/codex-app-server.pid',
+    isolationFile: '/tmp/runtime/codex-app-server.scope',
+    capabilities: { probe: 'function', residency: 'function', mutationGuard: 'function' },
+  }])
 })
 
 test('codex-headless launch starts the shared app-server and first turn, then exits without attaching a TUI', () => {

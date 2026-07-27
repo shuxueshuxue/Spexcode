@@ -60,6 +60,7 @@ scenarios:
       - spec-cli/src/anchors.ts#selectorsHitRanges
       - spec-cli/src/anchors.ts#diffHunkRanges
       - spec-cli/src/git.ts#pathRangeEvents
+      - spec-cli/src/git.ts#canonicalPathProjector
       - spec-cli/src/anchors.ts#anchorHitCommits
       - spec-cli/src/git.ts#treeTextFiles
       - spec-cli/src/specs.ts#loadSpecs

@@ -896,13 +896,19 @@ function canonicalPathProjector(
       const candidate = pending.pop()!
       if (seen.has(candidate)) { resolved.add(candidate); continue }
       seen.add(candidate)
-      const applicable = (renamesByFrom.get(candidate) ?? []).filter((rename) => !precedes(rename.hash, event))
+      const unique = new Map<string, RenameProjectionEvent>()
+      for (const rename of renamesByFrom.get(candidate) ?? []) {
+        if (!precedes(rename.hash, event)) unique.set(`${rename.hash}\0${rename.to}`, rename)
+      }
+      const applicable = [...unique.values()]
       if (!applicable.length) { resolved.add(candidate); continue }
       // The earliest applicable rename starts this path's next lineage epoch. Later renames from the same
       // path belong to a recreated path, not to an event that predates the first boundary. Incomparable
-      // rename branches are both frontier members, so their identities still fork at the merge.
+      // rename branches are both frontier members, so their identities still fork at the merge. A merge can
+      // expose the same rename once per parent; equal-commit rows are peers, never ancestors of one another.
       const frontier = applicable.filter((rename, index) =>
-        !applicable.some((other, otherIndex) => otherIndex !== index && precedes(other.hash, rename.hash)))
+        !applicable.some((other, otherIndex) => otherIndex !== index
+          && other.hash !== rename.hash && precedes(other.hash, rename.hash)))
       if (frontier.some((rename) => !precedes(event, rename.hash))) resolved.add(candidate)
       for (const rename of frontier) pending.push(rename.to)
     }

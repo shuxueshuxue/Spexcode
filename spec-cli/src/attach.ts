@@ -8,6 +8,7 @@
 import { spawnSync } from 'node:child_process'
 import { networkInterfaces } from 'node:os'
 import { alive, apiBase, TMUX_SOCK } from './sessions.js'
+import { runSessionOperation } from './session-maintenance.js'
 
 const AGENT_ALTERNATIVES = 'read the pane with `spex session show <SEL> --capture`, drive it with `session send` (plain text first; `--keys` only as a last resort)'
 
@@ -33,18 +34,20 @@ The tmux session lives on THAT machine — a terminal can't be attached over HTT
 // foreground takeover of the session's real tmux window; returns only via detach (C-b d) or the session
 // ending. Interactive and blocking by design — a caller without a terminal (an agent inside its turn, a
 // pipe) is refused up front and pointed at the remote-capable verbs instead of tmux's bare "not a terminal".
-export async function attachSession(id: string): Promise<never> {
+export async function attachSession(id: string): Promise<number> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     console.error(`spex session attach: attach is INTERACTIVE and needs a terminal — it blocks until you detach.
 An agent must not run it inside a turn (it freezes you); ${AGENT_ALTERNATIVES}.`)
     process.exit(2)
   }
-  if (!(await alive(id))) {
-    console.error(`spex session attach: ${id} is offline — no live tmux session to attach.
+  return runSessionOperation({ op: 'attach', sessionId: id }, async () => {
+    if (!(await alive(id))) {
+      console.error(`spex session attach: ${id} is offline — no live tmux session to attach.
 Bring it back with \`spex session resume ${id}\`, or read its record with \`spex session show ${id}\`.`)
-    process.exit(1)
-  }
-  console.log(`attaching to ${id} — detach with C-b d (the session keeps running)`)
-  const r = spawnSync('tmux', ['-u', '-L', TMUX_SOCK, 'attach-session', '-t', id], { stdio: 'inherit' })
-  process.exit(r.status ?? 1)
+      return 1
+    }
+    console.log(`attaching to ${id} — detach with C-b d (the session keeps running)`)
+    const r = spawnSync('tmux', ['-u', '-L', TMUX_SOCK, 'attach-session', '-t', id], { stdio: 'inherit' })
+    return r.status ?? 1
+  })
 }

@@ -1,4 +1,6 @@
 import { apiBase, assertProjectMatch, resolveSession, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { readSync, writeSync } from 'node:fs'
+import type { Capability, MaintenanceState } from './session-maintenance.js'
 
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -10,6 +12,8 @@ export class BackendError extends Error {
 // the ONE seam where "no backend" becomes loud. A network failure (nothing listening at the resolved base)
 // is the only thing thrown; an HTTP Response of any status is returned for the caller to interpret.
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  if (brokerFds() && init?.method && !['GET', 'HEAD'].includes(init.method.toUpperCase()))
+    throw new BackendError('maintenance_capability_missing: the operator broker admits only its exact stop/resume plan')
   const base = await apiBase()
   try {
     return await fetch(`${base}${path}`, init)
@@ -23,6 +27,64 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
 const guarded = (verb: string) => assertProjectMatch(`spex ${verb}`)
 const post = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 const seg = (id: string) => encodeURIComponent(id)
+type BrokerRequest = { op: string; sessionId?: string; force?: boolean }
+type BrokerResponse = { ok: boolean; status?: number; body?: any; code?: string; error?: string }
+function brokerFds(): { request: number; response: number } | null {
+  const [request, response, extra] = (process.env.SPEXCODE_MAINTENANCE_BROKER_FDS || '').split(',').map(Number)
+  return !extra && Number.isInteger(request) && request >= 3 && Number.isInteger(response) && response >= 3
+    ? { request, response }
+    : null
+}
+function brokerRequest(request: BrokerRequest): BrokerResponse | null {
+  const fds = brokerFds()
+  if (!fds) return null
+  const id = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  writeSync(fds.request, `${JSON.stringify({ v: 1, id, ...request })}\n`)
+  let line = ''
+  const byte = Buffer.alloc(1)
+  while (!line.endsWith('\n')) {
+    const count = readSync(fds.response, byte, 0, 1, null)
+    if (count === 0) throw new BackendError('maintenance broker closed before replying')
+    line += byte.toString('utf8', 0, count)
+    if (line.length > 64 * 1024) throw new BackendError('maintenance broker response exceeded its bound')
+  }
+  const response = JSON.parse(line) as BrokerResponse & { id?: string }
+  if (response.id !== id) throw new BackendError('maintenance broker response identity mismatch')
+  return response
+}
+const brokerMutation = (request: BrokerRequest): BrokerResponse | null => brokerRequest(request)
+
+export type MaintenanceLeaseResponse = { token: string; epoch: number; state: 'draining' | 'active'; capabilities?: Capability[] }
+export async function clientMaintenanceAcquire(capabilities: Capability[], ttlMs: number, waitMs: number): Promise<{ status: number; lease: MaintenanceLeaseResponse }> {
+  await guarded('session maintain')
+  const r = await apiFetch('/api/session-maintenance/acquire', post({ capabilities, ttlMs, waitMs }))
+  const lease = await r.json().catch(() => ({})) as MaintenanceLeaseResponse & { error?: string }
+  if (r.status !== 201 && r.status !== 202) throw new BackendError(`backend refused maintenance acquire (${r.status}): ${lease.error || 'invalid response'}`, r.status)
+  return { status: r.status, lease }
+}
+export async function clientMaintenanceStatus(): Promise<MaintenanceState> {
+  const r = await apiFetch('/api/session-maintenance')
+  if (!r.ok) throw new BackendError(`backend refused maintenance status (${r.status})`, r.status)
+  return await r.json() as MaintenanceState
+}
+const maintenanceHeaders = (token: string): Record<string, string> => ({
+  'content-type': 'application/json',
+  'x-spexcode-session-maintenance': token,
+})
+export async function clientMaintenanceHeartbeat(token: string, epoch: number, ttlMs: number): Promise<void> {
+  const r = await apiFetch('/api/session-maintenance/heartbeat', { method: 'POST', headers: maintenanceHeaders(token), body: JSON.stringify({ epoch, ttlMs }) })
+  if (!r.ok) throw new BackendError(`backend refused maintenance heartbeat (${r.status}): ${await r.text()}`, r.status)
+}
+export async function clientMaintenanceRelease(token: string, epoch: number): Promise<void> {
+  const r = await apiFetch('/api/session-maintenance/release', { method: 'POST', headers: maintenanceHeaders(token), body: JSON.stringify({ epoch }) })
+  if (!r.ok) throw new BackendError(`backend refused maintenance release (${r.status}): ${await r.text()}`, r.status)
+}
+export async function clientMaintenanceOperation(token: string, request: { op: 'stop' | 'resume'; sessionId: string; force?: boolean }): Promise<BrokerResponse> {
+  const path = `/api/sessions/${seg(request.sessionId)}/${request.op}`
+  const r = await apiFetch(path, { method: 'POST', headers: maintenanceHeaders(token), body: JSON.stringify(request.op === 'resume' ? { force: request.force === true } : {}) })
+  const body = await r.json().catch(() => ({}))
+  return { ok: r.ok, status: r.status, body, ...(!r.ok ? { code: body?.code, error: body?.error || `status ${r.status}` } : {}) }
+}
 
 // GET /api/sessions — the board, used by `spex session ls`, and by `spex session watch`/`wait` as their poll source.
 export async function clientListSessions(includeArchived = false): Promise<Session[]> {
@@ -55,6 +117,8 @@ export async function clientCapture(id: string): Promise<CaptureResult> {
 // socket, socket-only + fail-loud; a non-accepted prompt comes back ok:false / HTTP 502).
 export async function clientSend(id: string, text: string, from?: string): Promise<DispatchResult> {
   await guarded('session send')
+  const brokered = brokerMutation({ op: 'send', sessionId: id })
+  if (brokered) return brokered.ok ? brokered.body as DispatchResult : { ok: false, error: brokered.code || brokered.error || 'maintenance_active' }
   // `from` = the sending agent's own session id; the backend logs the comms edge ([[comms-edge]]) only when
   // it's present (an agent send), so a human-shell send stays unrecorded.
   const r = await apiFetch(`/api/sessions/${seg(id)}/input`, post({ kind: 'text', text, ...(from ? { from } : {}) }))
@@ -126,6 +190,11 @@ export async function clientMerge(id: string): Promise<{ dispatched: boolean; re
 // carries a non-error advisory.
 export async function clientResume(id: string, force = false): Promise<{ ok: boolean; error?: string; refused?: boolean; info?: string }> {
   await guarded('session resume')
+  const brokered = brokerMutation({ op: 'resume', sessionId: id, force })
+  if (brokered) {
+    if (!brokered.ok) throw new BackendError(brokered.code || brokered.error || 'maintenance_active', brokered.status)
+    return brokered.body
+  }
   const r = await apiFetch(`/api/sessions/${seg(id)}/resume`, post({ force }))
   return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` }))
 }
@@ -134,6 +203,11 @@ export async function clientResume(id: string, force = false): Promise<{ ok: boo
 // resumable). Distinct from close. {ok:false} = no such session.
 export async function clientStop(id: string): Promise<boolean> {
   await guarded('session stop')
+  const brokered = brokerMutation({ op: 'stop', sessionId: id })
+  if (brokered) {
+    if (!brokered.ok) throw new BackendError(brokered.code || brokered.error || 'maintenance_active', brokered.status)
+    return !!brokered.body?.ok
+  }
   const r = await apiFetch(`/api/sessions/${seg(id)}/stop`, post({}))
   if (!r.ok) throw new BackendError(`backend refused to stop ${id}: ${await r.text()}`, r.status)
   return !!(await r.json().catch(() => ({ ok: false })))?.ok

@@ -69,7 +69,12 @@ export type MaintenanceTicket = {
   epoch: number
   delegateSharedSpawn(sessionId: string): string
 }
-export type MaintenanceLease = { token: string; epoch: number; state: 'draining' | 'active' }
+export type MaintenanceLease = {
+  token: string
+  epoch: number
+  state: 'draining' | 'active'
+  capabilities: readonly Capability[]
+}
 export type MaintenanceState = {
   state: DurableState['state']
   epoch: number
@@ -428,7 +433,12 @@ export function createSessionMaintenance(input: CoordinatorInput) {
       state.delegates = []
       if (state.tickets.length === 0) state.state = 'active'
       dirty()
-      return { token, epoch: state.epoch, state: state.state as MaintenanceLease['state'] }
+      return {
+        token,
+        epoch: state.epoch,
+        state: state.state as MaintenanceLease['state'],
+        capabilities: copy(capabilities),
+      }
     })
     input.onEvent?.({ type: 'maintenance-acquire', state: started.state, epoch: started.epoch })
     if (started.state === 'active' || waitMs === 0) return started
@@ -488,6 +498,23 @@ export function createSessionMaintenance(input: CoordinatorInput) {
     }
   }
 
+  const runOperationSync = <T>(operation: Operation, body: (ticket: MaintenanceTicket) => T): T => {
+    const owner = input.selfIdentity()
+    const ticket = locked((state, dirty) => beginTicket(state, operation, owner, dirty))
+    let succeeded = false
+    try {
+      const result = context.run({ ticketId: ticket.id }, () => body({
+        id: ticket.id,
+        epoch: ticket.epoch,
+        delegateSharedSpawn: (sessionId: string) => delegateForTicket(ticket.id, sessionId),
+      }))
+      succeeded = true
+      return result
+    } finally {
+      finishTicket(ticket.id, succeeded)
+    }
+  }
+
   const authorizeHttpOperation = async ({ authenticated, projectMatches, headers, operation }: { authenticated: boolean; projectMatches: boolean; headers: Record<string, string>; operation: Operation }): Promise<void> => {
     if (!authenticated) fail('unauthorized', 'authentication is required before maintenance admission')
     if (!projectMatches) fail('project_mismatch', 'request project does not match the maintenance project')
@@ -514,7 +541,7 @@ export function createSessionMaintenance(input: CoordinatorInput) {
 
   return {
     headerName: 'X-SpexCode-Session-Maintenance',
-    runOperation, acquireLease, heartbeatLease, releaseLease, readState, authorizeHttpOperation,
+    runOperation, runOperationSync, acquireLease, heartbeatLease, releaseLease, readState, authorizeHttpOperation,
     beginExternalOperation, finishExternalOperation,
   }
 }
@@ -526,6 +553,11 @@ function productionProcessIdentity(pid: number): ProcessReading {
   }
   const startToken = processStartToken(pid)
   return startToken ? { pid, startToken } : 'ambiguous'
+}
+
+export function exactProcessIdentity(pid: number): ProcessIdentity | null {
+  const reading = productionProcessIdentity(pid)
+  return reading && reading !== 'ambiguous' ? reading : null
 }
 
 const coordinators = new Map<string, ReturnType<typeof createSessionMaintenance>>()
@@ -549,6 +581,8 @@ export function sessionMaintenance(root = projectRuntimeRoot()): ReturnType<type
 
 export const runSessionOperation = <T>(operation: Operation, body: (ticket: MaintenanceTicket) => Promise<T> | T): Promise<T> =>
   sessionMaintenance().runOperation(operation, body)
+export const runSessionOperationSync = <T>(operation: Operation, body: (ticket: MaintenanceTicket) => T): T =>
+  sessionMaintenance().runOperationSync(operation, body)
 
 export function maintenanceErrorPayload(error: unknown): Record<string, unknown> | null {
   if (!(error instanceof SessionMaintenanceError)) return null

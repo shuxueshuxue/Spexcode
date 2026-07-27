@@ -218,6 +218,10 @@ Control another session (all take SEL):
   spex session archive <SEL>             cold-archive it: exact leaf/runtime stopped, worktree + conversation kept
   spex session unarchive <SEL>           deprecated signpost: same as resume (relaunches the same conversation)
   spex session close <SEL>               retire the session and its worktree
+  spex session maintain --allow-stop <SEL> [--allow-resume <SEL>[:force]] … -- <command> [args…]
+      Hold one project maintenance lease around a bounded operator command. Only the exact one-shot
+      stop/resume plan is brokered; ordinary session writes stay closed. The bearer never prints or
+      enters argv/environment. \`session maintain --status\` is the sanitized read-only lease view.
 
 Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on):
   spex session done --propose merge|nothing|close [--note T]   committed and stopping

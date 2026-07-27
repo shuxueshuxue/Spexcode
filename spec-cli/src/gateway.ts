@@ -237,10 +237,11 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
   const removeDownstreamListeners = () => {
     req.off('aborted', abortFromDownstream)
     req.off('error', abortFromDownstream)
+    req.off('end', onRequestEnd)
     req.off('close', onRequestClose)
     res.off('error', abortFromDownstream)
     res.off('close', onResponseClose)
-    res.off('finish', finish)
+    res.off('finish', onResponseFinish)
   }
   const destroyUpstream = () => {
     req.unpipe(up)
@@ -254,10 +255,22 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
     upstreamResponse?.destroy()
     up.destroy()
   }
-  const finish = () => {
+  const settle = () => {
     if (settled) return
     settled = true
     removeDownstreamListeners()
+  }
+  const onResponseFinish = () => {
+    if (settled) return
+    if (req.complete) { settle(); return }
+    // An upstream may reject a body before the client finishes sending it. The response is valid, but the
+    // upload leg is over: sever it upstream and drain the downstream body so the flushed response and
+    // keep-alive socket are not turned into a reset. Request abort ownership stays until end/close.
+    req.unpipe(up)
+    upstreamResponse?.destroy()
+    up.socket?.destroy()
+    up.destroy()
+    if (!req.destroyed) req.resume()
   }
   const abortFromDownstream = () => {
     if (settled) return
@@ -267,7 +280,9 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
   }
   const onRequestClose = () => {
     if (!req.complete) abortFromDownstream()
+    else if (res.writableFinished) settle()
   }
+  const onRequestEnd = () => { if (res.writableFinished) settle() }
   const onResponseClose = () => {
     if (!res.writableFinished) abortFromDownstream()
   }
@@ -282,6 +297,7 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
   }
 
   const up = http.request({ host: '127.0.0.1', port: upstreamPort, path: path ?? req.url, method: req.method, headers: req.headers }, (received) => {
+    if (settled || res.destroyed) { received.destroy(); up.destroy(); return }
     upstreamResponse = received
     received.once('aborted', failFromUpstream)
     received.once('error', failFromUpstream)
@@ -304,10 +320,11 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
   up.once('error', failFromUpstream)
   req.once('aborted', abortFromDownstream)
   req.once('error', abortFromDownstream)
+  req.once('end', onRequestEnd)
   req.once('close', onRequestClose)
   res.once('error', abortFromDownstream)
   res.once('close', onResponseClose)
-  res.once('finish', finish)
+  res.once('finish', onResponseFinish)
   req.pipe(up)
 }
 

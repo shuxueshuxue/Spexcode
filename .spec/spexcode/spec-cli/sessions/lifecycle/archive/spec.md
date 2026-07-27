@@ -52,6 +52,15 @@ ownership or the stop proof is unprovable, archive fails loudly and leaves the r
   Reversible only through `resume`, which unarchives before recreating the runtime.
 - `close` is the **terminal** verb — give the disk back, destroying the work. Not reversible.
 
+Close has two ownership-proof entries into that one terminal result. A live row first uses the ordinary exact
+stop proof, then removes its record, worktree, and branch. A proven-cold archived row must not pretend to be
+live again just to retire: it verifies that the record's cold proof still binds the target adapter/thread and
+that every target-owned PID, tmux window, rendezvous transport, and loaded thread remains absent, then removes
+the record, worktree, and branch directly. That cold retirement path sends no signal and neither probes nor
+requires ownership of unrelated references on the shared project app-server; archive already returned the
+target's runtime. Any target runtime that has reappeared, stale/swapped target identity, unreadable cold proof,
+or ambiguous target ownership fails loudly before deletion and leaves the shelf row intact.
+
 Archiving never removes or moves the worktree/branch and writes no timeline row. Success means the exact leaf is
 stopped and the record is archived; a failed stop means no archive field change. An archived record is therefore
 always offline and consumes no active slot or loaded-thread reference of its own.
@@ -61,7 +70,8 @@ census, not one RPC per row. A cold proof is current only when that census is he
 an externally reloaded or ambiguous thread projects visible with `archiveHazard` even if its historical proof still
 matches. A deliberately absent shared root is a healthy empty census only when its registered PID is dead and its
 socket has no live listener; stale files alone never prove absence. Explicit close resolves the all-record store,
-including cold rows, and succeeds/nonzero only according to whether the record is actually removed.
+including cold rows. For a proven-cold row it judges only the target's continuing cold ownership facts, never
+unrelated shared-root references, and succeeds/nonzero only according to whether the record is actually removed.
 
 The copy states the cold result plainly: the retained worktree/branch/conversation can be resumed, while the
 session-owned runtime is gone. A failed ownership proof is a visible hazard, never a successful archive.

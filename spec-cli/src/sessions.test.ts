@@ -5,10 +5,10 @@ import { once } from 'node:events'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { claudeHarness, codexHeadlessHarness, sessionIdentityEnvVars, type SharedRuntimeProbe } from './harness.js'
+import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, composeCommandPrompt, fromRaw, launchPreflight, launchScript, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, launchPreflight, launchScript, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -198,6 +198,75 @@ test('stop revalidates the exact leaf after every shared guard before TERM and K
     claudeHarness.cleanupRuntime = originalCleanup
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+  }
+})
+
+test('closing a proven-cold archive ignores unrelated shared refs but rejects target runtime ambiguity without signaling', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const originalShared = codexHarness.sharedRuntimes
+  const originalColdPreflight = codexHarness.coldPreflight
+  const originalCleanup = codexHarness.cleanupRuntime
+  const home = mkdtempSync(join(tmpdir(), 'spex-cold-close-'))
+  process.env.SPEXCODE_HOME = home
+  let residentIds: string[] = ['unrelated-unowned-thread']
+  let coldPreflightCalls = 0
+  let leaf: ReturnType<typeof spawn> | null = null
+
+  const writeColdRecord = (id: string, thread: string) => {
+    const dir = sessionStoreDir(id)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+      session_id: id, governed: true, worktree_path: join(home, `${id}-absent-worktree`), branch: '',
+      node: 'archive', title: '', name: '', parent: '', status: 'asking', proposal: '',
+      merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: thread,
+      stopped: true, archived: true, cold_proof: `cold-v1|codex|${id}|thread:${thread}`,
+      adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
+    }, null, 2)}\n`)
+  }
+
+  codexHarness.sharedRuntimes = () => [{
+    key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'shared.pid'), isolationFile: join(home, 'shared.scope'),
+    residency: async () => ({ healthy: true, referenceIds: residentIds }),
+    probe: async () => { throw new Error('cold retirement must not enter the full shared-root ownership guard') },
+  }]
+  codexHarness.coldPreflight = async () => { coldPreflightCalls++; return { ok: true, alreadyCold: true } }
+  codexHarness.cleanupRuntime = async () => { throw new Error('cold retirement must not invoke adapter cleanup') }
+
+  try {
+    const safeId = `cold-close-safe-${process.pid}`
+    const safeThread = `target-safe-${process.pid}`
+    writeColdRecord(safeId, safeThread)
+    assert.equal(await closeSession(safeId), true)
+    assert.equal(existsSync(sessionStoreDir(safeId)), false, 'proven-cold target is permanently retired')
+    assert.equal(coldPreflightCalls, 1, 'target collection is checked without the full shared-root guard')
+
+    const loadedId = `cold-close-loaded-${process.pid}`
+    const loadedThread = `target-loaded-${process.pid}`
+    writeColdRecord(loadedId, loadedThread)
+    residentIds = ['unrelated-unowned-thread', loadedThread]
+    await assert.rejects(closeSession(loadedId), /target adapter thread .* is loaded/)
+    assert.equal(existsSync(sessionRecordPath(loadedId)), true, 'loaded target ambiguity preserves the shelf record')
+
+    const pidId = `cold-close-pid-${process.pid}`
+    const pidThread = `target-pid-${process.pid}`
+    residentIds = ['unrelated-unowned-thread']
+    writeColdRecord(pidId, pidThread)
+    leaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    for (let i = 0; i < 50 && !processStartToken(leaf.pid!); i++) await sleep(20)
+    writeFileSync(sessionArtifactPath(pidId, 'agent.pid'), `${leaf.pid}\n`)
+    await assert.rejects(closeSession(pidId), /target leaf PID .* live or recycled/)
+    assert.ok(processStartToken(leaf.pid!), 'ambiguous target PID is left alive; cold close sends no signal')
+    assert.equal(existsSync(sessionRecordPath(pidId)), true, 'PID ambiguity preserves the shelf record')
+  } finally {
+    codexHarness.sharedRuntimes = originalShared
+    codexHarness.coldPreflight = originalColdPreflight
+    codexHarness.cleanupRuntime = originalCleanup
+    if (leaf?.pid && processStartToken(leaf.pid)) {
+      try { process.kill(leaf.pid, 'SIGKILL') } catch { /* already exited */ }
+    }
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
   }
 })
 

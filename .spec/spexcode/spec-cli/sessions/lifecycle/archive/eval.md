@@ -49,6 +49,19 @@ scenarios:
       Archive is nonzero/HTTP 409, record remains projected archived:false/visible (or explicit archiveHazard),
       and target/shared-root/worktree/branch are unchanged. No read projection performs an automatic repair.
     tags: [backend-api, cli]
+  - name: close-proven-cold-archive
+    test: spec-dashboard/test/archive-shelf.e2e.mjs
+    description: >
+      In the same isolated real Codex rig, archive the live target through the public surface and, while it is
+      still archived/offline, invoke explicit close. Preserve unrelated sibling references on the shared
+      app-server and inspect the target record, worktree, branch, tmux/PID/socket/thread artifacts, and shelf row.
+    expected: >
+      Close resolves the cold row from the all-record store, verifies its target-bound cold proof and continued
+      absence of every target-owned runtime, sends no signal, and permanently removes its record, worktree,
+      branch, and shelf row. Unrelated or unowned shared app-server references neither block nor disappear. A
+      reappeared, swapped, unreadable, or ambiguous target runtime fails nonzero/409 before deletion and leaves
+      the cold row and retained work intact.
+    tags: [frontend-e2e, backend-api, cli]
   - name: watch-wait-presence-through-archive-resume-close
     test: spec-dashboard/test/archive-shelf.e2e.mjs
     description: >

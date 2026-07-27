@@ -550,8 +550,12 @@ export async function pendingWindowCommits(
       out = read.stdout
     } else out = await gitA(args)
     return out.split('\n').map((line) => {
-      const [hash, trailers = ''] = line.trim().split('\x1f')
-      return hash && (!nodeId || !trailers.split(',').map((v) => v.trim()).includes(nodeId)) ? hash : ''
+      const separator = line.indexOf('\x1f')
+      if (separator < 0) return ''
+      const hash = line.slice(0, separator).trim()
+      if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(hash)) return ''
+      const trailers = line.slice(separator + 1).trim()
+      return !nodeId || !trailers.split(',').map((v) => v.trim()).includes(nodeId) ? hash : ''
     }).filter(Boolean)
   }
   const ordinary = await run(['--no-merges'])

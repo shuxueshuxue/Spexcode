@@ -353,6 +353,60 @@ exec ${JSON.stringify(realGit)} "$@"
   }
 })
 
+test('exact impact accepts only commit headers from a merge patch stream', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-session-impact-merge-'))
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+  const source = (target: number, left: number, right: number) => [
+    'def target():', `    return ${target}`, '',
+    'def left():', `    return ${left}`, '',
+    'def right():', `    return ${right}`, '',
+  ].join('\n')
+  try {
+    git('init', '-q', '-b', 'main')
+    git('config', 'user.email', 'eval@example.test')
+    git('config', 'user.name', 'Eval Test')
+    mkdirSync(join(root, '.spec/project/n'), { recursive: true })
+    mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, '.spec/project/spec.md'), '---\ntitle: project\n---\n# project\n')
+    writeFileSync(join(root, '.spec/project/n/spec.md'), [
+      '---', 'title: n', 'code:', '  - src/shared.py#target', '---', '# n', '',
+    ].join('\n'))
+    writeFileSync(join(root, '.spec/project/n/eval.md'), [
+      '---', 'scenarios:', '  - name: merge-target', '    tags: [backend-api]',
+      '    code: [src/shared.py#target]', '    description: merge authors target',
+      '    expected: exact impact reports the merge commit', '---', '',
+    ].join('\n'))
+    writeFileSync(join(root, 'src/shared.py'), source(0, 0, 0))
+    git('add', '.')
+    git('commit', '-q', '-m', 'base')
+    const base = git('rev-parse', 'HEAD')
+    git('branch', 'side')
+
+    writeFileSync(join(root, 'src/shared.py'), source(0, 1, 0))
+    git('add', 'src/shared.py')
+    git('commit', '-q', '-m', 'change left')
+    git('checkout', '-q', 'side')
+    writeFileSync(join(root, 'src/shared.py'), source(0, 0, 1))
+    git('add', 'src/shared.py')
+    git('commit', '-q', '-m', 'change right')
+    git('checkout', '-q', 'main')
+    git('merge', '-q', '--no-ff', '--no-commit', 'side')
+    writeFileSync(join(root, 'src/shared.py'), source(1, 1, 1))
+    git('add', 'src/shared.py')
+    git('commit', '-q', '-m', 'merge and author target')
+    const merge = git('rev-parse', 'HEAD')
+
+    const projection = await projectSessionImpact(root, { base, head: merge })
+    const scenario = projection.nodes.find((node) => node.id === 'n')!.scenarios
+      .find((item) => item.name === 'merge-target')!
+    assert.deepEqual(scenario.impact, ['code'])
+    assert.deepEqual(scenario.selectorHits.map((hit) => hit.commit), [merge])
+    assert.ok(scenario.selectorHits.every((hit) => /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(hit.commit)))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('an empty exact projection batch-reads declarations independent of node count', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-impact-batch-'))
   const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()

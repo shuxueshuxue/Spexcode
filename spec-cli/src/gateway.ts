@@ -227,9 +227,9 @@ const wantsGzip = (req: http.IncomingMessage) => /\bgzip\b/.test(String(req.head
 
 // reverse-proxy an /api request to the loopback supervisor (which forwards to the live child) —
 // stream-gzipping compressible bodies (measured: the board JSON rides down at under a third).
-// `path` overrides the upstream path (the host gateway strips its /p/:projectId prefix); default = as-is.
-// Exported: the host gateway ([[host-gateway]]) proxies per-project traffic through this same function.
-export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string) {
+// `path` and `headers` optionally override routing inputs (the host gateway strips its /p/:projectId
+// prefix and gateway cookies); transport ownership stays here once. Defaults pass the request through.
+export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string, headers: http.OutgoingHttpHeaders = req.headers) {
   let upstreamResponse: http.IncomingMessage | null = null
   let transform: ReturnType<typeof createGzip> | null = null
   let settled = false
@@ -296,7 +296,7 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
     else res.destroy()
   }
 
-  const up = http.request({ host: '127.0.0.1', port: upstreamPort, path: path ?? req.url, method: req.method, headers: req.headers }, (received) => {
+  const up = http.request({ host: '127.0.0.1', port: upstreamPort, path: path ?? req.url, method: req.method, headers }, (received) => {
     if (settled || res.destroyed) { received.destroy(); up.destroy(); return }
     upstreamResponse = received
     received.once('aborted', failFromUpstream)

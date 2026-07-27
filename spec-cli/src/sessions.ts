@@ -2400,11 +2400,11 @@ async function assertColdRetirementSafe(id: string, rec: SessRec): Promise<void>
   if (rec.adapterRecovery)
     throw new ResourceConflict(`refusing to close archived session ${id}: adapter recovery is pending (${rec.adapterRecovery})`)
 
-  const snap = await liveSnapshot()
+  const [snap, socket] = await Promise.all([liveSnapshot(), rendezvousListening(id)])
   if (snap.probeFailed) throw new ResourceConflict(`refusing to close archived session ${id}: liveness probe failed; target runtime absence is unproven`)
   if (snap.windows.has(id)) throw new ResourceConflict(`refusing to close archived session ${id}: target tmux window has reappeared`)
-  if (snap.sockets.has(id)) throw new ResourceConflict(`refusing to close archived session ${id}: target rendezvous transport has reappeared`)
-  if (snap.unproven.has(id)) throw new ResourceConflict(`refusing to close archived session ${id}: target rendezvous state is ambiguous`)
+  if (socket === 'live') throw new ResourceConflict(`refusing to close archived session ${id}: target rendezvous transport has reappeared`)
+  if (socket === 'unproven') throw new ResourceConflict(`refusing to close archived session ${id}: target rendezvous state is ambiguous`)
   const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
   if (Number.isFinite(pid) && pid > 0 && processStartToken(pid))
     throw new ResourceConflict(`refusing to close archived session ${id}: target leaf PID ${pid} is live or recycled; ownership is ambiguous`)
@@ -2430,8 +2430,49 @@ async function assertColdRetirementSafe(id: string, rec: SessRec): Promise<void>
   }
 }
 
+// A never-launched queue owns only prepared disk state. The transition/record locks around close serialize
+// this check with startQueued: whichever wins decides whether the record is still a queue or has become live.
+// No shared-runtime probe belongs here because a valid prepared row has no adapter thread to look up.
+async function assertQueuedRetirementSafe(id: string, rec: SessRec, path: string, branch: string | null): Promise<void> {
+  if (rec.status !== 'queued' || rec.harnessSessionId)
+    throw new ResourceConflict(`refusing to close queued session ${id}: the record has a target thread or is no longer queued`)
+  if (rec.adapterRecovery || launching.has(id))
+    throw new ResourceConflict(`refusing to close queued session ${id}: target launch/recovery is already in progress`)
+
+  const [snap, socket] = await Promise.all([liveSnapshot(), rendezvousListening(id)])
+  if (snap.probeFailed) throw new ResourceConflict(`refusing to close queued session ${id}: liveness probe failed; target runtime absence is unproven`)
+  if (snap.windows.has(id)) throw new ResourceConflict(`refusing to close queued session ${id}: target tmux window already exists`)
+  if (socket === 'live') throw new ResourceConflict(`refusing to close queued session ${id}: target rendezvous transport already exists`)
+  if (socket === 'unproven') throw new ResourceConflict(`refusing to close queued session ${id}: target rendezvous state is ambiguous`)
+  const pidPath = sessionArtifactPath(id, 'agent.pid')
+  if (existsSync(pidPath)) {
+    const pid = readAgentPid(pidPath)
+    throw new ResourceConflict(`refusing to close queued session ${id}: target leaf PID artifact ${Number.isFinite(pid) && pid > 0 ? pid : 'is unreadable'}; never-launched ownership is ambiguous`)
+  }
+
+  if (existsSync(path)) {
+    const status = await gitTry(['-C', path, 'status', '--porcelain', '--untracked-files=all'])
+    if (!status.ok) throw new ResourceConflict(`refusing to close queued session ${id}: prepared worktree status is unreadable`)
+    if (status.stdout.trim()) throw new ResourceConflict(`refusing to close queued session ${id}: prepared worktree has dirty work`)
+  }
+  if (branch) {
+    const resolved = await gitTry(['-C', mainRoot(), 'rev-parse', '--verify', `${branch}^{commit}`])
+    if (resolved.ok) {
+      const count = await gitTry(['-C', mainRoot(), 'rev-list', '--count', `${mainBranch()}..${branch}`])
+      if (!count.ok) throw new ResourceConflict(`refusing to close queued session ${id}: prepared branch ancestry is unreadable`)
+      const ahead = Number(count.stdout.trim())
+      if (!Number.isFinite(ahead) || ahead !== 0)
+        throw new ResourceConflict(`refusing to close queued session ${id}: prepared branch is ${Number.isFinite(ahead) ? ahead : 'an unknown number of'} commit(s) ahead`)
+    } else if (resolved.failure !== 'exit') {
+      throw new ResourceConflict(`refusing to close queued session ${id}: prepared branch identity is unreadable`)
+    } else if (existsSync(path)) {
+      throw new ResourceConflict(`refusing to close queued session ${id}: prepared worktree exists but branch ${branch} is missing`)
+    }
+  }
+}
+
 // @@@ closeSession - the REMOVAL (human-confirmed): a live row uses stop's exact kill, while a proven-cold
-// archive uses the read-only proof above. Both then remove the worktree + branch and the session's whole
+// archive or never-launched queue uses its target-only read proof above. All then remove the worktree + branch and the session's whole
 // global-store record dir — the work is gone, not just stopped. The git/store teardown remains one path.
 // The tree's materialize slot ([[runtime]] trees/<enc>) retires with the worktree — its key needs the live tree,
 // so it is resolved BEFORE the removal; both sweeps are best-effort (residue is swept at uninstall anyway).
@@ -2455,14 +2496,28 @@ async function closeSessionUnlocked(id: string): Promise<boolean> {
   }
   if (!wt) return false
   if (wt.rec.archived) await assertColdRetirementSafe(id, wt.rec)
+  else if (wt.rec.status === 'queued') await assertQueuedRetirementSafe(id, wt.rec, wt.path, wt.branch)
   else await stopAgentProcess(id, wt.rec)
   let slot: string | null = null
   try { slot = treeSlotDir(wt.path) } catch { /* tree already unresolvable — nothing to key the slot by */ }
   // a retired session's worktree/branch are already gone; removing them is a no-op to skip, not a failure.
-  if (existsSync(wt.path)) await gitA(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
-  if (wt.branch) await gitTry(['-C', mainRoot(), 'branch', '-D', wt.branch])
+  if (existsSync(wt.path)) {
+    const removed = await gitTry(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
+    if (!removed.ok) throw new ResourceConflict(`refusing to finish close for ${id}: worktree removal failed`)
+  }
+  if (wt.branch) {
+    const branchRef = `refs/heads/${wt.branch}`
+    const present = await gitTry(['-C', mainRoot(), 'rev-parse', '--verify', '--quiet', branchRef])
+    if (present.ok) {
+      const removed = await gitTry(['-C', mainRoot(), 'branch', '-D', wt.branch])
+      if (!removed.ok) throw new ResourceConflict(`refusing to finish close for ${id}: branch removal failed`)
+    } else if (present.failure !== 'exit') {
+      throw new ResourceConflict(`refusing to finish close for ${id}: branch presence is unreadable`)
+    }
+  }
   if (slot) { try { rmSync(slot, { recursive: true, force: true }) } catch { /* best-effort GC */ } }
-  try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) } catch { /* best-effort sweep of the global record */ }
+  rmSync(sessionStoreDir(id), { recursive: true, force: true })
+  if (existsSync(sessionStoreDir(id))) throw new ResourceConflict(`refusing to finish close for ${id}: session record removal failed`)
   void drainQueue()   // a close frees a slot — start the next queued session if any
   return true
 }

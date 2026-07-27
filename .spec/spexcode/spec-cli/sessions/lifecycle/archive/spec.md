@@ -52,7 +52,7 @@ ownership or the stop proof is unprovable, archive fails loudly and leaves the r
   Reversible only through `resume`, which unarchives before recreating the runtime.
 - `close` is the **terminal** verb — give the disk back, destroying the work. Not reversible.
 
-Close has two ownership-proof entries into that one terminal result. A live row first uses the ordinary exact
+Close has three ownership-proof entries into that one terminal result. A live row first uses the ordinary exact
 stop proof, then removes its record, worktree, and branch. A proven-cold archived row must not pretend to be
 live again just to retire: it verifies that the record's cold proof still binds the target adapter/thread and
 that every target-owned PID, tmux window, rendezvous transport, and loaded thread remains absent, then removes
@@ -60,6 +60,14 @@ the record, worktree, and branch directly. That cold retirement path sends no si
 requires ownership of unrelated references on the shared project app-server; archive already returned the
 target's runtime. Any target runtime that has reappeared, stale/swapped target identity, unreadable cold proof,
 or ambiguous target ownership fails loudly before deletion and leaves the shelf row intact.
+
+A prepared `queued` row that has never launched takes the other target-only retirement path. Close serializes
+with the drainer on the same session transition/record lock; if close wins while the record is still queued, it
+verifies that no harness thread identity, tmux window, live/recycled leaf PID, rendezvous transport, ahead
+commit, or dirty work exists, then removes the prepared prompt, record, worktree, and branch before releasing
+capacity. It sends no signal and asks nothing of unrelated shared references because no target runtime was ever
+created. If the drainer wins first, status is no longer queued and ordinary live close owns teardown. Any
+target/runtime/work ambiguity fails loudly with the queued row intact.
 
 Archiving never removes or moves the worktree/branch and writes no timeline row. Success means the exact leaf is
 stopped and the record is archived; a failed stop means no archive field change. An archived record is therefore

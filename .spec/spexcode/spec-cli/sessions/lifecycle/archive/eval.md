@@ -62,6 +62,18 @@ scenarios:
       reappeared, swapped, unreadable, or ambiguous target runtime fails nonzero/409 before deletion and leaves
       the cold row and retained work intact.
     tags: [frontend-e2e, backend-api, cli]
+  - name: close-never-launched-queue
+    description: >
+      With a prepared queued record whose launcher has never created a thread, PID, tmux window, or transport,
+      call public close while unrelated unowned references remain on the project shared runtime. Race one case
+      against the queue drainer and inject target PID/thread/dirty-work ambiguity in refusal controls.
+    expected: >
+      Close and the drainer serialize on the target. If close owns the still-queued record, it performs no
+      signal or shared-root ownership proof and removes the prompt, record, clean zero-ahead worktree, and branch
+      before capacity is released. If launch already won, live close owns teardown. Any target thread, live or
+      recycled PID, tmux/socket, ahead commit, or dirty work refuses before deletion and leaves the queue intact;
+      unrelated shared references survive either result.
+    tags: [backend-api, cli]
   - name: watch-wait-presence-through-archive-resume-close
     test: spec-dashboard/test/archive-shelf.e2e.mjs
     description: >

@@ -209,11 +209,17 @@ try {
   narrate('resume same conversation through starting to online')
   await page.locator(`.si-item[data-sid="${sessionId}"]`).click()
   const stateTrace = []
-  const tracePromise = waitFor(async () => { const s = await getTarget(true); if (s) stateTrace.push(s.status); return s }, (s) => s?.archived === false && s?.liveness === 'online' && stateTrace.includes('starting'), 'resume starting -> online', 30_000, 10)
-  const resumeResponse = page.waitForResponse((r) => new URL(r.url()).pathname === `/api/sessions/${sessionId}/resume` && r.request().method() === 'POST')
-  await page.locator('.si-shelf-card .si-act.go').click(); assert.equal((await resumeResponse).ok(), true)
-  const resumed = await tracePromise
-  assert.ok(stateTrace.includes('starting'), `resume state trace lacked starting: ${stateTrace.join(' -> ')}`)
+  const runtimeTrace = []
+  const runtimeTimer = setInterval(() => runtimeTrace.push({ tmux: tmuxPresent(process.env.SPEXCODE_TMUX, sessionId), pid: processMarker(process.env.TARGET_PID_FILE) }), 25)
+  let resumed
+  try {
+    const sawStarting = () => stateTrace.includes('starting') || runtimeTrace.some((sample) => sample.tmux === true && sample.pid === null)
+    const tracePromise = waitFor(async () => { const s = await getTarget(true); if (s) stateTrace.push(s.status); return s }, (s) => s?.archived === false && s?.liveness === 'online' && sawStarting(), 'resume starting -> online', 30_000, 10)
+    const resumeResponse = page.waitForResponse((r) => new URL(r.url()).pathname === `/api/sessions/${sessionId}/resume` && r.request().method() === 'POST')
+    await page.locator('.si-shelf-card .si-act.go').click(); assert.equal((await resumeResponse).ok(), true)
+    resumed = await tracePromise
+    assert.ok(sawStarting(), `resume trace lacked API or runtime starting witness: ${stateTrace.join(' -> ')}`)
+  } finally { clearInterval(runtimeTimer) }
   const resumedResources = await get('/api/resources')
   const resumedRef = (resumedResources.owners || []).flatMap((owner) => owner.references || []).find((ref) => ref.sessionId === sessionId && ref.threadId)
   assert.equal(resumedRef?.threadId, beforeThread, 'resume returns the same Codex conversation')

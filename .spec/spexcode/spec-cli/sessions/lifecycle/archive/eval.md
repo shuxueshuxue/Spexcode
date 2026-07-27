@@ -4,29 +4,101 @@ scenarios:
     test: spec-dashboard/test/archive-shelf.e2e.mjs
     description: >
       Drive the real dashboard console in a browser against a live backend. Starting from the session
-      list, archive the SELECTED session through the product's own Command Box (`/archive`), then read the
-      rendered DOM at each step: the header's three pills, the star door without a numeric count, the row leaving the list,
-      the archive view holding it, and the archive card on selecting it. Restore with the card's one
-      button. Read the record over `GET /api/sessions` to confirm what archiving did and did not change.
+      list, archive the SELECTED live Codex leaf through the product's own Command Box (`/archive`), then read
+      the rendered DOM and API/resource census at each step: the header's three pills, the row leaving the default
+      graph/list/edges, the flat archive collection, and the offline archive card. Resume with the card's one
+      button and observe the same conversation returning through starting -> online. Capture process/runtime and
+      sibling shared-root evidence alongside `GET /api/sessions?all=1` and `GET /api/resources`.
     expected: >
-      The round trip returns the board to exactly its starting state. Archiving flips only `archived` —
-      `lifecycle` is untouched, no process is stopped, no worktree removed. The header always shows three
-      equal pills including the star, which never shows a numeric count and remains live even at zero; the
-      archived row is in exactly one of the two lists at a time; the archive card is the ONLY
-      thing visible and clickable for an archived session (no live terminal layer over it); the row's
-      right-click menu offers exactly one direction and acts with no confirm; and the view never strands in an
-      emptied archive — not when restoring from the card, and not when the archive is emptied from outside the
-      browser while it is open.
+      Archive succeeds only after exact leaf/tmux/adapter cleanup: the record preserves worktree, branch, dirty
+      bytes, and conversation identity while reading `archived:true`, `stopped:true`, `status:offline`,
+      `liveness:offline`. The default API/graph/edges/subsession counts, maxActive occupancy, and active resource
+      owners exclude it; the explicit history API shows it as a flat cold row with no status zones. The shared
+      app-server PID/start/socket and sibling loaded/new-turn reference remain unchanged. Resume is the card's
+      only exit and recreates the same conversation through starting -> online. A guard refusal is nonzero/409,
+      keeps the record unarchived and visible, and leaves all runtime/worktree/shared-root evidence unchanged.
     tags: [frontend-e2e]
   - name: shelving-costs-no-git-walk
     description: >
-      Call `GET /api/graph` and read the shelved session's worktree row. The board enumerates every record,
-      shelved or not, so the row must be present; the per-worktree spec-delta (`ops`) is the expensive
-      git-history probe archive exists to stop paying.
+      Call the default `GET /api/graph` and the explicit `GET /api/sessions?all=1` and compare the same archived
+      record. The default graph is a working-set projection; the explicit history read is the cold archive view.
     expected: >
-      A shelved session still has a board row (enumeration is existence truth, never a view preference), and
-      that row's `ops` is empty — the delta is skipped rather than computed and hidden.
+      A true cold archive is absent from default graph/list/hover/edges/subsession counts and active resources,
+      while the explicit history record is offline with `ops` empty. The adapter residency census is one
+      project-wide paginated loaded-ID read (O(pages), no per-thread `thread/read`); a legacy archived+live or
+      externally reloaded violation is instead projected archived:false with real liveness/status plus an
+      `archiveHazard` marker until an explicit repair. A dead PID plus socket with no live listener is a healthy
+      empty root, while a live or ambiguous root remains a visible hazard.
     tags: [backend-api]
+  - name: archive-cold-runtime-and-capacity
+    description: >
+      Against two real Codex sibling leaves on one project app-server, capture a pre-archive and post-archive
+      census through the default session API/graph/edges, `spex session resources --json`, and configured
+      `sessions.maxActive` queue capacity.
+    expected: >
+      The A census may show the archived-live hazard and shared-root guard loss. The B archive succeeds only with
+      exact target PID/start/argv/thread ownership and detached shared-root proof despite unrelated unowned refs;
+      target runtime/artifacts are gone, target is offline history-only, sibling leaf and shared app-server
+      identity/ref remain and can take a new turn, and capacity/resources no longer charge the target. A native
+      descendant created after preflight but before archive settlement is caught by the post-mutation census,
+      fails loud, and is compensated rather than filed as cold.
+    tags: [backend-api, cli]
+  - name: archive-guard-failure-visible
+    description: >
+      Attempt archive through HTTP and CLI with unhealthy/undetached shared-root proof, ambiguous/unowned target
+      leaf, stale PID, or an artifact swap while the real resource census is live.
+    expected: >
+      Archive is nonzero/HTTP 409, record remains projected archived:false/visible (or explicit archiveHazard),
+      and target/shared-root/worktree/branch are unchanged. No read projection performs an automatic repair.
+    tags: [backend-api, cli]
+  - name: close-proven-cold-archive
+    test: spec-dashboard/test/archive-shelf.e2e.mjs
+    description: >
+      In the same isolated real Codex rig, archive the live target through the public surface and, while it is
+      still archived/offline, invoke explicit close. Preserve unrelated sibling references on the shared
+      app-server and inspect the target record, worktree, branch, tmux/PID/socket/thread artifacts, and shelf row.
+    expected: >
+      Close resolves the cold row from the all-record store, verifies its target-bound cold proof and continued
+      absence of every target-owned runtime, sends no signal, and permanently removes its record, worktree,
+      branch, and shelf row. Unrelated or unowned shared app-server references neither block nor disappear. A
+      reappeared, swapped, unreadable, or ambiguous target runtime fails nonzero/409 before deletion and leaves
+      the cold row and retained work intact. The cold proof performs no unrelated sibling `thread/read`.
+    tags: [frontend-e2e, backend-api, cli]
+  - name: close-never-launched-queue
+    description: >
+      With a prepared queued record whose launcher has never created a thread, PID, tmux window, or transport,
+      call public close while unrelated unowned references remain on the project shared runtime. Race one case
+      against the queue drainer and inject target PID/thread/dirty-work ambiguity in refusal controls.
+    expected: >
+      Close and the drainer serialize on the target. If close owns the still-queued record, it performs no
+      signal or shared-root ownership proof and removes the prompt, record, clean zero-ahead worktree, and branch
+      before capacity is released. If launch already won, live close owns teardown. Any target thread, live or
+      recycled PID, tmux/socket, ahead commit, or dirty work refuses before deletion and leaves the queue intact;
+      unrelated shared references survive either result.
+    tags: [backend-api, cli]
+  - name: watch-wait-presence-through-archive-resume-close
+    test: spec-dashboard/test/archive-shelf.e2e.mjs
+    description: >
+      Against the same isolated backend and real Codex target as the browser runner, keep a real `spex session
+      watch`/`wait` process on the fixed selector while the product API/browser drives working -> archive/offline
+      -> resume/starting -> online -> close. Inspect the emitted event stream and served all-record rows.
+    expected: >
+      Archive is observed as an offline transition and never as gone/closed; resume remains the same record and
+      conversation; only the subsequent true record/worktree removal emits one closed event and returns gone.
+      The monitor uses active-only events plus all-record presence and never infers existence from the default
+      active-only projection. The in-memory helper is only a narrow unit regression, not a YATU reading.
+    tags: [backend-api, cli]
+  - name: shelf-refresh-preserves-human-view
+    description: >
+      In a real Chromium session console, select an ordinary working row, open the archive star, and serve
+      several equivalent history refreshes that replace the archived-row objects without changing the selected
+      session id or either row's archived state. Then select the exact archived row through the rendered list.
+    expected: >
+      The star remains on with aria-pressed true across every refresh; the exact archived row stays uniquely
+      visible and clickable with no status-zone or ops chrome; selecting it keeps the shelf open, marks that row
+      selected, and renders one separate archive card with one resume action. A real selected-id or selected-row
+      archived-state transition still automatically chooses the side that owns that selection.
+    tags: [frontend-e2e]
 ---
 
 # eval — archive

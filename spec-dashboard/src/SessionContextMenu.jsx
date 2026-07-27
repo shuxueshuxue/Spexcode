@@ -4,10 +4,11 @@ import Modal from './Modal.jsx'
 import SessionAttach from './SessionAttach.jsx'
 import { apiFetch, loadSettings } from './data.js'
 import { sessionHeadline } from './session.js'
+import { archiveEligible } from './sessionCommands.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
-export default function SessionContextMenu({ menu, onClose, onChanged, onLock, onMultiSelect }) {
+export default function SessionContextMenu({ menu, onClose, onChanged, onLock, onMultiSelect, onError }) {
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
   const [closing, setClosing] = useState(null)     // the session whose close-confirm prompt is open | null
@@ -69,16 +70,21 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
     onClose()
   }
 
-  // archive ([[archive]]) acts AT ONCE — no confirm. Close needs one because it destroys work; archiving is
-  // reversible from the same menu, and a prompt guarding a reversible act is friction pretending to be care.
+  // archive/resume ([[archive]]) acts AT ONCE — no confirm. Archive exact-stops before filing; a cold row's
+  // only reverse action is the same resume endpoint used by the card.
   const toggleArchive = (e) => {
     e.stopPropagation()
     const { id, archived } = menu.session
     onClose()
-    apiFetch(`/api/sessions/${id}/archive`, {
+    const path = archived ? `/api/sessions/${id}/resume` : `/api/sessions/${id}/archive`
+    apiFetch(path, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ on: !archived }),
-    }).catch(() => { /* the next board poll reconciles */ }).finally(() => onChanged?.())
+      ...(archived ? {} : { body: JSON.stringify({ on: true }) }),
+    }).then(async (response) => {
+      if (response.ok) return
+      const body = await response.json().catch(() => null)
+      onError?.(body?.error || `session ${archived ? 'resume' : 'archive'} refused (HTTP ${response.status})`)
+    }).catch((error) => onError?.(error instanceof Error ? error.message : String(error))).finally(() => onChanged?.())
   }
 
   // close opens a confirm prompt first (the removal is destructive and a right-click is easy to mis-aim).
@@ -126,11 +132,12 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
               <ContextMenuItem icon="terminal" onClick={startAttach}>{t('sessionWindow.attach')}</ContextMenuItem>
             )}
             <ContextMenuItem icon="list-checks" onClick={startSelect}>{t('sessionWindow.select')}</ContextMenuItem>
-            {/* one item, both directions ([[archive]]) — the row already knows which state it is in, so the
-                menu offers the move OUT of it rather than a pair where one is always inert. */}
-            <ContextMenuItem icon={menu.session.archived ? 'star-filled' : 'star'} onClick={toggleArchive}>
-              {t(menu.session.archived ? 'sessionWindow.unarchive' : 'sessionWindow.archive')}
-            </ContextMenuItem>
+            {/* one item, archive or resume ([[archive]]) — the cold row never exposes a record-only unarchive. */}
+            {(menu.session.archived || archiveEligible(menu.session.status, false)) && (
+              <ContextMenuItem icon={menu.session.archived ? 'star-filled' : 'star'} onClick={toggleArchive}>
+                {t(menu.session.archived ? 'sessionWindow.resume' : 'sessionWindow.archive')}
+              </ContextMenuItem>
+            )}
           </ContextMenuGroup>
           <ContextMenuSeparator />
           <ContextMenuGroup>

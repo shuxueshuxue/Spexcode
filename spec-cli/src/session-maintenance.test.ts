@@ -1,9 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const tsx = fileURLToPath(new URL('../node_modules/.bin/tsx', import.meta.url))
+const casFixture = fileURLToPath(new URL('../test/session-maintenance-cas-fixture.ts', import.meta.url))
 
 type Identity = { pid: number; startToken: string }
 type ProcessReading = Identity | null | 'ambiguous'
@@ -139,17 +145,28 @@ test('aggregate future maintenance coordinator contract', async (t) => {
 
       const otherRoot = mkdtempSync(join(tmpdir(), 'spex-maintenance-cas-a-'))
       try {
-        const make = () => createSessionMaintenance({
-          runtimeRoot: otherRoot, now: () => 20_000, randomBytes: (size) => Buffer.alloc(size, Math.floor(Math.random() * 255)),
-          processIdentity: (pid) => pid === 7001 ? { pid, startToken: 'lease-owner-a' } : null,
-          selfIdentity: () => ({ pid: 8001, startToken: 'ticket-owner-a' }), ticketReportMs: 1_000,
+        const barrier = join(otherRoot, 'start')
+        const ready = join(otherRoot, 'ready'); mkdirSync(ready)
+        const children = [0x31, 0x32].map((byte) => spawn(tsx, [casFixture, otherRoot, barrier, ready, String(byte)], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }))
+        const completed = children.map((child) => {
+          let stdout = ''; let stderr = ''
+          child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
+          child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+          const closed = once(child, 'close') as Promise<[number]>
+          return async () => {
+            const [code] = await closed
+            assert.equal(code, 0, stderr)
+            return JSON.parse(stdout) as { ok: boolean; code?: string }
+          }
         })
-        const winners = await Promise.allSettled([
-          make().acquireLease({ capabilities: [], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0 }),
-          make().acquireLease({ capabilities: [], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0 }),
-        ])
-        assert.equal(winners.filter((result) => result.status === 'fulfilled').length, 1)
-        assert.equal(winners.filter((result) => result.status === 'rejected').length, 1)
+        for (let i = 0; i < 200 && readdirSync(ready).length !== 2; i++) await new Promise((resolve) => setTimeout(resolve, 5))
+        assert.equal(readdirSync(ready).length, 2, 'both independent processes reached the same-root CAS barrier')
+        writeFileSync(barrier, '')
+        const results = await Promise.all(completed.map((done) => done()))
+        assert.equal(results.filter((result) => result.ok).length, 1)
+        assert.deepEqual(results.filter((result) => !result.ok).map((result) => result.code), ['maintenance_conflict'])
       } finally { rmSync(otherRoot, { recursive: true, force: true }) }
     } finally { f.cleanup() }
   })
@@ -215,6 +232,51 @@ test('aggregate future maintenance coordinator contract', async (t) => {
     } finally { f.cleanup() }
   })
 
+  await t.test('exact stop and multi-resume capabilities admit positives and reject duplicate/session/op/force mismatches without state change', async () => {
+    const f = makeFixture()
+    try {
+      const gate = f.create()
+      const initial = JSON.stringify({ state: gate.readState(), events: f.events })
+      await expectCode(gate.acquireLease({
+        capabilities: [{ op: 'stop', sessionId: 's-1' }, { op: 'stop', sessionId: 's-1' }],
+        owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+      }), 'maintenance_invalid')
+      assert.equal(JSON.stringify({ state: gate.readState(), events: f.events }), initial, 'duplicate capability refusal changes nothing')
+
+      const lease = await gate.acquireLease({
+        capabilities: [
+          { op: 'stop', sessionId: 's-1' },
+          { op: 'resume', sessionId: 's-1', force: false },
+          { op: 'resume', sessionId: 's-2', force: true },
+        ],
+        owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+      })
+      const auth = { token: lease.token, epoch: lease.epoch }
+      const beforeAuthorize = JSON.stringify({ state: gate.readState(), events: f.events })
+      await gate.authorizeHttpOperation({
+        authenticated: true, projectMatches: true, headers: { [gate.headerName]: lease.token },
+        operation: { op: 'stop', sessionId: 's-1' },
+      })
+      assert.equal(JSON.stringify({ state: gate.readState(), events: f.events }), beforeAuthorize, 'legal HTTP authorization is a pure check')
+
+      for (const operation of [
+        { op: 'stop', sessionId: 'wrong', authorization: auth },
+        { op: 'resume', sessionId: 's-2', force: false, authorization: auth },
+        { op: 'send', sessionId: 's-1', authorization: auth },
+      ] as unknown as Operation[]) {
+        const before = JSON.stringify({ state: gate.readState(), events: f.events })
+        await expectCode(gate.runOperation(operation, async () => assert.fail('mismatched capability callback ran')), 'maintenance_capability_missing')
+        assert.equal(JSON.stringify({ state: gate.readState(), events: f.events }), before)
+      }
+
+      const effects: string[] = []
+      await gate.runOperation({ op: 'stop', sessionId: 's-1', authorization: auth }, async () => { effects.push('stop:s-1') })
+      await gate.runOperation({ op: 'resume', sessionId: 's-1', force: false, authorization: auth }, async () => { effects.push('resume:s-1:false') })
+      await gate.runOperation({ op: 'resume', sessionId: 's-2', force: true, authorization: auth }, async () => { effects.push('resume:s-2:true') })
+      assert.deepEqual(effects, ['stop:s-1', 'resume:s-1:false', 'resume:s-2:true'])
+    } finally { f.cleanup() }
+  })
+
   await t.test('token hash, constant-shape negatives, monotonic epoch, and one-shot capability state', async () => {
     const f = makeFixture()
     try {
@@ -230,18 +292,21 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       assert.doesNotMatch(raw, new RegExp(lease.token))
       assert.doesNotMatch(JSON.stringify(f.events), new RegExp(lease.token))
 
-      for (const headers of [{}, { [gate.headerName]: 'wrong' }, { [gate.headerName]: '00'.repeat(32) }]) {
+      const negatives = [
+        { authenticated: false, projectMatches: false, headers: {}, code: 'unauthorized' },
+        { authenticated: true, projectMatches: false, headers: {}, code: 'project_mismatch' },
+        { authenticated: true, projectMatches: true, headers: {}, code: 'maintenance_token_invalid' },
+        { authenticated: true, projectMatches: true, headers: { [gate.headerName]: 'wrong' }, code: 'maintenance_token_invalid' },
+        { authenticated: true, projectMatches: true, headers: { [gate.headerName]: '00'.repeat(32) }, code: 'maintenance_token_invalid' },
+      ]
+      for (const attempt of negatives) {
+        const before = JSON.stringify({ state: gate.readState(), events: f.events })
         await expectCode(gate.authorizeHttpOperation({
-          authenticated: true, projectMatches: true, headers,
+          authenticated: attempt.authenticated, projectMatches: attempt.projectMatches, headers: attempt.headers,
           operation: { op: 'stop', sessionId: 's-1' },
-        }), 'maintenance_token_invalid')
+        }), attempt.code)
+        assert.equal(JSON.stringify({ state: gate.readState(), events: f.events }), before, `${attempt.code} refusal changes no state/event`)
       }
-      await expectCode(gate.authorizeHttpOperation({
-        authenticated: false, projectMatches: true, headers: { [gate.headerName]: lease.token }, operation: { op: 'stop', sessionId: 's-1' },
-      }), 'unauthorized')
-      await expectCode(gate.authorizeHttpOperation({
-        authenticated: true, projectMatches: false, headers: { [gate.headerName]: lease.token }, operation: { op: 'stop', sessionId: 's-1' },
-      }), 'project_mismatch')
 
       await gate.runOperation({ op: 'stop', sessionId: 's-1', authorization: { token: lease.token, epoch: lease.epoch } }, async () => {})
       await expectCode(gate.runOperation({ op: 'stop', sessionId: 's-1', authorization: { token: lease.token, epoch: lease.epoch } }, async () => {}), 'maintenance_capability_used')
@@ -249,9 +314,11 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       const next = await gate.acquireLease({ capabilities: [{ op: 'stop', sessionId: 'throws' }], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0 })
       assert.ok(next.epoch > lease.epoch)
       await expectCode(gate.heartbeatLease({ token: lease.token, epoch: lease.epoch, ttlMs: 30_000 }), 'maintenance_conflict')
+      const beforeStale = JSON.stringify({ state: gate.readState(), events: f.events })
       await expectCode(gate.authorizeHttpOperation({
         authenticated: true, projectMatches: true, headers: { [gate.headerName]: lease.token }, operation: { op: 'stop', sessionId: 'throws' },
       }), 'maintenance_token_invalid')
+      assert.equal(JSON.stringify({ state: gate.readState(), events: f.events }), beforeStale, 'stale token changes no state/event')
       const callbackThrow = gate.runOperation({ op: 'stop', sessionId: 'throws', authorization: { token: next.token, epoch: next.epoch } }, async () => {
         throw new Error('unknown-after-callback-entry')
       })

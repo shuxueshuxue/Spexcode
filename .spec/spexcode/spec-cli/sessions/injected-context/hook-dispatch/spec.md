@@ -7,7 +7,6 @@ code:
   - spec-cli/src/hooks.ts#compileManifest
 related:
   - spec-cli/src/hook-dispatch.test.ts
-  - spec-cli/hooks/dispatch.sh
 ---
 
 # hook-dispatch
@@ -43,7 +42,7 @@ hook, the Stop gate included, silently no-ops in the window. The legacy file is 
 tree's next anchor plants its slot, the fallback goes dead, and the stale file is residue until
 [[spex-uninstall]]'s whole-store sweep. An explicit `SPEX_HOOK_MANIFEST` override skips both lookups.
 
-The dispatcher reproduces the native multi-hook contract — which on BOTH harnesses runs matching hooks in
+[[dispatcher-runtime]] owns the shell entry that executes this compiled manifest. The dispatcher reproduces the native multi-hook contract — which on BOTH harnesses runs matching hooks in
 parallel with no ordering guarantee — but **deterministically**: it feeds each handler the original hook
 stdin, runs them all in manifest order so every side effect is preserved, concatenates their stdout
 (block decisions / additionalContext) through, and exits 2 when a handler declared `block: true` and either
@@ -53,12 +52,6 @@ however, reads a Stop block's continuation prompt from STDERR — so on the JSON
 when the handler wrote its `decision:block` to stdout and left stderr empty, the dispatcher extracts the
 `reason` and forwards it to stderr; else codex would see exit 2 with no continuation. A handler that did not
 declare blocking can never block its event; a missing manifest dispatches nothing.
-
-Before invoking the first handler, the dispatcher enters one [[maintenance-lease]] `hook-state` scoped
-operation owned by the dispatcher PID/start and holds it across every matching handler. When maintenance has
-closed admission it emits the structured `maintenance_active` block through the harness's native blocking
-channel and invokes zero handlers; no handler stdout, file write, lifecycle write, or event is produced. The
-scope always releases its ticket on normal exit, handler failure, or dispatcher interruption.
 
 This is the substrate the spec-aware injections ([[inject-spec-first]], [[inject-spec-of-file]]) and the lifecycle gates
 ride on. Which nodes plug in is a [[surface]] field decision, not a code change here; adding or retiring a

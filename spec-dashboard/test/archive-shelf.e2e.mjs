@@ -149,6 +149,8 @@ try {
   await page.goto(`${base}/#/sessions/${sessionId}`, { waitUntil: 'domcontentloaded' })
   const row = page.locator(`.si-item[data-sid="${sessionId}"]`)
   await row.waitFor({ state: 'visible', timeout: 30_000 })
+  await row.click()
+  await page.waitForFunction((id) => document.querySelector(`.si-item[data-sid="${id}"]`)?.classList.contains('on') === true, sessionId)
   await page.keyboard.press('Alt+i')
   const command = page.locator('.si-command-input')
   await command.waitFor({ state: 'visible' }); await command.fill('/archive')

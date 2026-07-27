@@ -233,8 +233,8 @@ freshness path), so a surface can say `EvalsFeed.jsx +3` instead of a bare "code
 stale readout). It is derived, never stored, and never feeds the stale/fresh decision — it explains one.
 
 The surface mirrors the code-drift report:
-- **lint [--changed]** — the measurement layer's findings, PURE ADVISORY and always exit 0 (`spex spec
-  lint`'s errors block commits; a measurement gap never blocks anyone — one lint per layer, same word):
+- **lint [--changed]** — the measurement layer's findings are PURE ADVISORY (`spex spec lint`'s errors
+  block commits; a measurement gap never blocks anyone — one lint per layer, same word):
   a malformed eval.md (`eval-schema` — missing field,
   unknown key, dup name, ghost `code`/`related` path, a dead/ambiguous/unextractable `code:` selector,
   out-of-library tag), a stale reading (`eval-drift`), a scenario never
@@ -246,6 +246,11 @@ The surface mirrors the code-drift report:
   summary — a file governed by > `maxOwners` scenarios (`eval-owners`, split it). A `drift`/`missing` line
   carries the scenario's **tags**, so a reader (and [[eval-proactive]]'s Stop nudge) sees the gap's SURFACE —
   e.g. a browser-measured `frontend-e2e` scenario needs a real product run to refresh, not a desk check.
+  A completed scan exits zero regardless of findings. `--changed` first prints the scope it actually
+  established: the resolved merge base, changed-path count, and the exact current-worktree `spexcode.json`
+  path (or `defaults`). The changed-path set is the union of the merge-base diff (both endpoints of a
+  rename/copy) and untracked files. Failure to resolve the base or read either changed-path set is a command
+  failure, not an empty scope: it exits non-zero and never prints a zero-finding summary.
   `--changed` keeps its selection axis aligned with the finding it is about ([[eval-proactive]]). The
   per-node classes (malformed, missing, coverage) select a node when the branch touched one of that node's
   OWN files — its spec directory excluding every descendant node directory — or the node's `code:` axis.

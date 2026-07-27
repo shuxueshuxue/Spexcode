@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join, relative } from 'node:path'
+import { delimiter, dirname, isAbsolute, join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { buildProjection, projectionDiff } from './sync-init-plugins.mjs'
@@ -214,6 +214,7 @@ function runCase({ language, harness, name }, spex, suiteRoot) {
     CI: '1',
     HOME: home,
     CODEX_HOME: codexHome,
+    PATH: `${dirname(spex)}${delimiter}${process.env.PATH ?? ''}`,
     SPEXCODE_HOME: join(home, '.spexcode'),
     SPEXCODE_PI_AGENT_DIR: join(home, '.pi', 'agent'),
     GIT_CONFIG_GLOBAL: globalGitConfig,
@@ -251,6 +252,40 @@ function runCase({ language, harness, name }, spex, suiteRoot) {
 
   const receipt = parseReceipt(initOutput, name)
   assertReceipt({ entries: receipt, initOutput, project, codexHome, harness, caseName: name })
+
+  const beforeAdoption = git('rev-parse', 'HEAD').trim()
+  git('add', '--', '.spec', 'spexcode.json')
+  const staged = git('diff', '--cached', '--name-only').trim().split('\n').filter(Boolean)
+  assert.ok(staged.includes('spexcode.json') && staged.some((path) => path.startsWith('.spec/')),
+    `[${name}] adoption stages both project source assets`)
+  assert.ok(staged.every((path) => path === 'spexcode.json' || path.startsWith('.spec/')),
+    `[${name}] adoption stages only .spec and spexcode.json: ${staged.join(', ')}`)
+
+  run('git', ['-C', project, 'commit', '-qm', 'chore: seed SpexCode source of truth'], {
+    env: { ...env, SPEXCODE_ALLOW_MAIN: '1' },
+    label: `[${name}] git adoption commit`,
+  })
+  const adoptionHead = git('rev-parse', 'HEAD').trim()
+  assert.notEqual(adoptionHead, beforeAdoption, `[${name}] adoption creates a reachable commit`)
+  assert.deepEqual(
+    git('diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD').trim().split('\n').filter(Boolean).sort(),
+    [...staged].sort(),
+    `[${name}] adoption commit contains exactly the staged source assets`,
+  )
+
+  const headPaths = new Set(git('ls-tree', '-r', '--name-only', 'HEAD', '--', '.spec', 'spexcode.json')
+    .trim().split('\n').filter(Boolean))
+  for (const sourcePath of walkFiles(join(project, '.spec')).map((path) => relative(project, path)).concat('spexcode.json')) {
+    assert.ok(headPaths.has(sourcePath), `[${name}] HEAD reaches source asset ${sourcePath}`)
+  }
+  const tracked = new Set(git('ls-files').trim().split('\n').filter(Boolean))
+  assert.ok(tracked.has(language.tracked), `[${name}] original source remains tracked`)
+  assert.ok(!tracked.has(language.untracked), `[${name}] local-only source remains untracked`)
+  for (const generated of [harness.contract, harness.shim, harness.skill]) {
+    assert.ok(!tracked.has(generated), `[${name}] generated harness artifact remains untracked: ${generated}`)
+  }
+  assert.deepEqual(git('status', '--short', '--untracked-files=all').trim().split('\n').filter(Boolean),
+    [`?? ${language.untracked}`], `[${name}] only the deliberate local source remains visible after adoption`)
 
   const materializeOutput = run(spex, ['materialize'], {
     cwd: project,

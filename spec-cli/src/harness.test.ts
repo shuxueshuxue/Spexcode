@@ -27,7 +27,11 @@ const codexRpcFixture = (handler: (message: any) => unknown) => createServer((so
     if (message.method === 'initialized') return
     try {
       const result = handler(message)
-      if (result !== NO_RPC_RESPONSE) send({ id: message.id, result: result ?? {} })
+      if (result === NO_RPC_RESPONSE) return
+      if (result instanceof Promise) {
+        result.then((value) => send({ id: message.id, result: value ?? {} }))
+          .catch((error) => send({ id: message.id, error: { message: error instanceof Error ? error.message : String(error) } }))
+      } else send({ id: message.id, result: result ?? {} })
     }
     catch (error) { send({ id: message.id, error: { message: error instanceof Error ? error.message : String(error) } }) }
   }
@@ -490,6 +494,57 @@ test('Codex cold retirement rejects missing or non-detached shared owner identit
     if (nonDetached && !nonDetached.ok) assert.match(nonDetached.reason, /detached.*identity|generation is unproven/)
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('Codex cold retirement rejects a generation swap after target proof while collection lists are pending', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-cold-retirement-generation-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const target = 'cold-generation-target'
+  const pendingLists: Array<{ archived: boolean; resolve: (value: unknown) => void }> = []
+  let targetProofResponses = 0
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') {
+      targetProofResponses++
+      return { data: [], nextCursor: null }
+    }
+    if (message.method === 'thread/list' && message.params.ancestorThreadId) {
+      targetProofResponses++
+      return { data: [], nextCursor: null }
+    }
+    if (message.method === 'thread/list') return new Promise((resolve) => {
+      pendingLists.push({ archived: !!message.params.archived, resolve })
+    })
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const root = runtimeRoot()
+  const socket = codexAppServerSock(root)
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    owner = startCodexOwner(root)
+    const retirement = codexHarness.coldRetirementPreflight?.({ session: 'cold-generation-session', harnessSessionId: target })
+    for (let i = 0; i < 100 && (targetProofResponses < 3 || pendingLists.length < 2); i++) await new Promise((resolve) => setTimeout(resolve, 5))
+    assert.equal(targetProofResponses, 3, 'loaded-ID and both target descendant responses completed first')
+    assert.equal(pendingLists.length, 2, 'active and archived collection responses remain pending')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    writeFileSync(codexAppServerIsolation(root), 'replacement generation while collections pending\n')
+    for (const pending of pendingLists) pending.resolve({ data: pending.archived ? [{ id: target }] : [], nextCursor: null })
+    const result = await retirement
+    assert.equal(result?.ok, false)
+    if (result && !result.ok) assert.match(result.reason, /generation changed during cold retirement proof/)
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
     if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR

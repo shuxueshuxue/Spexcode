@@ -173,6 +173,11 @@ test('selected nested session keeps its lead separated from the revealed headlin
   )
 })
 
+test('session sidebar owns a bounded vertical scrollport', () => {
+  assert.match(css, /\.si-page\s*\{[^}]*min-height:\s*0;/s)
+  assert.match(css, /\.si-list\s*\{[^}]*overflow-y:\s*auto;/s)
+})
+
 test('session sidebar defaults denser and caps selected headlines at three lines', () => {
   assert.match(css, /\.si-list\s*\{[^}]*flex:\s*0 0 204px;/s)
   assert.match(css, /\.si-item\s*\{[^}]*font-size:\s*var\(--type-caption\);[^}]*line-height:\s*var\(--line-session-row\);/s)

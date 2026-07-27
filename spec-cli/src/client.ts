@@ -25,8 +25,8 @@ const post = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'cont
 const seg = (id: string) => encodeURIComponent(id)
 
 // GET /api/sessions — the board, used by `spex session ls`, and by `spex session watch`/`wait` as their poll source.
-export async function clientListSessions(): Promise<Session[]> {
-  const r = await apiFetch('/api/sessions')
+export async function clientListSessions(includeArchived = false): Promise<Session[]> {
+  const r = await apiFetch(includeArchived ? '/api/sessions?all=1' : '/api/sessions')
   if (!r.ok) throw new BackendError(`backend error ${r.status} listing sessions`, r.status)
   return await r.json() as Session[]
 }
@@ -38,8 +38,8 @@ export async function clientResources(): Promise<import('./host-resources.js').R
 }
 
 // resolve a selector (full id, id-prefix, node, or branch) against the live board, then call with the full id.
-export async function resolveClientSession(selector: string): Promise<Resolved> {
-  return resolveSession(selector, await clientListSessions())
+export async function resolveClientSession(selector: string, includeArchived = true): Promise<Resolved> {
+  return resolveSession(selector, await clientListSessions(includeArchived))
 }
 
 // GET /api/sessions/:id/capture — the live pane as text. The discriminated result keeps the three failure
@@ -155,12 +155,12 @@ export async function clientClose(id: string): Promise<boolean> {
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
-// POST /api/sessions/:id/archive — shelve (or with on=false unshelve) the session ([[archive]]). Record-only:
-// it neither stops the agent nor touches the worktree, so pair it with stop when you also want the process
-// back. {ok:false} = no such session.
+// POST /api/sessions/:id/archive — cold-archive the session ([[archive]]). The legacy on=false spelling is a
+// signpost to the same resume transition; it never performs a record-only unarchive.
 export async function clientArchive(id: string, on = true): Promise<boolean> {
   await guarded(on ? 'session archive' : 'session unarchive')
   const r = await apiFetch(`/api/sessions/${seg(id)}/archive`, post({ on }))
+  if (!r.ok) throw new BackendError(`backend refused to ${on ? 'archive' : 'unarchive'} ${id}: ${await r.text()}`, r.status)
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 

@@ -215,8 +215,8 @@ Control another session (all take SEL):
       --capture prints the LIVE PANE as text instead (empty pane = exit 0; unknown session = exit 2).
   spex session resume <SEL> [--force]    relaunch ONLY if confirmed offline (--force for a wedged one)
   spex session stop <SEL>               soft stop: kill the exact agent, KEEP the worktree (resumable)
-  spex session archive <SEL>             shelve it: out of the default list, nothing stopped or removed
-  spex session unarchive <SEL>           bring a shelved session back into the list
+  spex session archive <SEL>             cold-archive it: exact leaf/runtime stopped, worktree + conversation kept
+  spex session unarchive <SEL>           deprecated signpost: same as resume (relaunches the same conversation)
   spex session close <SEL>               retire the session and its worktree
 
 Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on):

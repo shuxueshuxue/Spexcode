@@ -78,7 +78,14 @@ export type MaintenanceLease = {
 export type MaintenanceState = {
   state: DurableState['state']
   epoch: number
-  tickets: readonly { operation: Operation['op']; owner: ProcessIdentity }[]
+  heartbeatDeadline: number | null
+  tickets: readonly {
+    operation: Operation['op']
+    sessionId?: string
+    force?: boolean
+    owner: ProcessIdentity
+    deadline: number
+  }[]
   capabilities: readonly { capability: Capability; state: CapabilityState }[]
 }
 
@@ -412,7 +419,14 @@ export function createSessionMaintenance(input: CoordinatorInput) {
   const readState = (): MaintenanceState => locked((state) => ({
     state: state.state,
     epoch: state.epoch,
-    tickets: copy(state.tickets.map((ticket) => ({ operation: ticket.operation, owner: ticket.owner }))),
+    heartbeatDeadline: state.heartbeatDeadline,
+    tickets: copy(state.tickets.map((ticket) => ({
+      operation: ticket.operation,
+      ...(ticket.sessionId ? { sessionId: ticket.sessionId } : {}),
+      ...(ticket.force !== undefined ? { force: ticket.force } : {}),
+      owner: ticket.owner,
+      deadline: ticket.deadline,
+    }))),
     capabilities: copy(state.capabilities),
   }))
 

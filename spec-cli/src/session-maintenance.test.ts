@@ -44,7 +44,7 @@ type Ticket = {
   epoch: number
   delegateSharedSpawn(sessionId: string): string
 }
-type Lease = { token: string; epoch: number; state: 'draining' | 'active' }
+type Lease = { token: string; epoch: number; state: 'draining' | 'active'; capabilities: readonly Capability[] }
 type Maintenance = {
   headerName: string
   runOperation<T>(operation: Operation, body: (ticket: Ticket) => Promise<T> | T): Promise<T>
@@ -54,7 +54,8 @@ type Maintenance = {
   readState(): {
     state: 'open' | 'draining' | 'active'
     epoch: number
-    tickets: readonly { operation: Operation['op']; owner: Identity }[]
+    heartbeatDeadline: number | null
+    tickets: readonly { operation: Operation['op']; sessionId?: string; force?: boolean; owner: Identity; deadline: number }[]
     capabilities: readonly { capability: Capability; state: 'unused' | 'running' | 'completed' | 'indeterminate' }[]
   }
   authorizeHttpOperation(input: {
@@ -218,6 +219,11 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       f.advance(60_000)
       const draining = await f.create().acquireLease({ capabilities: [], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0 })
       assert.equal(draining.state, 'draining', 'deadline cannot prove a live callback stopped')
+      assert.deepEqual(f.create().readState(), {
+        state: 'draining', epoch: draining.epoch, heartbeatDeadline: 100_000,
+        tickets: [{ operation: 'send', sessionId: 's-live', owner: { pid: 8001, startToken: 'ticket-owner-a' }, deadline: 11_000 }],
+        capabilities: [],
+      }, 'status exposes deadlines and exact owners without secret ticket or bearer material')
       f.readings.set(8001, 'ambiguous')
       assert.equal(f.create().readState().state, 'draining', 'ambiguous exact owner remains a blocker')
       f.readings.set(8001, { pid: 8001, startToken: 'pid-reused' })

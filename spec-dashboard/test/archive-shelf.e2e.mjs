@@ -46,9 +46,9 @@ const post = async (path, body = {}) => {
   assert.equal(response.ok, true, `${path} failed: ${response.status} ${text}`)
   return json
 }
-const waitFor = async (read, accept, label, timeout = 30_000) => {
+const waitFor = async (read, accept, label, timeout = 30_000, interval = 250) => {
   const deadline = Date.now() + timeout
-  while (Date.now() < deadline) { const value = await read(); if (accept(value)) return value; await new Promise((r) => setTimeout(r, 250)) }
+  while (Date.now() < deadline) { const value = await read(); if (accept(value)) return value; await new Promise((r) => setTimeout(r, interval)) }
   throw new Error(`timed out waiting for ${label}`)
 }
 const procToken = (pid) => { try { return readFileSync(`/proc/${pid}/stat`, 'utf8').toString().trim().split(' ')[21] || null } catch { return null } }
@@ -209,7 +209,7 @@ try {
   narrate('resume same conversation through starting to online')
   await page.locator(`.si-item[data-sid="${sessionId}"]`).click()
   const stateTrace = []
-  const tracePromise = waitFor(async () => { const s = await getTarget(true); if (s) stateTrace.push(s.status); return s }, (s) => s?.archived === false && s?.liveness === 'online' && stateTrace.includes('starting'), 'resume starting -> online')
+  const tracePromise = waitFor(async () => { const s = await getTarget(true); if (s) stateTrace.push(s.status); return s }, (s) => s?.archived === false && s?.liveness === 'online' && stateTrace.includes('starting'), 'resume starting -> online', 30_000, 10)
   const resumeResponse = page.waitForResponse((r) => new URL(r.url()).pathname === `/api/sessions/${sessionId}/resume` && r.request().method() === 'POST')
   await page.locator('.si-shelf-card .si-act.go').click(); assert.equal((await resumeResponse).ok(), true)
   const resumed = await tracePromise

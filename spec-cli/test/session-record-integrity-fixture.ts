@@ -11,7 +11,7 @@ import { createServer, type Socket } from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { codexAppServerSock, rvSock } from '../src/harness.js'
+import { codexAppServerPid, codexAppServerSock, rvSock } from '../src/harness.js'
 import { runtimeRoot } from '../src/layout.js'
 import { processStartToken } from '../src/process-identity.js'
 
@@ -47,6 +47,7 @@ const serverFrame = (value: unknown): Buffer => {
 // crosses the same Unix WebSocket and backend stop/close routes as a real app-server.
 async function fakeLoadedThreadRuntime(threadId: string): Promise<() => Promise<void>> {
   const path = codexAppServerSock(runtimeRoot())
+  const pidFile = codexAppServerPid(runtimeRoot())
   rmSync(path, { force: true })
   const clients = new Set<Socket>()
   const server = createServer((socket) => {
@@ -94,10 +95,12 @@ async function fakeLoadedThreadRuntime(threadId: string): Promise<() => Promise<
     server.once('error', reject)
     server.listen(path, () => resolve())
   })
+  writeFileSync(pidFile, `${process.pid}\n`)
   return async () => {
     for (const client of clients) client.destroy()
     await new Promise<void>((resolve) => server.close(() => resolve()))
     rmSync(path, { force: true })
+    rmSync(pidFile, { force: true })
   }
 }
 
@@ -237,8 +240,8 @@ async function corruptRecordIsDiagnosable(home: string, worktree: string): Promi
 
   const quarantineBefore = quarantineFiles(home).length
   const stopped = await jsonRequest(`/api/sessions/${cid}/stop`, { method: 'POST' })
-  assert.equal(stopped.status, 409, `corrupt stop with an unowned loaded thread fails closed: ${stopped.text}`)
-  assert.match(String(stopped.body?.error ?? stopped.text), /loaded thread.*without one exact governed session owner/is)
+  assert.equal(stopped.status, 409, `corrupt stop with no exact owner fails closed: ${stopped.text}`)
+  assert.match(String(stopped.body?.error ?? stopped.text), /no readable session record proves the adapter or leaf owner/is)
   assert.equal((await pexec('tmux', ['-L', tmux!, 'display-message', '-p', '-t', cid, '#{pane_pid}'])).stdout.trim(), paneBefore, 'stop sent no tmux signal')
   assert.equal(processStartToken(agent.pid!), agentStart, 'stop left the exact signalable agent instance alive')
   assert.equal(readFileSync(adapterTransport, 'utf8'), 'must survive without guessed defaultHarness cleanup\n', 'stop ran no guessed adapter cleanup')
@@ -246,7 +249,7 @@ async function corruptRecordIsDiagnosable(home: string, worktree: string): Promi
 
   const closed = await jsonRequest(`/api/sessions/${cid}/close`, { method: 'POST' })
   assert.equal(closed.status, 409, `a corrupt record close fails closed: ${closed.text}`)
-  assert.match(String(closed.body?.error ?? closed.text), /unreadable record.*no adapter.*loaded thread.*runtime remains.*worktree.*branch.*no process signal or deletion/is)
+  assert.match(String(closed.body?.error ?? closed.text), /unreadable record.*no adapter.*runtime remains.*worktree.*branch.*no process signal or deletion/is)
   assert.equal(readFileSync(rec, 'utf8'), original, 'the corrupt record remains byte-identical')
   assert.equal(readFileSync(runtimeSentinel, 'utf8'), 'must survive corrupt close\n', 'session runtime remains')
   assert.equal(readFileSync(join(preservedWorktree, 'unmerged.txt'), 'utf8'), 'must survive corrupt close\n', 'worktree bytes remain')
@@ -267,7 +270,7 @@ async function corruptRecordIsDiagnosable(home: string, worktree: string): Promi
   assert.notEqual(processStartToken(agent.pid!), agentStart, 'fixture teardown removed only its exact agent instance')
   const absentClose = await jsonRequest(`/api/sessions/${cid}/close`, { method: 'POST' })
   assert.equal(absentClose.status, 409, `target-absent corrupt close remains quarantine-only: ${absentClose.text}`)
-  assert.match(String(absentClose.body?.error ?? absentClose.text), /could not prove its live references.*Runtime remains/is)
+  assert.match(String(absentClose.body?.error ?? absentClose.text), /no readable session record proves the adapter or leaf owner.*Runtime remains/is)
   assert.equal(readFileSync(rec, 'utf8'), original, 'target-absent close still preserves the corrupt runtime')
   assert.equal(readFileSync(join(preservedWorktree, 'unmerged.txt'), 'utf8'), 'must survive corrupt close\n', 'target-absent close preserves worktree bytes')
   await pexec('git', ['-C', worktree, 'show-ref', '--verify', `refs/heads/${preservedBranch}`])
@@ -320,12 +323,12 @@ async function duplicateLoadedThreadIsBlocked(home: string, project: string): Pr
   try {
     const stopped = await jsonRequest(`/api/sessions/${first}/stop`, { method: 'POST' })
     assert.equal(stopped.status, 409, `ambiguous loaded-thread stop fails closed: ${stopped.text}`)
-    assert.match(String(stopped.body?.error ?? stopped.text), /without one exact governed session owner.*thread-with-two-readable-records/is)
+    assert.match(String(stopped.body?.error ?? stopped.text), /target thread thread-with-two-readable-records has no one exact governed session owner/is)
     assert.equal((await pexec('tmux', ['-L', tmux, 'display-message', '-p', '-t', first, '#{pane_pid}'])).stdout.trim(), pane, 'ambiguous stop sent no tmux signal')
 
     const closed = await jsonRequest(`/api/sessions/${first}/close`, { method: 'POST' })
     assert.equal(closed.status, 409, `ambiguous loaded-thread close fails closed: ${closed.text}`)
-    assert.match(String(closed.body?.error ?? closed.text), /without one exact governed session owner.*thread-with-two-readable-records/is)
+    assert.match(String(closed.body?.error ?? closed.text), /target thread thread-with-two-readable-records has no one exact governed session owner/is)
     assert.equal((await pexec('tmux', ['-L', tmux, 'display-message', '-p', '-t', first, '#{pane_pid}'])).stdout.trim(), pane, 'ambiguous close sent no tmux signal')
     for (const id of [first, second]) {
       assert.ok(existsSync(worktrees.get(id)!), `ambiguous close preserved worktree ${id}`)

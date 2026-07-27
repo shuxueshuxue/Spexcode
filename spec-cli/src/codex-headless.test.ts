@@ -21,13 +21,14 @@ test('codex-headless composes Codex materialization and shared-runtime ownership
   assert.equal(codexHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
   assert.equal(codexHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.equal(codexHeadlessHarness.deliver, codexHarness.deliver)
+  assert.equal(codexHeadlessHarness.sharedRuntimes, codexHarness.sharedRuntimes)
   const headlessRuntime = codexHeadlessHarness.sharedRuntimes?.('/tmp/runtime') ?? []
   const interactiveRuntime = codexHarness.sharedRuntimes?.('/tmp/runtime') ?? []
   assert.deepEqual(
-    headlessRuntime.map(({ probe: _probe, ...descriptor }) => descriptor),
-    interactiveRuntime.map(({ probe: _probe, ...descriptor }) => descriptor),
+    headlessRuntime.map(({ probe: _probe, residency: _residency, ...descriptor }) => descriptor),
+    interactiveRuntime.map(({ probe: _probe, residency: _residency, ...descriptor }) => descriptor),
   )
-  assert.ok(headlessRuntime.every((descriptor) => typeof descriptor.probe === 'function'))
+  assert.ok(headlessRuntime.every((descriptor) => typeof descriptor.probe === 'function' && typeof descriptor.residency === 'function'))
 })
 
 test('codex-headless launch starts the shared app-server and first turn, then exits without attaching a TUI', () => {

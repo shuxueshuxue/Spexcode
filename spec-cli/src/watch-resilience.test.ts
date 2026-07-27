@@ -10,7 +10,7 @@ function mk(id: string, status: Session['status']): Session {
   return {
     id, node: null, branch: null, label: id, headline: id, raw: { name: null, title: null },
     path: `/wt/${id}`, parent: null, harness: 'claude', capabilities: { headless: false }, launcher: null,
-    lifecycle: 'active', proposal: null, merges: 0, status, liveness: 'online', note: null, archived: false,
+    lifecycle: 'active', proposal: null, merges: 0, status, liveness: 'online', note: null, archived: false, archiveHazard: null,
     prompt: null, promptPreview: null, created: 0, activity: null, sortKey: null,
   }
 }
@@ -20,6 +20,31 @@ const ID = 'wwww1111-1111-1111-1111-111111111111'
 function waitFor(source: () => Promise<Session[]>): Promise<WatchOutcome> {
   return watchSessions(() => {}, { source, selectors: [ID], intervalMs: 10, until: { timeoutMs: 1000 } })
 }
+
+test('watch/wait: archive is an offline transition, and only true record removal is gone/closed', async () => {
+  let archivePoll = 0
+  const archiveEvents: string[] = []
+  const archived = { ...mk(ID, 'offline'), archived: true, liveness: 'offline' as const }
+  const archivedResult = await watchSessions((line) => archiveEvents.push(line), {
+    source: async () => {
+      archivePoll++
+      return [archivePoll === 1 ? mk(ID, 'working') : archived]
+    }, selectors: [ID], intervalMs: 10, until: { timeoutMs: 1000 },
+  })
+  assert.deepEqual(archivedResult, { reached: 'offline', path: ['working', 'offline'] })
+  assert.equal(archiveEvents.filter((line) => line.includes('closed')).length, 0, 'archive must never emit closed')
+
+  let closePoll = 0
+  const closeEvents: string[] = []
+  const closeResult = await watchSessions((line) => closeEvents.push(line), {
+    source: async () => {
+      closePoll++
+      return closePoll === 1 ? [archived] : []
+    }, selectors: [ID], intervalMs: 10, until: { timeoutMs: 1000 },
+  })
+  assert.deepEqual(closeResult, { gone: true, path: ['offline'] })
+  assert.equal(closeEvents.filter((line) => line.includes('closed')).length, 1, 'true removal emits closed exactly once')
+})
 
 // THE regression: the backend hot-reloads (supervisor reboots the child on a sibling merge) so the first
 // probe's fetch fails with a connection error. `spex session wait` must RETRY, not exit — later probes observe a

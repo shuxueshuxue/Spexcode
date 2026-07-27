@@ -110,12 +110,15 @@ the adapter reports at least one loaded thread, whether that reference is active
 and queued-without-thread entries remain visible but do not count or protect; loaded threads with no record remain
 visible, counted, and protective. An unhealthy/unknown probe reports an unknown refcount, never a synthetic zero.
 
-The existing stop transition asks the adapter-owned shared-runtime probe before touching tmux or a leaf. The
-mutation scope is exact: a target leaf with a registered PID/start token and matching argv/identity may be stopped
-even when unrelated sibling or unowned loaded references exist; those references remain protective against any
-shared app-server/control-plane teardown, which this path never performs. An unhealthy/unknown probe fails closed
-before any leaf signal because the shared-root boundary itself is unproven. A target thread that is itself
-ambiguous or unowned, or a missing/mismatched leaf PID/start/argv proof, blocks before mutation. The launch
+The existing stop transition asks the adapter-owned target-scoped mutation proof before touching tmux or a leaf.
+That proof hard-gates the shared PID/start/isolation/socket generation, uses the lightweight loaded-ID census, and
+reads only the exact target thread when it is loaded; full per-reference report projection is read-only evidence,
+not mutation authority. The mutation scope is exact: a target leaf with a registered PID/start token and matching
+argv/identity may be stopped even when unrelated sibling or unowned loaded references are slow or unresponsive;
+their loaded IDs remain protective against any shared app-server/control-plane teardown, which this path never
+performs. An unhealthy loaded-ID census, unknown exact target read, target active turn or descendant, or unproven
+shared-root identity fails closed before any leaf signal. A target thread that is itself ambiguous or unowned, or
+a missing/mismatched leaf PID/start/argv proof, blocks before mutation. The launch
 artifact and detached process-boundary evidence are rechecked immediately before the leaf signal and before each
 bounded OS escalation; a PID reuse or topology change fails loudly. The report issues no token and has no mutation route;
 stop and close remain the only lifecycle verbs. Project-shared control planes and backends are reported with

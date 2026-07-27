@@ -54,6 +54,43 @@ test('shared runtime spawn records an observed detached process boundary', async
   }
 })
 
+test('session stop proof does not wait on a non-returning full sibling projection', async () => {
+  const originalSharedRuntimes = codexHarness.sharedRuntimes
+  const root = mkdtempSync(join(tmpdir(), 'spex-target-scoped-stop-'))
+  const pidFile = join(root, 'shared.pid')
+  const isolationFile = join(root, 'shared.scope')
+  const identity = spawnDetachedRuntime({
+    cwd: root,
+    logFile: join(root, 'shared.log'),
+    pidFile,
+    isolationFile,
+    command: process.execPath,
+    args: ['-e', 'setInterval(() => {}, 1000)'],
+  })
+  codexHarness.sharedRuntimes = () => [{
+    key: 'codex-app-server',
+    label: 'Codex app-server',
+    pidFile,
+    isolationFile,
+    residency: async () => ({ healthy: true, referenceIds: ['slow-unrelated-sibling'] }),
+    probe: async () => new Promise<SharedRuntimeProbe>(() => {}),
+  }]
+  try {
+    const result = await Promise.race([
+      assertSessionStopSafe('target-scoped-stop', { session: 'target-scoped-stop', harness: 'codex' }).then(() => 'safe'),
+      new Promise<string>((resolve) => setTimeout(() => resolve('timed-out-on-full-projection'), 100)),
+    ])
+    assert.equal(result, 'safe')
+  } finally {
+    codexHarness.sharedRuntimes = originalSharedRuntimes
+    if (processStartToken(identity.pid) === identity.startToken) {
+      try { process.kill(identity.pid, 'SIGTERM') } catch {}
+      for (let i = 0; i < 50 && processStartToken(identity.pid) === identity.startToken; i++) await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('shared-runtime projection uses live adapter refs and fail-closed process identity', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-resources-'))
   const previousHome = process.env.SPEXCODE_HOME

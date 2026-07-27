@@ -51,6 +51,16 @@ Archive eligibility reads the target's fresh native turn census, not its public 
 `inProgress` turn refuses with zero mutation, while a loaded target whose complete turn census has no
 `inProgress` turn may archive even if a hook-authored public status still reads working.
 
+For a shared resident adapter, lifecycle mutation uses a target-scoped proof rather than the resource report's
+full projection. It first proves the shared PID/start/isolation/socket generation, obtains the paginated loaded-ID
+set, and checks the target's active and archived descendants. It reads turn history only when the exact target is
+loaded, and then reads only that target. An absent target with no descendants may therefore stop or archive even
+while an unrelated loaded or unowned sibling is slow or unresponsive; those sibling IDs still protect the shared
+root, which the session mutation never signals. A loaded active target, an unknown target read, any descendant,
+an ambiguous collection state, duplicate ownership, or a shared-generation identity change fails closed. The
+resource report remains the complete projection and may inspect every loaded reference; its latency or an
+unrelated turn-read failure is not mutation authority.
+
 **It is the attention verb backed by the resource stop.** This is the line that must not blur:
 
 - `stop` is the **resource** verb — give the process back. Reversible by `resume`.

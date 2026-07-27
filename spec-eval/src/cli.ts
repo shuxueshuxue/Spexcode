@@ -61,16 +61,31 @@ function currentNodeId(root: string): string | null {
 const UI_FILE = /\.(jsx|tsx|vue|svelte|css)$/
 export const isUiPath = (p: string) => UI_FILE.test(p) || p.includes('spec-dashboard/')
 
-// merge-base anchored so the main branch advancing isn't counted as this branch's change; a git error yields ∅ (--changed scan stays silent)
-function changedSinceBase(root: string): Set<string> {
-  const out = new Set<string>()
-  const add = (s: string) => { for (const l of s.split('\n')) { const t = l.trim(); if (t) out.add(t) } }
+type ChangedScope = { base: string; paths: Set<string>; config: string }
+
+// Merge-base anchored so main advancing is not counted as this branch's change. Scope construction is
+// indivisible: a missing base/diff is no scope at all, never an empty set that can masquerade as clean.
+function changedScope(root: string): ChangedScope {
+  const branch = mainBranch()
+  const paths = new Set<string>()
+  const add = (path: string | undefined) => { if (path) paths.add(path) }
   try {
-    const base = git(['-C', root, 'merge-base', mainBranch(), 'HEAD']).trim()
-    if (base) add(git(['-C', root, '-c', 'core.quotePath=false', 'diff', '--name-only', base]))
-    add(git(['-C', root, '-c', 'core.quotePath=false', 'ls-files', '--others', '--exclude-standard']))
-  } catch { /* no base → empty set */ }
-  return out
+    const base = git(['-C', root, 'merge-base', branch, 'HEAD']).trim()
+    if (!base) throw new Error('git merge-base returned no commit')
+    const fields = git(['-C', root, '-c', 'core.quotePath=false', 'diff', '--name-status', '-z', '-M', base])
+      .split('\0').filter(Boolean)
+    for (let i = 0; i < fields.length;) {
+      const status = fields[i++]
+      if (/^[RC]/.test(status)) { add(fields[i++]); add(fields[i++]) }
+      else add(fields[i++])
+    }
+    for (const path of git(['-C', root, '-c', 'core.quotePath=false', 'ls-files', '--others', '--exclude-standard']).split('\n')) add(path.trim())
+    const config = existsSync(join(root, 'spexcode.json')) ? join(root, 'spexcode.json') : 'defaults'
+    return { base, paths, config }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message.trim() : String(error)
+    throw new Error(`cannot establish changed scope against '${branch}': ${detail}`)
+  }
 }
 
 // A node owns the files under its spec dir except those under a descendant node. Its other selection axis
@@ -88,11 +103,21 @@ export function nodeChanged(dirRel: string, codeFiles: readonly string[], change
 async function scan(args: string[] = []): Promise<number> {
   const root = repoRoot()
   const cfg = loadConfig(root)
+  const changedOnly = has(args, 'changed')
+  let changed: Set<string> | null = null
+  if (changedOnly) {
+    try {
+      const scope = changedScope(root)
+      changed = scope.paths
+      console.error(`spex eval lint --changed scope: base=${scope.base} paths=${scope.paths.size} config=${scope.config}`)
+    } catch (error) {
+      console.error(`spex eval lint --changed: ${error instanceof Error ? error.message : String(error)}`)
+      return 2
+    }
+  }
   // eval-coverage fires on ANY governed source file per the same classifier as spec coverage, not just
   // frontend — so backend/CLI/non-web source is held to the loss discipline too, not exempted.
   const sourceFiles = new Set(trackedSourceFiles(root, cfg.governedRoots, cfg))
-  const changedOnly = has(args, 'changed')
-  const changed = changedOnly ? changedSinceBase(root) : null
   const idx = await driftIndex(root)
   // the off-history content fallback ([[eval-core]]): a rebased/folded-away anchor with byte-identical
   // governed content reads fresh instead of false-positive stale. Lazy — in-history readings never probe.
@@ -745,7 +770,8 @@ async function scenarioLs(args: string[]): Promise<number> {
 
 // the `spex eval` drawer's node-scoped verbs ([[cli-surface]]): add (file a measurement) · ls (a node's
 // reading timeline) · scenario ls/write (the declared contracts and their canonical metadata writer) · lint (the
-// measurement-layer lint — advisory, always exit 0) · ok (the human sign-off) · retract · clean.
+// measurement-layer lint — findings are advisory; an unreadable --changed scope fails) · ok (the human
+// sign-off) · retract · clean.
 // The session-scoped read (`spex eval ls --session <SEL>`) is intercepted in cli.ts before this runs;
 // `check-staged` is hook plumbing, exported separately for `spex internal check-staged`.
 export async function runEval(args: string[]): Promise<number> {

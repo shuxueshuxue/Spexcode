@@ -60,6 +60,10 @@ root, which the session mutation never signals. A loaded active target, an unkno
 an ambiguous collection state, duplicate ownership, or a shared-generation identity change fails closed. The
 resource report remains the complete projection and may inspect every loaded reference; its latency or an
 unrelated turn-read failure is not mutation authority.
+Archive compensation is fenced to that same exact original generation at connection, request, and response
+boundaries. If the shared generation changes after the archive request, commit state is reported unknown and no
+`thread/unarchive` is sent to the replacement generation; recovery remains explicit rather than borrowing new
+authority from a process that was never proved by the original preflight.
 
 **It is the attention verb backed by the resource stop.** This is the line that must not blur:
 

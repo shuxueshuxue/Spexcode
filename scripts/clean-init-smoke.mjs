@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join, relative } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -220,6 +220,8 @@ function runCase({ language, harness, name }, spex, suiteRoot) {
     GIT_CONFIG_GLOBAL: globalGitConfig,
     GIT_CONFIG_NOSYSTEM: '1',
   }
+  delete env.SPEXCODE_ALLOW_MAIN
+  delete env.SPEXCODE_SKIP_LINT
   const git = (...args) => run('git', ['-C', project, ...args], { env, label: `[${name}] git ${args.join(' ')}` })
 
   git('init', '-q', '-b', 'main')
@@ -260,6 +262,26 @@ function runCase({ language, harness, name }, spex, suiteRoot) {
     `[${name}] adoption stages both project source assets`)
   assert.ok(staged.every((path) => path === 'spexcode.json' || path.startsWith('.spec/')),
     `[${name}] adoption stages only .spec and spexcode.json: ${staged.join(', ')}`)
+
+  const preCommit = git('rev-parse', '--path-format=absolute', '--git-path', 'hooks/pre-commit').trim()
+  assert.ok(existsSync(preCommit), `[${name}] init installs pre-commit`)
+  assert.ok((statSync(preCommit).mode & 0o111) !== 0, `[${name}] installed pre-commit is executable`)
+  assert.match(readFileSync(preCommit, 'utf8'), /^#!.*\n# spexcode-managed-hook-v1\n/,
+    `[${name}] installed pre-commit is the managed hook`)
+
+  const stagedTree = git('write-tree').trim()
+  const rejected = spawnSync('git', ['-C', project, 'commit', '-qm', 'negative control: direct main commit'], {
+    env,
+    encoding: 'utf8',
+    timeout: 120_000,
+  })
+  assert.equal(rejected.status, 1, `[${name}] direct main adoption commit is rejected: ${rejected.stdout}${rejected.stderr}`)
+  assert.match(`${rejected.stdout}${rejected.stderr}`, /direct commits on main .*blocked/i,
+    `[${name}] rejection came from the installed SpexCode main guard`)
+  assert.equal(git('rev-parse', 'HEAD').trim(), beforeAdoption, `[${name}] rejected commit does not move HEAD`)
+  assert.equal(git('write-tree').trim(), stagedTree, `[${name}] rejected commit preserves the staged tree`)
+  assert.deepEqual(git('diff', '--cached', '--name-only').trim().split('\n').filter(Boolean), staged,
+    `[${name}] rejected commit preserves every staged source asset`)
 
   run('git', ['-C', project, 'commit', '-qm', 'chore: seed SpexCode source of truth'], {
     env: { ...env, SPEXCODE_ALLOW_MAIN: '1' },

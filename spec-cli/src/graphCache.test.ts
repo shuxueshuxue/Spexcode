@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -75,6 +75,13 @@ function shimPids(): number[] {
   if (!existsSync(pidLog)) return []
   return readFileSync(pidLog, 'utf8').split(/\s+/).filter(Boolean).map(Number).filter((pid) => existsSync(`/proc/${pid}`))
 }
+function hungHistoryPids(): number[] {
+  if (!existsSync(argvLog)) return []
+  return readFileSync(argvLog, 'utf8').split('\n').filter(Boolean).flatMap((line) => {
+    const [pid, ...args] = line.split(' ')
+    return args.some((arg) => arg === 'log' || arg === 'rev-list') && existsSync(`/proc/${pid}`) ? [Number(pid)] : []
+  })
+}
 
 test('dirty stale readers are immediate while one fresh flight owns completion', { concurrency: false }, async () => {
   rmSync(trigger, { force: true })
@@ -82,6 +89,10 @@ test('dirty stale readers are immediate while one fresh flight owns completion',
   const warm = await cache.getBoard()
   assert.equal(warm.nodes.length, 1)
   await delay(100)
+
+  const [quietPatrolA, quietPatrolB] = await Promise.all([cache.patrolBoard(), cache.patrolBoard()])
+  assert.equal(quietPatrolA, warm, 'an unchanged patrol must return the cached board object, not rebuild it')
+  assert.equal(quietPatrolB, warm, 'concurrent patrol callers must join the same validation flight')
 
   run('commit', '-q', '--allow-empty', '-m', 'move head before wedge')
   writeFileSync(trigger, 'hang\n')
@@ -94,16 +105,41 @@ test('dirty stale readers are immediate while one fresh flight owns completion',
   assert.equal(stale.json, JSON.stringify(warm))
 
   const spawnDeadline = Date.now() + 500
-  while (shimPids().length === 0 && Date.now() < spawnDeadline) await delay(10)
-  assert.ok(shimPids().length > 0, `wedge fixture did not spawn a git child; argv=${existsSync(argvLog) ? readFileSync(argvLog, 'utf8') : '<none>'}`)
+  while (hungHistoryPids().length === 0 && Date.now() < spawnDeadline) await delay(10)
+  assert.ok(hungHistoryPids().length > 0, `wedge fixture did not spawn a hung history child; argv=${existsSync(argvLog) ? readFileSync(argvLog, 'utf8') : '<none>'}`)
   rmSync(trigger, { force: true })
   await assert.rejects(cache.getBoard(), (error: unknown) => /did not settle|aborting|aborted/i.test(String((error as Error)?.message || error)))
   await delay(250)
   assert.equal(shimPids().length, 0, 'watchdog left a git child running')
-  cache.invalidateBoard('full')
+  // No second invalidation: the failed producer itself restores the full scope it consumed.
   const recovered = await cache.getBoard()
   assert.equal(recovered.nodes.length, 1)
   assert.equal((await cache.getBoardJson('fresh')).freshness, 'fresh')
+
+  // No invalidateBoard call: this is the patrol's self-heal case, as if a healthy-looking worktree watcher
+  // silently missed an ordinary spec edit. A fresh reader arriving during validation joins that flight; a
+  // stale-ok reader may return immediately but must say that the refresh is still unresolved.
+  const specPath = join(project, '.spec', 'project', 'spec.md')
+  writeFileSync(specPath, '---\ntitle: Fixture repaired by patrol\nstatus: active\n---\n\nFixture body.\n')
+  const patrolRepair = cache.patrolBoard()
+  const staleDuringValidation = await cache.getBoardJson('stale-ok')
+  const freshDuringValidation = cache.getBoard()
+  assert.equal(staleDuringValidation.freshness, 'stale')
+  assert.equal(staleDuringValidation.refreshing, true)
+  assert.equal(staleDuringValidation.json, JSON.stringify(recovered))
+  const repaired = await patrolRepair
+  assert.equal(await freshDuringValidation, repaired, 'a fresh read must join the patrol validation/producer flight')
+  assert.notEqual(repaired, recovered, 'a changed patrol revision must not reuse the old board object')
+  assert.equal(repaired.nodes[0].title, 'Fixture repaired by patrol')
+
+  // Restoring mtime and size must not defeat the repair fingerprint. ctime is non-user-settable and records
+  // this same-length edit even after utimes puts the visible modification time back.
+  const oldStat = statSync(specPath)
+  const sameLength = readFileSync(specPath, 'utf8').replace('repaired', 'restored')
+  writeFileSync(specPath, sameLength)
+  utimesSync(specPath, oldStat.atime, oldStat.mtime)
+  const restored = await cache.patrolBoard()
+  assert.equal(restored.nodes[0].title, 'Fixture restored by patrol')
 
   await graph.buildBoard()
   const before = git.historyCacheStats()

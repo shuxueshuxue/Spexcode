@@ -8,9 +8,9 @@ import { execFileSync } from 'node:child_process'
 // @@@ boardScope — pins the SPLICE-EQUIVALENCE contract of the scoped board cache ([[graph-cache]]):
 //   1. spliceSessions(prev) is byte-indistinguishable from a fresh buildBoard() when only SESSION state moved
 //      (a lifecycle write) — the sessions slice is re-derived, the node/meta units are reused verbatim.
-//   2. graphCache's scope has a DOMAIN, not just a dirty bit: a 'sessions'-scoped invalidation splices (and so
-//      must NOT pick up a NODE change — the negative control proving the splice skips node work), while a
-//      'full'-scoped one rebuilds; a 'sessions' signal followed by a 'full' one ESCALATES to a full rebuild.
+//   2. graphCache's scope has a DOMAIN, not just a dirty bit: a true session-only invalidation splices, while a
+//      nominal session refresh promotes itself when the cache-owned full revision reveals a missed graph change;
+//      a 'sessions' signal followed by a 'full' one also ESCALATES to a full rebuild.
 //
 // RIG NOTE (why the fixture is built BEFORE the dynamic imports): specs.ts freezes `ROOT = repoRoot()` at
 // MODULE-IMPORT time from process.cwd(), git.ts memoizes repoRoot() on first call, and sessions.ts reads
@@ -87,6 +87,7 @@ if (gitOk) {
   // in every build (no real tmux session of the box can interfere). chdir so repoRoot()/ROOT resolve to `proj`.
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_TMUX = 'boardscope-iso'
+  process.env.SPEXCODE_BOARD_DEBUG = '1'
   delete process.env.SPEXCODE_SESSION_ID
   process.chdir(proj)
 
@@ -142,30 +143,49 @@ test('spliceSessions is byte-identical to a fresh buildBoard when only session s
 
 // ---------------------------------------------------------------------------------------------------------
 // 2. SCOPE ESCALATION (graphCache) — one sequential test so getBoard's module state stays order-deterministic.
-//    A 'sessions' invalidation SPLICES (must NOT see a node change: the negative control); a 'full' one, or a
-//    'sessions' signal ESCALATED by a following 'full', does a full rebuild that DOES see the node change.
+//    A true session-only invalidation SPLICES. A missed graph input promotes that nominal session refresh, while
+//    an explicit 'sessions' signal followed by 'full' also escalates before one producer starts.
 // ---------------------------------------------------------------------------------------------------------
 test('boardCache scope: sessions-scoped splices (skips node work), full-scoped (incl. escalated) rebuilds', { skip: !gitOk && 'git not available' }, async () => {
   cache.invalidateBoard('full')                 // clean full baseline regardless of prior module state
   const b0 = await cache.getBoard()
   assert.equal(b0.nodes.find((n: any) => n.id === 'child')?.title, 'Child Node ORIGINAL')
 
-  // mutate a NODE on disk (working-tree title) — a change only a FULL rebuild can surface (splice reuses nodes).
-  writeSpec('.spec/proj/child', 'Child Node CHANGED')
-
-  // sessions-scoped invalidation → SPLICE path → the node change is NOT picked up (negative control).
+  // A true session-only move takes the splice path and keeps the node/meta anchor byte-for-byte.
+  writeSessionRecord({ status: 'active', note: 'session splice' })
   cache.invalidateBoard('sessions')
   const b1 = await cache.getBoard()
   assert.equal(b1.nodes, b0.nodes, 'splice reuses the cached node objects (same reference)')
-  assert.equal(b1.nodes.find((n: any) => n.id === 'child')?.title, 'Child Node ORIGINAL',
-    'a sessions-scoped read does NOT re-walk nodes — the on-disk node change is invisible')
+  assert.equal(b1.sessions[0].note, 'session splice')
 
-  // ESCALATION: a 'sessions' signal followed by a 'full' one must produce a FULL rebuild (full subsumes splice)
-  // → the node change now surfaces, and fresh node objects are built.
+  // A session watcher can fire alongside a graph-domain event another watcher missed. The cache must compare
+  // the node/meta revision it owns before splicing; otherwise it could bind old nodes to the new full revision
+  // and every later patrol would falsely certify the stale graph forever.
+  writeSpec('.spec/proj/child', 'Child Node CHANGED')
+  writeSessionRecord({ status: 'active', note: 'session event beside missed full change' })
+  cache.invalidateBoard('sessions')
+  const b2 = await cache.getBoard()
+  assert.equal(b2.nodes.find((n: any) => n.id === 'child')?.title, 'Child Node CHANGED',
+    'a moved full revision promotes a nominal session refresh to the full producer')
+  assert.notEqual(b2.nodes, b1.nodes, 'the stale node/meta anchor must not survive the promoted refresh')
+
+  // Explicit escalation still owns one full producer (full subsumes the pending session scope).
   cache.invalidateBoard('sessions')
   cache.invalidateBoard('full')
-  const b2 = await cache.getBoard()
-  assert.notEqual(b2.nodes, b0.nodes, 'a full rebuild produced fresh node objects')
-  assert.equal(b2.nodes.find((n: any) => n.id === 'child')?.title, 'Child Node CHANGED',
-    'a full-scoped (escalated) read re-walks nodes — the on-disk node change is visible')
+  const b3 = await cache.getBoard()
+  assert.notEqual(b3.nodes, b2.nodes, 'an explicitly escalated full rebuild produced fresh node objects')
+
+  // Patrol repairs derive their scope from the changed revision component. A missed record event is
+  // sessions-only: the row advances, while the full node graph stays the exact object returned above.
+  writeSessionRecord({ status: 'active', note: 'patrol session repair' })
+  const b4 = await cache.patrolBoard()
+  assert.equal(b4.nodes, b3.nodes, 'a session-only patrol repair must splice, not promote to full')
+  assert.equal(b4.sessions[0].note, 'patrol session repair')
+
+  // The prompt is a separate store artifact but a first-class board row field. A missed prompt write must move
+  // the sessions revision just like session.json, without paying for a node rebuild.
+  writeFileSync(layout.sessionArtifactPath(SESS_ID, 'prompt'), 'A newly discovered originating prompt.\n')
+  const b5 = await cache.patrolBoard()
+  assert.equal(b5.nodes, b4.nodes, 'a prompt-only repair remains sessions-scoped')
+  assert.equal(b5.sessions[0].prompt, 'A newly discovered originating prompt.\n')
 })

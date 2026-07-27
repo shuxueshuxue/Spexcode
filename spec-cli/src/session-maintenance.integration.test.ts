@@ -307,8 +307,8 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
   }
 })
 
-async function startHttpFixture(mode: 'draining-active' | 'expiry', resultPath: string) {
-  const child = spawn(process.execPath, [httpFixture], { env: { ...process.env, MODE: mode, RESULT_PATH: resultPath }, stdio: ['ignore', 'pipe', 'pipe'] })
+async function startHttpFixture(mode: 'draining-active' | 'expiry' | 'heartbeat-loss' | 'broker-concurrent', resultPath: string, extraEnv: Record<string, string> = {}) {
+  const child = spawn(process.execPath, [httpFixture], { env: { ...process.env, MODE: mode, RESULT_PATH: resultPath, ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe'] })
   const closed = once(child, 'close') as Promise<[number]>
   let stdout = ''; let stderr = ''; let port = 0
   child.stdout.setEncoding('utf8').on('data', (chunk) => {
@@ -344,6 +344,7 @@ ${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session stop ${ID
 ${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session stop ${OTHER} --api ${JSON.stringify(fixture.base)}; echo "wrong_session=$?" >> ${JSON.stringify(codes)}
 ${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session send ${ID} nope --api ${JSON.stringify(fixture.base)}; echo "wrong_op=$?" >> ${JSON.stringify(codes)}
 ${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session resume ${RESUME_FORCE} --api ${JSON.stringify(fixture.base)}; echo "wrong_force=$?" >> ${JSON.stringify(codes)}
+${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session new 'broker-blocked-create' --api ${JSON.stringify(fixture.base)}; echo "create=$?" >> ${JSON.stringify(codes)}
 exit 0
 `)
   chmodSync(script, 0o755)
@@ -400,11 +401,77 @@ exit 0
     heartbeatObserved: true, heartbeatBeforeActive: true, heartbeatBearerExact: true, heartbeatBodyExact: true,
     commandAfterActive: true,
     forwarded: [{ op: 'stop', sessionId: ID, header: TOKEN }],
-    codes: { allowed: '0', wrong_session: '1', wrong_op: '1', wrong_force: '1' },
+    codes: { allowed: '0', wrong_session: '1', wrong_op: '1', wrong_force: '1', create: '1' },
     tokenInOutput: false, tokenInEnv: false, brokerFds: true,
     release: { header: TOKEN, input: { epoch: 7 } },
     expiryStatus: 1, expiryExecuted: false, expiryForwarded: false,
   })
+})
+
+test('active heartbeat loss closes broker admission and terminates the operator command before it can continue', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-heartbeat-loss-a-'))
+  const resultPath = join(dir, 'events.ndjson'); const entered = join(dir, 'entered'); const terminated = join(dir, 'terminated'); const completed = join(dir, 'completed')
+  const fixture = await startHttpFixture('heartbeat-loss', resultPath)
+  const script = join(dir, 'operator.sh')
+  writeFileSync(script, `#!/usr/bin/env bash
+trap 'touch ${JSON.stringify(terminated)}; exit 73' TERM
+touch ${JSON.stringify(entered)}
+sleep 3
+touch ${JSON.stringify(completed)}
+`)
+  chmodSync(script, 0o755)
+  const started = Date.now()
+  const wrapper = spawn(tsx, [cli, 'session', 'maintain', '--allow-stop', ID, '--ttl-ms', '5000', '--wait-ms', '0', '--api', fixture.base, '--', script], {
+    cwd: pkgRoot, env: { ...process.env, SPEXCODE_API_URL: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const result = await collect(wrapper)()
+  const elapsed = Date.now() - started
+  await fixture.stop()
+  const actual = {
+    status: result.code,
+    entered: existsSync(entered),
+    heartbeatFailed: events(resultPath).some((event) => event.step === 'heartbeat'),
+    terminated: existsSync(terminated),
+    completed: existsSync(completed),
+    bounded: elapsed < 2_500,
+  }
+  rmSync(dir, { recursive: true, force: true })
+  assert.deepEqual(actual, { status: 1, entered: true, heartbeatFailed: true, terminated: true, completed: false, bounded: true })
+})
+
+test('concurrent nested stop and resume receive only their own broker responses', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-broker-concurrent-a-'))
+  const resultPath = join(dir, 'events.ndjson'); const release = join(dir, 'release'); const codes = join(dir, 'codes')
+  const fixture = await startHttpFixture('broker-concurrent', resultPath, { BROKER_RELEASE_PATH: release })
+  const script = join(dir, 'operator.sh')
+  writeFileSync(script, `#!/usr/bin/env bash
+set +e
+${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session stop ${ID} --api ${JSON.stringify(fixture.base)} & first=$!
+while ! grep -q '"step":"operation".*"op":"stop"' ${JSON.stringify(resultPath)}; do sleep 0.01; done
+kill -STOP "$first"
+${JSON.stringify(process.execPath)} ${JSON.stringify(spexBin)} session resume ${RESUME_ONE} --api ${JSON.stringify(fixture.base)} & second=$!
+for _ in $(seq 1 300); do grep -q 'pipe_read' "/proc/$second/wchan" 2>/dev/null && break; sleep 0.01; done
+touch ${JSON.stringify(release)}
+wait "$second"; second_rc=$?
+kill -CONT "$first" 2>/dev/null
+wait "$first"; first_rc=$?
+printf 'first=%s\nsecond=%s\n' "$first_rc" "$second_rc" > ${JSON.stringify(codes)}
+exit 0
+`)
+  chmodSync(script, 0o755)
+  const wrapper = spawn(tsx, [cli, 'session', 'maintain', '--allow-stop', ID, '--allow-resume', RESUME_ONE, '--ttl-ms', '5000', '--wait-ms', '0', '--api', fixture.base, '--', script], {
+    cwd: pkgRoot, env: { ...process.env, SPEXCODE_API_URL: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const result = await collect(wrapper)()
+  await fixture.stop()
+  const codeRows = Object.fromEntries(lines(codes).map((line) => line.split('=')))
+  const actual = {
+    wrapper: result.code,
+    codes: codeRows,
+    operations: events(resultPath).filter((event) => event.step === 'operation').map((event) => `${event.op}:${event.sessionId}`),
+  }
+  rmSync(dir, { recursive: true, force: true })
+  assert.deepEqual(actual, { wrapper: 0, codes: { first: '0', second: '0' }, operations: [`stop:${ID}`, `resume:${RESUME_ONE}`] })
 })
 
 test('actual session attach is refused before tmux while active and holds an open ticket for its foreground lifetime', async () => {
@@ -453,6 +520,69 @@ async function freePort(): Promise<number> {
   const address = server.address(); assert.ok(address && typeof address === 'object')
   server.close(); await once(server, 'close'); return address.port
 }
+
+test('active lease authority survives backend child replacement without reopening ordinary writes', { timeout: 60_000 }, async () => {
+  const { processStartToken } = await import('./process-identity.js')
+  const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-hot-reload-a-'))
+  const projectPath = join(dir, 'project'); mkdirSync(projectPath); const project = realpathSync(projectPath)
+  const apiHome = join(dir, 'home'); const portA = await freePort(); const portB = await freePort()
+  const authorityStart = processStartToken(process.pid); assert.ok(authorityStart)
+  mkdirSync(join(project, '.spec'), { recursive: true })
+  cpSync(join(pkgRoot, 'templates', 'spec', 'project'), join(project, '.spec', 'project'), { recursive: true })
+  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude'] }, null, 2))
+  writeFileSync(join(project, 'README.md'), 'fixture\n')
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
+  execFileSync('git', ['-c', 'user.name=maintenance-fixture', '-c', 'user.email=maintenance@example.test', 'add', '.'], { cwd: project })
+  execFileSync('git', ['-c', 'user.name=maintenance-fixture', '-c', 'user.email=maintenance@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
+  const env = {
+    ...process.env,
+    PATH: process.env.PATH?.split(':').filter((part) => part !== transportBin).join(':'),
+    SPEXCODE_HOME: apiHome,
+    SPEXCODE_TMUX: `spex-maintenance-reload-${process.pid}`,
+    SPEXCODE_MAINTENANCE_AUTHORITY_PID: String(process.pid),
+    SPEXCODE_MAINTENANCE_AUTHORITY_START: authorityStart,
+  }
+  const boot = async (port: number) => {
+    const child = spawn(tsx, [apiEntry], { cwd: project, env: { ...env, PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] })
+    const done = collect(child)
+    const base = `http://127.0.0.1:${port}`
+    await waitFor(async () => { try { return (await fetch(`${base}/health`)).ok } catch { return false } }, `backend ${port} health`, 3000)
+    return { child, done, base }
+  }
+  let first: Awaited<ReturnType<typeof boot>> | null = null
+  let second: Awaited<ReturnType<typeof boot>> | null = null
+  try {
+    first = await boot(portA)
+    const acquired = await fetch(`${first.base}/api/session-maintenance/acquire`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ capabilities: [], ttlMs: 30_000, waitMs: 0 }),
+    })
+    const lease = await acquired.json() as any
+    assert.equal(acquired.status, 201)
+    first.child.kill('SIGTERM'); await first.done(); first = null
+    second = await boot(portB)
+    const status = await fetch(`${second.base}/api/session-maintenance`).then((response) => response.json()) as any
+    const heartbeat = await fetch(`${second.base}/api/session-maintenance/heartbeat`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-spexcode-session-maintenance': lease.token },
+      body: JSON.stringify({ epoch: lease.epoch, ttlMs: 30_000 }),
+    })
+    const ordinary = await fetch(`${second.base}/api/sessions`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: 'must stay blocked', parent: null }),
+    })
+    const ordinaryBody = await ordinary.json().catch(() => ({})) as any
+    assert.deepEqual({ state: status.state, epoch: status.epoch, heartbeat: heartbeat.status, ordinary: ordinary.status, code: ordinaryBody.code }, {
+      state: 'active', epoch: lease.epoch, heartbeat: 200, ordinary: 409, code: 'maintenance_active',
+    })
+    const released = await fetch(`${second.base}/api/session-maintenance/release`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-spexcode-session-maintenance': lease.token }, body: JSON.stringify({ epoch: lease.epoch }),
+    })
+    assert.equal(released.status, 200)
+  } finally {
+    if (first) { first.child.kill('SIGTERM'); await first.done() }
+    if (second) { second.child.kill('SIGTERM'); await second.done() }
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
 
 test('real isolated backend admits exact stop plus two resumes under one active capability plan', { timeout: 120_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-backend-a-'))

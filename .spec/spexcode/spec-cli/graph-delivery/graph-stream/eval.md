@@ -94,6 +94,23 @@ scenarios:
       exactly one `stale, refreshing` -> `fresh` cycle and one non-overlapping build. Registration/runtime
       failures are visible with their source path and errno and never leave a half-attached or silently-deaf
       registry.
+  - name: failed-refresh-keeps-trigger-attribution
+    tags: [backend-api]
+    code: spec-cli/src/graphStream.ts
+    related: [spec-cli/src/graphCache.ts, spec-cli/src/graphStream.api.test.ts]
+    description: >-
+      In an isolated real backend, attach a delta subscriber and let it anchor. Make a governed spec/ref
+      change while a controlled git history child is wedged so the board watchdog aborts that refresh; while
+      the failed flight is still occupied, change a session record through the watched store. Release the
+      wedge but issue no second invalidation and make no fresh graph request: wait for the existing cold
+      patrol to recover the cache, then inspect the SSE frame, final graph and debug attribution.
+    expected: >-
+      The failed producer restores its consumed full scope, the session event that arrived during the flight
+      remains owed, and the next patrol completes one fresh graph containing both changes without any manual
+      invalidation. Its trigger ledger retains the full and sessions watcher causes alongside patrol. It must
+      NOT emit PATROL-REPAIR: the patrol recovered work already attributed to healthy leaf signals, so calling
+      that a blind-watcher repair is false. The stream must not swallow the rebuild or any trigger that arrived
+      while the failed flight was occupied.
   - name: adopter-scale-watch-budget
     tags: [backend-api]
     code: spec-cli/src/graphStream.ts

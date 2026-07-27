@@ -499,6 +499,34 @@ const INDEX_ROOT_SLOTS = Math.max(4, Number(process.env.SPEXCODE_INDEX_CACHE_ROO
 
 function rootKey(root: string): string { return resolve(root) }
 
+function gitInterpretationKey(root: string): string {
+  const common = commonDirOf(gitDirOf(root))
+  const shallowPath = join(common, 'shallow')
+  const shallow = existsSync(shallowPath) ? readFileSync(shallowPath, 'utf8') : 'unshallow'
+  const graftsPath = join(common, 'info', 'grafts')
+  const grafts = existsSync(graftsPath) ? readFileSync(graftsPath, 'utf8') : ''
+  const replacements: string[] = []
+  const packedRefs = join(common, 'packed-refs')
+  if (existsSync(packedRefs)) {
+    for (const line of readFileSync(packedRefs, 'utf8').split('\n')) {
+      if (line.includes(' refs/replace/')) replacements.push(line)
+    }
+  }
+  const replaceRoot = join(common, 'refs', 'replace')
+  if (existsSync(replaceRoot)) {
+    const pending = [replaceRoot]
+    while (pending.length) {
+      const dir = pending.pop()!
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name)
+        if (entry.isDirectory()) pending.push(path)
+        else replacements.push(`${path.slice(replaceRoot.length + 1)} ${readFileSync(path, 'utf8').trim()}`)
+      }
+    }
+  }
+  return `${gitObjectFormat(root)}\0${shallow}\0${grafts}\0${replacements.sort().join('\n')}`
+}
+
 // HEAD plus Git's object-interpretation state identifies the immutable index contents; the root owns which
 // view is still useful. Moving a checkout or changing replace/shallow/graft state drops its old history,
 // while equal views across live roots share one promise. The root bound keeps closed worktrees from leaking.
@@ -565,7 +593,7 @@ export function historyIndex(root: string, tip = 'HEAD'): Promise<HistoryIndex> 
   }
   const head = headOrEmpty(root)
   if (!head) return buildIndex(root, 'HEAD')
-  const cacheKey = `${rootKey(root)}\0${head}`
+  const cacheKey = `${rootKey(root)}\0${head}\0${gitInterpretationKey(root)}`
   touchRoot(indexRoots, indexCache, root, cacheKey)
   const hit = indexCache.get(cacheKey)
   if (hit) return hit
@@ -1119,7 +1147,7 @@ export function driftIndex(root: string, tip = 'HEAD'): Promise<DriftIndex> {
   }
   const head = headOrEmpty(root) // filesystem HEAD, no subprocess — see historyIndex
   if (!head) return buildDriftIndex(root, 'HEAD')
-  const cacheKey = `${rootKey(root)}\0${head}`
+  const cacheKey = `${rootKey(root)}\0${head}\0${gitInterpretationKey(root)}`
   touchRoot(driftRoots, driftIdxCache, root, cacheKey)
   const hit = driftIdxCache.get(cacheKey)
   if (hit) return hit

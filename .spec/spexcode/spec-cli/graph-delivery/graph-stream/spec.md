@@ -158,6 +158,12 @@ the stable latest-generation result later replaces it through this same envelope
 events but may publish/build only the newest generation. No summary-specific SSE, WebSocket, endpoint poll, or
 timer exists.
 
+A refresh consumes its trigger set only after it successfully validates or produces a board. Producer,
+watchdog, or validation failure leaves every existing cause owed, including watcher signals that arrived while
+the failed flight was occupied, matching [[graph-cache]]'s restored dirty scope. If a later patrol recovers that
+work, `patrol` is added alongside those retained causes; only a successful changed refresh whose sole cause was
+patrol is a blind-watcher `PATROL-REPAIR`.
+
 **Rebuilds are gated on someone listening.** With no delta subscriber the pipeline never builds — plain
 subscribers get the zero-cost notify, a closed dashboard costs nothing (both pollers stop with their last
 subscriber). With delta subscribers the debounced fire rebuilds ONCE through [[graph-cache]]'s single-flight

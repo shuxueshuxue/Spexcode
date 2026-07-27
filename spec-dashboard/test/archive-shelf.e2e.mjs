@@ -86,7 +86,7 @@ const sharedSocketBefore = socketMarker(process.env.SHARED_SOCKET)
 const siblingBefore = (await get(true)).find((s) => s.id === siblingId)
 assert.ok(siblingBefore, 'real sibling must be present before archive')
 const startMonitor = (verb) => {
-  const child = spawn(process.execPath, [spex, 'session', verb, sessionId, '--interval', '0.2', ...(verb === 'wait' ? ['--timeout', '60'] : []), '--api', base], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(process.execPath, [spex, 'session', verb, sessionId, '--interval', '1', ...(verb === 'wait' ? ['--timeout', '60'] : []), '--api', base], { stdio: ['ignore', 'pipe', 'pipe'] })
   let stdout = ''; let stderr = ''
   child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
   child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })

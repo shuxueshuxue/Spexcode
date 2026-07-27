@@ -1,132 +1,210 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { once } from 'node:events'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH
-  || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
+// This is the product-level archive YATU runner. It intentionally requires a prebuilt dashboard, an isolated
+// backend, and TWO real sibling sessions; a fake HTTP state machine belongs only to watch-cli.api.test.mjs and
+// cannot file an archive reading.
+const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
 const base = process.env.BASE || 'http://127.0.0.1:5175'
 const sessionId = process.env.SESSION
+const siblingId = process.env.SIBLING
+const guardId = process.env.GUARD_SESSION
+const dist = process.env.DIST
 const out = resolve(process.env.OUT || '/tmp/archive-shelf-e2e')
-if (!sessionId) throw new Error('SESSION=<live-session-id> is required')
+const spex = resolve(process.env.SPEX || 'spec-cli/bin/spex.mjs')
+if (!sessionId || !siblingId || !guardId) throw new Error('SESSION=<real Codex target>, SIBLING=<real Codex sibling>, and GUARD_SESSION=<blocked archive leg> are required')
+for (const name of ['SPEXCODE_TMUX', 'TARGET_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE', 'QUEUED_SESSION', 'MAX_ACTIVE']) {
+  if (!process.env[name]) throw new Error(`${name} is required for runtime/resource evidence`)
+}
+if (!dist || !existsSync(dist)) throw new Error('DIST=<prebuilt dashboard dist> is required')
+if (!existsSync(playwrightPath)) throw new Error(`Playwright is missing: ${playwrightPath}`)
 mkdirSync(out, { recursive: true })
 
 const { chromium } = await import(pathToFileURL(playwrightPath).href)
-const getSessions = async () => {
-  const response = await fetch(`${base}/api/sessions`)
-  assert.equal(response.ok, true, `sessions endpoint failed: ${response.status}`)
-  return response.json()
+const get = async (path) => {
+  const response = await fetch(`${base}${path}`)
+  const text = await response.text()
+  let body = null; try { body = JSON.parse(text) } catch { /* text endpoint */ }
+  assert.equal(response.ok, true, `${path} failed: ${response.status} ${text}`)
+  return body
 }
-const setArchived = async (on) => {
-  const response = await fetch(`${base}/api/sessions/${sessionId}/archive`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ on }),
-  })
-  assert.equal(response.ok, true, `archive cleanup failed: ${response.status}`)
+const hashBytes = (bytes) => createHash('sha256').update(bytes).digest('hex')
+const beforeIndex = readFileSync(join(dist, 'index.html'))
+const servedIndex = Buffer.from(await (await fetch(`${base}/`)).arrayBuffer())
+assert.equal(hashBytes(servedIndex), hashBytes(beforeIndex), 'BASE must serve the exact prebuilt DIST index')
+const post = async (path, body = {}) => {
+  const response = await fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  const text = await response.text(); let json = null; try { json = JSON.parse(text) } catch { /* */ }
+  assert.equal(response.ok, true, `${path} failed: ${response.status} ${text}`)
+  return json
 }
-const waitForArchived = async (expected) => {
-  const deadline = Date.now() + 15_000
-  while (Date.now() < deadline) {
-    const session = (await getSessions()).find((candidate) => candidate.id === sessionId)
-    if (session?.archived === expected) return session
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 200))
-  }
-  throw new Error(`session archived state did not become ${expected}`)
+const waitFor = async (read, accept, label, timeout = 30_000) => {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) { const value = await read(); if (accept(value)) return value; await new Promise((r) => setTimeout(r, 250)) }
+  throw new Error(`timed out waiting for ${label}`)
 }
+const procToken = (pid) => { try { return readFileSync(`/proc/${pid}/stat`, 'utf8').toString().trim().split(' ')[21] || null } catch { return null } }
+const processMarker = (pidFile) => {
+  if (!pidFile || !existsSync(pidFile)) return null
+  const pid = Number(readFileSync(pidFile, 'utf8').trim()); const start = procToken(pid)
+  return pid > 0 && start ? `${pid}@${start}` : null
+}
+const socketMarker = (socketPath) => { try { const s = statSync(socketPath); return `${s.dev}:${s.ino}` } catch { return null } }
+const tmuxPresent = (socket, id) => {
+  if (!socket) return null
+  try { execFileSync('tmux', ['-L', socket, 'has-session', '-t', id], { stdio: 'ignore' }); return true } catch { return false }
+}
+const getTarget = async (all = true) => (await get(all ? '/api/sessions?all=1' : '/api/sessions')).find((s) => s.id === sessionId)
+const events = []
+const started = Date.now()
+const narrate = (label) => events.push({ atMs: Date.now() - started, kind: 'narrate', label })
+const frame = (label) => events.push({ atMs: Date.now() - started, kind: 'frame', label })
 
-const initialSessions = await getSessions()
-const initial = initialSessions.find((candidate) => candidate.id === sessionId)
-assert.ok(initial, `unknown session: ${sessionId}`)
-assert.equal(initial.archived, false, 'the scenario target must begin in the working list')
-assert.notEqual(initial.liveness, 'offline', 'the Command Box requires a live session')
+const before = await getTarget(false)
+const beforeAll = await getTarget(true)
+assert.ok(before && beforeAll, 'target must be a real existing session')
+assert.equal(before.archived, false, 'target must begin unarchived')
+assert.equal(beforeAll.harness, 'codex', 'archive YATU requires a real Codex target')
+const queuedBefore = (await get(true)).find((s) => s.id === process.env.QUEUED_SESSION)
+assert.equal(queuedBefore?.status, 'queued', 'MAX_ACTIVE control requires a real queued session before archive')
+const beforeResources = await get('/api/resources')
+const dirtyHashBefore = hashBytes(readFileSync(process.env.DIRTY_SENTINEL))
+const recordBeforeBytes = JSON.parse(readFileSync(process.env.RECORD_FILE, 'utf8'))
+const recordIdentityBefore = hashBytes(JSON.stringify({ worktree_path: recordBeforeBytes.worktree_path, branch: recordBeforeBytes.branch, harness_session_id: recordBeforeBytes.harness_session_id }))
+const targetBeforeRef = (beforeResources.owners || []).flatMap((owner) => owner.references || []).find((ref) => ref.sessionId === sessionId && ref.threadId)
+assert.ok(targetBeforeRef, 'resources must expose the exact target Codex thread reference before archive')
+const beforeThread = targetBeforeRef.threadId
+const siblingBeforeRef = (beforeResources.owners || []).flatMap((owner) => owner.references || []).find((ref) => ref.sessionId === siblingId && ref.threadId)
+assert.ok(siblingBeforeRef, 'resources must expose the exact sibling Codex thread reference before archive')
+const sharedPidBefore = processMarker(process.env.SHARED_PID_FILE)
+const sharedSocketBefore = socketMarker(process.env.SHARED_SOCKET)
+const siblingBefore = (await get(true)).find((s) => s.id === siblingId)
+assert.ok(siblingBefore, 'real sibling must be present before archive')
+const startMonitor = (verb) => {
+  const child = spawn(process.execPath, [spex, 'session', verb, sessionId, '--interval', '0.2', ...(verb === 'wait' ? ['--timeout', '60'] : []), '--api', base], { stdio: ['ignore', 'pipe', 'pipe'] })
+  let stdout = ''; let stderr = ''
+  child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
+  child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+  return { child, text: () => ({ stdout, stderr }) }
+}
+const waitClosed = async (child) => { if (child.exitCode == null) await once(child, 'close') }
+const watch = startMonitor('watch')
+const wait = startMonitor('wait')
+await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
 
 const browser = await chromium.launch({ executablePath: chromiumPath, headless: true })
-const context = await browser.newContext({
-  viewport: { width: 1280, height: 800 },
-  recordVideo: { dir: out, size: { width: 1280, height: 800 } },
-})
+const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, recordVideo: { dir: out, size: { width: 1280, height: 800 } } })
 const page = await context.newPage()
-const started = Date.now()
-const events = []
-const narrate = (label) => events.push({ atMs: Date.now() - started, kind: 'narrate', label: `▶ shelve-and-restore-round-trip · ${label}` })
-const frame = (label) => events.push({ atMs: Date.now() - started, kind: 'frame', label: `📷 ${label}` })
-const shelf = page.locator('.si-pill.shelf')
-const row = page.locator(`.si-item[data-sid="${sessionId}"]`)
-const assertIconOnlyShelf = async () => {
-  assert.equal(await shelf.locator('.si-pill-count').count(), 0)
-  assert.equal((await shelf.textContent())?.trim(), '')
-  assert.equal(await shelf.locator('.si-pill-glyph svg').count(), 1)
-}
-
+const pageErrors = []; const consoleErrors = []
+page.on('pageerror', (error) => pageErrors.push(String(error)))
+page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()) })
 let failure
 try {
-  narrate('archive star stays icon-only through a real archive and restore round trip')
+  const guardBefore = await get(true)
+  await page.goto(`${base}/#/sessions/${guardId}`, { waitUntil: 'domcontentloaded' })
+  const guardRow = page.locator(`.si-item[data-sid="${guardId}"]`)
+  await guardRow.waitFor({ state: 'visible', timeout: 30_000 })
+  await guardRow.click({ button: 'right' })
+  const guardArchive = page.locator('.sess-menu-item').filter({ hasText: /archive/i }).first()
+  await guardArchive.waitFor({ state: 'visible' }); await guardArchive.click()
+  const guardError = page.locator('[role="alert"].si-offline-err').first()
+  await guardError.waitFor({ state: 'visible', timeout: 10_000 })
+  assert.match((await guardError.textContent()) || '', /refus|ownership|unowned|turn|probe/i)
+  const guardAfter = (await get(true)).find((s) => s.id === guardId)
+  const guardRowBefore = guardBefore.find((s) => s.id === guardId)
+  assert.deepEqual({ archived: guardAfter?.archived, status: guardAfter?.status, liveness: guardAfter?.liveness }, { archived: guardRowBefore?.archived, status: guardRowBefore?.status, liveness: guardRowBefore?.liveness }, 'guard refusal must not mutate the guarded record projection')
+
+  narrate('archive exact Codex target through the real browser surface')
   await page.goto(`${base}/#/sessions/${sessionId}`, { waitUntil: 'domcontentloaded' })
+  const row = page.locator(`.si-item[data-sid="${sessionId}"]`)
   await row.waitFor({ state: 'visible', timeout: 30_000 })
-  await shelf.waitFor({ state: 'visible' })
-  assert.equal(await page.locator('.si-toprow > .si-pill').count(), 3)
-  const pillWidths = await page.locator('.si-toprow > .si-pill').evaluateAll((pills) => pills.map((pill) => pill.getBoundingClientRect().width))
-  assert.ok(Math.max(...pillWidths) - Math.min(...pillWidths) <= 1, `top pills are not equal: ${pillWidths.join(', ')}`)
-  await assertIconOnlyShelf()
-  frame('existing archive content does not add a number to the star')
-
   await page.keyboard.press('Alt+i')
-  const commandInput = page.locator('.si-command-input')
-  await commandInput.waitFor({ state: 'visible' })
-  await commandInput.fill('/archive')
+  const command = page.locator('.si-command-input')
+  await command.waitFor({ state: 'visible' }); await command.fill('/archive')
   const archiveCommand = page.locator('.mention-menu.up .mention-item').filter({ hasText: '/archive' }).first()
-  await archiveCommand.waitFor({ state: 'visible' })
-  const archivedResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return url.pathname === `/api/sessions/${sessionId}/archive` && response.request().method() === 'POST'
-  })
-  await archiveCommand.click()
-  assert.equal((await archivedResponse).ok(), true)
-  await waitForArchived(true)
-  assert.ok((await getSessions()).some((candidate) => candidate.archived), 'archive must contain at least the target session')
-  await row.waitFor({ state: 'detached' })
-  await assertIconOnlyShelf()
-  frame('archiving adds a row to the shelf but no numeric badge')
+  await archiveCommand.waitFor({ state: 'visible' }); await archiveCommand.click()
+  await waitFor(() => getTarget(true), (s) => s?.archived === true && s?.status === 'offline' && s?.liveness === 'offline', 'cold archived history row')
+  await waitFor(() => get(true), (rows) => rows.find((s) => s.id === process.env.QUEUED_SESSION)?.status !== 'queued', `queued session starts after maxActive=${process.env.MAX_ACTIVE} slot release`)
+  await waitClosed(wait.child)
+  const waitTranscript = wait.text()
+  assert.match(waitTranscript.stdout, /offline/, `wait missed offline archive: ${JSON.stringify(waitTranscript)}`)
+  assert.doesNotMatch(waitTranscript.stdout + waitTranscript.stderr, /gone|no such \(living\)/i)
+  const defaultRows = await get(false)
+  assert.equal(defaultRows.some((s) => s.id === sessionId), false, 'cold target must leave default sessions')
+  const graph = await get('/api/graph')
+  assert.ok(Array.isArray(graph.sessions), 'graph must expose structured sessions')
+  assert.equal(graph.sessions.some((s) => s.id === sessionId), false, 'cold target must leave default graph sessions')
+  assert.equal(graph.sessions.some((s) => (s.children || []).some((c) => c.id === sessionId)), false, 'cold target must leave graph subtrees/counts')
+  const resources = await get('/api/resources')
+  assert.equal((resources.owners || []).some((owner) => owner.kind === 'session' && owner.id === sessionId), false, 'cold target must leave active resource owners')
+  assert.equal((resources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.sessionId === sessionId || ref.threadId === beforeThread), false, 'cold target thread ref must leave resources')
+  const siblingRefAfterArchive = (resources.owners || []).flatMap((owner) => owner.references || []).find((ref) => ref.sessionId === siblingId && ref.threadId)
+  assert.ok(siblingRefAfterArchive && siblingRefAfterArchive.threadId === siblingBeforeRef.threadId, 'pre-existing sibling thread ref must remain loaded')
+  assert.equal(tmuxPresent(process.env.SPEXCODE_TMUX, sessionId), false, 'target tmux must be gone')
+  assert.equal(processMarker(process.env.TARGET_PID_FILE), null, 'target leaf PID must be gone')
+  assert.equal(processMarker(process.env.SHARED_PID_FILE), sharedPidBefore, 'shared app-server PID/start must be unchanged')
+  assert.equal(socketMarker(process.env.SHARED_SOCKET), sharedSocketBefore, 'shared app-server socket identity must be unchanged')
+  assert.equal((resources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.threadId === beforeThread), false, 'target thread is not still loaded after archive')
+  const shelf = page.locator('.si-pill.shelf'); await shelf.click(); await page.waitForFunction(() => document.querySelector('.si-pill.shelf')?.getAttribute('aria-pressed') === 'true')
+  assert.equal(await page.locator('.si-zone').count(), 0, 'archive shelf must be flat with no status zones')
+  frame('flat offline shelf; default graph/resources omit target; target runtime gone and shared sibling retained')
 
-  await shelf.click()
-  await page.waitForFunction(() => document.querySelector('.si-pill.shelf')?.getAttribute('aria-pressed') === 'true')
-  await row.waitFor({ state: 'visible' })
-  await row.click()
-  await page.locator('.si-shelf-card').waitFor({ state: 'visible' })
-  await assertIconOnlyShelf()
-  frame('archive door reveals the shelved row and restore card')
+  const nonce = `sibling-archive-proof-${Date.now()}`
+  const derived = hashBytes(nonce)
+  const siblingStates = []
+  const siblingTrace = waitFor(async () => {
+    const report = await get('/api/resources')
+    const ref = (report.owners || []).flatMap((owner) => owner.references || []).find((item) => item.sessionId === siblingId)
+    if (ref) siblingStates.push(ref.turnPresence)
+    return ref
+  }, (ref) => siblingStates.includes('active') && ref?.turnPresence === 'idle', 'sibling active -> terminal while target is cold')
+  await post(`/api/sessions/${siblingId}/input`, { kind: 'text', text: `Compute the SHA-256 of this nonce and reply with only the lowercase digest: ${nonce}` })
+  await siblingTrace
+  await waitFor(async () => await (await fetch(`${base}/api/sessions/${siblingId}/capture`)).text(), (body) => body.split('\n').some((line) => line.trim() === derived), 'sibling final derived token while target is cold')
 
-  const restoredResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return url.pathname === `/api/sessions/${sessionId}/archive` && response.request().method() === 'POST'
-  })
-  await page.locator('.si-shelf-card .si-act.go').click()
-  assert.equal((await restoredResponse).ok(), true)
-  const restored = await waitForArchived(false)
-  await page.waitForFunction(() => document.querySelector('.si-pill.shelf')?.getAttribute('aria-pressed') === 'false')
-  await row.waitFor({ state: 'visible' })
-  await assertIconOnlyShelf()
-  assert.equal(restored.lifecycle, initial.lifecycle)
-  assert.equal(restored.liveness, initial.liveness)
-  assert.equal(restored.path, initial.path)
-  assert.equal(restored.branch, initial.branch)
-  frame('restore returns the unchanged live session to the working list')
+  narrate('resume same conversation through starting to online')
+  await page.locator(`.si-item[data-sid="${sessionId}"]`).click()
+  const stateTrace = []
+  const tracePromise = waitFor(async () => { const s = await getTarget(true); if (s) stateTrace.push(s.status); return s }, (s) => s?.archived === false && s?.liveness === 'online' && stateTrace.includes('starting'), 'resume starting -> online')
+  const resumeResponse = page.waitForResponse((r) => new URL(r.url()).pathname === `/api/sessions/${sessionId}/resume` && r.request().method() === 'POST')
+  await page.locator('.si-shelf-card .si-act.go').click(); assert.equal((await resumeResponse).ok(), true)
+  const resumed = await tracePromise
+  assert.ok(stateTrace.includes('starting'), `resume state trace lacked starting: ${stateTrace.join(' -> ')}`)
+  const resumedResources = await get('/api/resources')
+  const resumedRef = (resumedResources.owners || []).flatMap((owner) => owner.references || []).find((ref) => ref.sessionId === sessionId && ref.threadId)
+  assert.equal(resumedRef?.threadId, beforeThread, 'resume returns the same Codex conversation')
+  assert.deepEqual({ path: resumed.path, branch: resumed.branch }, { path: beforeAll.path, branch: beforeAll.branch }, 'worktree/branch identity survives')
+  assert.equal(hashBytes(readFileSync(process.env.DIRTY_SENTINEL)), dirtyHashBefore, 'dirty sentinel bytes survive archive/resume')
+  const recordAfterBytes = JSON.parse(readFileSync(process.env.RECORD_FILE, 'utf8'))
+  assert.equal(hashBytes(JSON.stringify({ worktree_path: recordAfterBytes.worktree_path, branch: recordAfterBytes.branch, harness_session_id: recordAfterBytes.harness_session_id })), recordIdentityBefore, 'record worktree/branch/conversation identity survives')
+  frame('resume returns the same thread through starting to online')
 
-  await page.screenshot({ path: join(out, 'restored-icon-only.png'), fullPage: true })
-} catch (error) {
-  failure = error
-} finally {
-  const current = (await getSessions()).find((candidate) => candidate.id === sessionId)
-  if (current?.archived) await setArchived(false)
+  await post(`/api/sessions/${sessionId}/close`)
+  await waitFor(() => get(true), (rows) => !rows.some((s) => s.id === sessionId), 'true close removal')
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 500))
+  watch.child.kill('SIGTERM'); await waitClosed(watch.child)
+  const watchTranscript = watch.text()
+  assert.equal((watchTranscript.stdout.match(/\[spex\] closed/g) ?? []).length, 1, watchTranscript.stdout)
+  writeFileSync(join(out, 'watch.log'), watchTranscript.stdout + watchTranscript.stderr)
+  writeFileSync(join(out, 'wait.log'), waitTranscript.stdout + waitTranscript.stderr)
+  frame('only true close removes the record')
+} catch (error) { failure = error }
+finally {
+  if (watch.child.exitCode == null) watch.child.kill('SIGTERM')
+  if (wait.child.exitCode == null) wait.child.kill('SIGTERM')
+  const current = await getTarget(true).catch(() => null)
+  if (current?.archived) await post(`/api/sessions/${sessionId}/resume`).catch(() => {})
 }
-
-const video = page.video()
-await context.close()
-const videoPath = await video.path()
-await browser.close()
+const video = page.video(); await context.close(); const videoPath = await video.path(); await browser.close()
+assert.deepEqual(pageErrors, [], `browser page errors: ${pageErrors.join('\n')}`)
+assert.deepEqual(consoleErrors, [], `browser console errors: ${consoleErrors.join('\n')}`)
 writeFileSync(join(out, 'archive-shelf.timeline.json'), `${JSON.stringify({ events }, null, 2)}\n`)
-writeFileSync(join(out, 'result.json'), `${JSON.stringify({ ok: !failure, sessionId, video: videoPath }, null, 2)}\n`)
+writeFileSync(join(out, 'result.json'), `${JSON.stringify({ ok: !failure, sessionId, siblingId, video: videoPath }, null, 2)}\n`)
 if (failure) throw failure
 console.log(JSON.stringify({ ok: true, video: videoPath, timeline: join(out, 'archive-shelf.timeline.json') }))

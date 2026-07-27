@@ -1,7 +1,7 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { alive } from './sessions.js'
+import { alive, withSessionInputLock } from './sessions.js'
 
 const pexec = promisify(execFile)
 const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
@@ -362,8 +362,10 @@ const MAX_INPUT_BYTES = 64 * 1024
 export function forwardInput(id: string, viewer: Viewer, data: string): boolean {
   const subscription = currentSubscription(id, viewer)
   if (!subscription?.visible || !subscription.bridge || !data || Buffer.byteLength(data, 'utf8') > MAX_INPUT_BYTES) return false
-  sendControl(subscription.bridge, { t: 'input', data })
-  return true
+  return withSessionInputLock(id, () => {
+    sendControl(subscription.bridge!, { t: 'input', data })
+    return true
+  }) ?? false
 }
 
 async function restoreBridge(id: string, viewer: Viewer, subscription: Subscription): Promise<void> {

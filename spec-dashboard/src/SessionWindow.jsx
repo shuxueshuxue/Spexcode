@@ -91,6 +91,7 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
         {ops && <span className="sess-ops">{ops}</span>}
       </span>
       <span className="sess-id" data-tip={headline}>{headline}</span>
+      {s.archiveHazard && <span className="sess-hazard" data-tip={s.archiveHazard} aria-label={s.archiveHazard}><Icon name="issue-opened" size={13} /></span>}
       {locked && <span className="sess-lock" data-tip={t('sessionWindow.lockedTitle')}><LockGlyph /></span>}
     </>
   )

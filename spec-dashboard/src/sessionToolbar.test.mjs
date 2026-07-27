@@ -67,7 +67,7 @@ test('session eval glance reuses the graph summary projection and review-state v
 })
 
 test('command availability, icons, toolbar tools, and typed twins remain one registry result', () => {
-  const runners = Object.fromEntries(['command', 'eval', 'merge', 'relaunch', 'stop', 'archive', 'unarchive', 'close'].map((name) => [name, () => name]))
+  const runners = Object.fromEntries(['command', 'eval', 'merge', 'relaunch', 'stop', 'archive', 'close'].map((name) => [name, () => name]))
   const names = (status, liveness, archived) => uiCommandsFor(status, runners, liveness, archived).map((command) => command.name)
   const typed = (status, liveness, archived) => uiCommandsFor(status, runners, liveness, archived).filter((command) => command.typed !== false).map((command) => command.name)
   const tools = (status, liveness) => uiCommandsFor(status, runners, liveness).filter((command) => command.button).map(({ name, icon }) => [name, icon])
@@ -75,25 +75,24 @@ test('command availability, icons, toolbar tools, and typed twins remain one reg
   assert.deepEqual(names('working', 'online'), ['command', 'eval', 'stop', 'archive', 'close'])
   assert.deepEqual(names('review', 'online'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
   assert.deepEqual(names('done', 'online'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
-  assert.deepEqual(names('queued', 'offline'), ['eval', 'archive', 'close'])
+  assert.deepEqual(names('queued', 'offline'), ['eval', 'close'])
   assert.deepEqual(names('asking', 'offline'), ['eval', 'relaunch', 'archive', 'close'])
   assert.deepEqual(names('review', 'offline'), ['eval', 'relaunch', 'archive', 'close'])
   assert.deepEqual(typed('asking', 'offline'), ['eval', 'archive', 'close'])
   assert.deepEqual(tools('review', 'online'), [['command', 'command'], ['merge', 'git-merge']])
   assert.deepEqual(tools('asking', 'offline'), [['relaunch', 'rotate-ccw']])
-  // shelving ([[archive]]) is the THIRD orthogonal axis: exactly one of archive/unarchive is ever offered, and
-  // which one depends on `archived` ALONE — never on lifecycle or liveness. A running session can be shelved
-  // and a dead one restored, so neither verb may quietly acquire a liveness precondition.
-  assert.deepEqual(names('working', 'online', true), ['command', 'eval', 'stop', 'unarchive', 'close'])
-  assert.deepEqual(names('asking', 'offline', true), ['eval', 'relaunch', 'unarchive', 'close'])
-  for (const [st, lv] of [['working', 'online'], ['asking', 'offline'], ['queued', 'offline'], ['review', 'online']]) {
+  // A cold archive is always offline and exposes no running-session actions, even if a stale/illegal payload
+  // claims working/online. Recovery is the only archived command.
+  assert.deepEqual(names('working', 'online', true), [])
+  assert.deepEqual(names('asking', 'offline', true), [])
+  for (const [st, lv] of [['working', 'online'], ['asking', 'offline'], ['queued', 'offline'], ['retired', 'offline'], ['corrupt', 'unknown'], ['review', 'online']]) {
     for (const archived of [false, true]) {
       const offered = names(st, lv, archived).filter((n) => n === 'archive' || n === 'unarchive')
-      assert.deepEqual(offered, [archived ? 'unarchive' : 'archive'], `${st}/${lv}/archived=${archived}`)
+    assert.deepEqual(offered, archived ? [] : (['queued', 'retired', 'corrupt'].includes(st) ? [] : ['archive']), `${st}/${lv}/archived=${archived}`)
     }
   }
   // neither shelving verb gets a toolbar twin — filing is deliberate, never one pixel from the terminal
-  assert.deepEqual(UI_COMMANDS.filter((c) => c.name === 'archive' || c.name === 'unarchive').map((c) => c.button), [false, false])
+  assert.deepEqual(UI_COMMANDS.filter((c) => c.name === 'archive').map((c) => c.button), [false])
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').anchor, 'right')
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').typed, false)
   assert.match(source, /uiCommandsFor\(selSession\?\.status, runners, selSession\?\.liveness, selSession\?\.archived\)/)

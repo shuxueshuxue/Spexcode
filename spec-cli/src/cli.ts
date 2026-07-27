@@ -665,12 +665,11 @@ if (cmd === 'serve') {
     // incl. a remote machine); selectSessions/formatTable are pure presentation, applied client-side.
     const { selectSessions, formatTable } = await import('./sessions.js')
     const { clientListSessions } = await import('./client.js')
-    // shelved sessions ([[archive]]) are OUT of the default table — that is the whole point of shelving — but
-    // the backend still enumerated them, so `--all` shows them without a second query. Naming a shelved session
-    // explicitly also wins: an explicit selector is the human already saying which row they mean.
+    // The backend's default projection excludes cold archives. --all and an explicit selector request the
+    // history projection so an operator can still inspect or unarchive one deliberately.
     const selectors = positionals(4)
-    const all = await clientListSessions()
-    const visible = has('all') || selectors.length ? all : all.filter((s) => !s.archived)
+    const all = await clientListSessions(has('all') || selectors.length > 0)
+    const visible = all
     const picked = selectSessions(visible, selectors, flag('status')?.split(','))
     console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked))
   } else if (sub === 'resources') {
@@ -684,8 +683,15 @@ if (cmd === 'serve') {
     const { clientListSessions } = await import('./client.js')
     const selectors = positionals(4)
     const intervalMs = (Number(flag('interval')) || 5) * 1000
+    // Broad watch keeps the default active-only event population, so the archive shelf is not replayed into
+    // ordinary monitoring. Presence is a separate all-record read: hiding a cold row must not turn it into
+    // "gone"/closed. An explicit selector opts into the history population so its archive/offline transition
+    // remains observable.
+    const history = () => clientListSessions(true)
+    const events = selectors.length ? history : () => clientListSessions(false)
     await withWatchEdge(selectors, intervalMs, () => watchSessions((line) => console.log(line), {
-      source: clientListSessions,   // poll the backend, so watch streams the (possibly remote) backend's board
+      source: events,
+      presenceSource: history,
       selectors,
       statuses: flag('status')?.split(','),
       includeIdle: has('idle'),
@@ -705,8 +711,12 @@ if (cmd === 'serve') {
     if (own) console.error(`spex session wait: heads-up (managed agent ${own.slice(0, 8)}) — this command BLOCKS until it OBSERVES ${id} transition from non-actionable into an actionable status (edge-triggered: an already-actionable current state does NOT return it — to just read the state now, use \`spex session ls\`/\`review\`); run it in the BACKGROUND or it freezes your whole turn (its exit is your wake-up). Proceeding.`)
     const intervalMs = (Number(flag('interval')) || 2) * 1000
     const timeoutSec = Number(flag('timeout')) || 1200
+    // `wait` addresses one explicit record. Read its history row for both events and presence so archive is an
+    // offline transition, not a vanished session; only a missing all-record row is a genuine gone/closed result.
+    const history = () => clientListSessions(true)
     const r = await withWatchEdge([id], intervalMs, () => watchSessions(() => {}, {
-      source: clientListSessions,
+      source: history,
+      presenceSource: history,
       selectors: [id],
       includeIdle: has('idle'),
       intervalMs,
@@ -823,14 +833,17 @@ if (cmd === 'serve') {
       console.log(r.ok ? `interrupted ${full}` : `interrupt failed: ${r.error}`)
       process.exit(r.ok ? 0 : 1)
     } else if (sub === 'archive' || sub === 'unarchive') {
-      // ARCHIVING ([[archive]]) — the attention verb: it writes one record field and stops nothing.
+      // ARCHIVING/legacy unarchive ([[archive]]) — archive exact-stops before filing; unarchive signposts to
+      // resume and recreates the same conversation.
       const on = sub === 'archive'
       const full = await resolveSelectorOrExit(id)
       const ok = await c.clientArchive(full, on)
-      console.log(!ok ? `no such session ${full}` : `${on ? 'archived' : 'unarchived'} ${full}`)
+      console.log(!ok ? `no such session ${full}` : `${on ? 'archived' : 'resumed'} ${full}`)
     } else if (sub === 'close') {
       const full = await resolveSelectorOrExit(id)
-      console.log(await c.clientClose(full) ? `closed ${full}` : `no such session ${full}`)
+      const closed = await c.clientClose(full)
+      if (!closed) { console.error(`spex session close: no such session ${full} (record remains; no close was committed)`); process.exit(1) }
+      console.log(`closed ${full}`)
     } else if (sub === 'send') {
       const full = await resolveSelectorOrExit(id)
       if (has('keys')) {

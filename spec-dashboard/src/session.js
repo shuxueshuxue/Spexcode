@@ -38,10 +38,8 @@ export const sessionZone = (s) => {
   return NEED_STATUS.has(s?.status) ? 'need' : 'run'
 }
 export const ZONE_ORDER = ['need', 'run', 'offline']
-// @@@ archive is a PARTITION, never a fourth zone ([[archive]]). A shelved session still HAS a zone — it can
-// be needing you, running, or offline — the human has merely filed it out of view, so folding it into the zone
-// vocabulary would destroy the very information you want back when you unshelve. Every list surface therefore
-// splits FIRST and zones each side independently, and `archived` rows never leak into the main forest.
+// @@@ archive is a separate flat cold collection, never a fourth working zone ([[archive]]). Every list surface
+// splits the default working population from true archived/offline rows before applying any status/nesting fold.
 export const isArchived = (s) => !!s?.archived
 export const splitArchived = (sessions = []) => ({
   live: sessions.filter((s) => !isArchived(s)),
@@ -62,7 +60,7 @@ export const sessionPresent = (sessions, id) => {
   const s = id ? (sessions || []).find((x) => x.id === id) : null
   return s || null
 }
-// zone-partition the list: needs-you first, self-running next, offline (dormant) at the bottom; and WITHIN
+// order the working list by its active lifecycle zones; the archive shelf is a separate flat cold collection.
 // each zone the NEWEST session on top (descending effective time) — the fresh, recently-touched work you
 // actually reach for, not the oldest.
 const effOf = (s) => (s?.sortKey != null ? s.sortKey : (s?.created ?? 0))
@@ -218,8 +216,7 @@ export function sessionForest(sessions, isExpanded, { zoneFolded = () => false, 
   return items
 }
 
-// The natural all-rows order behind every session list: same zones, newest-first roots, and recursive
-// parent-before-child disclosure as sessionForest. Consumers without local fold state (notably an empty
-// jump palette) inherit the dashboard's presentation order instead of restating its sorting rules.
+// The natural working-list order behind session lists: zones, newest-first roots, and recursive parent-before-
+// child disclosure as sessionForest. The archive shelf deliberately bypasses this and remains flat.
 export const sessionPresentationOrder = (sessions) =>
   sessionForest(sessions, () => true).filter((item) => item.type === 'row').map((item) => item.s)

@@ -65,8 +65,11 @@ test('production seed carries the high-risk measurement and Codex multi-file inv
   const projection = buildProjection()
   const text = (path) => projection.get(path)?.content.toString('utf8') ?? ''
 
-  assert.ok(text('core/spec.md').includes('DYNAMIC scenario'))
-  assert.ok(text('core/spec.md').includes('`codeSha` anchors to HEAD'))
+  const core = text('core/spec.md')
+  assert.ok(core.split(/\s+/).filter(Boolean).length <= 240, 'the always-on contract stays a compact invariant set')
+  assert.match(core, /`spex help` is the authoritative command map/i)
+  assert.match(core, /spex spec lint.*blocking correctness gate/i)
+  assert.match(core, /reading's `codeSha` must name that commit/i)
   assert.ok(text('prompts/reproduce-before-fix/spec.md').includes('fix, verify, commit, then file (pass)'))
   assert.ok(text('prompts/reproduce-before-fix/spec.md').includes('`codeSha` names the very commit you measured'))
   assert.ok(text('core/spec-first/spec-first.sh').includes('while IFS= read -r candidate'))

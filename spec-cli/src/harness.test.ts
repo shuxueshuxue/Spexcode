@@ -222,6 +222,55 @@ test('Codex cold retirement proves only target collections and never thread/read
   }
 })
 
+test('Codex archive uses the fresh inProgress turn, not stale thread status, as its mutation guard', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-archive-turn-race-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const target = 'archive-turn-race-target'
+  let targetTurn = 'inProgress'
+  let archived = false
+  const mutations: string[] = []
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: archived ? [{ id: 'unrelated-loaded-sibling' }] : [{ id: target }, { id: 'unrelated-loaded-sibling' }], nextCursor: null }
+    if (message.method === 'thread/read') return message.params.threadId === target
+      ? { thread: { status: { type: 'active' }, turns: [{ id: 'target-turn', status: targetTurn }] } }
+      : { thread: { status: { type: 'idle' }, turns: [] } }
+    if (message.method === 'thread/archive') { archived = true; mutations.push('archive'); return {} }
+    if (message.method === 'thread/unarchive') { archived = false; mutations.push('unarchive'); return {} }
+    if (message.method === 'thread/list') {
+      if (message.params.ancestorThreadId) return { data: [], nextCursor: null }
+      return { data: message.params.archived === archived ? [{ id: target }] : [], nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const root = runtimeRoot()
+  const socket = codexAppServerSock(root)
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    writeFileSync(codexAppServerPid(root), `${process.pid}\n`)
+    writeFileSync(codexAppServerIsolation(root), `fixture ${process.pid}\n`)
+
+    const active = await codexHarness.coldRuntime?.({ session: 'archive-turn-race-session', harnessSessionId: target })
+    assert.equal(active?.ok, false)
+    if (active && !active.ok) assert.match(active.reason, /has an active turn/)
+    assert.deepEqual(mutations, [], 'a fresh inProgress target turn refuses before the archive mutation')
+
+    targetTurn = 'completed'
+    assert.deepEqual(await codexHarness.coldRuntime?.({ session: 'archive-turn-race-session', harnessSessionId: target }), { ok: true })
+    assert.deepEqual(mutations, ['archive'], 'a complete idle turn census archives even while top-level thread status remains active')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('Codex archive re-censuses native descendants after mutation and compensates a late child', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR

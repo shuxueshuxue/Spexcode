@@ -47,6 +47,9 @@ ownership or the stop proof is unprovable, archive fails loudly and leaves the r
 Native thread ownership is unique whether the target is currently loaded or not. For adapters whose archive RPC
 can race native child creation, the target descendant census runs again after the mutation and before success;
 a descendant appearing in that interval refuses and compensates instead of filing a false zero-runtime proof.
+Archive eligibility reads the target's fresh native turn census, not its public lifecycle/status projection: an
+`inProgress` turn refuses with zero mutation, while a loaded target whose complete turn census has no
+`inProgress` turn may archive even if a hook-authored public status still reads working.
 
 **It is the attention verb backed by the resource stop.** This is the line that must not blur:
 

@@ -3,7 +3,7 @@ import { execFileSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 // This is the product-level archive YATU runner. It intentionally requires a prebuilt dashboard, an isolated
@@ -77,6 +77,7 @@ const before = await getTarget(false)
 const beforeAll = await getTarget(true)
 assert.ok(before && beforeAll, 'target must be a real existing session')
 assert.ok(beforeAll.path && beforeAll.branch, 'target must retain an exact worktree and branch identity')
+const fixtureRoot = dirname(execFileSync('git', ['-C', beforeAll.path, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim())
 assert.equal(before.archived, false, 'target must begin unarchived')
 assert.equal(beforeAll.harness, 'codex', 'archive YATU requires a real Codex target')
 const beforeResources = await get('/api/resources')
@@ -267,13 +268,13 @@ try {
   assert.equal(processMarker(process.env.TARGET_PID_FILE), null, 'cold-close target PID must already be gone')
   assert.equal(existsSync(beforeAll.path), true, 'cold close must begin with the retained worktree present')
   assert.equal(existsSync(process.env.RECORD_FILE), true, 'cold close must begin with the retained record present')
-  const branchBeforeClose = execFileSync('git', ['branch', '--list', beforeAll.branch], { encoding: 'utf8' }).trim()
+  const branchBeforeClose = execFileSync('git', ['-C', fixtureRoot, 'branch', '--list', beforeAll.branch], { encoding: 'utf8' }).trim()
   assert.ok(branchBeforeClose, 'cold close must begin with the retained branch present')
   await post(`/api/sessions/${sessionId}/close`)
   await waitFor(() => get(true), (rows) => !rows.some((s) => s.id === sessionId), 'true close removal')
   assert.equal(existsSync(beforeAll.path), false, 'cold close removes the retained worktree')
   assert.equal(existsSync(process.env.RECORD_FILE), false, 'cold close removes the retained record')
-  assert.equal(execFileSync('git', ['branch', '--list', beforeAll.branch], { encoding: 'utf8' }).trim(), '', 'cold close removes the retained branch')
+  assert.equal(execFileSync('git', ['-C', fixtureRoot, 'branch', '--list', beforeAll.branch], { encoding: 'utf8' }).trim(), '', 'cold close removes the retained branch')
   const afterCloseResources = await get('/api/resources')
   assert.equal(processMarker(process.env.SHARED_PID_FILE), sharedPidBefore, 'cold close leaves shared app-server PID/start unchanged')
   assert.equal(socketMarker(process.env.SHARED_SOCKET), sharedSocketBefore, 'cold close leaves shared app-server socket unchanged')

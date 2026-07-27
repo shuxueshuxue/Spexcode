@@ -1854,12 +1854,17 @@ export const codexHarness: Harness = {
   coldRetirementPreflight: async (rec) => {
     if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
     const threadId = rec.harnessSessionId
-    const sock = codexAppServerSock(runtimeRoot())
+    const dir = runtimeRoot()
+    const generationBefore = codexRuntimeGeneration(dir)
+    if (!generationBefore) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
+    const sock = codexAppServerSock(dir)
     const [proof, archivedList, activeList] = await Promise.all([
-      codexTargetMutationProof(threadId),
+      codexTargetMutationProof(threadId, dir),
       codexThreadList(sock, { archived: true, sourceKinds: [] }),
       codexThreadList(sock, { archived: false, sourceKinds: [] }),
     ])
+    if (codexRuntimeGeneration(dir) !== generationBefore)
+      return { ok: false, reason: 'shared Codex app-server generation changed during cold retirement proof' }
     if (proof.descendantIds.length) return { ok: false, reason: `Codex thread ${threadId} has owned descendants (${proof.descendantIds.join(', ')}); cold retirement is not proven safe` }
     if (!proof.healthy) return { ok: false, reason: proof.error || `Codex thread ${threadId} target state is unknown` }
     if (!archivedList.ok) return { ok: false, reason: archivedList.error }

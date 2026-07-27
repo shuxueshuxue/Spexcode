@@ -31,6 +31,13 @@ deterministically verifiable contract structure. Errors block; warnings advise. 
 rule, its level, its one-line meaning) is printed by `spex help spec` and `spex guide spec` — the manual
 lists ALL lint rules, always:
 
+Before constructing history indexes, lint checks a worktree's adoption boundary. An untracked `.spec/` file
+or `spexcode.json` is an **integrity error** naming the untracked project source of truth and the ordinary
+`git add .spec spexcode.json` repair. Harness delivery files such as `.codex/`, `.claude/`, and `AGENTS.md`
+are machine-local and are not part of this check. A staged candidate is judged from its candidate tree, so
+staged adoption data is valid; an untracked seed cannot masquerade as a clean graph. Bare receivers have no
+worktree state to inspect and continue with the immutable candidate tree.
+
 - **integrity** (error): every file a spec lists in `code:` exists — broken links block. A SELECTOR
   (`path#symbol` on either relation, [[code-anchor]]) must also resolve: dead (unit deleted/renamed),
   ambiguous (two same-named units), or an unparseable file all error with the repair spelled out. A

@@ -20,12 +20,16 @@ const capacityId = process.env.CAPACITY_SESSION
 const dist = process.env.DIST
 const out = resolve(process.env.OUT || '/tmp/archive-shelf-e2e')
 const spex = resolve(process.env.SPEX || 'spec-cli/bin/spex.mjs')
+const spexPackage = dirname(dirname(spex))
+const cli = join(spexPackage, 'src', 'cli.ts')
+const tsxCli = join(spexPackage, 'node_modules', 'tsx', 'dist', 'cli.mjs')
 if (!sessionId || !siblingId || !guardId || !noPaneId) throw new Error('SESSION=<real Codex target>, SIBLING=<real Codex sibling>, GUARD_SESSION=<blocked archive leg>, and NO_PANE_SESSION=<idle interactive Codex control> are required')
 for (const name of ['SPEXCODE_TMUX', 'TARGET_PID_FILE', 'NO_PANE_PID_FILE', 'SHARED_PID_FILE', 'SHARED_SOCKET', 'DIRTY_SENTINEL', 'RECORD_FILE']) {
   if (!process.env[name]) throw new Error(`${name} is required for runtime/resource evidence`)
 }
 if (!dist || !existsSync(dist)) throw new Error('DIST=<prebuilt dashboard dist> is required')
 if (!existsSync(playwrightPath)) throw new Error(`Playwright is missing: ${playwrightPath}`)
+if (!existsSync(cli) || !existsSync(tsxCli)) throw new Error(`SPEX must resolve a package with cli.ts + tsx: ${spexPackage}`)
 mkdirSync(out, { recursive: true })
 
 const { chromium } = await import(pathToFileURL(playwrightPath).href)
@@ -100,7 +104,7 @@ const sharedSocketBefore = socketMarker(process.env.SHARED_SOCKET)
 const siblingBefore = (await get(true)).find((s) => s.id === siblingId)
 assert.ok(siblingBefore, 'real sibling must be present before archive')
 const startMonitor = (verb) => {
-  const child = spawn(process.execPath, [spex, 'session', verb, sessionId, '--interval', '5', ...(verb === 'wait' ? ['--timeout', '60'] : []), '--api', base], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(process.execPath, [tsxCli, cli, 'session', verb, sessionId, '--interval', '5', ...(verb === 'wait' ? ['--timeout', '60'] : []), '--api', base], { stdio: ['ignore', 'pipe', 'pipe'] })
   let stdout = ''; let stderr = ''
   child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
   child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })

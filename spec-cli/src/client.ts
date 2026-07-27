@@ -33,7 +33,7 @@ export async function clientListSessions(): Promise<Session[]> {
 
 export async function clientResources(): Promise<import('./host-resources.js').ResourceReport> {
   const r = await apiFetch('/api/resources')
-  if (!r.ok) throw new BackendError(`backend error ${r.status} reading resources: ${await r.text()}`, r.status)
+  if (!r.ok) throw new BackendError(`backend error ${r.status} loading resources: ${await r.text()}`, r.status)
   return await r.json() as import('./host-resources.js').ResourceReport
 }
 

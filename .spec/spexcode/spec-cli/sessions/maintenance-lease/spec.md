@@ -128,7 +128,11 @@ Every coordinator transaction uses one crash-safe lock generation. A complete ow
 fsynced beside the lock, then hard-linked to the fixed lock path as the atomic CAS, so a crash before publication
 cannot leave an ownerless canonical lock. Reaping a proven-dead/reused owner first claims a nonce-specific marker;
 while it exists no acquirer may publish, and the reaper re-reads the same nonce and exact dead identity before
-unlinking. Release removes only its own nonce, so concurrent stale reapers cannot delete a replacement owner.
+unlinking. A marker is itself a complete nonce plus exact PID/start owner record. A contender waits on every
+live or ambiguous marker; it may reclaim a dead/reused marker only under the same recursive nonce-owned claim,
+then re-reads the unchanged marker nonce and owner immediately before unlinking. Thus a reaper crash on either
+side of canonical-lock unlink cannot wedge admission or let a later reaper delete a replacement owner. Release
+removes only its own nonce.
 
 The public porcelain stays under the existing session noun: `spex session maintain --allow-stop <SEL> ...
 --allow-resume <SEL>[:force] ... -- <command...>` is one scoped wrapper, and `spex session maintain --status`
@@ -143,7 +147,11 @@ accepts the same finite TTL range. The wrapper keeps the bearer in memory and he
 On normal exit it closes and drains broker admission, reaps the command, then releases its still-current epoch.
 Heartbeat/status epoch, state, plan, or owner mismatch closes admission immediately, terminates and boundedly
 reaps the local operator command process group, exits nonzero, and never releases or adopts the stale epoch. It
-never prints or exports the bearer.
+never prints or exports the bearer. Broker HTTP operations carry an explicit completed/refused/indeterminate
+outcome rather than inferring capability state from a generic status. Every request has a bounded abort signal;
+broker transport loss closes admission and aborts pending HTTP work before command reap. Every path after a
+well-formed acquire token and epoch, including response-plan validation before command spawn, enters one cleanup
+scope and safely releases that exact still-current authority unless authority itself was lost.
 
 A `202 draining` response is ownership of the closed admission epoch, NOT permission to execute. The wrapper
 creates no command process and no broker FD while draining; it may only heartbeat that exact epoch and poll

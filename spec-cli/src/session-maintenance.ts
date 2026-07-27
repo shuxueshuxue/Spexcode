@@ -259,6 +259,37 @@ export function createSessionMaintenance(input: CoordinatorInput) {
     try { return readdirSync(input.runtimeRoot).filter((name) => name.startsWith(lockPrefix)) }
     catch { return [] }
   }
+  const sameLockRecord = (left: LockRecord | null, right: LockRecord): boolean =>
+    !!left && left.nonce === right.nonce && sameIdentity(left.owner, right.owner)
+  const reclaimDeadRecord = (path: string, expected: LockRecord, depth = 0): boolean => {
+    if (depth >= 64) fail('maintenance_conflict', 'session maintenance lock claim depth exceeded')
+    if (!sameLockRecord(readLock(path), expected) || !['dead', 'reused'].includes(identityState(expected.owner))) return false
+    const claimPath = `${path}.claim`
+    const self = input.selfIdentity()
+    const claim: LockRecord = { version: 1, nonce: input.randomBytes(16).toString('hex'), owner: self }
+    if (!writeLinkedRecord(claimPath, claim)) {
+      const existing = readLock(claimPath)
+      if (!existing || !['dead', 'reused'].includes(identityState(existing.owner))) return false
+      if (!reclaimDeadRecord(claimPath, existing, depth + 1)) return false
+      return reclaimDeadRecord(path, expected, depth + 1)
+    }
+    try {
+      const confirmed = readLock(path)
+      if (!sameLockRecord(confirmed, expected) || !['dead', 'reused'].includes(identityState(expected.owner))) return false
+      unlinkSync(path)
+      return true
+    } finally {
+      if (sameLockRecord(readLock(claimPath), claim)) unlinkSync(claimPath)
+    }
+  }
+  const clearDeadMarkers = (): boolean => {
+    for (const name of reapMarkers()) {
+      const path = join(input.runtimeRoot, name)
+      const marker = readLock(path)
+      if (marker && ['dead', 'reused'].includes(identityState(marker.owner))) reclaimDeadRecord(path, marker)
+    }
+    return reapMarkers().length === 0
+  }
 
   const acquireLock = (): (() => void) => {
     const deadline = Date.now() + LOCK_WAIT_MS
@@ -266,7 +297,7 @@ export function createSessionMaintenance(input: CoordinatorInput) {
     const nonce = input.randomBytes(16).toString('hex')
     const own: LockRecord = { version: 1, nonce, owner: self }
     for (;;) {
-      if (reapMarkers().length === 0 && writeLinkedRecord(lockPath, own)) {
+      if (clearDeadMarkers() && writeLinkedRecord(lockPath, own)) {
         return () => {
           const current = readLock()
           if (!current || current.nonce !== nonce || !sameIdentity(current.owner, self))

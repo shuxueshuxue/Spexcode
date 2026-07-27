@@ -151,7 +151,10 @@ never prints or exports the bearer. Broker HTTP operations carry an explicit com
 outcome rather than inferring capability state from a generic status. Every request has a bounded abort signal;
 broker transport loss closes admission and aborts pending HTTP work before command reap. Every path after a
 well-formed acquire token and epoch, including response-plan validation before command spawn, enters one cleanup
-scope and safely releases that exact still-current authority unless authority itself was lost.
+scope and safely releases that exact still-current authority unless authority itself was lost. Direct operator
+exit is observed independently of inherited broker-pipe closure. If that exit races any queued, partial, or
+in-flight broker request, the wrapper closes admission, aborts pending HTTP, reaps the whole command group,
+reports an indeterminate nonzero result, and does not release the capability lease.
 
 A `202 draining` response is ownership of the closed admission epoch, NOT permission to execute. The wrapper
 creates no command process and no broker FD while draining; it may only heartbeat that exact epoch and poll

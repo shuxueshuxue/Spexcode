@@ -34,7 +34,7 @@ const server = createServer(async (req, res) => {
     acquiredCapabilities = mode === 'post-acquire-validation' ? [] : input.capabilities
     record({ step: 'acquire', input })
     const active = mode === 'heartbeat-loss' || mode === 'broker-concurrent' || mode === 'broker-transport-loss'
-      || mode === 'broker-pending-transport-loss' || mode === 'resume-refused-retry' || mode === 'post-acquire-validation'
+      || mode === 'broker-pending-transport-loss' || mode === 'resume-refused-retry' || mode === 'resume-500-indeterminate' || mode === 'post-acquire-validation'
     res.statusCode = active ? 201 : 202
     return res.end(JSON.stringify({ state: active ? 'active' : 'draining', epoch, token, owner, capabilities: acquiredCapabilities }))
   }
@@ -78,6 +78,10 @@ const server = createServer(async (req, res) => {
     if (mode === 'resume-refused-retry' && match[2] === 'resume' && ++resumeAttempts === 1) {
       res.statusCode = 409
       return res.end(JSON.stringify({ ok: false, refused: true, error: 'target liveness refused this attempt' }))
+    }
+    if (mode === 'resume-500-indeterminate' && match[2] === 'resume' && ++resumeAttempts === 1) {
+      res.statusCode = 500
+      return res.end(JSON.stringify({ ok: false, error: 'backend outcome is unknown' }))
     }
     return res.end(JSON.stringify({ ok: true }))
   }

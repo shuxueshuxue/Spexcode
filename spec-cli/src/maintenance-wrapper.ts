@@ -53,7 +53,8 @@ const reapCommandGroup = async (child: ReturnType<typeof spawn>, closed: Promise
       try { process.kill(-child.pid, 'SIGKILL') } catch { /* already exited */ }
     }
   }
-  if (child.exitCode === null && child.signalCode === null) await closed
+  const closedAfterReap = await Promise.race([closed.then(() => true), wait(2_000).then(() => false)])
+  if (!closedAfterReap) throw new Error('maintenance operator pipes did not close after exact process-group reap')
 }
 
 export async function runMaintenanceWrapper(input: {
@@ -124,6 +125,7 @@ export async function runMaintenanceWrapper(input: {
       env: { ...process.env, SPEXCODE_MAINTENANCE_BROKER_FDS: '3,4,5' },
       detached: true,
     })
+    const exited = once(child, 'exit') as Promise<[number | null, NodeJS.Signals | null]>
     const closed = once(child, 'close') as Promise<[number | null, NodeJS.Signals | null]>
     const childStdio = child.stdio as Array<Readable | Writable | Duplex | null | undefined>
     const requestPipe = childStdio[3] as Readable
@@ -132,6 +134,7 @@ export async function runMaintenanceWrapper(input: {
     requestPipe.setEncoding('utf8')
     let pending = ''
     let serial = Promise.resolve()
+    let brokerWork = 0
     let brokerOpen = true
     let transportLossTimer: ReturnType<typeof setTimeout> | null = null
     const brokerTransportLost = (error: unknown) => {
@@ -217,14 +220,15 @@ export async function runMaintenanceWrapper(input: {
         if (newline < 0) break
         const line = pending.slice(0, newline); pending = pending.slice(newline + 1)
         if (!line) continue
+        brokerWork++
         serial = serial.then(async () => {
           try { await handle(JSON.parse(line) as BrokerRequest) }
           catch (error) { reply(undefined, { ok: false, code: 'maintenance_broker_failed', error: error instanceof Error ? error.message : String(error) }) }
-        })
+        }).finally(() => { brokerWork-- })
       }
     })
     const outcome = await Promise.race([
-      closed.then(([code, signal]) => ({ kind: 'exit' as const, code, signal })),
+      exited.then(([code, signal]) => ({ kind: 'exit' as const, code, signal })),
       authorityFailure.catch((error) => ({ kind: 'lost' as const, error: error instanceof Error ? error : new Error(String(error)) })),
     ])
     if (outcome.kind === 'lost') {
@@ -233,9 +237,15 @@ export async function runMaintenanceWrapper(input: {
       await reapCommandGroup(child, closed)
       throw outcome.error
     }
+    const brokerIndeterminate = brokerWork > 0 || pendingOperations.size > 0 || pending.trim().length > 0
+    if (brokerIndeterminate) authorityLost = true
     closeAdmission()
     await serial
-    await reapCommandGroup(child, closed)
+    try { await reapCommandGroup(child, closed) }
+    catch (error) { authorityLost = true; throw error }
+    if (brokerIndeterminate) {
+      throw new Error('operator exited while a maintenance broker operation was indeterminate')
+    }
     if (heartbeatFailure) {
       authorityLost = true
       throw heartbeatFailure

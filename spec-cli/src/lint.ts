@@ -71,6 +71,7 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
 export type SpecLintOptions = { tip?: string }
 
 function untrackedAdoptionFiles(root: string): string[] {
+  if (git(['-C', root, 'rev-parse', '--is-inside-work-tree']).trim() !== 'true') return []
   const status = git([
     '-C', root,
     '-c', 'core.quotePath=false',

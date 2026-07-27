@@ -54,6 +54,171 @@ test('shared runtime spawn records an observed detached process boundary', async
   }
 })
 
+test('session stop guard reads only the exact governed target and fails closed on target ambiguity', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const originalSharedRuntimes = codexHarness.sharedRuntimes
+  const home = mkdtempSync(join(tmpdir(), 'spex-target-scoped-stop-home-'))
+  process.env.SPEXCODE_HOME = home
+  const root = runtimeRoot()
+  const runtime = join(home, 'shared-runtime')
+  mkdirSync(root, { recursive: true })
+  mkdirSync(runtime, { recursive: true })
+  const pidFile = join(runtime, 'shared.pid')
+  const isolationFile = join(runtime, 'shared.scope')
+  const identity = spawnDetachedRuntime({
+    cwd: runtime,
+    logFile: join(runtime, 'shared.log'),
+    pidFile,
+    isolationFile,
+    command: process.execPath,
+    args: ['-e', 'setInterval(() => {}, 1000)'],
+  })
+  const targetLeaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+  for (let i = 0; i < 50 && !processStartToken(targetLeaf.pid!); i++) await new Promise((resolve) => setTimeout(resolve, 20))
+  const targetLeafStart = processStartToken(targetLeaf.pid!)
+  assert.ok(targetLeafStart)
+  const target = 'target-scoped-stop'
+  const targetThread = 'target-scoped-thread'
+  const recordDir = join(root, 'sessions', target)
+  mkdirSync(recordDir, { recursive: true })
+  writeFileSync(join(recordDir, 'session.json'), `${JSON.stringify({
+    session_id: target, governed: true, worktree_path: root, branch: 'node/target-scoped-stop', node: null,
+    title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0, note: null,
+    sortkey: null, createdAt: Date.now(), harness: 'codex', harness_session_id: targetThread, stopped: false,
+    archived: false, launcher: 'codex', launch_cmd: 'codex --yolo',
+  }, null, 2)}\n`)
+  let mode: 'idle' | 'active' | 'unknown' | 'descendant' = 'idle'
+  let loadedIdCensuses = 0
+  let exactTargetReads = 0
+  let activeDescendantCensuses = 0
+  let archivedDescendantCensuses = 0
+  let fullSiblingReads = 0
+  const descriptor = {
+    key: 'codex-app-server',
+    label: 'Codex app-server',
+    pidFile,
+    isolationFile,
+    residency: async () => ({ healthy: true, referenceIds: [targetThread, 'slow-unrelated-sibling'] }),
+    mutationGuard: async (threadId: string | null) => {
+      assert.equal(threadId, targetThread)
+      loadedIdCensuses++
+      exactTargetReads++
+      activeDescendantCensuses++
+      archivedDescendantCensuses++
+      return {
+        healthy: mode !== 'unknown',
+        referenceIds: [targetThread, 'slow-unrelated-sibling'],
+        targetTurnPresence: mode === 'active' ? 'active' : mode === 'unknown' ? 'unknown' : 'idle',
+        descendantIds: mode === 'descendant' ? ['owned-native-child'] : [],
+        ...(mode === 'unknown' ? { error: 'exact target turn state is unknown' } : {}),
+      }
+    },
+    probe: async () => {
+      fullSiblingReads++
+      return new Promise<SharedRuntimeProbe>(() => {})
+    },
+  }
+  codexHarness.sharedRuntimes = () => [descriptor as any]
+  try {
+    const result = await Promise.race([
+      assertSessionStopSafe(target, { session: target, harness: 'codex' }).then(() => 'safe'),
+      new Promise<string>((resolve) => setTimeout(() => resolve('timed-out-on-full-projection'), 100)),
+    ])
+    assert.equal(result, 'safe')
+    assert.deepEqual({ loadedIdCensuses, exactTargetReads, activeDescendantCensuses, archivedDescendantCensuses }, {
+      loadedIdCensuses: 1, exactTargetReads: 1, activeDescendantCensuses: 1, archivedDescendantCensuses: 1,
+    })
+    assert.equal(fullSiblingReads, 0, 'stop safety never enters the full sibling turn projection')
+
+    const restoreIdentity = () => {
+      writeFileSync(pidFile, `${identity.pid}\n`)
+      writeIsolationStamp(identity.pid, isolationFile)
+    }
+    const refuseIdentity = async (name: string, setup: () => void, reason: RegExp) => {
+      restoreIdentity()
+      setup()
+      const proofCallsBefore = loadedIdCensuses
+      await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), reason)
+      assert.equal(loadedIdCensuses, proofCallsBefore, `${name} refuses before the adapter guard`)
+      assert.equal(processStartToken(identity.pid), identity.startToken, `${name} sends no signal to the shared root`)
+      assert.equal(processStartToken(targetLeaf.pid!), targetLeafStart, `${name} sends no signal to the target leaf`)
+    }
+    await refuseIdentity('missing PID', () => rmSync(pidFile, { force: true }), /no readable owner PID/)
+    await refuseIdentity('dead PID', () => writeFileSync(pidFile, '999999999\n'), /no readable process-start identity/)
+    await refuseIdentity('missing scope', () => rmSync(isolationFile, { force: true }), /no matching live detached process-boundary record/)
+    await refuseIdentity('mismatched start', () => writeFileSync(isolationFile, `detached-v3 ${identity.pid} wrong ${identity.pid} ${identity.pid}\n`), /no matching live detached process-boundary record/)
+    await refuseIdentity('arbitrary scope', () => writeFileSync(isolationFile, `fixture ${identity.pid}\n`), /no matching live detached process-boundary record/)
+    await refuseIdentity('non-detached topology', () => {
+      const pid = targetLeaf.pid!
+      const start = processStartToken(pid)!
+      writeFileSync(pidFile, `${pid}\n`)
+      writeFileSync(isolationFile, `detached-v3 ${pid} ${start} ${pid} ${pid}\n`)
+    }, /no matching live detached process-boundary record/)
+    restoreIdentity()
+
+    for (const [next, reason] of [['unknown', /target turn state is unknown/], ['active', /active turn/], ['descendant', /owned descendants.*owned-native-child/]] as const) {
+      mode = next
+      await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), reason)
+      assert.equal(processStartToken(identity.pid), identity.startToken, `${next} refusal sends no signal to the shared root`)
+      assert.equal(processStartToken(targetLeaf.pid!), targetLeafStart, `${next} refusal sends no signal to the target leaf`)
+    }
+  } finally {
+    codexHarness.sharedRuntimes = originalSharedRuntimes
+    if (processStartToken(identity.pid) === identity.startToken) {
+      try { process.kill(identity.pid, 'SIGTERM') } catch {}
+      for (let i = 0; i < 50 && processStartToken(identity.pid) === identity.startToken; i++) await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    if (targetLeaf.pid && processStartToken(targetLeaf.pid)) {
+      try { targetLeaf.kill('SIGTERM') } catch {}
+      for (let i = 0; i < 50 && processStartToken(targetLeaf.pid); i++) await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('resource report retains the full shared projection and reports its sibling timeout', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const originalSharedRuntimes = codexHarness.sharedRuntimes
+  const home = mkdtempSync(join(tmpdir(), 'spex-full-resource-projection-'))
+  process.env.SPEXCODE_HOME = home
+  const root = runtimeRoot()
+  const id = 'full-resource-projection'
+  const recordDir = join(root, 'sessions', id)
+  mkdirSync(recordDir, { recursive: true })
+  writeFileSync(join(recordDir, 'session.json'), `${JSON.stringify({
+    session_id: id, governed: true, worktree_path: root, branch: 'node/full-resource-projection', node: null,
+    title: null, name: null, parent: null, status: 'awaiting', proposal: 'nothing', merges: 0, note: null,
+    sortkey: null, createdAt: Date.now(), harness: 'codex', harness_session_id: 'resource-target-thread',
+    stopped: false, archived: false, launcher: 'codex', launch_cmd: 'codex --yolo',
+  }, null, 2)}\n`)
+  let residencyCalls = 0
+  let siblingThreadReads = 0
+  codexHarness.sharedRuntimes = () => [{
+    key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'missing.pid'),
+    isolationFile: join(home, 'missing.scope'),
+    residency: async () => { residencyCalls++; return { healthy: true, referenceIds: ['slow-unrelated-sibling'] } },
+    probe: async () => {
+      siblingThreadReads++
+      return { healthy: false, references: [], error: 'codex app-server ownership probe timed out after 5000ms' }
+    },
+  }]
+  try {
+    const report = await collectResourceReport({ persist: false })
+    const shared = report.owners.find((owner) => owner.kind === 'shared-runtime' && owner.id === 'codex-app-server')
+    assert.equal(siblingThreadReads, 1, 'resources still performs the full per-thread ownership projection')
+    assert.equal(residencyCalls, 0, 'resources does not substitute the mutation/read-projection census')
+    assert.equal(shared?.controlPlane?.healthy, false)
+    assert.match(shared?.controlPlane?.error || '', /ownership probe timed out after 5000ms/)
+  } finally {
+    codexHarness.sharedRuntimes = originalSharedRuntimes
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('shared-runtime projection uses live adapter refs and fail-closed process identity', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-resources-'))
   const previousHome = process.env.SPEXCODE_HOME
@@ -119,9 +284,9 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
       mkdirSync(dir, { recursive: true })
       writeFileSync(join(dir, 'session.json'), `${JSON.stringify(record(id, thread, terminal), null, 2)}\n`)
     }
-    const fixtureSharedRuntimes = (runtimeDir: string) => originalSharedRuntimes!(runtimeDir).map((descriptor) => ({ ...descriptor, probe: async () => probe }))
-    codexHarness.sharedRuntimes = fixtureSharedRuntimes
-    codexHeadlessHarness.sharedRuntimes = fixtureSharedRuntimes
+    const fallbackSharedRuntimes = (runtimeDir: string) => originalSharedRuntimes!(runtimeDir).map((descriptor) => ({ ...descriptor, mutationGuard: undefined, probe: async () => probe }))
+    codexHarness.sharedRuntimes = fallbackSharedRuntimes
+    codexHeadlessHarness.sharedRuntimes = fallbackSharedRuntimes
 
     sharedRoot = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
       stdio: 'ignore',

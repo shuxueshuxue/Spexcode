@@ -67,11 +67,13 @@ test('Codex archive ignores a non-returning unrelated read when the exact target
   const target = 'unloaded-archive-target'
   let archived = false
   let unrelatedReads = 0
+  let archiveCalls = 0
+  let unarchiveCalls = 0
   const server = codexRpcFixture((message) => {
     if (message.method === 'thread/loaded/list') return { data: [{ id: 'slow-unrelated-sibling' }], nextCursor: null }
     if (message.method === 'thread/read') { unrelatedReads++; return NO_RPC_RESPONSE }
-    if (message.method === 'thread/archive') { archived = true; return {} }
-    if (message.method === 'thread/unarchive') { archived = false; return {} }
+    if (message.method === 'thread/archive') { archiveCalls++; archived = true; return {} }
+    if (message.method === 'thread/unarchive') { unarchiveCalls++; archived = false; return {} }
     if (message.method === 'thread/list') {
       const data = message.params.ancestorThreadId ? [] : message.params.archived === archived ? [{ id: target }] : []
       return { data, nextCursor: null }
@@ -86,7 +88,64 @@ test('Codex archive ignores a non-returning unrelated read when the exact target
     writeFileSync(codexAppServerPid(root), `${process.pid}\n`)
     writeFileSync(codexAppServerIsolation(root), `fixture ${process.pid}\n`)
     assert.deepEqual(await codexHarness.coldRuntime?.({ session: 'target-scoped-session', harnessSessionId: target }), { ok: true })
+    const [activeFinal, archivedFinal] = await Promise.all([
+      codexThreadList(socket, { archived: false, sourceKinds: [] }),
+      codexThreadList(socket, { archived: true, sourceKinds: [] }),
+    ])
+    assert.equal(archiveCalls, 1, 'success requires exactly one native archive commit')
+    assert.equal(unarchiveCalls, 0, 'the successful path does not compensate')
+    assert.deepEqual(activeFinal, { ok: true, ids: [] })
+    assert.deepEqual(archivedFinal, { ok: true, ids: [target] })
     assert.equal(unrelatedReads, 0, 'mutation proof never waits on or reads the unrelated sibling')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('Codex archive refuses a shared generation swap during exact target proof before mutation', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-generation-fence-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const target = 'generation-fence-target'
+  let archived = false
+  let swapped = false
+  let archiveCalls = 0
+  const root = runtimeRoot()
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: archived ? [] : [{ id: target }], nextCursor: null }
+    if (message.method === 'thread/read') {
+      if (!swapped) {
+        swapped = true
+        writeFileSync(codexAppServerIsolation(root), `swapped fixture ${process.pid}\n`)
+      }
+      return { thread: { status: { type: 'idle' }, turns: [] } }
+    }
+    if (message.method === 'thread/archive') { archiveCalls++; archived = true; return {} }
+    if (message.method === 'thread/unarchive') { archived = false; return {} }
+    if (message.method === 'thread/list') {
+      const data = message.params.ancestorThreadId ? [] : message.params.archived === archived ? [{ id: target }] : []
+      return { data, nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const socket = codexAppServerSock(root)
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    writeFileSync(codexAppServerPid(root), `${process.pid}\n`)
+    writeFileSync(codexAppServerIsolation(root), `original fixture ${process.pid}\n`)
+    const result = await codexHarness.coldRuntime?.({ session: 'generation-fence-session', harnessSessionId: target })
+    assert.equal(result?.ok, false)
+    if (result && !result.ok) assert.match(result.reason, /generation changed during target proof/)
+    assert.equal(archiveCalls, 0, 'a generation swap never reaches thread/archive')
+    assert.equal(archived, false)
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME

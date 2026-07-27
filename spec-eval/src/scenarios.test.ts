@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { parseScenarios, validateScenarios, evalNodes, evalNodesAsync, resolveEvalNode, scenarioHash, writeScenarioMeasurementMetadata } from './scenarios.js'
+import { parseScenarios, validateScenarios, evalNodes, evalNodesAsync, resolveEvalNode, scenarioHash, scenarioProjection, writeScenarioMeasurementMetadata } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading } from './sidecar.js'
 import { changedSince, staleAxes } from './freshness.js'
 import { putBlob, listBlobs, gc, resolveBlob, MISS_BLOB, isStrayBlob } from './cache.js'
@@ -111,6 +111,9 @@ test('writeScenarioMeasurementMetadata inserts one exact test mapping and deleti
   assert.equal(proposed, expected)
   assert.equal(proposed.replace(/\r\n/g, '').includes('\n'), false, 'writer introduced a bare LF')
   assert.deepEqual(parseScenarios(proposed)[0].test, mutation.insert.test)
+  assert.deepEqual(scenarioProjection([{
+    id: 'fixture', scenarios: parseScenarios(proposed), evalSource: proposed,
+  }]).rows[0].measurement, { test: mutation.insert.test })
   assert.deepEqual(validateScenarios(proposed), [])
   assert.equal(
     writeScenarioMeasurementMetadata(proposed, { scenario: 'alpha', delete: 'test' }),

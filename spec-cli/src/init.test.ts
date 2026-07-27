@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsS
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 
 // [[spex-init]] / [[residence]] — the ADOPTION SURFACE: what `spex init` prints must be TRUE of what it
 // planted (the success message once claimed governedRoots ["src"] while the template seeded ["."] — the
@@ -61,6 +61,34 @@ test('init success message reports the governedRoots the template ACTUALLY ships
   const projectSpec = readFileSync(join(proj, '.spec', 'project', 'spec.md'), 'utf8')
   assert.match(projectSpec, /`system` contracts[\s\S]*`hook` handlers[\s\S]*`command` presets[\s\S]*`skill`/, 'starter project spec names the initialized plugin surfaces')
   assert.doesNotMatch(projectSpec, /seed ships `core`|seed ships `tidy`/, 'obsolete core-plus-tidy inventory is gone')
+})
+
+test('init adoption data cannot masquerade as a clean untracked project', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, g, env, spex } = freshRepo()
+  const out = spex('init', '.', '--harness', 'codex')
+  assert.match(out, /project source of truth[\s\S]*\.spec[\s\S]*spexcode\.json/i)
+  assert.match(out, /commit them/i)
+
+  const before = spawnSync(TSX, [CLI, 'spec', 'lint'], {
+    cwd: proj,
+    env,
+    encoding: 'utf8',
+  })
+  assert.equal(before.status, 1, `untracked adoption data must block lint: ${before.stdout}\n${before.stderr}`)
+  assert.match(before.stderr, /integrity: project source of truth is untracked/i)
+  assert.match(before.stderr, /git add \.spec spexcode\.json/i)
+
+  g('add', '.spec', 'spexcode.json')
+  execFileSync('git', ['-C', proj, 'commit', '-qm', 'adopt SpexCode seed'], {
+    env: { ...env, SPEXCODE_ALLOW_MAIN: '1' },
+  })
+  const after = spawnSync(TSX, [CLI, 'spec', 'lint'], {
+    cwd: proj,
+    env,
+    encoding: 'utf8',
+  })
+  assert.equal(after.status, 0, `tracked adoption data should leave lint advisory-only: ${after.stdout}\n${after.stderr}`)
+  assert.doesNotMatch(after.stderr, /project source of truth is untracked/i)
 })
 
 test('adoption needs no vote: a host-TRACKED contract file goes straight through the filter — clean status, no hint, no honest-M', { skip: !gitAvailable() && 'git not available' }, () => {

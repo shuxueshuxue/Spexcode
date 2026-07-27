@@ -130,6 +130,11 @@ blobs from old `HEAD` with ownership in the candidate tree and rejects an orphan
 explicit local bypass is `SPEXCODE_SKIP_LINT=1`; no installed hook means no local enforcement, so [[ci-gate]]
 remains authoritative.
 
+The single-parent candidate preflight narrows work only when the candidate's changed paths are outside every
+declared subject and outside governance metadata. Its exact-path, directory-prefix, and glob claims use the
+same pure relation matcher as ownership and eval impact, over declarations read from the immutable candidate
+tree. This preflight may skip construction of the history indexes; it never supplies a second drift verdict.
+
 ### Spec-OK — acknowledging an implementation-only change
 
 A commit ahead of a spec isn't always staleness — a refactor can change a governed file while the spec

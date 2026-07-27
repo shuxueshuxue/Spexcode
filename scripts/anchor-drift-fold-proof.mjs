@@ -194,23 +194,18 @@ for (const path of paths) {
 
 const specs = await loadSpecs(root, { tip, history: hidx, drift: didx })
 const registry = extractors(root)
-const pathCommits = new Map()
-function commitsFor(path) {
-  const cached = pathCommits.get(path)
+const pathEvents = new Map()
+function eventsFor(path) {
+  const cached = pathEvents.get(path)
   if (cached) return cached
-  const ordinary = didx.lazy
-    ? git(['rev-list', '--no-merges', tip, '--', path]).trim().split('\n').filter(Boolean)
-    : didx.fileCommits.get(path) ?? []
-  const merges = didx.resolutionCommits?.get(path) ?? []
-  const commits = [...new Set([...ordinary, ...merges])]
-  pathCommits.set(path, commits)
-  return commits
+  const events = [...(didx.fileEvents.get(path) ?? []), ...(didx.resolutionEvents?.get(path) ?? [])]
+  pathEvents.set(path, events)
+  return events
 }
+const commitsFor = (path) => [...new Set(eventsFor(path).map((event) => event.commit))]
 
-const checkpointAcks = (node) => didx.lazy
-  ? didx.lazy.ackByNode.get(node) ?? []
-  : [...didx.acks].filter(([, nodes]) => nodes.has(node)).map(([hash]) => hash)
-const selfAcks = didx.lazy?.selfAcks ?? didx.selfAcks ?? new Map()
+const checkpointAcks = (node) => [...didx.acks].filter(([, nodes]) => nodes.has(node)).map(([hash]) => hash)
+const selfAcks = didx.selfAcks ?? new Map()
 const clearedFor = (commit, version, node) => isAncestor(commit, version)
   || selfAcks.get(commit)?.has(node)
   || checkpointAcks(node).some((ack) => !isAncestor(ack, version) && isAncestor(commit, ack))
@@ -266,7 +261,7 @@ for (const spec of specs) {
   for (const entry of spec.codeScoped) {
     const extractor = extractorFor(registry, extOf(entry.path))
     if (!extractor || extractor.ready() !== true) continue
-    const hits = await anchorHitCommits(root, commitsFor(entry.path), entry.path, entry.selectors, extractor)
+    const hits = await anchorHitCommits(root, eventsFor(entry.path), entry.selectors, registry)
     for (const hit of hits) hitRecords.push({ node: spec.id, path: entry.path, commit: hit.commit, selectors: hit.selectors })
     const selectedDebt = hits.filter((hit) => !isAncestor(hit.commit, selected))
     const lenientDebt = hits.filter((hit) => versions.every((version) => !isAncestor(hit.commit, version)))
@@ -304,7 +299,8 @@ for (const spec of specs) {
 
 // The proof derives and retains every hit identity from the complete drift event index. Project that set
 // onto the first-parent points only for the growth measurement; do not re-run a path-limited `git log`
-// at each point, because history simplification is exactly the 749-vs-757 measurement bug this proof guards.
+// at each point, replace event historical paths with current names, or query a rename through only its
+// result path: the first two undercount and the third invents full-addition hits.
 const firstParent = git(['rev-list', '--first-parent', '--reverse', tip]).trim().split('\n').filter(Boolean)
 const countMemo = new Map()
 const reachableCount = (hash) => {
@@ -362,6 +358,7 @@ console.log(JSON.stringify({
     growth,
     rawDifferingNodes: rawSemanticDifferences,
     differingNodes: semanticDifferences,
+    ...(process.env.SPEX_HIT_RECORDS === '1' ? { hitRecords } : {}),
   },
   counterexample: await structuralCounterexample(),
 }, null, 2))

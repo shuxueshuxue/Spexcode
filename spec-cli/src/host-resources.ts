@@ -379,7 +379,7 @@ const sessionStopBlocker = async (
     if (!topology || topology.startToken !== startToken || topology.processGroupId !== pid || topology.sessionId !== pid ||
       stamp !== `detached-v3 ${pid} ${startToken} ${pid} ${pid}`) {
       const refs = probe.references.map((reference) => reference.referenceId).join(', ') || 'no loaded threads'
-      return `${descriptor.label} PID ${pid}@${startToken} serves ${refs} and has no matching live detached process-boundary proof`
+      return `${descriptor.label} PID ${pid}@${startToken} serves ${refs} and has no matching live detached process-boundary record`
     }
   }
   return null

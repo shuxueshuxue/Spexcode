@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -18,7 +18,7 @@ const ROOT = join(SRC, '..', '..')
 test('ordinary hunk ranges preserve old-side deletions below line one', () => {
   const patch = '@@ -4,2 +3,0 @@ removed beta\n'
   assert.deepEqual(diffHunkRanges(patch, 'old'), [[4, 5]])
-  assert.deepEqual(diffHunkRanges(patch, 'new'), [[3, 3]])
+  assert.deepEqual(diffHunkRanges(patch, 'new'), [])
   assert.deepEqual(selectorsHitRanges(
     [{ name: 'beta', kind: 'function', start: 4, end: 5 }],
     ['beta'],
@@ -130,53 +130,12 @@ test('multi-selector hits across file revisions: a commit counts ONCE and unpars
   g('add', '-A'); g('commit', '-qm', 'c5'); const c5 = g('rev-parse', 'HEAD')
 
   const x = tsAstExtractor(ROOT) // resolves this governed repo's TypeScript; content comes from the fixture's git
-  const hits = await anchorHitCommits(root, [c2, c3, c4, c5], 'src/x.ts', ['f', 'g'], x)
+  const hits = await anchorHitCommits(root, [c2, c3, c4, c5].map((commit) => ({ commit, historicalPath: 'src/x.ts', parents: [] })), ['f', 'g'], [x])
   assert.deepEqual(hits.map((h) => ({ commit: h.commit, selectors: h.selectors, unparseable: !!h.unparseable })), [
     { commit: c2, selectors: ['f'], unparseable: false },
     { commit: c3, selectors: ['f', 'g'], unparseable: false }, // both units in one commit — one row
     { commit: c5, selectors: ['f', 'g'], unparseable: true },  // c4 (outside both units) is absent
   ])
-})
-
-test('a loud anchor read never trusts a fail-soft empty hunk memo', { skip: !gitAvailable() && 'git not available' }, async () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-anchor-loud-memo-'))
-  const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
-  const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
-  const bin = join(root, 'bin')
-  const fake = join(bin, 'git')
-  const priorPath = process.env.PATH
-  const priorFail = process.env.ANCHOR_FAIL_SHOW
-  try {
-    g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
-    mkdirSync(join(root, 'src'))
-    writeFileSync(join(root, 'src/x.ts'), 'export function f() {\n  return 1\n}\n')
-    g('add', '-A'); g('commit', '-qm', 'base')
-    writeFileSync(join(root, 'src/x.ts'), 'export function f() {\n  return 2\n}\n')
-    g('add', '-A'); g('commit', '-qm', 'change f')
-    const commit = g('rev-parse', 'HEAD')
-    mkdirSync(bin)
-    writeFileSync(fake, `#!/bin/sh
-case " $* " in
-  *--no-walk*) exit 0 ;;
-  *show*--cc*) [ "$ANCHOR_FAIL_SHOW" = 1 ] && echo forced-soft-show-failure >&2 && exit 72 ;;
-esac
-exec ${JSON.stringify(realGit)} "$@"
-`)
-    chmodSync(fake, 0o755)
-    process.env.PATH = `${bin}:${priorPath}`
-    process.env.ANCHOR_FAIL_SHOW = '1'
-    const extractor = tsAstExtractor(ROOT)
-    assert.deepEqual(await anchorHitCommits(root, [commit], 'src/x.ts', ['f'], extractor), [])
-
-    delete process.env.ANCHOR_FAIL_SHOW
-    const verified = await anchorHitCommits(root, [commit], 'src/x.ts', ['f'], extractor, { loud: true })
-    assert.deepEqual(verified.map((hit) => hit.selectors), [['f']], 'verified read must bypass the soft empty memo and re-read Git')
-  } finally {
-    process.env.PATH = priorPath
-    if (priorFail === undefined) delete process.env.ANCHOR_FAIL_SHOW
-    else process.env.ANCHOR_FAIL_SHOW = priorFail
-    rmSync(root, { recursive: true, force: true })
-  }
 })
 
 test('historical extractor memo stays stable across order and same-process repetition', { skip: !gitAvailable() && 'git not available' }, async () => {
@@ -192,12 +151,12 @@ test('historical extractor memo stays stable across order and same-process repet
       const commit = g('rev-parse', 'HEAD')
       const x = tsAstExtractor(ROOT)
       for (const path of order) {
-        const hits = await anchorHitCommits(root, [commit], path, ['f'], x)
+        const hits = await anchorHitCommits(root, [{ commit, historicalPath: path, parents: [] }], ['f'], [x])
         if (path.endsWith('.tsx')) assert.equal(hits[0]?.unparseable !== undefined, true, 'TSX must retain its parse error')
         else assert.equal(hits[0]?.unparseable, undefined, 'TS must not inherit the TSX memo result')
       }
       for (const path of [...order].reverse()) {
-        const hits = await anchorHitCommits(root, [commit], path, ['f'], x)
+        const hits = await anchorHitCommits(root, [{ commit, historicalPath: path, parents: [] }], ['f'], [x])
         if (path.endsWith('.tsx')) assert.equal(hits[0]?.unparseable !== undefined, true, 'repeat TSX query must stay conservative')
         else assert.equal(hits[0]?.unparseable, undefined, 'repeat TS query must stay parseable')
       }

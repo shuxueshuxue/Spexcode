@@ -8,7 +8,7 @@ import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layo
 import { evalNodes, evalNodesAt, validateScenarios, resolveEvalNode, scenarioCodeAxis, scenarioHash, scenarioProjection, writeScenarioMeasurementMetadata, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, contentProbeFor, anchorProbeFor, anchorProblems } from './freshness.js'
-import { parseRelation } from '../../spec-cli/src/anchors.js'
+import { parseRelation, relationClaimsPath } from '../../spec-cli/src/anchors.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
 import { stripRefSigil } from '../../spec-cli/src/mentions.js'
@@ -82,13 +82,7 @@ export function nodeChanged(dirRel: string, codeFiles: readonly string[], change
     const inDescendant = descendants.some((d) => c === d || c.startsWith(d + '/'))
     if (inNodeDir && !inDescendant) return true
   }
-  return codeFiles.some((cf) => {
-    if (changed.has(cf)) return true
-    const dir = cf.replace(/\/+$/, '') + '/'
-    const re = cf.includes('*') ? new RegExp('^' + cf.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$') : null
-    for (const c of changed) { if (c.startsWith(dir)) return true; if (re && re.test(c)) return true }
-    return false
-  })
+  return codeFiles.some((claim) => [...changed].some((file) => relationClaimsPath(claim, file)))
 }
 
 async function scan(args: string[] = []): Promise<number> {
@@ -702,7 +696,7 @@ async function scenarioLs(args: string[]): Promise<number> {
   const unmeasuredOnly = has(args, 'unmeasured')
   if (has(args, 'json')) {
     if (unmeasuredOnly) {
-      console.error('spex eval scenario ls --json: --unmeasured needs readings; JSON is the complete declaration projection and reads no eval sidecar')
+      console.error('spex eval scenario ls --json: --unmeasured needs evals; JSON is the complete declaration projection and reads no eval sidecar')
       return 2
     }
     try {

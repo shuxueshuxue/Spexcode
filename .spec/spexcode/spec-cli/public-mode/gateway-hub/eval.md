@@ -12,7 +12,9 @@ scenarios:
       loopback vs. a genuinely non-loopback connection with spoofed forwarding headers), setting the admin
       and project passwords through the gateway APIs, both designed login flows, cross-project and
       cross-scope access attempts, password rotation and clearing, hostile projectIds sent path-as-is, and
-      a WebSocket upgrade with and without a session.
+      a WebSocket upgrade with and without a session. Complete an ordinary scoped HTTP request, then open a
+      scoped SSE response and abruptly close the downstream after its first event while counting the real
+      backend-side connection through a bounded settle.
     expected: |
       An ungated project proxies straight through, prefix stripped, query preserved, spex_* cookies removed
       while foreign cookies pass. /projects answers a loopback caller with the registry (non-loopback
@@ -26,6 +28,8 @@ scenarios:
       project password kills its old sessions; DELETE reopens the project. Unknown, traversal-shaped, and
       non-loopback-upstream ids 404 with no upstream contact. A gated upgrade with no session is destroyed
       before any backend contact; with one it completes 101 and the backend sees only non-gateway cookies.
+      Ordinary scoped HTTP completes with its body intact, and the abrupt SSE downstream close reclaims the
+      corresponding upstream socket by the bounded settle instead of retaining one connection per subscriber.
 ---
 
 Measured through the product surface itself — the hub's public HTTP/WS face on a real port — via

@@ -44,6 +44,9 @@ agent-authored lifecycle, worktree, branch, transcript, and conversation identit
 only after the existing exact-instance stop guard has safely stopped that session-owned leaf, tmux, and adapter
 transport. The shared project app-server/control plane is never touched; sibling references remain loaded. If
 ownership or the stop proof is unprovable, archive fails loudly and leaves the record unarchived and visible.
+Native thread ownership is unique whether the target is currently loaded or not. For adapters whose archive RPC
+can race native child creation, the target descendant census runs again after the mutation and before success;
+a descendant appearing in that interval refuses and compensates instead of filing a false zero-runtime proof.
 
 **It is the attention verb backed by the resource stop.** This is the line that must not blur:
 
@@ -59,7 +62,9 @@ that every target-owned PID, tmux window, rendezvous transport, and loaded threa
 the record, worktree, and branch directly. That cold retirement path sends no signal and neither probes nor
 requires ownership of unrelated references on the shared project app-server; archive already returned the
 target's runtime. Any target runtime that has reappeared, stale/swapped target identity, unreadable cold proof,
-or ambiguous target ownership fails loudly before deletion and leaves the shelf row intact.
+or ambiguous target ownership fails loudly before deletion and leaves the shelf row intact. Continuing-cold
+proof may list loaded IDs and the target's own native collection/descendants, but it never `thread/read`s or
+waits on an unrelated loaded sibling.
 
 A prepared `queued` row that has never launched takes the other target-only retirement path. Close serializes
 with the drainer on the same session transition/record lock; if close wins while the record is still queued, it
@@ -67,7 +72,8 @@ verifies that no harness thread identity, tmux window, live/recycled leaf PID, r
 commit, or dirty work exists, then removes the prepared prompt, record, worktree, and branch before releasing
 capacity. It sends no signal and asks nothing of unrelated shared references because no target runtime was ever
 created. If the drainer wins first, status is no longer queued and ordinary live close owns teardown. Any
-target/runtime/work ambiguity fails loudly with the queued row intact.
+target/runtime/work ambiguity fails loudly with the queued row intact. Close reports success and releases
+capacity only after worktree, branch, prompt, and record removal have each been proven complete.
 
 Archiving never removes or moves the worktree/branch and writes no timeline row. Success means the exact leaf is
 stopped and the record is archived; a failed stop means no archive field change. An archived record is therefore

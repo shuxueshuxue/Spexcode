@@ -371,9 +371,9 @@ const sessionStopBlocker = async (
     const ownerCounts = new Map<string, number>()
     for (const rec of entry.recs) if (rec.harness_session_id) ownerCounts.set(rec.harness_session_id, (ownerCounts.get(rec.harness_session_id) ?? 0) + 1)
     const targetThread = entry.recs.find((rec) => rec.session_id === id)?.harness_session_id
+    if (targetThread && ownerCounts.get(targetThread) !== 1)
+      return `${descriptor.label} target thread ${targetThread} has no one exact governed session owner`
     const targetRef = probe.healthy && targetThread ? probe.references.find((reference) => reference.referenceId === targetThread) : undefined
-    if (targetRef && ownerCounts.get(targetRef.referenceId) !== 1)
-      return `${descriptor.label} target thread ${targetRef.referenceId} has no one exact governed session owner`
     const siblings = probe.healthy ? probe.references.filter((reference) => !targetThread || reference.referenceId !== targetThread) : []
     const liveReason = siblings.length
       ? `${siblings.length} live sibling thread(s)`

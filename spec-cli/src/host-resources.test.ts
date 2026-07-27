@@ -163,6 +163,10 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     mkdirSync(duplicateDir, { recursive: true })
     writeFileSync(join(duplicateDir, 'session.json'), `${JSON.stringify(record(duplicate, 'thread-target'), null, 2)}\n`)
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /target thread thread-target has no one exact governed session owner/)
+    probe = { healthy: true, references: [] }
+    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /target thread thread-target has no one exact governed session owner/,
+      'duplicate record ownership stays ambiguous even while the native thread is unloaded')
+    probe = governedProbe(false)
     rmSync(duplicateDir, { recursive: true, force: true })
     rmSync(codexAppServerPid(root), { force: true })
     probe = { healthy: false, references: [], error: 'fixture probe failed' }

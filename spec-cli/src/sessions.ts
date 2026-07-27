@@ -2410,6 +2410,11 @@ async function assertColdRetirementSafe(id: string, rec: SessRec): Promise<void>
     throw new ResourceConflict(`refusing to close archived session ${id}: target leaf PID ${pid} is live or recycled; ownership is ambiguous`)
 
   const harness = harnessById(rec.harness || defaultHarness.id)
+  if (harness.coldRetirementPreflight) {
+    const proof = await harness.coldRetirementPreflight(rec)
+    if (!proof.ok) throw new ResourceConflict(`refusing to close archived session ${id}: ${proof.reason}`)
+    return
+  }
   const descriptors = harness.sharedRuntimes?.(runtimeRoot()) ?? []
   let everySharedRootAbsent = descriptors.length > 0
   for (const descriptor of descriptors) {
@@ -2504,6 +2509,7 @@ async function closeSessionUnlocked(id: string): Promise<boolean> {
   if (existsSync(wt.path)) {
     const removed = await gitTry(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
     if (!removed.ok) throw new ResourceConflict(`refusing to finish close for ${id}: worktree removal failed`)
+    if (existsSync(wt.path)) throw new ResourceConflict(`refusing to finish close for ${id}: worktree remains after removal`)
   }
   if (wt.branch) {
     const branchRef = `refs/heads/${wt.branch}`
@@ -2511,12 +2517,15 @@ async function closeSessionUnlocked(id: string): Promise<boolean> {
     if (present.ok) {
       const removed = await gitTry(['-C', mainRoot(), 'branch', '-D', wt.branch])
       if (!removed.ok) throw new ResourceConflict(`refusing to finish close for ${id}: branch removal failed`)
+      const remaining = await gitTry(['-C', mainRoot(), 'rev-parse', '--verify', '--quiet', branchRef])
+      if (remaining.ok || remaining.failure !== 'exit') throw new ResourceConflict(`refusing to finish close for ${id}: branch remains or its removal is unproven`)
     } else if (present.failure !== 'exit') {
       throw new ResourceConflict(`refusing to finish close for ${id}: branch presence is unreadable`)
     }
   }
   if (slot) { try { rmSync(slot, { recursive: true, force: true }) } catch { /* best-effort GC */ } }
-  rmSync(sessionStoreDir(id), { recursive: true, force: true })
+  try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) }
+  catch (error) { throw new ResourceConflict(`refusing to finish close for ${id}: session record/prompt removal failed (${error instanceof Error ? error.message : String(error)})`) }
   if (existsSync(sessionStoreDir(id))) throw new ResourceConflict(`refusing to finish close for ${id}: session record removal failed`)
   void drainQueue()   // a close frees a slot — start the next queued session if any
   return true

@@ -137,6 +137,7 @@ test('codex native descendant census includes subAgent sources and follows every
     assert.equal(requests.length, 2)
     assert.equal(requests[1].params.cursor, 'p2')
     assert.deepEqual(requests[0].params.sourceKinds, CODEX_THREAD_SOURCE_KINDS)
+    assert.equal(requests[0].params.useStateDbOnly, true)
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     rmSync(socketPath, { force: true })

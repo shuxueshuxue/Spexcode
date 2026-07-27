@@ -880,7 +880,7 @@ export function codexThreadList(sock: string, params: Record<string, unknown>): 
   const sourceKinds = Array.isArray(params.sourceKinds) && params.sourceKinds.length
     ? params.sourceKinds
     : [...CODEX_THREAD_SOURCE_KINDS]
-  return codexPagedIds(sock, 'thread/list', { ...params, sourceKinds }, (item) => {
+  return codexPagedIds(sock, 'thread/list', { ...params, sourceKinds, useStateDbOnly: true }, (item) => {
     if (typeof item === 'string') return item
     const id = (item as { id?: unknown } | null)?.id
     return typeof id === 'string' ? id : null

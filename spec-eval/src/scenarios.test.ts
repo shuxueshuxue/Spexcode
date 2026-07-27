@@ -216,6 +216,44 @@ test('writeScenarioMeasurementMetadata rejects YAML-illegal tab indentation', ()
   )
 })
 
+test('validateScenarios rejects inconsistent sibling indentation and space-tab block scalar indentation', () => {
+  const inconsistentFieldIndent = oneScenarioSource.replace(
+    '    description: alpha description',
+    '      description: alpha description',
+  )
+  const tabIndentedBlock = oneScenarioSource.replace(
+    '    description: alpha description',
+    '    description: >-\n    \talpha description',
+  )
+  const tabLeadingContent = oneScenarioSource.replace(
+    '    description: alpha description',
+    '    description: |-\n      first line\n      \talpha description',
+  )
+  const tabBelowEstablishedIndent = oneScenarioSource.replace(
+    '    description: alpha description',
+    '    description: |-\n      first line\n     \talpha description',
+  )
+  const tabPseudoBlank = oneScenarioSource.replace(
+    '    description: alpha description',
+    '    description: |-\n    \t',
+  )
+
+  assert.ok(
+    validateScenarios(inconsistentFieldIndent).some((error) => /inconsistent scenario field indentation/i.test(error)),
+  )
+  assert.ok(
+    validateScenarios(tabIndentedBlock).some((error) => /tab indentation.*block scalar/i.test(error)),
+  )
+  assert.deepEqual(validateScenarios(tabLeadingContent), [])
+  assert.equal(parseScenarios(tabLeadingContent)[0].description, 'first line\n\talpha description')
+  assert.ok(
+    validateScenarios(tabBelowEstablishedIndent).some((error) => /tab indentation.*block scalar/i.test(error)),
+  )
+  assert.ok(
+    validateScenarios(tabPseudoBlank).some((error) => /tab indentation.*block scalar/i.test(error)),
+  )
+})
+
 test('parseScenarios: no frontmatter / no scenarios key → empty', () => {
   assert.deepEqual(parseScenarios('# just a heading\n'), [])
   assert.deepEqual(parseScenarios('---\ntitle: x\n---\nbody\n'), [])

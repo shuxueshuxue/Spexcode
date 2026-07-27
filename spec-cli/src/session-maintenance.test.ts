@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { tmpdir } from 'node:os'
@@ -81,6 +81,22 @@ const deferred = <T = void>() => {
   return { promise, resolve }
 }
 const turn = () => new Promise<void>((resolve) => setImmediate(resolve))
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+const waitUntil = async (check: () => boolean, label: string, timeoutMs = 5_000) => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (check()) return
+    await sleep(5)
+  }
+  throw new Error(`timed out waiting for ${label}`)
+}
+const bounded = <T>(promise: Promise<T>, label: string, timeoutMs = 5_000) => Promise.race([
+  promise,
+  new Promise<never>((_, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timed out waiting for ${label}`)), timeoutMs)
+    timer.unref()
+  }),
+])
 
 const expectCode = async (promise: Promise<unknown>, code: string) => {
   await assert.rejects(promise, (error: any) => {
@@ -144,30 +160,50 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       assert.deepEqual(b.readState().capabilities.map((entry) => entry.capability), [{ op: 'stop', sessionId: 's-1' }])
 
       const otherRoot = mkdtempSync(join(tmpdir(), 'spex-maintenance-cas-a-'))
-      try {
-        const barrier = join(otherRoot, 'start')
-        const ready = join(otherRoot, 'ready'); mkdirSync(ready)
-        const children = [0x31, 0x32].map((byte) => spawn(tsx, [casFixture, otherRoot, barrier, ready, String(byte)], {
+      const startBarrier = join(otherRoot, 'start')
+      const releaseBarrier = join(otherRoot, 'release')
+      const ready = join(otherRoot, 'ready')
+      const resultsDir = join(otherRoot, 'results')
+      mkdirSync(ready); mkdirSync(resultsDir)
+      const children = [0x31, 0x32].map((byte) => {
+        const child = spawn(tsx, [casFixture, otherRoot, startBarrier, releaseBarrier, ready, resultsDir, String(byte)], {
           stdio: ['ignore', 'pipe', 'pipe'],
-        }))
-        const completed = children.map((child) => {
-          let stdout = ''; let stderr = ''
-          child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
-          child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
-          const closed = once(child, 'close') as Promise<[number]>
-          return async () => {
-            const [code] = await closed
-            assert.equal(code, 0, stderr)
-            return JSON.parse(stdout) as { ok: boolean; code?: string }
-          }
         })
-        for (let i = 0; i < 200 && readdirSync(ready).length !== 2; i++) await new Promise((resolve) => setTimeout(resolve, 5))
+        let stdout = ''; let stderr = ''
+        child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
+        child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+        const closed = (once(child, 'close') as Promise<[number | null, NodeJS.Signals | null]>).then(([code, signal]) => ({ code, signal, stdout, stderr }))
+        return { child, closed }
+      })
+      try {
+        await waitUntil(() => readdirSync(ready).length === 2, 'both CAS children ready')
         assert.equal(readdirSync(ready).length, 2, 'both independent processes reached the same-root CAS barrier')
-        writeFileSync(barrier, '')
-        const results = await Promise.all(completed.map((done) => done()))
+        writeFileSync(startBarrier, '')
+        await waitUntil(() => readdirSync(resultsDir).length === 2, 'both CAS children report')
+        const results = readdirSync(resultsDir).map((name) => JSON.parse(readFileSync(join(resultsDir, name), 'utf8')) as { pid: number; ok: boolean; code?: string })
         assert.equal(results.filter((result) => result.ok).length, 1)
         assert.deepEqual(results.filter((result) => !result.ok).map((result) => result.code), ['maintenance_conflict'])
-      } finally { rmSync(otherRoot, { recursive: true, force: true }) }
+        const winner = results.find((result) => result.ok)
+        const winnerChild = children.find(({ child }) => child.pid === winner?.pid)
+        assert.ok(winnerChild, 'winner identity maps to one exact child')
+        assert.equal(winnerChild.child.exitCode, null, 'winner remains alive through loser report')
+        assert.equal(winnerChild.child.signalCode, null, 'winner is not signaled before loser report')
+        writeFileSync(releaseBarrier, '')
+        const exits = await Promise.all(children.map(({ closed }, index) => bounded(closed, `CAS child ${index} exit`)))
+        for (const result of exits) assert.equal(result.code, 0, result.stderr)
+      } finally {
+        if (!existsSync(startBarrier)) writeFileSync(startBarrier, '')
+        if (!existsSync(releaseBarrier)) writeFileSync(releaseBarrier, '')
+        for (const { child } of children) {
+          if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
+        }
+        await Promise.all(children.map(({ closed }, index) => bounded(closed, `CAS child ${index} teardown`, 1_000).catch(() => null)))
+        for (const { child } of children) {
+          if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+        }
+        await Promise.all(children.map(({ closed }, index) => bounded(closed, `CAS child ${index} forced teardown`, 1_000).catch(() => null)))
+        rmSync(otherRoot, { recursive: true, force: true })
+      }
     } finally { f.cleanup() }
   })
 
@@ -274,6 +310,21 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       await gate.runOperation({ op: 'resume', sessionId: 's-1', force: false, authorization: auth }, async () => { effects.push('resume:s-1:false') })
       await gate.runOperation({ op: 'resume', sessionId: 's-2', force: true, authorization: auth }, async () => { effects.push('resume:s-2:true') })
       assert.deepEqual(effects, ['stop:s-1', 'resume:s-1:false', 'resume:s-2:true'])
+    } finally { f.cleanup() }
+  })
+
+  await t.test('valid heartbeat preserves the active epoch and extends its exact durable deadline', async () => {
+    const f = makeFixture()
+    try {
+      const gate = f.create()
+      const lease = await gate.acquireLease({
+        capabilities: [{ op: 'stop', sessionId: 's-1' }], owner: { pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+      })
+      f.advance(1_000)
+      await gate.heartbeatLease({ token: lease.token, epoch: lease.epoch, ttlMs: 60_000 })
+      assert.equal(gate.readState().state, 'active')
+      assert.equal(gate.readState().epoch, lease.epoch)
+      assert.equal(JSON.parse(readFileSync(join(f.root, 'session-maintenance.json'), 'utf8')).heartbeatDeadline, 71_000)
     } finally { f.cleanup() }
   })
 

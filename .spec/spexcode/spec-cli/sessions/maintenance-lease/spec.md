@@ -3,10 +3,9 @@ title: session maintenance lease
 status: active
 hue: 280
 desc: A project-scoped admission barrier that drains in-flight session writes, blocks ordinary mutation, and admits only a finite exact stop/resume maintenance plan.
-code:
-  - spec-cli/test/session-maintenance-http-fixture.mjs
 related:
   - spec-cli/test/session-maintenance-cas-fixture.ts
+  - spec-cli/test/session-maintenance-http-fixture.mjs
   - spec-cli/src/session-maintenance.test.ts
   - spec-cli/src/session-maintenance.integration.test.ts
   - spec-cli/src/sessions.ts

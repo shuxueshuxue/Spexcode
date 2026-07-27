@@ -898,10 +898,13 @@ function canonicalPathProjector(
       seen.add(candidate)
       const applicable = (renamesByFrom.get(candidate) ?? []).filter((rename) => !precedes(rename.hash, event))
       if (!applicable.length) { resolved.add(candidate); continue }
-      // event < rename replaces this historical name with the target. Incomparable event/rename branches
-      // fork identity at their merge: the event-side old path and rename-side target can both survive.
-      if (applicable.some((rename) => !precedes(event, rename.hash))) resolved.add(candidate)
-      for (const rename of applicable) pending.push(rename.to)
+      // The earliest applicable rename starts this path's next lineage epoch. Later renames from the same
+      // path belong to a recreated path, not to an event that predates the first boundary. Incomparable
+      // rename branches are both frontier members, so their identities still fork at the merge.
+      const frontier = applicable.filter((rename, index) =>
+        !applicable.some((other, otherIndex) => otherIndex !== index && precedes(other.hash, rename.hash)))
+      if (frontier.some((rename) => !precedes(event, rename.hash))) resolved.add(candidate)
+      for (const rename of frontier) pending.push(rename.to)
     }
     return [...resolved]
   }

@@ -135,16 +135,20 @@ server, but it is never silent. Successful replacement is live before its hold i
 authoritative rescan is triggered.
 
 **The patrol is a self-heal authority, not a crutch — and it is accountable.** The delta-gated ~15s cold
-tick now `invalidateBoard('full')`s before it rebuilds (it once read the still-valid cache back — a no-op
-patrol, found by measurement: an uncommitted worktree edit stayed invisible through five ticks while a
-control write propagated in 231ms). A patrol rebuild whose diff is non-empty when NO leaf watcher signalled
-logs a loud `PATROL-REPAIR` naming the changed units: a repair means some leaf is blind, and the target
-state is repairs/hour = 0. The trigger set is what caused ONE rebuild, so the rebuild consumes it whether or
-not content moved — a fire that changed nothing (every poller's first sample is one) must not leave its tag
-behind to make the next genuine repair read as leaf-signalled, which is the alarm silencing itself on
-exactly the machines that need it. `SPEXCODE_DISABLE_WATCHERS` (csv: store, refs, worktrees) deliberately blinds a
-leaf so tests can prove the patrol catches and reports what it misses; `SPEXCODE_BOARD_DEBUG=1` logs every
-broadcast's changed units, trigger tags and build cost.
+tick asks [[graph-cache]] for a patrol refresh and tags that refresh `patrol`; it does not mark the board
+full-dirty merely because time passed. The cache compares its compact board-input revision under the same
+single flight as a real rebuild. An unchanged tick returns the anchor and starts zero assembly, while a moved
+revision selects the cache's existing session-splice or full-build domain (so an uncommitted worktree edit or
+ref move a leaf missed still lands). A resulting diff when NO leaf watcher signalled logs a loud
+`PATROL-REPAIR` naming the changed units: a repair means some leaf is blind, and the target state is
+repairs/hour = 0. The trigger set is what
+caused ONE refresh, so the refresh consumes it whether or not content moved — a no-op patrol must not leave its
+tag behind to make the next genuine repair read as leaf-signalled, which is the alarm silencing itself on
+exactly the machines that need it. `SPEXCODE_DISABLE_WATCHERS` (csv: store, refs, worktrees) deliberately blinds
+a leaf so tests can prove the patrol catches and reports what it misses; `SPEXCODE_BOARD_DEBUG=1` logs every
+broadcast's changed units, trigger tags and refresh cost. No second timer, fingerprint poller, or eval-summary
+generation exists: the one cold tick verifies ordinary board inputs, while session-eval currentness remains
+event-driven under [[session-eval]]'s observer holds.
 
 The patrol is deliberately **not an eval-summary correctness source** ([[session-eval]]). It neither advances a
 session eval input generation nor starts a periodic fingerprint/build. Session-eval coherence is a state machine
@@ -153,6 +157,12 @@ generation and makes the session unit `updating(lastKnown)`, then the existing g
 the stable latest-generation result later replaces it through this same envelope. A burst increments through its
 events but may publish/build only the newest generation. No summary-specific SSE, WebSocket, endpoint poll, or
 timer exists.
+
+A refresh consumes its trigger set only after it successfully validates or produces a board. Producer,
+watchdog, or validation failure leaves every existing cause owed, including watcher signals that arrived while
+the failed flight was occupied, matching [[graph-cache]]'s restored dirty scope. If a later patrol recovers that
+work, `patrol` is added alongside those retained causes; only a successful changed refresh whose sole cause was
+patrol is a blind-watcher `PATROL-REPAIR`.
 
 **Rebuilds are gated on someone listening.** With no delta subscriber the pipeline never builds — plain
 subscribers get the zero-cost notify, a closed dashboard costs nothing (both pollers stop with their last

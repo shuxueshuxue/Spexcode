@@ -250,6 +250,9 @@ export interface Harness {
   // Archive preflight runs BEFORE any leaf signal. It may inspect shared references to refuse an active or
   // unknown target turn, but it must not mutate the shared runtime; coldRuntime is the sole commit primitive.
   coldPreflight?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): Promise<{ ok: true; alreadyCold?: boolean } | { ok: false; reason: string }>
+  // A record that is already archived needs a target-only continuing-cold proof. Unlike mutation preflight,
+  // this must not thread/read unrelated loaded siblings merely to retire a target whose runtime is absent.
+  coldRetirementPreflight?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): Promise<{ ok: true; alreadyCold: true } | { ok: false; reason: string }>
   // Optional cold-storage proof/cleanup. A harness with a per-session loaded reference must remove exactly that
   // reference or return a loud reason; adapters without such a resident reference return {ok:true}.
   coldRuntime?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): Promise<{ ok: true } | { ok: false; reason: string }>
@@ -1721,6 +1724,30 @@ export const codexHarness: Harness = {
   leafOwnerNeedle: (rec) => rec.harnessSessionId ?? null,
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   cleanupRuntime: async () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
+  coldRetirementPreflight: async (rec) => {
+    if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
+    const threadId = rec.harnessSessionId
+    const sock = codexAppServerSock(runtimeRoot())
+    const [activeDescendants, archivedDescendants, loaded, archivedList, activeList] = await Promise.all([
+      codexThreadList(sock, { ancestorThreadId: threadId, archived: false, sourceKinds: [] }),
+      codexThreadList(sock, { ancestorThreadId: threadId, archived: true, sourceKinds: [] }),
+      codexLoadedReferenceIds(sock),
+      codexThreadList(sock, { archived: true, sourceKinds: [] }),
+      codexThreadList(sock, { archived: false, sourceKinds: [] }),
+    ])
+    if (!activeDescendants.ok) return { ok: false, reason: activeDescendants.error }
+    if (!archivedDescendants.ok) return { ok: false, reason: archivedDescendants.error }
+    if (!loaded.ok) return { ok: false, reason: loaded.error }
+    if (!archivedList.ok) return { ok: false, reason: archivedList.error }
+    if (!activeList.ok) return { ok: false, reason: activeList.error }
+    const descendants = [...new Set([...activeDescendants.ids, ...archivedDescendants.ids])]
+    if (descendants.length) return { ok: false, reason: `Codex thread ${threadId} has owned descendants (${descendants.join(', ')}); cold retirement is not proven safe` }
+    if (loaded.referenceIds.includes(threadId)) return { ok: false, reason: `Codex thread ${threadId} is still loaded` }
+    const inArchived = archivedList.ids.includes(threadId)
+    const inActive = activeList.ids.includes(threadId)
+    if (!inArchived || inActive) return { ok: false, reason: `Codex thread ${threadId} is not uniquely in the archived collection (archived=${inArchived}, active=${inActive})` }
+    return { ok: true, alreadyCold: true }
+  },
   coldPreflight: async (rec) => {
     if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
     const sock = codexAppServerSock(runtimeRoot())
@@ -1764,15 +1791,21 @@ export const codexHarness: Harness = {
     if (!generationBefore) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
     const siblingBefore = before.references.filter((reference) => reference.referenceId !== threadId)
     const coldCheck = async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
-      const [probe, archivedList, activeList] = await Promise.all([
+      const [probe, archivedList, activeList, activeDescendants, archivedDescendants] = await Promise.all([
         codexSharedRuntimeProbe(runtimeRoot()),
         codexThreadList(sock, { archived: true, sourceKinds: [] }),
         codexThreadList(sock, { archived: false, sourceKinds: [] }),
+        codexThreadList(sock, { ancestorThreadId: threadId, archived: false, sourceKinds: [] }),
+        codexThreadList(sock, { ancestorThreadId: threadId, archived: true, sourceKinds: [] }),
       ])
       if (!probe.healthy) return { ok: false, reason: probe.error || 'Codex post-archive runtime probe is unhealthy' }
       if (codexRuntimeGeneration(runtimeRoot()) !== generationBefore) return { ok: false, reason: 'shared Codex app-server generation changed during archive' }
       if (!archivedList.ok) return { ok: false, reason: archivedList.error }
       if (!activeList.ok) return { ok: false, reason: activeList.error }
+      if (!activeDescendants.ok) return { ok: false, reason: activeDescendants.error }
+      if (!archivedDescendants.ok) return { ok: false, reason: archivedDescendants.error }
+      const descendants = [...new Set([...activeDescendants.ids, ...archivedDescendants.ids])]
+      if (descendants.length) return { ok: false, reason: `Codex thread ${threadId} acquired owned descendants during archive (${descendants.join(', ')})` }
       if (probe.references.some((reference) => reference.referenceId === threadId)) return { ok: false, reason: `Codex thread ${threadId} remains loaded after thread/archive` }
       if (!archivedList.ids.includes(threadId)) return { ok: false, reason: `Codex thread ${threadId} is absent from both loaded and archived collections` }
       if (activeList.ids.includes(threadId)) return { ok: false, reason: `Codex thread ${threadId} remains in the non-archived collection` }

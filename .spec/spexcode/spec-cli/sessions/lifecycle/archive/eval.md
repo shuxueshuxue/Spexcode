@@ -39,7 +39,9 @@ scenarios:
       The A census may show the archived-live hazard and shared-root guard loss. The B archive succeeds only with
       exact target PID/start/argv/thread ownership and detached shared-root proof despite unrelated unowned refs;
       target runtime/artifacts are gone, target is offline history-only, sibling leaf and shared app-server
-      identity/ref remain and can take a new turn, and capacity/resources no longer charge the target.
+      identity/ref remain and can take a new turn, and capacity/resources no longer charge the target. A native
+      descendant created after preflight but before archive settlement is caught by the post-mutation census,
+      fails loud, and is compensated rather than filed as cold.
     tags: [backend-api, cli]
   - name: archive-guard-failure-visible
     description: >
@@ -60,7 +62,7 @@ scenarios:
       absence of every target-owned runtime, sends no signal, and permanently removes its record, worktree,
       branch, and shelf row. Unrelated or unowned shared app-server references neither block nor disappear. A
       reappeared, swapped, unreadable, or ambiguous target runtime fails nonzero/409 before deletion and leaves
-      the cold row and retained work intact.
+      the cold row and retained work intact. The cold proof performs no unrelated sibling `thread/read`.
     tags: [frontend-e2e, backend-api, cli]
   - name: close-never-launched-queue
     description: >

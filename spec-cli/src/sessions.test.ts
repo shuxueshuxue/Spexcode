@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -206,6 +206,7 @@ test('closing a proven-cold archive ignores unrelated shared refs but rejects ta
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = codexHarness.sharedRuntimes
   const originalColdPreflight = codexHarness.coldPreflight
+  const originalColdRetirementPreflight = codexHarness.coldRetirementPreflight
   const originalCleanup = codexHarness.cleanupRuntime
   const home = mkdtempSync(join(tmpdir(), 'spex-cold-close-'))
   process.env.SPEXCODE_HOME = home
@@ -230,7 +231,13 @@ test('closing a proven-cold archive ignores unrelated shared refs but rejects ta
     residency: async () => ({ healthy: true, referenceIds: residentIds }),
     probe: async () => { throw new Error('cold retirement must not enter the full shared-root ownership guard') },
   }]
-  codexHarness.coldPreflight = async () => { coldPreflightCalls++; return { ok: true, alreadyCold: true } }
+  codexHarness.coldPreflight = async () => { throw new Error('cold retirement must not use mutation preflight') }
+  codexHarness.coldRetirementPreflight = async (rec) => {
+    coldPreflightCalls++
+    return rec.harnessSessionId && residentIds.includes(rec.harnessSessionId)
+      ? { ok: false, reason: `target adapter thread ${rec.harnessSessionId} is loaded` }
+      : { ok: true, alreadyCold: true }
+  }
   codexHarness.cleanupRuntime = async () => { throw new Error('cold retirement must not invoke adapter cleanup') }
 
   try {
@@ -261,6 +268,7 @@ test('closing a proven-cold archive ignores unrelated shared refs but rejects ta
   } finally {
     codexHarness.sharedRuntimes = originalShared
     codexHarness.coldPreflight = originalColdPreflight
+    codexHarness.coldRetirementPreflight = originalColdRetirementPreflight
     codexHarness.cleanupRuntime = originalCleanup
     if (leaf?.pid && processStartToken(leaf.pid)) {
       try { process.kill(leaf.pid, 'SIGKILL') } catch { /* already exited */ }
@@ -346,6 +354,15 @@ test('public close cancels a clean never-launched queue without entering the unr
       listener.close()
       await once(listener, 'close')
       rmSync(socketPath, { force: true })
+    }
+
+    const deletionFailure = prepare('deletion-failure')
+    chmodSync(sessionStoreDir(deletionFailure.id), 0o500)
+    try {
+      await assert.rejects(closeSession(deletionFailure.id), /session record\/prompt removal failed/)
+      assert.equal(existsSync(sessionStoreDir(deletionFailure.id)), true, 'close cannot report success after incomplete store/prompt removal')
+    } finally {
+      chmodSync(sessionStoreDir(deletionFailure.id), 0o700)
     }
   } finally {
     codexHarness.sharedRuntimes = originalShared

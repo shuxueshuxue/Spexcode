@@ -7,6 +7,52 @@ import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
 import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerIsolation, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
+import { runtimeRoot } from './layout.js'
+
+const codexRpcFixture = (handler: (message: any) => unknown) => createServer((socket) => {
+  let buffer = Buffer.alloc(0)
+  let upgraded = false
+  const send = (value: unknown) => {
+    const payload = Buffer.from(JSON.stringify(value))
+    const header = payload.length < 126
+      ? Buffer.from([0x81, payload.length])
+      : Buffer.from([0x81, 126, payload.length >> 8, payload.length & 0xff])
+    socket.write(Buffer.concat([header, payload]))
+  }
+  const handle = (message: any) => {
+    if (message.method === 'initialize') return send({ id: message.id, result: {} })
+    if (message.method === 'initialized') return
+    try { send({ id: message.id, result: handler(message) ?? {} }) }
+    catch (error) { send({ id: message.id, error: { message: error instanceof Error ? error.message : String(error) } }) }
+  }
+  socket.on('data', (chunk) => {
+    buffer = Buffer.concat([buffer, chunk])
+    if (!upgraded) {
+      const split = buffer.indexOf('\r\n\r\n')
+      if (split < 0) return
+      socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n')
+      upgraded = true
+      buffer = buffer.slice(split + 4)
+    }
+    while (buffer.length >= 2) {
+      const masked = (buffer[1] & 0x80) !== 0
+      let length = buffer[1] & 0x7f
+      let offset = 2
+      if (length === 126) { if (buffer.length < 4) return; length = buffer.readUInt16BE(2); offset = 4 }
+      const maskOffset = offset
+      const dataOffset = offset + (masked ? 4 : 0)
+      if (buffer.length < dataOffset + length) return
+      let payload = buffer.slice(dataOffset, dataOffset + length)
+      if (masked) {
+        const mask = buffer.slice(maskOffset, maskOffset + 4)
+        payload = Buffer.from(payload)
+        for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i % 4]
+      }
+      buffer = buffer.slice(dataOffset + length)
+      handle(JSON.parse(payload.toString('utf8')))
+    }
+  })
+})
 
 test('shQuote preserves a single quote through a POSIX shell', () => {
   const input = "alpha'beta"
@@ -141,6 +187,79 @@ test('codex native descendant census includes subAgent sources and follows every
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     rmSync(socketPath, { force: true })
+  }
+})
+
+test('Codex cold retirement proves only target collections and never thread/reads an unrelated loaded sibling', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-cold-retirement-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const target = 'cold-target'
+  let threadReads = 0
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: [{ id: 'unrelated-loaded-sibling' }], nextCursor: null }
+    if (message.method === 'thread/read') { threadReads++; return { thread: { status: { type: 'idle' }, turns: [] } } }
+    if (message.method === 'thread/list') {
+      if (message.params.ancestorThreadId) return { data: [], nextCursor: null }
+      return { data: message.params.archived ? [{ id: target }] : [], nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const socket = codexAppServerSock(runtimeRoot())
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    assert.deepEqual(await codexHarness.coldRetirementPreflight?.({ session: 'cold-session', harnessSessionId: target }), { ok: true, alreadyCold: true })
+    assert.equal(threadReads, 0, 'cold retirement does not wait on or read the unrelated loaded sibling')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('Codex archive re-censuses native descendants after mutation and compensates a late child', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-late-descendant-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const target = 'archive-race-target'
+  let archived = false
+  const mutations: string[] = []
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: archived ? [{ id: 'unrelated-loaded-sibling' }] : [{ id: target }, { id: 'unrelated-loaded-sibling' }], nextCursor: null }
+    if (message.method === 'thread/read') return { thread: { status: { type: 'idle' }, turns: [] } }
+    if (message.method === 'thread/archive') { archived = true; mutations.push('archive'); return {} }
+    if (message.method === 'thread/unarchive') { archived = false; mutations.push('unarchive'); return {} }
+    if (message.method === 'thread/list') {
+      if (message.params.ancestorThreadId) return { data: archived ? [{ id: 'late-native-descendant' }] : [], nextCursor: null }
+      return { data: message.params.archived === archived ? [{ id: target }] : [], nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const root = runtimeRoot()
+  const socket = codexAppServerSock(root)
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    writeFileSync(codexAppServerPid(root), `${process.pid}\n`)
+    writeFileSync(codexAppServerIsolation(root), `fixture ${process.pid}\n`)
+    const result = await codexHarness.coldRuntime?.({ session: 'archive-race-session', harnessSessionId: target })
+    assert.equal(result?.ok, false)
+    if (result && !result.ok) assert.match(result.reason, /acquired owned descendants during archive \(late-native-descendant\)/)
+    assert.deepEqual(mutations, ['archive', 'unarchive'], 'late descendant causes fail-loud compensation before cold success')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
   }
 })
 

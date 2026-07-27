@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { parseScenarios, validateScenarios, evalNodes, evalNodesAsync, resolveEvalNode, scenarioHash } from './scenarios.js'
+import { parseScenarios, validateScenarios, evalNodes, evalNodesAsync, resolveEvalNode, scenarioHash, writeScenarioMeasurementMetadata } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading } from './sidecar.js'
 import { changedSince, staleAxes } from './freshness.js'
 import { putBlob, listBlobs, gc, resolveBlob, MISS_BLOB, isStrayBlob } from './cache.js'
@@ -76,6 +76,141 @@ scenarios:
     { path: 'tests/auth.spec.ts', name: 'login > accepts @smoke [chrome]' },
     { path: 'tests/auth.spec.ts', name: 'allows admin, user' },
   ])
+})
+
+test('writeScenarioMeasurementMetadata inserts one exact test mapping and deletion restores CRLF bytes', () => {
+  const source = [
+    '---',
+    'scenarios:',
+    '    - name: alpha',
+    '      tags: [cli]',
+    '',
+    '      # the writer must not move this comment or reflow either scalar',
+    '      description: >-',
+    '        alpha description',
+    '      expected: >-',
+    '        alpha expected',
+    '    - name: beta',
+    '      tags: [cli]',
+    '      description: beta description',
+    '      expected: beta expected',
+    '---',
+    '# eval body',
+    '',
+  ].join('\r\n')
+  const mutation = {
+    scenario: 'alpha',
+    insert: { test: { path: 'tests/auth.spec.ts', name: 'accepts admin, user: exact case' } },
+  }
+  const proposed = writeScenarioMeasurementMetadata(source, mutation)
+  const expected = source.replace(
+    '      tags: [cli]\r\n',
+    '      tags: [cli]\r\n      test:\r\n        path: "tests/auth.spec.ts"\r\n        name: "accepts admin, user: exact case"\r\n',
+  )
+
+  assert.equal(proposed, expected)
+  assert.equal(proposed.replace(/\r\n/g, '').includes('\n'), false, 'writer introduced a bare LF')
+  assert.deepEqual(parseScenarios(proposed)[0].test, mutation.insert.test)
+  assert.deepEqual(validateScenarios(proposed), [])
+  assert.equal(
+    writeScenarioMeasurementMetadata(proposed, { scenario: 'alpha', delete: 'test' }),
+    source,
+    'the sanctioned reverse must reconstruct the authoritative input bytes exactly',
+  )
+})
+
+test('writeScenarioMeasurementMetadata rejects malformed, ambiguous, absent, and multi-target mutations', () => {
+  const source = `---
+scenarios:
+  - name: alpha
+    tags: [cli]
+    description: alpha description
+    expected: alpha expected
+  - name: beta
+    tags: [cli]
+    description: beta description
+    expected: beta expected
+---
+`
+  const testRef = { path: 'tests/auth.spec.ts', name: 'exact case' }
+
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(source, { scenario: 'missing', insert: { test: testRef } }),
+    /scenario 'missing'.*not found/i,
+  )
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(source.replace('name: beta', 'name: alpha'), { scenario: 'alpha', insert: { test: testRef } }),
+    /duplicate scenario name 'alpha'/i,
+  )
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(source.replace('    tags: [cli]', '    tags: [cli]\n    tags: [backend-api]'), { scenario: 'alpha', insert: { test: testRef } }),
+    /malformed eval\.md.*duplicate field `tags`/is,
+  )
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(source.replace('expected: beta expected', 'expectd: beta expected'), { scenario: 'beta', insert: { test: testRef } }),
+    /malformed eval\.md.*unknown field `expectd`/is,
+  )
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(source, { scenario: 'alpha', delete: 'test' }),
+    /scenario 'alpha'.*no `test`/i,
+  )
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(source, { scenario: ['alpha', 'beta'], insert: { test: testRef } }),
+    /exactly one scenario/i,
+  )
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(source, { scenario: 'alpha', insert: { test: testRef, runner: 'playwright' } }),
+    /exactly one measurement field.*test/i,
+  )
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(source, { scenario: 'alpha', insert: { test: testRef }, delete: 'test' }),
+    /exactly one action/i,
+  )
+
+  const proposed = writeScenarioMeasurementMetadata(source, { scenario: 'alpha', insert: { test: testRef } })
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(proposed, { scenario: 'alpha', insert: { test: testRef } }),
+    /scenario 'alpha'.*already has `test`/i,
+  )
+})
+
+const oneScenarioSource = `---
+scenarios:
+  - name: alpha
+    tags: [cli]
+    description: alpha description
+    expected: alpha expected
+---
+`
+
+test('writeScenarioMeasurementMetadata rejects duplicate top-level scenarios blocks', () => {
+  const duplicateBlock = oneScenarioSource.replace(
+    '\n---\n',
+    `\nscenarios:\n  - name: alpha\n    tags: [cli]\n    description: shadow\n    expected: shadow\n---\n`,
+  )
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(duplicateBlock, { scenario: 'alpha', insert: { test: 'tests/a.ts' } }),
+    /malformed eval\.md.*duplicate top-level `scenarios:`/is,
+  )
+})
+
+test('writeScenarioMeasurementMetadata rejects non-mapping lines inside a scenario', () => {
+  const malformed = oneScenarioSource.replace(
+    '    description: alpha description',
+    '    this is not a mapping entry\n    description: alpha description',
+  )
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(malformed, { scenario: 'alpha', insert: { test: 'tests/a.ts' } }),
+    /malformed eval\.md.*invalid scenario entry `this is not a mapping entry`/is,
+  )
+})
+
+test('writeScenarioMeasurementMetadata rejects YAML-illegal tab indentation', () => {
+  const malformed = oneScenarioSource.replace('  - name: alpha', '\t- name: alpha')
+  assert.throws(
+    () => writeScenarioMeasurementMetadata(malformed, { scenario: 'alpha', insert: { test: 'tests/a.ts' } }),
+    /malformed eval\.md.*tab indentation/is,
+  )
 })
 
 test('parseScenarios: no frontmatter / no scenarios key → empty', () => {

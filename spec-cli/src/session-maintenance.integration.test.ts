@@ -520,20 +520,21 @@ touch ${JSON.stringify(completed)}
 
 test('operator exit with a pending broker HTTP operation is indeterminate and never releases the lease', { timeout: 15_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-child-exit-pending-a-'))
-  const resultPath = join(dir, 'events.ndjson'); const identityPath = join(dir, 'request-identity.json'); const preload = join(dir, 'identity-preload.cjs')
+  const resultPath = join(dir, 'events.ndjson'); const identityPath = join(dir, 'request-identity.json'); const identityRunner = join(dir, 'identity-runner.mts')
   const fixture = await startHttpFixture('broker-pending-transport-loss', resultPath)
-  writeFileSync(preload, `
-const fs = require('node:fs')
-const raw = fs.readFileSync('/proc/' + process.pid + '/stat', 'utf8')
-const close = raw.lastIndexOf(')')
-const startToken = raw.slice(close + 2).split(' ')[19]
-fs.writeFileSync(process.env.SPEX_TEST_IDENTITY_PATH, JSON.stringify({ pid: process.pid, startToken }))
+  writeFileSync(identityRunner, `
+import { writeFileSync } from 'node:fs'
+import { processStartToken } from ${JSON.stringify(new URL('./process-identity.js', import.meta.url).href)}
+const startToken = processStartToken(process.pid)
+if (!startToken || !process.env.SPEX_TEST_IDENTITY_PATH) throw new Error('exact portable process identity unavailable')
+writeFileSync(process.env.SPEX_TEST_IDENTITY_PATH, JSON.stringify({ pid: process.pid, startToken }))
+await import(${JSON.stringify(new URL('./cli.js', import.meta.url).href)})
 `)
   const script = join(dir, 'operator.mjs')
   writeFileSync(script, `import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-const child = spawn(${JSON.stringify(process.execPath)}, ['--import', 'tsx', ${JSON.stringify(cli)}, 'session', 'stop', ${JSON.stringify(ID)}, '--api', ${JSON.stringify(fixture.base)}], {
-  env: { ...process.env, NODE_OPTIONS: ${JSON.stringify(`${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''}--require=${preload}`)}, SPEX_TEST_IDENTITY_PATH: ${JSON.stringify(identityPath)} },
+const child = spawn(${JSON.stringify(process.execPath)}, ['--import', 'tsx', ${JSON.stringify(identityRunner)}, 'session', 'stop', ${JSON.stringify(ID)}, '--api', ${JSON.stringify(fixture.base)}], {
+  env: { ...process.env, SPEX_TEST_IDENTITY_PATH: ${JSON.stringify(identityPath)} },
   stdio: ['ignore', 'ignore', 'ignore', 3, 4, 5],
 })
 child.unref()
@@ -560,6 +561,36 @@ const timer = setInterval(() => {
   }
   rmSync(dir, { recursive: true, force: true })
   assert.deepEqual(actual, { status: 1, requestReachedBackend: true, requestReaped: true, bounded: true, released: false })
+})
+
+test('normal fast operator close leaves no referenced reap deadline behind', { timeout: 15_000 }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-reap-deadline-a-'))
+  const resultPath = join(dir, 'events.ndjson'); const timerState = join(dir, 'timer-state'); const preload = join(dir, 'timer-preload.cjs')
+  const fixture = await startHttpFixture('broker-transport-loss', resultPath)
+  writeFileSync(preload, `
+const fs = require('node:fs')
+const original = global.setTimeout
+global.setTimeout = function(callback, delay, ...args) {
+  const timer = original(callback, delay, ...args)
+  if (delay === 2000 && String(new Error().stack).includes('maintenance-wrapper')) {
+    queueMicrotask(() => fs.writeFileSync(process.env.SPEX_TEST_TIMER_STATE, timer.hasRef() ? 'ref' : 'unref'))
+  }
+  return timer
+}
+`)
+  const wrapper = spawn(process.execPath, ['--require', preload, '--import', 'tsx', cli, 'session', 'maintain', '--allow-stop', ID, '--ttl-ms', '5000', '--wait-ms', '0', '--api', fixture.base, '--', 'true'], {
+    cwd: pkgRoot, env: { ...process.env, SPEXCODE_API_URL: '', SPEX_TEST_TIMER_STATE: timerState }, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const result = await collect(wrapper)()
+  await fixture.stop()
+  const actual = {
+    status: result.code,
+    timerObserved: existsSync(timerState),
+    reapDeadline: existsSync(timerState) ? readFileSync(timerState, 'utf8') : null,
+    released: events(resultPath).some((event) => event.step === 'release'),
+  }
+  rmSync(dir, { recursive: true, force: true })
+  assert.deepEqual(actual, { status: 0, timerObserved: true, reapDeadline: 'unref', released: true })
 })
 
 test('post-acquire validation failure safely releases the exact lease before command spawn', { timeout: 15_000 }, async () => {

@@ -57,6 +57,12 @@ rule: materialize returns a receipt of the contract, shim, skill/agent, plugin, 
 adapters actually asserted, and init renders that receipt. A Claude-only init therefore cannot claim AGENTS,
 Codex shims, or Codex trust; a Codex-only init cannot claim CLAUDE or Claude shims.
 
+The seeded `.spec/` tree and `spexcode.json` are project source of truth, so init names them as files to add
+and commit. Generated harness files such as `.codex/`, `.claude/`, and `AGENTS.md` are machine-local and
+remain untracked. Until the project data is tracked, the existing `spex spec lint` gate reports an integrity
+error rather than treating the untracked seed as a clean graph; it gives the ordinary Git repair command and
+does no separate adoption workflow.
+
 **Adoption asks no footprint question.** The retired `--render` vote is gone: materialized artifacts are
 never tracked
 ([[residence]]), so init's own materialize covers a host-TRACKED contract file with the clean/smudge

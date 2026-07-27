@@ -43,6 +43,24 @@ scenarios:
       The rename-only merge transports identity but is not itself charged as a hit. Exit code is 1 (the
       pre-commit shim blocks). A subsequent `spex spec ack <node> --reason "…"`
       quiets it (the reason lands in the ack commit's message body) and lint returns to 0 errors.
+  - name: vacated-reuse-consumers
+    tags: [cli, backend-api]
+    test:
+      path: scripts/anchor-drift-vacated-reuse-proof.mjs
+      name: vacated path reuse stays isolated across every consumer and lint ack closes a real hit
+    code:
+      - spec-cli/src/git.ts#canonicalPathProjector
+      - spec-cli/src/anchors.ts#anchorHitCommits
+      - spec-eval/src/freshness.ts#codeDrift
+      - spec-eval/src/sessioneval.ts#projectSessionImpact
+    description: >
+      In two disposable real Git repositories, exercise A→B rename, recreate A, then A→C while an old
+      A-lineage edit exists, and separately run a real anchored hit through `spex spec lint` followed by
+      `spex spec ack`. The proof is a single executable scenario with assertions, not a copied unit fixture.
+    expected: >
+      History rows, drift events, anchor hits, freshness counts, and session-impact head selectors exclude
+      the old A-lineage edit while the base-side session declaration retains it. The lint command exits
+      non-zero with `anchor-drift`, the ack succeeds, and the next lint exits zero without that finding.
   - name: outside-change-warns
     tags: [cli]
     description: >

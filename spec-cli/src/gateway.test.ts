@@ -34,6 +34,8 @@ function getText(port: number, path: string): Promise<{ status: number; body: st
 test('proxyHttp pairs normal and abruptly-closed downstream/upstream lifetimes', async (t) => {
   let activeSse = 0
   let activeCompressed = 0
+  let activeEarlyResponses = 0
+  const earlyUpstream = { request: null as http.IncomingMessage | null }
   let activeUploads = 0
   let uploadStarted!: () => void
   const uploadStart = new Promise<void>((resolve) => { uploadStarted = resolve })
@@ -62,6 +64,16 @@ test('proxyHttp pairs normal and abruptly-closed downstream/upstream lifetimes',
       res.once('close', () => { activeCompressed-- })
       res.writeHead(200, { 'content-type': 'application/json' })
       res.write(`{"partial":"${'x'.repeat(65536)}`)
+      return
+    }
+    if (req.url === '/early-response') {
+      activeEarlyResponses++
+      earlyUpstream.request = req
+      req.socket.once('close', () => { activeEarlyResponses-- })
+      req.once('data', () => {
+        res.writeHead(413, { 'content-type': 'text/plain' })
+        res.end('too large')
+      })
       return
     }
     if (req.url === '/cut') {
@@ -125,6 +137,28 @@ test('proxyHttp pairs normal and abruptly-closed downstream/upstream lifetimes',
   await uploadStart
   upload.destroy()
   await waitFor(() => activeUploads === 0, 'the aborted upstream upload to close')
+
+  const earlyResponse = await new Promise<{ request: http.ClientRequest; status: number; body: string }>((resolve, reject) => {
+    const request = http.request({
+      host: '127.0.0.1', port: proxyPort, path: '/early-response', method: 'POST',
+      headers: { 'content-length': '1000000' },
+    }, (response) => {
+      let body = ''
+      response.setEncoding('utf8')
+      response.on('data', (chunk) => { body += chunk })
+      response.on('end', () => resolve({ request, status: response.statusCode ?? 0, body }))
+    })
+    request.on('error', reject)
+    request.write('partial')
+  })
+  assert.deepEqual({ status: earlyResponse.status, body: earlyResponse.body }, { status: 413, body: 'too large' })
+  earlyResponse.request.destroy()
+  await waitFor(() => activeEarlyResponses === 0, 'the early-response upstream socket to close')
+  assert.deepEqual({
+    active: activeEarlyResponses,
+    requestComplete: earlyUpstream.request?.complete,
+    socketDestroyed: earlyUpstream.request?.socket.destroyed,
+  }, { active: 0, requestComplete: false, socketDestroyed: true })
 
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('truncated upstream left the downstream response open')), 1500)

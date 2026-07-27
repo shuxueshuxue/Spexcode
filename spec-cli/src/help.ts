@@ -236,13 +236,14 @@ ${MENTION_NOTE}`,
     see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',
   },
   eval: {
-    line: 'eval <verb>           the measurement system: add · ls · scenario ls · matrix · lint · ok · retract · clean',
+    line: 'eval <verb>           the measurement system: add · ls · scenario ls/write · matrix · lint · ok · retract · clean',
     body: `Usage: spex eval add [<node>|.] [--scenario <name>] (--pass|--fail) [--note <text>]
                     [--image <png> …repeatable] [--result <path|->] [--video <webm|mp4>] [--timeline <json>]
        spex eval ls [<node>|.] [--json]                a node's eval timeline, newest first
        spex eval ls --session <SEL> [--json]           a session's aggregate: its changed nodes' scores
        spex eval ls --session <SEL> --export [--open | --out <path>]
        spex eval scenario ls [<node>|.] [--unmeasured] [--json]   declared scenarios; JSON = canonical index
+       spex eval scenario write --mutation <json> < eval.md       propose one canonical metadata mutation
        spex eval matrix <launcher> [--node <id>] [--rows k1,k2]   the harness live-behavior matrix
        spex eval lint [--changed]                      measurement-layer findings (advisory, always exit 0)
        spex eval ok <node> [--scenario <name>]         the HUMAN sign-off on the scenario's latest measurement
@@ -262,6 +263,10 @@ HTML artifact (diff · evidence inlined · gates) for CI/sharing.
 scenario ls — the DECLARED contracts, no evals: text may show the latest verdict and --unmeasured is its blind-spot
 worklist; --json emits the complete canonical semantic/measurement index with stable hashes and fixed-tree provenance
 (--unmeasured is text-only because the JSON projection never reads the eval sidecar).
+
+scenario write — the fixed-tree declaration writer for an external measurement guard: stdin is the authoritative
+eval.md, --mutation is one closed JSON insert/delete request for one scenario's test metadata, and stdout is only
+the proposed eval.md bytes. It reads no worktree or runner and fails without stdout on malformed or ambiguous input.
 
 matrix — run the eight-row harness live-behavior matrix against a REAL dispatched session of the named
 launcher (the harness-adapter acceptance rule, defined once in spec-eval/src/matrix.ts): it syncs the

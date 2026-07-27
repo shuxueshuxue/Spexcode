@@ -79,41 +79,59 @@ type RawTestObject = {
   malformed: string[]
 }
 
+type RawFieldLocation = { startLine: number; endLine: number; indent: string }
+
 // a raw scenario item straight off the frontmatter walk: the known fields it set, plus any UNKNOWN keys it
 // carried — kept (not dropped) so the validator can name a typo'd field instead of silently swallowing it.
-type RawItem = { fields: Partial<Record<ScenarioKey, string>>; testObject?: RawTestObject; unknownKeys: string[] }
+type RawItem = {
+  fields: Partial<Record<ScenarioKey, string>>
+  testObject?: RawTestObject
+  unknownKeys: string[]
+  duplicateKeys: string[]
+  malformed: string[]
+  locations: Partial<Record<ScenarioKey, RawFieldLocation>>
+}
 
 // tiny indentation parser for eval.md's frontmatter `scenarios:` block (no YAML dep), shared by parseScenarios and validateScenarios so they can't disagree; reports hasFrontmatter/hasKey so the validator can tell "none declared" from "malformed"
-function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean; items: RawItem[] } {
-  const m = src.match(/^---\n([\s\S]*?)\n---/)
-  if (!m) return { hasFrontmatter: false, hasKey: false, items: [] }
+function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean; items: RawItem[]; malformed: string[] } {
+  const normalized = src.replace(/\r\n?/g, '\n')
+  const m = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)
+  if (!m) return { hasFrontmatter: false, hasKey: false, items: [], malformed: [] }
   const lines = m[1].split('\n')
-  let i = lines.findIndex((l) => /^scenarios:\s*$/.test(l))
-  if (i < 0) return { hasFrontmatter: true, hasKey: false, items: [] }
+  const scenarioKeys = lines.flatMap((line, index) => /^scenarios:\s*$/.test(line) ? [index] : [])
+  let i = scenarioKeys[0] ?? -1
+  if (i < 0) return { hasFrontmatter: true, hasKey: false, items: [], malformed: [] }
   const items: RawItem[] = []
+  const malformed = scenarioKeys.length > 1
+    ? [`duplicate top-level \`scenarios:\` key (${scenarioKeys.length}×) — eval.md must have exactly one declaration list`]
+    : []
   let cur: RawItem | null = null
   let itemIndent = -1            // the indent of the `- ` that starts each scenario (set by the first one)
   const indentOf = (l: string) => l.length - l.replace(/^\s+/, '').length
   for (i++; i < lines.length; i++) {
     const line = lines[i]
     if (!line.trim()) continue
+    if (/^ *\t/.test(line)) malformed.push(`line ${i + 2}: tab indentation is not valid in an eval.md scenario mapping`)
     const indent = indentOf(line)
     if (indent === 0) break       // dedented to another top-level key — scenarios block is done
     const trimmed = line.trim()
     const dash = trimmed.startsWith('- ') || trimmed === '-'
     if (dash && (itemIndent < 0 || indent <= itemIndent)) {
       // a new scenario item. start fresh; the `- ` may carry the first field inline.
-      cur = { fields: {}, unknownKeys: [] }
+      cur = { fields: {}, unknownKeys: [], duplicateKeys: [], malformed: [], locations: {} }
       items.push(cur)
       itemIndent = indent
       const inline = trimmed.slice(1).trim()   // text after the dash
-      if (inline) i = assignField(cur, inline, lines, i, indent)
+      if (inline) i = assignField(cur, inline, lines, i, indent, true)
       continue
     }
-    if (!cur) continue            // content before the first dash — ignore
+    if (!cur) {
+      if (!trimmed.startsWith('#')) malformed.push(`invalid scenarios entry \`${trimmed}\` before the first scenario`)
+      continue
+    }
     i = assignField(cur, trimmed, lines, i, indent)
   }
-  return { hasFrontmatter: true, hasKey: true, items }
+  return { hasFrontmatter: true, hasKey: true, items, malformed }
 }
 
 // assign a `key: value` field to the current item. When the value is a block-scalar indicator (`|`
@@ -121,21 +139,39 @@ function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean;
 // the LAST consumed line (the for-loop's ++ then moves past it); otherwise return `idx` unchanged. A key
 // outside the schema is recorded under unknownKeys (still consuming its block, so the body isn't misread as
 // new items) rather than dropped — validateScenarios needs to see it to reject the typo.
-function assignField(cur: RawItem, kv: string, lines: string[], idx: number, keyIndent: number): number {
+function assignField(cur: RawItem, kv: string, lines: string[], idx: number, keyIndent: number, inline = false): number {
   const f = kv.match(/^([A-Za-z_][\w-]*):\s*(.*)$/)
-  if (!f) return idx
+  if (!f) {
+    if (!kv.startsWith('#')) cur.malformed.push(`invalid scenario entry \`${kv}\``)
+    return idx
+  }
   const key = f[1]
+  const scenarioKey = (SCENARIO_KEYS as readonly string[]).includes(key) ? key as ScenarioKey : null
+  const finish = (parserEnd: number, locationEnd = parserEnd): number => {
+    if (scenarioKey) {
+      if (cur.locations[scenarioKey]) cur.duplicateKeys.push(key)
+      else cur.locations[scenarioKey] = {
+        startLine: idx,
+        endLine: locationEnd,
+        indent: `${lines[idx].match(/^\s*/)?.[0] ?? ''}${inline ? '  ' : ''}`,
+      }
+    }
+    return parserEnd
+  }
   if (key === 'test') {
     const raw = f[2].trim()
     if (!raw) {
       const parsed = emptyTestObject()
       let childIndent = -1
+      let lastChild = idx
       let j = idx + 1
       for (; j < lines.length; j++) {
         const line = lines[j]
         if (!line.trim()) continue
+        if (/^ *\t/.test(line)) parsed.malformed.push(`tab indentation is not valid in nested \`test\` metadata`)
         const indent = line.length - line.replace(/^\s+/, '').length
         if (indent <= keyIndent) break
+        lastChild = j
         if (childIndent < 0) childIndent = indent
         if (indent !== childIndent) {
           parsed.malformed.push(`invalid nested test object entry \`${line.trim()}\``)
@@ -144,27 +180,30 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
         assignTestField(parsed, line.trim())
       }
       cur.testObject = parsed
-      return j - 1
+      return finish(j - 1, lastChild)
     }
     if (raw.startsWith('{') || raw.endsWith('}')) {
       cur.testObject = parseFlowTestObject(raw)
-      return idx
+      return finish(idx)
     }
   }
   // a list field (`code:`/`related:`) may be a YAML block sequence (`- item` lines); the scalar reader can't see those, so collect them here into the comma form parseCodeList expects
   if ((LIST_KEYS as readonly string[]).includes(key) && f[2].trim() === '') {
     const items: string[] = []
+    let lastItem = idx
     let j = idx + 1
     for (; j < lines.length; j++) {
       const l = lines[j]
       if (!l.trim()) continue
+      if (/^ *\t/.test(l)) cur.malformed.push(`tab indentation is not valid in \`${key}\` metadata`)
       const ind = l.length - l.replace(/^\s+/, '').length
       if (ind <= keyIndent) break
       const it = l.trim().match(/^-\s*(.+)$/)
       if (!it) break
       items.push(unquote(it[1]))
+      lastItem = j
     }
-    if (items.length) { cur.fields[key as ScenarioKey] = items.join(','); return j - 1 }
+    if (items.length) { cur.fields[key as ScenarioKey] = items.join(','); return finish(j - 1, lastItem) }
   }
   let value: string
   let end = idx
@@ -185,11 +224,11 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
     value = fold ? body.join(' ').replace(/\s+/g, ' ').trim() : body.join('\n')
     end = j - 1
   } else {
-    value = unquote(f[2])
+    value = key === 'test' ? testValue(f[2]) : unquote(f[2])
   }
   if ((SCENARIO_KEYS as readonly string[]).includes(key)) cur.fields[key as ScenarioKey] = value
   else cur.unknownKeys.push(key)
-  return end
+  return finish(end)
 }
 
 const unquote = (s: string) => s.replace(/^["'](.*)["']$/, '$1').trim()
@@ -198,6 +237,9 @@ const emptyTestObject = (): RawTestObject => ({ fields: {}, unknownKeys: [], dup
 
 function testValue(raw: string, opaque = false): string {
   const value = raw.trim()
+  if (value.startsWith('"') && value.endsWith('"')) {
+    try { return JSON.parse(value) } catch { /* fall through to the parser's legacy quote handling */ }
+  }
   const quoted = value.match(/^(["'])([\s\S]*)\1$/)
   return quoted ? quoted[2] : opaque ? value : unquote(value)
 }
@@ -367,11 +409,11 @@ export function scenarioProjection(
 // the repair the user owns: pick an existing tag, or extend the library. An empty library (none configured)
 // disables only the membership check, never the ≥1-tag requirement.
 export function validateScenarios(src: string, tagLibrary: string[] = [], pathRoot?: string): string[] {
-  const { hasFrontmatter, hasKey, items } = walkScenarios(src)
+  const { hasFrontmatter, hasKey, items, malformed } = walkScenarios(src)
   if (!hasFrontmatter) return ['no frontmatter block — an eval.md must declare a `scenarios:` list']
   if (!hasKey) return ['frontmatter has no `scenarios:` key — declare at least one scenario']
   if (!items.length) return ['`scenarios:` declares no scenarios — add one (name + description + expected)']
-  const errs: string[] = []
+  const errs: string[] = [...malformed]
   const counts = new Map<string, number>()
   const lib = tagLibrary.length ? ` (library: ${tagLibrary.join(', ')})` : ''
   items.forEach((it, idx) => {
@@ -387,6 +429,8 @@ export function validateScenarios(src: string, tagLibrary: string[] = [], pathRo
         errs.push(`${label}: tag \`${t}\` is not in the configured tag library${lib} — use an existing tag, or add \`${t}\` to lint.scenarioTags in spexcode.json to create it`)
       }
     }
+    for (const entry of it.malformed) errs.push(`${label}: ${entry}`)
+    for (const d of it.duplicateKeys) errs.push(`${label}: duplicate field \`${d}\``)
     for (const u of it.unknownKeys) errs.push(`${label}: unknown field \`${u}\` (allowed: ${SCENARIO_KEYS.join(', ')})`)
     if (it.testObject) {
       for (const u of it.testObject.unknownKeys) errs.push(`${label}: unknown \`test\` field \`${u}\` (allowed: ${TEST_KEYS.join(', ')})`)
@@ -404,6 +448,116 @@ export function validateScenarios(src: string, tagLibrary: string[] = [], pathRo
   })
   for (const [n, c] of counts) if (c > 1) errs.push(`duplicate scenario name '${n}' (${c}×) — names must be unique within an eval.md`)
   return errs
+}
+
+export type ScenarioMeasurementMetadataMutation =
+  | { scenario: string; insert: { test: string | { path: string; name: string } } }
+  | { scenario: string; delete: 'test' }
+
+type ParsedMetadataMutation =
+  | { scenario: string; action: 'insert'; test: ScenarioTestReference }
+  | { scenario: string; action: 'delete' }
+
+const recordOf = (value: unknown): Record<string, unknown> | null =>
+  value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+
+function parseMetadataMutation(value: unknown): ParsedMetadataMutation {
+  const mutation = recordOf(value)
+  if (!mutation || typeof mutation.scenario !== 'string' || !mutation.scenario.trim()) {
+    throw new Error('a metadata mutation must name exactly one scenario with a non-empty `scenario` string')
+  }
+  const unknown = Object.keys(mutation).filter((key) => !['scenario', 'insert', 'delete'].includes(key))
+  if (unknown.length) throw new Error(`metadata mutation has unknown field(s): ${unknown.join(', ')}`)
+  const actions = ['insert', 'delete'].filter((key) => key in mutation)
+  if (actions.length !== 1) throw new Error('a metadata mutation must contain exactly one action: `insert` or `delete`')
+
+  if ('delete' in mutation) {
+    if (mutation.delete !== 'test') throw new Error('`delete` must name exactly one measurement field: `test`')
+    return { scenario: mutation.scenario, action: 'delete' }
+  }
+
+  const insert = recordOf(mutation.insert)
+  if (!insert || Object.keys(insert).length !== 1 || !('test' in insert)) {
+    throw new Error('`insert` must contain exactly one measurement field: `test`')
+  }
+  if (typeof insert.test === 'string') {
+    if (!insert.test.trim()) throw new Error('`insert.test` path must be a non-empty string')
+    return { scenario: mutation.scenario, action: 'insert', test: { path: insert.test } }
+  }
+  const test = recordOf(insert.test)
+  if (!test || Object.keys(test).sort().join(',') !== 'name,path'
+      || typeof test.path !== 'string' || !test.path.trim()
+      || typeof test.name !== 'string' || !test.name.trim()) {
+    throw new Error('`insert.test` must be a path string or an exact `{path,name}` string mapping')
+  }
+  return { scenario: mutation.scenario, action: 'insert', test: { path: test.path, name: test.name } }
+}
+
+function declarationLineEnding(source: string): '\n' | '\r\n' {
+  const withoutCrlf = source.replace(/\r\n/g, '')
+  if (withoutCrlf.includes('\r')) throw new Error('eval.md uses unsupported bare CR line endings')
+  if (source.includes('\r\n') && withoutCrlf.includes('\n')) {
+    throw new Error('eval.md mixes LF and CRLF line endings; normalize it before applying metadata')
+  }
+  return source.includes('\r\n') ? '\r\n' : '\n'
+}
+
+function malformedDeclaration(errors: string[]): Error {
+  return new Error(`malformed eval.md:\n${errors.map((error) => `  - ${error}`).join('\n')}`)
+}
+
+// Canonical write half of the declaration identity. The caller supplies authoritative bytes and one closed
+// semantic mutation; source locations come only from the same structural walk parseScenarios/validation use.
+// Untouched lines are never serialized, which is what makes insert -> delete a byte-exact inverse.
+export function writeScenarioMeasurementMetadata(source: string, request: unknown): string {
+  const mutation = parseMetadataMutation(request)
+  const beforeErrors = validateScenarios(source)
+  if (beforeErrors.length) throw malformedDeclaration(beforeErrors)
+
+  const walked = walkScenarios(source)
+  const matches = walked.items.filter((item) => item.fields.name === mutation.scenario)
+  if (matches.length !== 1) {
+    throw new Error(matches.length
+      ? `scenario '${mutation.scenario}' is ambiguous (${matches.length} declarations)`
+      : `scenario '${mutation.scenario}' was not found in eval.md`)
+  }
+  const item = matches[0]
+  const lineEnding = declarationLineEnding(source)
+  const lines = source.split(lineEnding)
+
+  if (mutation.action === 'insert') {
+    if (item.locations.test) throw new Error(`scenario '${mutation.scenario}' already has \`test\`; refusing to overwrite authoritative metadata`)
+    const tags = item.locations.tags
+    if (!tags) throw new Error(`scenario '${mutation.scenario}' has no structural \`tags\` field`)
+    const keyIndent = tags.indent
+    const childIndent = `${tags.indent}  `
+    const rendered = mutation.test.name === undefined
+      ? [`${keyIndent}test: ${JSON.stringify(mutation.test.path)}`]
+      : [
+          `${keyIndent}test:`,
+          `${childIndent}path: ${JSON.stringify(mutation.test.path)}`,
+          `${childIndent}name: ${JSON.stringify(mutation.test.name)}`,
+        ]
+    lines.splice(tags.endLine + 2, 0, ...rendered)
+  } else {
+    const test = item.locations.test
+    if (!test) throw new Error(`scenario '${mutation.scenario}' has no \`test\` field to delete`)
+    lines.splice(test.startLine + 1, test.endLine - test.startLine + 1)
+  }
+
+  const proposed = lines.join(lineEnding)
+  const afterErrors = validateScenarios(proposed)
+  if (afterErrors.length) throw new Error(`metadata mutation produced ${malformedDeclaration(afterErrors).message}`)
+  const after = parseScenarios(proposed).filter((scenario) => scenario.name === mutation.scenario)
+  if (after.length !== 1) throw new Error(`metadata mutation lost the unique scenario '${mutation.scenario}'`)
+  if (mutation.action === 'insert') {
+    if (JSON.stringify(after[0].test) !== JSON.stringify(mutation.test)) {
+      throw new Error(`metadata mutation did not round-trip the exact requested \`test\` mapping for scenario '${mutation.scenario}'`)
+    }
+  } else if (after[0].test !== undefined) {
+    throw new Error(`metadata mutation did not delete \`test\` from scenario '${mutation.scenario}'`)
+  }
+  return proposed
 }
 
 // walk `.spec` for every dir holding an eval.md; the node id is its CANONICAL spec id ([[id-url-safe]]) —

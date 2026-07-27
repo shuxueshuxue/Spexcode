@@ -7,6 +7,7 @@ code:
   - spec-eval/src/scenarios.ts#scenarioHash
   - spec-eval/src/scenarios.ts#scenarioProjection
   - spec-eval/src/scenarios.ts#validateScenarios
+  - spec-eval/src/scenarios.ts#writeScenarioMeasurementMetadata
   - spec-eval/src/scenarios.ts#resolveEvalNode
 related:
   - spec-cli/src/cli.ts
@@ -15,6 +16,8 @@ related:
   - spec-eval/src/freshness.ts
   - spec-eval/src/scenariofresh.ts
   - spec-eval/src/scenariofresh.test.ts
+  - spec-eval/src/scenarios.test.ts
+  - spec-eval/src/declaration-write.cli.test.ts
   - spec-eval/src/scan-source.test.ts
   - spec-eval/src/cache.ts
   - spec-eval/src/filing.ts
@@ -273,6 +276,27 @@ The surface mirrors the code-drift report:
   content projections; the outer `treeSha` is the provenance signal that catches it. All fields, including
   empty relation/tag arrays and a missing test, have one stable JSON shape. The projection is the only
   canonical `--json` output; no second parser or cache exists.
+
+  The declaration identity also has ONE small **write seam over fixed-tree bytes** for external measurement
+  guards that need to propose metadata back into eval.md. A mutation names exactly one scenario and exactly
+  one measurement field; initially the only field is `test`, carrying the same strict path-only or
+  `{path,name}` value the reader already normalizes. The library accepts the authoritative eval.md bytes plus
+  that single mutation, and `spex eval scenario write --mutation <json> < eval.md` accepts the same value and
+  writes only the proposed bytes to stdout. Neither face reads a worktree, resolves a runner, or knows which
+  forge/CR requested the proposal.
+
+  This is the write half of the EXISTING declaration parser, never a second YAML identity. Before mutation the
+  bytes must pass `parseScenarios`' closed-schema validation; the named scenario must resolve exactly once;
+  after mutation the proposed bytes pass the same parser again and its normalized `measurement.test` must equal
+  the requested value. Unknown/duplicate scenarios, malformed YAML/schema, a mutation containing several
+  scenarios or fields, an insertion whose target field already exists, and a deletion whose target field is
+  absent all fail LOUD. Callers never provide byte offsets, line numbers, or text anchors. The writer chooses
+  one structural placement: `test` immediately after
+  the required `tags` entry in the scenario mapping, while retaining the source's indentation and LF/CRLF
+  convention. Deleting a value inserted by the writer is its exact inverse: it must reconstruct the
+  authoritative input bytes byte-for-byte, including comments, blank lines, scalar style, final newline, and
+  line endings. This byte equality is the proof that a guard may safely reverse its own proposal; the writer
+  does not reformat unrelated declaration text to manufacture semantic equality.
 - **add [.|<node>] [--scenario N] (--pass|--fail|--note T) [--image P …repeatable] [--result P|-] [--video P [--timeline P]]** —
   FILE the measurement the agent already took. eval runs nothing: it stores the evidence under one verdict,
   for one scenario. `--image` REPEATS (N stills) and combines freely with `--result`/`--video` in one filing —

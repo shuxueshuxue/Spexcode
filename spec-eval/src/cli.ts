@@ -5,7 +5,7 @@ import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadConfig } from '../../spec-cli/src/lint.js'
 import { trackedSourceFiles } from '../../spec-cli/src/source-files.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
-import { evalNodes, evalNodesAt, validateScenarios, resolveEvalNode, scenarioCodeAxis, scenarioHash, scenarioProjection, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
+import { evalNodes, evalNodesAt, validateScenarios, resolveEvalNode, scenarioCodeAxis, scenarioHash, scenarioProjection, writeScenarioMeasurementMetadata, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, contentProbeFor, anchorProbeFor, anchorProblems } from './freshness.js'
 import { parseRelation } from '../../spec-cli/src/anchors.js'
@@ -653,6 +653,41 @@ function scenarioProjectionProvenance(root: string): { head: string; treeSha: st
   return { head, treeSha }
 }
 
+function scenarioWrite(args: string[]): number {
+  let rawMutation: string | undefined
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg !== '--mutation') {
+      console.error(`spex eval scenario write: unknown argument '${arg}' — accepts only --mutation <json>; eval.md bytes come from stdin`)
+      return 2
+    }
+    if (rawMutation !== undefined) {
+      console.error('spex eval scenario write: --mutation must be supplied exactly once')
+      return 2
+    }
+    const value = args[++i]
+    if (value === undefined) {
+      console.error('spex eval scenario write: --mutation needs one JSON value')
+      return 2
+    }
+    rawMutation = value
+  }
+  if (rawMutation === undefined) {
+    console.error('spex eval scenario write: usage: spex eval scenario write --mutation <json> < eval.md')
+    return 2
+  }
+
+  try {
+    const mutation = JSON.parse(rawMutation)
+    const source = readFileSync(0, 'utf8')
+    process.stdout.write(writeScenarioMeasurementMetadata(source, mutation))
+    return 0
+  } catch (e: any) {
+    console.error(`spex eval scenario write: ${e?.message ?? e}`)
+    return 1
+  }
+}
+
 async function scenarioLs(args: string[]): Promise<number> {
   for (const a of args) {
     if (!a.startsWith('--')) continue
@@ -715,7 +750,7 @@ async function scenarioLs(args: string[]): Promise<number> {
 }
 
 // the `spex eval` drawer's node-scoped verbs ([[cli-surface]]): add (file a measurement) · ls (a node's
-// reading timeline) · scenario ls (the declared contracts, --unmeasured = blind spots) · lint (the
+// reading timeline) · scenario ls/write (the declared contracts and their canonical metadata writer) · lint (the
 // measurement-layer lint — advisory, always exit 0) · ok (the human sign-off) · retract · clean.
 // The session-scoped read (`spex eval ls --session <SEL>`) is intercepted in cli.ts before this runs;
 // `check-staged` is hook plumbing, exported separately for `spex internal check-staged`.
@@ -735,10 +770,11 @@ export async function runEval(args: string[]): Promise<number> {
   }
   if (sub === 'scenario') {
     if (args[1] === 'ls') return scenarioLs(args.slice(2))
-    console.error('spex eval scenario: ls [<node>|.] [--unmeasured] [--json] — list declared scenarios (the measurement contracts)')
+    if (args[1] === 'write') return scenarioWrite(args.slice(2))
+    console.error('spex eval scenario: ls [<node>|.] [--unmeasured] [--json] | write --mutation <json> < eval.md')
     return 2
   }
-  console.error('spex eval: add [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path>] [--timeline <json>] | ls [.|<node>] [--json] | ls --session <SEL> [--export] | scenario ls [<node>|.] [--unmeasured] [--json] | matrix <launcher> [--node <id>] [--rows k1,k2] | lint [--changed] | ok <node> [--scenario <name>] | retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>] | clean [--keep-latest|--all]')
+  console.error('spex eval: add [.|<node>] [--scenario <name>] (--pass|--fail) [--note <text>] [--image <path> …repeatable] [--result <path|->] [--video <path>] [--timeline <json>] | ls [.|<node>] [--json] | ls --session <SEL> [--export] | scenario ls [<node>|.] [--unmeasured] [--json] | scenario write --mutation <json> < eval.md | matrix <launcher> [--node <id>] [--rows k1,k2] | lint [--changed] | ok <node> [--scenario <name>] | retract [.|<node>] [--scenario <name>] [--last | --ts <iso>] [--note <why>] | clean [--keep-latest|--all]')
   return 2
 }
 

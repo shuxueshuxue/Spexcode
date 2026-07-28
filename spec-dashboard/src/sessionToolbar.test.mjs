@@ -55,6 +55,8 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.match(contextMenu, /onError\?\.\(body\?\.error \|\| `session close refused/)
   assert.match(source, /const j = await res\.json\(\)\.catch\(\(\) => null\)/)
   assert.match(source, /!res\.ok \|\| j\?\.ok === false/)
+  assert.equal((source.match(/si-action-error/g) || []).length, 1)
+  assert.doesNotMatch(source, /actErr && !shelvedSel/)
 })
 
 test('cold archive rows render without paying for a git ops projection', () => {

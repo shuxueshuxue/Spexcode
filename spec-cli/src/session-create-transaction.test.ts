@@ -149,7 +149,7 @@ esac
     await noCreateArtifacts()
     unlinkSync(mismatchGit)
 
-    const key = 'one-concurrent-create'
+    const key = 'collision-112'
     const started = Date.now()
     const [left, right] = await Promise.all([post(key), post(key)])
     const [a, b] = await Promise.all([left.json() as Promise<any>, right.json() as Promise<any>])
@@ -171,6 +171,17 @@ esac
     assert.equal(conflict.status, 409)
     assert.equal(conflictBody.code, 'session_create_key_reused')
     assert.deepEqual((await rows()).map((row) => row.id), [a.id])
+
+    const colliding = await post('collision-117')
+    const collidingBody = await colliding.json() as any
+    assert.equal(colliding.status, 409, 'a different key with the same id4 cannot publish over the first receipt')
+    assert.deepEqual({ code: collidingBody.code, phase: collidingBody.phase }, { code: 'session_create_failed', phase: 'git-worktree' })
+    assert.deepEqual((await rows()).map((row) => row.id), [a.id])
+    assert.deepEqual(sessionDirs(), [a.id])
+    assert.equal(realpathSync(git(a.path, 'rev-parse', '--show-toplevel')), realpathSync(a.path), 'collision preserves the published worktree')
+    assert.equal(git(a.path, 'symbolic-ref', '--short', 'HEAD'), a.branch, 'collision preserves the published checkout')
+    assert.ok(git(project, 'show-ref', '--verify', `refs/heads/${a.branch}`), 'collision preserves the published ref')
+    assert.equal(worktrees(), 3)
 
     await waitFor(() => existsSync(trace) && (readFileSync(trace, 'utf8').match(/ launcher /g)?.length ?? 0) === 1, 'one launcher attempt')
     const phases = logs.split('\n').filter((line) => line.startsWith('spex session-create ')).map((line) => JSON.parse(line.slice('spex session-create '.length)))

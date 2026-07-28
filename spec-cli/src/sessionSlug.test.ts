@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { nodeFromPrompt, slugify, titleFromPrompt } from './sessions.js'
 
-// the derivation newSession names a session by: slug = `${slugify(ref || titleFromPrompt(prompt))}-<shortid>`.
+// the create transaction names a session by: slug = `${slugify(ref || titleFromPrompt(prompt))}-<shortid>`.
 // A session's slug is its OWN identity — an @-mentioned session id or a bare UUID in the prompt must never
 // become this session's branch/worktree name (the z-code collision: a cleanup worker named after its target
 // matched its own worktree and deleted it from under its running process).
@@ -44,7 +44,7 @@ test('a mixed CJK/ASCII prompt keeps both scripts and drops the mention', () => 
 
 test('a mention-only prompt falls back to the non-empty session slug', () => {
   assert.equal(titleFromPrompt(`@${OTHER}`), null)
-  // newSession suffixes `-<id.slice(0,4)>`, so the fallback stays unique per session
+  // Session creation suffixes `-<id.slice(0,4)>`, so the fallback stays unique per session
   assert.equal(slugify(null), 'session')
 })
 

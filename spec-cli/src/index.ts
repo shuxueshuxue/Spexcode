@@ -474,7 +474,7 @@ app.post('/api/sessions', async (c) => {
   outgoing?.once('close', cancel)
   try {
     const body = await c.req.json().catch(() => null)
-    const result = await sessionCreateRequest(body, undefined, { requestKey, signal: controller.signal })
+    const result = await sessionCreateRequest(body, { requestKey, signal: controller.signal })
     if (result.status === 201) {
       c.header('Idempotency-Key', requestKey)
       return c.json(result.session, 201)

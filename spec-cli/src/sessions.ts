@@ -1300,7 +1300,7 @@ export const isBackendUnreachable = (e: unknown): boolean =>
 // take unicode), so a CJK prompt survives as the readable name its author typed instead of being stripped to
 // nothing — transliteration would buy ASCII at the cost of a dependency and a name nobody wrote. NFC pins one
 // canonical byte form across IME/OS variants. Non-empty is guaranteed by the 'session' fallback; uniqueness
-// is the caller's job (newSession suffixes the session short-id).
+// is the caller's job (the create transaction suffixes the session short-id).
 export const slugify = (s: string | null) =>
   (s || 'session').normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'session'
 
@@ -1347,7 +1347,7 @@ export function composeCommandPrompt(raw: string, presets: CommandPreset[], spec
   return free ? `${body}\n\n${free}` : body
 }
 
-// Load only the one live preset named by the raw invocation. Both newSession and sendText call this seam, so
+// Load only the one live preset named by the raw invocation. Both session creation and sendText call this seam, so
 // launch and an existing session's inbox resolve identical plugin data with identical target semantics.
 export async function resolveCommandPrompt(raw: string, loadedSpecs?: CommandSpec[]): Promise<string> {
   const commandName = raw.match(/^\/(\S+)/)?.[1]
@@ -1622,7 +1622,7 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
 const startQueued = (id: string): Promise<boolean> => withSessionTransition(id, () => withRecordLock(id, () => startQueuedUnlocked(id)))
 
 // @@@ drainQueue - start as many `queued` sessions as there are free slots, oldest first. Idempotent and
-// re-entrancy-guarded; safe to call on every slot-freeing event (newSession / close / propose) AND on a
+// re-entrancy-guarded; safe to call on every slot-freeing event (session creation / close / propose) AND on a
 // periodic tick (superviseQueue) — the periodic tick is what catches the AGENT-authored transitions
 // (done/parked written by a hook SUBPROCESS, which can't reach this server's queue). Re-lists each iteration
 // so a freshly launched session (held in `launching`) counts immediately and we never exceed the cap.
@@ -1661,7 +1661,7 @@ const requestQueueDrain = (): void => {
 }
 
 // @@@ superviseQueue - the periodic drainer. Started once at serve(). The explicit drainQueue() calls on
-// newSession/close/propose cover the slot-freeing events the SERVER handles, but an agent proposing done or
+// session creation/close/propose cover the slot-freeing events the SERVER handles, but an agent proposing done or
 // going parked writes its global session.json record from a hook subprocess the server never sees, and a crash just makes a
 // socket vanish — so a timer is what turns those into freed slots. Cheap: one worktree+tmux snapshot per tick,
 // and a no-op when nothing is queued. Idempotent (guarded), so a second call is harmless.
@@ -1787,16 +1787,13 @@ export function superviseTurnFailures(intervalMs = 1000): void {
 // cross-project signal (that's the whole flag-beats-env thesis). The guard fires only on a positive
 // mismatch: no local repo, an unreachable backend, or a backend root that isn't a resolvable local path
 // (a genuinely remote backend) all fall through to allow, so legit remote drive stays untouched.
-export async function assertProjectMatch(verb: string): Promise<void> {
-  const { url, source } = await apiBaseInfo()
+type BackendSettings = { layout?: { main?: string } }
+function assertProjectSettingsMatch(verb: string, target: ApiBaseInfo, settings: BackendSettings | null): void {
+  const { url, source } = target
   if (source === 'flag') return                                   // explicitly routed — the caller named the target
   let localMain: string
   try { localMain = realpathSync(mainRoot()) } catch { return }   // caller not in a repo → can't prove a mismatch
-  let served: string | null = null
-  try {
-    const r = await fetch(`${url}/api/settings`)
-    if (r.ok) served = (await r.json() as { layout?: { main?: string } }).layout?.main ?? null
-  } catch { return }                                              // backend unreachable → the write itself surfaces it (fail-loud there)
+  const served = settings?.layout?.main ?? null
   if (!served || !isAbsolute(served)) return                      // unknown / config-aliased root → don't risk a false refusal
   let backendMain: string
   try { backendMain = realpathSync(served) } catch { return }     // backend root not a local path → a remote backend, allow
@@ -1808,6 +1805,16 @@ export async function assertProjectMatch(verb: string): Promise<void> {
     e.name = 'GuardError'
     throw e
   }
+}
+export async function assertProjectMatch(verb: string): Promise<void> {
+  const target = await apiBaseInfo()
+  if (target.source === 'flag') return
+  let settings: BackendSettings | null = null
+  try {
+    const r = await fetch(`${target.url}/api/settings`)
+    if (r.ok) settings = await r.json() as BackendSettings
+  } catch { return }                                              // backend unreachable → the write itself surfaces it (fail-loud there)
+  assertProjectSettingsMatch(verb, target, settings)
 }
 
 export type SessionCreateFailureCode =
@@ -1830,7 +1837,6 @@ export class SessionCreateError extends Error {
   }
 }
 type SessionCreateContext = { id: string; requestDigest: string; payloadHash: string; signal: AbortSignal }
-type SessionCreateFn = (prompt: string, parent: string | null, launcher?: string, context?: SessionCreateContext) => Promise<Session>
 type SessionCreateRequestOptions = {
   requestKey?: string
   signal?: AbortSignal
@@ -1877,7 +1883,7 @@ function throwIfCreateAborted(signal: AbortSignal, phase: SessionCreatePhase): v
 
 // The API create boundary accepts one small, closed object shape. Unknown fields fail through this generic
 // contract before any worktree is made; removed or misspelled inputs never disappear into defaults.
-export async function sessionCreateRequest(body: unknown, create: SessionCreateFn = newSession, options: SessionCreateRequestOptions = {}): Promise<SessionCreateRequestResult> {
+export async function sessionCreateRequest(body: unknown, options: SessionCreateRequestOptions = {}): Promise<SessionCreateRequestResult> {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: 400, error: 'body must be a JSON object' }
   const input = body as Record<string, unknown>
   const unknown = Object.keys(input).filter((key) => !['prompt', 'parent', 'launcher'].includes(key)).sort()
@@ -1905,7 +1911,7 @@ export async function sessionCreateRequest(body: unknown, create: SessionCreateF
   try {
     return await runSessionOperation({ op: options.operation ?? 'create' }, async () => {
       try {
-        const session = await create(prompt, parent, launcher, { id, requestDigest, payloadHash, signal: controller.signal })
+        const session = await prepareSession(prompt, parent, launcher, { id, requestDigest, payloadHash, signal: controller.signal })
         traceSessionCreate(id, requestDigest, 'request', 'finish')
         return { status: 201, session }
       } catch (error) {
@@ -1932,8 +1938,8 @@ export async function sessionCreateRequest(body: unknown, create: SessionCreateF
 // either process.) So the CLI POSTs to the running backend whenever one answers. Only an explicit
 // ECONNREFUSED proves there is no owner on the target and permits the legacy in-process fallback. A timeout,
 // reset, DNS failure, or other ambiguous transport result may hide an admitted request, so it fails loud and
-// never starts a second writer. The backend's own POST handler calls newSession directly and cannot re-enter
-// this path.
+// never starts a second writer. The backend POST, mention dispatch, and fallback all enter through
+// sessionCreateRequest; the private preparation half cannot be called without its bounded context.
 function isExplicitConnectionRefused(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   if ((error as NodeJS.ErrnoException).code === 'ECONNREFUSED') return true
@@ -1941,37 +1947,43 @@ function isExplicitConnectionRefused(error: unknown): boolean {
   if (Array.isArray(errors)) return errors.length > 0 && errors.every(isExplicitConnectionRefused)
   return isExplicitConnectionRefused((error as { cause?: unknown }).cause)
 }
+async function probeSessionCreateAuthority(target: ApiBaseInfo): Promise<boolean> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 1500)
+  timer.unref?.()
+  try {
+    const response = await fetch(`${target.url}/api/settings`, { signal: controller.signal })
+    let settings: BackendSettings | null = null
+    if (response.ok) {
+      try { settings = await response.json() as BackendSettings }
+      catch (error) { if (controller.signal.aborted) throw error }
+    }
+    assertProjectSettingsMatch('spex session new', target, settings)
+    return false
+  } catch (error) {
+    if (isExplicitConnectionRefused(error)) return true
+    const failed = new Error(`backend availability is indeterminate at ${target.url}; refusing in-process session creation (${error instanceof Error ? error.message : error})`)
+    failed.name = 'BackendError'
+    Object.assign(failed, { code: 'backend_availability_indeterminate', cause: error })
+    throw failed
+  } finally { clearTimeout(timer) }
+}
 export async function createSession(prompt: string, launcher?: string): Promise<Session> {
   if (maintenanceBrokerDescriptors()) {
     throw new SessionMaintenanceError('maintenance_capability_missing', 'maintenance operator broker admits only its exact stop/resume plan', { operation: 'create' })
   }
-  await assertProjectMatch('spex session new')
   // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
   // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the
   // backend, whose process env carries no acting session id. An agent that runs `spex session new` stamps its own id;
   // a human in a plain shell has none → null → the new session is top-level (no phantom nesting).
   const parent = ownSessionId()
   const requestKey = randomUUID()
-  const base = await apiBase()
-  const probeController = new AbortController()
-  const probeTimer = setTimeout(() => probeController.abort(), 1500)
-  probeTimer.unref?.()
-  let refused = false
-  try {
-    await fetch(`${base}/api/settings`, { signal: probeController.signal })
-  } catch (error) {
-    refused = isExplicitConnectionRefused(error)
-    if (!refused) {
-      const failed = new Error(`backend availability is indeterminate at ${base}; refusing in-process session creation (${error instanceof Error ? error.message : error})`)
-      failed.name = 'BackendError'
-      Object.assign(failed, { code: 'backend_availability_indeterminate', cause: error })
-      throw failed
-    }
-  }
-  finally { clearTimeout(probeTimer) }
+  const target = await apiBaseInfo()
+  const base = target.url
+  const refused = await probeSessionCreateAuthority(target)
   if (refused) {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    const fallback = await sessionCreateRequest({ prompt, parent, launcher }, newSession, { requestKey, operation: 'fallback-create' })
+    const fallback = await sessionCreateRequest({ prompt, parent, launcher }, { requestKey, operation: 'fallback-create' })
     if (fallback.status === 201) return fallback.session
     const error = new Error(`${fallback.code || 'session_create_failed'}: ${fallback.error}`)
     error.name = 'BackendError'
@@ -2071,43 +2083,51 @@ async function materializeSessionCandidate(rec: SessRec, signal: AbortSignal): P
   }
 }
 
-async function cleanupSessionCandidate(id: string, path: string, branch: string): Promise<string[]> {
+type SessionCandidateOwnership = { store: boolean; path: boolean; worktree: boolean; branch: boolean }
+type SessionCandidateState = { path: boolean; worktree: boolean; branch: boolean }
+async function sessionCandidateState(root: string, path: string, branch: string, signal: AbortSignal): Promise<SessionCandidateState> {
+  const [listed, ref] = await withGitAbortSignal(signal, () => Promise.all([
+    gitTry(['-C', root, 'worktree', 'list', '--porcelain', '-z']),
+    gitTry(['-C', root, 'show-ref', '--verify', '--quiet', `refs/heads/${branch}`]),
+  ]))
+  if (!listed.ok) throw new SessionCreateError('session_create_failed', 'git-worktree', `cannot read worktree registry: ${listed.stderr.trim() || listed.failure}`, 500)
+  if (!ref.ok && ref.failure !== 'exit') throw new SessionCreateError('session_create_failed', 'git-worktree', `cannot read candidate branch: ${ref.stderr.trim() || ref.failure}`, 500)
+  return { path: existsSync(path), worktree: listed.stdout.split('\0').includes(`worktree ${path}`), branch: ref.ok }
+}
+
+async function cleanupSessionCandidate(root: string, id: string, path: string, branch: string, owned: SessionCandidateOwnership): Promise<string[]> {
   const residues: string[] = []
-  const removeStore = () => {
-    try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) }
-    catch (error) { residues.push(`session store removal failed: ${error instanceof Error ? error.message : error}`) }
+  if (owned.store) {
+    try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) } catch { /* verified below */ }
   }
-  removeStore()
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 10_000)
   timer.unref?.()
   try {
     await withGitAbortSignal(controller.signal, async () => {
-      if (existsSync(path)) {
-        const removed = await gitTry(['-C', mainRoot(), 'worktree', 'remove', '--force', path])
+      if (owned.worktree) {
+        const removed = await gitTry(['-C', root, 'worktree', 'remove', '--force', path])
         if (!removed.ok) residues.push(`worktree remove failed: ${removed.stderr.trim() || removed.failure}`)
       }
-      const pruned = await gitTry(['-C', mainRoot(), 'worktree', 'prune', '--expire', 'now'])
-      if (!pruned.ok) residues.push(`worktree prune failed: ${pruned.stderr.trim() || pruned.failure}`)
+      const afterRemove = await sessionCandidateState(root, path, branch, controller.signal)
+      if (owned.path && afterRemove.path && !afterRemove.worktree) {
+        try { rmSync(path, { recursive: true, force: true }) } catch { /* verified below */ }
+      }
       const ref = `refs/heads/${branch}`
-      const present = await gitTry(['-C', mainRoot(), 'show-ref', '--verify', '--quiet', ref])
-      if (present.ok) {
-        const deleted = await gitTry(['-C', mainRoot(), 'branch', '-D', branch])
+      if (owned.branch) {
+        const deleted = await gitTry(['-C', root, 'branch', '-D', branch])
         if (!deleted.ok) residues.push(`branch delete failed: ${deleted.stderr.trim() || deleted.failure}`)
-      } else if (present.failure !== 'exit') residues.push(`branch state unreadable: ${present.stderr.trim() || present.failure}`)
-      const remainingRef = await gitTry(['-C', mainRoot(), 'show-ref', '--verify', '--quiet', ref])
-      if (remainingRef.ok) residues.push(`branch remains at ${ref}`)
-      else if (remainingRef.failure !== 'exit') residues.push(`branch cleanup unreadable: ${remainingRef.stderr.trim() || remainingRef.failure}`)
-      const listed = await gitTry(['-C', mainRoot(), 'worktree', 'list', '--porcelain', '-z'])
-      if (!listed.ok) residues.push(`worktree cleanup unreadable: ${listed.stderr.trim() || listed.failure}`)
-      else if (listed.stdout.split('\0').includes(`worktree ${path}`)) residues.push(`worktree remains registered at ${path}`)
+      }
+      const state = await sessionCandidateState(root, path, branch, controller.signal)
+      if ((owned.path && state.path) || (owned.worktree && state.worktree)) residues.push(`owned worktree remains at ${path}`)
+      if (owned.branch && state.branch) residues.push(`owned branch remains at ${ref}`)
+      if ((!owned.path && state.path) || (!owned.worktree && state.worktree)) residues.push(`unowned candidate worktree preserved at ${path}`)
+      if (!owned.branch && state.branch) residues.push(`unowned candidate branch preserved at ${ref}`)
     })
   } catch (error) {
     residues.push(`Git cleanup did not settle: ${error instanceof Error ? error.message : error}`)
   } finally { clearTimeout(timer) }
-  removeStore()
-  if (existsSync(path)) residues.push(`worktree remains at ${path}`)
-  if (existsSync(sessionStoreDir(id))) residues.push(`session store remains at ${sessionStoreDir(id)}`)
+  if (owned.store && existsSync(sessionStoreDir(id))) residues.push(`owned session store remains at ${sessionStoreDir(id)}`)
   return residues
 }
 
@@ -2134,19 +2154,16 @@ async function proveSessionCandidate(path: string, branch: string, signal: Abort
   return null
 }
 
-// @@@ newSession - durable worktree (branch node/<slug> off main) + a global session.json record. The agent does NOT
+// @@@ prepareSession - private required-context half of the bounded create owner. It prepares one durable
+// worktree (branch node/<slug> off main) + global session.json record. The agent does NOT
 // launch inline any more: the worktree is prepared and parked as `queued`, then drainQueue() launches it
 // immediately if we're under the concurrency cap, else it waits its turn. Backs both the dashboard POST and
 // `spex session new`. Creating or deleting a spec node is NOT a server op — it is prompt-driven work the
 // launched agent does itself (the composer's nn/dd chords just prefill a plain instruction). So the server
 // only ever launches a session; it never mutates the spec tree ([[mentions]]: the issue store is the sole
 // programmatic surface, every other surface is prompt only).
-export async function newSession(prompt: string, parent: string | null = null, launcher?: string, context?: SessionCreateContext): Promise<Session> {
-  const requestKey = context ? null : randomUUID()
-  const id = context?.id ?? sessionIdForCreateKey(requestKey!)
-  const requestDigest = context?.requestDigest ?? digest(requestKey!)
-  const payloadHash = context?.payloadHash ?? digest(JSON.stringify({ prompt, parent, launcher: launcher ?? null }))
-  const signal = context?.signal ?? new AbortController().signal
+async function prepareSession(prompt: string, parent: string | null, launcher: string | undefined, context: SessionCreateContext): Promise<Session> {
+  const { id, requestDigest, payloadHash, signal } = context
   let phase: SessionCreatePhase = 'creation-lock'
   let shouldDrain = false
   traceSessionCreate(id, requestDigest, phase, 'start')
@@ -2200,57 +2217,87 @@ export async function newSession(prompt: string, parent: string | null = null, l
       }
       traceSessionCreate(id, requestDigest, phase, 'finish')
 
-      let published = false
-      try {
-        phase = 'git-worktree'
-        traceSessionCreate(id, requestDigest, phase, 'start')
+      phase = 'git-worktree'
+      traceSessionCreate(id, requestDigest, phase, 'start')
+      const resourceLock = `create-resource-${digest(`${path}\0${branch}`)}`
+      return await withRecordLock(resourceLock, async () => {
         throwIfCreateAborted(signal, phase)
-        const added = await withGitAbortSignal(signal, () => gitTry(['-C', mainRoot(), 'worktree', 'add', '-b', branch, path, mainBranch()]))
-        if (!added.ok || !existsSync(path)) {
-          throw new SessionCreateError('session_create_failed', phase, `git worktree add failed: ${added.stderr.trim() || added.failure || 'worktree missing after success'}`, 500)
+        const before = await sessionCandidateState(root, path, branch, signal)
+        const storePresent = existsSync(sessionStoreDir(id))
+        if (storePresent || before.path || before.worktree || before.branch) {
+          const occupied = [storePresent ? `session store ${sessionStoreDir(id)}` : '', before.path ? `path ${path}` : '', before.worktree ? `registered worktree ${path}` : '', before.branch ? `branch ${branch}` : ''].filter(Boolean).join(', ')
+          throw new SessionCreateError('session_create_failed', phase, `session target is already occupied: ${occupied}`, 409)
         }
-        traceSessionCreate(id, requestDigest, phase, 'finish')
-        seedWorktreeHostState(mainRoot(), path)
+        const owned: SessionCandidateOwnership = { store: false, path: false, worktree: false, branch: false }
+        let gitMutationStarted = false
+        let published = false
+        try {
+          gitMutationStarted = true
+          const added = await withGitAbortSignal(signal, () => gitTry(['-C', root, 'worktree', 'add', '-b', branch, path, mainBranch()]))
+          if (added.ok) Object.assign(owned, { path: true, worktree: true, branch: true })
+          if (!added.ok || !existsSync(path)) {
+            throw new SessionCreateError('session_create_failed', phase, `git worktree add failed: ${added.stderr.trim() || added.failure || 'worktree missing after success'}`, 500)
+          }
+          traceSessionCreate(id, requestDigest, phase, 'finish')
+          seedWorktreeHostState(root, path)
 
-        let rec: SessRec = {
-          session: id, governed: true, worktreePath: path, branch,
-          node: ref || null, title, name: null, parent: parent && parent !== id ? parent : null,
-          status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
-          harness: h.id, harnessSessionId: null, stopped: false, archived: false, coldProof: null, adapterRecovery: null, launcher: chosen.name,
-          launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
+          let rec: SessRec = {
+            session: id, governed: true, worktreePath: path, branch,
+            node: ref || null, title, name: null, parent: parent && parent !== id ? parent : null,
+            status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
+            harness: h.id, harnessSessionId: null, stopped: false, archived: false, coldProof: null, adapterRecovery: null, launcher: chosen.name,
+            launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
+          }
+          owned.store = true
+          const dir = storeDir(id)
+          writeFileSync(join(dir, 'prompt'), rawPrompt)
+          writeFileSync(join(dir, 'launch'), launchPrompt)
+
+          phase = 'materialize'
+          traceSessionCreate(id, requestDigest, phase, 'start')
+          rec = await materializeSessionCandidate(rec, signal)
+          traceSessionCreate(id, requestDigest, phase, 'finish')
+
+          phase = 'record-write'
+          traceSessionCreate(id, requestDigest, phase, 'start')
+          throwIfCreateAborted(signal, phase)
+          const gitMismatch = await proveSessionCandidate(path, branch, signal)
+          if (gitMismatch) throw new SessionCreateError('session_create_failed', phase, `refusing session publication: ${gitMismatch}`, 500)
+          throwIfCreateAborted(signal, phase)
+          writeRecord(rec)
+          published = true
+          shouldDrain = true
+          traceSessionCreate(id, requestDigest, phase, 'publish')
+          return toSession(rec, 'queued', 'offline')
+        } catch (error) {
+          if (published) throw error
+          const failurePhase = error instanceof SessionCreateError ? error.phase : phase
+          let ownershipFailure: string | null = null
+          if (gitMutationStarted && !(owned.path && owned.worktree && owned.branch)) {
+            const inspection = new AbortController()
+            const timer = setTimeout(() => inspection.abort(), 10_000)
+            timer.unref?.()
+            try {
+              const after = await sessionCandidateState(root, path, branch, inspection.signal)
+              owned.path ||= !before.path && after.path
+              owned.worktree ||= !before.worktree && after.worktree
+              owned.branch ||= !before.branch && after.branch
+            } catch (inspectionError) {
+              ownershipFailure = `candidate ownership inspection failed: ${inspectionError instanceof Error ? inspectionError.message : inspectionError}`
+            } finally { clearTimeout(timer) }
+          }
+          phase = 'cleanup'
+          traceSessionCreate(id, requestDigest, phase, 'start')
+          const residues = await cleanupSessionCandidate(root, id, path, branch, owned)
+          if (ownershipFailure) residues.unshift(ownershipFailure)
+          traceSessionCreate(id, requestDigest, phase, residues.length ? 'abort' : 'finish', residues.join('; ') || undefined)
+          if (residues.length) throw new SessionCreateError('session_create_cleanup_failed', phase, `session creation failed and cleanup left residue: ${residues.join('; ')}`, 500)
+          if (signal.aborted) { phase = failurePhase; throw createAbortError(signal, failurePhase) }
+          throw error instanceof SessionCreateError
+            ? error
+            : new SessionCreateError('session_create_failed', failurePhase, error instanceof Error ? error.message : String(error), 500)
         }
-        writeFileSync(join(storeDir(id), 'prompt'), rawPrompt)
-        writeFileSync(join(storeDir(id), 'launch'), launchPrompt)
-
-        phase = 'materialize'
-        traceSessionCreate(id, requestDigest, phase, 'start')
-        rec = await materializeSessionCandidate(rec, signal)
-        traceSessionCreate(id, requestDigest, phase, 'finish')
-
-        phase = 'record-write'
-        traceSessionCreate(id, requestDigest, phase, 'start')
-        throwIfCreateAborted(signal, phase)
-        const gitMismatch = await proveSessionCandidate(path, branch, signal)
-        if (gitMismatch) throw new SessionCreateError('session_create_failed', phase, `refusing session publication: ${gitMismatch}`, 500)
-        throwIfCreateAborted(signal, phase)
-        writeRecord(rec)
-        published = true
-        shouldDrain = true
-        traceSessionCreate(id, requestDigest, phase, 'publish')
-        return toSession(rec, 'queued', 'offline')
-      } catch (error) {
-        if (published) throw error
-        const failurePhase = error instanceof SessionCreateError ? error.phase : phase
-        phase = 'cleanup'
-        traceSessionCreate(id, requestDigest, phase, 'start')
-        const residues = await cleanupSessionCandidate(id, path, branch)
-        traceSessionCreate(id, requestDigest, phase, residues.length ? 'abort' : 'finish', residues.join('; ') || undefined)
-        if (residues.length) throw new SessionCreateError('session_create_cleanup_failed', phase, `session creation failed and cleanup left residue: ${residues.join('; ')}`, 500)
-        if (signal.aborted) { phase = failurePhase; throw createAbortError(signal, failurePhase) }
-        throw error instanceof SessionCreateError
-          ? error
-          : new SessionCreateError('session_create_failed', failurePhase, error instanceof Error ? error.message : String(error), 500)
-      }
+      }, signal)
     }, signal)
     traceSessionCreate(id, requestDigest, 'creation-lock', 'finish')
     if (shouldDrain) {

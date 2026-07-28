@@ -170,7 +170,7 @@ test('a fresh selected-harness default drives no-choice session creation and pin
   spex('init', '.', '--harness', 'codex')
 
   // Make the liveness snapshot time out so the real create path leaves the session queued instead of starting
-  // an installed Codex. This exercises CLI → newSession → persisted record without replacing the launcher.
+  // an installed Codex. This exercises CLI → bounded create owner → persisted record without replacing the launcher.
   const fakeBin = mkdtempSync(join(tmpdir(), 'spex-init-bin-'))
   const fakeTmux = join(fakeBin, 'tmux')
   writeFileSync(fakeTmux, '#!/usr/bin/env node\nsetTimeout(() => {}, 10000)\n')

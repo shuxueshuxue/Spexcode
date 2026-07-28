@@ -122,8 +122,6 @@ test('actual create/send/raw-key/xterm/hook-state/queue/sort seams refuse active
   writeFileSync(leasePath, JSON.stringify(leaseRow('active', process.pid, startToken), null, 2))
   const leaseBefore = readFileSync(leasePath, 'utf8')
   const recordBefore = readFileSync(recordPath, 'utf8')
-  let createEffects = 0
-
   const viewer = { send() {} }
   pty.attachViewer(ID, viewer)
   pty.resizeBridge(ID, viewer, 80, 24)
@@ -132,10 +130,7 @@ test('actual create/send/raw-key/xterm/hook-state/queue/sort seams refuse active
   writeFileSync(tmuxCalls, '')
   writeFileSync(terminalInput, '')
 
-  const create = await capture(() => sessions.sessionCreateRequest({ prompt: 'blocked create', parent: null }, async () => {
-    createEffects++
-    return { id: 'must-not-exist' } as any
-  }))
+  const create = await capture(() => sessions.sessionCreateRequest({ prompt: 'blocked create', parent: null }))
   const send = await capture(() => sessions.sendText(ID, 'blocked send'))
   const rawKey = await capture(() => sessions.rawKey(ID, 'Enter'))
   const terminal = await capture(() => pty.forwardInput(ID, viewer, 'X\n'))
@@ -149,13 +144,13 @@ test('actual create/send/raw-key/xterm/hook-state/queue/sort seams refuse active
 
   const actual = {
     codes: [create.code, send.code, rawKey.code, terminal.code, hookState.code, queue.code, sort.code],
-    createEffects, tmuxTransports, terminalWrites,
+    tmuxTransports, terminalWrites,
     leaseUnchanged: readFileSync(leasePath, 'utf8') === leaseBefore,
     recordUnchanged: readFileSync(recordPath, 'utf8') === recordBefore,
   }
   rmSync(worktree, { recursive: true, force: true })
   assert.deepEqual(actual, {
-    codes: Array(7).fill('maintenance_active'), createEffects: 0, tmuxTransports: [], terminalWrites: 0,
+    codes: Array(7).fill('maintenance_active'), tmuxTransports: [], terminalWrites: 0,
     leaseUnchanged: true, recordUnchanged: true,
   })
 })

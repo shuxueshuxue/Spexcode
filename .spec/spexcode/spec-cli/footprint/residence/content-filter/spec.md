@@ -26,11 +26,12 @@ one newline, git's own well-formed shape; a 0-or-2+-newline tail normalizes once
 then stays stable. Smudge strips defensively before injecting, so a block that somehow reached the index
 can never double-inject.
 
-Everything the filter needs is PER-CLONE — zero repo footprint: `git config filter.spexcode.smudge/clean`,
-a managed block in `.git/info/attributes` binding each covered file, and a shim + block-content pair under
-`<git-common>/spexcode/` (a dir shared with other per-clone spexcode data — only our two files are ever
-ours to remove). The block-content file is what smudge injects, so the materialize and future checkouts always
-agree.
+The driver is PER-CLONE, while its payload is PER-TREE. One stable `git config
+filter.spexcode.smudge/clean` and a managed `.git/info/attributes` binding cover the closed materialized text
+paths. At invocation the driver asks Git for the current toplevel, resolves that tree's existing runtime slot,
+and selects the exact `%f` payload there; no payload means identity. Thus two linked worktrees can carry
+different contracts and ignore blocks without `extensions.worktreeConfig`, without replacing the user's
+global excludes, and without a last-writer common `contract-block.md`.
 
 **Where it is planted — mixed content, present or imminent.** The kind detection ([[residence]]) binds
 the filter for a contract file that is host-TRACKED, and PRE-ARMS it for an untracked contract file the
@@ -51,7 +52,8 @@ Three field-verified edges the mechanism must hold:
    `git diff` runs the filter and shows nothing) — settled by a content-GUARDED `git add --renormalize`:
    run only when the cleaned worktree already equals the index blob, a pure stat refresh that can never
    stage a user's real unstaged edit (a genuine edit keeps its honest `M`).
-3. **Ordered unplant.** Strip the block from the working files FIRST, then remove attributes/config/shim —
+3. **Ordered unplant.** Strip the block from the working files FIRST, then remove its tree payload; remove the
+   common attributes/config/shim only after no registered tree claim needs them —
    the reverse order leaves the block exposed as an uncommitted modification the moment the clean filter
    disappears ([[harness-delivery]]'s erase order honors this).
 

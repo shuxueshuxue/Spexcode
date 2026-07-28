@@ -42,7 +42,7 @@ bundles — that is [[plugin-harness]], which materialize drives off `partitionH
 plugin target only validates (and, being exclusive, leaves every native harness UNSELECTED → pruned).
 
 **The chain contract — every materialize leg honors the persisted selection.** materialize is reached by four
-distinct legs, and ALL of them read the same `spexcode.json` set (via `readConfig(mainCheckout)`), never a
+distinct legs, and ALL of them read the materialized tree's own `spexcode.json` set, never a
 default full set: `spex init`'s adoption materialize, a manual `spex materialize`, the pre-commit anchor's
 unconditional materialize ([[commit-surgery]]), and the worktree materialize at session creation
 (`bootstrapMaterialize`). Concretely: a codex-only
@@ -57,8 +57,14 @@ materialize:
 its managed contract block, generated shim, trust, skill/agent files, and the emptied dirs themselves — while
 the user's own prose and `.spec` data are never touched. And that next materialize needs no human: the
 freshness key
-(`hp_config_hash`, [[harness-delivery]]) covers the persisted policy files (the main checkout's
+(`hp_config_hash`, [[harness-delivery]]) covers the persisted policy files (that tree's
 `spexcode.json` + `spexcode.local.json`), so a selection edit alone moves the key, and the very next
 git-native anchor ([[commit-surgery]] — the commit/checkout/merge that carries the edit, or a manual
 `spex materialize`) re-materializes under the new set — a selection change SELF-HEALS through the product
 path, never via a harness event and never waiting for an unrelated `.plugins` edit.
+
+Selection is tree-local; shared harness wiring is not last-writer-owned. A successful materialize publishes
+one claim in that tree's existing runtime slot. The project reconciles shared root hooks/trust from the union
+of claims belonging to Git-registered worktrees, retaining a registered missing/locked tree's last successful
+claim until Git itself removes that registration. Dispatch reads the current tree slot's selected ids, so a
+shared Codex shim retained for a sibling cannot activate hooks in a tree that did not select Codex.

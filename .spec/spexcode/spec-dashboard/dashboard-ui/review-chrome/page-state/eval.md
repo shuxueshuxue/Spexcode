@@ -29,11 +29,10 @@ scenarios:
       navigation after the Sessions page has painted its board projection. Capture request URL, status,
       ETag/revision, route shell/runtime presence, and the first painted rows.
     expected: >
-      Each cold review route issues its committed page request and paints rows when that response completes;
-      the lightweight Evals shell does not mint a second same-identity request merely because it rendered,
-      and a cold graph build cannot overlap a first fallback poll that leaves the review request waiting on a
-      second graph flight. Sessions-first navigation is a recovery control, not a required transport for the
-      review page.
+      Each cold review route uses the route-first shell, issues its committed page request, and paints rows
+      when that response completes; it does not mint a second same-identity request merely because it
+      rendered, and it does not wait for a graph HTTP/stream winner or a second fallback graph flight.
+      Sessions-first navigation is a recovery control, not a required transport for the review page.
 ---
 
 # measuring page-state

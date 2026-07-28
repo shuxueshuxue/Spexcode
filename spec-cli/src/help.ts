@@ -29,6 +29,95 @@ const MENTION_NOTE = `Mentions: @session · [[node]] · @new / @new:<launcher> w
 text passed as a CLI arg included. [[node]] names the topic node; @session hands the text to that live agent;
 @new spawns a fresh worker on the thread's node (bare = configured default; :<launcher> = that named profile).`
 
+type SessionVerbNote = 'selector' | 'project-bound'
+type SessionVerbHelp = readonly [usage: string | readonly string[], detail: string, notes?: readonly SessionVerbNote[]]
+
+// One definition feeds both the complete session drawer and exact `session <verb> --help` projections.
+// Keeping the behavioral prose here prevents a compact probe from becoming a second, drifting manual.
+function sessionHelpDefinitions(): Record<string, SessionVerbHelp> {
+  return {
+    new: ['spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>]',
+      `Launch a worker in its own node worktree. Give it ONLY its task — the dev-flow contract
+reaches it through the materialized system prompt. The prompt's first [[id]] mention binds the
+session to that node. --prompt-file <path>|- carries a long prompt without shell quoting
+(exclusive with the inline prompt). The successful receipt names what to read, monitor, and reply on.`],
+    ls: ['spex session ls [SEL…] [--status a,b] [--all] [--json]',
+      'One-shot table of living sessions. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.', ['selector']],
+    resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
+    watch: ['spex session watch [SEL…] [--as NAME] [--idle] [--interval N=5]',
+      `Streams lifecycle transitions until killed — it NEVER EXITS; the human's forever stream.
+An agent must background it or use wait; blocking a turn on watch freezes you.`, ['selector']],
+    wait: ['spex session wait <SEL> [--timeout S=1200] [--interval S=2] [--idle]',
+      `EDGE-TRIGGERED sleep on one session — ALWAYS run it in the BACKGROUND; its exit is your wake-up.
+Prints the session's current status immediately (stderr), then exits 0 only when it OBSERVES
+the session TRANSITION from a non-actionable status into an actionable one, printing the
+observed path on stdout (e.g. working→review — read the LAST token as the status reached).
+USE IT to sleep until a dispatched worker next needs you — including a dispatched MERGE
+actually landing (review→working while the merge runs, then the edge back is your wake-up).
+It NEVER returns just because the session is actionable ALREADY — for "what is it right NOW"
+use \`session ls\` / \`session review\` instead. --timeout is the guaranteed exit (code 1,
+observed path on stderr). Background one wait per worker.`, ['selector']],
+    review: ['spex session review <SEL> [--json]', 'The merge cockpit: ahead · uncommitted · proposal · gates · merge-base diff — decide from this, don\'t hand-run git.', ['selector']],
+    merge: ['spex session merge <SEL>', `Gated merge, dispatched to the session's OWN agent. Confirm HEAD advanced before
+closing — closing unmerged discards work.`, ['selector', 'project-bound']],
+    send: [['spex session send <SEL> "<msg>"', 'spex session send <SEL> --keys "<keys>"'],
+      `Plain send delivers a message and fails loud when dispatch is dead. --keys is the LAST RESORT:
+raw nav-mode keystrokes to a TUI dialog ("Up Up Enter", C-/M-/S- combos). The raw key surface
+is UNSTABLE and can confirm dangerous dialogs — try a plain send first; use keys only when text
+provably cannot land.`, ['selector', 'project-bound']],
+    interrupt: ['spex session interrupt <SEL>', 'Hard-interrupt the current turn through native harness control.', ['selector', 'project-bound']],
+    rename: ['spex session rename <SEL> "<name>"', 'Set the display name; an empty name clears it.', ['selector', 'project-bound']],
+    show: ['spex session show <SEL> [--capture] [--json]', `The session record: status · node · branch · launcher · the full originating prompt.
+--capture prints the LIVE PANE as text instead (empty pane = exit 0; unknown session = exit 2).`, ['selector']],
+    resume: ['spex session resume <SEL> [--force]', 'Relaunch ONLY if confirmed offline; --force is for a wedged session.', ['selector', 'project-bound']],
+    stop: ['spex session stop <SEL>', 'Soft stop: kill the exact agent and KEEP the worktree resumable.', ['selector', 'project-bound']],
+    archive: ['spex session archive <SEL>', 'Cold-archive it: exact leaf/runtime stopped, worktree and conversation kept.', ['selector']],
+    unarchive: ['spex session unarchive <SEL>', 'Deprecated compatibility spelling: same behavior as resume, relaunching the same conversation.', ['selector']],
+    close: ['spex session close <SEL>', 'Retire the session and its worktree.', ['selector', 'project-bound']],
+    done: ['spex session done --propose merge|nothing|close [--note T]', 'Declare your own work committed and stop.'],
+    park: ['spex session park --note <what-you-await>', 'Declare that a real background task will wake your own session.'],
+    ask: ['spex session ask --note <your-question>', 'Declare that your own session is stopped on the human and resumes on reply.'],
+    attach: ['spex session attach <SEL>', `Sit in the worker's REAL tmux (detach: C-b d). INTERACTIVE AND BLOCKING — an agent
+must NEVER run it in a turn: use show --capture / send. LOCAL-only (fails loud on a remote backend).`, ['selector']],
+  }
+}
+
+const SESSION_HELP_GROUPS = [
+  { title: 'Manager verbs (dispatch, monitor, land)', verbs: ['new', 'ls', 'resources', 'watch', 'wait', 'review', 'merge'] },
+  { title: 'Control another session', verbs: ['send', 'interrupt', 'rename', 'show', 'resume', 'stop', 'archive', 'unarchive', 'close'] },
+  { title: 'Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on)', verbs: ['done', 'park', 'ask'] },
+  { title: 'Human escape hatch', verbs: ['attach'] },
+] as const
+
+const SESSION_WRITE_NOTE = `Manager verbs that WRITE (send/interrupt/rename/resume/stop/close/merge) are PROJECT-BOUND: a backend serving
+another project's repo refuses loudly — name the target with --api <url> to drive it on purpose.`
+
+function indent(text: string, spaces: number): string {
+  const prefix = ' '.repeat(spaces)
+  return text.split('\n').map((line) => `${prefix}${line}`).join('\n')
+}
+
+function sessionDrawerHelp(): string {
+  const definitions = sessionHelpDefinitions()
+  const groups = SESSION_HELP_GROUPS.map(({ title, verbs }) => `${title}:\n${verbs.map((verb) => {
+    const [rawUsage, detail] = definitions[verb]
+    const usages = typeof rawUsage === 'string' ? [rawUsage] : rawUsage
+    return `${usages.map((usage) => `  ${usage}`).join('\n')}\n${indent(detail, 6)}`
+  }).join('\n')}`).join('\n\n')
+  return `${groups}\n\n${SEL_NOTE}\n${SESSION_WRITE_NOTE}\n${MENTION_NOTE}`
+}
+
+function sessionVerbHelp(verb: string): string | null {
+  const entry = sessionHelpDefinitions()[verb]
+  if (!entry) return null
+  const [rawUsage, detail, sharedNotes = []] = entry
+  const usages = typeof rawUsage === 'string' ? [rawUsage] : rawUsage
+  const notes = [detail]
+  if (sharedNotes.includes('selector')) notes.push(SEL_NOTE)
+  if (sharedNotes.includes('project-bound')) notes.push(SESSION_WRITE_NOTE)
+  return `${usages.map((line, index) => `${index === 0 ? 'Usage: ' : '       '}${line}`).join('\n')}\n\n${notes.join('\n\n')}`
+}
+
 const ENTRIES: Record<string, Entry> = {
   // ── project verbs (implicit object = this project) ────────────────────────
   graph: {
@@ -175,64 +264,7 @@ edit the spec instead — same commit as the code.`,
   },
   session: {
     line: 'session <verb>        the worktree state machine: new · ls · watch · wait · review · merge · send · …',
-    body: `Manager verbs (dispatch, monitor, land):
-  spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>]
-      Launch a worker in its own node worktree. Give it ONLY its task — the dev-flow contract
-      reaches it through the materialized system prompt. The prompt's first [[id]] mention binds
-      the session to that node. --prompt-file <path>|- carries a long prompt
-      without shell quoting (exclusive with the inline prompt). Then MONITOR it (wait/watch below).
-  spex session ls [SEL…] [--status a,b] [--all] [--json]  one-shot table of living sessions
-      Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.
-  spex session resources [--json]       read-only host/process ownership, budgets, shared refs, and findings
-  spex session watch [SEL…] [--as NAME] [--idle] [--interval N=5]
-      Streams lifecycle transitions until killed — it NEVER EXITS; the human's forever stream. An
-      agent must background it or use wait; blocking a turn on watch freezes you.
-  spex session wait <SEL> [--timeout S=1200] [--interval S=2] [--idle]
-      EDGE-TRIGGERED sleep on one session — ALWAYS run it in the BACKGROUND; its exit is your wake-up.
-      Prints the session's current status immediately (stderr), then exits 0 only when it OBSERVES
-      the session TRANSITION from a non-actionable status into an actionable one, printing the
-      observed path on stdout (e.g. working→review — read the LAST token as the status reached).
-      USE IT to sleep until a dispatched worker next needs you — including a dispatched MERGE
-      actually landing (review→working while the merge runs, then the edge back is your wake-up).
-      It NEVER returns just because the session is actionable ALREADY — for "what is it right NOW"
-      use \`session ls\` / \`session review\` instead. --timeout is the guaranteed exit (code 1,
-      observed path on stderr). Background one wait per worker.
-  spex session review <SEL> [--json]     the merge cockpit: ahead · uncommitted · proposal · gates ·
-                                         merge-base diff — decide from this, don't hand-run git
-  spex session merge <SEL>               gated merge, dispatched to the session's OWN agent; confirm
-                                         HEAD advanced before closing — closing unmerged discards work
-
-Control another session (all take SEL):
-  spex session send <SEL> "<msg>"        deliver a message (fail-loud: a dead dispatch exits non-zero)
-  spex session interrupt <SEL>           hard-interrupt the current turn through native harness control
-  spex session send <SEL> --keys "<keys>"
-      LAST RESORT: raw nav-mode keystrokes to a TUI dialog ("Up Up Enter", C-/M-/S- combos). The raw
-      key surface is UNSTABLE and can confirm dangerous dialogs — don't reach for it unless a plain
-      \`session send\` text provably cannot land.
-  spex session rename <SEL> "<name>"     set the display name ("" clears)
-  spex session show <SEL> [--capture] [--json]
-      The session record: status · node · branch · launcher · the full originating prompt.
-      --capture prints the LIVE PANE as text instead (empty pane = exit 0; unknown session = exit 2).
-  spex session resume <SEL> [--force]    relaunch ONLY if confirmed offline (--force for a wedged one)
-  spex session stop <SEL>               soft stop: kill the exact agent, KEEP the worktree (resumable)
-  spex session archive <SEL>             cold-archive it: exact leaf/runtime stopped, worktree + conversation kept
-  spex session unarchive <SEL>           deprecated signpost: same as resume (relaunches the same conversation)
-  spex session close <SEL>               retire the session and its worktree
-
-Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on):
-  spex session done --propose merge|nothing|close [--note T]   committed and stopping
-  spex session park --note <what-you-await>                    a real background task will wake you
-  spex session ask  --note <your-question>                     stopped on the human; resumes on reply
-
-Human escape hatch:
-  spex session attach <SEL>              sit in the worker's REAL tmux (detach: C-b d). INTERACTIVE
-                                         AND BLOCKING — an agent must NEVER run it in a turn: use
-                                         show --capture / send. LOCAL-only (fails loud on a remote backend).
-
-${SEL_NOTE}
-Manager verbs that WRITE (send/interrupt/rename/resume/stop/close/merge) are PROJECT-BOUND: a backend serving
-another project's repo refuses loudly — name the target with --api <url> to drive it on purpose.
-${MENTION_NOTE}`,
+    body: sessionDrawerHelp(),
     see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',
   },
   eval: {
@@ -388,14 +420,25 @@ your own state is declared with spex session done|park|ask.`,
   },
 }
 
-// `spex <cmd> --help` must meet the user wherever they typed it: cli.ts intercepts the probe pre-verb and
-// asks for the FIRST token's entry, so `spex session send --help` answers with the session drawer's entry.
-export function commandHelp(name: string): string | null {
+// `spex <cmd> --help` must meet the user wherever they typed it: cli.ts intercepts the probe pre-verb.
+// Session's noun-verb shape gets one extra projection; a bare noun still returns the complete drawer.
+export function commandHelp(name: string, verb?: string): string | null {
+  if (name === 'session' && verb) {
+    const exact = sessionVerbHelp(verb)
+    if (exact) return `${exact}\n\nsee also: spex session (the complete drawer)\n\nmap: spex help · skills: spex guide`
+  }
   const e = ENTRIES[name]
   if (!e) return null
   const oneLiner = e.line.replace(/^\S+(\s+\S+)*?\s{2,}/, '')   // the map line minus its "cmd args" column
   const header = oneLiner ? `spex ${name} — ${oneLiner}\n\n` : ''  // unlisted entries (internal, help) lead with their own Usage
   return `${header}${e.body}${e.see ? `\n\nsee also: ${e.see}` : ''}\n\nmap: spex help · skills: spex guide`
+}
+
+export function sessionLaunchReceipt(id: string): string {
+  return `spex: launched session ${id}
+  current result: the session JSON is on stdout now; \`spex session ls ${id}\` is the later one-shot snapshot
+  next lifecycle change: background \`spex session wait ${id}\` (edge-triggered; exits on the next non-actionable→actionable transition); \`spex session watch ${id}\` streams and NEVER EXITS
+  response channel: \`spex session send ${id} "<msg>"\`; \`send --keys\` is an UNSTABLE LAST RESORT after a plain send cannot land`
 }
 
 export function overviewHelp(): string {

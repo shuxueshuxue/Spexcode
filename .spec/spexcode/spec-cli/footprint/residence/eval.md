@@ -37,10 +37,10 @@ scenarios:
       Then materialize a second time.
     expected: >
       No vote, no hint, no mystery-M: status is clean immediately (tracked contracts covered by the
-      clean/smudge filter, index pristine, working tree carries the block), the host .gitignore is
-      byte-untouched, the managed ignore block lives ONLY in per-clone .git/info/exclude (machine facts +
-      run residue + wholly-ours materialized artifacts; never a tracked contract file's name), and the
-      second materialize is byte-stable (idempotence).
+      clean/smudge filter, index pristine, working tree carries the block). The host .gitignore's INDEX bytes
+      stay pristine while its working copy carries the tree-local ignore projection; common .git/info/exclude
+      contains only checkout-invariant residue and installed shared transport. A tracked contract is named by
+      neither ignore projection, and the second materialize is byte-stable (idempotence).
     tags: [backend-api, cli]
     code: spec-cli/src/materialize.ts
     related: [spec-cli/src/materialize.test.ts]
@@ -65,7 +65,7 @@ scenarios:
       check-ignore/status/attributes, then run the user's own `git add CLAUDE.md` and read the index.
     expected: >
       Wholly-ours: excluded, invisible in status. The moment user prose enters, the next materialize WITHDRAWS
-      the exclude entry (user content is never hidden) and pre-arms the clean filter; the file surfaces as
+      the tree-local ignore entry (user content is never hidden) and pre-arms the clean filter; the file surfaces as
       honestly untracked (??). Their add succeeds — the staged blob carries their prose and NO sentinel
       block; the working tree keeps prose + block. SpexCode never staged or committed anything itself.
     tags: [backend-api, cli]

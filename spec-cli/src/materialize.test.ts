@@ -54,17 +54,20 @@ function makeHost() {
 
 const status = (g: (...a: string[]) => string) => g('status', '--short').trim()
 
-test('one residence behavior: tracked contracts go through the filter, host .gitignore untouched, exclude carries the rest; idempotent', { skip: !gitAvailable() && 'git not available' }, () => {
+test('one residence behavior: tracked host text keeps pristine index bytes while the working tree carries local delivery; idempotent', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex } = makeHost()
   const read = (f: string) => readFileSync(join(proj, f), 'utf8')
   const exclude = () => { const p = join(proj, '.git', 'info', 'exclude'); return existsSync(p) ? readFileSync(p, 'utf8') : '' }
 
   // no vote, no modes: the adoption materialize already left the host clean
   assert.equal(status(g), '', 'clean status straight after adoption — no leak, no phantom-M, no honest-M prompt')
-  assert.equal(read('.gitignore'), 'node_modules/\nartifacts/\n\n\ndist/\n', 'the host .gitignore is NEVER touched')
-  assert.match(exclude(), /spexcode:start[\s\S]*spexcode:end/, 'the managed ignore block lives in per-clone info/exclude')
-  assert.ok(exclude().includes('.claude/settings.json') && exclude().includes('spexcode.local.json') && exclude().includes('.worktrees/'),
-    'machine facts + run residue in the exclude block')
+  assert.ok(read('.gitignore').startsWith('node_modules/\nartifacts/\n\n\ndist/\n'), 'host ignore prose stays byte-exact before the projected block')
+  assert.match(read('.gitignore'), /# spexcode:start[\s\S]*\.claude\/settings\.json[\s\S]*# spexcode:end/,
+    'selection-dependent delivery is visible only in this tree\'s working .gitignore')
+  assert.equal(g('show', ':.gitignore'), 'node_modules/\nartifacts/\n\n\ndist/\n', 'the INDEX keeps the pristine host .gitignore through the filter')
+  assert.match(exclude(), /spexcode:start[\s\S]*spexcode:end/, 'the common exclude keeps only checkout-invariant residue')
+  assert.ok(!exclude().includes('.claude/settings.json') && exclude().includes('spexcode.local.json') && exclude().includes('.worktrees/'),
+    'local shim stays out of the common exclude; run residue stays in it')
   assert.ok(!/^CLAUDE\.md$/m.test(exclude()) && !/^AGENTS\.md$/m.test(exclude()),
     'tracked contract files are the FILTER domain — never exclude entries')
   assert.ok(read('CLAUDE.md').includes('spexcode:start') && read('CLAUDE.md').includes('keep me'), 'contract delivered, prose kept')
@@ -100,14 +103,16 @@ test('legacy .gitignore managed block is forgotten by the next materialize (eras
   const { proj, g, spex } = makeHost()
   // simulate a pre-collapse deployment: the old ignored-mode block sits in the TRACKED .gitignore
   const legacy = 'node_modules/\nartifacts/\n\n\ndist/\n\n# spexcode:start\nCLAUDE.md\n.claude/settings.json\n# spexcode:end\n'
+  g('config', '--unset-all', 'filter.spexcode.clean')
+  writeFileSync(join(proj, '.git', 'info', 'attributes'), '')
   writeFileSync(join(proj, '.gitignore'), legacy)
   g('add', '.gitignore'); g('commit', '-qm', 'legacy ignored-mode block', '--no-verify')
   spex('materialize')
   const gi = readFileSync(join(proj, '.gitignore'), 'utf8')
-  assert.ok(!gi.includes('spexcode:start'), 'the legacy block is stripped from the working .gitignore')
+  assert.ok(gi.includes('spexcode:start') && !/^CLAUDE\.md$/m.test(gi), 'the legacy block is replaced by the current tree projection')
   assert.ok(gi.includes('node_modules/') && gi.includes('\n\n\ndist/'), 'the host rules + blank-line run survive')
-  assert.match(status(g), /M \.gitignore/, 'the strip shows as an honest modification (commit it once to finish the migration)')
-  assert.ok(readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8').includes('.claude/settings.json'), 'the entries live in exclude now')
+  assert.match(status(g), /M \.gitignore/, 'the cleaned legacy index differs honestly until the host commits the one-time migration')
+  assert.ok(!readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8').includes('.claude/settings.json'), 'tree-local entries no longer leak through the common exclude')
 })
 
 test('content-filter edges: missing shim degrades to cat; a contract change re-materializes + settles; uninstall leaves no residue', { skip: !gitAvailable() && 'git not available' }, () => {
@@ -434,31 +439,84 @@ test('harness selection is persistent + self-healing at the git-native anchors: 
 // function of ONE tree's .plugins, so each tree materializes into its own trees/<enc(toplevel)> slot. The old
 // single global file was last-writer-wins across worktrees — tree A's materialize silently replaced the hook set
 // tree B's sessions dispatched (cross-tree hook bleed).
-test('per-tree materialize slots: a divergent worktree materializes into its own slot; another tree\'s later materialize never rewrites it', { skip: !gitAvailable() && 'git not available' }, () => {
+test('one per-tree materialize projection survives a sibling pass across divergent config and plugins', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, env, g, spex } = makeBareRepo('spex-slots-')
+  writeFileSync(join(proj, '.gitignore'), 'host/\n')
   g('add', '-A'); g('commit', '-qm', 'init')
-  spex(proj, 'init', '.', '--harness', 'claude,codex')
+  spex(proj, 'init', '.', '--harness', 'claude')
   g('add', '-A'); g('commit', '-qm', 'adopt', '--no-verify')
-  // worktree with a DIVERGENT .plugins: one extra surface:hook node bound to SessionStart
+  const slotOf = (tree: string) => {
+    const projects = join(env.SPEXCODE_HOME, 'projects')
+    return join(projects, readdirSync(projects)[0], 'trees', tree.replace(/[/.]/g, '-'))
+  }
+  // Simulate the pre-tree-ignore release: main has generated bytes, but only the shared block hides them.
+  const excludePath = join(proj, '.git', 'info', 'exclude')
+  const localIgnore = readFileSync(join(proj, '.gitignore'), 'utf8')
+  const localBody = localIgnore.match(/# spexcode:start\n([\s\S]*?)\n# spexcode:end/)?.[1]
+  assert.ok(localBody, 'fixture has a local selection projection to move back into the legacy common block')
+  writeFileSync(excludePath, readFileSync(excludePath, 'utf8').replace(
+    /# spexcode:start\n[\s\S]*?\n# spexcode:end/,
+    `# spexcode:start\n${localBody}\n# spexcode:end`,
+  ))
+  const attributesPath = join(proj, '.git', 'info', 'attributes')
+  writeFileSync(attributesPath, readFileSync(attributesPath, 'utf8').replace(/^\/\.gitignore .*\n/m, ''))
+  writeFileSync(join(proj, '.gitignore'), 'host/\n')
+  rmSync(join(slotOf(proj), 'tree-ignore-v1'))
+  g('add', '.gitignore')
+  writeFileSync(join(proj, 'AGENTS.md'), 'user-owned\n')
+  assert.equal(g('status', '--short').trim(), '?? AGENTS.md',
+    'legacy common ignore hides old generated bytes without hiding an unselected user file')
+  // The linked tree selects Codex and adds one hook; main remains Claude-only.
   const wt = join(proj, '.worktrees', 'wt')
   g('worktree', 'add', '-q', wt, '-b', 'node/wt')
+  const wtCfg = JSON.parse(readFileSync(join(wt, 'spexcode.json'), 'utf8'))
+  wtCfg.harnesses = ['codex']
+  writeFileSync(join(wt, 'spexcode.json'), `${JSON.stringify(wtCfg, null, 2)}\n`)
   const probe = join(wt, '.spec', 'project', '.plugins', 'probe')
   mkdirSync(probe, { recursive: true })
   writeFileSync(join(probe, 'spec.md'), '---\ntitle: probe\nsurface: hook\nstatus: active\nevents:\n- SessionStart\norder: 10\nblock: false\n---\nmarker\n')
   writeFileSync(join(probe, 'probe.sh'), '#!/usr/bin/env bash\necho PROBE\n')
   spex(wt, 'materialize')
-  const slotOf = (tree: string) => {
-    const projects = join(env.SPEXCODE_HOME, 'projects')
-    return join(projects, readdirSync(projects)[0], 'trees', tree.replace(/[/.]/g, '-'))
-  }
+  assert.equal(g('status', '--short').trim(), '?? AGENTS.md',
+    'upgrading the linked tree neither exposes legacy artifacts nor hides a main-owned user file')
   const wtManifest = readFileSync(join(slotOf(wt), 'hooks-manifest'), 'utf8')
   assert.ok(wtManifest.includes('probe.sh'), "the worktree's slot compiled the worktree's own .plugins")
   const mainManifest = readFileSync(join(slotOf(proj), 'hooks-manifest'), 'utf8')
   assert.ok(!mainManifest.includes('probe.sh'), "main's slot (from init) never saw the worktree-only node")
-  // the OTHER tree materializes LAST — under the old single slot this was the clobber
+  assert.ok(existsSync(join(wt, 'AGENTS.md')) && !existsSync(join(wt, 'CLAUDE.md')), 'candidate selection comes from the candidate tree')
+  assert.match(readFileSync(join(wt, '.gitignore'), 'utf8'), /\.codex\/hooks\.json/)
+  assert.equal(g('-C', wt, 'show', ':.gitignore'), 'host/\n', 'candidate index keeps host ignore bytes')
+
+  // The other tree materializes last: local bytes stay separate and installed Codex transport stays inert there.
   spex(proj, 'materialize')
+  assert.ok(!readFileSync(excludePath, 'utf8').includes('.claude/settings.json'),
+    'the last registered tree receipt retires legacy selection entries from common exclude')
   assert.equal(readFileSync(join(slotOf(wt), 'hooks-manifest'), 'utf8'), wtManifest,
     "main's later materialize lands in main's slot and leaves the worktree's manifest untouched")
+  assert.ok(existsSync(join(wt, 'AGENTS.md')) && readFileSync(join(wt, 'AGENTS.md'), 'utf8').includes('spexcode:start'),
+    "main's pass leaves the candidate contract intact")
+  assert.ok(existsSync(join(proj, 'CLAUDE.md')), 'main keeps its selected Claude contract')
+  assert.equal(readFileSync(join(proj, 'AGENTS.md'), 'utf8'), 'user-owned\n',
+    'main keeps an unselected AGENTS file as visible user bytes, with no sibling contract block')
+  assert.ok(existsSync(join(proj, '.codex', 'hooks.json')), 'the project-scoped Codex transport survives the sibling pass')
+  assert.match(readFileSync(join(proj, '.gitignore'), 'utf8'), /\.claude\/settings\.json/)
+  assert.ok(!readFileSync(join(proj, '.gitignore'), 'utf8').includes('.codex/hooks.json'), 'shared transport is not projected as a local selection')
+  assert.equal(g('show', ':.gitignore'), 'host/\n', 'main index keeps the same host ignore bytes')
   assert.ok(existsSync(join(slotOf(wt), 'content-hash')) && existsSync(join(slotOf(proj), 'content-hash')),
     'each tree carries its own content-hash stamp')
+  // Registration may outlive the directory. Receipt lookup is path identity, never a sibling fs dependency.
+  rmSync(join(slotOf(wt), 'tree-ignore-v1'))
+  writeFileSync(excludePath, readFileSync(excludePath, 'utf8').replace(
+    /# spexcode:end/,
+    'legacy-only/\n# spexcode:end',
+  ))
+  rmSync(wt, { recursive: true, force: true })
+  spex(proj, 'materialize')
+  assert.ok(readFileSync(excludePath, 'utf8').includes('legacy-only/'),
+    'a deleted but registered legacy tree retains prior common protection without crashing')
+  g('worktree', 'prune')
+  spex(proj, 'materialize')
+  assert.ok(!readFileSync(excludePath, 'utf8').includes('legacy-only/'), 'pruning the final legacy registration retires protection')
+  assert.ok(existsSync(join(proj, '.codex', 'hooks.json')), 'project transport stays installed and dormant until uninstall')
+  assert.equal(readFileSync(join(slotOf(proj), 'harnesses'), 'utf8'), 'claude\n', 'main publishes only its own active dispatch family')
 })

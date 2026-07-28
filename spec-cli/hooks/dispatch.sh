@@ -43,6 +43,16 @@ proj="${CLAUDE_PROJECT_DIR:-$PWD}"
 rt="$(cd "$proj" 2>/dev/null && hp_runtime_dir)" || rt=""
 slot="$(cd "$proj" 2>/dev/null && hp_tree_dir)" || slot=""
 
+# A project transport can outlive the tree that installed it. The current tree's last successful materialize
+# is the authority for whether its events are active. Before the v1 marker, an absent allowlist is the legacy
+# shape; afterwards absence means this tree never successfully selected a harness and dispatch stays inert.
+allowed="$slot/harnesses"
+if [ -f "$allowed" ]; then
+  grep -Fxq "$harness" "$allowed" || exit 0
+elif [ -f "$rt/harness-selection-v1" ]; then
+  exit 0
+fi
+
 # --- dispatch ---------------------------------------------------------------------------------------------
 if [ -n "${SPEX_HOOK_MANIFEST:-}" ]; then
   manifest="$SPEX_HOOK_MANIFEST"

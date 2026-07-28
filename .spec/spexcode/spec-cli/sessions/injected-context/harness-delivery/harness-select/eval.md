@@ -32,9 +32,10 @@ scenarios:
       Materialize with `harnesses` ["claude","codex"], confirm codex artifacts exist, then set `harnesses` to
       ["claude"] and re-materialize. Inspect codex's and claude's artifacts and any user prose in AGENTS.md.
     expected: >-
-      Codex's products are PRUNED — its AGENTS.md <spexcode> block stripped, its .codex/hooks.json shim and
-      .codex/skills removed, its global trust block gone — while Claude's artifacts stay intact. Any user prose
-      outside the AGENTS.md managed block is preserved; no .spec data is touched.
+      Codex's tree-local products are PRUNED — its AGENTS.md <spexcode> block and .codex/skills disappear —
+      while Claude's artifacts stay intact. Project-scoped .codex/hooks.json and trust may remain installed,
+      but the tree's final allowlist omits codex and a real codex dispatch is a no-op. Any user prose outside
+      the AGENTS.md managed block is preserved; no .spec data is touched.
   - name: selection-edit-self-heals
     tags: [cli]
     description: >-
@@ -47,6 +48,26 @@ scenarios:
       (.claude gone, the generated CLAUDE.md gone / block stripped) under the narrowed set. A selection change
       self-heals at the next git transition — never via a harness event, never waiting for an unrelated
       .plugins edit.
+  - name: checkout-method-independent-selection
+    tags: [cli]
+    code:
+      - spec-cli/src/materialize.ts#materialize
+      - spec-cli/src/contract-filter.ts
+      - spec-cli/hooks/dispatch.sh
+    description: >-
+      Put a codex-only spexcode.json on a candidate commit while main carries a different valid selection.
+      Judge that same candidate first by switching the root checkout to it, then by restoring main and adding
+      the candidate as a linked worktree. Leave main on the legacy common-ignore projection, upgrade the linked
+      tree first, then materialize both registered trees in alternating order; inspect each tree's
+      contract/filter/ignore output, the shared Codex shim/trust, and dispatch from an unselected tree.
+    expected: >-
+      Checkout method changes nothing: the candidate reads its own codex selection and materializes
+      successfully in both shapes. Each tree keeps only its selected local artifacts and its own filter payload;
+      the first upgraded tree does not expose an older sibling, and the legacy common entries retire after the
+      last registered tree publishes its local receipt. A later sibling materialize cannot rewrite local bytes.
+      Project-scoped Codex transport survives a sibling materialize, while the final per-tree allowlist makes
+      dispatch in an unselected tree a no-op. Git status/index keep host prose honest and no user global ignore
+      configuration is replaced.
 ---
 # eval.md — harness-select
 

@@ -1,5 +1,4 @@
 {
-  "mainBranch": "main",
   "lint": {
     "governedRoots": ["."]
   },

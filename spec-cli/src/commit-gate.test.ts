@@ -880,8 +880,7 @@ test('a stale arm never turns branch, tag, fetch, or reset-to-ancestor into a li
 
 const git = (cwd: string, args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
 
-// the product's real shape: a MAIN checkout plus a LINKED worktree on the node branch. Keeping both makes the
-// base-vs-candidate relation explicit and avoids the fixture artifact of measuring `HEAD..HEAD`.
+// Keep base and candidate in separate checkouts so the fixture cannot collapse its proof to `HEAD..HEAD`.
 function repo(): { main: string; wt: string } {
   const main = mkdtempSync(join(tmpdir(), 'spex-gate-'))
   git(main, ['init', '-q', '-b', 'main'])

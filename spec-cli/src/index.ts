@@ -652,13 +652,18 @@ app.post('/api/sessions/:id/input', async (c) => {
 app.post('/api/sessions/:id/stop', async (c) => {
   const sessionId = c.req.param('id')
   const authorization = await operationAuthorization(c.req.header.bind(c.req), { op: 'stop', sessionId })
-  return c.json({ ok: await stopSession(sessionId, { authorization }) })
+  const ok = await stopSession(sessionId, { authorization })
+  return c.json(ok ? { ok: true } : { ok: false, error: `no stop transition was committed for session ${sessionId}` }, ok ? 200 : 404)
 })
 app.post('/api/sessions/:id/interrupt', async (c) => {
   const result = await interruptSession(c.req.param('id'))
   return c.json(result, result.ok ? 200 : 502)
 })
-app.post('/api/sessions/:id/close', async (c) => c.json({ ok: await closeSession(c.req.param('id')) }))
+app.post('/api/sessions/:id/close', async (c) => {
+  const sessionId = c.req.param('id')
+  const ok = await closeSession(sessionId)
+  return c.json(ok ? { ok: true } : { ok: false, error: `no close transition was committed for session ${sessionId}` }, ok ? 200 : 404)
+})
 // archive / legacy unarchive signpost ([[archive]]) — archive proves exact cold/offline ownership before filing;
 // `{on:false}` enters the same resume transition and recreates the preserved conversation. {ok:false}=no such session.
 app.post('/api/sessions/:id/archive', async (c) => {

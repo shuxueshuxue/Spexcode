@@ -181,25 +181,34 @@ test('dispatch reads the manifest from the dispatching tree\'s own slot', () => 
   const slot = join(runtime, 'trees', dir.replace(/[/.]/g, '-'))
   mkdirSync(slot, { recursive: true })
   writeFileSync(join(slot, 'hooks-manifest'), 'SessionStart\t10\tfalse\thooks/echo.sh\n')
-  const r = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
-  assert.equal(r.status, 0, r.stderr)
-  assert.match(r.stdout, /SLOT-HIT/)
+  writeFileSync(join(slot, 'harnesses'), 'claude\n')
+  const allowed = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
+  assert.equal(allowed.status, 0, allowed.stderr)
+  assert.match(allowed.stdout, /SLOT-HIT/)
+  const siblingOnly = spawnSync('bash', [dispatch, 'codex', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
+  assert.equal(siblingOnly.status, 0, siblingOnly.stderr)
+  assert.equal(siblingOnly.stdout, '', 'a shared shim is inert when this tree did not select its harness')
 })
 
-test('a slot-less tree falls back to the legacy global manifest (migration window), and the slot wins once present', () => {
+test('legacy dispatch remains live until the project marker; then only a successful tree allowlist activates it', () => {
   const { dir, runtime, env } = slotRepo()
   mkdirSync(runtime, { recursive: true })
   writeFileSync(join(runtime, 'hooks-manifest'), 'SessionStart\t10\tfalse\thooks/echo.sh\n')
   const legacy = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
   assert.equal(legacy.status, 0, legacy.stderr)
   assert.match(legacy.stdout, /SLOT-HIT/, 'pre-slot tree: hooks still fire off the legacy global manifest')
-  // the tree gains its slot (what the next git-native anchor plants) — the slot now shadows the legacy file
+  // The first v1 materialize marks the project. An old/unmaterialized sibling has no authority until it
+  // publishes its own allowlist; its slot manifest alone must not inherit a shared transport.
   const slot = join(runtime, 'trees', dir.replace(/[/.]/g, '-'))
   mkdirSync(slot, { recursive: true })
-  writeFileSync(join(slot, 'hooks-manifest'), '')   // this tree compiles to NO SessionStart hooks
-  const slotted = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
-  assert.equal(slotted.status, 0, slotted.stderr)
-  assert.ok(!/SLOT-HIT/.test(slotted.stdout), 'the slot shadows the legacy file even when it dispatches nothing')
+  writeFileSync(join(slot, 'hooks-manifest'), 'SessionStart\t10\tfalse\thooks/echo.sh\n')
+  writeFileSync(join(runtime, 'harness-selection-v1'), '')
+  const inert = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
+  assert.equal(inert.status, 0, inert.stderr)
+  assert.equal(inert.stdout, '')
+  writeFileSync(join(slot, 'harnesses'), 'claude\n')
+  const active = spawnSync('bash', [dispatch, 'claude', 'SessionStart'], { cwd: dir, env, input: '{}', encoding: 'utf8' })
+  assert.match(active.stdout, /SLOT-HIT/)
 })
 
 // [[mark-active]] in-process subagents (issue #60) — a Task-subagent tool call fires the PARENT's hooks with

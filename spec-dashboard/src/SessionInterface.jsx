@@ -597,7 +597,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       const res = await fetch(apiUrl(`/api/sessions/${active}/${verb}`), body
         ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
         : { method: 'POST' })
-      if (!res.ok) { ok = false; const j = await res.json().catch(() => null); if (j?.error) setActErr(j.error) }
+      const j = await res.json().catch(() => null)
+      if (!res.ok || j?.ok === false) {
+        ok = false
+        setActErr(j?.error || `session ${verb} refused (HTTP ${res.status})`)
+      }
     } catch (error) {
       ok = false
       setActErr(error instanceof Error ? error.message : String(error))
@@ -792,7 +796,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           </div>
           )}
           {actErr && <div className="si-offline-err si-action-error" role="alert">{actErr}</div>}
-          {actErr && !shelvedSel && <div className="si-offline-err" role="alert">{actErr}</div>}
           {viewingShelf && !shelved.length && <div className="si-empty">{t('session.shelfEmpty')}</div>}
           {forest.map((it) => {
             // Working rows group into triage zones and fold nested sessions; the archive branch above is flat and

@@ -110,10 +110,13 @@ test('adoption needs no vote: a host-TRACKED contract file goes straight through
   assert.ok(!g('show', ':CLAUDE.md').includes('spexcode:start'), 'index stays pristine (clean filter planted at init)')
   const dirty = g('status', '--short').trim().split('\n').filter((l) => l && !l.startsWith('??'))
   assert.deepEqual(dirty, [], `no modified tracked file after adoption (no mystery M): ${dirty}`)
-  // materialized artifacts + machine facts land in the per-clone exclude; the host has no .gitignore to touch
+  // Checkout-invariant residue stays common; selection-local products live in this tree's filtered ignore.
   const excl = readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8')
-  assert.ok(excl.includes('spexcode:start') && excl.includes('.claude/settings.json'), 'exclude block planted')
-  assert.ok(!existsSync(join(proj, '.gitignore')), 'init never creates or edits a host .gitignore')
+  assert.ok(excl.includes('spexcode:start') && excl.includes('.codex/hooks.json'), 'common exclude block owns project transport')
+  assert.ok(!excl.includes('.claude/settings.json'), 'common exclude does not leak tree-local selection')
+  const localIgnore = readFileSync(join(proj, '.gitignore'), 'utf8')
+  assert.ok(localIgnore.includes('spexcode:start') && localIgnore.includes('.claude/settings.json'), 'tree-local ignore owns selected artifacts')
+  assert.ok(localIgnore.includes('.gitignore'), 'a wholly generated ignore hides itself')
 })
 
 test('init without --harness fails loud BEFORE writing anything — the delivery choice is required, never defaulted', { skip: !gitAvailable() && 'git not available' }, () => {

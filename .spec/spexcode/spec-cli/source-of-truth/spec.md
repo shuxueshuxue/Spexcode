@@ -10,6 +10,7 @@ related:
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts
   - docs/audits/source-of-truth-stage2-20260728.md
+  - docs/audits/source-of-truth-incremental-lint-stage3-20260729.md
 ---
 # source-of-truth
 

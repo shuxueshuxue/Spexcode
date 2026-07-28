@@ -55,10 +55,12 @@ would otherwise silently drop every tuned setting the file holds (layout, launch
 [[spec-lint]]'s `loadConfig` reads through the same helper) and revert to defaults with no diagnostic. It
 fails LOUD instead, naming the file and the parse error, so the author sees exactly what broke.
 
-The **source-of-truth branch** — what worktrees fork from, merges land on, and reviews diff against — is
-detected by `mainBranch()`, never the baked-in name `main`: the `mainBranch` override above wins, else the
-branch the main checkout is currently on (so an adopted repo whose default is `staging`/`feat-x` just works
-with no config), else `main`. This single resolution is surfaced two ways downstream — `GET /api/settings`
+The **source-of-truth branch** — what worktrees fork from, merges land on, and reviews diff against — is a
+stable project fact, never the mutable branch currently checked out in a particular directory. `spex init`
+records the root checkout's branch in `mainBranch`; an explicit pre-existing value wins, and an older project
+with no value uses the conventional `main`. This one-time adoption detection lets a `staging`/`feat-x` repo
+work without hand configuration while an ordinary later `git switch node/x` cannot redefine that feature
+branch as trunk. This single resolution is surfaced two ways downstream — `GET /api/settings`
 for the dashboard and `spex internal trunk` (one line, for shell consumers like the [[main-guard]] pre-commit hook,
 which asks "is HEAD the trunk?" instead of hardcoding `main`). Both resolve via the shared git **common**
 dir, so they answer identically from the main checkout, a linked worktree, or a commit hook:

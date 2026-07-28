@@ -2,50 +2,49 @@
 title: session-new-monitor-hint
 status: active
 hue: 280
-desc: A successful launch nudges its caller to MONITOR the new session — and names the comm channel (`spex send`) — on stderr, so the JSON stdout stays parseable.
+desc: Session verbs are discoverable before use, and a successful new receipt names the current result, next lifecycle change, and response channel without corrupting stdout JSON.
+code:
+  - spec-cli/src/help.ts#sessionHelpDefinitions
+  - spec-cli/src/help.ts#sessionDrawerHelp
+  - spec-cli/src/help.ts#sessionVerbHelp
+  - spec-cli/src/help.ts#commandHelp
+  - spec-cli/src/help.ts#sessionLaunchReceipt
 related:
   - spec-cli/src/cli.ts
+  - spec-cli/src/session-help-cli.test.ts
+  - spec-cli/src/session-create-cli.test.ts
 ---
 
 # session-new-monitor-hint
 
 ## raw source
 
-Launching a session and then forgetting to watch it is a real gap: the caller — a supervising agent or a
-human at a terminal — fires `spex new` / `spex session new`, gets the record, moves on, and the session's
-later review / failure / needs-input goes unnoticed because nobody is streaming its lifecycle. So a
-successful create must **teach its caller to monitor**, at the moment the caller is looking.
-
-Reaching the worker is the same discoverability gap: `send` sits inside the `session` sub-command
-cluster, and a caller who never finds it improvises — the observed failure mode is injecting raw tmux
-keystrokes into the worker's pane (field report: gugu-promo coordination, corrected on the spot). So the
-same nudge also names the **communication channel**.
-
-The nudge lives at the **CLI seam** (both `spex new` and its `spex session new` longhand, which share one
-create), so it reaches whoever typed the command — the same hint for a human and a dispatched agent, never
-baked into one harness.
+Session coordination has two discoverability moments. Before a command runs, a caller probing
+`spex session <verb> --help` needs that verb's exact behaviour, not the complete session drawer repeated
+for every probe. After `spex session new` succeeds, the caller needs a compact receipt that says what result
+exists now, which existing command observes the next lifecycle change, and which existing command carries a
+response. Both are CLI projections of the mechanisms that already exist; neither invents a workflow or a
+new primitive.
 
 ## expanded spec
 
-After [[launch]] returns the new session record, the CLI prints — to **STDERR** — a short (2–4 line)
-reminder carrying the new session **id**, how to watch it, and how to reach it. STDERR is the contract:
-`spex new` and `spex session new` print the session **JSON to STDOUT**, which callers parse, so the
-reminder must never touch stdout or it corrupts that JSON. The hint is calm and useful, not noisy.
+**Exact noun-verb help.** `spex session <verb> --help` is intercepted before dispatch and prints only that
+verb's usage and behaviour. The full `spex session` / `spex help session` drawer remains intact. Both views
+are rendered from one shared session-help definition, so wait's edge semantics, watch's never-exit warning,
+and send's raw-key warning cannot drift between a drawer manual and copied verb manuals. Existing session
+verbs and spellings keep their behaviour; this is a help projection change only.
 
-It names both monitors, keyed to who is calling when that is cheap to tell (the caller's own-session id,
-the same signal [[session-nesting]] reads):
+**The successful-create receipt.** After [[launch]] returns the new session record, `spex session new`
+prints the bare, parseable session **JSON to STDOUT** exactly as before, then prints a concise receipt to
+**STDERR**. The receipt carries the real session id and one line for each dependency:
 
-- **`spex watch`** — the canonical live stream of actionable session transitions; the human/interactive
-  monitor (and the path a supervising Claude-Code agent turns into a live Monitor).
-- background **`spex wait <id>`** — blocks until it observes *this* session transition from non-actionable
-  into an actionable status (edge-triggered, [[session-edges]]), then exits printing the observed status
-  path; the [[manager-cockpit]] manager loop's per-worker monitor. Surfaced first when the caller is itself
-  an agent.
+- **current result** — the session JSON is on stdout now, and `spex session ls <id>` is the later one-shot
+  snapshot;
+- **next lifecycle change** — background `spex session wait <id>` observes a non-actionable to actionable
+  edge and exits as the wake-up, while `spex session watch <id>` is the continuous stream and never exits;
+- **response channel** — `spex session send <id> "<msg>"` is the ordinary path, while `send --keys` remains
+  an unstable last resort only after plain text cannot land.
 
-And, for every caller, one **comm line**: `spex send <id> "<msg>"` is how you talk to the worker — with
-the explicit warning off raw tmux keystrokes, since that is the dangerous improvisation the line exists
-to preempt.
-
-This node is the **harness-agnostic CLI hint** only — it teaches the reminder, it does not auto-wire any
-harness's Monitor tool. Turning `spex watch` into a live Monitor is the agent harness's job, downstream of
-the words printed here.
+The receipt is the same harness-agnostic dependency model for every caller. It does not diagnose
+launcher/provider failures, prescribe a supervisor workflow, require child sessions, change lifecycle
+states, or add a command. Those concerns remain in their existing adapter and product boundaries.

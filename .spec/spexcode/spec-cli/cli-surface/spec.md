@@ -78,8 +78,9 @@ has a move:
    `--api`/`--port` routing, the mention grammar).
 2. `spex help <command>` / `spex <command> --help` — ONE drawer/command's usage. The `--help`
    interception still fires BEFORE any verb runs ([[guide]]'s safety contract: probing `session new`
-   or `session watch` with `--help` must never start the verb); a drawer sub's probe answers with its
-   drawer's entry.
+   or `session watch` with `--help` must never start the verb). A noun-verb probe such as
+   `spex session wait --help` answers with that VERB's exact usage, projected from the same definition
+   the bare `spex session` drawer assembles; exact help never carries a copied second manual.
 3. `spex guide [topic]` — the skill layer ([[guide]]): workflows, file formats, settings. **help
    answers "what do I type", guide answers "how do I work".**
 

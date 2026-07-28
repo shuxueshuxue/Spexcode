@@ -3,29 +3,30 @@ scenarios:
   - name: self-launch-zero-friction-codex
     tags: [backend-api]
     description: >-
-      The whole ideal path on a CLEAN machine state (isolated SPEXCODE_HOME + CODEX_HOME): run `spex init`
-      in a fresh project, then launch a REAL codex TUI in that project as a user would (no SpexCode process
-      in the launch). Observe the startup and the model-visible prompt.
+      The whole ideal path on a CLEAN machine state (isolated SPEXCODE_HOME + CODEX_HOME): run `spex init
+      --harness codex` in a fresh project, enter an ordinary or linked checkout, then launch a REAL Codex
+      session there as a user would (no SpexCode process in the launch). Give only a product task, with no
+      Spex commands or workflow in the prompt, and inspect its concrete command/edit/recovery trajectory.
     expected: >-
       Codex starts straight into the session with ZERO prompts — no directory-trust prompt and no
       hooks-review prompt (the deterministic trusted_hash materialize wrote into the scoped global config is
-      accepted). The materialized AGENTS.md <spexcode> block is present in codex's model-visible prompt-input
-      and carries the surface:system contract bodies in name order. The
-      user performed no step after `spex init`.
+      accepted). The materialized AGENTS.md <spexcode> index leads the agent to the real owner/help/guide
+      surfaces: it reads the governing body, gives independent intent its own node, validates and commits the
+      code plus spec, then files a correctly anchored reading. Checkout shape adds no copy/move workaround or
+      launch ceremony. The user performed no step after materialize and did not teach that workflow.
   - name: contract-files-are-untracked-artifacts
     tags: [backend-api]
     description: >-
-      In a fresh git project carrying the spec tree, run `spex materialize`. Inspect the generated
-      AGENTS.md/CLAUDE.md, `git check-ignore` them (the managed block lives in the per-clone
-      .git/info/exclude — the host .gitignore is never touched), then edit a
-      surface:system node, commit or run materialize again.
+      In a fresh git project carrying the spec tree and an explicit harness selection, run `spex
+      materialize`. Inspect the selected contract files, the working/index .gitignore pair and the common
+      .git/info/exclude; then edit a surface:system node and run materialize again.
     expected: >-
-      AGENTS.md and CLAUDE.md are written and BOTH are ignored via the exclude block (alongside the shims +
-      skills), so a clone never carries a committed copy —
-      no contract file is tracked, and no .gitignore is created or edited. Each file's
-      `<!-- spexcode:start -->…<!-- spexcode:end -->` block
-      equals the surface:system bodies in name order — and NOTHING else, no per-project prose file; the next materialize
-      reflects the edited body. The writeManagedBlock primitive still preserves any bytes outside the markers.
+      Only the selected harness contracts are written and none is tracked. Tree-local contracts, shims and
+      skills are ignored by that tree's filtered working .gitignore while its index retains any host bytes;
+      checkout-invariant residue and installed shared transport alone occupy common .git/info/exclude. Each
+      contract's `<!-- spexcode:start -->…<!-- spexcode:end -->` block equals the surface:system bodies in
+      name order — and NOTHING else, no per-project prose file; the next materialize reflects the edit.
+      writeManagedBlock preserves bytes outside its markers.
   - name: exclude-block-checkout-invariant
     tags: [backend-api]
     code: spec-cli/src/materialize.ts
@@ -74,9 +75,8 @@ scenarios:
 # eval.md — harness-delivery
 
 Loss is measured through the REAL self-launch surface (YATU): a user-launched codex/claude on a clean,
-isolated home must get the full SpexCode system (the assembled guide + contract + hooks + zero-prompt trust)
-with no step after `spex init`. The contract files (AGENTS.md/CLAUDE.md) are SpexCode-owned GENERATED
-artifacts — never tracked, exclude-hidden, regenerated per clone/launch — so the only tracked contract
-prose is the plugin tree the materialize assembles from. Verify the contract reaches the model via `codex debug
-prompt-input` (no model call needed); verify trust via a real TUI launch (zero prompts). Always use isolated
-SPEXCODE_HOME/CODEX_HOME — never the real user config.
+isolated home must get the assembled contract, guides, hooks and zero-prompt trust with no instructional
+workflow in the user prompt. The contract files (AGENTS.md/CLAUDE.md) are SpexCode-owned GENERATED artifacts
+— never tracked, tree-locally ignored, regenerated per checkout — so the only tracked contract prose is the
+plugin tree materialize assembles. Inspect the agent's actual choices and recovery, not only a prompt dump.
+Always use isolated SPEXCODE_HOME/CODEX_HOME — never the real user config.

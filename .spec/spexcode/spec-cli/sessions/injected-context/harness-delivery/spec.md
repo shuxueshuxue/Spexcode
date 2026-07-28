@@ -81,24 +81,20 @@ plugin node. This replaces the launch-time
   codex-rs algorithm), so a user-self-launched codex skips its trust prompts entirely.
   Trust is global-only by codex's security design (a repo cannot declare itself trusted) — the one
   necessary scoped global write; everything else is project-local.
-- **the content-hash marker** (same per-tree slot as the manifest), stamped LAST — a freshness record (a
-  crash mid-materialize leaves it stale, diagnosably); the unconditional pre-commit materialize heals regardless.
+- **the content-hash marker** (same per-tree slot as the manifest), a diagnostic freshness record written
+  before the final authority; the unconditional pre-commit materialize heals a partial pass.
+- **the dispatch-family allowlist** (same slot), atomically renamed into place LAST. It is the sole success
+  receipt consumed by dispatch, so a killed writer leaves the preceding successful selection intact.
 
-The pass obeys the **forgetting law**: materialize(P₂) ∘ materialize(P₁) = materialize(P₂) — whatever a
-prior policy (harness set, a retired render-vote mode, or older legacy modes) wrote, one materialize under the
-current policy fully forgets it; idempotence is the special case P₂ = P₁, and **dematerialize =
-materialize(∅)** is the empty policy [[spex-uninstall]] builds on. The shape is ERASE-THEN-ASSERT over a
-CLOSED set of landing points: each is first erased unconditionally by its IDENTITY STAMP — the sentinel
-blocks, the shim's own `dispatch.sh` command line, the generated mark on skills/agents (which is also what
-lets a RENAMED or deleted node's product be forgotten), the content-filter config namespace, the legacy
-skip-worktree bit — then rewritten per the current policy, possibly to nothing. No ledger of past states,
-no pairwise migration branches: the erase IS the migration. So an UNSELECTED harness needs no separate
-prune pass — the erase already forgot it and only selected harnesses are asserted ([[harness-adapter]]'s
-`clean()` remains the per-harness surgical inverse the erase is built from). The erase order carries one
-constraint: managed blocks leave the working contract files BEFORE the content filter's config goes
-([[content-filter]] edge 3). A plugin target stays exclusive ([[plugin-harness]]); its bundle FOLDERS are
-arbitrary paths no stamp can enumerate, so they keep the one small ledger of last-emitted folders (in the
-same per-tree slot as the manifest) — the single landing point outside the stamp-erasable set.
+The pass obeys a scoped **forgetting law**. One tree's semantic output is exactly its current policy. Local
+landing points are ERASE-THEN-ASSERT by identity stamp, so narrowing one tree removes its
+contract/shim/skills without touching a sibling. Project-scoped hook/trust wiring is installation transport,
+not selection state: once a tree needs it, it may remain dormant until project-wide dematerialize/uninstall.
+The dispatch-family allowlist in each existing tree runtime slot is the single final publication of a
+successful pass, and gates that shared transport before admission or input handling; retaining the transport
+therefore cannot activate a harness that this tree did not select. Idempotence is the same-policy case, and
+project-wide dematerialize clears every accessible registered tree before shared substrate. A plugin target
+stays exclusive ([[plugin-harness]]) and its arbitrary bundle folders remain in the same per-tree ledger.
 
 The pass returns a **materialization receipt** alongside its content hash: the manifest and the exact contract,
 shim, skill/agent, plugin-bundle, and trust paths asserted by this run. The receipt is populated at those writes,
@@ -106,22 +102,23 @@ with trust paths supplied by the adapter that performed the global write, so cal
 harness footprint without maintaining a second harness-artifact inventory.
 
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
-(never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. The materialize's ignore
-rules are one managed `#` block in the per-clone `.git/info/exclude` — the host's tracked `.gitignore` is
-never touched ([[residence]]) — carrying the MACHINE facts (the adapters' `shimFile()`s, which bake
-THIS machine's absolute install path; any plugin bundle dir; `spexcode.local.json`; and the session
-residue: `.worktrees/` — where a launch plants its worktrees — plus a legacy `.session` entry for
-worktrees an old backend labeled with the retired per-worktree state file; live session state is the
-global store's `session.json`), the materialized skills/agents, and the wholly-ours contract files; a
-tracked-or-mixed contract file is the [[content-filter]]'s domain instead, never an exclude entry. The
-block is **checkout-invariant**: the exclude lives in the COMMON git dir shared by the main checkout and
-every worktree, so if the entries differed by where materialize ran the two passes would fight. The only
-entry that varies is Codex's hooks shim, which an adapter places at the [[harness-adapter|main checkout]]
-(a worktree's codex reads the root's hooks): from main it is `.codex/hooks.json`, from a worktree it
-escapes `proj` (`../…`). So each entry is anchored to the checkout it LIVES under — project-relative when
-inside `proj`, else main-checkout-relative — which resolves that shim to `.codex/hooks.json` from ANY
-checkout (a pattern naming a main-only path is a harmless no-op in a worktree). Every checkout emits the
-identical block. The Codex trust hash is not in-tree at all — it lives in the global `~/.codex/config.toml`.
+(never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. Ignore is projected with
+the same ownership split. Checkout-invariant machine residue (`spexcode.local.json`, `.worktrees/`, legacy
+`.session`, and installed shared root transport) stays in the common `.git/info/exclude`. Selection-dependent local
+shims, bundles, skills/agents, and wholly-ours contract files are one managed block in that tree's working
+`.gitignore`. [[content-filter]] keeps a tracked host `.gitignore` pristine in the index, leaves an untracked
+host file honestly visible, and lets a wholly generated one ignore itself. Contract and ignore payloads live
+under the current tree slot; one common filter driver derives that slot from the invoking Git toplevel plus `%f`, so linked
+trees never overwrite one another's bytes and user global ignore configuration is untouched. The Codex trust
+hash remains global and project-scoped, and is removed by project-wide dematerialize/uninstall rather than a
+sibling's selection change.
+
+Migration cannot expose a registered tree that still depends on the old common ignore projection. Until every
+previously materialized registered tree publishes its per-tree ignore receipt, common `.git/info/exclude`
+retains its prior managed entries. The upgrading tree has no authority to add its local paths to that common
+set. The last receipt removes the retained entries; from then on only checkout-invariant residue and shared
+transport remain common. Receipt lookup is derived from registered path identity, so a deleted-but-not-yet-
+pruned worktree keeps protection without making sibling filesystem access a materialize prerequisite.
 
 The net ideal path: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`, zero
 further operation, no global pollution beyond the scoped Codex trust. The contract files are SpexCode-owned

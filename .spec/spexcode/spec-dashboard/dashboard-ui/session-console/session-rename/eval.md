@@ -59,7 +59,7 @@ scenarios:
       after the refusal.
     expected: >
       The close request is non-2xx with a structured diagnostic, the row remains present, and the dashboard
-      renders that diagnostic through its action-error surface. A refused destructive operation never reads as
+      renders that diagnostic once through its action-error surface. A refused destructive operation never reads as
       HTTP success or silently disappears.
     code:
       - spec-cli/src/index.ts#closeSession

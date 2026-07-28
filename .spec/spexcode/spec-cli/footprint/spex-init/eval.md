@@ -4,12 +4,12 @@ scenarios:
     tags: [cli]
     description: >-
       In a fresh git repo, run `spex init . --harness claude,codex` and compare what the success message +
-      next-steps CLAIM about lint.governedRoots, harnesses, and launchers with what the planted
+      next-steps CLAIM about mainBranch, lint.governedRoots, harnesses, and launchers with what the planted
       spexcode.json actually contains.
     expected: >-
-      Every printed value IS the planted value (the starter ships governedRoots ["."]; harnesses and the
-      seeded launcher names echo the --harness choice), read back from the file — no message may restate a
-      config value as a code literal. No stale ["src"] claim anywhere in the output.
+      Every printed value IS the planted value (mainBranch is the adoption checkout's branch; the starter
+      ships governedRoots ["."]; harnesses and seeded launcher names echo the --harness choice), read back
+      from the file — no message may restate a config value as a code literal. No stale ["src"] claim anywhere.
   - name: no-vote-adoption
     tags: [cli]
     description: >-

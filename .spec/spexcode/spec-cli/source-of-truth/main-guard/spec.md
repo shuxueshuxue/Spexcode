@@ -39,13 +39,12 @@ exception. An earlier `.spec/.forum/**` exception here was removed as redundant 
 
 The guard's real question is "am I committing directly onto the trunk?", not "is this branch literally
 named `main`?". It resolves the trunk through the SAME single source of truth the rest of SpexCode
-uses — [[portable-layout]]'s `mainBranch()` (config override → the main checkout's current branch →
+uses — [[portable-layout]]'s stable `mainBranch` project fact (stamped at adoption; conventional default
 `main`), surfaced to the shell as `spex internal trunk` — so a repo whose trunk is `master` or any non-`main`
 base is protected, not silently exempt. A hardcoded `main` compare would disagree with the layout side
 and leave a `master`-default repo wide open. When the CLI isn't resolvable (advisory mode, no
-`@spexcode/spec-cli` installed) the hook falls back to a pure-git auto-detect of the main checkout's
-current branch, then `main` — still naming the real trunk in the common case, never enumerating a second
-hardcoded branch.
+`@spexcode/spec-cli` installed), shell has no structured config reader and uses only the conventional `main`;
+it never guesses identity from the branch a developer happened to check out.
 
 Hooks live in the **common** git dir, so one install covers every worktree at once. There is **one
 canonical hook source** — the `spec-cli/templates/hooks/` shipped with the package — and **both** install

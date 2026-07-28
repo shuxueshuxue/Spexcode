@@ -73,25 +73,18 @@ test('the live rename command resolves to the self-rename prompt through the sha
   assert.equal(await resolveCommandPrompt('/not-a-preset'), '/not-a-preset')
 })
 
-test('session-create API rejects stale fields generically and accepts an ordinary launcher create', async () => {
-  let called: [string, string | null, string | undefined] | null = null
-  const created = { id: 'created-1' } as Session
-  const create = async (prompt: string, parent: string | null, launcher?: string) => {
-    called = [prompt, parent, launcher]
-    return created
-  }
-
-  const stale = await sessionCreateRequest({ prompt: 'probe', launcher: 'claude', mode: 'headless' }, create)
+test('session-create API rejects stale fields before entering the transaction', async () => {
+  const stale = await sessionCreateRequest({ prompt: 'probe', launcher: 'claude', mode: 'headless' })
   assert.deepEqual(stale, { status: 400, error: 'unknown session-create field: mode' })
-  assert.equal(called, null, 'unknown fields are refused before creation')
 
-  const removedNode = await sessionCreateRequest({ node: 'launcher-select', prompt: 'probe', launcher: 'claude' }, create)
+  const removedNode = await sessionCreateRequest({ node: 'launcher-select', prompt: 'probe', launcher: 'claude' })
   assert.deepEqual(removedNode, { status: 400, error: 'unknown session-create field: node' })
-  assert.equal(called, null, 'the removed node field is refused before creation')
+})
 
-  const ordinary = await sessionCreateRequest({ prompt: '[[launcher-select]] probe', parent: null, launcher: 'claude' }, create)
-  assert.deepEqual(ordinary, { status: 201, session: created })
-  assert.deepEqual(called, ['[[launcher-select]] probe', null, 'claude'])
+test('session creation exports only the bounded transaction owner', async () => {
+  const surface = await import('./sessions.js') as Record<string, unknown>
+  assert.equal(surface.newSession, undefined)
+  assert.equal(typeof surface.sessionCreateRequest, 'function')
 })
 
 // @@@ birth registration — EXECUTE a generated launch.sh whose agent command is a stub, and prove the wrapper
@@ -146,7 +139,7 @@ function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: strin
     node: 'maintenance-lease', title: '', name: '', parent: '', status: 'active', proposal: '',
     merges: 0, note: 'preserve-before-readiness', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',
     harness_session_id: `thread-${id}`, stopped: true, archived: false, cold_proof: '', adapter_recovery: '',
-    launcher: 'fixture', launch_cmd: launchCmd, launch_owner: '',
+    launcher: 'fixture', launch_cmd: launchCmd, launch_owner: '', create_request_id: '', create_payload_hash: '',
     launch_readiness_pending: '',
   }, null, 2)}\n`)
 }

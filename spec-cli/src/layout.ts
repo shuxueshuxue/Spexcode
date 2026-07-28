@@ -184,6 +184,8 @@ export type RawRecord = {
   adapter_recovery?: string // explicit lifecycle recovery required after a partial adapter mutation; absent on old records
   launcher?: string   // the launcher profile this session was created under ([[launcher-select]]); absent/empty only on old records predating launchers
   launch_cmd?: string // the RESOLVED base launcher command PINNED at creation, so a resume replays the EXACT launcher (and its config-dir env) that made the conversation, never a since-changed default ([[launcher-select]] resume-launcher-pin); absent → old record, fall back to the launcher name / ambient
+  create_request_id?: string // SHA-256 digest of the create Idempotency-Key; the raw key is never persisted
+  create_payload_hash?: string // normalized create payload bound to create_request_id
   launch_readiness_pending?: '' | RawLaunchReadinessPending
 }
 

@@ -5,6 +5,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
+import { createServer } from 'node:net'
 
 // [[spex-init]] / [[residence]] — the ADOPTION SURFACE: what `spex init` prints must be TRUE of what it
 // planted (the success message once claimed governedRoots ["src"] while the template seeded ["."] — the
@@ -31,6 +32,15 @@ const SEEDED_LAUNCHERS = {
 function gitAvailable(): boolean {
   try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true } catch { return false }
 }
+
+const freePort = () => new Promise<number>((resolvePort, reject) => {
+  const server = createServer()
+  server.once('error', reject)
+  server.listen(0, '127.0.0.1', () => {
+    const address = server.address()
+    server.close(() => typeof address === 'object' && address ? resolvePort(address.port) : reject(new Error('no test port')))
+  })
+})
 
 function freshRepo(opts: { trackedContract?: boolean } = {}) {
   const proj = mkdtempSync(join(tmpdir(), 'spex-init-'))
@@ -155,20 +165,21 @@ test('--harness seeds only the selected launchers, with automatic permission lim
   }
 })
 
-test('a fresh selected-harness default drives no-choice session creation and pins its safe command', { skip: !gitAvailable() && 'git not available' }, () => {
+test('a fresh selected-harness default drives no-choice session creation and pins its safe command', { skip: !gitAvailable() && 'git not available' }, async () => {
   const { proj, home, env, spex } = freshRepo()
   spex('init', '.', '--harness', 'codex')
 
   // Make the liveness snapshot time out so the real create path leaves the session queued instead of starting
-  // an installed Codex. This exercises CLI → newSession → persisted record without replacing the launcher.
+  // an installed Codex. This exercises CLI → bounded create owner → persisted record without replacing the launcher.
   const fakeBin = mkdtempSync(join(tmpdir(), 'spex-init-bin-'))
   const fakeTmux = join(fakeBin, 'tmux')
   writeFileSync(fakeTmux, '#!/usr/bin/env node\nsetTimeout(() => {}, 10000)\n')
   chmodSync(fakeTmux, 0o755)
+  const refusedPort = await freePort()
   const createEnv = {
     ...env,
     PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
-    SPEXCODE_API_URL: 'http://127.0.0.1:1',
+    SPEXCODE_API_URL: `http://127.0.0.1:${refusedPort}`,
     SPEXCODE_TMUX: `safe-init-${process.pid}`,
   }
   const out = execFileSync(TSX, [CLI, 'session', 'new', 'safe default probe'], {

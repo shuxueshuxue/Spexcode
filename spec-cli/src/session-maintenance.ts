@@ -32,7 +32,7 @@ export type Operation =
   | { op: 'merge-dispatch'; sessionId: string }
   | { op: 'queue-drain' }
   | { op: 'attach'; sessionId: string }
-  | { op: 'shared-spawn'; sessionId: string; delegate: string }
+  | { op: 'shared-spawn'; sessionId: string; delegate?: string }
 
 type CapabilityState = 'unused' | 'inflight' | 'committed' | 'indeterminate'
 type CapabilityEntry = { capability: Capability; state: CapabilityState; requestId?: string }
@@ -345,11 +345,11 @@ export function createSessionMaintenance(input: CoordinatorInput) {
     renameSync(temp, statePath)
   }
 
-  const recover = (state: DurableState): boolean => {
+  const recover = (state: DurableState, protectedTicketId?: string): boolean => {
     let dirty = false
     const retained: Ticket[] = []
     for (const ticket of state.tickets) {
-      const ownerState = identityState(ticket.owner)
+      const ownerState = ticket.id === protectedTicketId ? 'live' : identityState(ticket.owner)
       if (ownerState === 'live' || ownerState === 'ambiguous') {
         retained.push(ticket)
         continue
@@ -397,12 +397,13 @@ export function createSessionMaintenance(input: CoordinatorInput) {
     return dirty
   }
 
-  const locked = <T>(body: (state: DurableState, dirty: () => void) => T): T => {
+  const locked = <T>(body: (state: DurableState, dirty: () => void) => T, beforeRecover?: (state: DurableState) => string | undefined): T => {
     const release = acquireLock()
     try {
       const loaded = load()
       let changed = !loaded.exists
-      if (recover(loaded.state)) changed = true
+      const protectedTicketId = beforeRecover?.(loaded.state)
+      if (recover(loaded.state, protectedTicketId)) changed = true
       const value = body(loaded.state, () => { changed = true })
       if (changed) persist(loaded.state)
       return value
@@ -432,6 +433,19 @@ export function createSessionMaintenance(input: CoordinatorInput) {
     return isDescendantOf(process.pid, ticket.owner, input.processIdentity) ? ticket : null
   }
 
+  const sharedSpawnAuthority = (state: DurableState, operation: Extract<Operation, { op: 'shared-spawn' }>): { delegate: Delegate; parentTicket: Ticket } => {
+    const raw = 'delegate' in operation ? operation.delegate : undefined
+    const delegate = typeof raw === 'string' ? state.delegates.find((candidate) => candidate.epoch === state.epoch
+      && candidate.operation === 'shared-spawn' && candidate.sessionId === operation.sessionId
+      && presentedTokenMatches(raw, candidate.tokenHash)) : undefined
+    const parentTicket = delegate && state.tickets.find((candidate) => candidate.id === delegate.parentTicketId
+      && candidate.epoch === state.epoch && candidate.operation === 'resume'
+      && candidate.sessionId === operation.sessionId && candidate.mode === 'maintenance')
+    if (!delegate || delegate.state !== 'unused' || !parentTicket || identityState(parentTicket.owner) !== 'live')
+      return fail('maintenance_delegate_invalid', 'shared-runtime delegate is forged, stale, completed, mismatched, replayed, or detached from its live resume owner', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
+    return { delegate, parentTicket }
+  }
+
   const beginTicket = (state: DurableState, operation: Operation, owner: ProcessIdentity, markDirty: () => void): Ticket => {
     if (!OPERATIONS.has(operation.op)) fail('maintenance_invalid', `unknown maintenance operation ${(operation as { op?: string }).op ?? ''}`)
     const parent = inheritedOrdinaryParent(state)
@@ -441,19 +455,11 @@ export function createSessionMaintenance(input: CoordinatorInput) {
 
     if (operation.op === 'shared-spawn') {
       if (state.state === 'open') {
-        if (operation.delegate) fail('maintenance_delegate_invalid', 'shared-runtime delegate is not valid outside active maintenance', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
+        if ('delegate' in operation) fail('maintenance_delegate_invalid', 'shared-runtime delegate channel is not valid outside active maintenance', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
       } else if (state.state !== 'active') {
         fail('maintenance_active', `session maintenance is ${state.state}; shared-spawn was not admitted`, { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
       } else {
-        const raw = operation.delegate
-        const delegate = state.delegates.find((candidate) => candidate.epoch === state.epoch
-          && candidate.operation === 'shared-spawn' && candidate.sessionId === operation.sessionId
-          && presentedTokenMatches(raw, candidate.tokenHash))
-        const parentTicket = delegate && state.tickets.find((candidate) => candidate.id === delegate.parentTicketId
-          && candidate.epoch === state.epoch && candidate.operation === 'resume'
-          && candidate.sessionId === operation.sessionId && candidate.mode === 'maintenance')
-        if (!delegate || delegate.state !== 'unused' || !parentTicket)
-          return fail('maintenance_delegate_invalid', 'shared-runtime delegate is forged, stale, completed, mismatched, or replayed', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
+        const { delegate, parentTicket } = sharedSpawnAuthority(state, operation)
         delegate.state = 'running'
         mode = 'maintenance'
         parentTicketId = parentTicket.id
@@ -490,6 +496,15 @@ export function createSessionMaintenance(input: CoordinatorInput) {
     markDirty()
     return ticket
   }
+
+  const beginOperationTicket = (operation: Operation, owner: ProcessIdentity): Ticket => locked(
+    (state, dirty) => beginTicket(state, operation, owner, dirty),
+    (state) => {
+      if (operation.op !== 'shared-spawn' || state.state !== 'active') return undefined
+      // Protect the proven-live parent from recovery, then re-read it in beginTicket before delegate mutation.
+      return sharedSpawnAuthority(state, operation).parentTicket.id
+    },
+  )
 
   const finishTicket = (ticketId: string, outcome: 'committed' | 'retryable' | 'indeterminate'): void => locked((state, dirty) => {
     const index = state.tickets.findIndex((ticket) => ticket.id === ticketId)
@@ -604,7 +619,7 @@ export function createSessionMaintenance(input: CoordinatorInput) {
 
   const runOperation = async <T>(operation: Operation, body: (ticket: MaintenanceTicket) => Promise<T> | T): Promise<T> => {
     const owner = input.selfIdentity()
-    const ticket = locked((state, dirty) => beginTicket(state, operation, owner, dirty))
+    const ticket = beginOperationTicket(operation, owner)
     let outcome: 'committed' | 'retryable' | 'indeterminate' = 'indeterminate'
     try {
       const result = await context.run({ ticketId: ticket.id }, () => body({
@@ -624,7 +639,7 @@ export function createSessionMaintenance(input: CoordinatorInput) {
 
   const runOperationSync = <T>(operation: Operation, body: (ticket: MaintenanceTicket) => T): T => {
     const owner = input.selfIdentity()
-    const ticket = locked((state, dirty) => beginTicket(state, operation, owner, dirty))
+    const ticket = beginOperationTicket(operation, owner)
     let outcome: 'committed' | 'retryable' | 'indeterminate' = 'indeterminate'
     try {
       const result = context.run({ ticketId: ticket.id }, () => body({
@@ -662,7 +677,7 @@ export function createSessionMaintenance(input: CoordinatorInput) {
 
   const beginExternalOperation = (operation: Operation, owner: ProcessIdentity): string => {
     if (identityState(owner) !== 'live') fail('maintenance_invalid', 'external operation owner is not exact and live')
-    return locked((state, dirty) => beginTicket(state, operation, owner, dirty)).id
+    return beginOperationTicket(operation, owner).id
   }
   const finishExternalOperation = (ticketId: string, owner: ProcessIdentity): void => locked((state, dirty) => {
     const index = state.tickets.findIndex((ticket) => ticket.id === ticketId && sameIdentity(ticket.owner, owner))

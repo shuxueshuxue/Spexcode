@@ -261,18 +261,26 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
   })
   const dir = mkdtempSync(join(tmpdir(), 'spex-maintenance-spawn-a-'))
 
-  const run = async (name: string, delegate: string | null) => {
+  type DelegateChannel =
+    | { kind: 'absent' }
+    | { kind: 'pipe'; value: string }
+    | { kind: 'unreadable' }
+    | { kind: 'malformed' }
+  const run = async (name: string, channel: DelegateChannel) => {
     const runDir = join(dir, name); mkdirSync(runDir)
     const log = join(runDir, 'runtime.log'); const pidFile = join(runDir, 'runtime.pid'); const scope = join(runDir, 'runtime.scope')
+    const delegateFd = channel.kind === 'absent' ? undefined : channel.kind === 'malformed' ? 'not-a-fd' : '3'
     const child = spawn(process.execPath, [spexBin, 'internal', 'shared-runtime-spawn', runDir, log, pidFile, scope, process.execPath, '-e', 'console.log("SPAWN-READY"); setInterval(() => {}, 1000)'], {
       cwd: pkgRoot,
-      env: { ...process.env, SPEXCODE_SESSION_ID: ID, SPEXCODE_MAINTENANCE_DELEGATE_FD: '3' },
-      stdio: ['ignore', 'pipe', 'pipe', 'pipe'],
+      env: { ...process.env, SPEXCODE_SESSION_ID: ID, ...(delegateFd === undefined ? {} : { SPEXCODE_MAINTENANCE_DELEGATE_FD: delegateFd }) },
+      stdio: channel.kind === 'pipe' ? ['ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'],
     })
     const done = collect(child)
-    const delegatePipe = child.stdio[3] as NodeJS.WritableStream
-    delegatePipe.on('error', () => {})
-    delegatePipe.end(delegate ?? '')
+    if (channel.kind === 'pipe') {
+      const delegatePipe = child.stdio[3] as NodeJS.WritableStream
+      delegatePipe.on('error', () => {})
+      delegatePipe.end(channel.value)
+    }
     const result = await done()
     await waitFor(() => result.code !== 0 || existsSync(pidFile), `${name} pid artifact`)
     const pid = existsSync(pidFile) ? Number(readFileSync(pidFile, 'utf8').trim()) : 0
@@ -294,19 +302,21 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
   }
 
   writeFileSync(leasePath, JSON.stringify(leaseRow('open', process.pid, startToken), null, 2))
-  const openOrdinary = await run('open-ordinary', null)
-  const openExplicitDelegate = await run('open-explicit-delegate', 'ee'.repeat(32))
+  const openOrdinary = await run('open-ordinary', { kind: 'absent' })
+  const openExplicitEmpty = await run('open-explicit-empty', { kind: 'pipe', value: '' })
+  const openUnreadable = await run('open-unreadable', { kind: 'unreadable' })
+  const openMalformed = await run('open-malformed', { kind: 'malformed' })
   writeFileSync(leasePath, JSON.stringify(activeResume(), null, 2))
-  const valid = await run('valid', DELEGATE)
-  const replay = await run('replay', DELEGATE)
+  const valid = await run('valid', { kind: 'pipe', value: DELEGATE })
+  const replay = await run('replay', { kind: 'pipe', value: DELEGATE })
   writeFileSync(leasePath, JSON.stringify(activeResume(), null, 2))
-  const forged = await run('forged', 'ff'.repeat(32))
+  const forged = await run('forged', { kind: 'pipe', value: 'ff'.repeat(32) })
   writeFileSync(leasePath, JSON.stringify(activeResume(), null, 2))
-  const absent = await run('absent', null)
+  const absent = await run('absent', { kind: 'absent' })
   rmSync(dir, { recursive: true, force: true })
 
   assert.deepEqual(openOrdinary, { status: 0, structured: false, pidLive: true, logReady: true, scopeExact: true, pidArtifact: true })
-  for (const refused of [openExplicitDelegate, replay, forged, absent]) {
+  for (const refused of [openExplicitEmpty, openUnreadable, openMalformed, replay, forged, absent]) {
     assert.deepEqual(refused, { status: 1, structured: true, pidLive: false, logReady: false, scopeExact: false, pidArtifact: false })
   }
   assert.deepEqual(valid, { status: 0, structured: false, pidLive: true, logReady: true, scopeExact: true, pidArtifact: true })

@@ -1034,9 +1034,11 @@ if (cmd === 'serve') {
     const { readFileSync } = await import('node:fs')
     const { runSessionOperation } = await import('./session-maintenance.js')
     const { spawnDetachedRuntime } = await import('./runtime-ownership.js')
-    const delegateFd = Number(process.env.SPEXCODE_MAINTENANCE_DELEGATE_FD)
+    const delegateFdValue = process.env.SPEXCODE_MAINTENANCE_DELEGATE_FD
+    const delegateChannelPresent = delegateFdValue !== undefined
+    const delegateFd = Number(delegateFdValue)
     let delegate = ''
-    if (Number.isInteger(delegateFd) && delegateFd >= 3) {
+    if (delegateChannelPresent && Number.isInteger(delegateFd) && delegateFd >= 3) {
       try { delegate = readFileSync(delegateFd, 'utf8').trim() } catch { delegate = '' }
     }
     const sessionId = process.env.SPEXCODE_MAINTENANCE_SESSION_ID?.trim()
@@ -1045,7 +1047,7 @@ if (cmd === 'serve') {
     delete env.SPEXCODE_MAINTENANCE_DELEGATE_FD
     delete env.SPEXCODE_MAINTENANCE_SESSION_ID
     delete env.SPEXCODE_SESSION_ID
-    const runtime = await runSessionOperation({ op: 'shared-spawn', sessionId, delegate }, () =>
+    const runtime = await runSessionOperation({ op: 'shared-spawn', sessionId, ...(delegateChannelPresent ? { delegate } : {}) }, () =>
       spawnDetachedRuntime({ cwd, logFile, pidFile, isolationFile, command, args, env }))
     console.log(runtime.pid)
   } else if (sub === 'codex-launch') {

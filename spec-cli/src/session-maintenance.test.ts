@@ -38,7 +38,7 @@ type Operation =
   | { op: 'merge-dispatch'; sessionId: string }
   | { op: 'queue-drain' }
   | { op: 'attach'; sessionId: string }
-  | { op: 'shared-spawn'; sessionId: string; delegate: string }
+  | { op: 'shared-spawn'; sessionId: string; delegate?: string }
 
 type Ticket = {
   id: string
@@ -414,12 +414,35 @@ test('aggregate future maintenance coordinator contract', async (t) => {
     } finally { f.cleanup() }
   })
 
+  await t.test('shared spawn rechecks the live resume owner before mutating delegated authority', async () => {
+    const f = makeFixture()
+    try {
+      const gate = f.create()
+      const lease = await gate.acquireLease({
+        capabilities: [{ op: 'resume', sessionId: 's-1', force: true }], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+      })
+      let callbacks = 0
+      await gate.runOperation({ op: 'resume', sessionId: 's-1', force: true, authorization: { token: lease.token, epoch: lease.epoch } }, async (ticket) => {
+        const delegate = ticket.delegateSharedSpawn('s-1')
+        const statePath = join(f.root, 'session-maintenance.json')
+        const beforeState = readFileSync(statePath, 'utf8')
+        const beforeEvents = JSON.stringify(f.events)
+        f.readings.set(8001, 'ambiguous')
+        await expectCode(gate.runOperation({ op: 'shared-spawn', sessionId: 's-1', delegate }, async () => { callbacks++ }), 'maintenance_delegate_invalid')
+        assert.equal(callbacks, 0)
+        assert.equal(readFileSync(statePath, 'utf8'), beforeState)
+        assert.equal(JSON.stringify(f.events), beforeEvents)
+        f.readings.set(8001, { pid: 8001, startToken: 'ticket-owner-a' })
+      })
+    } finally { f.cleanup() }
+  })
+
   await t.test('shared spawn is ordinary only when open without maintenance authority', async () => {
     const f = makeFixture()
     try {
       const gate = f.create()
       const callbacks: string[] = []
-      await gate.runOperation({ op: 'shared-spawn', sessionId: 's-1', delegate: '' }, async () => {
+      await gate.runOperation({ op: 'shared-spawn', sessionId: 's-1' }, async () => {
         callbacks.push('open-empty')
         assert.deepEqual(gate.readState().tickets.map((ticket) => ({ operation: ticket.operation, sessionId: ticket.sessionId })), [
           { operation: 'shared-spawn', sessionId: 's-1' },
@@ -429,7 +452,7 @@ test('aggregate future maintenance coordinator contract', async (t) => {
       assert.equal(gate.readState().tickets.length, 0)
 
       const before = JSON.stringify({ state: gate.readState(), events: f.events })
-      await expectCode(gate.runOperation({ op: 'shared-spawn', sessionId: 's-1', delegate: 'ff'.repeat(32) }, async () => {
+      await expectCode(gate.runOperation({ op: 'shared-spawn', sessionId: 's-1', delegate: '' }, async () => {
         callbacks.push('open-explicit')
       }), 'maintenance_delegate_invalid')
       assert.deepEqual(callbacks, ['open-empty'])

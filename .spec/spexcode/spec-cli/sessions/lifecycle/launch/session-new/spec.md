@@ -50,6 +50,16 @@ one ownership receipt and removes only resources this transaction proved it crea
 the candidate name into authority to delete. A colliding request therefore cannot damage an already-published
 receipt, while a transaction that owns its candidate still removes exactly that candidate on abort.
 
+Process-local ownership is not enough: the backend may die after creating Git or store resources but before
+publishing the record. Before the first Git mutation, while holding both the candidate id lock and exact
+`{branch,path}` lock, creation atomically publishes one private candidate receipt outside the session store.
+It binds the request digest and payload hash to the exact root, path, branch, all-absent resource pre-state,
+and the last durably reached preparation stage. A restart holding those same locks may inspect, clean, and
+restart the candidate only when that receipt is valid and matches every field of the retry. A different key,
+mismatched payload/resource identity, malformed receipt, or occupied orphan with no receipt conveys no
+ownership: all resources are preserved and creation fails loud. Normal rollback or record publication retires
+the private receipt; a matching retry also retires a publication-left receipt after recovering the public row.
+
 The public request accepts the standard `Idempotency-Key` header. The backend deterministically maps a valid
 key to one candidate session id and binds it to the normalized `{prompt,parent,launcher}` payload. Creation for
 that id is serialized at the existing per-session lock. A same-key retry, including a concurrent retry or a

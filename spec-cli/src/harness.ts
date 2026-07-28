@@ -16,7 +16,7 @@ import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless } from '.
 import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath } from './layout.js'
 import { git } from './git.js'
 import { shQuote } from './sh.js'
-import { processStartToken, processTopology } from './process-identity.js'
+import { detachedRuntimeGenerationToken, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from './process-identity.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -53,7 +53,7 @@ export type SharedRuntimeDescriptor = {
   key: string
   label: string
   pidFile: string
-  isolationFile: string
+  receiptFile: string
   // Lightweight project-wide resident census used by read projections. It must return exact loaded IDs without
   // per-thread reads; the full probe remains the resource/lifecycle surface that also reads turn state.
   residency?: () => Promise<{ healthy: boolean; referenceIds: string[]; error?: string; rootAbsent?: boolean }>
@@ -429,37 +429,26 @@ export const codexAppServerSock = (dir = runtimeRoot()) => {
   return join(base, `spexcode-cx-${createHash('sha1').update(dir).digest('hex').slice(0, 16)}.sock`)
 }
 export const codexAppServerPid = (dir = runtimeRoot()) => join(dir, 'codex-app-server.pid')
-export const codexAppServerIsolation = (dir = runtimeRoot()) => join(dir, 'codex-app-server.scope')
+export const codexAppServerReceipt = (dir = runtimeRoot()) => join(dir, 'codex-app-server.detached.json')
 type CodexRuntimeGenerationProof = Readonly<{
-  pid: number
-  startToken: string
-  processGroupId: number
-  sessionId: number
-  isolation: string
+  identity: VerifiedDetachedRuntime
   socket: Readonly<{ path: string; dev: number; ino: number }>
 }>
 function codexRuntimeGenerationProof(dir = runtimeRoot()): CodexRuntimeGenerationProof | null {
   try {
     const pid = Number(readFileSync(codexAppServerPid(dir), 'utf8').trim())
-    const start = processStartToken(pid)
-    const scope = readFileSync(codexAppServerIsolation(dir), 'utf8').trim()
-    const topology = processTopology(pid)
+    const detached = verifyDetachedRuntime(pid, codexAppServerReceipt(dir))
     const socketPath = codexAppServerSock(dir)
     const socket = statSync(socketPath)
-    if (!(pid > 0) || !start || !topology || topology.startToken !== start || topology.processGroupId !== pid || topology.sessionId !== pid ||
-      scope !== `detached-v3 ${pid} ${start} ${pid} ${pid}` || !socket.isSocket()) return null
+    if (!(pid > 0) || !detached.ok || !socket.isSocket()) return null
     return Object.freeze({
-      pid,
-      startToken: start,
-      processGroupId: topology.processGroupId,
-      sessionId: topology.sessionId,
-      isolation: scope,
+      identity: detached.identity,
       socket: Object.freeze({ path: socketPath, dev: socket.dev, ino: socket.ino }),
     })
   } catch { return null }
 }
 const codexRuntimeGenerationToken = (proof: CodexRuntimeGenerationProof) =>
-  `${proof.pid}|${proof.startToken}|${proof.processGroupId}|${proof.sessionId}|${proof.isolation}|${proof.socket.path}|${proof.socket.dev}:${proof.socket.ino}`
+  `${detachedRuntimeGenerationToken(proof.identity)}|${proof.socket.path}|${proof.socket.dev}:${proof.socket.ino}`
 function codexRuntimeGeneration(dir = runtimeRoot()): string | null {
   const proof = codexRuntimeGenerationProof(dir)
   return proof ? codexRuntimeGenerationToken(proof) : null
@@ -680,14 +669,14 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
   const tuiBypass = !codexCmd.includes('--dangerously-bypass-hook-trust') && codexSupportsBypassHookTrust(codexBinary(codexCmd)) ? ' --dangerously-bypass-hook-trust' : ''
   const sock = codexAppServerSock(dir)         // short sun_path-safe path in the owned tmp subdir/override — NOT under "$dir"
   const pid = codexAppServerPid(dir)
-  const isolation = codexAppServerIsolation(dir)
+  const receipt = codexAppServerReceipt(dir)
   const log = join(dir, 'codex-app-server.log')
   const lock = join(dir, 'codex-app-server.lock')
   const script = [
     `dir=${shQuote(dir)}`,
     `sock=${shQuote(sock)}`,
     `pid=${shQuote(pid)}`,
-    `isolation=${shQuote(isolation)}`,
+    `receipt=${shQuote(receipt)}`,
     `log=${shQuote(log)}`,
     `lock=${shQuote(lock)}`,
     // codex-launch's bypass-trust gate (and writeTrust's) resolves the codex binary from SPEXCODE_CODEX_CMD;
@@ -731,10 +720,10 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     // mis-attributes; the id it needs — the ACTING thread's — codex injects per command, so stripping the
     // inherited ones removes a wrong answer without removing a right one ([[harness-adapter]]).
     // The adapter launches its shared control plane in a new OS process group + session. `nohup` alone was not
-    // a boundary: the Codex Node launcher reset signal handling and died with the tmux pane despite a matching
-    // stamp. The internal helper uses child_process detached=true, records PID/start plus the observed pgrp/sid,
-    // and refuses unless the live process is its own session leader. The stop guard re-reads that topology.
-    `  ( unset ${sessionIdentityEnvVars().join(' ')}; ${SPEX} internal shared-runtime-spawn "$dir" "$log" "$pid" "$isolation" ${server} app-server --listen "unix://$sock" ) || { rmdir "$lockd" 2>/dev/null; exit 1; }`,
+    // a boundary: the Codex Node launcher reset signal handling and died with the tmux pane. The internal helper
+    // uses child_process detached=true, then the process adapter publishes a private receipt only after proving
+    // exact PID/start + PGID (and Linux SID). Every consumer re-verifies that same receipt.
+    `  ( unset ${sessionIdentityEnvVars().join(' ')}; ${SPEX} internal shared-runtime-spawn "$dir" "$log" "$pid" "$receipt" ${server} app-server --listen "unix://$sock" ) || { rmdir "$lockd" 2>/dev/null; exit 1; }`,
     '  for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
     'fi',
     'rmdir "$lockd" 2>/dev/null',
@@ -1318,6 +1307,8 @@ export function codexSharedRuntimeProbe(dir = runtimeRoot()): Promise<SharedRunt
     const listener = await listenerAt(sock, 800)
     if (!pidLive && listener === 'dead') return { healthy: true, references: [] }
     if (!pidLive || listener !== 'live') return { healthy: false, references: [], error: 'Codex shared root state is unknown (PID/listener identity is not proven)' }
+    const generation = codexRuntimeGeneration(dir)
+    if (!generation) return { healthy: false, references: [], error: 'Codex shared root detached receipt/socket generation is not proven' }
     return new Promise<SharedRuntimeProbe>((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
@@ -1335,7 +1326,9 @@ export function codexSharedRuntimeProbe(dir = runtimeRoot()): Promise<SharedRunt
       settled = true
       clearTimeout(timer)
       try { conn.destroy() } catch { /* */ }
-      resolve(result)
+      resolve(result.healthy && codexRuntimeGeneration(dir) !== generation
+        ? { healthy: false, references: result.references, error: 'Codex shared root detached receipt/socket generation changed during ownership probe' }
+        : result)
     }
     const fail = (error: string) => done({ healthy: false, references: [...references.values()], error })
     timer = setTimeout(() => fail('codex app-server ownership probe timed out after 5000ms'), 5000)
@@ -2200,7 +2193,7 @@ export const codexHarness: Harness = {
     key: 'codex-app-server',
     label: 'Codex app-server',
     pidFile: codexAppServerPid(runtimeDir),
-    isolationFile: codexAppServerIsolation(runtimeDir),
+    receiptFile: codexAppServerReceipt(runtimeDir),
     residency: async () => {
       const sock = codexAppServerSock(runtimeDir)
       let pid = 0

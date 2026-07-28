@@ -7,7 +7,7 @@ import { defaultHarness, HARNESSES, harnessById, sessionIdentityEnvVars, type Ha
 import { listSessionIds, readConfig, readJsonConfig, readPublicRecordEntry, readRawRecord, runtimeRoot, type PublicRecordEntry, type RawRecord } from './layout.js'
 import { repoRoot } from './git.js'
 import { endpointRecordPath } from './host.js'
-import { parseProcStat, processStartToken, processTopology, type ProcessIdentity } from './process-identity.js'
+import { detachedRuntimeGenerationToken, parseProcStat, processStartToken, verifyDetachedRuntime, type ProcessIdentity } from './process-identity.js'
 import { readBackendInstanceRecords, type BackendInstanceRecord } from './runtime-ownership.js'
 
 type Proc = ProcessIdentity & {
@@ -393,7 +393,6 @@ const sessionStopBlocker = async (
     if (allowed && !allowed.has(key)) continue
     const descriptor = entry.descriptor
     const pid = runtimePid(descriptor.pidFile)
-    const startToken = pid ? processStartToken(pid) : null
     const ownerCounts = new Map<string, number>()
     for (const rec of entry.recs) if (rec.harness_session_id) ownerCounts.set(rec.harness_session_id, (ownerCounts.get(rec.harness_session_id) ?? 0) + 1)
     const targetThread = entry.recs.find((rec) => rec.session_id === id)?.harness_session_id
@@ -402,23 +401,15 @@ const sessionStopBlocker = async (
     if (!knownProbes && descriptor.mutationGuard) {
       if (!targetThread) return `${descriptor.label} target has no exact governed thread identity`
       if (!pid) return `${descriptor.label} target-scoped mutation guard has no readable owner PID`
-      if (!startToken) return `${descriptor.label} PID ${pid} target-scoped mutation guard has no readable process-start identity`
-      const topologyBefore = processTopology(pid)
-      let stampBefore = ''
-      try { stampBefore = readFileSync(descriptor.isolationFile, 'utf8').trim() } catch { /* legacy unsafe runtime */ }
-      if (!topologyBefore || topologyBefore.startToken !== startToken || topologyBefore.processGroupId !== pid || topologyBefore.sessionId !== pid ||
-        stampBefore !== `detached-v3 ${pid} ${startToken} ${pid} ${pid}`)
-        return `${descriptor.label} PID ${pid}@${startToken} has no matching live detached process-boundary record`
+      const identityBefore = verifyDetachedRuntime(pid, descriptor.receiptFile)
+      if (!identityBefore.ok)
+        return `${descriptor.label} PID ${pid} has no matching live detached process-boundary record: ${identityBefore.reason}`
       let guard
       try { guard = await descriptor.mutationGuard(targetThread, opts) }
       catch (error) { return `${descriptor.label} target-scoped mutation guard failed: ${(error as Error).message}` }
-      const startAfter = processStartToken(pid)
-      const topologyAfter = processTopology(pid)
-      let stampAfter = ''
-      try { stampAfter = readFileSync(descriptor.isolationFile, 'utf8').trim() } catch { /* changed/missing identity */ }
-      if (startAfter !== startToken || !topologyAfter || topologyAfter.startToken !== startToken ||
-        topologyAfter.processGroupId !== pid || topologyAfter.sessionId !== pid || stampAfter !== stampBefore)
-        return `${descriptor.label} PID/start/isolation identity changed during target-scoped mutation guard`
+      const identityAfter = verifyDetachedRuntime(pid, descriptor.receiptFile)
+      if (!identityAfter.ok || detachedRuntimeGenerationToken(identityAfter.identity) !== detachedRuntimeGenerationToken(identityBefore.identity))
+        return `${descriptor.label} PID/start/detached-receipt identity changed during target-scoped mutation guard${identityAfter.ok ? '' : `: ${identityAfter.reason}`}`
       if (guard.descendantIds.length && guard.coldTeardownAuthorized !== true)
         return `${descriptor.label} target thread ${targetThread} has owned descendants (${guard.descendantIds.join(', ')})`
       if (!guard.healthy)
@@ -434,17 +425,13 @@ const sessionStopBlocker = async (
       ? `${siblings.length} live sibling thread(s)`
       : probe.healthy ? `${probe.references.length} live thread reference(s)` : 'an unproven live reference set'
     if (!pid) return `${descriptor.label} has ${liveReason} but no readable owner PID`
-    if (!startToken) return `${descriptor.label} PID ${pid} has ${liveReason} but no readable process-start identity`
-    const topology = processTopology(pid)
-    let stamp = ''
-    try { stamp = readFileSync(descriptor.isolationFile, 'utf8').trim() } catch { /* legacy unsafe runtime */ }
-    if (!topology || topology.startToken !== startToken || topology.processGroupId !== pid || topology.sessionId !== pid ||
-      stamp !== `detached-v3 ${pid} ${startToken} ${pid} ${pid}`) {
+    const identity = verifyDetachedRuntime(pid, descriptor.receiptFile)
+    if (!identity.ok) {
       const refs = probe.references.map((reference) => reference.referenceId).join(', ') || 'no loaded threads'
-      return `${descriptor.label} PID ${pid}@${startToken} serves ${refs} and has no matching live detached process-boundary record`
+      return `${descriptor.label} PID ${pid} serves ${refs} and has no matching live detached process-boundary record: ${identity.reason}`
     }
     if (!probe.healthy)
-      return `${descriptor.label} PID ${pid}@${startToken} has an unproven live reference set: ${probe.error || 'unknown probe failure'}`
+      return `${descriptor.label} PID ${pid}@${identity.identity.startToken} has an unproven live reference set: ${probe.error || 'unknown probe failure'}`
   }
   return null
 }

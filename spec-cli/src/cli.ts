@@ -1130,10 +1130,11 @@ if (cmd === 'serve') {
     const ok = mark(() => s.markState(st, { proposal: flag('propose') as any, note: flag('note'), sessionId: sess }))
     console.log(ok.ok ? `state -> ${st}${noteEcho(flag('note'))}` : ok.reason ?? noRecord())
   } else if (sub === 'session-fail') {
-    // the StopFailure hook marks its session (--session from the payload) as error (turn died on an API error)
-    const { s, sess, mark, noRecord } = await stateKit()
-    const failed = mark(() => s.markError(sess))
-    console.log(failed.ok ? 'marked error' : failed.reason ?? noRecord())
+    // StopFailure is one native source for the shared active-only turn-failure CAS. A declaration or explicit
+    // stop that landed first is authoritative, just as it is for Codex notifications and headless exits.
+    const { s, sess, mark } = await stateKit()
+    const failed = mark(() => s.markTurnFailure(sess, 'claude turn failed'))
+    console.log(failed.ok ? 'marked error' : failed.reason ?? 'noop (session is not live active)')
   } else if (sub === 'session-turn-fail') {
     // Headless adapters report an ephemeral turn's non-zero exit through this one shared CAS. A declaration
     // that landed before teardown wins, so a late child close can never erase an agent-authored state.
@@ -1143,7 +1144,7 @@ if (cmd === 'serve') {
       process.exit(2)
     }
     const { markHeadlessTurnFailure } = await import('./sessions.js')
-    console.log(markHeadlessTurnFailure(sessionId, harness, exitCode) ? `marked error (${harness} ${exitCode})` : 'noop (no active session record)')
+    console.log(markHeadlessTurnFailure(sessionId, harness, exitCode) ? `marked error (${harness} ${exitCode})` : 'noop (session is not live active)')
   } else if (sub === 'session-idle') {
     // the Notification(idle_prompt) hook marks its session (--session from the payload) idle when claude waits
     // at its prompt. INFERRED, so guarded active-only: it no-ops unless the current status is exactly `active`,

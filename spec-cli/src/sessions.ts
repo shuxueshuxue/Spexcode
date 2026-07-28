@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
-import { adapterLoadedReferenceState, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { adapterLoadedReferenceState, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
@@ -1651,6 +1651,106 @@ export function superviseQueue(intervalMs = 3000): void {
   void tick()
 }
 
+type TurnFailureObserverState = {
+  fingerprint: string
+  subscription: FailureSubscription | null
+  startedAt: number
+  failures: number
+  retryAt: number
+  lastReason: string | null
+}
+const turnFailureObservers = new Map<string, TurnFailureObserverState>()
+let supervisingTurnFailures = false
+const TURN_FAILURE_OBSERVER_STABLE_MS = 5000
+
+export function turnFailureNote(harness: string, failure: TurnFailure): string {
+  const message = failure.message.replace(/\s+/g, ' ').trim().slice(0, 500) || 'turn failed'
+  const at = failure.completedAt == null ? '' : ` at ${new Date(failure.completedAt * 1000).toISOString()}`
+  return `${harness} turn failed${at}: ${message}`
+}
+
+export function turnFailureRetryDelay(failures: number): number {
+  return Math.min(30_000, 1000 * 2 ** Math.max(0, Math.min(failures - 1, 5)))
+}
+
+function deferTurnFailureObserver(id: string, harness: string, state: TurnFailureObserverState, reason: string): void {
+  state.subscription = null
+  state.failures++
+  const delay = turnFailureRetryDelay(state.failures)
+  state.retryAt = Date.now() + delay
+  if (state.lastReason !== reason)
+    console.warn(`[spex ${harness}] turn failure observer for ${id} disconnected (${reason}); retrying in ${delay}ms`)
+  state.lastReason = reason
+}
+
+// Reconcile one adapter-owned native failure subscription per live governed session. Product code knows only
+// the optional interface capability; Codex owns WebSocket/thread semantics and Claude keeps using StopFailure.
+export function reconcileTurnFailureObservers(): void {
+  const wanted = new Map<string, { rec: SessRec; harness: Harness; fingerprint: string }>()
+  for (const id of listSessionIds()) {
+    let rec: SessRec | null = null
+    try { rec = readRecord(id) } catch { continue }
+    if (!rec?.governed || rec.stopped || rec.archived || !rec.harnessSessionId) continue
+    const harness = harnessById(rec.harness || defaultHarness.id)
+    if (!harness.observeTurnFailures) continue
+    wanted.set(id, { rec, harness, fingerprint: `${harness.id}:${rec.harnessSessionId}:${runtimeRoot()}` })
+  }
+  for (const [id, state] of turnFailureObservers) {
+    if (wanted.get(id)?.fingerprint === state.fingerprint) continue
+    turnFailureObservers.delete(id)
+    state.subscription?.close()
+  }
+  for (const [id, target] of wanted) {
+    const now = Date.now()
+    let state = turnFailureObservers.get(id)
+    if (state?.subscription) {
+      if (state.failures > 0 && now - state.startedAt >= TURN_FAILURE_OBSERVER_STABLE_MS) {
+        state.failures = 0
+        state.retryAt = 0
+        state.lastReason = null
+      }
+      continue
+    }
+    if (state && now < state.retryAt) continue
+    state ??= { fingerprint: target.fingerprint, subscription: null, startedAt: 0, failures: 0, retryAt: 0, lastReason: null }
+    state.startedAt = now
+    turnFailureObservers.set(id, state)
+    try {
+      const subscription = target.harness.observeTurnFailures!({
+        session: id,
+        worktreePath: target.rec.worktreePath,
+        harnessSessionId: target.rec.harnessSessionId,
+        runtimeDir: runtimeRoot(),
+        launchCmd: target.rec.launchCmd,
+      }, (failure) => {
+        if (turnFailureObservers.get(id)?.fingerprint !== target.fingerprint) return
+        try { markTurnFailure(id, turnFailureNote(target.harness.id, failure)) }
+        catch (error) { console.error(`[spex ${target.harness.id}] could not record native turn failure for ${id}: ${error instanceof Error ? error.message : String(error)}`) }
+      })
+      state.subscription = subscription
+      void subscription.closed.then((reason) => {
+        if (turnFailureObservers.get(id) !== state) return
+        if (reason) deferTurnFailureObserver(id, target.harness.id, state, reason)
+        else turnFailureObservers.delete(id)
+      })
+    } catch (error) {
+      deferTurnFailureObserver(id, target.harness.id, state, error instanceof Error ? error.message : String(error))
+    }
+  }
+}
+
+export function superviseTurnFailures(intervalMs = 1000): void {
+  if (supervisingTurnFailures) return
+  supervisingTurnFailures = true
+  const tick = () => {
+    try { reconcileTurnFailureObservers() }
+    catch (error) { console.error(`spex: turn failure reconciliation failed: ${error instanceof Error ? error.message : String(error)}`) }
+    const timer = setTimeout(tick, intervalMs)
+    timer.unref?.()
+  }
+  tick()
+}
+
 // @@@ assertProjectMatch - a WRITE is PROJECT-BOUND, but routing is by URL. A mutating verb's intent is
 // "act on the project my cwd is in", yet the resolved base is a pure URL carrying no project identity —
 // the backend it answers acts on ITS OWN mainRoot, so a stale inherited SPEXCODE_API_URL (pointing at
@@ -2105,18 +2205,22 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
 }
 export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId })
 export const markError = (sessionId?: string) => markState('error', { sessionId })
-// @@@ headless turn outcome - a harness turn is an ephemeral child, so its non-zero exit is the one external
-// runtime fact that must become visible on the durable board. Compare-and-set only an undeclared active record:
-// a zero exit is never routed here, and a declaration that landed before teardown is authoritative.
-export function markHeadlessTurnFailure(sessionId: string, harness: string, exitCode: string): boolean {
-  if (exitCode === '0') return false
+// @@@ harness turn failure - native adapter failures are external runtime facts that must become visible on
+// the durable board. Compare-and-set only an undeclared active record, so a declaration that landed before a
+// late process close or app-server completion remains authoritative.
+export function markTurnFailure(sessionId: string | undefined, note: string): boolean {
+  if (!sessionId) return false
   return runSessionOperationSync({ op: 'lifecycle-transition', sessionId }, () => withRecordLockSync(sessionId, () => {
     const rec = readLiveRecord(sessionId)
-    if (!rec || rec.status !== 'active') return false
-    const outcome = /^\d+$/.test(exitCode) ? `exit code ${exitCode}` : `signal ${exitCode}`
-    writeRecord({ ...rec, status: 'error', proposal: null, note: `${harness} turn exited with ${outcome}` })
+    if (!rec || rec.status !== 'active' || rec.stopped || rec.archived) return false
+    writeRecord({ ...rec, status: 'error', proposal: null, note })
     return true
   }))
+}
+export function markHeadlessTurnFailure(sessionId: string, harness: string, exitCode: string): boolean {
+  if (exitCode === '0') return false
+  const outcome = /^\d+$/.test(exitCode) ? `exit code ${exitCode}` : `signal ${exitCode}`
+  return markTurnFailure(sessionId, `${harness} turn exited with ${outcome}`)
 }
 export function markHarnessSessionId(sessionId: string | undefined, harnessSessionId: string | undefined): boolean {
   const id = sessionId || ownSessionId()

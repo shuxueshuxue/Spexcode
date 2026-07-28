@@ -24,6 +24,11 @@ event input once, and enters one [[maintenance-lease]] `hook-state` scoped opera
 handler. The ticket owner is the dispatcher process's exact PID/start identity and the ticket lives for the
 whole ordered handler loop. A trap releases it on normal completion, handler failure, signal, or shell exit.
 
+The same tree slot carries the dispatch-id allowlist from its last successful materialize. A project transport
+may remain installed after a selection changes, but an event whose baked harness id is absent from THIS tree's
+allowlist exits before admission or input handling. Before the project migration marker, an absent allowlist is
+the one-version legacy shape; afterwards absence is inert until a git-native materialize publishes it.
+
 Draining or active maintenance withholds EVERY manifest handler, including spec-discipline handlers. The
 dispatcher emits structured `maintenance_active` through the harness's native blocking channel and exits with
 the harness block status; it runs zero handler scripts and produces no handler file, record, sentinel, ledger,

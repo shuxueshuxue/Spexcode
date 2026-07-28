@@ -24,15 +24,15 @@ scenarios:
   - name: cold-review-navigation
     tags: [frontend-e2e]
     description: >
-      Against the branch-local backend with the real session/eval/issue stores, open fresh top-level
-      #/evals and #/issues controls, record every review request and graph request, then repeat the route
-      navigation after the Sessions page has painted its board projection. Capture request URL, status,
-      ETag/revision, route shell/runtime presence, and the first painted rows.
+      Against the branch-local backend with the real session/eval/issue stores, first publish one review
+      snapshot, then start and hold the next full graph producer. Open fresh top-level #/evals and #/issues
+      routes through the exact pre-fix graph-join path and through the candidate snapshot path. Capture each
+      request URL, start/end/status, ETag/revision, painted rows/loading, and barrier state before release.
     expected: >
-      Each cold review route uses the route-first shell, issues its committed page request, and paints rows
-      when that response completes; it does not mint a second same-identity request merely because it
-      rendered, and it does not wait for a graph HTTP/stream winner or a second fallback graph flight.
-      Sessions-first navigation is a recovery control, not a required transport for the review page.
+      The pre-fix path remains loading while the full producer is held. With the candidate path, each route
+      issues one committed page request and paints the published 25-row page before barrier release, with an
+      ETag and revision derived from that snapshot plus the route's current session-presence input. A first
+      publication may still be cold; Sessions-first is neither the fix nor the pass condition.
 ---
 
 # measuring page-state

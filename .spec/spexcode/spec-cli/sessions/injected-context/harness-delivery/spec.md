@@ -113,6 +113,11 @@ trees never overwrite one another's bytes and user global ignore configuration i
 hash remains global and project-scoped, and is removed by project-wide dematerialize/uninstall rather than a
 sibling's selection change.
 
+Migration cannot expose a registered tree that still depends on the old common ignore projection. Until every
+previously materialized registered tree publishes its per-tree ignore receipt, common `.git/info/exclude`
+retains the prior managed entries plus the upgrading tree's local entries. The last receipt removes that
+temporary union; from then on only checkout-invariant residue and shared transport remain common.
+
 The net ideal path: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`, zero
 further operation, no global pollution beyond the scoped Codex trust. The contract files are SpexCode-owned
 generated artifacts, so a clone never carries a stale committed copy — and the only tracked source they are

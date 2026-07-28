@@ -34,8 +34,9 @@ export type MaterializeResult = { contentHash: string; planted: MaterializedArti
 // implementation is ERASE-THEN-ASSERT over a CLOSED set of landing points: each is first erased
 // unconditionally by its IDENTITY STAMP (sentinel blocks, the shim's dispatch.sh command line, the generated
 // mark on skills/agents, the filter config namespace, the skip-worktree bit), then rewritten per the current
-// policy (possibly to nothing). No ledger of past states, no pairwise migration branches — the erase IS the
-// migration, whatever the previous state was.
+// policy (possibly to nothing). There are no policy-pair branches. The one cross-tree migration receipt below
+// preserves old common ignore entries until every registered tree owns its local projection; it never reads or
+// reconstructs a sibling policy.
 
 const PKG = fileURLToPath(new URL('..', import.meta.url))                 // installed spec-cli root
 const DISPATCH = join(PKG, 'hooks', 'dispatch.sh')
@@ -93,6 +94,23 @@ function isTracked(proj: string, file: string): boolean {
 function registeredTrees(proj: string): string[] {
   const rows = git(['-C', mainCheckout(proj), 'worktree', 'list', '--porcelain', '-z']).split('\0')
   return rows.filter((row) => row.startsWith('worktree ')).map((row) => row.slice('worktree '.length))
+}
+
+const TREE_IGNORE_RECEIPT = 'tree-ignore-v1'
+
+function hasLegacyTreeIgnore(proj: string): boolean {
+  return registeredTrees(proj).some((tree) => {
+    const slot = treeSlotDir(tree)
+    return existsSync(join(slot, 'content-hash')) && !existsSync(join(slot, TREE_IGNORE_RECEIPT))
+  })
+}
+
+function managedExcludeEntries(file: string): string[] {
+  if (!existsSync(file)) return []
+  const lines = readFileSync(file, 'utf8').split('\n')
+  const start = lines.indexOf('# spexcode:start')
+  const end = lines.indexOf('# spexcode:end', start + 1)
+  return start >= 0 && end > start ? lines.slice(start + 1, end).filter(Boolean) : []
 }
 
 function selectionBody(selected: typeof HARNESSES, plugin = false): string {
@@ -351,7 +369,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     'spexcode.local.json', '.worktrees/', '.session',
   ]
   const entries = (list: string[]) => [...new Set(list)].sort().join('\n')
-  writeManagedBlock(infoExcludePath(proj), entries(commonEntries), ['# ', ''])
+  const priorCommonEntries = managedExcludeEntries(infoExcludePath(proj))
 
   // Contract residence stays a live fact. Selection-dependent untracked products are ignored by this tree's
   // working .gitignore, whose own managed block is filtered when the host tracks/owns that file.
@@ -383,8 +401,11 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   const h = contentHash(proj)
   writeFileSync(join(rt, 'content-hash'), h)
   writeFileSync(join(rt, 'contract-filter-v2'), '')
+  writeFileSync(join(rt, TREE_IGNORE_RECEIPT), '')
   writeFileSync(join(runtimeRoot(proj), 'harness-selection-v1'), '')
   retireLegacyContractBlock(proj)
+  const legacyEntries = hasLegacyTreeIgnore(proj) ? [...priorCommonEntries, ...localEntries] : []
+  writeManagedBlock(infoExcludePath(proj), entries([...commonEntries, ...legacyEntries]), ['# ', ''])
   publishSelection(join(rt, 'harnesses'), selectionBody(selected, plugins.length > 0))
   return { contentHash: h, planted }
 }

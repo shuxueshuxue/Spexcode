@@ -57,14 +57,17 @@ scenarios:
     description: >-
       Put a codex-only spexcode.json on a candidate commit while main carries a different valid selection.
       Judge that same candidate first by switching the root checkout to it, then by restoring main and adding
-      the candidate as a linked worktree. Materialize both registered trees in alternating order; inspect each
-      tree's contract/filter/ignore output, the shared Codex shim/trust, and dispatch from an unselected tree.
+      the candidate as a linked worktree. Leave main on the legacy common-ignore projection, upgrade the linked
+      tree first, then materialize both registered trees in alternating order; inspect each tree's
+      contract/filter/ignore output, the shared Codex shim/trust, and dispatch from an unselected tree.
     expected: >-
       Checkout method changes nothing: the candidate reads its own codex selection and materializes
       successfully in both shapes. Each tree keeps only its selected local artifacts and its own filter payload;
-      a later sibling materialize cannot rewrite them. Project-scoped Codex transport survives a sibling
-      materialize, while the final per-tree allowlist makes dispatch in an unselected tree a no-op. Git
-      status/index keep host prose honest and no user global ignore configuration is replaced.
+      the first upgraded tree does not expose an older sibling, and the legacy common entries retire after the
+      last registered tree publishes its local receipt. A later sibling materialize cannot rewrite local bytes.
+      Project-scoped Codex transport survives a sibling materialize, while the final per-tree allowlist makes
+      dispatch in an unselected tree a no-op. Git status/index keep host prose honest and no user global ignore
+      configuration is replaced.
 ---
 # eval.md — harness-select
 

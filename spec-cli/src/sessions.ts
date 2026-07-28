@@ -2085,6 +2085,72 @@ async function materializeSessionCandidate(rec: SessRec, signal: AbortSignal): P
 
 type SessionCandidateOwnership = { store: boolean; path: boolean; worktree: boolean; branch: boolean }
 type SessionCandidateState = { path: boolean; worktree: boolean; branch: boolean }
+type SessionCandidateStage = 'prepared' | 'git-created' | 'store-created'
+type SessionCandidateReceipt = {
+  version: 1
+  requestDigest: string
+  payloadHash: string
+  root: string
+  path: string
+  branch: string
+  prestate: { store: false; path: false; worktree: false; branch: false }
+  stage: SessionCandidateStage
+}
+type SessionCandidateReceiptRead =
+  | { kind: 'absent' }
+  | { kind: 'invalid'; error: string }
+  | { kind: 'valid'; receipt: SessionCandidateReceipt }
+
+const sessionCandidateReceiptDir = () => join(runtimeRoot(), '.session-create-candidates')
+const sessionCandidateReceiptPath = (id: string) => join(sessionCandidateReceiptDir(), `${id}.json`)
+const sessionCandidateLockId = (path: string, branch: string) => `create-resource-${digest(`${path}\0${branch}`)}`
+function readSessionCandidateReceipt(id: string): SessionCandidateReceiptRead {
+  const path = sessionCandidateReceiptPath(id)
+  if (!existsSync(path)) return { kind: 'absent' }
+  try {
+    const value = JSON.parse(readFileSync(path, 'utf8')) as Partial<SessionCandidateReceipt>
+    const prestate = value.prestate
+    if (value.version !== 1 || typeof value.requestDigest !== 'string' || typeof value.payloadHash !== 'string'
+      || typeof value.root !== 'string' || typeof value.path !== 'string' || typeof value.branch !== 'string'
+      || !prestate || prestate.store !== false || prestate.path !== false || prestate.worktree !== false || prestate.branch !== false
+      || !['prepared', 'git-created', 'store-created'].includes(value.stage as string)) {
+      return { kind: 'invalid', error: `invalid private candidate receipt at ${path}` }
+    }
+    return { kind: 'valid', receipt: value as SessionCandidateReceipt }
+  } catch (error) {
+    return { kind: 'invalid', error: `invalid private candidate receipt at ${path}: ${error instanceof Error ? error.message : error}` }
+  }
+}
+function writeSessionCandidateReceipt(id: string, receipt: SessionCandidateReceipt): void {
+  const dir = sessionCandidateReceiptDir()
+  mkdirSync(dir, { recursive: true })
+  const path = sessionCandidateReceiptPath(id)
+  const tmp = join(dir, `.${id}.${process.pid}.${randomUUID()}.tmp`)
+  try {
+    writeFileSync(tmp, `${JSON.stringify(receipt, null, 2)}\n`, { mode: 0o600 })
+    renameSync(tmp, path)
+  } finally { rmSync(tmp, { force: true }) }
+}
+function retireSessionCandidateReceipt(id: string): boolean {
+  try { rmSync(sessionCandidateReceiptPath(id), { force: true }) } catch { return false }
+  return !existsSync(sessionCandidateReceiptPath(id))
+}
+function sessionCandidateReceiptMatches(receipt: SessionCandidateReceipt, context: SessionCreateContext, root: string, path: string, branch: string): boolean {
+  return receipt.requestDigest === context.requestDigest && receipt.payloadHash === context.payloadHash
+    && receipt.root === root && receipt.path === path && receipt.branch === branch
+}
+async function retirePublishedSessionCandidateReceipt(rec: SessRec, context: SessionCreateContext): Promise<void> {
+  if (!rec.branch || !rec.worktreePath) return
+  const root = mainRoot(), path = rec.worktreePath, branch = rec.branch
+  const durable = readSessionCandidateReceipt(rec.session)
+  if (durable.kind !== 'valid' || !sessionCandidateReceiptMatches(durable.receipt, context, root, path, branch)) return
+  await withRecordLock(sessionCandidateLockId(path, branch), async () => {
+    const current = readSessionCandidateReceipt(rec.session)
+    if (current.kind === 'valid' && sessionCandidateReceiptMatches(current.receipt, context, root, path, branch)) {
+      retireSessionCandidateReceipt(rec.session)
+    }
+  }, context.signal)
+}
 async function sessionCandidateState(root: string, path: string, branch: string, signal: AbortSignal): Promise<SessionCandidateState> {
   const [listed, ref] = await withGitAbortSignal(signal, () => Promise.all([
     gitTry(['-C', root, 'worktree', 'list', '--porcelain', '-z']),
@@ -2174,6 +2240,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
         if (existing.createRequestId !== requestDigest || existing.createPayloadHash !== payloadHash) {
           throw new SessionCreateError('session_create_key_reused', 'creation-lock', 'Idempotency-Key is already bound to another session-create payload', 409)
         }
+        await retirePublishedSessionCandidateReceipt(existing, context)
         return existingCreateReceipt(existing)
       }
 
@@ -2219,15 +2286,36 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
 
       phase = 'git-worktree'
       traceSessionCreate(id, requestDigest, phase, 'start')
-      const resourceLock = `create-resource-${digest(`${path}\0${branch}`)}`
+      const resourceLock = sessionCandidateLockId(path, branch)
       return await withRecordLock(resourceLock, async () => {
         throwIfCreateAborted(signal, phase)
-        const before = await sessionCandidateState(root, path, branch, signal)
-        const storePresent = existsSync(sessionStoreDir(id))
-        if (storePresent || before.path || before.worktree || before.branch) {
+        let before = await sessionCandidateState(root, path, branch, signal)
+        let storePresent = existsSync(sessionStoreDir(id))
+        const durable = readSessionCandidateReceipt(id)
+        if (durable.kind === 'invalid') throw new SessionCreateError('session_create_failed', phase, durable.error, 409)
+        if (durable.kind === 'valid') {
+          if (!sessionCandidateReceiptMatches(durable.receipt, context, root, path, branch)) {
+            throw new SessionCreateError('session_create_failed', phase, 'private candidate receipt does not match this create request; preserving candidate resources', 409)
+          }
+          phase = 'cleanup'
+          traceSessionCreate(id, requestDigest, phase, 'start', `recover-${durable.receipt.stage}`)
+          const recovered = await cleanupSessionCandidate(root, id, path, branch, {
+            store: storePresent, path: before.path, worktree: before.worktree, branch: before.branch,
+          })
+          traceSessionCreate(id, requestDigest, phase, recovered.length ? 'abort' : 'finish', recovered.join('; ') || undefined)
+          if (recovered.length) throw new SessionCreateError('session_create_cleanup_failed', phase, `matching candidate recovery left residue: ${recovered.join('; ')}`, 500)
+          before = { path: false, worktree: false, branch: false }
+          storePresent = false
+          phase = 'git-worktree'
+        } else if (storePresent || before.path || before.worktree || before.branch) {
           const occupied = [storePresent ? `session store ${sessionStoreDir(id)}` : '', before.path ? `path ${path}` : '', before.worktree ? `registered worktree ${path}` : '', before.branch ? `branch ${branch}` : ''].filter(Boolean).join(', ')
           throw new SessionCreateError('session_create_failed', phase, `session target is already occupied: ${occupied}`, 409)
         }
+        let candidateReceipt: SessionCandidateReceipt = {
+          version: 1, requestDigest, payloadHash, root, path, branch,
+          prestate: { store: false, path: false, worktree: false, branch: false }, stage: 'prepared',
+        }
+        writeSessionCandidateReceipt(id, candidateReceipt)
         const owned: SessionCandidateOwnership = { store: false, path: false, worktree: false, branch: false }
         let gitMutationStarted = false
         let published = false
@@ -2238,6 +2326,8 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           if (!added.ok || !existsSync(path)) {
             throw new SessionCreateError('session_create_failed', phase, `git worktree add failed: ${added.stderr.trim() || added.failure || 'worktree missing after success'}`, 500)
           }
+          candidateReceipt = { ...candidateReceipt, stage: 'git-created' }
+          writeSessionCandidateReceipt(id, candidateReceipt)
           traceSessionCreate(id, requestDigest, phase, 'finish')
           seedWorktreeHostState(root, path)
 
@@ -2252,6 +2342,8 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           const dir = storeDir(id)
           writeFileSync(join(dir, 'prompt'), rawPrompt)
           writeFileSync(join(dir, 'launch'), launchPrompt)
+          candidateReceipt = { ...candidateReceipt, stage: 'store-created' }
+          writeSessionCandidateReceipt(id, candidateReceipt)
 
           phase = 'materialize'
           traceSessionCreate(id, requestDigest, phase, 'start')
@@ -2266,6 +2358,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           throwIfCreateAborted(signal, phase)
           writeRecord(rec)
           published = true
+          retireSessionCandidateReceipt(id)
           shouldDrain = true
           traceSessionCreate(id, requestDigest, phase, 'publish')
           return toSession(rec, 'queued', 'offline')
@@ -2290,6 +2383,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           traceSessionCreate(id, requestDigest, phase, 'start')
           const residues = await cleanupSessionCandidate(root, id, path, branch, owned)
           if (ownershipFailure) residues.unshift(ownershipFailure)
+          if (!residues.length && !retireSessionCandidateReceipt(id)) residues.push(`private candidate receipt remains at ${sessionCandidateReceiptPath(id)}`)
           traceSessionCreate(id, requestDigest, phase, residues.length ? 'abort' : 'finish', residues.join('; ') || undefined)
           if (residues.length) throw new SessionCreateError('session_create_cleanup_failed', phase, `session creation failed and cleanup left residue: ${residues.join('; ')}`, 500)
           if (signal.aborted) { phase = failurePhase; throw createAbortError(signal, failurePhase) }

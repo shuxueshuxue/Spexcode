@@ -13,8 +13,8 @@ function sessionHelp(verb?: string) {
 
 test('session noun-verb help projects the exact verb from the shared drawer definition', () => {
   const cases = [
-    { verb: 'send', usage: 'Usage: spex session send <SEL> "<msg>"', behavior: /UNSTABLE LAST RESORT|LAST RESORT:[\s\S]*UNSTABLE/ },
-    { verb: 'wait', usage: 'Usage: spex session wait <SEL>', behavior: /EDGE-TRIGGERED[\s\S]*non-actionable status into an actionable one/ },
+    { verb: 'send', usage: 'Usage: spex session send <SEL> "<msg>"', behavior: /LAST RESORT:[\s\S]*UNSTABLE[\s\S]*SEL = session id[\s\S]*PROJECT-BOUND/ },
+    { verb: 'wait', usage: 'Usage: spex session wait <SEL>', behavior: /EDGE-TRIGGERED[\s\S]*non-actionable status into an actionable one[\s\S]*SEL = session id/ },
     { verb: 'new', usage: 'Usage: spex session new "<prompt>"', behavior: /--prompt-file[\s\S]*successful receipt/ },
   ]
   const outputs = cases.map(({ verb, usage, behavior }) => {

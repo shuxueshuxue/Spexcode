@@ -9,7 +9,8 @@ scenarios:
       `spex session new --help` — the first is the complete drawer while each noun-verb probe is only
       that verb's exact usage, projected from the shared drawer definition. The exact entries preserve
       their caveats (watch never exits; wait is edge-triggered; send --keys is last-resort/unstable) and
-      the map/guide footer; (3)
+      shared safety notes (SEL grammar on selector verbs; project-bound warning on writes), plus the
+      map/guide footer; (3)
       `spex guide eval` — the skill page must footer back to the help layers. Also probe the
       dead-ends: `spex nosuch`, `spex help nosuch`, `spex guide nosuch`, bare `spex internal`, and an
       unknown drawer verb (`spex spec nosuch`) must each fail loud AND name the layer to return to;

@@ -5,14 +5,14 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerIsolation, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerIsolation, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurnObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot } from './layout.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
 const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
-const codexRpcFixture = (handler: (message: any) => unknown) => createServer((socket) => {
+const codexRpcFixture = (handler: (message: any, send: (value: unknown) => void) => unknown) => createServer((socket) => {
   let buffer = Buffer.alloc(0)
   let upgraded = false
   const send = (value: unknown) => {
@@ -26,7 +26,7 @@ const codexRpcFixture = (handler: (message: any) => unknown) => createServer((so
     if (message.method === 'initialize') return send({ id: message.id, result: {} })
     if (message.method === 'initialized') return
     try {
-      const result = handler(message)
+      const result = handler(message, send)
       if (result === NO_RPC_RESPONSE) return
       if (result instanceof Promise) {
         result.then((value) => send({ id: message.id, result: value ?? {} }))
@@ -62,6 +62,132 @@ const codexRpcFixture = (handler: (message: any) => unknown) => createServer((so
       handle(JSON.parse(payload.toString('utf8')))
     }
   })
+})
+
+test('Codex turn observer reports only failed native completions with the native timestamp', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-turn-observer-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const root = runtimeRoot()
+  const threadId = 'observer-thread'
+  const server = codexRpcFixture((message, send) => {
+    if (message.method !== 'thread/resume') throw new Error(`unexpected RPC ${message.method}`)
+    setTimeout(() => {
+      send({ method: 'turn/completed', params: { threadId, turn: { id: 'done', status: 'completed', completedAt: 100 } } })
+      send({ method: 'turn/completed', params: { threadId, turn: { id: 'stopped', status: 'interrupted', completedAt: 101 } } })
+      send({ method: 'turn/completed', params: { threadId, turn: { id: 'failed', status: 'failed', completedAt: 102, error: { message: 'context window exceeded' } } } })
+    }, 10)
+    return { thread: { status: { type: 'active' } } }
+  })
+  const socket = codexAppServerSock(root)
+  mkdirSync(dirname(socket), { recursive: true })
+  let observer: ReturnType<typeof codexTurnObserver> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    const failures: unknown[] = []
+    let resolveFailure!: (value: unknown) => void
+    const failure = new Promise<unknown>((resolve) => { resolveFailure = resolve })
+    observer = codexTurnObserver({ session: 'observer-session', harnessSessionId: threadId, runtimeDir: root }, (value) => {
+      failures.push(value)
+      resolveFailure(value)
+    })
+    assert.deepEqual(await Promise.race([
+      failure,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('turn failure was not observed')), 1_000)),
+    ]), { turnId: 'failed', message: 'context window exceeded', completedAt: 102 })
+    assert.equal(failures.length, 1, 'completed and interrupted outcomes are controls, not errors')
+  } finally {
+    observer?.close()
+    await observer?.closed
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('Codex turn observer reconciles a pre-existing systemError after subscription', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-turn-reconcile-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const root = runtimeRoot()
+  const threadId = 'system-error-thread'
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/resume') return {
+      thread: { status: { type: 'systemError' } },
+      initialTurnsPage: { data: [{ id: 'old-turn', status: 'completed', completedAt: 203 }], nextCursor: null },
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const socket = codexAppServerSock(root)
+  mkdirSync(dirname(socket), { recursive: true })
+  let observer: ReturnType<typeof codexTurnObserver> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    let resolveFailure!: (value: unknown) => void
+    const failure = new Promise<unknown>((resolve) => { resolveFailure = resolve })
+    observer = codexTurnObserver({ session: 'reconcile-session', harnessSessionId: threadId, runtimeDir: root }, resolveFailure)
+    assert.deepEqual(await Promise.race([
+      failure,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('systemError was not reconciled')), 1_000)),
+    ]), {
+      turnId: 'old-turn',
+      message: 'Codex thread entered systemError before the turn observer subscribed',
+      completedAt: 203,
+    })
+  } finally {
+    observer?.close()
+    await observer?.closed
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('Codex turn observer drops restart reconciliation when a new turn starts', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-turn-reconcile-race-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const root = runtimeRoot()
+  const threadId = 'system-error-race-thread'
+  const server = codexRpcFixture((message, send) => {
+    if (message.method !== 'thread/resume') throw new Error(`unexpected RPC ${message.method}`)
+    setTimeout(() => send({ method: 'turn/started', params: { threadId, turn: { id: 'new-turn', status: 'inProgress' } } }), 10)
+    return {
+      thread: { status: { type: 'systemError' } },
+      initialTurnsPage: { data: [{ id: 'old-turn', status: 'completed', completedAt: 303 }], nextCursor: null },
+    }
+  })
+  const socket = codexAppServerSock(root)
+  mkdirSync(dirname(socket), { recursive: true })
+  let observer: ReturnType<typeof codexTurnObserver> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    const failures: unknown[] = []
+    observer = codexTurnObserver({ session: 'reconcile-race-session', harnessSessionId: threadId, runtimeDir: root }, (value) => failures.push(value))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    assert.deepEqual(failures, [], 'the new native turn supersedes the historical systemError snapshot')
+  } finally {
+    observer?.close()
+    await observer?.closed
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
 })
 
 const startCodexOwner = (root: string) => spawnDetachedRuntime({

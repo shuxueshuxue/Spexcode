@@ -77,6 +77,26 @@ scenarios:
       active/working to error within a bounded wall, with a note naming the harness and exit code or signal.
       Liveness remains online only when the adapter can still accept a subsequent delivery. Zero exits do not
       manufacture an error, and a declaration that lands before teardown is never overwritten.
+  - name: codex-turn-completed-failure
+    tags: [backend-api, cli]
+    code:
+      - spec-cli/src/harness.ts#codexTurnObserver
+      - spec-cli/src/sessions.ts#superviseTurnOutcomes
+      - spec-cli/src/sessions.ts#markHarnessTurnFailure
+    description: >-
+      Through a real governed interactive Codex session and its project app-server, force one model turn to
+      finish with the native `turn/completed` status `failed` without reaching Codex's Stop hook. Read the
+      session only through `spex session show --json`, and preserve the app-server completion payload beside
+      the reading. At the native protocol boundary, repeat with completed and interrupted controls; at the
+      session writer boundary, race failure against an already-landed declaration.
+    expected: >-
+      The native failed completion changes an undeclared active session to lifecycle/status `error` within a
+      bounded wall, with a note naming Codex and the structured failure message. The recorded failure time is
+      the native turn's `completedAt`, not the observer's later discovery time. Completed and interrupted turns
+      manufacture no error, and a declaration that lands before completion remains authoritative. Detection
+      survives a backend restart by resubscribing to every live governed Codex thread: a native `systemError`
+      thread status proves the missed failure and its latest turn supplies the original completion time before
+      later live completions arrive. No Codex StopFailure hook is invented.
   - name: nested-subagent-hooks-do-not-clobber-parent-record
     tags: [backend-api]
     code: spec-cli/hooks/harness.sh

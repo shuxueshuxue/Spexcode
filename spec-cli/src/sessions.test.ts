@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, launchPreflight, launchScript, listSessions, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, harnessTurnFailureNote, launchPreflight, launchScript, listSessions, markHarnessTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 import { readTimeline } from './session-timeline.js'
 
@@ -906,10 +906,30 @@ test('headless turn failure is an active-only error projection', () => {
 
     stored.status = 'active'
     writeFileSync(sessionRecordPath(id), JSON.stringify(stored, null, 2) + '\n')
+    const nativeNote = harnessTurnFailureNote('codex', {
+      turnId: 'native-failure',
+      message: '  context   window exceeded  ',
+      completedAt: 1_700_000_000,
+    })
+    assert.equal(nativeNote, 'codex turn failed at 2023-11-14T22:13:20.000Z: context window exceeded')
+    assert.equal(markHarnessTurnFailure(id, nativeNote), true)
+    stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(stored.status, 'error')
+    assert.equal(stored.note, nativeNote)
+
+    stored.status = 'active'
+    writeFileSync(sessionRecordPath(id), JSON.stringify(stored, null, 2) + '\n')
     assert.equal(markHeadlessTurnFailure(id, 'opencode-headless', '0'), false, 'zero exit never manufactures an error')
     stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(stored.status, 'active')
-    assert.equal(stored.note, 'opencode-headless turn exited with exit code 1')
+    assert.equal(stored.note, nativeNote)
+
+    stored.stopped = true
+    writeFileSync(sessionRecordPath(id), JSON.stringify(stored, null, 2) + '\n')
+    assert.equal(markHarnessTurnFailure(id, 'late failure after stop'), false, 'explicit stop wins over a late native completion')
+    stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(stored.status, 'active')
+    assert.equal(stored.note, nativeNote)
   } finally {
     if (prevHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = prevHome

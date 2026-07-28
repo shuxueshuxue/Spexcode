@@ -37,6 +37,8 @@ export type HarnessLaunchReadinessFence = {
   readonly proof: Readonly<Record<string, unknown>>
   validate(current: () => HarnessLaunchReadyRecord | null): Promise<boolean>
 }
+export type HarnessTurnFailure = { turnId: string | null; message: string; completedAt: number | null }
+export type HarnessTurnObserver = { close(): void; readonly closed: Promise<string | null> }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
 // one whole-box pid→(ppid, comm) table (a single `ps` spawn).
@@ -262,6 +264,9 @@ export interface Harness {
   // (mid-turn, not queued for after the agent stops) or `turn/start`s a fresh turn when the thread is idle.
   // Returns ok=false with a reason that propagates to the API.
   deliver(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult>
+  // Observe native turn failures that this harness does not expose as a lifecycle hook. The adapter owns the
+  // transport subscription; sessions owns observer reconciliation and the active-only lifecycle CAS.
+  observeTurnOutcomes?(rec: HarnessDeliveryRecord, onFailure: (failure: HarnessTurnFailure) => void): HarnessTurnObserver
   // Hard-interrupt the current turn through the harness's native control plane. Optional because a harness
   // without a confirmed native interrupt must refuse rather than emulate one with a signal or PTY key.
   interrupt?(rec: HarnessDeliveryRecord): Promise<DispatchResult>
@@ -819,6 +824,107 @@ function drainWsFrames(s: FrameState, conn: Socket, onText: (json: string) => vo
 }
 const WS_UPGRADE = (key: string) => `GET /rpc HTTP/1.1\r\nHost: localhost\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: ${key}\r\n\r\n`
 const wsInitialize: JsonRpc = { id: 1, method: 'initialize', params: { clientInfo: { name: 'spexcode', title: 'SpexCode', version: '0.0.0' }, capabilities: { experimentalApi: true, requestAttestation: false } } }
+
+// Codex has no StopFailure hook, but its app-server has the stronger native signal: every subscribed turn ends
+// with turn/completed and a final completed/interrupted/failed status. Rejoin is atomic with subscription, so
+// this observer also survives backend replacement; a thread already in systemError is reconciled from its
+// latest turn before later live notifications take over.
+export function codexTurnObserver(
+  rec: HarnessDeliveryRecord,
+  onFailure: (failure: HarnessTurnFailure) => void,
+): HarnessTurnObserver {
+  const threadId = rec.harnessSessionId
+  if (!threadId) return { close: () => {}, closed: Promise.resolve(null) }
+  const sock = codexAppServerSock(rec.runtimeDir || runtimeRoot())
+  const conn: Socket = createConnection(sock)
+  const frames: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
+  let upgraded = false, settled = false
+  let reconciliationTimer: ReturnType<typeof setTimeout> | null = null
+  let resolveClosed!: (reason: string | null) => void
+  const closed = new Promise<string | null>((resolve) => { resolveClosed = resolve })
+  const cancelReconciliation = () => {
+    if (!reconciliationTimer) return
+    clearTimeout(reconciliationTimer)
+    reconciliationTimer = null
+  }
+  const finish = (reason: string | null) => {
+    if (settled) return
+    settled = true
+    clearTimeout(timer)
+    cancelReconciliation()
+    try { conn.destroy() } catch {}
+    resolveClosed(reason)
+  }
+  const timer = setTimeout(() => finish('Codex turn observer did not subscribe within 5000ms'), 5000)
+  timer.unref?.()
+  const send = (message: JsonRpc) => conn.write(wsText(JSON.stringify(message)))
+  const report = (turn: unknown, fallbackMessage?: string) => {
+    const value = turn as { id?: unknown; status?: unknown; completedAt?: unknown; error?: { message?: unknown } | null }
+    if (value?.status !== 'failed' && !fallbackMessage) return
+    const nativeMessage = typeof value?.error?.message === 'string' ? value.error.message.trim() : ''
+    onFailure({
+      turnId: typeof value?.id === 'string' ? value.id : null,
+      message: nativeMessage || fallbackMessage || 'Codex turn failed',
+      completedAt: typeof value?.completedAt === 'number' && Number.isFinite(value.completedAt) ? value.completedAt : null,
+    })
+  }
+  conn.on('error', (error) => finish(`Codex turn observer connection failed: ${rpcError(error)}`))
+  conn.on('close', () => finish('Codex turn observer connection closed'))
+  conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
+  const handle = (json: string) => {
+    let message: JsonRpc
+    try { message = JSON.parse(json) } catch { return }
+    if (message.error) return finish(`Codex turn observer request failed: ${message.error.message || JSON.stringify(message.error)}`)
+    if (message.id === 1 && message.result) {
+      send({ method: 'initialized', params: {} })
+      return send({
+        id: 2,
+        method: 'thread/resume',
+        params: { threadId, excludeTurns: true, initialTurnsPage: { limit: 1, sortDirection: 'desc', itemsView: 'notLoaded' } },
+      })
+    }
+    if (message.id === 2 && message.result) {
+      clearTimeout(timer)
+      const result = message.result as { thread?: { status?: { type?: unknown } }; initialTurnsPage?: { data?: unknown } }
+      if (result.thread?.status?.type === 'systemError') {
+        const turns = result.initialTurnsPage?.data
+        const latest = Array.isArray(turns) ? turns[0] : null
+        // Give a concurrently-starting turn's native notification precedence over this historical snapshot.
+        reconciliationTimer = setTimeout(() => {
+          reconciliationTimer = null
+          report(latest, 'Codex thread entered systemError before the turn observer subscribed')
+        }, 100)
+        reconciliationTimer.unref?.()
+      }
+      return
+    }
+    if (message.method === 'turn/started') {
+      const params = message.params as { threadId?: unknown } | undefined
+      if (params?.threadId === threadId) cancelReconciliation()
+    }
+    if (message.method === 'turn/completed') {
+      const params = message.params as { threadId?: unknown; turn?: unknown } | undefined
+      if (params?.threadId === threadId) {
+        cancelReconciliation()
+        report(params.turn)
+      }
+    }
+  }
+  conn.on('data', (chunk: Buffer) => {
+    frames.buf = Buffer.concat([frames.buf, chunk])
+    if (!upgraded) {
+      const split = frames.buf.indexOf('\r\n\r\n')
+      if (split < 0) return
+      const head = frames.buf.slice(0, split).toString('utf8')
+      if (!/^HTTP\/1\.1 101/.test(head)) return finish(`Codex app-server refused turn observer: ${head.split('\r\n')[0]}`)
+      upgraded = true
+      frames.buf = frames.buf.slice(split + 4)
+      send(wsInitialize)
+    }
+    if (drainWsFrames(frames, conn, handle)) finish('Codex app-server closed the turn observer')
+  })
+  return { close: () => finish(null), closed }
+}
 
 // Protocol-verified cold/restore seam. The Codex schema (`codex app-server generate-json-schema --experimental`)
 // defines thread/archive and thread/unarchive with {threadId}; no guessed method or process command is used.
@@ -1891,6 +1997,7 @@ export const codexHarness: Harness = {
   },
   leafOwnerNeedle: (rec) => rec.harnessSessionId ?? null,
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
+  observeTurnOutcomes: codexTurnObserver,
   cleanupRuntime: async () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
   coldRetirementPreflight: async (rec) => {
     if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }

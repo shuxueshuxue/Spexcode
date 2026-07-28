@@ -414,6 +414,29 @@ test('aggregate future maintenance coordinator contract', async (t) => {
     } finally { f.cleanup() }
   })
 
+  await t.test('shared spawn is ordinary only when open without maintenance authority', async () => {
+    const f = makeFixture()
+    try {
+      const gate = f.create()
+      const callbacks: string[] = []
+      await gate.runOperation({ op: 'shared-spawn', sessionId: 's-1', delegate: '' }, async () => {
+        callbacks.push('open-empty')
+        assert.deepEqual(gate.readState().tickets.map((ticket) => ({ operation: ticket.operation, sessionId: ticket.sessionId })), [
+          { operation: 'shared-spawn', sessionId: 's-1' },
+        ])
+      })
+      assert.deepEqual(callbacks, ['open-empty'])
+      assert.equal(gate.readState().tickets.length, 0)
+
+      const before = JSON.stringify({ state: gate.readState(), events: f.events })
+      await expectCode(gate.runOperation({ op: 'shared-spawn', sessionId: 's-1', delegate: 'ff'.repeat(32) }, async () => {
+        callbacks.push('open-explicit')
+      }), 'maintenance_delegate_invalid')
+      assert.deepEqual(callbacks, ['open-empty'])
+      assert.equal(JSON.stringify({ state: gate.readState(), events: f.events }), before)
+    } finally { f.cleanup() }
+  })
+
   await t.test('explicit maintenance authority never degrades to ordinary admission', async () => {
     const f = makeFixture()
     try {

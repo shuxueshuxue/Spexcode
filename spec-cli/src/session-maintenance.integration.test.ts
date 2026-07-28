@@ -252,6 +252,7 @@ test('real dispatcher holds one open ticket for the whole handler run and active
 test('real internal shared spawn admits one valid delegate and refuses forged, replayed, or absent delegates with complete artifact snapshots', async () => {
   const [{ runtimeRoot }, { processStartToken }] = await Promise.all([import('./layout.js'), import('./process-identity.js')])
   const root = runtimeRoot(); const leasePath = join(root, 'session-maintenance.json')
+  mkdirSync(root, { recursive: true })
   const startToken = processStartToken(process.pid); assert.ok(startToken)
   const activeResume = () => leaseRow('active', process.pid, startToken, {
     capabilities: [{ capability: { op: 'resume', sessionId: ID, force: true }, state: 'inflight', requestId: 'resume-ticket' }],
@@ -292,6 +293,9 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
     return snapshot
   }
 
+  writeFileSync(leasePath, JSON.stringify(leaseRow('open', process.pid, startToken), null, 2))
+  const openOrdinary = await run('open-ordinary', null)
+  const openExplicitDelegate = await run('open-explicit-delegate', 'ee'.repeat(32))
   writeFileSync(leasePath, JSON.stringify(activeResume(), null, 2))
   const valid = await run('valid', DELEGATE)
   const replay = await run('replay', DELEGATE)
@@ -301,10 +305,11 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
   const absent = await run('absent', null)
   rmSync(dir, { recursive: true, force: true })
 
-  assert.deepEqual(valid, { status: 0, structured: false, pidLive: true, logReady: true, scopeExact: true, pidArtifact: true })
-  for (const refused of [replay, forged, absent]) {
+  assert.deepEqual(openOrdinary, { status: 0, structured: false, pidLive: true, logReady: true, scopeExact: true, pidArtifact: true })
+  for (const refused of [openExplicitDelegate, replay, forged, absent]) {
     assert.deepEqual(refused, { status: 1, structured: true, pidLive: false, logReady: false, scopeExact: false, pidArtifact: false })
   }
+  assert.deepEqual(valid, { status: 0, structured: false, pidLive: true, logReady: true, scopeExact: true, pidArtifact: true })
 })
 
 async function startHttpFixture(mode: 'draining-active' | 'expiry' | 'heartbeat-loss' | 'broker-concurrent' | 'broker-transport-loss' | 'broker-pending-transport-loss' | 'resume-refused-retry' | 'resume-500-indeterminate' | 'post-acquire-validation', resultPath: string, extraEnv: Record<string, string> = {}) {

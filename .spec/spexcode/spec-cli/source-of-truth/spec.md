@@ -9,6 +9,7 @@ code:
 related:
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts
+  - docs/audits/source-of-truth-stage2-20260728.md
 ---
 # source-of-truth
 

@@ -37,8 +37,8 @@ type SessionVerbHelp = readonly [usage: string | readonly string[], detail: stri
 function sessionHelpDefinitions(): Record<string, SessionVerbHelp> {
   return {
     new: ['spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>]',
-      `Launch a worker in its own node worktree. Give it ONLY its task — the dev-flow contract
-reaches it through the materialized system prompt. The prompt's first [[id]] mention binds the
+      `Launch a worker in its own node worktree. The materialized system contract reaches it
+automatically; the prompt supplies the task context. Its first [[id]] mention binds the
 session to that node. --prompt-file <path>|- carries a long prompt without shell quoting
 (exclusive with the inline prompt). The successful receipt names what to read, monitor, and reply on.`],
     ls: ['spex session ls [SEL…] [--status a,b] [--all] [--json]',
@@ -48,15 +48,13 @@ session to that node. --prompt-file <path>|- carries a long prompt without shell
       `Streams lifecycle transitions until killed — it NEVER EXITS; the human's forever stream.
 An agent must background it or use wait; blocking a turn on watch freezes you.`, ['selector']],
     wait: ['spex session wait <SEL> [--timeout S=1200] [--interval S=2] [--idle]',
-      `EDGE-TRIGGERED sleep on one session — ALWAYS run it in the BACKGROUND; its exit is your wake-up.
-Prints the session's current status immediately (stderr), then exits 0 only when it OBSERVES
+      `EDGE-TRIGGERED wait on one session. Prints the current status immediately (stderr), then
+exits 0 only when it OBSERVES
 the session TRANSITION from a non-actionable status into an actionable one, printing the
 observed path on stdout (e.g. working→review — read the LAST token as the status reached).
-USE IT to sleep until a dispatched worker next needs you — including a dispatched MERGE
-actually landing (review→working while the merge runs, then the edge back is your wake-up).
 It NEVER returns just because the session is actionable ALREADY — for "what is it right NOW"
 use \`session ls\` / \`session review\` instead. --timeout is the guaranteed exit (code 1,
-observed path on stderr). Background one wait per worker.`, ['selector']],
+observed path on stderr).`, ['selector']],
     review: ['spex session review <SEL> [--json]', 'The merge cockpit: ahead · uncommitted · proposal · gates · merge-base diff — decide from this, don\'t hand-run git.', ['selector']],
     merge: ['spex session merge <SEL>', `Gated merge, dispatched to the session's OWN agent. Confirm HEAD advanced before
 closing — closing unmerged discards work.`, ['selector', 'project-bound']],

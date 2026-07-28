@@ -29,7 +29,8 @@ new primitive.
 ## expanded spec
 
 **Exact noun-verb help.** `spex session <verb> --help` is intercepted before dispatch and prints only that
-verb's usage and behaviour. The full `spex session` / `spex help session` drawer remains intact. Both views
+verb's syntax, output, side effects and blocking behaviour. It does not prescribe an orchestration workflow.
+The full `spex session` / `spex help session` drawer remains intact. Both views
 are rendered from one shared session-help definition, so wait's edge semantics, watch's never-exit warning,
 send's raw-key warning, selector grammar, and project-bound write warning cannot drift between a drawer
 manual and copied verb manuals. Existing session verbs and spellings keep their behaviour; this is a help

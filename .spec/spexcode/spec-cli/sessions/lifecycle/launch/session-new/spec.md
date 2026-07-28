@@ -42,6 +42,14 @@ Cleanup is part of the outcome, not a detached best-effort continuation. If exac
 the request returns `session_create_cleanup_failed` and names the residue rather than claiming zero artifacts.
 No timeout path falls back to another launcher, an in-process create, or a background create.
 
+Branch and worktree names are shorter than the session identity, so a different request may derive the same
+Git resources. The transaction therefore locks the exact `{branch,path}` pair with the existing lock primitive,
+then records whether the store, branch, and registered worktree were absent before preparation and which of
+them its successful operations created. Pre-existing resources fail without mutation. Rollback consumes that
+one ownership receipt and removes only resources this transaction proved it created; a failed add never turns
+the candidate name into authority to delete. A colliding request therefore cannot damage an already-published
+receipt, while a transaction that owns its candidate still removes exactly that candidate on abort.
+
 The public request accepts the standard `Idempotency-Key` header. The backend deterministically maps a valid
 key to one candidate session id and binds it to the normalized `{prompt,parent,launcher}` payload. Creation for
 that id is serialized at the existing per-session lock. A same-key retry, including a concurrent retry or a
@@ -51,11 +59,19 @@ with `session_create_key_reused` and creates nothing. Callers that omit the head
 semantics with a backend-minted key; SpexCode's own CLI always sends a fresh key and retains it across its one
 bounded request attempt.
 
-Before that attempt the CLI may enter the existing in-process fallback only after an explicit
-`ECONNREFUSED` proves the selected target has no listener. Every HTTP response, including `404` and `503`,
-proves that a backend owns the target; a slow accepted connection, abort, reset, DNS failure, or unknown
-transport outcome is indeterminate. Those cases fail loud without local creation, because the remote owner
-may already have admitted the keyed request.
+Before that attempt the CLI performs one bounded `GET /api/settings` authority probe. That same response is
+the project-match evidence for an implicit target; there is no earlier unbounded project fetch. The CLI may
+enter the existing in-process fallback only after an explicit `ECONNREFUSED` proves the selected target has no
+listener. Every HTTP response, including `404` and `503`, proves that a backend owns the target; a slow accepted
+connection, abort, reset, DNS failure, or unknown transport outcome is indeterminate. Those cases fail loud
+within the probe wall without local creation, because the remote owner may already have admitted the keyed
+request.
+
+`sessionCreateRequest` is the only callable governed-session creation seam. It owns validation, maintenance
+admission, request identity, deadline/cancellation, and the private prepare/publish function's required context.
+The HTTP route, CLI no-listener fallback, and issue/remark `@new` dispatch all call it. Preparation is not
+exported and cannot mint a never-aborted context for itself, so adding another caller cannot bypass the wall or
+transaction owner.
 
 The record publication is the irreversible boundary. The transaction checks cancellation immediately before
 the synchronous atomic record replace and re-proves that the candidate path is the exact Git top-level, is

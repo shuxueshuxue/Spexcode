@@ -37,29 +37,25 @@ type SessionVerbHelp = readonly [usage: string | readonly string[], detail: stri
 function sessionHelpDefinitions(): Record<string, SessionVerbHelp> {
   return {
     new: ['spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>]',
-      `Launch a worker in its own node worktree. Give it ONLY its task — the dev-flow contract
-reaches it through the materialized system prompt. The prompt's first [[id]] mention binds the
+      `Launch a worker in its own node worktree. The materialized system contract reaches it
+automatically; the prompt supplies the task context. Its first [[id]] mention binds the
 session to that node. --prompt-file <path>|- carries a long prompt without shell quoting
 (exclusive with the inline prompt). The successful receipt names what to read, monitor, and reply on.`],
     ls: ['spex session ls [SEL…] [--status a,b] [--all] [--json]',
       'One-shot table of living sessions. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
     watch: ['spex session watch [SEL…] [--as NAME] [--idle] [--interval N=5]',
-      `Streams lifecycle transitions until killed — it NEVER EXITS; the human's forever stream.
-An agent must background it or use wait; blocking a turn on watch freezes you.`, ['selector']],
+      'Streams lifecycle transitions and blocks until killed; `session wait` is the one-shot alternative.', ['selector']],
     wait: ['spex session wait <SEL> [--timeout S=1200] [--interval S=2] [--idle]',
-      `EDGE-TRIGGERED sleep on one session — ALWAYS run it in the BACKGROUND; its exit is your wake-up.
-Prints the session's current status immediately (stderr), then exits 0 only when it OBSERVES
+      `EDGE-TRIGGERED wait on one session. Prints the current status immediately (stderr), then
+exits 0 only when it OBSERVES
 the session TRANSITION from a non-actionable status into an actionable one, printing the
 observed path on stdout (e.g. working→review — read the LAST token as the status reached).
-USE IT to sleep until a dispatched worker next needs you — including a dispatched MERGE
-actually landing (review→working while the merge runs, then the edge back is your wake-up).
 It NEVER returns just because the session is actionable ALREADY — for "what is it right NOW"
 use \`session ls\` / \`session review\` instead. --timeout is the guaranteed exit (code 1,
-observed path on stderr). Background one wait per worker.`, ['selector']],
-    review: ['spex session review <SEL> [--json]', 'The merge cockpit: ahead · uncommitted · proposal · gates · merge-base diff — decide from this, don\'t hand-run git.', ['selector']],
-    merge: ['spex session merge <SEL>', `Gated merge, dispatched to the session's OWN agent. Confirm HEAD advanced before
-closing — closing unmerged discards work.`, ['selector', 'project-bound']],
+observed path on stderr).`, ['selector']],
+    review: ['spex session review <SEL> [--json]', 'Reports ahead · uncommitted · proposal · gates · merge-base diff.', ['selector']],
+    merge: ['spex session merge <SEL>', 'Dispatches a gated merge to the session\'s own agent; it does not close the session.', ['selector', 'project-bound']],
     send: [['spex session send <SEL> "<msg>"', 'spex session send <SEL> --keys "<keys>"'],
       `Plain send delivers a message and fails loud when dispatch is dead. --keys is the LAST RESORT:
 raw nav-mode keystrokes to a TUI dialog ("Up Up Enter", C-/M-/S- combos). The raw key surface
@@ -83,8 +79,8 @@ argv/environment. --status is the sanitized read-only lease view.`, ['selector',
     done: ['spex session done --propose merge|nothing|close [--note T]', 'Declare your own work committed and stop.'],
     park: ['spex session park --note <what-you-await>', 'Declare that a real background task will wake your own session.'],
     ask: ['spex session ask --note <your-question>', 'Declare that your own session is stopped on the human and resumes on reply.'],
-    attach: ['spex session attach <SEL>', `Sit in the worker's REAL tmux (detach: C-b d). INTERACTIVE AND BLOCKING — an agent
-must NEVER run it in a turn: use show --capture / send. LOCAL-only (fails loud on a remote backend).`, ['selector']],
+    attach: ['spex session attach <SEL>', `Attaches the current terminal to the worker's tmux (detach: C-b d) and blocks until detached.
+LOCAL-only (fails loud on a remote backend); show --capture and send are non-interactive.`, ['selector']],
   }
 }
 

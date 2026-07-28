@@ -28,6 +28,7 @@ test('session noun-verb help projects the exact verb from the shared drawer defi
     return result.stdout
   })
   assert.equal(new Set(outputs).size, cases.length)
+  assert.doesNotMatch(outputs.join('\n'), /USE IT|Background one wait per worker|Give it ONLY its task|don't hand-run git|must NEVER run it/)
 })
 
 test('bare session keeps the complete compatible drawer', () => {

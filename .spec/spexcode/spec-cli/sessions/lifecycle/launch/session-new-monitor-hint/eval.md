@@ -12,7 +12,8 @@ scenarios:
       the shared session help definition, not the repeated full drawer. Send keeps plain text plus unstable
       last-resort raw keys, wait keeps its edge-triggered exit semantics, new explains launch inputs, and
       selector/write entries keep the shared SEL grammar/project-bound safety notes. Every entry points back
-      to the help map/guide. Bare `spex session` remains the complete compatible drawer.
+      to the help map/guide without prescribing an orchestration workflow. Bare `spex session` remains the
+      complete compatible drawer.
     code: spec-cli/src/help.ts
     related: spec-cli/src/cli.ts
   - name: hint-names-monitor-and-comm

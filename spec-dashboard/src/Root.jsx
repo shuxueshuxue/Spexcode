@@ -7,6 +7,7 @@ import { useIsMobile } from './useIsMobile.js'
 
 const App = lazy(() => import('./App.jsx'))
 const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
+const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
 const MobileApp = lazy(() => import('./MobileApp.jsx'))
 
 function focusNode(id) {
@@ -16,7 +17,7 @@ function focusNode(id) {
 
 const openSession = (id) => navigate('sessions', id)
 
-function EvalEntry() {
+function ReviewEntry({ page }) {
   const isMobile = useIsMobile()
   const t = useT()
   const loading = <div className="loading">{t('hud.loading')}</div>
@@ -32,11 +33,13 @@ function EvalEntry() {
   return (
     <div className="app">
       <TooltipLayer />
-      <SideBar page="evals" identity={null} catalog={null} />
+      <SideBar page={page} identity={null} catalog={null} />
       <div className="app-main">
-        <div className="page-pane page-evals">
+        <div className={`page-pane page-${page}`}>
           <Suspense fallback={loading}>
-            <EvalsPage onOpenSession={openSession} onFocusNode={focusNode} />
+            {page === 'evals'
+              ? <EvalsPage onOpenSession={openSession} onFocusNode={focusNode} />
+              : <IssuesPage onOpenSession={openSession} onFocusNode={focusNode} />}
           </Suspense>
         </div>
       </div>
@@ -46,19 +49,19 @@ function EvalEntry() {
 
 export default function Root() {
   const t = useT()
-  const { page } = useRoute()
-  const coldEvalsRoute = page === 'evals'
-  // @@@ cold-entry latch - a tab born on any Evals route may bypass App; once the board starts, its warm
+  const { page, param } = useRoute()
+  const coldReviewRoute = page === 'evals' || (page === 'issues' && !param)
+  // @@@ cold-entry latch - a tab born on Evals or the top-level Issues list may bypass App; once the board starts, its warm
   // graph/session state survives every later route change exactly as it did before this outer selector.
-  const [boardStarted, setBoardStarted] = useState(() => !coldEvalsRoute)
+  const [boardStarted, setBoardStarted] = useState(() => !coldReviewRoute)
   useEffect(() => {
-    if (!coldEvalsRoute) setBoardStarted(true)
-  }, [coldEvalsRoute])
-  const lightweight = coldEvalsRoute && !boardStarted
+    if (!coldReviewRoute) setBoardStarted(true)
+  }, [coldReviewRoute])
+  const lightweight = coldReviewRoute && !boardStarted
 
   return (
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-      {lightweight ? <EvalEntry /> : <App />}
+      {lightweight ? <ReviewEntry page={page} /> : <App />}
     </Suspense>
   )
 }

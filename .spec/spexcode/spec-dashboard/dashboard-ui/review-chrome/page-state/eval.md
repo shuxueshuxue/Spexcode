@@ -21,6 +21,18 @@ scenarios:
       The painted rows stay on screen through every board delta: the same-request refresh is quiet (no
       lp-empty "loading…" flash, no aria-busy wipe), and only a genuine request-identity change (new
       query/page/domain) may show the loading state again.
+  - name: cold-review-navigation
+    tags: [frontend-e2e]
+    description: >
+      Against the branch-local backend with the real session/eval/issue stores, first publish one review
+      snapshot, then start and hold the next full graph producer. Open fresh top-level #/evals and #/issues
+      routes through the exact pre-fix graph-join path and through the candidate snapshot path. Capture each
+      request URL, start/end/status, ETag/revision, painted rows/loading, and barrier state before release.
+    expected: >
+      The pre-fix path remains loading while the full producer is held. With the candidate path, each route
+      issues one committed page request and paints the published 25-row page before barrier release, with an
+      ETag and revision derived from that snapshot plus the route's current session-presence input. A first
+      publication may still be cold; Sessions-first is neither the fix nor the pass condition.
 ---
 
 # measuring page-state

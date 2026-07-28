@@ -1006,10 +1006,10 @@ if (cmd === 'serve') {
     if (!owner) { console.error('maintenance_identity_unknown: hook dispatcher owner identity is not exact'); process.exit(2) }
     sessionMaintenance().finishExternalOperation(ticket, owner)
   } else if (sub === 'shared-runtime-spawn') {
-    const [cwd, logFile, pidFile, isolationFile, command] = process.argv.slice(4, 9)
+    const [cwd, logFile, pidFile, receiptFile, command] = process.argv.slice(4, 9)
     const args = process.argv.slice(9)
-    if (!cwd || !logFile || !pidFile || !isolationFile || !command) {
-      console.error('usage: spex internal shared-runtime-spawn <cwd> <log> <pid-file> <isolation-file> <command> [args...]')
+    if (!cwd || !logFile || !pidFile || !receiptFile || !command) {
+      console.error('usage: spex internal shared-runtime-spawn <cwd> <log> <pid-file> <receipt-file> <command> [args...]')
       process.exit(2)
     }
     const { readFileSync } = await import('node:fs')
@@ -1029,7 +1029,7 @@ if (cmd === 'serve') {
     delete env.SPEXCODE_MAINTENANCE_SESSION_ID
     delete env.SPEXCODE_SESSION_ID
     const runtime = await runSessionOperation({ op: 'shared-spawn', sessionId, ...(delegateChannelPresent ? { delegate } : {}) }, () =>
-      spawnDetachedRuntime({ cwd, logFile, pidFile, isolationFile, command, args, env }))
+      spawnDetachedRuntime({ cwd, logFile, pidFile, receiptFile, command, args, env }))
     console.log(runtime.pid)
   } else if (sub === 'codex-launch') {
     // BACKEND-owned codex thread. On the shared per-project app-server: thread/start { cwd = this worktree }

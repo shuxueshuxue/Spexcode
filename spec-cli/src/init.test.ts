@@ -223,8 +223,7 @@ test('real init refreshes exact legacy Spex hooks, preserves a custom commit-msg
   chmodSync(localSpex, 0o755)
 
   const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))
-  cfg.mainBranch = 'main'
-  writeFileSync(join(proj, 'spexcode.json'), JSON.stringify(cfg, null, 2) + '\n')
+  assert.equal(cfg.mainBranch, 'main', 'init persists trunk identity before an ordinary checkout can switch away')
   g('switch', '-qc', 'node/init-hook')
   writeFileSync(join(proj, 'README.md'), '# changed\n')
   g('add', 'README.md')

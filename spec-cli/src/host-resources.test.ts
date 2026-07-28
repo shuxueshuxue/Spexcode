@@ -3,17 +3,17 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { platform, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { codexAppServerIsolation, codexAppServerPid, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, type SharedRuntimeProbe } from './harness.js'
+import { codexAppServerReceipt, codexAppServerPid, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, type SharedRuntimeProbe } from './harness.js'
 import { repoRoot } from './git.js'
 import { runtimeRoot } from './layout.js'
 import {
   assertSessionStopSafe,
   collectResourceReport,
 } from './host-resources.js'
-import { parseProcStat, processStartToken, processTopology } from './process-identity.js'
-import { registerBackendInstance, spawnDetachedRuntime, unregisterBackendInstance, writeIsolationStamp } from './runtime-ownership.js'
+import { parseProcStat, processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from './process-identity.js'
+import { registerBackendInstance, spawnDetachedRuntime, unregisterBackendInstance } from './runtime-ownership.js'
 
 test('parseProcStat keeps PID identity separate from process name punctuation', () => {
   const fields = ['S', '7', '8', '9', '0', '0', '0', '0', '0', '0', '0', '11', '13', '0', '0', '0', '0', '0', '0', '4242', '0', '21']
@@ -30,21 +30,27 @@ test('parseProcStat keeps PID identity separate from process name punctuation', 
 test('shared runtime spawn records an observed detached process boundary', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-detached-runtime-'))
   const pidFile = join(root, 'runtime.pid')
-  const isolationFile = join(root, 'runtime.scope')
+  const receiptFile = join(root, 'runtime.detached.json')
   let identity: { pid: number; startToken: string } | null = null
   try {
     identity = spawnDetachedRuntime({
       cwd: root,
       logFile: join(root, 'runtime.log'),
       pidFile,
-      isolationFile,
+      receiptFile,
       command: process.execPath,
       args: ['-e', 'setInterval(() => {}, 1000)'],
     })
-    const topology = processTopology(identity.pid)
-    assert.deepEqual(topology, { ...identity, processGroupId: identity.pid, sessionId: identity.pid })
+    const detached = verifyDetachedRuntime(identity.pid, receiptFile)
+    assert.equal(detached.ok, true)
+    if (detached.ok) assert.deepEqual(detached.identity, {
+      ...identity,
+      receiptVersion: 4,
+      processGroupId: identity.pid,
+      ...(platform() === 'linux' ? { linuxSessionId: identity.pid } : {}),
+    })
     assert.equal(readFileSync(pidFile, 'utf8'), `${identity.pid}\n`)
-    assert.equal(readFileSync(isolationFile, 'utf8'), `detached-v3 ${identity.pid} ${identity.startToken} ${identity.pid} ${identity.pid}\n`)
+    assert.equal(JSON.parse(readFileSync(receiptFile, 'utf8')).version, 4)
   } finally {
     if (identity && processStartToken(identity.pid) === identity.startToken) {
       try { process.kill(identity.pid, 'SIGTERM') } catch {}
@@ -64,12 +70,12 @@ test('session stop guard reads only the exact governed target and fails closed o
   mkdirSync(root, { recursive: true })
   mkdirSync(runtime, { recursive: true })
   const pidFile = join(runtime, 'shared.pid')
-  const isolationFile = join(runtime, 'shared.scope')
+  const receiptFile = join(runtime, 'shared.detached.json')
   const identity = spawnDetachedRuntime({
     cwd: runtime,
     logFile: join(runtime, 'shared.log'),
     pidFile,
-    isolationFile,
+    receiptFile,
     command: process.execPath,
     args: ['-e', 'setInterval(() => {}, 1000)'],
   })
@@ -93,23 +99,27 @@ test('session stop guard reads only the exact governed target and fails closed o
   let activeDescendantCensuses = 0
   let archivedDescendantCensuses = 0
   let fullSiblingReads = 0
+  let replaceReceiptDuringGuard = false
+  const coldReceipt = { fixture: 'adapter-owned-cold-receipt' }
   const descriptor = {
     key: 'codex-app-server',
     label: 'Codex app-server',
     pidFile,
-    isolationFile,
+    receiptFile,
     residency: async () => ({ healthy: true, referenceIds: [targetThread, 'slow-unrelated-sibling'] }),
-    mutationGuard: async (threadId: string | null) => {
+    mutationGuard: async (threadId: string | null, opts?: { coldReceipt?: unknown }) => {
       assert.equal(threadId, targetThread)
       loadedIdCensuses++
       exactTargetReads++
       activeDescendantCensuses++
       archivedDescendantCensuses++
+      if (replaceReceiptDuringGuard) writeFileSync(receiptFile, '{"version":999}\n')
       return {
         healthy: mode !== 'unknown',
         referenceIds: [targetThread, 'slow-unrelated-sibling'],
         targetTurnPresence: mode === 'active' ? 'active' : mode === 'unknown' ? 'unknown' : 'idle',
         descendantIds: mode === 'descendant' ? ['owned-native-child'] : [],
+        coldTeardownAuthorized: mode === 'descendant' && opts?.coldReceipt === coldReceipt,
         ...(mode === 'unknown' ? { error: 'exact target turn state is unknown' } : {}),
       }
     },
@@ -132,7 +142,7 @@ test('session stop guard reads only the exact governed target and fails closed o
 
     const restoreIdentity = () => {
       writeFileSync(pidFile, `${identity.pid}\n`)
-      writeIsolationStamp(identity.pid, isolationFile)
+      writeDetachedRuntimeReceipt(identity.pid, receiptFile)
     }
     const refuseIdentity = async (name: string, setup: () => void, reason: RegExp) => {
       restoreIdentity()
@@ -144,16 +154,29 @@ test('session stop guard reads only the exact governed target and fails closed o
       assert.equal(processStartToken(targetLeaf.pid!), targetLeafStart, `${name} sends no signal to the target leaf`)
     }
     await refuseIdentity('missing PID', () => rmSync(pidFile, { force: true }), /no readable owner PID/)
-    await refuseIdentity('dead PID', () => writeFileSync(pidFile, '999999999\n'), /no readable process-start identity/)
-    await refuseIdentity('missing scope', () => rmSync(isolationFile, { force: true }), /no matching live detached process-boundary record/)
-    await refuseIdentity('mismatched start', () => writeFileSync(isolationFile, `detached-v3 ${identity.pid} wrong ${identity.pid} ${identity.pid}\n`), /no matching live detached process-boundary record/)
-    await refuseIdentity('arbitrary scope', () => writeFileSync(isolationFile, `fixture ${identity.pid}\n`), /no matching live detached process-boundary record/)
+    await refuseIdentity('dead PID', () => writeFileSync(pidFile, '999999999\n'), /receipt names PID|no readable process-start identity/)
+    await refuseIdentity('missing receipt', () => rmSync(receiptFile, { force: true }), /no matching live detached process-boundary record/)
+    await refuseIdentity('mismatched start', () => {
+      const receipt = JSON.parse(readFileSync(receiptFile, 'utf8'))
+      receipt.startToken = 'wrong'
+      writeFileSync(receiptFile, `${JSON.stringify(receipt)}\n`)
+    }, /no matching live detached process-boundary record/)
+    await refuseIdentity('arbitrary receipt', () => writeFileSync(receiptFile, `fixture ${identity.pid}\n`), /no matching live detached process-boundary record/)
     await refuseIdentity('non-detached topology', () => {
       const pid = targetLeaf.pid!
       const start = processStartToken(pid)!
       writeFileSync(pidFile, `${pid}\n`)
-      writeFileSync(isolationFile, `detached-v3 ${pid} ${start} ${pid} ${pid}\n`)
+      writeFileSync(receiptFile, `${JSON.stringify({
+        version: 4, kind: 'spexcode-detached-runtime', pid, startToken: start, processGroupId: pid,
+        ...(platform() === 'linux' ? { linuxSessionId: pid } : {}),
+      })}\n`)
     }, /no matching live detached process-boundary record/)
+    restoreIdentity()
+
+    replaceReceiptDuringGuard = true
+    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }),
+      /PID\/start\/detached-receipt identity changed during target-scoped mutation guard/)
+    replaceReceiptDuringGuard = false
     restoreIdentity()
 
     for (const [next, reason] of [['unknown', /target turn state is unknown/], ['active', /active turn/], ['descendant', /owned descendants.*owned-native-child/]] as const) {
@@ -161,6 +184,14 @@ test('session stop guard reads only the exact governed target and fails closed o
       await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), reason)
       assert.equal(processStartToken(identity.pid), identity.startToken, `${next} refusal sends no signal to the shared root`)
       assert.equal(processStartToken(targetLeaf.pid!), targetLeafStart, `${next} refusal sends no signal to the target leaf`)
+    }
+    mode = 'descendant'
+    await assert.doesNotReject(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }, { coldReceipt }),
+      'archive may pass an already-proven exact descendant collection to the adapter cold commit')
+    for (const next of ['unknown', 'active'] as const) {
+      mode = next
+      await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }, { coldReceipt }),
+        next === 'unknown' ? /target turn state is unknown/ : /active turn/)
     }
   } finally {
     codexHarness.sharedRuntimes = originalSharedRuntimes
@@ -197,7 +228,7 @@ test('resource report retains the full shared projection and reports its sibling
   let siblingThreadReads = 0
   codexHarness.sharedRuntimes = () => [{
     key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'missing.pid'),
-    isolationFile: join(home, 'missing.scope'),
+    receiptFile: join(home, 'missing.detached.json'),
     residency: async () => { residencyCalls++; return { healthy: true, referenceIds: ['slow-unrelated-sibling'] } },
     probe: async () => {
       siblingThreadReads++
@@ -301,10 +332,10 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     assert.ok(processStartToken(sharedRoot.pid!) && processStartToken(sessionLeaf.pid!), 'shared and leaf fixtures acquired process-start tokens')
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /live sibling thread.*no readable owner PID/)
     writeFileSync(codexAppServerPid(root), '99999999\n')
-    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no readable process-start identity/)
+    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no matching live detached process-boundary record/)
     writeFileSync(codexAppServerPid(root), `${sharedRoot.pid}\n`)
     await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no matching live detached process-boundary record/)
-    writeIsolationStamp(sharedRoot.pid!, codexAppServerIsolation(root))
+    writeDetachedRuntimeReceipt(sharedRoot.pid!, codexAppServerReceipt(root))
     await assert.doesNotReject(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }))
     probe = { healthy: true, references: [] }
     await assert.rejects(() => assertSessionStopSafe(target, null), /no readable session record proves the adapter or leaf owner/)
@@ -342,7 +373,7 @@ test('shared-runtime projection uses live adapter refs and fail-closed process i
     assert.ok(unknownShared?.references?.every((reference) => !reference.protectsControlPlane), 'records stay visible but cannot invent live references')
     assert.ok(unknownShared?.references?.some((reference) => reference.referenceState === 'queued-no-thread'))
     writeFileSync(codexAppServerPid(root), '99999999\n')
-    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /unproven live reference set.*no readable process-start identity/)
+    await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), /no matching live detached process-boundary record/)
     writeFileSync(codexAppServerPid(root), `${sharedRoot.pid}\n`)
     probe = governedProbe(true)
 

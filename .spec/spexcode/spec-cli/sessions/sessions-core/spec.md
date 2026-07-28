@@ -56,6 +56,13 @@ under `related:`, so a change here attributes its drift and eval staleness to th
 (see [[governed-related]]). That several features hold no code of their own is the honest signal that
 `sessions.ts` is a monolith — a future code split into per-feature modules would let each reclaim ownership.
 
+The shared layer also reconciles each live governed record with its adapter's optional native turn-outcome
+observer. It owns observer lifetime across backend replacement and record stop/archive/retirement, but no
+product protocol: subscription and failure mapping remain adapter work ([[harness-adapter]]). Every reported
+failure reaches one record-locked compare-and-set that changes only a live, undeclared `active` record to `error`.
+A declaration that landed first is authoritative, so a late process close, delayed native completion, or
+restart reconciliation cannot overwrite it.
+
 All side-effectful functions in this shared layer enter [[maintenance-lease]] at their lowest common boundary,
 not only at one HTTP caller: create/new (including fallback), send, raw-key input, interrupt, rename, persisted
 sort, lifecycle transition, queue drain, stop/resume/archive/close, and merge dispatch. This makes one durable

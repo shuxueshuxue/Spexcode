@@ -6,6 +6,7 @@ import { inboxCommands, uiCommandsFor, UI_COMMANDS } from './sessionCommands.js'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
+const contextMenu = readFileSync(new URL('./SessionContextMenu.jsx', import.meta.url), 'utf8')
 const sessionWindow = readFileSync(new URL('./SessionWindow.jsx', import.meta.url), 'utf8')
 const timelineChat = readFileSync(new URL('./TimelineChat.jsx', import.meta.url), 'utf8')
 const feed = readFileSync(new URL('./EvalsFeed.jsx', import.meta.url), 'utf8')
@@ -46,6 +47,14 @@ test('archive refresh cannot override a human shelf toggle without a selection t
   assert.match(source, /const selectedArchived = active !== 'new'[\s\S]{0,160}\.archived/)
   assert.match(source, /setShowShelf\(selectedArchived\)[\s\S]{0,100}\}, \[open, active, selectedArchived\]\)/)
   assert.doesNotMatch(source, /setShowShelf\(!!allSessions\.find[\s\S]{0,120}\[open, active, allSessions\]/)
+})
+
+test('close refusals remain visible instead of being swallowed by the background action', () => {
+  assert.match(contextMenu, /const body = await response\.json\(\)\.catch\(\(\) => null\)/)
+  assert.match(contextMenu, /!response\.ok \|\| body\?\.ok === false/)
+  assert.match(contextMenu, /onError\?\.\(body\?\.error \|\| `session close refused/)
+  assert.match(source, /const j = await res\.json\(\)\.catch\(\(\) => null\)/)
+  assert.match(source, /!res\.ok \|\| j\?\.ok === false/)
 })
 
 test('cold archive rows render without paying for a git ops projection', () => {

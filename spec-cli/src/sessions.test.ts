@@ -188,12 +188,12 @@ test('maintenance resume holds its parent ticket after delegated spawn until ada
   const id = `resume-ready-delay-${process.pid}`
   assertIsolatedResumeStore(home, id)
   const sharedDir = join(home, 'shared'); mkdirSync(sharedDir)
-  const sharedPid = join(sharedDir, 'runtime.pid'); const sharedScope = join(sharedDir, 'runtime.scope')
+  const sharedPid = join(sharedDir, 'runtime.pid'); const sharedReceipt = join(sharedDir, 'runtime.detached.json')
   const consumed = join(home, 'delegate-consumed'); const helper = join(home, 'helper.sh')
   const spex = join(process.cwd(), 'bin', 'spex.mjs')
   writeFileSync(helper, `#!/usr/bin/env bash
 set -eu
-${JSON.stringify(process.execPath)} ${JSON.stringify(spex)} internal shared-runtime-spawn ${JSON.stringify(sharedDir)} ${JSON.stringify(join(sharedDir, 'runtime.log'))} ${JSON.stringify(sharedPid)} ${JSON.stringify(sharedScope)} ${JSON.stringify(process.execPath)} -e 'setInterval(() => {}, 1000)'
+${JSON.stringify(process.execPath)} ${JSON.stringify(spex)} internal shared-runtime-spawn ${JSON.stringify(sharedDir)} ${JSON.stringify(join(sharedDir, 'runtime.log'))} ${JSON.stringify(sharedPid)} ${JSON.stringify(sharedReceipt)} ${JSON.stringify(process.execPath)} -e 'setInterval(() => {}, 1000)'
 touch ${JSON.stringify(consumed)}
 `)
   chmodSync(helper, 0o755)
@@ -455,9 +455,9 @@ test('stop revalidates the exact leaf after every shared guard before TERM and K
       }, null, 2)}\n`)
 
       const pidFile = join(home, 'shared.pid')
-      const isolationFile = join(home, 'shared.scope')
+      const receiptFile = join(home, 'shared.detached.json')
       shared = spawnDetachedRuntime({
-        cwd: home, logFile: join(home, 'shared.log'), pidFile, isolationFile,
+        cwd: home, logFile: join(home, 'shared.log'), pidFile, receiptFile,
         command: process.execPath, args: ['-e', 'setInterval(() => {}, 1000)'],
       })
       const leafProgram = signal === 'SIGKILL'
@@ -480,7 +480,7 @@ test('stop revalidates the exact leaf after every shared guard before TERM and K
         }
         return { healthy: true, references: [] }
       }
-      claudeHarness.sharedRuntimes = () => [{ key: `leaf-${signal}`, label: `${signal} leaf fixture`, pidFile, isolationFile, probe }]
+      claudeHarness.sharedRuntimes = () => [{ key: `leaf-${signal}`, label: `${signal} leaf fixture`, pidFile, receiptFile, probe }]
       claudeHarness.cleanupRuntime = async () => {}
       process.kill = ((pid: number, next?: number | NodeJS.Signals) => {
         if (pid === leaf!.pid && next && next !== 0) attempted.push(String(next))
@@ -542,7 +542,7 @@ test('closing a proven-cold archive ignores unrelated shared refs but rejects ta
   }
 
   codexHarness.sharedRuntimes = () => [{
-    key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'shared.pid'), isolationFile: join(home, 'shared.scope'),
+    key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'shared.pid'), receiptFile: join(home, 'shared.detached.json'),
     residency: async () => ({ healthy: true, referenceIds: residentIds }),
     probe: async () => { throw new Error('cold retirement must not enter the full shared-root ownership guard') },
   }]
@@ -677,7 +677,7 @@ test('public close cancels a clean never-launched queue without entering the unr
   }
 
   codexHarness.sharedRuntimes = () => [{
-    key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'shared.pid'), isolationFile: join(home, 'shared.scope'),
+    key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'shared.pid'), receiptFile: join(home, 'shared.detached.json'),
     residency: async () => ({ healthy: true, referenceIds: ['unrelated-unowned-a', 'unrelated-unowned-b'] }),
     probe: async () => { throw new Error('never-launched queue close must not enter the shared-runtime guard') },
   }]

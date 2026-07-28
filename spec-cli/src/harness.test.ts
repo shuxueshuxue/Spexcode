@@ -2,13 +2,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
-import { tmpdir } from 'node:os'
+import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerIsolation, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot } from './layout.js'
-import { processStartToken } from './process-identity.js'
+import { processStartToken, writeDetachedRuntimeReceipt } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
 const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
@@ -68,7 +68,7 @@ const startCodexOwner = (root: string) => spawnDetachedRuntime({
   cwd: root,
   logFile: join(root, 'codex-owner.log'),
   pidFile: codexAppServerPid(root),
-  isolationFile: codexAppServerIsolation(root),
+  receiptFile: codexAppServerReceipt(root),
   command: process.execPath,
   args: ['-e', 'setInterval(() => {}, 1000)'],
 })
@@ -137,11 +137,13 @@ test('codex-headless launch fence joins unique governed ownership and rejects un
     assert.ok(initial)
     const socketStat = statSync(socket)
     assert.deepEqual(initial.proof.generation, {
-      pid: owner.pid,
-      startToken: owner.startToken,
-      processGroupId: owner.pid,
-      sessionId: owner.pid,
-      isolation: `detached-v3 ${owner.pid} ${owner.startToken} ${owner.pid} ${owner.pid}`,
+      identity: {
+        pid: owner.pid,
+        startToken: owner.startToken,
+        receiptVersion: 4,
+        processGroupId: owner.pid,
+        ...(platform() === 'linux' ? { linuxSessionId: owner.pid } : {}),
+      },
       socket: { path: socket, dev: socketStat.dev, ino: socketStat.ino },
     })
     assert.deepEqual(initial.proof.target, {
@@ -212,7 +214,7 @@ const runReplacementArchiveCase = async (response: 'success' | 'error') => {
     if (message.method === 'thread/archive') {
       archiveCalls++
       archived = true
-      writeFileSync(codexAppServerIsolation(root), `replacement generation ${response}\n`)
+      writeFileSync(codexAppServerReceipt(root), `replacement generation ${response}\n`)
       if (response === 'error') throw new Error('archive response lost after commit')
       return {}
     }
@@ -308,7 +310,7 @@ test('Codex archive refuses a shared generation swap during exact target guard b
     if (message.method === 'thread/read') {
       if (!swapped) {
         swapped = true
-        writeFileSync(codexAppServerIsolation(root), `swapped fixture ${process.pid}\n`)
+        writeFileSync(codexAppServerReceipt(root), `swapped fixture ${process.pid}\n`)
       }
       return { thread: { status: { type: 'idle' }, turns: [] } }
     }
@@ -808,7 +810,14 @@ test('Codex cold retirement rejects missing or non-detached shared owner identit
     if (missing && !missing.ok) assert.match(missing.reason, /generation is unproven/)
 
     const start = processStartToken(process.pid)!
-    writeFileSync(codexAppServerIsolation(root), `detached-v3 ${process.pid} ${start} ${process.pid} ${process.pid}\n`)
+    writeFileSync(codexAppServerReceipt(root), `${JSON.stringify({
+      version: 4,
+      kind: 'spexcode-detached-runtime',
+      pid: process.pid,
+      startToken: start,
+      processGroupId: process.pid,
+      ...(platform() === 'linux' ? { linuxSessionId: process.pid } : {}),
+    })}\n`)
     const nonDetached = await codexHarness.coldRetirementPreflight?.({ session: 'cold-identity-session', harnessSessionId: target })
     assert.equal(nonDetached?.ok, false)
     if (nonDetached && !nonDetached.ok) assert.match(nonDetached.reason, /detached.*identity|generation is unproven/)
@@ -857,7 +866,7 @@ test('Codex cold retirement rejects a generation swap after target guard while c
     assert.equal(targetProofResponses, 3, 'loaded-ID and both target descendant responses completed first')
     assert.equal(pendingLists.length, 2, 'active and archived collection responses remain pending')
     await new Promise((resolve) => setTimeout(resolve, 20))
-    writeFileSync(codexAppServerIsolation(root), 'replacement generation while collections pending\n')
+    writeFileSync(codexAppServerReceipt(root), 'replacement generation while collections pending\n')
     for (const pending of pendingLists) pending.resolve({ data: pending.archived ? [{ id: target }] : [], nextCursor: null })
     const result = await retirement
     assert.equal(result?.ok, false)
@@ -983,10 +992,59 @@ test('codex shared probe treats dead PID plus stale socket files as a healthy em
   try {
     const socket = codexAppServerSock(dir)
     writeFileSync(codexAppServerPid(dir), '999999999\n')
-    writeFileSync(codexAppServerIsolation(dir), 'detached-v3 999999999 dead 999999999 999999999\n')
+    writeFileSync(codexAppServerReceipt(dir), 'detached-v3 999999999 dead 999999999 999999999\n')
     writeFileSync(socket, 'stale socket path, no listener\n')
     assert.deepEqual(await codexSharedRuntimeProbe(dir), { healthy: true, references: [] })
   } finally {
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('codex resource probe rejects a missing, wrong, or replaced detached receipt generation', async () => {
+  const dir = mkdtempSync(join(tmpdir(), `spex-codex-resource-generation-${process.pid}-`))
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
+  const socket = codexAppServerSock(dir)
+  let replaceDuringProbe = false
+  let rpcCalls = 0
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') {
+      rpcCalls++
+      if (replaceDuringProbe) writeFileSync(codexAppServerReceipt(dir), '{"version":999}\n')
+      return { data: [], nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    owner = startCodexOwner(dir)
+
+    rmSync(codexAppServerReceipt(dir), { force: true })
+    const missing = await codexSharedRuntimeProbe(dir)
+    assert.equal(missing.healthy, false)
+    assert.match(missing.error || '', /detached receipt\/socket generation is not proven/)
+    assert.equal(rpcCalls, 0, 'missing receipt refuses before reading native references')
+
+    writeDetachedRuntimeReceipt(owner.pid, codexAppServerReceipt(dir))
+    const wrong = JSON.parse(readFileSync(codexAppServerReceipt(dir), 'utf8'))
+    wrong.processGroupId = owner.pid + 1
+    writeFileSync(codexAppServerReceipt(dir), `${JSON.stringify(wrong)}\n`)
+    const mismatched = await codexSharedRuntimeProbe(dir)
+    assert.equal(mismatched.healthy, false)
+    assert.equal(rpcCalls, 0, 'wrong receipt refuses before reading native references')
+
+    writeDetachedRuntimeReceipt(owner.pid, codexAppServerReceipt(dir))
+    replaceDuringProbe = true
+    const replaced = await codexSharedRuntimeProbe(dir)
+    assert.equal(replaced.healthy, false)
+    assert.match(replaced.error || '', /generation changed during ownership probe/)
+    assert.equal(rpcCalls, 1)
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
     if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
     else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
     rmSync(dir, { recursive: true, force: true })
@@ -1033,7 +1091,7 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   assert.match(cmd, /internal shared-runtime-spawn [^\n]* codex app-server --listen "unix:\/\/\$sock"/)
   // the shared per-project daemon runs in the STABLE runtime dir "$dir", NOT the transient worktree — else a
   // later worktree deletion dead-cwds the daemon and every future thread's config load fails with ENOENT.
-  assert.match(cmd, /unset [^\n]*; [^\n]*internal shared-runtime-spawn "\$dir" "\$log" "\$pid" "\$isolation" [^\n]*app-server --listen "unix:\/\/\$sock"/)
+  assert.match(cmd, /unset [^\n]*; [^\n]*internal shared-runtime-spawn "\$dir" "\$log" "\$pid" "\$receipt" [^\n]*app-server --listen "unix:\/\/\$sock"/)
   // ...and it carries NO session identity: it is started by whichever session launched first, serves every
   // later thread, and outlives them all — so an inherited SPEXCODE_SESSION_ID / adapter sessionEnvVar in its
   // env is a stale lie every consumer downstream reads as the acting session (github#76).

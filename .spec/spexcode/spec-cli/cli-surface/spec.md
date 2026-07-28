@@ -80,7 +80,8 @@ has a move:
    interception still fires BEFORE any verb runs ([[guide]]'s safety contract: probing `session new`
    or `session watch` with `--help` must never start the verb). A noun-verb probe such as
    `spex session wait --help` answers with that VERB's exact usage, projected from the same definition
-   the bare `spex session` drawer assembles; exact help never carries a copied second manual.
+   the bare `spex session` drawer assembles; exact help never carries a copied second manual. Shared
+   selector grammar and project-bound write warnings follow the relevant verb into that projection.
 3. `spex guide [topic]` — the skill layer ([[guide]]): workflows, file formats, settings. **help
    answers "what do I type", guide answers "how do I work".**
 

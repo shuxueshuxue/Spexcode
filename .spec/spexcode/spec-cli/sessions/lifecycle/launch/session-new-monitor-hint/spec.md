@@ -31,8 +31,9 @@ new primitive.
 **Exact noun-verb help.** `spex session <verb> --help` is intercepted before dispatch and prints only that
 verb's usage and behaviour. The full `spex session` / `spex help session` drawer remains intact. Both views
 are rendered from one shared session-help definition, so wait's edge semantics, watch's never-exit warning,
-and send's raw-key warning cannot drift between a drawer manual and copied verb manuals. Existing session
-verbs and spellings keep their behaviour; this is a help projection change only.
+send's raw-key warning, selector grammar, and project-bound write warning cannot drift between a drawer
+manual and copied verb manuals. Existing session verbs and spellings keep their behaviour; this is a help
+projection change only.
 
 **The successful-create receipt.** After [[launch]] returns the new session record, `spex session new`
 prints the bare, parseable session **JSON to STDOUT** exactly as before, then prints a concise receipt to

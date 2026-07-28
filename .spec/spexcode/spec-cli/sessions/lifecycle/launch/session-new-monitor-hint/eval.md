@@ -11,7 +11,8 @@ scenarios:
       Every probe exits 0 without running its verb and prints only that verb's exact usage/behaviour from
       the shared session help definition, not the repeated full drawer. Send keeps plain text plus unstable
       last-resort raw keys, wait keeps its edge-triggered exit semantics, new explains launch inputs, and
-      every entry points back to the help map/guide. Bare `spex session` remains the complete compatible drawer.
+      selector/write entries keep the shared SEL grammar/project-bound safety notes. Every entry points back
+      to the help map/guide. Bare `spex session` remains the complete compatible drawer.
     code: spec-cli/src/help.ts
     related: spec-cli/src/cli.ts
   - name: hint-names-monitor-and-comm

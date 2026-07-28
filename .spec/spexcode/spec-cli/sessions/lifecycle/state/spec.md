@@ -136,6 +136,19 @@ So resume never itself makes the agent work; the `merge` dispatch, which resumes
 so the dispatch hits a live one, then sends the merge prompt — and THAT prompt is what flips the lifecycle to
 `active` (and clears the now-obsolete proposal) through mark-active.
 
+Launch handoff is not proof that resume restored liveness. The resolved harness adapter supplies a bounded
+readiness fence. Resume persists an internal launch-readiness-pending fence while every public record, list,
+API, graph, resources, settings, and timeline projection remains the exact pre-resume stopped/offline state. After the adapter
+revalidates the same runtime, target reference, and unique governed owner across that durable boundary, one
+final record write clears the pending fence and publishes `stopped:false` plus the real resting lifecycle
+transition exactly once. False, throw, timeout, or stale-pending recovery retains/restores the exact original
+lifecycle, proposal, and note with no transition event, leaving an offline session that can be retried. Thus
+no stale readiness sample or transient `active` to `idle` candidate can become public online state. The frozen
+lifecycle and proposal must be members of their closed semantic enums before any public projection accepts the
+fence; an unknown string is corrupt/unknown on every surface. A valid pending row always carries offline
+liveness and an offline compact display without running live reconciliation, including defensive readings of
+an `active`/`idle`, `stopped:false` original while candidate runtime is already live.
+
 **The resume guard — restore-on-alive must be impossible.** Relaunch is a *kill-then-respawn*, so it destroys
 a running agent's in-flight work the instant the agent is actually alive. That was the incident's kill-shot:
 the board lied (a live worker read `offline`), the human hit relaunch, and live claude processes died mid-task.
@@ -193,6 +206,12 @@ refuses (an unreadable record, a retired session — [[sessions-core]]) says so 
 `governed` — they serve any agent, keeping their once-per-session sentinel/ledger as sibling files in the same
 global session dir (created on demand even for a session with no `session.json`). So board state is a managed-
 session concern; spec-awareness is universal.
+
+The manifest dispatcher acquires one [[maintenance-lease]] ticket before invoking ANY handler, including
+spec-discipline handlers: their sentinel/ledger writes are still side effects even though they do not mutate
+board lifecycle. During draining/active maintenance every manifest handler is withheld with structured
+`maintenance_active` and zero handler side effect. Only non-hook reads remain open. Once admitted, one dispatcher
+ticket spans the complete ordered handler run and is released on every exit.
 
 - **`UserPromptSubmit` + `PreToolUse` → one `mark-active` hook**: it writes **`asking`** on an
   **AskUserQuestion** (the question → the note), else **`active`** — the freshness signal that also flips

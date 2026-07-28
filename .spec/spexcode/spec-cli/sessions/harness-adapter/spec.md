@@ -216,6 +216,25 @@ surface:
   (`nohup` did not survive the real Codex Node launcher resetting signal behavior). Its PID/start and observed
   process-group/session are recorded, then re-read live by teardown; an artifact alone never proves isolation.
   Killing the pane that happened to launch the daemon therefore cannot HUP unrelated turns.
+  Shared-runtime spawn also acquires [[maintenance-lease]] admission. During active maintenance it is allowed
+  only by consuming the resume ticket's opaque one-use delegated capability, bound to that live ticket's
+  epoch/session/operation and inherited outside argv/logs; forged, stale, completed, mismatched, and replayed
+  delegates refuse before spawn. A direct launch, fallback, or queue drain never receives the lease bearer or
+  authority to start a shared root. Launch acceptance and launch readiness are separate adapter facts. The
+  optional `launchReady` seam returns an adapter-owned readiness fence, not a boolean: its immutable proof names
+  the runtime/reference facts that made the launched session addressable, and its validator re-proves those same
+  facts after product code crosses a durable internal pending boundary. Public readers project the exact
+  pre-resume stopped/offline record throughout that validation; only a successful recheck clears pending and
+  publishes `stopped:false`. Adapters without it retain the existing
+  bounded liveness proof and recheck. A missing, timed-out, or invalidated fence is a launch failure, never a
+  successful handoff. Codex-headless readiness freezes one exact live detached shared-root PID/start/process-
+  group/session/isolation/socket generation, the loaded target thread, and its unique governed record owner.
+  Ownership is joined from every governed record whose adapter declares that shared-runtime descriptor; exactly
+  one record may claim the target thread and it must be the session being resumed. The loaded-ID set establishes
+  reference state but cannot establish record ownership. The post-pending validator repeats the full generation,
+  loaded-reference, and owner join: an unload, restart, owner collision, or reassignment retains/restores the
+  original stopped/offline projection without a false transition. This launch fence does not replace steady-state headless liveness: once committed, a sleeping
+  headless conversation remains record-backed.
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **pane-title semantics** (`paneTitleIsSelfSummary`) — whether the harness's tmux pane title IS the agent's

@@ -47,7 +47,17 @@ app-server remains the liveness address only when it can accept another delivery
 The session record is the liveness address: while it exists and is not explicitly stopped, the adapter reports
 `online` regardless of the empty pane or process probes. `headless: true` keeps it out of the dashboard launcher
 picker by default and the note conversation is the console trunk. Human `stop` tears down the session runtime
-and marks the retained record stopped, so it reads `offline` until resume clears the marker. Resume is
-deliberately degraded to the no-TUI form: `resumeArg` is empty because the durable thread already lives in the
-shared server and there is no TUI to reattach or restart. Closing remains the terminal operation that removes
-the record, worktree, branch, pane, and shared runtime references owned by the session.
+and marks the retained record stopped, so it reads `offline` until a proven resume clears the marker. Resume is
+the no-TUI form: `resumeArg` is empty because there is no TUI to reattach, but an absent shared server must be
+recreated through the canonical delegated spawn before the record can return online. The adapter's launch
+readiness is stricter than its steady-state record liveness: it proves one unchanged exact detached-v3
+PID/start/process-group/session/isolation/socket generation, the target's existing thread loaded under that
+shared root, and exactly one governed record owner for that thread across every adapter record sharing the
+descriptor. That owner must be the current SpexCode session; a deduplicated loaded-ID set is never ownership
+evidence. The adapter returns those facts as one readiness fence. Resume durably records an internal pending
+candidate only while the parent maintenance ticket is still live; every public projection continues to expose
+the exact stopped/offline original. The same fence then repeats the complete generation/reference/owner proof
+before one final write clears pending and publishes online state. An unload, shared-root restart,
+duplicate/reassigned owner, refused helper, bounded timeout, or stale pending recovery retains/restores the
+original record without a false lifecycle event and returns non-success. Closing remains the terminal
+operation that removes the record, worktree, branch, pane, and shared runtime references owned by the session.

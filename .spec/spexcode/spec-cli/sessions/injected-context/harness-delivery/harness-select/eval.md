@@ -32,9 +32,10 @@ scenarios:
       Materialize with `harnesses` ["claude","codex"], confirm codex artifacts exist, then set `harnesses` to
       ["claude"] and re-materialize. Inspect codex's and claude's artifacts and any user prose in AGENTS.md.
     expected: >-
-      Codex's products are PRUNED — its AGENTS.md <spexcode> block stripped, its .codex/hooks.json shim and
-      .codex/skills removed, its global trust block gone — while Claude's artifacts stay intact. Any user prose
-      outside the AGENTS.md managed block is preserved; no .spec data is touched.
+      Codex's tree-local products are PRUNED — its AGENTS.md <spexcode> block and .codex/skills disappear —
+      while Claude's artifacts stay intact. Project-scoped .codex/hooks.json and trust may remain installed,
+      but the tree's final allowlist omits codex and a real codex dispatch is a no-op. Any user prose outside
+      the AGENTS.md managed block is preserved; no .spec data is touched.
   - name: selection-edit-self-heals
     tags: [cli]
     description: >-
@@ -61,9 +62,9 @@ scenarios:
     expected: >-
       Checkout method changes nothing: the candidate reads its own codex selection and materializes
       successfully in both shapes. Each tree keeps only its selected local artifacts and its own filter payload;
-      a later sibling materialize cannot rewrite them. Shared root wiring is the union of successful registered
-      tree claims, so one tree cannot erase a sibling's Codex hook/trust, while dispatch in an unselected tree is
-      a no-op. Git status/index keep host prose honest and no user global ignore configuration is replaced.
+      a later sibling materialize cannot rewrite them. Project-scoped Codex transport survives a sibling
+      materialize, while the final per-tree allowlist makes dispatch in an unselected tree a no-op. Git
+      status/index keep host prose honest and no user global ignore configuration is replaced.
 ---
 # eval.md — harness-select
 

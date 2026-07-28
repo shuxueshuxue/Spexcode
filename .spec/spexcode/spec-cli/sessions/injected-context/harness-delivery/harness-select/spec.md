@@ -51,11 +51,11 @@ harness event through dispatch.sh materializes nothing at all. Proven
 end-to-end (through the real CLI + dispatch.sh) in `materialize.test.ts`.
 
 Selection has a back-edge, and it is part of policy P under the forgetting law ([[harness-delivery]]).
-`materialize` write()s the SELECTED harnesses, and the erase phase (which sweeps ALL harnesses by identity
-stamp) forgets the rest — so NARROWING `harnesses` prunes the dropped harness's products on the next
-materialize:
-its managed contract block, generated shim, trust, skill/agent files, and the emptied dirs themselves — while
-the user's own prose and `.spec` data are never touched. And that next materialize needs no human: the
+`materialize` writes the SELECTED harnesses, and the erase phase forgets the rest of that tree's semantic
+products — so NARROWING `harnesses` prunes the dropped harness's managed contract block, tree-local shim,
+skills/agents and emptied dirs on the next materialize. Project-scoped transport/trust may remain installed
+but is inert because the final allowlist no longer names that dispatch family. The user's own prose and `.spec`
+data are never touched. And that next materialize needs no human: the
 freshness key
 (`hp_config_hash`, [[harness-delivery]]) covers the persisted policy files (that tree's
 `spexcode.json` + `spexcode.local.json`), so a selection edit alone moves the key, and the very next
@@ -63,8 +63,7 @@ git-native anchor ([[commit-surgery]] — the commit/checkout/merge that carries
 `spex materialize`) re-materializes under the new set — a selection change SELF-HEALS through the product
 path, never via a harness event and never waiting for an unrelated `.plugins` edit.
 
-Selection is tree-local; shared harness wiring is not last-writer-owned. A successful materialize publishes
-one claim in that tree's existing runtime slot. The project reconciles shared root hooks/trust from the union
-of claims belonging to Git-registered worktrees, retaining a registered missing/locked tree's last successful
-claim until Git itself removes that registration. Dispatch reads the current tree slot's selected ids, so a
-shared Codex shim retained for a sibling cannot activate hooks in a tree that did not select Codex.
+Selection is tree-local; project-scoped transport is not selection state. A successful materialize publishes
+its dispatch-family allowlist once, at the end, in that tree's existing runtime slot. A root Codex shim/trust
+installed from any tree may remain dormant until project uninstall, while dispatch reads the current tree's
+allowlist before admission, so retained transport cannot activate hooks in a tree that did not select Codex.

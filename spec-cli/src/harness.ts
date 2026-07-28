@@ -16,7 +16,7 @@ import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless } from '.
 import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath } from './layout.js'
 import { git } from './git.js'
 import { shQuote } from './sh.js'
-import { detachedRuntimeGenerationToken, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from './process-identity.js'
+import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from './process-identity.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -440,6 +440,7 @@ export const codexAppServerSock = (dir = runtimeRoot()) => {
 }
 export const codexAppServerPid = (dir = runtimeRoot()) => join(dir, 'codex-app-server.pid')
 export const codexAppServerReceipt = (dir = runtimeRoot()) => join(dir, 'codex-app-server.detached.json')
+const codexAppServerLegacyScope = (dir = runtimeRoot()) => join(dir, 'codex-app-server.scope')
 type CodexRuntimeGenerationProof = Readonly<{
   identity: VerifiedDetachedRuntime
   socket: Readonly<{ path: string; dev: number; ino: number }>
@@ -462,6 +463,18 @@ const codexRuntimeGenerationToken = (proof: CodexRuntimeGenerationProof) =>
 function codexRuntimeGeneration(dir = runtimeRoot()): string | null {
   const proof = codexRuntimeGenerationProof(dir)
   return proof ? codexRuntimeGenerationToken(proof) : null
+}
+
+function codexMutationGeneration(dir = runtimeRoot()): string | null {
+  const current = codexRuntimeGeneration(dir)
+  if (current) return current
+  let pid: number
+  try {
+    pid = Number(readFileSync(codexAppServerPid(dir), 'utf8').trim())
+    if (!Number.isInteger(pid) || pid <= 0 || !statSync(codexAppServerSock(dir)).isSocket()) return null
+  } catch { return null }
+  if (!migrateLegacyDetachedRuntimeReceipt(pid, codexAppServerLegacyScope(dir), codexAppServerReceipt(dir))) return null
+  return codexRuntimeGeneration(dir)
 }
 
 // the spex launcher (bin/spex.mjs), baked into the codex launch script (mirrors materialize.ts's SPEX) so
@@ -1138,7 +1151,7 @@ function codexThreadCollection(sock: string, params: Record<string, unknown>): P
 }
 
 async function codexTargetMutationGuard(threadId: string, dir = runtimeRoot()): Promise<SharedRuntimeMutationGuard> {
-  const generationBefore = codexRuntimeGeneration(dir)
+  const generationBefore = codexMutationGeneration(dir)
   if (!generationBefore) return { healthy: false, referenceIds: [], targetTurnPresence: 'unknown', descendantIds: [], error: 'Codex shared app-server generation is unproven' }
   const sock = codexAppServerSock(dir)
   const [loaded, activeDescendants, archivedDescendants] = await Promise.all([
@@ -1195,7 +1208,7 @@ const isCodexColdPlan = (value: unknown): value is CodexColdPlan => {
 }
 
 async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expectedGeneration?: string): Promise<CodexColdPreflight> {
-  const generation = expectedGeneration ?? codexRuntimeGeneration(dir)
+  const generation = expectedGeneration ?? codexMutationGeneration(dir)
   if (!generation || codexRuntimeGeneration(dir) !== generation)
     return { ok: false, reason: 'Codex shared app-server generation is unproven or changed before subtree census' }
   const sock = codexAppServerSock(dir)

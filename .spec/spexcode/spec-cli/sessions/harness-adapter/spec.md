@@ -220,6 +220,9 @@ surface:
   `detached-v3` PID/start whose observed process group and session, isolation stamp, and socket inode all agree.
   Unknown/active subtree state, ambiguous ancestry, or a generation change fails closed, and compensating mutation
   is permitted only on the unchanged original generation.
+  The adapter receipt also owns post-cold compensation outside the native RPC boundary: until the product commits
+  the archive record and final offline proof, a failure returns the same receipt to `restoreRuntime`, which restores
+  all and only its originally-active subtree members. A receipt-free resume remains the normal parent-only restore.
   The Codex app-server is spawned
   as a detached child in its own operating-system process group and session, not merely wrapped in `nohup`
   (`nohup` did not survive the real Codex Node launcher resetting signal behavior). Its PID/start and observed

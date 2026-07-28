@@ -2568,7 +2568,7 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
     writeRecord({ ...latest, archived: true, stopped: true, coldProof: coldProofFor(latest) })
   } catch (error) {
     if (coldCommitted) {
-      const restored = await h.restoreRuntime?.(wt.rec)
+      const restored = await h.restoreRuntime?.(wt.rec, preflight?.ok ? preflight.receipt : undefined)
       if (restored && !restored.ok) {
         const current = readRecord(id)
         if (current) writeRecord({ ...current, archived: false, stopped: true, coldProof: null, adapterRecovery: `restore-runtime:${restored.reason}` })

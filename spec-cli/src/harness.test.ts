@@ -473,7 +473,11 @@ test('Codex archive cold-tears down the exact active and archived transitive des
     mkdirSync(root, { recursive: true })
     owner = startCodexOwner(root)
 
-    assert.deepEqual(await codexHarness.coldRuntime?.({ session: 'owned-subtree-session', harnessSessionId: target }), { ok: true })
+    const rec = { session: 'owned-subtree-session', harnessSessionId: target }
+    const preflight = await codexHarness.coldPreflight?.(rec)
+    assert.equal(preflight?.ok, true)
+    if (!preflight?.ok) throw new Error('owned subtree fixture did not obtain its adapter receipt')
+    assert.deepEqual(await codexHarness.coldRuntime?.(rec, preflight.receipt), { ok: true })
     assert.deepEqual(new Set(threadReads), new Set([target, activeChild, grandchild]),
       'only loaded members of the exact target subtree are read')
     assert.deepEqual(mutations, [
@@ -491,6 +495,22 @@ test('Codex archive cold-tears down the exact active and archived transitive des
     ], 'cold archive preserves every native conversation history')
     assert.deepEqual(await codexHarness.coldRetirementPreflight?.({ session: 'owned-subtree-session', harnessSessionId: target }),
       { ok: true, alreadyCold: true })
+    assert.deepEqual(await codexHarness.restoreRuntime?.(rec, preflight.receipt), { ok: true },
+      'post-cold publication compensation accepts only the original adapter receipt')
+    assert.deepEqual(mutations, [
+      `archive:${grandchild}`,
+      `archive:${activeChild}`,
+      `archive:${target}`,
+      `unarchive:${target}`,
+      `unarchive:${activeChild}`,
+      `unarchive:${grandchild}`,
+    ])
+    assert.deepEqual([...collection], [
+      [target, 'active'],
+      [activeChild, 'active'],
+      [grandchild, 'active'],
+      [archivedChild, 'archived'],
+    ], 'outer compensation restores all and only the subtree members that were active before archive')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await stopCodexOwner(owner)

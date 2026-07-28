@@ -72,6 +72,12 @@ provably cannot land.`, ['selector', 'project-bound']],
     archive: ['spex session archive <SEL>', 'Cold-archive it: exact leaf/runtime stopped, worktree and conversation kept.', ['selector']],
     unarchive: ['spex session unarchive <SEL>', 'Deprecated compatibility spelling: same behavior as resume, relaunching the same conversation.', ['selector']],
     close: ['spex session close <SEL>', 'Retire the session and its worktree.', ['selector', 'project-bound']],
+    maintain: [[
+      'spex session maintain --allow-stop <SEL> [--allow-resume <SEL>[:force]] … -- <command> [args…]',
+      'spex session maintain --status',
+    ], `Hold one project maintenance lease around a bounded operator command. Only the exact one-shot
+stop/resume plan is brokered; ordinary session writes stay closed. The bearer never prints or enters
+argv/environment. --status is the sanitized read-only lease view.`, ['selector', 'project-bound']],
     done: ['spex session done --propose merge|nothing|close [--note T]', 'Declare your own work committed and stop.'],
     park: ['spex session park --note <what-you-await>', 'Declare that a real background task will wake your own session.'],
     ask: ['spex session ask --note <your-question>', 'Declare that your own session is stopped on the human and resumes on reply.'],
@@ -82,12 +88,12 @@ must NEVER run it in a turn: use show --capture / send. LOCAL-only (fails loud o
 
 const SESSION_HELP_GROUPS = [
   { title: 'Manager verbs (dispatch, monitor, land)', verbs: ['new', 'ls', 'resources', 'watch', 'wait', 'review', 'merge'] },
-  { title: 'Control another session', verbs: ['send', 'interrupt', 'rename', 'show', 'resume', 'stop', 'archive', 'unarchive', 'close'] },
+  { title: 'Control another session', verbs: ['send', 'interrupt', 'rename', 'show', 'resume', 'stop', 'archive', 'unarchive', 'close', 'maintain'] },
   { title: 'Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on)', verbs: ['done', 'park', 'ask'] },
   { title: 'Human escape hatch', verbs: ['attach'] },
 ] as const
 
-const SESSION_WRITE_NOTE = `Manager verbs that WRITE (send/interrupt/rename/resume/stop/close/merge) are PROJECT-BOUND: a backend serving
+const SESSION_WRITE_NOTE = `Manager verbs that WRITE (send/interrupt/rename/resume/stop/close/maintain/merge) are PROJECT-BOUND: a backend serving
 another project's repo refuses loudly — name the target with --api <url> to drive it on purpose.`
 
 function indent(text: string, spaces: number): string {

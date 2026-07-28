@@ -42,3 +42,10 @@ support, not a second actor on the socket, so the single-actor rule survives int
 **Offline is loud.** A selector that resolves to a session with no live tmux (offline/closed-out runtime)
 errors distinctly — naming `reopen` as the repair — because a dead attach must never read as an empty
 screen.
+
+**Maintenance lifetime.** A new Spex attach obtains [[maintenance-lease]]'s `attach` ticket before it probes or
+opens tmux and holds that ticket until the foreground tmux client exits; callback cleanup releases it on detach,
+session end, or throw. Draining/active maintenance refuses before a tmux client is created. A Spex attach already
+alive when acquisition closes admission remains a live preceding-epoch ticket and must exit before activation.
+A human who invoked raw `tmux attach` or a native Codex client bypassed Spex and is deliberately outside this
+barrier; the maintenance runbook must census and close that native admission separately.

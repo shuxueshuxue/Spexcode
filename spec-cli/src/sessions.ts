@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, openSync, closeSync, unlinkSync, writeSync } from 'node:fs'
@@ -7,14 +7,15 @@ import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
-import { adapterLoadedReferenceState, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { adapterLoadedReferenceState, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
-import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, envSessionId, type RawRecord } from './layout.js'
+import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
 import { processStartToken } from './process-identity.js'
+import { maintenanceBrokerDescriptors, runSessionOperation, runSessionOperationSync, SessionMaintenanceError, type Authorization, type MaintenanceTicket } from './session-maintenance.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
 // SOURCE OF TRUTH is an untracked record (`session.json`) in a per-user GLOBAL store keyed by the harness
@@ -107,8 +108,8 @@ const rvEnv = (id: string, harness = HARNESS) => {
 // for the existing importers (client.ts) that read it off the sessions module.
 export type { DispatchResult }
 
-export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'parked' | 'error' | 'asking' | 'queued'
-export type Proposal = 'merge' | 'nothing' | 'close'
+export type Lifecycle = SessionLifecycle
+export type Proposal = SessionProposal
 // `corrupt` and `retired` are the two RECORD-INTEGRITY readings — neither a lifecycle the agent authored nor a
 // liveness the runtime probed, but the honest answer when the record itself can no longer carry either: its
 // bytes don't parse, or the worktree it names is gone. They exist so such a row can never silently vanish.
@@ -248,9 +249,10 @@ export type SessRec = {
   launcher: string | null   // the launcher profile this session launches under ([[launcher-select]]); null only for old records predating launchers
   launchCmd: string | null  // the RESOLVED base launcher command pinned at creation ([[launcher-select]] resume-launcher-pin); null → old record → fall back to the launcher name / ambient
   launchOwner: string | null // stable public-backend authority while queued; null for active/legacy records
+  launchReadinessPending?: LaunchReadinessPending | null // internal resume candidate; every public reader projects `original` until one final publish
 }
-const LIFECYCLES = new Set<Lifecycle>(['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'])
-const PROPOSALS = new Set<Proposal>(['merge', 'nothing', 'close'])
+type LaunchReadinessOriginal = Pick<SessRec, 'status' | 'proposal' | 'note' | 'stopped' | 'archived' | 'coldProof' | 'adapterRecovery'>
+type LaunchReadinessPending = { version: 1; startedAt: number; original: LaunchReadinessOriginal }
 export const OWNED_QUEUE_RAW_STATUS = 'launch-queued'
 
 // @@@ stable launch authority - the supervisor injects its PUBLIC proxy URL into every replaceable child.
@@ -284,7 +286,11 @@ function readRecord(id: string): SessRec | null {
   const entry = readAliasedRecordEntry(id)
   if (entry.kind === 'absent') return null
   if (entry.kind === 'corrupt') throw new SessionRecordUnusable('corrupt', id, corruptReason(entry))
-  return fromRaw(entry.raw)
+  try { return fromRaw(entry.raw) }
+  catch (error) {
+    throw new SessionRecordUnusable('corrupt', id,
+      `session record is unreadable: ${sessionRecordPath(id)} — ${error instanceof Error ? error.message : String(error)}. The file is kept as-is; nothing will rewrite it.`)
+  }
 }
 // @@@ SessionRecordUnusable - the record exists but cannot carry state, for one of two reasons, and BOTH must
 // stop a writer rather than let it invent one. `corrupt`: the bytes don't parse, so writing would DESTROY the
@@ -413,12 +419,17 @@ function hasValidColdProof(rec: SessRec): boolean {
 // claude, absent pin → null) are unit-auditable without a store on disk.
 export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
   const ownedQueue = raw.status === OWNED_QUEUE_RAW_STATUS
-  const status = ownedQueue ? 'queued' : LIFECYCLES.has(raw.status as Lifecycle) ? raw.status as Lifecycle : 'active'
+  const status = ownedQueue ? 'queued' : isSessionLifecycle(raw.status) ? raw.status : 'active'
   const launchOwner = ownedQueue ? raw.launch_owner?.trim() : null
   if (ownedQueue && !launchOwner) throw new Error(`owned queue record '${raw.session_id}' has no launch_owner`)
-  const proposal = raw.proposal && PROPOSALS.has(raw.proposal as Proposal) ? raw.proposal as Proposal : null
+  const proposal = isSessionProposal(raw.proposal) ? raw.proposal : null
   const sk = raw.sortkey
   const sortKey = typeof sk === 'number' && Number.isFinite(sk) ? sk : null
+  const pendingRaw = rawLaunchReadinessOriginal(raw)
+  const pendingStatus = pendingRaw && isSessionLifecycle(pendingRaw.status) ? pendingRaw.status : null
+  if (pendingRaw && !pendingStatus) throw new Error(`session '${raw.session_id}' launch readiness original has invalid lifecycle '${pendingRaw.status}'`)
+  const pendingProposal = pendingRaw && isSessionProposal(pendingRaw.proposal) ? pendingRaw.proposal : null
+  if (pendingRaw?.proposal && !pendingProposal) throw new Error(`session '${raw.session_id}' launch readiness original has invalid proposal '${pendingRaw.proposal}'`)
   return {
     session: raw.session_id, governed: !!raw.governed, worktreePath: raw.worktree_path || '', branch: raw.branch || null,
     node: raw.node || null, title: raw.title || null, name: raw.name || null, parent: raw.parent || null,
@@ -432,7 +443,42 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     launcher: raw.launcher || null,     // records written before launchers → null → old-record fallback
     launchCmd: raw.launch_cmd || null,  // records written before the pin → null → fall back to launcher name / ambient
     launchOwner: launchOwner || null,
+    launchReadinessPending: pendingRaw ? {
+      version: 1,
+      startedAt: (raw.launch_readiness_pending as { startedAt: number }).startedAt,
+      original: {
+        status: pendingStatus!, proposal: pendingProposal, note: pendingRaw.note || null,
+        stopped: pendingRaw.stopped, archived: pendingRaw.archived,
+        coldProof: pendingRaw.cold_proof || null, adapterRecovery: pendingRaw.adapter_recovery || null,
+      },
+    } : null,
   }
+}
+
+function publicRecord(rec: SessRec): SessRec {
+  const original = rec.launchReadinessPending?.original
+  return original ? { ...rec, ...original } : rec
+}
+
+function launchReadinessPending(original: SessRec): LaunchReadinessPending {
+  return {
+    version: 1,
+    startedAt: Date.now(),
+    original: {
+      status: original.status,
+      proposal: original.proposal,
+      note: original.note,
+      stopped: original.stopped,
+      archived: original.archived,
+      coldProof: original.coldProof ?? null,
+      adapterRecovery: original.adapterRecovery ?? null,
+    },
+  }
+}
+
+function restoreLaunchReadinessOriginal(rec: SessRec): SessRec {
+  const original = rec.launchReadinessPending?.original
+  return original ? { ...rec, ...original, launchReadinessPending: null } : rec
 }
 // @@@ the ONE record writer - every field of session.json is produced HERE, by serializing the typed record,
 // and lands by atomic replace (temp file in the same dir, then rename). Nothing else — no hook, no shell, no
@@ -485,6 +531,19 @@ function writeRecord(rec: SessRec): void {
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
     launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
+    launch_readiness_pending: rec.launchReadinessPending ? {
+      version: 1,
+      startedAt: rec.launchReadinessPending.startedAt,
+      original: {
+        status: rec.launchReadinessPending.original.status,
+        proposal: rec.launchReadinessPending.original.proposal ?? '',
+        note: rec.launchReadinessPending.original.note ?? '',
+        stopped: rec.launchReadinessPending.original.stopped,
+        archived: rec.launchReadinessPending.original.archived,
+        cold_proof: rec.launchReadinessPending.original.coldProof ?? '',
+        adapter_recovery: rec.launchReadinessPending.original.adapterRecovery ?? '',
+      },
+    } : '',
   }
   const dir = sessionStoreDir(rec.session)
   mkdirSync(dir, { recursive: true })
@@ -492,12 +551,16 @@ function writeRecord(rec: SessRec): void {
   const tmp = join(dir, `.session.json.${process.pid}.tmp`)
   writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n')
   renameSync(tmp, path)   // atomic within the dir: a concurrent reader sees the old record or the new one
-  // session.json is only the CURRENT projection. Persist each moved lifecycle value before this writer
-  // returns, so a later write cannot erase a declaration note between observer samples. New-record genesis
-  // stays with superviseTimeline; metadata-only writes do not manufacture status events.
-  if (rec.governed && previous && (previous.status !== rec.status
-    || previous.proposal !== rec.proposal || previous.note !== rec.note)) {
-    recordStatus(rec.session, rec.status, rec.proposal, rec.note)
+  // session.json normally is the current public projection. A launch-readiness candidate is the sole internal
+  // exception: its frozen original remains public until validation clears the fence. Persist each PUBLIC moved
+  // lifecycle value before this writer returns, so a later write cannot erase a declaration note between
+  // observer samples. New-record genesis stays with superviseTimeline; metadata-only writes do not manufacture
+  // status events.
+  const previousPublic = previous ? publicRecord(previous) : null
+  const nextPublic = publicRecord(rec)
+  if (rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
+    || previousPublic.proposal !== nextPublic.proposal || previousPublic.note !== nextPublic.note)) {
+    recordStatus(rec.session, nextPublic.status, nextPublic.proposal, nextPublic.note)
   }
 }
 
@@ -815,12 +878,12 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
 // any state (queued/live/offline) since it edits the on-disk record, not the live tmux. Unknown id → false
 // (the route answers 404). The frontend's right-click rename is the sole caller today.
 export async function renameSession(id: string, name: string): Promise<boolean> {
-  return withRecordLock(id, async () => {
+  return runSessionOperation({ op: 'rename', sessionId: id }, () => withRecordLock(id, async () => {
     const wt = await findWorktree(id)
     if (!wt) return false
     writeRecord({ ...wt.rec, name: name.trim() || null })
     return true
-  })
+  }))
 }
 
 // @@@ setSessionSort - set (or clear) a session's drag-reorder pseudo-time ([[session-reorder]]), parallel
@@ -828,12 +891,12 @@ export async function renameSession(id: string, name: string): Promise<boolean> 
 // shows on every surface (all sort by `sortKey ?? created`). A null key CLEARS it, dropping the row back to
 // its `created` slot. Works in any state since it edits the on-disk record. Unknown id → false (route 404s).
 export async function setSessionSort(id: string, key: number | null): Promise<boolean> {
-  return withRecordLock(id, async () => {
+  return runSessionOperation({ op: 'sort', sessionId: id }, () => withRecordLock(id, async () => {
     const wt = await findWorktree(id)
     if (!wt) return false
     writeRecord({ ...wt.rec, sortKey: key != null && Number.isFinite(key) ? key : null })
     return true
-  })
+  }))
 }
 
 // the session's full ORIGINATING prompt (what it was asked to do), or null if none was recorded. A record we
@@ -863,16 +926,16 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
   ])
   // Freeze one record snapshot for both the census join and row projection. A second full read after an awaited
   // probe could pair record A with thread identity B and accidentally treat a missing census entry as clean.
-  const snapshots = new Map<string, { entry: ReturnType<typeof readAliasedRecordEntry>; rec: SessRec | null }>()
+  const snapshots = new Map<string, { entry: PublicRecordEntry; rec: SessRec | null }>()
   for (const id of ids) {
     try {
-      const entry = readAliasedRecordEntry(id)
+      const entry = readPublicRecordEntry(id)
       snapshots.set(id, { entry, rec: entry.kind === 'ok' ? fromRaw(entry.raw) : null })
     } catch { /* guardSession below preserves the last-known row for a transient read failure */ }
   }
   // Only archived adapter records need the resident-ID join. If there are none, this read path performs zero
   // control-plane probes; resources still owns the full turn/read probe for its detailed report.
-  const censusRecords = [...snapshots.values()].flatMap(({ rec }) => rec && rec.governed && rec.archived && rec.harnessSessionId
+  const censusRecords = [...snapshots.values()].flatMap(({ entry, rec }) => entry.kind === 'ok' && entry.liveness === null && rec && rec.governed && rec.archived && rec.harnessSessionId
     ? [{ ...rec, harness: rec.harness || defaultHarness.id }]
     : [])
   const residentCensus = censusRecords.length ? await adapterLoadedReferenceState(censusRecords) : new Map()
@@ -881,7 +944,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
   const changedDuringCensus = new Set<string>()
   for (const rec of censusRecords) {
     try {
-      const current = readAliasedRecordEntry(rec.session)
+      const current = readPublicRecordEntry(rec.session)
       const before = snapshots.get(rec.session)?.entry
       if (current.kind !== 'ok' || before?.kind !== 'ok' || JSON.stringify(current.raw) !== JSON.stringify(before.raw)) changedDuringCensus.add(rec.session)
     } catch { changedDuringCensus.add(rec.session) }
@@ -899,6 +962,13 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     if (entry.kind === 'corrupt') { const c = corruptSession(id, entry); lastKnownSession.set(id, c); return c }
     const rec = snapshot.rec
     if (!rec || !rec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
+    // A forced public liveness comes only from the shared record projection. Do not let live process/thread
+    // evidence punch through it (including archive hazard repair).
+    if (entry.kind === 'ok' && entry.liveness === 'offline') {
+      const pending = toSession(rec, 'offline', 'offline')
+      lastKnownSession.set(id, pending)
+      return pending
+    }
     // the pane title → headline activity, gated by THIS session's harness ([[harness-adapter]]): claude's title
     // is its task self-summary (used); codex's is the cwd folder name (refused → headline falls to the prompt).
     const activity = paneActivity(harnessById(rec.harness || defaultHarness.id), snap.titles.get(id))
@@ -1353,7 +1423,7 @@ export function launchPreflight(rec: SessRec): LaunchBlock | null {
 // @@@ launch quoting - single-quote a string for a POSIX shell, `'` → `'\''`. Used to nest the whole agent
 // invocation inside the birth-registration `sh -c '…'` wrapper without any segment double-expanding.
 const shq1 = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
-export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
+export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string, delegateFifo?: string): string {
   const file = join(storeDir(id), 'launch.sh')
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
   // createSession ([[harness-delivery]]) and the agent auto-discovers them — the SAME path as a self-launched
@@ -1424,16 +1494,22 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
     `exit $__spex_rc`,
     ``,
   ]
-  writeFileSync(file, launchBody.join('\n'))
+  const delegatePreamble = delegateFifo ? [
+    `exec 9<${shq1(delegateFifo)}`,
+    `rm -f ${shq1(delegateFifo)}`,
+    'export SPEXCODE_MAINTENANCE_DELEGATE_FD=9',
+    `export SPEXCODE_MAINTENANCE_SESSION_ID=${shq1(id)}`,
+  ] : []
+  writeFileSync(file, [...delegatePreamble, ...launchBody].join('\n'))
   return file
 }
-async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS, cmd?: string): Promise<void> {
+async function launch(id: string, path: string, tail: string, harness: Harness = HARNESS, cmd?: string, delegateFifo?: string): Promise<void> {
   // record the transport path THIS runtime hands the agent, before anything reads it (launchScript bakes it
   // into the launch env). Same kind of launch-time fact as agent.pid, and the reason a session's socket is
   // reachable only from the world it belongs to ([[harness-adapter]] rendezvous socket).
   if (harness.ownsRendezvous) stampRvSock(id)
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail, harness, cmd)}`])
+  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail, harness, cmd, delegateFifo)}`])
   await tmux(['send-keys', '-t', id, 'Enter'])
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
@@ -1525,7 +1601,7 @@ const startQueued = (id: string): Promise<boolean> => withSessionTransition(id, 
 // periodic tick (superviseQueue) — the periodic tick is what catches the AGENT-authored transitions
 // (done/parked written by a hook SUBPROCESS, which can't reach this server's queue). Re-lists each iteration
 // so a freshly launched session (held in `launching`) counts immediately and we never exceed the cap.
-export async function drainQueue(): Promise<void> {
+async function drainQueueUnlocked(): Promise<void> {
   if (draining) return
   draining = true
   try {
@@ -1549,6 +1625,14 @@ export async function drainQueue(): Promise<void> {
       if (!(await startQueued(next.id))) break   // launch failed → stop this pass; a later tick retries
     }
   } finally { draining = false }
+}
+export const drainQueue = (): Promise<void> => runSessionOperation({ op: 'queue-drain' }, drainQueueUnlocked)
+const requestQueueDrain = (): void => {
+  void drainQueue().catch((error) => {
+    // An exact maintenance stop deliberately frees no unrelated queue work while admission is closed.
+    if (error instanceof SessionMaintenanceError && error.code === 'maintenance_active') return
+    console.error(`spex: queue drain failed: ${error instanceof Error ? error.message : String(error)}`)
+  })
 }
 
 // @@@ superviseQueue - the periodic drainer. Started once at serve(). The explicit drainQueue() calls on
@@ -1617,11 +1701,14 @@ export async function sessionCreateRequest(body: unknown, create: SessionCreateF
   if (!prompt.trim()) return { status: 400, error: 'empty prompt' }
   const launcher = typeof input.launcher === 'string' && input.launcher.trim() ? input.launcher.trim() : undefined
   const parent = typeof input.parent === 'string' && input.parent.trim() ? input.parent.trim() : null
-  try {
-    return { status: 201, session: await create(prompt, parent, launcher) }
-  } catch (e) {
-    return { status: 400, error: String((e as Error).message || e) }
-  }
+  return runSessionOperation({ op: 'create' }, async () => {
+    try {
+      return { status: 201, session: await create(prompt, parent, launcher) }
+    } catch (e) {
+      if (e instanceof SessionMaintenanceError) throw e
+      return { status: 400, error: String((e as Error).message || e) }
+    }
+  })
 }
 
 // @@@ createSession (dispatch via backend) - `spex session new` must launch the worker in the
@@ -1633,6 +1720,9 @@ export async function sessionCreateRequest(body: unknown, create: SessionCreateF
 // reachable do we fall back to launching in this process (with a stderr warning) — the backend's own POST
 // handler calls newSession directly, so it never re-enters this path.
 export async function createSession(prompt: string, launcher?: string): Promise<Session> {
+  if (maintenanceBrokerDescriptors()) {
+    throw new SessionMaintenanceError('maintenance_capability_missing', 'maintenance operator broker admits only its exact stop/resume plan', { operation: 'create' })
+  }
   await assertProjectMatch('spex session new')
   // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
   // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the
@@ -1648,7 +1738,7 @@ export async function createSession(prompt: string, launcher?: string): Promise<
     })
   } catch {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    return newSession(prompt, parent, launcher)
+    return runSessionOperation({ op: 'fallback-create' }, () => newSession(prompt, parent, launcher))
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '')
@@ -1785,13 +1875,29 @@ const SOCKET_READY_TIMEOUT_MS = 30000   // spans launchScript's bounded fast-fai
                                         // waitForReady (slot-hold + resume) waits through a daemon-race retry
                                         // instead of returning before a recovering socket
 const SOCKET_POLL_MS = 200
-async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
+async function waitForReady(id: string, harness: Harness, pending?: SessRec, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<HarnessLaunchReadinessFence | null> {
+  const current = () => {
+    const stored = readRecord(id)
+    const rec = stored && pending
+      ? { ...pending, ...stored, stopped: pending.stopped, archived: pending.archived }
+      : stored || pending
+    return rec ? { ...rec, runtimeDir: runtimeRoot() } : null
+  }
   const deadline = Date.now() + timeoutMs
+  if (harness.launchReady) return harness.launchReady(current, deadline)
+  const genericFence = (): HarnessLaunchReadinessFence => ({
+    proof: Object.freeze({ kind: 'adapter-liveness', harnessId: harness.id, sessionId: id }),
+    validate: async (latest) => {
+      const rec = latest()
+      const snap = await liveSnapshot()
+      return !!rec && harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online'
+    },
+  })
   for (;;) {
-    const rec = readRecord(id)
+    const rec = current()
     const snap = await liveSnapshot()   // window + pane probe + live-listener set in one snapshot — all the adapter needs
-    if (rec && harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online') return true
-    if (Date.now() >= deadline) return false
+    if (rec && harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online') return genericFence()
+    if (Date.now() >= deadline) return null
     await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
   }
 }
@@ -1818,12 +1924,63 @@ async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_REA
 //     session that is proposing a merge must NOT silently withdraw it. Only applied when we actually relaunch;
 //     a refusal leaves the record wholly untouched.
 // Fail-loud is unchanged: if the agent never comes online, the later deliver() fails loud.
-async function resumeSessionUnlocked(id: string, opts: { force?: boolean; guard?: boolean } = {}): Promise<{ ok: boolean; error?: string; refused?: boolean; info?: string }> {
+type ResumeOptions = { force?: boolean; guard?: boolean; authorization?: Authorization }
+type ResumeExecutionOptions = ResumeOptions & { ticket?: MaintenanceTicket }
+
+async function delegatedSpawnTransfer(id: string, ticket: MaintenanceTicket): Promise<{
+  fifo: string
+  done: Promise<void>
+  close(): void
+}> {
+  const fifo = join(storeDir(id), `.maintenance-delegate-${randomUUID()}.fifo`)
+  await pexec('mkfifo', ['-m', '600', fifo])
+  const bearer = ticket.delegateSharedSpawn(id)
+  const writer = spawn('sh', ['-c', 'cat > "$1"', 'spex-maintenance-delegate', fifo], {
+    stdio: ['pipe', 'ignore', 'pipe'],
+  })
+  let stderr = ''
+  writer.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+  writer.stdin.on('error', () => {})
+  writer.stdin.end(bearer)
+  let settled = false
+  const done = new Promise<void>((resolve, reject) => {
+    writer.once('error', (error) => { settled = true; reject(error) })
+    writer.once('close', (code, signal) => {
+      settled = true
+      if (code === 0) resolve()
+      else reject(new SessionMaintenanceError('maintenance_delegate_invalid',
+        `shared-spawn delegate transfer failed (${signal || code}${stderr.trim() ? `: ${stderr.trim()}` : ''})`,
+        { operation: 'shared-spawn', sessionId: id }))
+    })
+  })
+  return {
+    fifo,
+    done,
+    close() {
+      if (!settled) writer.kill('SIGTERM')
+      rmSync(fifo, { force: true })
+    },
+  }
+}
+
+async function resumeSessionUnlocked(id: string, opts: ResumeExecutionOptions = {}): Promise<{ ok: boolean; error?: string; refused?: boolean; info?: string }> {
   const { force = false, guard = true } = opts
   let wt: { path: string; branch: string | null; rec: SessRec } | null
   try { wt = await findWorktree(id) }
   catch (e) { if (e instanceof SessionRecordUnusable) return { ok: false, refused: true, error: e.message }; throw e }
   if (!wt) return { ok: false, error: `no such session ${id}` }
+  // A process that died while validating left an internal candidate behind. This record lock proves no live
+  // resume still owns it. Restore the frozen public original before doing any transport work and require an
+  // explicit retry; stale runtime evidence is never adopted into a fresh launch attempt.
+  if (wt.rec.launchReadinessPending) {
+    writeRecord(restoreLaunchReadinessOriginal(wt.rec))
+    return {
+      ok: false,
+      refused: true,
+      error: `session ${id}: stale launch readiness pending was recovered fail-closed; the exact stopped/offline record was retained. Retry resume.`,
+    }
+  }
+  const preResume = wt.rec
   // a retired session (its worktree gone) is terminal, not offline: say so in its own words rather than in the
   // preflight's, since `close` — not a repair — is what it needs.
   const retired = retirementReason(wt.rec)
@@ -1873,14 +2030,59 @@ async function resumeSessionUnlocked(id: string, opts: { force?: boolean; guard?
   const resumed: SessRec = { ...current, archived: false, coldProof: null, status: current.status === 'active' ? 'idle' : current.status, stopped: false }
   if (force || lv === 'offline') {
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane (or a force-killed live one)
-    await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec))
-    writeRecord(resumed)
-    await waitForReady(id, h)   // a relaunched agent is "ready" only once the adapter reads it online
+    const transfer = opts.authorization && opts.ticket && h.sharedRuntimeSpawn
+      ? await delegatedSpawnTransfer(id, opts.ticket)
+      : null
+    try {
+      await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec), transfer?.fifo)
+      if (transfer) await transfer.done
+    } finally { transfer?.close() }
+    let readiness: HarnessLaunchReadinessFence | null = null
+    let readinessError = ''
+    try { readiness = await waitForReady(id, h, resumed) }
+    catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
+    if (!readiness) {
+      const failed = readRecord(id) || current
+      writeRecord({ ...failed, ...preResume, launchReadinessPending: null })
+      return {
+        ok: false,
+        refused: true,
+        error: `session ${id}: launch did not become ready${readinessError ? ` - ${readinessError}` : ''}; the session remains stopped and can be retried`,
+      }
+    }
+    const latest = readRecord(id) || resumed
+    const candidate: SessRec = {
+      ...latest,
+      archived: false,
+      coldProof: null,
+      status: latest.status === 'active' ? 'idle' : latest.status,
+      stopped: false,
+      launchReadinessPending: launchReadinessPending(preResume),
+    }
+    writeRecord(candidate)
+    let stillReady = false
+    try { stillReady = await readiness.validate(() => {
+      const stored = readRecord(id)
+      return stored ? { ...stored, runtimeDir: runtimeRoot() } : null
+    }) }
+    catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
+    if (!stillReady) {
+      const failed = readRecord(id) || candidate
+      writeRecord(restoreLaunchReadinessOriginal(failed))
+      return {
+        ok: false,
+        refused: true,
+        error: `session ${id}: launch readiness changed across the pending publication${readinessError ? ` - ${readinessError}` : ''}; the session remains stopped and can be retried`,
+      }
+    }
+    const published = readRecord(id) || candidate
+    writeRecord({ ...published, launchReadinessPending: null })
   } else writeRecord(resumed)
   return { ok: true }
 }
-export const resumeSession = (id: string, opts: { force?: boolean; guard?: boolean } = {}) =>
-  withSessionTransition(id, () => withRecordLock(id, () => resumeSessionUnlocked(id, opts)))
+export const resumeSession = (id: string, opts: ResumeOptions = {}) =>
+  runSessionOperation({ op: 'resume', sessionId: id, force: opts.force === true, ...(opts.authorization ? { authorization: opts.authorization } : {}) },
+    (ticket) => withSessionTransition(id, () => withRecordLock(id, () => resumeSessionUnlocked(id, { ...opts, ticket }))))
 
 // @@@ agent-authored state - the agent (forced by gates at boundaries) writes its OWN state; it is the
 // authority on what a stop MEANS (awaiting human vs parked on a background task). External hooks only know
@@ -1890,7 +2092,7 @@ export const resumeSession = (id: string, opts: { force?: boolean; guard?: boole
 export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?: string; sessionId?: string } = {}): boolean {
   const id = opts.sessionId || ownSessionId()
   if (!id) return false
-  return withRecordLockSync(id, () => {
+  return runSessionOperationSync({ op: 'lifecycle-transition', sessionId: id }, () => withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
     if (!rec) return false
     writeRecord({
@@ -1899,7 +2101,7 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
       note: opts.note ?? null,
     })
     return true
-  })
+  }))
 }
 export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId })
 export const markError = (sessionId?: string) => markState('error', { sessionId })
@@ -1908,23 +2110,23 @@ export const markError = (sessionId?: string) => markState('error', { sessionId 
 // a zero exit is never routed here, and a declaration that landed before teardown is authoritative.
 export function markHeadlessTurnFailure(sessionId: string, harness: string, exitCode: string): boolean {
   if (exitCode === '0') return false
-  return withRecordLockSync(sessionId, () => {
+  return runSessionOperationSync({ op: 'lifecycle-transition', sessionId }, () => withRecordLockSync(sessionId, () => {
     const rec = readLiveRecord(sessionId)
     if (!rec || rec.status !== 'active') return false
     const outcome = /^\d+$/.test(exitCode) ? `exit code ${exitCode}` : `signal ${exitCode}`
     writeRecord({ ...rec, status: 'error', proposal: null, note: `${harness} turn exited with ${outcome}` })
     return true
-  })
+  }))
 }
 export function markHarnessSessionId(sessionId: string | undefined, harnessSessionId: string | undefined): boolean {
   const id = sessionId || ownSessionId()
   if (!id || !harnessSessionId) return false
-  return withRecordLockSync(id, () => {
+  return runSessionOperationSync({ op: 'lifecycle-transition', sessionId: id }, () => withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
     if (!rec) return false
     writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
     return true
-  })
+  }))
 }
 // @@@ markIdle - the ONE INFERRED state, so (unlike the agent-authored writers above) it carries a strict
 // active-only guard: the Notification(idle_prompt) hook fires it when claude is waiting at its prompt, and it
@@ -1934,12 +2136,12 @@ export function markHarnessSessionId(sessionId: string | undefined, harnessSessi
 export function markIdle(sessionId?: string): boolean {
   const id = sessionId || ownSessionId()
   if (!id) return false
-  return withRecordLockSync(id, () => {
+  return runSessionOperationSync({ op: 'lifecycle-transition', sessionId: id }, () => withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
     if (!rec || rec.status !== 'active') return false  // active-only: never clobber a declaration
     writeRecord({ ...rec, status: 'idle' })
     return true
-  })
+  }))
 }
 // @@@ asking has TWO writers, both deterministic (neither guarded active-only): (1) the mark-active
 // PreToolUse hook captures it the instant the agent invokes the AskUserQuestion tool (status=asking,
@@ -2134,7 +2336,7 @@ function mergePrompt(mainPath: string, branch: string, reason: string): string {
 // the main checkout, no worktree path needed). Async + fail-loud: returns {dispatched:true} once the prompt is
 // CONFIRMED accepted, else {dispatched:false, reason} (the loud DispatchResult error). The server no longer
 // re-checks gates, runs git, bumps `merges`, or closes the session — review shows the gates; the agent verifies.
-export async function mergeSession(id: string): Promise<{ dispatched: boolean; reason?: string }> {
+async function mergeSessionUnlocked(id: string): Promise<{ dispatched: boolean; reason?: string }> {
   const wt = await findWorktree(id)
   if (!wt || !wt.branch) return { dispatched: false, reason: 'no such session' }
   const branch = wt.branch, main = mainRoot()
@@ -2148,6 +2350,8 @@ export async function mergeSession(id: string): Promise<{ dispatched: boolean; r
   if (!r.ok) return { dispatched: false, reason: r.error }
   return { dispatched: true }
 }
+export const mergeSession = (id: string): Promise<{ dispatched: boolean; reason?: string }> =>
+  runSessionOperation({ op: 'merge-dispatch', sessionId: id }, () => mergeSessionUnlocked(id))
 
 // @@@ killAgentProcess - the pane is the agent's HOME, not its LEASH. `kill-session` SIGHUPs the pane's
 // process group, and an idle agent goes with it (measured: ~0.8s) — but one mid-turn can outlive the whole
@@ -2271,11 +2475,12 @@ async function stopSessionUnlocked(id: string): Promise<boolean> {
   await stopAgentProcess(id, wt.rec)
   const rec = readRecord(id)
   if (rec) writeRecord({ ...rec, stopped: true })
-  void drainQueue()   // a stop frees a slot — start the next queued session if any
+  requestQueueDrain()   // a stop frees a slot — start the next queued session if any
   return !!wt
 }
-export const stopSession = (id: string): Promise<boolean> =>
-  withSessionTransition(id, () => withRecordLock(id, () => stopSessionUnlocked(id)))
+export const stopSession = (id: string, opts: { authorization?: Authorization } = {}): Promise<boolean> =>
+  runSessionOperation({ op: 'stop', sessionId: id, ...(opts.authorization ? { authorization: opts.authorization } : {}) },
+    () => withSessionTransition(id, () => withRecordLock(id, () => stopSessionUnlocked(id))))
 
 // @@@ archiveSession - cold storage ([[archive]]): prove and stop the exact session-owned runtime first, then
 // write archived:true + stopped:true. The shared adapter root is never torn down. A guard/ownership failure
@@ -2373,13 +2578,14 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
     }
     throw error
   }
-  void drainQueue()
+  requestQueueDrain()
   return true
   } finally { archiving.delete(id) }
 }
 export const archiveSession = (id: string, on = true): Promise<boolean> => {
   if (!on) return archiveSessionUnarchive(id)
-  return withSessionTransition(id, () => withRecordLock(id, () => archiveSessionUnlocked(id, on)))
+  return runSessionOperation({ op: 'archive', sessionId: id },
+    () => withSessionTransition(id, () => withRecordLock(id, () => archiveSessionUnlocked(id, on))))
 }
 async function archiveSessionUnarchive(id: string): Promise<boolean> {
   const wt = await findWorktree(id)
@@ -2527,11 +2733,12 @@ async function closeSessionUnlocked(id: string): Promise<boolean> {
   try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) }
   catch (error) { throw new ResourceConflict(`refusing to finish close for ${id}: session record/prompt removal failed (${error instanceof Error ? error.message : String(error)})`) }
   if (existsSync(sessionStoreDir(id))) throw new ResourceConflict(`refusing to finish close for ${id}: session record removal failed`)
-  void drainQueue()   // a close frees a slot — start the next queued session if any
+  requestQueueDrain()   // a close frees a slot — start the next queued session if any
   return true
 }
 export const closeSession = (id: string): Promise<boolean> =>
-  withSessionTransition(id, () => withRecordLock(id, () => closeSessionUnlocked(id)))
+  runSessionOperation({ op: 'close', sessionId: id },
+    () => withSessionTransition(id, () => withRecordLock(id, () => closeSessionUnlocked(id))))
 
 // @@@ quarantine - closing sweeps the session's whole store dir, so an UNREADABLE record would take the only
 // evidence of what corrupted it with it. Copy those bytes to the per-project `corrupt/` shelf first, named by
@@ -2879,19 +3086,19 @@ async function sendTextUnlocked(id: string, text: string, from?: string, opts: {
 export async function sendText(id: string, text: string, from?: string, opts: { replyVia?: 'note' } = {}): Promise<DispatchResult> {
   // The record lock spans the delivery RPC. Archive preflight and leaf teardown cannot race a product turn
   // start/steer/input from another CLI process and then discover it only after killing the pane.
-  return withRecordLock(id, () => sendTextUnlocked(id, text, from, opts))
+  return runSessionOperation({ op: 'send', sessionId: id }, () => withRecordLock(id, () => sendTextUnlocked(id, text, from, opts)))
 }
 
 // Hard interrupt is adapter-native control, distinct from stop's process teardown. A harness without a
 // confirmed native primitive refuses loudly; there is no signal/PTY fallback that could target the wrong turn.
 export async function interruptSession(id: string): Promise<DispatchResult> {
-  return withRecordLock(id, async () => {
+  return runSessionOperation({ op: 'interrupt', sessionId: id }, () => withRecordLock(id, async () => {
     const rec = readRecord(id)
     if (!rec) return { ok: false, error: `no session record for ${id} - nothing to interrupt` }
     const h = harnessById(rec.harness || defaultHarness.id)
     if (!h.interrupt) return { ok: false, error: `harness ${h.id} has no native hard-interrupt control` }
     return h.interrupt({ ...rec, runtimeDir: runtimeRoot() })
-  })
+  }))
 }
 
 // @@@ rawKey - the RAW-KEYSTROKE nav path, kept DELIBERATELY on `tmux send-keys` and NEVER the rendezvous
@@ -2947,7 +3154,7 @@ function rawKeyArgs(id: string, key: string): string[] | null {
 // (browser + server + send-keys all parallel) and scramble the sequence; a single serialised batch cannot.
 // An unknown token is skipped without dropping the rest; false only if the tmux session is gone or nothing sent.
 export async function rawKey(id: string, key: string | string[]): Promise<boolean> {
-  return withRecordLock(id, async () => {
+  return runSessionOperation({ op: 'raw-key-input', sessionId: id }, () => withRecordLock(id, async () => {
     const list = (Array.isArray(key) ? key : [key]).filter((k) => typeof k === 'string' && k.length > 0)
     if (list.length === 0 || !(await alive(id))) return false
     let sent = false
@@ -2957,5 +3164,5 @@ export async function rawKey(id: string, key: string | string[]): Promise<boolea
       await tmux(args); sent = true
     }
     return sent
-  })
+  }))
 }

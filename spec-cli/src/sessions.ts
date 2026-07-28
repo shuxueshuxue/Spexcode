@@ -2139,16 +2139,27 @@ function sessionCandidateReceiptMatches(receipt: SessionCandidateReceipt, contex
   return receipt.requestDigest === context.requestDigest && receipt.payloadHash === context.payloadHash
     && receipt.root === root && receipt.path === path && receipt.branch === branch
 }
+function publishedSessionCandidateReceiptRetirementFailure(rec: SessRec, root: string): string | null {
+  const durable = readSessionCandidateReceipt(rec.session)
+  if (durable.kind === 'absent') return null
+  if (durable.kind === 'invalid') return durable.error
+  if (!rec.createRequestId || !rec.createPayloadHash || !rec.branch || !rec.worktreePath
+    || durable.receipt.requestDigest !== rec.createRequestId || durable.receipt.payloadHash !== rec.createPayloadHash
+    || durable.receipt.root !== root || durable.receipt.path !== rec.worktreePath || durable.receipt.branch !== rec.branch) {
+    return `private candidate receipt at ${sessionCandidateReceiptPath(rec.session)} does not match the published record`
+  }
+  if (!retireSessionCandidateReceipt(rec.session)) return `private candidate receipt remains at ${sessionCandidateReceiptPath(rec.session)}`
+  return readSessionCandidateReceipt(rec.session).kind === 'absent'
+    ? null
+    : `private candidate receipt retirement is unproven at ${sessionCandidateReceiptPath(rec.session)}`
+}
 async function retirePublishedSessionCandidateReceipt(rec: SessRec, context: SessionCreateContext): Promise<void> {
   if (!rec.branch || !rec.worktreePath) return
+  if (readSessionCandidateReceipt(rec.session).kind === 'absent') return
   const root = mainRoot(), path = rec.worktreePath, branch = rec.branch
-  const durable = readSessionCandidateReceipt(rec.session)
-  if (durable.kind !== 'valid' || !sessionCandidateReceiptMatches(durable.receipt, context, root, path, branch)) return
   await withRecordLock(sessionCandidateLockId(path, branch), async () => {
-    const current = readSessionCandidateReceipt(rec.session)
-    if (current.kind === 'valid' && sessionCandidateReceiptMatches(current.receipt, context, root, path, branch)) {
-      retireSessionCandidateReceipt(rec.session)
-    }
+    const failure = publishedSessionCandidateReceiptRetirementFailure(rec, root)
+    if (failure) console.error(`spex: published session ${rec.session.slice(0, 8)} remains the fence for its candidate receipt: ${failure}`)
   }, context.signal)
 }
 async function sessionCandidateState(root: string, path: string, branch: string, signal: AbortSignal): Promise<SessionCandidateState> {
@@ -2358,7 +2369,8 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           throwIfCreateAborted(signal, phase)
           writeRecord(rec)
           published = true
-          retireSessionCandidateReceipt(id)
+          const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(rec, root)
+          if (receiptFailure) console.error(`spex: published session ${id.slice(0, 8)} remains the fence for its candidate receipt: ${receiptFailure}`)
           shouldDrain = true
           traceSessionCreate(id, requestDigest, phase, 'publish')
           return toSession(rec, 'queued', 'offline')
@@ -3261,6 +3273,40 @@ async function assertQueuedRetirementSafe(id: string, rec: SessRec, path: string
 // so it is resolved BEFORE the removal; both sweeps are best-effort (residue is swept at uninstall anyway).
 // A corrupt record proves no adapter, leaf, worktree, or branch owner. Close may copy those bytes to the
 // control-plane quarantine, but then fails before this teardown seam and names every residue it preserved.
+async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch: string | null; rec: SessRec }): Promise<boolean> {
+  const root = mainRoot()
+  const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(wt.rec, root)
+  if (receiptFailure) throw new ResourceConflict(`refusing destructive close for ${id}: ${receiptFailure}; public record and resources remain the authority fence`)
+  if (wt.rec.archived) await assertColdRetirementSafe(id, wt.rec)
+  else if (wt.rec.status === 'queued') await assertQueuedRetirementSafe(id, wt.rec, wt.path, wt.branch)
+  else await stopAgentProcess(id, wt.rec)
+  let slot: string | null = null
+  try { slot = treeSlotDir(wt.path) } catch { /* tree already unresolvable — nothing to key the slot by */ }
+  // a retired session's worktree/branch are already gone; removing them is a no-op to skip, not a failure.
+  if (existsSync(wt.path)) {
+    const removed = await gitTry(['-C', root, 'worktree', 'remove', '--force', wt.path])
+    if (!removed.ok) throw new ResourceConflict(`refusing to finish close for ${id}: worktree removal failed`)
+    if (existsSync(wt.path)) throw new ResourceConflict(`refusing to finish close for ${id}: worktree remains after removal`)
+  }
+  if (wt.branch) {
+    const branchRef = `refs/heads/${wt.branch}`
+    const present = await gitTry(['-C', root, 'rev-parse', '--verify', '--quiet', branchRef])
+    if (present.ok) {
+      const removed = await gitTry(['-C', root, 'branch', '-D', wt.branch])
+      if (!removed.ok) throw new ResourceConflict(`refusing to finish close for ${id}: branch removal failed`)
+      const remaining = await gitTry(['-C', root, 'rev-parse', '--verify', '--quiet', branchRef])
+      if (remaining.ok || remaining.failure !== 'exit') throw new ResourceConflict(`refusing to finish close for ${id}: branch remains or its removal is unproven`)
+    } else if (present.failure !== 'exit') {
+      throw new ResourceConflict(`refusing to finish close for ${id}: branch presence is unreadable`)
+    }
+  }
+  if (slot) { try { rmSync(slot, { recursive: true, force: true }) } catch { /* best-effort GC */ } }
+  try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) }
+  catch (error) { throw new ResourceConflict(`refusing to finish close for ${id}: session record/prompt removal failed (${error instanceof Error ? error.message : String(error)})`) }
+  if (existsSync(sessionStoreDir(id))) throw new ResourceConflict(`refusing to finish close for ${id}: session record removal failed`)
+  requestQueueDrain()   // a close frees a slot — start the next queued session if any
+  return true
+}
 async function closeSessionUnlocked(id: string): Promise<boolean> {
   let wt: { path: string; branch: string | null; rec: SessRec } | null = null
   try { wt = await findWorktree(id) }
@@ -3278,35 +3324,10 @@ async function closeSessionUnlocked(id: string): Promise<boolean> {
       `refusing destructive close for ${id}: the unreadable record proves no adapter, leaf, worktree, or branch owner (${guard}). ${evidence}. Runtime remains at ${runtime}; worktree and branch ownership is unknown and was not touched; no process signal or deletion was attempted.`)
   }
   if (!wt) return false
-  if (wt.rec.archived) await assertColdRetirementSafe(id, wt.rec)
-  else if (wt.rec.status === 'queued') await assertQueuedRetirementSafe(id, wt.rec, wt.path, wt.branch)
-  else await stopAgentProcess(id, wt.rec)
-  let slot: string | null = null
-  try { slot = treeSlotDir(wt.path) } catch { /* tree already unresolvable — nothing to key the slot by */ }
-  // a retired session's worktree/branch are already gone; removing them is a no-op to skip, not a failure.
-  if (existsSync(wt.path)) {
-    const removed = await gitTry(['-C', mainRoot(), 'worktree', 'remove', '--force', wt.path])
-    if (!removed.ok) throw new ResourceConflict(`refusing to finish close for ${id}: worktree removal failed`)
-    if (existsSync(wt.path)) throw new ResourceConflict(`refusing to finish close for ${id}: worktree remains after removal`)
-  }
-  if (wt.branch) {
-    const branchRef = `refs/heads/${wt.branch}`
-    const present = await gitTry(['-C', mainRoot(), 'rev-parse', '--verify', '--quiet', branchRef])
-    if (present.ok) {
-      const removed = await gitTry(['-C', mainRoot(), 'branch', '-D', wt.branch])
-      if (!removed.ok) throw new ResourceConflict(`refusing to finish close for ${id}: branch removal failed`)
-      const remaining = await gitTry(['-C', mainRoot(), 'rev-parse', '--verify', '--quiet', branchRef])
-      if (remaining.ok || remaining.failure !== 'exit') throw new ResourceConflict(`refusing to finish close for ${id}: branch remains or its removal is unproven`)
-    } else if (present.failure !== 'exit') {
-      throw new ResourceConflict(`refusing to finish close for ${id}: branch presence is unreadable`)
-    }
-  }
-  if (slot) { try { rmSync(slot, { recursive: true, force: true }) } catch { /* best-effort GC */ } }
-  try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) }
-  catch (error) { throw new ResourceConflict(`refusing to finish close for ${id}: session record/prompt removal failed (${error instanceof Error ? error.message : String(error)})`) }
-  if (existsSync(sessionStoreDir(id))) throw new ResourceConflict(`refusing to finish close for ${id}: session record removal failed`)
-  requestQueueDrain()   // a close frees a slot — start the next queued session if any
-  return true
+  const target = wt
+  return target.branch
+    ? withRecordLock(sessionCandidateLockId(target.path, target.branch), () => closeOwnedSessionUnlocked(id, target))
+    : closeOwnedSessionUnlocked(id, target)
 }
 export const closeSession = (id: string): Promise<boolean> =>
   runSessionOperation({ op: 'close', sessionId: id },

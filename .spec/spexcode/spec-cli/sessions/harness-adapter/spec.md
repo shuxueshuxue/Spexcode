@@ -125,7 +125,9 @@ surface:
   canonical hook event set (its `HookEventName` enum, codex 0.142.3) is preToolUse/permissionRequest/postToolUse/
   preCompact/postCompact/sessionStart/userPromptSubmit/subagentStart/subagentStop/stop — there is no idle/
   attention "notification" event and no failed-stop event, so those two claude-only events are genuinely absent,
-  not unimplemented.
+  not unimplemented. Failure detection therefore does not fabricate another hook: the Codex adapter's optional
+  `observeTurnFailures` capability subscribes to the app-server's native `turn/completed` notifications and
+  reports only structured `failed` outcomes to the shared session layer.
 - **contract file(s)** — where the `surface: system` block is materialized ([[harness-delivery]]): Claude
   `./CLAUDE.md` or `./.claude/CLAUDE.md`; Codex ONLY the repo-root `./AGENTS.md`.
 - **artifact dirs** — the auto-discovered dirs the on-demand surfaces materialize into, or null when the harness
@@ -345,7 +347,13 @@ surface:
   turn that ends in the read→steer window fails that precondition and is retried as a `turn/start`. Either way
   the app-server response confirms it landed. There is NO tmux prompt typing fallback for Codex: typed keys can
   truncate and can only prove tmux accepted input, not that Codex accepted a
-  turn. `resumeArg(rec)` is the relaunch tail `reopen()` hands `launch()`, but the two harnesses consume that
+  turn. The adapter uses one independent `thread/resume` connection to atomically subscribe to that owned
+  thread's outcome notifications. A live `turn/completed` with status `failed` carries the native error message
+  and `completedAt`; `completed` and `interrupted` are controls and produce no lifecycle write. When a backend
+  replacement joins a thread already in `systemError`, the same resume response's `initialTurnsPage` supplies
+  the latest turn id and completion time. A concurrent native `turn/started` cancels that historical projection,
+  so an old failure cannot overwrite the new turn's active lifecycle.
+  `resumeArg(rec)` is the relaunch tail `reopen()` hands `launch()`, but the two harnesses consume that
   tail differently and the codex side MUST honour that: **claude** `--resume <id>` is appended straight to the
   `claude` command (the SAME conversation, the id we pinned). **codex** has no bare `codex` to append to — its
   `launchCmd` is a bootstrap script that feeds the tail (`"$@"`) to `spex internal codex-launch`, which mints a NEW
@@ -404,14 +412,15 @@ outcome of the last ephemeral turn. An intact record normally remains `online` b
 the adapter can accept another delivery without a resident turn process. The one explicit boundary is the
 human `stop`: after the runtime has been torn down, the retained record carries `stopped` and every headless
 adapter's shared record-backed liveness reads it `offline`. `resume` clears that marker as it relaunches the
-same conversation; close needs no marker handling because it removes the whole record. Every headless adapter
-reports a turn process that exits non-zero through
-one shared adapter-side outcome mechanism. That mechanism changes the lifecycle from `active` to `error` and
-records the harness plus exit code, so a turn that died before declaring can never remain visibly
-`working`/`online` forever. The write is compare-and-set: a zero exit changes nothing, and a declaration that
-landed before process teardown is authoritative and is never overwritten. `online` may remain true when the
-adapter's controller, pane home, or shared server can still accept the next delivery; the orthogonal `error`
-lifecycle is the honest signal that the previous turn failed.
+same conversation; close needs no marker handling because it removes the whole record. Turn outcomes enter the
+session layer through each harness's native signal: Claude's StopFailure hook, a process-backed headless
+adapter's non-zero child exit, or the Codex app-server observer inherited by its interactive and headless forms.
+Every source reaches the same active-only `markTurnFailure` compare-and-set, changing a live undeclared
+`active` lifecycle to `error`; a zero process exit, native completed or interrupted turn, declaration, or
+explicit stop that landed first changes nothing. Process notes name the harness plus exit code or signal;
+Codex notes retain the native error message and native `completedAt`. `online` may remain true
+when the adapter's controller, pane home, or shared server can still accept the next delivery; the orthogonal
+`error` lifecycle is the honest signal that the previous turn failed.
 
 The runtime's behavior-identical mechanics are shared once across adapter rows: shell arguments use one POSIX
 single-quote encoder; resident headless controllers use one newline-delimited JSON socket client and timeout;

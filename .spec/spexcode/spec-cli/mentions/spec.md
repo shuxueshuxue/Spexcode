@@ -78,7 +78,8 @@ grammar is uniform, the logic is tiny.
 - **A spawned worker's scope stays in its prompt.** When `@new` inherits a thread or surface node, the
   generated worker prompt carries that node as its leading `[[node]]` topic mention before the authored text.
   The ordinary [[launch]] first-mention rule then derives the session node; mention dispatch has no private
-  node argument into `newSession`.
+  node argument into creation. `@new` enters the same bounded `sessionCreateRequest` owner as the public API;
+  its private prepare/publish half is not callable without the owner's deadline and cancellation context.
 - **In a CLI argument the sigil is OPTIONAL, never banned.** In free text the sigils are what set a
   reference apart from prose, so they stay required there; but a CLI reference argument IS the reference,
   so it tolerates the dashboard-learned form: `spex review @graph` ≡ `spex review graph`, `spex eval add
@@ -89,7 +90,8 @@ grammar is uniform, the logic is tiny.
   Tolerance never widens matching: a stripped token matches exactly what the bare token matches, and a
   wrong sigiled token errors exactly like the bare one.
 - **No new delivery pipe.** `@session` → [[dispatch]]'s `sendKeys` (a prompt = the surrounding text + a
-  pointer to where it was written); `@new` → [[launch]]'s `newSession` (a fresh worker). Offline/unreachable
+  pointer to where it was written); `@new` → [[launch]]'s bounded session-create owner (a fresh worker).
+  Offline/unreachable
   fails loud (the `DispatchResult`), and the text still persists for the drain.
 - **A reply has two delivery paths; only the explicit `@` is ASSIGNMENT.** Beside it, a committed reply
   gets an **implicit originator loop-in** — a *courtesy* copy to whoever ORIGINATED the thread, over the SAME

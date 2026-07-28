@@ -2,7 +2,7 @@
 // node) and `@session` (an ACTOR — a live session, or `@new` for a fresh worker). The same parser resolves
 // them in ANY input box; the resolve+dispatch live HERE (CLI-first) so the issues page, the composer, and an agent's
 // own prompt share one implementation. An `@` "just auto-sends a prompt": resolve it against the live board
-// sessions and dispatch via [[dispatch]]'s sendText / [[launch]]'s newSession — storage and delivery stay
+// sessions and dispatch via [[dispatch]]'s sendText / [[launch]]'s bounded create owner — storage and delivery stay
 // separate, and sessions.ts is imported LAZILY so a mention-free post pays nothing.
 
 // ── parse (pure) ──────────────────────────────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ function mentionPrompt(threadId: string, node: string | null, author: string, te
 // A non-open thread is settled work: a fresh worker spawned onto it must not re-implement what already
 // landed, so the prompt leads with the status and a verify-on-main-first instruction.
 export function newWorkerPrompt(threadId: string, node: string | null, author: string, text: string, status?: string | null): string {
-  // Keep inherited scope inside the text the worker receives: newSession derives its node only from the
+  // Keep inherited scope inside the text the worker receives: the create transaction derives its node only from the
   // raw prompt's first [[id]] mention, so issue dispatch gets no private node-binding argument.
   const on = node ? ` on node [[${node}]]` : ''
   const settled = status && status !== 'open'
@@ -109,7 +109,7 @@ export async function dispatchMentions(
 ): Promise<DispatchOutcome[]> {
   const { actors } = parseMentions(text)
   if (!actors.length) return []
-  const { sendText, listSessions, newSession } = await import('./sessions.js')
+  const { sendText, listSessions, sessionCreateRequest } = await import('./sessions.js')
   const sessions = await listSessions()
   const resolved = resolveActors(actors, sessions as unknown as ActorSession[])
   const out: DispatchOutcome[] = []
@@ -120,8 +120,13 @@ export async function dispatchMentions(
       // deliberate audit/re-measure), but the worker prompt carries the status and the outcome line warns.
       const settled = ctx.status && ctx.status !== 'open' ? ctx.status : undefined
       try {
-        const s = await newSession(newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status), spawnParent(ctx.author, sessions), r.launcher)
-        out.push({ token: r.token, result: 'spawned', detail: s.id, ...(settled ? { note: `thread ${settled}` } : {}) })
+        const created = await sessionCreateRequest({
+          prompt: newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status),
+          parent: spawnParent(ctx.author, sessions),
+          launcher: r.launcher,
+        })
+        if (created.status !== 201) throw new Error(`${created.code || 'session_create_failed'}: ${created.error}`)
+        out.push({ token: r.token, result: 'spawned', detail: created.session.id, ...(settled ? { note: `thread ${settled}` } : {}) })
       } catch (e) { out.push({ token: r.token, result: 'failed', detail: e instanceof Error ? e.message : String(e) }) }
       continue
     }

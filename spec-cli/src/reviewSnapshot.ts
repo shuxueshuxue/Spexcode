@@ -21,3 +21,7 @@ export function readReviewSnapshot(): ReviewSnapshot {
   if (!current) throw new Error('review snapshot is unavailable before the first successful graph build')
   return current
 }
+
+export function hasReviewSnapshot(): boolean {
+  return current !== null
+}

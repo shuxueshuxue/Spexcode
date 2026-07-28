@@ -25,6 +25,13 @@ Concurrent consumers or React's development remount join one in-flight request f
 they do not double-pay the same page bytes. A later navigation may request that page again because it is a
 new user action, not a hidden app-resident row cache.
 
+The refresh trigger is an identity-bearing source signal, not a render-shaped container default: a cold
+lightweight review shell with no board data must remain quiet after its first answer, while the full shell
+may refresh on the board inputs the page actually depends on. The first direct review request waits for the
+first atomic [[review-snapshot]] publication. Once a generation exists, Issues and trunk Evals read it without
+joining a full graph flight already in progress: the published rows remain a valid answer until a later page
+refresh observes a replacement generation.
+
 The shared page-window projection yields the GitHub Issues number rhythm: all pages for a short set, a
 leading or trailing eight-page window near an edge, and two edge pages around ellipses for a large middle.
 It never changes navigation itself; [[review-chrome]] renders the projection as real anchors.

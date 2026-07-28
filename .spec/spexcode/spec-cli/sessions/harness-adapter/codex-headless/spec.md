@@ -51,7 +51,11 @@ and marks the retained record stopped, so it reads `offline` until a proven resu
 the no-TUI form: `resumeArg` is empty because there is no TUI to reattach, but an absent shared server must be
 recreated through the canonical delegated spawn before the record can return online. The adapter's launch
 readiness is stricter than its steady-state record liveness: it proves one unchanged exact detached-v3
-PID/start/isolation/socket generation and the target's existing thread loaded under that shared root. Only then
-does the resume commit `stopped:false`; a refused, failed, or timed-out helper leaves the retained record
-stopped/offline and retryable. Closing remains the terminal operation that removes the record, worktree,
-branch, pane, and shared runtime references owned by the session.
+PID/start/process-group/session/isolation/socket generation, the target's existing thread loaded under that
+shared root, and exactly one governed record owner for that thread across every adapter record sharing the
+descriptor. That owner must be the current SpexCode session; a deduplicated loaded-ID set is never ownership
+evidence. The adapter returns those facts as one readiness fence. Resume writes `stopped:false` only while the
+parent maintenance ticket is still live, then the same fence repeats the complete generation/reference/owner
+proof across the write. An unload, shared-root restart, duplicate/reassigned owner, refused helper, or bounded
+timeout rolls the retained record back to stopped/offline and returns non-success. Closing remains the terminal
+operation that removes the record, worktree, branch, pane, and shared runtime references owned by the session.

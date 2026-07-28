@@ -33,6 +33,10 @@ import { processStartToken, processTopology } from './process-identity.js'
 export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless' | 'codex-headless' | 'opencode-headless' | 'pi-headless'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null; stopped?: boolean; archived?: boolean }
 export type HarnessLaunchReadyRecord = HarnessLivenessRecord & { governed?: boolean; runtimeDir: string }
+export type HarnessLaunchReadinessFence = {
+  readonly proof: Readonly<Record<string, unknown>>
+  validate(current: () => HarnessLaunchReadyRecord | null): Promise<boolean>
+}
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
 // one whole-box pid→(ppid, comm) table (a single `ps` spawn).
@@ -240,9 +244,11 @@ export interface Harness {
   liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string, pane?: PaneProbe, socketLive?: boolean): 'online' | 'offline'
   // A completed launch command is only transport acceptance. An adapter with stronger runtime ownership may
   // keep the caller waiting until the launched conversation is genuinely addressable. The lazy record source
-  // lets a one-shot launch publish its native id while readiness is pending. Returning false is a launch
-  // failure; adapters without this seam retain the generic bounded liveness wait.
-  launchReady?(current: () => HarnessLaunchReadyRecord | null): Promise<boolean>
+  // lets a one-shot launch publish its native id while readiness is pending. The returned adapter-owned fence
+  // names the facts that established readiness and revalidates those SAME facts across the caller's record
+  // commit. Null at the deadline is a launch failure; adapters without this seam retain the generic bounded
+  // liveness fence.
+  launchReady?(current: () => HarnessLaunchReadyRecord | null, deadline: number): Promise<HarnessLaunchReadinessFence | null>
   // Exact leaf ownership evidence consumed by lifecycle teardown. The adapter returns the one argv identity
   // token it registered for this record (session id, harness thread/generation, or null when unprovable);
   // product lifecycle code never branches on harness names to invent this identity.
@@ -417,17 +423,39 @@ export const codexAppServerSock = (dir = runtimeRoot()) => {
 }
 export const codexAppServerPid = (dir = runtimeRoot()) => join(dir, 'codex-app-server.pid')
 export const codexAppServerIsolation = (dir = runtimeRoot()) => join(dir, 'codex-app-server.scope')
-function codexRuntimeGeneration(dir = runtimeRoot()): string | null {
+type CodexRuntimeGenerationProof = Readonly<{
+  pid: number
+  startToken: string
+  processGroupId: number
+  sessionId: number
+  isolation: string
+  socket: Readonly<{ path: string; dev: number; ino: number }>
+}>
+function codexRuntimeGenerationProof(dir = runtimeRoot()): CodexRuntimeGenerationProof | null {
   try {
     const pid = Number(readFileSync(codexAppServerPid(dir), 'utf8').trim())
     const start = processStartToken(pid)
     const scope = readFileSync(codexAppServerIsolation(dir), 'utf8').trim()
     const topology = processTopology(pid)
-    const socket = statSync(codexAppServerSock(dir))
+    const socketPath = codexAppServerSock(dir)
+    const socket = statSync(socketPath)
     if (!(pid > 0) || !start || !topology || topology.startToken !== start || topology.processGroupId !== pid || topology.sessionId !== pid ||
       scope !== `detached-v3 ${pid} ${start} ${pid} ${pid}` || !socket.isSocket()) return null
-    return `${pid}|${start}|${scope}|${socket.dev}:${socket.ino}`
+    return Object.freeze({
+      pid,
+      startToken: start,
+      processGroupId: topology.processGroupId,
+      sessionId: topology.sessionId,
+      isolation: scope,
+      socket: Object.freeze({ path: socketPath, dev: socket.dev, ino: socket.ino }),
+    })
   } catch { return null }
+}
+const codexRuntimeGenerationToken = (proof: CodexRuntimeGenerationProof) =>
+  `${proof.pid}|${proof.startToken}|${proof.processGroupId}|${proof.sessionId}|${proof.isolation}|${proof.socket.path}|${proof.socket.dev}:${proof.socket.ino}`
+function codexRuntimeGeneration(dir = runtimeRoot()): string | null {
+  const proof = codexRuntimeGenerationProof(dir)
+  return proof ? codexRuntimeGenerationToken(proof) : null
 }
 
 // the spex launcher (bin/spex.mjs), baked into the codex launch script (mirrors materialize.ts's SPEX) so
@@ -2006,6 +2034,93 @@ export const codexHarness: Harness = {
   fatalLaunchOutput: ['no rollout found for thread id'],
 }
 
+type CodexHeadlessLaunchReadinessProof = Readonly<{
+  kind: 'codex-headless-shared-runtime'
+  descriptorKey: string
+  generation: CodexRuntimeGenerationProof
+  target: Readonly<{
+    sessionId: string
+    threadId: string
+    ownerSessionId: string
+    ownerCount: 1
+    ownerState: 'governed'
+    referenceState: 'loaded'
+    protectsControlPlane: true
+  }>
+}>
+
+const sameCodexHeadlessReadinessProof = (left: CodexHeadlessLaunchReadinessProof, right: CodexHeadlessLaunchReadinessProof) =>
+  left.kind === right.kind &&
+  left.descriptorKey === right.descriptorKey &&
+  codexRuntimeGenerationToken(left.generation) === codexRuntimeGenerationToken(right.generation) &&
+  left.target.sessionId === right.target.sessionId &&
+  left.target.threadId === right.target.threadId &&
+  left.target.ownerSessionId === right.target.ownerSessionId &&
+  left.target.ownerCount === right.target.ownerCount &&
+  left.target.ownerState === right.target.ownerState &&
+  left.target.referenceState === right.target.referenceState &&
+  left.target.protectsControlPlane === right.target.protectsControlPlane
+
+const governedSharedRuntimeOwners = (runtimeDir: string, descriptorKey: string, threadId: string): string[] | null => {
+  const root = join(runtimeDir, 'sessions')
+  let entries
+  try { entries = readdirSync(root, { withFileTypes: true }) }
+  catch (error) { return (error as NodeJS.ErrnoException).code === 'ENOENT' ? [] : null }
+  const owners: string[] = []
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    let parsed: unknown
+    try { parsed = JSON.parse(readFileSync(join(root, entry.name, 'session.json'), 'utf8')) }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      return null
+    }
+    if (!parsed || typeof parsed !== 'object') return null
+    const record = parsed as { session_id?: unknown; governed?: unknown; harness?: unknown; harness_session_id?: unknown }
+    if (typeof record.session_id !== 'string') return null
+    if (record.governed !== true) continue
+    const harnessId = typeof record.harness === 'string' && record.harness ? record.harness : defaultHarness.id
+    let sharesDescriptor = false
+    try { sharesDescriptor = (harnessById(harnessId).sharedRuntimes?.(runtimeDir) ?? []).some((descriptor) => descriptor.key === descriptorKey) }
+    catch { return null }
+    if (sharesDescriptor && record.harness_session_id === threadId) owners.push(record.session_id)
+  }
+  return owners
+}
+
+async function codexHeadlessReadinessProof(current: () => HarnessLaunchReadyRecord | null): Promise<CodexHeadlessLaunchReadinessProof | null> {
+  const record = current()
+  if (!record?.governed || record.stopped || record.archived || !record.harnessSessionId) return null
+  const descriptor = codexHeadlessHarness.sharedRuntimes?.(record.runtimeDir)
+    .find((candidate) => candidate.key === 'codex-app-server')
+  if (!descriptor?.residency) return null
+  const generationBefore = codexRuntimeGenerationProof(record.runtimeDir)
+  if (!generationBefore) return null
+  let resident: Awaited<ReturnType<NonNullable<SharedRuntimeDescriptor['residency']>>>
+  try { resident = await descriptor.residency() }
+  catch { return null }
+  if (!resident.healthy) return null
+  if (!resident.referenceIds.includes(record.harnessSessionId)) return null
+  const owners = governedSharedRuntimeOwners(record.runtimeDir, descriptor.key, record.harnessSessionId)
+  if (!owners || owners.length !== 1 || owners[0] !== record.session) return null
+  const generationAfter = codexRuntimeGenerationProof(record.runtimeDir)
+  if (!generationAfter || codexRuntimeGenerationToken(generationBefore) !== codexRuntimeGenerationToken(generationAfter)) return null
+  return Object.freeze({
+    kind: 'codex-headless-shared-runtime',
+    descriptorKey: descriptor.key,
+    generation: generationAfter,
+    target: Object.freeze({
+      sessionId: record.session,
+      threadId: record.harnessSessionId,
+      ownerSessionId: owners[0],
+      ownerCount: 1,
+      ownerState: 'governed',
+      referenceState: 'loaded',
+      protectsControlPlane: true,
+    }),
+  })
+}
+
 // Codex headless is an independent adapter: its materialization and app-server delivery are exactly Codex's,
 // while launch only runs the backend-owned thread/start + first turn. There is no TUI to attach after that turn;
 // the shared project app-server keeps the thread addressable and idle sends use the inherited JSON-RPC channel.
@@ -2019,21 +2134,19 @@ export const codexHeadlessHarness: Harness = {
   // Record-backed liveness is the family contract for sleeping headless threads. An explicit stop is the one
   // offline marker; other app-server/thread failures surface through delivery rather than speculative liveness.
   liveness: recordOnline,
-  launchReady: async (current) => {
-    const deadline = Date.now() + 30_000
+  launchReady: async (current, deadline) => {
     for (;;) {
-      const rec = current()
-      if (rec?.governed && !rec.stopped && !rec.archived && rec.harnessSessionId) {
-        const descriptor = codexHeadlessHarness.sharedRuntimes?.(rec.runtimeDir)
-          .find((candidate) => candidate.key === 'codex-app-server')
-        const before = codexRuntimeGeneration(rec.runtimeDir)
-        const resident = descriptor?.residency ? await descriptor.residency() : null
-        const after = codexRuntimeGeneration(rec.runtimeDir)
-        const exactTargetRefs = resident?.referenceIds.filter((id) => id === rec.harnessSessionId).length ?? 0
-        if (before && after === before && resident?.healthy === true && exactTargetRefs === 1) return true
+      const proof = await codexHeadlessReadinessProof(current)
+      if (proof) return {
+        proof,
+        validate: async (latest) => {
+          const currentProof = await codexHeadlessReadinessProof(latest)
+          return !!currentProof && sameCodexHeadlessReadinessProof(proof, currentProof)
+        },
       }
-      if (Date.now() >= deadline) return false
-      await new Promise((resolve) => setTimeout(resolve, 200))
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) return null
+      await new Promise((resolve) => setTimeout(resolve, Math.min(200, remaining)))
     }
   },
   // There is no TUI to restart and the project app-server keeps the thread addressable. A forced reopen therefore

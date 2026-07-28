@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type ReviewDiffFile } from './git.js'
 import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
-import { adapterLoadedReferenceState, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { adapterLoadedReferenceState, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, envSessionId, type RawRecord } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
@@ -1806,7 +1806,7 @@ const SOCKET_READY_TIMEOUT_MS = 30000   // spans launchScript's bounded fast-fai
                                         // waitForReady (slot-hold + resume) waits through a daemon-race retry
                                         // instead of returning before a recovering socket
 const SOCKET_POLL_MS = 200
-async function waitForReady(id: string, harness: Harness, pending?: SessRec, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
+async function waitForReady(id: string, harness: Harness, pending?: SessRec, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<HarnessLaunchReadinessFence | null> {
   const current = () => {
     const stored = readRecord(id)
     const rec = stored && pending
@@ -1814,13 +1814,21 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
       : stored || pending
     return rec ? { ...rec, runtimeDir: runtimeRoot() } : null
   }
-  if (harness.launchReady) return harness.launchReady(current)
   const deadline = Date.now() + timeoutMs
+  if (harness.launchReady) return harness.launchReady(current, deadline)
+  const genericFence = (): HarnessLaunchReadinessFence => ({
+    proof: Object.freeze({ kind: 'adapter-liveness', harnessId: harness.id, sessionId: id }),
+    validate: async (latest) => {
+      const rec = latest()
+      const snap = await liveSnapshot()
+      return !!rec && harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online'
+    },
+  })
   for (;;) {
     const rec = current()
     const snap = await liveSnapshot()   // window + pane probe + live-listener set in one snapshot — all the adapter needs
-    if (rec && harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online') return true
-    if (Date.now() >= deadline) return false
+    if (rec && harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online') return genericFence()
+    if (Date.now() >= deadline) return null
     await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
   }
 }
@@ -1948,11 +1956,11 @@ async function resumeSessionUnlocked(id: string, opts: ResumeExecutionOptions = 
       await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec), transfer?.fifo)
       if (transfer) await transfer.done
     } finally { transfer?.close() }
-    let ready = false
+    let readiness: HarnessLaunchReadinessFence | null = null
     let readinessError = ''
-    try { ready = await waitForReady(id, h, resumed) }
+    try { readiness = await waitForReady(id, h, resumed) }
     catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
-    if (!ready) {
+    if (!readiness) {
       const failed = readRecord(id) || current
       writeRecord({ ...failed, archived: false, stopped: true })
       return {
@@ -1963,6 +1971,21 @@ async function resumeSessionUnlocked(id: string, opts: ResumeExecutionOptions = 
     }
     const latest = readRecord(id) || resumed
     writeRecord({ ...latest, archived: false, coldProof: null, status: latest.status === 'active' ? 'idle' : latest.status, stopped: false })
+    let stillReady = false
+    try { stillReady = await readiness.validate(() => {
+      const stored = readRecord(id)
+      return stored ? { ...stored, runtimeDir: runtimeRoot() } : null
+    }) }
+    catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
+    if (!stillReady) {
+      const failed = readRecord(id) || latest
+      writeRecord({ ...failed, archived: false, stopped: true })
+      return {
+        ok: false,
+        refused: true,
+        error: `session ${id}: launch readiness changed across the online commit${readinessError ? ` - ${readinessError}` : ''}; the session remains stopped and can be retried`,
+      }
+    }
   } else writeRecord(resumed)
   return { ok: true }
 }

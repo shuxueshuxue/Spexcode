@@ -190,6 +190,7 @@ touch ${JSON.stringify(consumed)}
   let releaseReady!: () => void
   const ready = new Promise<void>((resolve) => { releaseReady = resolve })
   let readinessEntered = false
+  let readinessValidations = 0
   let settled = false
   let runtimeIdentity: { pid: number; startToken: string } | null = null
   try {
@@ -199,7 +200,10 @@ touch ${JSON.stringify(consumed)}
       await waitUntil(() => existsSync(consumed), 'delegated helper consumption')
       readinessEntered = true
       await ready
-      return true
+      return {
+        proof: { kind: 'test-ready' },
+        validate: async () => { readinessValidations++; return true },
+      }
     }
     const pending = resumeSession(id, { force: true, authorization: { token, epoch: 41 } })
       .then((result) => { settled = true; return result })
@@ -213,6 +217,7 @@ touch ${JSON.stringify(consumed)}
     assert.equal(JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).stopped, true, 'record stays stopped before readiness')
     releaseReady()
     assert.deepEqual(await pending, { ok: true })
+    assert.equal(readinessValidations, 1, 'the same fence is validated after the record commit')
     assert.equal(JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).stopped, false)
     await waitUntil(() => existsSync(sharedPid), 'delegated runtime pid')
     const pid = Number(readFileSync(sharedPid, 'utf8').trim()); const runtimeStart = processStartToken(pid)
@@ -238,8 +243,8 @@ touch ${JSON.stringify(consumed)}
   }
 })
 
-test('resume helper failure and false readiness both preserve the stopped offline record', async (t) => {
-  for (const outcome of ['false', 'timeout'] as const) await t.test(outcome, async () => {
+test('resume missing, failed, or invalidated readiness preserves the stopped offline record', async (t) => {
+  for (const outcome of ['missing', 'timeout', 'invalidated'] as const) await t.test(outcome, async () => {
     const previousHome = process.env.SPEXCODE_HOME
     const previousPath = process.env.PATH
     const originalLaunchCmd = codexHeadlessHarness.launchCmd
@@ -260,13 +265,15 @@ test('resume helper failure and false readiness both preserve the stopped offlin
     try {
       codexHeadlessHarness.launchCmd = () => helper
       ;(codexHeadlessHarness as any).sharedRuntimeSpawn = false
-      ;(codexHeadlessHarness as any).launchReady = outcome === 'false'
-        ? async () => false
-        : async () => { throw new Error('bounded helper readiness timeout') }
+      ;(codexHeadlessHarness as any).launchReady = outcome === 'missing'
+        ? async () => null
+        : outcome === 'timeout'
+          ? async () => { throw new Error('bounded helper readiness timeout') }
+          : async () => ({ proof: { kind: 'test-invalidated' }, validate: async () => false })
       const result = await resumeSession(id, { force: true })
       assert.equal(result.ok, false)
       assert.equal(result.refused, true)
-      assert.match(result.error || '', outcome === 'timeout' ? /bounded helper readiness timeout/ : /did not become ready/)
+      assert.match(result.error || '', outcome === 'timeout' ? /bounded helper readiness timeout/ : /did not become ready|readiness changed/)
       const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
       assert.equal(stored.stopped, true)
       assert.equal(codexHeadlessHarness.liveness({ session: id, stopped: stored.stopped }, false), 'offline')

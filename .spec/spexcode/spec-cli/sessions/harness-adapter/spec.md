@@ -221,12 +221,18 @@ surface:
   epoch/session/operation and inherited outside argv/logs; forged, stale, completed, mismatched, and replayed
   delegates refuse before spawn. A direct launch, fallback, or queue drain never receives the lease bearer or
   authority to start a shared root. Launch acceptance and launch readiness are separate adapter facts. The
-  optional `launchReady` seam proves that a launched session is actually addressable before product code
-  commits a resume; adapters without it retain the existing bounded liveness-based readiness. A false result
-  is a launch failure, never a successful handoff. Codex-headless readiness requires one unchanged exact live
-  detached shared-root PID/start/isolation/socket generation and the governed target's existing thread in the
-  loaded set, so that exact reference protects the control plane. This readiness probe does not replace
-  steady-state headless liveness: once committed, a sleeping headless conversation remains record-backed.
+  optional `launchReady` seam returns an adapter-owned readiness fence, not a boolean: its immutable proof names
+  the runtime/reference facts that made the launched session addressable, and its validator re-proves those same
+  facts after product code crosses the `stopped:false` commit boundary. Adapters without it retain the existing
+  bounded liveness proof and recheck. A missing, timed-out, or invalidated fence is a launch failure, never a
+  successful handoff. Codex-headless readiness freezes one exact live detached shared-root PID/start/process-
+  group/session/isolation/socket generation, the loaded target thread, and its unique governed record owner.
+  Ownership is joined from every governed record whose adapter declares that shared-runtime descriptor; exactly
+  one record may claim the target thread and it must be the session being resumed. The loaded-ID set establishes
+  reference state but cannot establish record ownership. The post-write validator repeats the full generation,
+  loaded-reference, and owner join: an unload, restart, owner collision, or reassignment rolls the record back to
+  stopped/offline. This launch fence does not replace steady-state headless liveness: once committed, a sleeping
+  headless conversation remains record-backed.
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **pane-title semantics** (`paneTitleIsSelfSummary`) — whether the harness's tmux pane title IS the agent's

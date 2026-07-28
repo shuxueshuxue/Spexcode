@@ -72,6 +72,7 @@ type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'resources' |
 export type Worktree = {
   path: string; branch: string | null; node: string | null
   session: string | null; status: string | null; isMain: boolean
+  liveness?: 'offline' | 'unknown'
   ops: NodeOp[]   // pending spec-node changes this worktree makes vs main (the board's overlay)
 }
 export type Layout = { main: string; convention: Convention; worktrees: Worktree[] }
@@ -229,12 +230,6 @@ export function rawLaunchReadinessOriginal(raw: RawRecord): RawLaunchReadinessOr
   return original
 }
 
-export function rawPublicLifecycle(raw: RawRecord): Pick<RawRecord, 'status' | 'proposal' | 'note'> {
-  const original = rawLaunchReadinessOriginal(raw)
-  return original
-    ? { status: original.status, proposal: original.proposal, note: original.note }
-    : { status: raw.status, proposal: raw.proposal, note: raw.note }
-}
 // the agent's OWN session id from the environment — the only locator now that the record left the worktree.
 // Three tiers, in order:
 //   (1) a harness's per-thread env var (`sessionEnvVar`) RESOLVED VIA THE ALIAS — when it lands on a governed
@@ -276,6 +271,11 @@ export type RecordEntry =
   | { kind: 'absent' }
   | { kind: 'corrupt'; path: string; error: string }
 
+export type PublicRecordEntry =
+  | { kind: 'ok'; raw: RawRecord; liveness: 'offline' | null }
+  | { kind: 'absent' }
+  | { kind: 'corrupt'; sessionId: string; governed: boolean | null; path: string; error: string; liveness: 'unknown' }
+
 export function readRecordEntry(id: string): RecordEntry {
   const path = sessionRecordPath(id)
   let text: string
@@ -287,6 +287,49 @@ export function readRecordEntry(id: string): RecordEntry {
   if (!raw || typeof raw !== 'object' || !(raw as RawRecord).session_id)
     return { kind: 'corrupt', path, error: 'parsed, but carries no session_id — not a session record' }
   return { kind: 'ok', raw: raw as RawRecord }
+}
+
+// The ONE public session-record parser. Internal mutation/readiness code uses readRecordEntry's exact raw
+// candidate; every public projection passes through here. A valid pending fence replaces all lifecycle-facing
+// fields with its frozen original and forces offline liveness. Malformed pending bytes remain a present,
+// corrupt/unknown row instead of leaking candidate state or disappearing as absence.
+export function projectPublicRecordEntry(id: string, entry: RecordEntry): PublicRecordEntry {
+  if (entry.kind === 'absent') return entry
+  if (entry.kind === 'corrupt') return {
+    kind: 'corrupt', sessionId: id, governed: null, path: entry.path, error: entry.error, liveness: 'unknown',
+  }
+  try {
+    const original = rawLaunchReadinessOriginal(entry.raw)
+    if (!original) return { kind: 'ok', raw: entry.raw, liveness: null }
+    return {
+      kind: 'ok',
+      raw: {
+        ...entry.raw,
+        status: original.status,
+        proposal: original.proposal,
+        note: original.note,
+        stopped: original.stopped,
+        archived: original.archived,
+        cold_proof: original.cold_proof ?? undefined,
+        adapter_recovery: original.adapter_recovery ?? undefined,
+        launch_readiness_pending: '',
+      },
+      liveness: 'offline',
+    }
+  } catch (error) {
+    return {
+      kind: 'corrupt',
+      sessionId: id,
+      governed: typeof entry.raw.governed === 'boolean' ? entry.raw.governed : null,
+      path: sessionRecordPath(id),
+      error: error instanceof Error ? error.message : String(error),
+      liveness: 'unknown',
+    }
+  }
+}
+
+export function readPublicRecordEntry(id: string): PublicRecordEntry {
+  return projectPublicRecordEntry(id, readRecordEntry(id))
 }
 export function readRawRecord(id: string): RawRecord | null {
   try { const e = readRecordEntry(id); return e.kind === 'ok' ? e.raw : null }
@@ -369,15 +412,17 @@ export async function resolveLayout(): Promise<Layout> {
   // independent → compute (or cache-hit) in parallel, keyed by worktree path as before. guardWorktree wraps
   // each: a worktree whose dir was genuinely removed mid-read (a worker self-merged + retired it) is OMITTED;
   // one that still exists but hit a transient detail failure is kept as a DEGRADED row from the last cached delta.
-  const records = listSessionIds().map(readRawRecord).filter((r): r is RawRecord => !!r && r.governed)
+  const publicEntries = listSessionIds().map((id) => readPublicRecordEntry(id))
+    .filter((entry) => entry.kind === 'corrupt' ? entry.governed !== false : entry.kind === 'ok' && entry.raw.governed)
+  const records = publicEntries.flatMap((entry) => entry.kind === 'ok' ? [entry] : [])
   // main's tip, resolved ONCE per board read — a component of every worktree's overlay cache key
   // ([[worktree-linker]]: landed content must dissolve the ops it made moot).
   const mainSha = await (async () => {
     try { return (await gitA(['-C', main, 'rev-parse', '--verify', `${mainRef}^{commit}`])).trim() } catch { return '' }
   })()
-  const rows = await Promise.all(records.map((r) => {
+  const rows = await Promise.all(records.map(({ raw: r, liveness }) => {
     const node = r.node ?? (r.branch && r.branch.startsWith(convention.branchPrefix) ? r.branch.slice(convention.branchPrefix.length) : null)
-    const base: Worktree = { path: r.worktree_path, branch: r.branch, node, session: r.session_id, status: r.status, isMain: false, ops: [] }
+    const base: Worktree = { path: r.worktree_path, branch: r.branch, node, session: r.session_id, status: r.status, isMain: false, ...(liveness ? { liveness } : {}), ops: [] }
     // @@@ archived rows cost nothing - a shelved session ([[archive]]) keeps its row (the record is the
     // existence truth) but skips the per-worktree spec-delta entirely: that git-history probe is the board's
     // dominant per-row cost, and shelving is exactly the human saying "stop spending attention here". So the
@@ -387,14 +432,17 @@ export async function resolveLayout(): Promise<Layout> {
       async (): Promise<Worktree> => ({ ...base, ops: await cachedDelta(r.worktree_path, mainRef, mainSha) }),
       (): Worktree => ({ ...base, ops: deltaCache.get(r.worktree_path)?.ops ?? [] }))
   }))
-  const sessionWorktrees = rows.filter((w): w is Worktree => w !== null)
+  const corruptRows: Worktree[] = publicEntries.flatMap((entry) => entry.kind === 'corrupt'
+    ? [{ path: '', branch: null, node: null, session: entry.sessionId, status: 'corrupt', liveness: 'unknown', isMain: false, ops: [] }]
+    : [])
+  const sessionWorktrees = [...rows.filter((w): w is Worktree => w !== null), ...corruptRows]
   // the main checkout row (isMain) — always present, carries no overlay; it anchors the merged tree the board draws.
   const mainRow: Worktree = { path: main, branch: base, node: null, session: null, status: null, isMain: true, ops: [] }
   const worktrees = [mainRow, ...sessionWorktrees]
   // drop cache entries for worktrees that may no longer hold one — closed sessions (gone from the store) AND
   // newly-archived ones (which no longer compute a delta), so archiving SELF-EVICTS its cached ops instead of
   // stranding them in a map nothing prunes.
-  const live = new Set(records.filter((r) => !r.archived).map((r) => r.worktree_path))
+  const live = new Set(records.filter(({ raw }) => !raw.archived).map(({ raw }) => raw.worktree_path))
   for (const k of [...deltaCache.keys()]) if (!live.has(k)) deltaCache.delete(k)
   return { main: convention.main || main || root, convention, worktrees }
 }

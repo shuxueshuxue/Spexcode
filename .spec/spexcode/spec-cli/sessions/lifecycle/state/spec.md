@@ -138,7 +138,7 @@ so the dispatch hits a live one, then sends the merge prompt — and THAT prompt
 
 Launch handoff is not proof that resume restored liveness. The resolved harness adapter supplies a bounded
 readiness fence. Resume persists an internal launch-readiness-pending fence while every public record, list,
-API, graph, and timeline projection remains the exact pre-resume stopped/offline state. After the adapter
+API, graph, resources, settings, and timeline projection remains the exact pre-resume stopped/offline state. After the adapter
 revalidates the same runtime, target reference, and unique governed owner across that durable boundary, one
 final record write clears the pending fence and publishes `stopped:false` plus the real resting lifecycle
 transition exactly once. False, throw, timeout, or stale-pending recovery retains/restores the exact original

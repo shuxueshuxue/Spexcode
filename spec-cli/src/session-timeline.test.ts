@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { lastHumanSendVia, readTimeline } from './session-timeline.js'
-import { rawPublicLifecycle, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
+import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
 import { composeSessionPrompt, markState, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
 // The reply-channel signal must be SYMMETRIC (the [[session-timeline]] write surface): the phone's
@@ -105,9 +105,18 @@ test('timeline observation keeps a pending launch on the frozen lifecycle until 
       },
     },
   } satisfies RawRecord
-  assert.deepEqual(rawPublicLifecycle(candidate), { status: 'active', proposal: null, note: 'original note' })
-  assert.deepEqual(rawPublicLifecycle({ ...candidate, launch_readiness_pending: '' }),
-    { status: 'idle', proposal: null, note: 'candidate note' })
+  const pending = projectPublicRecordEntry(candidate.session_id, { kind: 'ok', raw: candidate })
+  assert.equal(pending.kind, 'ok')
+  if (pending.kind === 'ok') {
+    assert.deepEqual({ status: pending.raw.status, proposal: pending.raw.proposal, note: pending.raw.note, liveness: pending.liveness },
+      { status: 'active', proposal: null, note: 'original note', liveness: 'offline' })
+  }
+  const published = projectPublicRecordEntry(candidate.session_id, { kind: 'ok', raw: { ...candidate, launch_readiness_pending: '' } })
+  assert.equal(published.kind, 'ok')
+  if (published.kind === 'ok') {
+    assert.deepEqual({ status: published.raw.status, proposal: published.raw.proposal, note: published.raw.note, liveness: published.liveness },
+      { status: 'idle', proposal: null, note: 'candidate note', liveness: null })
+  }
 })
 
 test('a declaration note remains in the timeline after a later status replaces the current record', () => {

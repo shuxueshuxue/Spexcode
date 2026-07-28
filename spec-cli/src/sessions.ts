@@ -9,7 +9,7 @@ import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type Review
 import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
 import { adapterLoadedReferenceState, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
-import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, envSessionId, type RawRecord } from './layout.js'
+import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, type PublicRecordEntry, type RawRecord } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
@@ -928,29 +928,16 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
   ])
   // Freeze one record snapshot for both the census join and row projection. A second full read after an awaited
   // probe could pair record A with thread identity B and accidentally treat a missing census entry as clean.
-  const snapshots = new Map<string, { entry: ReturnType<typeof readAliasedRecordEntry>; rec: SessRec | null }>()
+  const snapshots = new Map<string, { entry: PublicRecordEntry; rec: SessRec | null }>()
   for (const id of ids) {
     try {
-      const entry = readAliasedRecordEntry(id)
-      if (entry.kind !== 'ok') snapshots.set(id, { entry, rec: null })
-      else {
-        try { snapshots.set(id, { entry, rec: fromRaw(entry.raw) }) }
-        catch (error) {
-          snapshots.set(id, {
-            entry: {
-              kind: 'corrupt',
-              path: sessionRecordPath(id),
-              error: error instanceof Error ? error.message : String(error),
-            },
-            rec: null,
-          })
-        }
-      }
+      const entry = readPublicRecordEntry(id)
+      snapshots.set(id, { entry, rec: entry.kind === 'ok' ? fromRaw(entry.raw) : null })
     } catch { /* guardSession below preserves the last-known row for a transient read failure */ }
   }
   // Only archived adapter records need the resident-ID join. If there are none, this read path performs zero
   // control-plane probes; resources still owns the full turn/read probe for its detailed report.
-  const censusRecords = [...snapshots.values()].flatMap(({ rec }) => rec && !rec.launchReadinessPending && rec.governed && rec.archived && rec.harnessSessionId
+  const censusRecords = [...snapshots.values()].flatMap(({ entry, rec }) => entry.kind === 'ok' && entry.liveness === null && rec && rec.governed && rec.archived && rec.harnessSessionId
     ? [{ ...rec, harness: rec.harness || defaultHarness.id }]
     : [])
   const residentCensus = censusRecords.length ? await adapterLoadedReferenceState(censusRecords) : new Map()
@@ -959,7 +946,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
   const changedDuringCensus = new Set<string>()
   for (const rec of censusRecords) {
     try {
-      const current = readAliasedRecordEntry(rec.session)
+      const current = readPublicRecordEntry(rec.session)
       const before = snapshots.get(rec.session)?.entry
       if (current.kind !== 'ok' || before?.kind !== 'ok' || JSON.stringify(current.raw) !== JSON.stringify(before.raw)) changedDuringCensus.add(rec.session)
     } catch { changedDuringCensus.add(rec.session) }
@@ -975,13 +962,11 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     // hits a transient read failure has nothing to fall back on and the row vanishes — re-opening the exact
     // hole this branch closes, one poll later. `corrupt` is a true reading, so it is worth remembering.
     if (entry.kind === 'corrupt') { const c = corruptSession(id, entry); lastKnownSession.set(id, c); return c }
-    const storedRec = snapshot.rec
-    if (!storedRec || !storedRec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
-    const rec = publicRecord(storedRec)
-    // A launched candidate is deliberately internal until its adapter fence revalidates. Do not let live
-    // process/thread evidence punch through the frozen public record (including archive hazard repair): every
-    // list/API/graph consumer sees the exact original lifecycle with an offline liveness axis.
-    if (storedRec.launchReadinessPending) {
+    const rec = snapshot.rec
+    if (!rec || !rec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
+    // A forced public liveness comes only from the shared record projection. Do not let live process/thread
+    // evidence punch through it (including archive hazard repair).
+    if (entry.kind === 'ok' && entry.liveness === 'offline') {
       const pending = toSession(rec, reconcile(rec, snap), 'offline')
       lastKnownSession.set(id, pending)
       return pending

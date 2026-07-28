@@ -10,6 +10,7 @@ code:
   - spec-cli/src/layout.ts#readJsonConfig
 related:
   - spec-cli/src/layout-session-id.test.ts
+  - spec-cli/src/session-public-projection.api.test.ts
   - spexcode.json
   - .nvmrc
 ---
@@ -74,6 +75,12 @@ NOT `git worktree list`, so an unmanaged scratch worktree (`agent-*`) never appe
 ([[archive]]) is the one governed row that still enumerates but computes NO `ops`: that git-history probe is
 the seam's dominant per-row cost and shelving is the human declining to spend it, so its row is served bare
 and its cached delta is evicted rather than kept alive by a row nobody is watching.
+
+Layout rows are a public record projection, not an internal-readiness view. `resolveLayout()` consumes the same
+layout-owned three-way parser as the session list and resource report: a valid launch-readiness-pending row
+keeps the frozen original status/archive fields and explicit offline liveness; a malformed fence remains a
+present `corrupt` row with unknown liveness and performs no worktree delta walk. Thus `/api/settings` cannot
+publish an idle/online candidate or silently drop an unreadable session while another surface stays fail-closed.
 
 Because the record left the worktree, an agent's `spex session done/park/ask` finds its OWN session in the
 ENVIRONMENT (`envSessionId()`), with a harness-aware precedence: a harness's per-thread env var

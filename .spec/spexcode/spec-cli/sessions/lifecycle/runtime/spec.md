@@ -65,8 +65,8 @@ Each slot holds the artifacts that are a pure function of THAT tree's `.plugins`
 content-hash freshness stamp, the plugin-folder ledger), keyed by the same `encodeProject` transform
 applied to the worktree's `rev-parse --show-toplevel` — the sessions pattern (shared global root, slotted
 by identity) applied to trees, so two worktrees with divergent `.plugins` never trade hook sets. The
-project tier also carries the Codex app-server socket/pid/log/lock when Codex is launched through
-SpexCode, plus [[code-anchor]]'s versioned immutable history-event ledgers. `project-store.ts` owns the pure
+project tier also carries the Codex app-server socket/pid/log/lock and private versioned detached-launch receipt
+when Codex is launched through SpexCode, plus [[code-anchor]]'s versioned immutable history-event ledgers. `project-store.ts` owns the pure
 home/path encoding shared by `layout.ts` and the Git indexer, while `layout.ts` adds Git common-dir discovery;
 this keeps one project identity without introducing a `git.ts` ↔ `layout.ts` import cycle. The tier also carries
 a `backend-instances/` registry: every supervisor generation atomically records its instance id, PID,

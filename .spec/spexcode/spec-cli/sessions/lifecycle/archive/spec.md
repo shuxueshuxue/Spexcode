@@ -44,26 +44,38 @@ agent-authored lifecycle, worktree, branch, transcript, and conversation identit
 only after the existing exact-instance stop guard has safely stopped that session-owned leaf, tmux, and adapter
 transport. The shared project app-server/control plane is never touched; sibling references remain loaded. If
 ownership or the stop proof is unprovable, archive fails loudly and leaves the record unarchived and visible.
-Native thread ownership is unique whether the target is currently loaded or not. For adapters whose archive RPC
-can race native child creation, the target descendant census runs again after the mutation and before success;
-a descendant appearing in that interval refuses and compensates instead of filing a false zero-runtime proof.
+Native thread ownership is unique whether the target is currently loaded or not. A native descendant collection
+is runtime owned by its exact ancestor, not a separate Spex session: archive includes every uniquely-owned active
+or already-archived descendant at any depth in the same cold transition, while preserving each native conversation
+for later same-thread resume. For adapters whose archive RPC can race native child creation, the complete target
+subtree census runs again after the mutation and before success. A new, missing, duplicated, or reassigned member
+in that interval refuses and compensates instead of filing a false zero-runtime proof.
 Archive eligibility reads the target's fresh native turn census, not its public lifecycle/status projection: an
 `inProgress` turn refuses with zero mutation, while a loaded target whose complete turn census has no
 `inProgress` turn may archive even if a hook-authored public status still reads working.
 
 For a shared resident adapter, lifecycle mutation uses a target-scoped proof rather than the resource report's
-full projection. It first proves the shared PID/start/isolation/socket generation, obtains the paginated loaded-ID
-set, and checks the target's active and archived descendants. It reads turn history only when the exact target is
-loaded, and then reads only that target. An absent target with no descendants may therefore stop or archive even
-while an unrelated loaded or unowned sibling is slow or unresponsive; those sibling IDs still protect the shared
-root, which the session mutation never signals. A loaded active target, an unknown target read, any descendant,
-an ambiguous collection state, duplicate ownership, or a shared-generation identity change fails closed. The
-resource report remains the complete projection and may inspect every loaded reference; its latency or an
+full projection. It first proves the shared PID/start/detached-receipt/socket generation, obtains the paginated loaded-ID
+set, and checks the target's active and archived descendant collections. Ordinary stop reads only the exact target
+and still refuses a resident descendant subtree. Archive additionally reads each loaded member of the exact owned
+subtree, then archives every member that was initially active under one generation fence; members already in the
+archived collection are verified but not mutated. An absent target with no descendants may therefore stop or
+archive even while an unrelated loaded or unowned sibling is slow or unresponsive; those sibling IDs still protect
+the shared root, which the session mutation never signals. A loaded active subtree member, an unknown exact member read, a
+member present in both or neither native collection, changed ancestry, duplicate ownership, or a shared-generation
+identity change fails closed. Success requires a post-mutation recensus proving parent plus the identical descendant
+closure uniquely archived, every subtree member unloaded, and every pre-existing unrelated loaded sibling retained.
+The resource report remains the complete projection and may inspect every loaded reference; its latency or an
 unrelated turn-read failure is not mutation authority.
 Archive compensation is fenced to that same exact original generation at connection, request, and response
 boundaries. If the shared generation changes after the archive request, commit state is reported unknown and no
 `thread/unarchive` is sent to the replacement generation; recovery remains explicit rather than borrowing new
-authority from a process that was never proved by the original preflight.
+authority from a process that was never proved by the original preflight. On an unchanged generation, compensation
+restores only members that were active before this attempt; an already-archived descendant is never unarchived.
+The same opaque preflight receipt remains available until the session record and final offline proof are committed.
+If native cold teardown succeeds but record lookup, final liveness, or filing then fails, outer compensation returns
+that exact receipt to the adapter so the complete originally-active subtree is restored on the same generation.
+Ordinary later resume carries no receipt and restores only the parent conversation.
 
 **It is the attention verb backed by the resource stop.** This is the line that must not blur:
 

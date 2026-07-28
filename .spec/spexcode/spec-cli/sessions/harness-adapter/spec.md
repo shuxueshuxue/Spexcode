@@ -206,15 +206,30 @@ surface:
   product mutation treats that uncertainty as a separate fail-closed blocker. The adapter exposes full projection
   and mutation proof as separate capabilities: resource reporting may read every loaded reference to describe turn
   presence, while lifecycle mutation uses the paginated loaded-ID set, both exact target descendant collections,
-  and an exact target read only when that target is loaded. The mutation proof fences the shared PID/start/isolation/
+  and exact reads only for loaded members authorized by the operation. Ordinary stop reads the target and refuses
+  descendants. Cold archive treats the adapter's native `ancestorThreadId` result as an ownership closure (all depths,
+  excluding the ancestor), verifies every member's direct-parent chain against the active/archived collections,
+  reads every loaded member, and archives the initially-active closure deepest-first with the ancestor last;
+  already-archived members are proof, not mutation.
+  The mutation proof fences the shared PID/start/detached-receipt/
   socket generation across those reads; an unrelated slow sibling remains a protective loaded ID but cannot block
-  an isolated target leaf. That generation exists only for a live `detached-v3` PID/start whose observed process
-  group and session, isolation stamp, and socket inode all agree. Unknown/active target state, descendants, or a
-  generation change fail closed, and compensating mutation is permitted only on the unchanged original generation.
+  an isolated target subtree. Post-mutation it re-censuses the identical closure, requires the whole subtree unloaded
+  and uniquely archived, and keeps unrelated loaded siblings intact. Duplicate active/archived membership, a member
+  absent from both collections, changed ancestry, or a late replacement fails closed; compensation restores only
+  originally-active members and only on the unchanged generation. That generation exists only for one verifier-owned
+  version-4 detached launch receipt whose live PID/start and process group agree, whose Linux `/proc` session also
+  agrees when running on Linux, and whose socket inode is unchanged. Darwin never consumes `ps sess` as evidence.
+  Unknown/active subtree state, ambiguous ancestry, or a generation change fails closed, and compensating mutation
+  is permitted only on the unchanged original generation.
+  The adapter receipt also owns post-cold compensation outside the native RPC boundary: until the product commits
+  the archive record and final offline proof, a failure returns the same receipt to `restoreRuntime`, which restores
+  all and only its originally-active subtree members. A receipt-free resume remains the normal parent-only restore.
   The Codex app-server is spawned
   as a detached child in its own operating-system process group and session, not merely wrapped in `nohup`
-  (`nohup` did not survive the real Codex Node launcher resetting signal behavior). Its PID/start and observed
-  process-group/session are recorded, then re-read live by teardown; an artifact alone never proves isolation.
+  (`nohup` did not survive the real Codex Node launcher resetting signal behavior). The process adapter writes a
+  private receipt only after proving PID/start and `PGID == PID`, plus Linux `SID == PID`; every later consumer
+  re-verifies it through that adapter, while Darwin deliberately asks no `ps sess` question. A receipt alone never
+  proves the live boundary.
   Killing the pane that happened to launch the daemon therefore cannot HUP unrelated turns.
   Shared-runtime spawn also acquires [[maintenance-lease]] admission. During active maintenance it is allowed
   only by consuming the resume ticket's opaque one-use delegated capability, bound to that live ticket's
@@ -227,8 +242,8 @@ surface:
   pre-resume stopped/offline record throughout that validation; only a successful recheck clears pending and
   publishes `stopped:false`. Adapters without it retain the existing
   bounded liveness proof and recheck. A missing, timed-out, or invalidated fence is a launch failure, never a
-  successful handoff. Codex-headless readiness freezes one exact live detached shared-root PID/start/process-
-  group/session/isolation/socket generation, the loaded target thread, and its unique governed record owner.
+  successful handoff. Codex-headless readiness freezes one exact live detached shared-root receipt/socket
+  generation, the loaded target thread, and its unique governed record owner.
   Ownership is joined from every governed record whose adapter declares that shared-runtime descriptor; exactly
   one record may claim the target thread and it must be the session being resumed. The loaded-ID set establishes
   reference state but cannot establish record ownership. The post-pending validator repeats the full generation,

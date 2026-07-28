@@ -440,22 +440,24 @@ export function createSessionMaintenance(input: CoordinatorInput) {
     let parentTicketId: string | undefined
 
     if (operation.op === 'shared-spawn') {
-      if (state.state !== 'active') {
-        if (state.state === 'open') fail('maintenance_delegate_invalid', 'shared-runtime delegate is not valid outside active maintenance', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
+      if (state.state === 'open') {
+        if (operation.delegate) fail('maintenance_delegate_invalid', 'shared-runtime delegate is not valid outside active maintenance', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
+      } else if (state.state !== 'active') {
         fail('maintenance_active', `session maintenance is ${state.state}; shared-spawn was not admitted`, { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
+      } else {
+        const raw = operation.delegate
+        const delegate = state.delegates.find((candidate) => candidate.epoch === state.epoch
+          && candidate.operation === 'shared-spawn' && candidate.sessionId === operation.sessionId
+          && presentedTokenMatches(raw, candidate.tokenHash))
+        const parentTicket = delegate && state.tickets.find((candidate) => candidate.id === delegate.parentTicketId
+          && candidate.epoch === state.epoch && candidate.operation === 'resume'
+          && candidate.sessionId === operation.sessionId && candidate.mode === 'maintenance')
+        if (!delegate || delegate.state !== 'unused' || !parentTicket)
+          return fail('maintenance_delegate_invalid', 'shared-runtime delegate is forged, stale, completed, mismatched, or replayed', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
+        delegate.state = 'running'
+        mode = 'maintenance'
+        parentTicketId = parentTicket.id
       }
-      const raw = operation.delegate
-      const delegate = state.delegates.find((candidate) => candidate.epoch === state.epoch
-        && candidate.operation === 'shared-spawn' && candidate.sessionId === operation.sessionId
-        && presentedTokenMatches(raw, candidate.tokenHash))
-      const parentTicket = delegate && state.tickets.find((candidate) => candidate.id === delegate.parentTicketId
-        && candidate.epoch === state.epoch && candidate.operation === 'resume'
-        && candidate.sessionId === operation.sessionId && candidate.mode === 'maintenance')
-      if (!delegate || delegate.state !== 'unused' || !parentTicket)
-        return fail('maintenance_delegate_invalid', 'shared-runtime delegate is forged, stale, completed, mismatched, or replayed', { state: state.state, epoch: state.epoch, operation: operation.op, sessionId: operation.sessionId })
-      delegate.state = 'running'
-      mode = 'maintenance'
-      parentTicketId = parentTicket.id
     } else if ((operation.op === 'stop' || operation.op === 'resume') && operation.authorization) {
       verifyLease(state, operation.authorization)
       const entry = capabilityFor(state, operation)

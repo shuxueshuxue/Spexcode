@@ -328,7 +328,7 @@ test('Codex archive refuses a shared generation swap during exact target guard b
     owner = startCodexOwner(root)
     const result = await codexHarness.coldRuntime?.({ session: 'generation-fence-session', harnessSessionId: target })
     assert.equal(result?.ok, false)
-    if (result && !result.ok) assert.match(result.reason, /generation changed during target guard/)
+    if (result && !result.ok) assert.match(result.reason, /generation changed during subtree turn census/)
     assert.equal(archiveCalls, 0, 'a generation swap never reaches thread/archive')
     assert.equal(archived, false)
   } finally {
@@ -360,7 +360,7 @@ test('Codex archive never compensates a commit-unknown RPC error on a replacemen
   assert.equal(archived, true)
 })
 
-test('Codex archive refuses an unknown exact loaded target and any archived native descendant', async () => {
+test('Codex archive refuses an unknown exact loaded target and an unowned archived native descendant', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   const home = mkdtempSync(join(tmpdir(), 'spex-codex-target-guard-'))
@@ -375,7 +375,8 @@ test('Codex archive refuses an unknown exact loaded target and any archived nati
       return { thread: { turns: [] } }
     }
     if (message.method === 'thread/list') {
-      if (message.params.ancestorThreadId) return { data: !targetUnknown && message.params.archived ? [{ id: 'archived-native-child' }] : [], nextCursor: null }
+      if (message.params.ancestorThreadId) return { data: !targetUnknown && message.params.archived
+        ? [{ id: 'archived-native-child', parentThreadId: target }] : [], nextCursor: null }
       return { data: message.params.archived ? [] : [{ id: target }], nextCursor: null }
     }
     throw new Error(`unexpected RPC ${message.method}`)
@@ -393,7 +394,7 @@ test('Codex archive refuses an unknown exact loaded target and any archived nati
     targetUnknown = false
     const descendant = await codexHarness.coldPreflight?.({ session: 'guarded-session', harnessSessionId: target })
     assert.equal(descendant?.ok, false)
-    if (descendant && !descendant.ok) assert.match(descendant.reason, /owned descendants \(archived-native-child\)/)
+    if (descendant && !descendant.ok) assert.match(descendant.reason, /archived-native-child.*absent from both.*unowned/)
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await stopCodexOwner(owner)
@@ -403,6 +404,209 @@ test('Codex archive refuses an unknown exact loaded target and any archived nati
     else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
     rmSync(home, { recursive: true, force: true })
   }
+})
+
+test('Codex archive cold-tears down the exact active and archived transitive descendant closure', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-owned-subtree-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const target = 'owned-subtree-target'
+  const activeChild = 'owned-active-child'
+  const grandchild = 'owned-active-grandchild'
+  const archivedChild = 'owned-archived-child'
+  const sibling = 'unrelated-loaded-sibling'
+  const parent = new Map([
+    [activeChild, target],
+    [grandchild, activeChild],
+    [archivedChild, target],
+  ])
+  const collection = new Map<string, 'active' | 'archived'>([
+    [target, 'active'],
+    [activeChild, 'active'],
+    [grandchild, 'active'],
+    [archivedChild, 'archived'],
+  ])
+  const loaded = new Set([target, activeChild, grandchild, sibling])
+  const histories = new Map([...collection].map(([id]) => [id, `history:${id}`]))
+  const mutations: string[] = []
+  const threadReads: string[] = []
+  const isDescendant = (id: string, ancestor: string) => {
+    for (let next = parent.get(id); next; next = parent.get(next)) if (next === ancestor) return true
+    return false
+  }
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: [...loaded].map((id) => ({ id })), nextCursor: null }
+    if (message.method === 'thread/read') {
+      threadReads.push(message.params.threadId)
+      if (message.params.threadId === sibling) throw new Error('unrelated sibling must never be read')
+      return { thread: { status: { type: 'idle' }, turns: [{ id: histories.get(message.params.threadId), status: 'completed' }] } }
+    }
+    if (message.method === 'thread/archive') {
+      const id = message.params.threadId
+      mutations.push(`archive:${id}`)
+      collection.set(id, 'archived')
+      loaded.delete(id)
+      return {}
+    }
+    if (message.method === 'thread/unarchive') {
+      const id = message.params.threadId
+      mutations.push(`unarchive:${id}`)
+      collection.set(id, 'active')
+      return {}
+    }
+    if (message.method === 'thread/list') {
+      const state = message.params.archived ? 'archived' : 'active'
+      const ids = [...collection].filter(([id, value]) => value === state &&
+        (!message.params.ancestorThreadId || isDescendant(id, message.params.ancestorThreadId)))
+        .map(([id]) => ({ id, parentThreadId: parent.get(id) ?? null }))
+      return { data: ids, nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const root = runtimeRoot()
+  const socket = codexAppServerSock(root)
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    owner = startCodexOwner(root)
+
+    const rec = { session: 'owned-subtree-session', harnessSessionId: target }
+    const preflight = await codexHarness.coldPreflight?.(rec)
+    assert.equal(preflight?.ok, true)
+    if (!preflight?.ok) throw new Error('owned subtree fixture did not obtain its adapter receipt')
+    assert.deepEqual(await codexHarness.coldRuntime?.(rec, preflight.receipt), { ok: true })
+    assert.deepEqual(new Set(threadReads), new Set([target, activeChild, grandchild]),
+      'only loaded members of the exact target subtree are read')
+    assert.deepEqual(mutations, [
+      `archive:${grandchild}`,
+      `archive:${activeChild}`,
+      `archive:${target}`,
+    ], 'each initially-active descendant is archived once before the parent; an already-archived child is not mutated')
+    assert.deepEqual([...collection].filter(([, state]) => state !== 'archived'), [])
+    assert.deepEqual([...loaded], [sibling], 'the complete target subtree is unloaded while the unrelated sibling survives')
+    assert.deepEqual([...histories], [
+      [target, `history:${target}`],
+      [activeChild, `history:${activeChild}`],
+      [grandchild, `history:${grandchild}`],
+      [archivedChild, `history:${archivedChild}`],
+    ], 'cold archive preserves every native conversation history')
+    assert.deepEqual(await codexHarness.coldRetirementPreflight?.({ session: 'owned-subtree-session', harnessSessionId: target }),
+      { ok: true, alreadyCold: true })
+    assert.deepEqual(await codexHarness.restoreRuntime?.(rec, preflight.receipt), { ok: true },
+      'post-cold publication compensation accepts only the original adapter receipt')
+    assert.deepEqual(mutations, [
+      `archive:${grandchild}`,
+      `archive:${activeChild}`,
+      `archive:${target}`,
+      `unarchive:${target}`,
+      `unarchive:${activeChild}`,
+      `unarchive:${grandchild}`,
+    ])
+    assert.deepEqual([...collection], [
+      [target, 'active'],
+      [activeChild, 'active'],
+      [grandchild, 'active'],
+      [archivedChild, 'archived'],
+    ], 'outer compensation restores all and only the subtree members that were active before archive')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('Codex archive rejects duplicate, unowned, reassigned, and late subtree members with bounded compensation', async (t) => {
+  const runCase = async (mode: 'duplicate' | 'unowned' | 'reassigned' | 'late-before') => {
+    const previousHome = process.env.SPEXCODE_HOME
+    const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+    const home = mkdtempSync(join(tmpdir(), `spex-codex-subtree-${mode}-`))
+    process.env.SPEXCODE_HOME = home
+    process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+    const target = `${mode}-target`
+    const child = `${mode}-child`
+    const late = `${mode}-late-child`
+    const collection = new Map<string, 'active' | 'archived'>([[target, 'active'], [child, 'active']])
+    const loaded = new Set([target, child])
+    const mutations: string[] = []
+    let reassigned = false
+    const server = codexRpcFixture((message) => {
+      if (message.method === 'thread/loaded/list') return { data: [...loaded].map((id) => ({ id })), nextCursor: null }
+      if (message.method === 'thread/read') return { thread: { status: { type: 'idle' }, turns: [] } }
+      if (message.method === 'thread/archive') {
+        const id = message.params.threadId
+        mutations.push(`archive:${id}`)
+        collection.set(id, 'archived')
+        loaded.delete(id)
+        if (mode === 'reassigned' && id === target) reassigned = true
+        return {}
+      }
+      if (message.method === 'thread/unarchive') {
+        const id = message.params.threadId
+        mutations.push(`unarchive:${id}`)
+        collection.set(id, 'active')
+        return {}
+      }
+      if (message.method === 'thread/list') {
+        const archived = !!message.params.archived
+        if (message.params.ancestorThreadId) {
+          if (mode === 'duplicate') return { data: [{ id: child, parentThreadId: target }], nextCursor: null }
+          if (mode === 'reassigned' && reassigned) return { data: [], nextCursor: null }
+          return { data: archived ? [] : [
+            { id: child, parentThreadId: target },
+            ...(mode === 'late-before' && reassigned ? [{ id: late, parentThreadId: target }] : []),
+          ], nextCursor: null }
+        }
+        const data = [...collection]
+          .filter(([id, state]) => (state === 'archived') === archived && !(mode === 'unowned' && id === child))
+          .map(([id]) => ({ id }))
+        return { data, nextCursor: null }
+      }
+      throw new Error(`unexpected RPC ${message.method}`)
+    })
+    const root = runtimeRoot()
+    const socket = codexAppServerSock(root)
+    let owner: ReturnType<typeof startCodexOwner> | null = null
+    try {
+      await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+      mkdirSync(root, { recursive: true })
+      owner = startCodexOwner(root)
+      let result
+      if (mode === 'late-before') {
+        const preflight = await codexHarness.coldPreflight?.({ session: `${mode}-session`, harnessSessionId: target })
+        assert.equal(preflight?.ok, true)
+        if (!preflight?.ok) throw new Error('late-before fixture did not obtain its adapter receipt')
+        collection.set(late, 'active')
+        loaded.add(late)
+        reassigned = true
+        result = await codexHarness.coldRuntime?.({ session: `${mode}-session`, harnessSessionId: target }, preflight.receipt)
+      } else {
+        result = await codexHarness.coldRuntime?.({ session: `${mode}-session`, harnessSessionId: target })
+      }
+      assert.equal(result?.ok, false)
+      if (result && !result.ok) assert.match(result.reason, mode === 'duplicate'
+        ? /both.*active.*archived|duplicate/i
+        : mode === 'unowned' ? /absent from both|unowned/i : /changed|reassigned|closure/i)
+      assert.deepEqual(mutations, mode === 'reassigned'
+        ? [`archive:${child}`, `archive:${target}`, `unarchive:${target}`, `unarchive:${child}`]
+        : [], `${mode} refuses before mutation or compensates every initially-active commit`)
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+      await stopCodexOwner(owner)
+      if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+      else process.env.SPEXCODE_HOME = previousHome
+      if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+      else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+      rmSync(home, { recursive: true, force: true })
+    }
+  }
+  for (const mode of ['duplicate', 'unowned', 'reassigned', 'late-before'] as const) await t.test(mode, () => runCase(mode))
 })
 
 test('shQuote preserves a single quote through a POSIX shell', () => {
@@ -506,7 +710,7 @@ test('codex native descendant census includes subAgent sources and follows every
         requests.push(message)
         send({ id: message.id, result: requests.length === 1
           ? { data: [], nextCursor: 'p2' }
-          : { data: [{ id: 'unowned-subagent-descendant' }], nextCursor: null } })
+          : { data: [{ id: 'unowned-subagent-descendant', parentThreadId: 'target-thread' }], nextCursor: null } })
       } else assert.fail(`unexpected RPC ${message.method}`)
     }
     socket.on('data', (chunk) => {
@@ -727,15 +931,25 @@ test('Codex archive re-censuses native descendants after mutation and compensate
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'archive-race-target'
   let archived = false
+  let lateCreated = false
   const mutations: string[] = []
   const server = codexRpcFixture((message) => {
-    if (message.method === 'thread/loaded/list') return { data: archived ? [{ id: 'unrelated-loaded-sibling' }] : [{ id: target }, { id: 'unrelated-loaded-sibling' }], nextCursor: null }
+    if (message.method === 'thread/loaded/list') return { data: [
+      ...(archived ? [] : [{ id: target }]),
+      ...(lateCreated ? [{ id: 'late-native-descendant' }] : []),
+      { id: 'unrelated-loaded-sibling' },
+    ], nextCursor: null }
     if (message.method === 'thread/read') return { thread: { status: { type: 'idle' }, turns: [] } }
-    if (message.method === 'thread/archive') { archived = true; mutations.push('archive'); return {} }
+    if (message.method === 'thread/archive') { archived = true; lateCreated = true; mutations.push('archive'); return {} }
     if (message.method === 'thread/unarchive') { archived = false; mutations.push('unarchive'); return {} }
     if (message.method === 'thread/list') {
-      if (message.params.ancestorThreadId) return { data: archived ? [{ id: 'late-native-descendant' }] : [], nextCursor: null }
-      return { data: message.params.archived === archived ? [{ id: target }] : [], nextCursor: null }
+      if (message.params.ancestorThreadId) return {
+        data: lateCreated && !message.params.archived ? [{ id: 'late-native-descendant', parentThreadId: target }] : [], nextCursor: null,
+      }
+      return { data: [
+        ...(message.params.archived === archived ? [{ id: target }] : []),
+        ...(lateCreated && !message.params.archived ? [{ id: 'late-native-descendant' }] : []),
+      ], nextCursor: null }
     }
     throw new Error(`unexpected RPC ${message.method}`)
   })
@@ -748,7 +962,7 @@ test('Codex archive re-censuses native descendants after mutation and compensate
     owner = startCodexOwner(root)
     const result = await codexHarness.coldRuntime?.({ session: 'archive-race-session', harnessSessionId: target })
     assert.equal(result?.ok, false)
-    if (result && !result.ok) assert.match(result.reason, /acquired owned descendants during archive \(late-native-descendant\)/)
+    if (result && !result.ok) assert.match(result.reason, /descendant closure changed.*late-native-descendant/)
     assert.deepEqual(mutations, ['archive', 'unarchive'], 'late descendant causes fail-loud compensation before cold success')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))

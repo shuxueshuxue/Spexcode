@@ -206,11 +206,23 @@ surface:
   product mutation treats that uncertainty as a separate fail-closed blocker. The adapter exposes full projection
   and mutation proof as separate capabilities: resource reporting may read every loaded reference to describe turn
   presence, while lifecycle mutation uses the paginated loaded-ID set, both exact target descendant collections,
-  and an exact target read only when that target is loaded. The mutation proof fences the shared PID/start/isolation/
+  and exact reads only for loaded members authorized by the operation. Ordinary stop reads the target and refuses
+  descendants. Cold archive treats the adapter's native `ancestorThreadId` result as an ownership closure (all depths,
+  excluding the ancestor), verifies every member's direct-parent chain against the active/archived collections,
+  reads every loaded member, and archives the initially-active closure deepest-first with the ancestor last;
+  already-archived members are proof, not mutation.
+  The mutation proof fences the shared PID/start/isolation/
   socket generation across those reads; an unrelated slow sibling remains a protective loaded ID but cannot block
-  an isolated target leaf. That generation exists only for a live `detached-v3` PID/start whose observed process
-  group and session, isolation stamp, and socket inode all agree. Unknown/active target state, descendants, or a
-  generation change fail closed, and compensating mutation is permitted only on the unchanged original generation.
+  an isolated target subtree. Post-mutation it re-censuses the identical closure, requires the whole subtree unloaded
+  and uniquely archived, and keeps unrelated loaded siblings intact. Duplicate active/archived membership, a member
+  absent from both collections, changed ancestry, or a late replacement fails closed; compensation restores only
+  originally-active members and only on the unchanged generation. That generation exists only for a live
+  `detached-v3` PID/start whose observed process group and session, isolation stamp, and socket inode all agree.
+  Unknown/active subtree state, ambiguous ancestry, or a generation change fails closed, and compensating mutation
+  is permitted only on the unchanged original generation.
+  The adapter receipt also owns post-cold compensation outside the native RPC boundary: until the product commits
+  the archive record and final offline proof, a failure returns the same receipt to `restoreRuntime`, which restores
+  all and only its originally-active subtree members. A receipt-free resume remains the normal parent-only restore.
   The Codex app-server is spawned
   as a detached child in its own operating-system process group and session, not merely wrapped in `nohup`
   (`nohup` did not survive the real Codex Node launcher resetting signal behavior). Its PID/start and observed

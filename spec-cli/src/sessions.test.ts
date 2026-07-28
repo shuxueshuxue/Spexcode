@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, launchPreflight, launchScript, listSessions, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, launchPreflight, launchScript, listSessions, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 import { readTimeline } from './session-timeline.js'
 
@@ -591,6 +591,59 @@ test('closing a proven-cold archive ignores unrelated shared refs but rejects ta
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
     rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('archive returns the exact adapter receipt when filing fails after cold runtime committed', async () => {
+  const liveBefore = liveSessionsCensus()
+  const previousHome = process.env.SPEXCODE_HOME
+  const originalShared = codexHarness.sharedRuntimes
+  const originalColdPreflight = codexHarness.coldPreflight
+  const originalColdRuntime = codexHarness.coldRuntime
+  const originalRestoreRuntime = codexHarness.restoreRuntime
+  const originalCleanup = codexHarness.cleanupRuntime
+  const home = mkdtempSync(join(tmpdir(), 'spex-archive-outer-compensation-'))
+  const id = `archive-outer-compensation-${process.pid}`
+  const threadId = `archive-outer-thread-${process.pid}`
+  const worktree = join(home, 'worktree')
+  const receipt = Object.freeze({ fixture: 'opaque-adapter-cold-receipt' })
+  let coldReceipt: unknown
+  let restoreReceipt: unknown
+  process.env.SPEXCODE_HOME = home
+  mkdirSync(worktree, { recursive: true })
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+    session_id: id, governed: true, worktree_path: worktree, branch: 'node/archive-outer-compensation',
+    node: 'archive', title: '', name: '', parent: '', status: 'idle', proposal: '', merges: 0, note: '',
+    sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: threadId, stopped: true,
+    archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
+  }, null, 2)}\n`)
+  codexHarness.sharedRuntimes = () => []
+  codexHarness.cleanupRuntime = async () => {}
+  codexHarness.coldPreflight = async () => ({ ok: true, receipt })
+  codexHarness.coldRuntime = async (_rec, actualReceipt) => {
+    coldReceipt = actualReceipt
+    rmSync(sessionRecordPath(id), { force: true })
+    return { ok: true }
+  }
+  codexHarness.restoreRuntime = async (_rec, actualReceipt) => {
+    restoreReceipt = actualReceipt
+    return { ok: true }
+  }
+  try {
+    await assert.rejects(archiveSession(id), /session record disappeared before filing/)
+    assert.equal(coldReceipt, receipt, 'cold commit receives the opaque preflight receipt')
+    assert.equal(restoreReceipt, receipt, 'outer post-cold compensation receives that exact same receipt')
+  } finally {
+    codexHarness.sharedRuntimes = originalShared
+    codexHarness.coldPreflight = originalColdPreflight
+    codexHarness.coldRuntime = originalColdRuntime
+    codexHarness.restoreRuntime = originalRestoreRuntime
+    codexHarness.cleanupRuntime = originalCleanup
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+    assertLiveSessionsUnchanged(liveBefore, 'archive outer-compensation fixture')
   }
 })
 

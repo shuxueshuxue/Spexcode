@@ -28,7 +28,7 @@ test('session new retires the out-of-band --node binding before launch', () => {
   assert.equal(r.stderr, 'spex session new: --node was removed — put a [[<id>]] mention in the prompt — the first mention binds\n')
 })
 
-test('session new ordinary launcher create posts the closed API shape and succeeds', async () => {
+test('session new keeps exact JSON stdout and emits the dependency receipt on stderr', async () => {
   let posted: unknown = null
   const server = createServer((req, res) => {
     const chunks: Buffer[] = []
@@ -61,5 +61,11 @@ test('session new ordinary launcher create posts the closed API shape and succee
 
   assert.equal(code, 0, stderr)
   assert.deepEqual(posted, { prompt: '[[launch]] ordinary task', parent: null, launcher: 'claude' })
-  assert.equal(JSON.parse(stdout).id, 'created-1')
+  assert.equal(stdout, '{\n  "id": "created-1"\n}\n')
+  assert.equal(stderr, `spex: launched session created-1
+  current result: the session JSON is on stdout now; \`spex session ls created-1\` is the later one-shot snapshot
+  next lifecycle change: background \`spex session wait created-1\` (edge-triggered; exits on the next non-actionable→actionable transition); \`spex session watch created-1\` streams and NEVER EXITS
+  response channel: \`spex session send created-1 "<msg>"\`; \`send --keys\` is an UNSTABLE LAST RESORT after a plain send cannot land
+`)
+  assert.doesNotMatch(stdout, /current result|next lifecycle change|response channel/)
 })

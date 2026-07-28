@@ -201,6 +201,13 @@ test('all public record APIs share pending projection and malformed fail-closed 
     const base = `http://127.0.0.1:${port}`
     await waitFor(() => fetch(`${base}/health`).then((response) => response.ok).catch(() => false), `backend health\n${log}`)
 
+    const refusedClose = await fetch(`${base}/api/sessions/00000000-0000-0000-0000-000000000000/close`, { method: 'POST' })
+    assert.equal(refusedClose.status, 404)
+    assert.deepEqual(await refusedClose.json(), {
+      ok: false,
+      error: 'no close transition was committed for session 00000000-0000-0000-0000-000000000000',
+    })
+
     const [sessionsResponse, graphResponse, edgesResponse, resourcesResponse, settingsResponse] = await Promise.all([
       fetch(`${base}/api/sessions?all=1`),
       fetch(`${base}/api/graph`),

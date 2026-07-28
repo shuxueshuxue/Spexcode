@@ -79,6 +79,10 @@ structured error when its ownership guard commits no removal, and the console ke
 showing that diagnostic through its shared action-error surface. A refusal never weakens the guard merely to
 make the row disappear.
 
+The right-click confirm consumes both the HTTP status and the JSON `{ok,error}` body before it asks the board
+to reload, so a legacy 200 false response cannot regress into a silent success while the endpoint is being
+rolled forward.
+
 Because both the pop-over and its prompt are opened **from** the board, each must render **above** it:
 a menu or modal that paints behind its own surface is present in the DOM yet invisible and unclickable,
 so they live on the top layer — over the board's backdrop, never beneath it. The board also suppresses

@@ -195,6 +195,17 @@ export type RawRecord = {
   launch_readiness_pending?: '' | RawLaunchReadinessPending
 }
 
+export const SESSION_LIFECYCLES = ['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'] as const
+export const SESSION_PROPOSALS = ['merge', 'nothing', 'close'] as const
+export type SessionLifecycle = typeof SESSION_LIFECYCLES[number]
+export type SessionProposal = typeof SESSION_PROPOSALS[number]
+const sessionLifecycles = new Set<string>(SESSION_LIFECYCLES)
+const sessionProposals = new Set<string>(SESSION_PROPOSALS)
+export const isSessionLifecycle = (value: unknown): value is SessionLifecycle =>
+  typeof value === 'string' && sessionLifecycles.has(value)
+export const isSessionProposal = (value: unknown): value is SessionProposal =>
+  typeof value === 'string' && sessionProposals.has(value)
+
 export type RawLaunchReadinessOriginal = {
   status: string
   proposal: string | null
@@ -219,8 +230,8 @@ export function rawLaunchReadinessOriginal(raw: RawRecord): RawLaunchReadinessOr
   if (pending == null || pending === '') return null
   const original = pending && typeof pending === 'object' ? pending.original : null
   if (pending.version !== 1 || !Number.isFinite(pending.startedAt) || !original || typeof original !== 'object'
-    || typeof original.status !== 'string'
-    || !(typeof original.proposal === 'string' || original.proposal === null)
+    || !isSessionLifecycle(original.status)
+    || !(original.proposal === null || original.proposal === '' || isSessionProposal(original.proposal))
     || !(typeof original.note === 'string' || original.note === null)
     || typeof original.stopped !== 'boolean' || typeof original.archived !== 'boolean'
     || !(typeof original.cold_proof === 'string' || original.cold_proof === null)
@@ -306,8 +317,8 @@ export function projectPublicRecordEntry(id: string, entry: RecordEntry): Public
       raw: {
         ...entry.raw,
         status: original.status,
-        proposal: original.proposal,
-        note: original.note,
+        proposal: original.proposal || null,
+        note: original.note || null,
         stopped: original.stopped,
         archived: original.archived,
         cold_proof: original.cold_proof ?? undefined,

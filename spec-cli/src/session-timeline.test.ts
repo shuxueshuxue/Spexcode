@@ -117,6 +117,17 @@ test('timeline observation keeps a pending launch on the frozen lifecycle until 
     assert.deepEqual({ status: published.raw.status, proposal: published.raw.proposal, note: published.raw.note, liveness: published.liveness },
       { status: 'idle', proposal: null, note: 'candidate note', liveness: null })
   }
+  for (const [label, original] of [
+    ['invalid lifecycle', { ...candidate.launch_readiness_pending.original, status: 'launching' }],
+    ['invalid proposal', { ...candidate.launch_readiness_pending.original, proposal: 'deploy' }],
+  ] as const) {
+    const invalid = projectPublicRecordEntry(candidate.session_id, {
+      kind: 'ok',
+      raw: { ...candidate, launch_readiness_pending: { ...candidate.launch_readiness_pending, original } },
+    })
+    assert.equal(invalid.kind, 'corrupt', `${label} is withheld from timeline observation`)
+    if (invalid.kind === 'corrupt') assert.equal(invalid.liveness, 'unknown')
+  }
 })
 
 test('a declaration note remains in the timeline after a later status replaces the current record', () => {

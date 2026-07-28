@@ -7,6 +7,9 @@ code:
   - spec-cli/src/host-resources.ts
 related:
   - spec-cli/src/process-identity.ts
+  - spec-cli/src/process-identity.test.ts
+  - spec-cli/src/runtime-ownership.ts
+  - spec-cli/src/host-resources.test.ts
   - spec-cli/src/harness.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/client.ts
@@ -67,6 +70,17 @@ generation anonymous. A clean supervisor removes only its own matching registrat
 superseded live generation remains charged to that exact backend instance and is reported as an orphan owned by
 backend teardown, not made reclaimable through a session lifecycle verb.
 
+A detached shared runtime publishes one private, closed, versioned launch receipt only after the host-process
+adapter proves the launched child still has the exact PID/start identity and is its own process-group leader.
+Every later readiness, reporting, stop, archive, and generation-fence read calls that same verifier; consumers do
+not parse the receipt or interpret process topology themselves. The verifier re-reads the exact start identity
+around its topology probes and requires live PID/start plus `PGID == PID` on every POSIX host. Linux additionally
+requires the live `/proc` session id and the receipt's Linux session id to equal PID. Darwin reads only the real
+start token and process group: its `ps sess=0` value is neither evidence nor a value to fake as PID. A missing,
+malformed, old-version, or mismatched receipt, unreadable/changed start, wrong process group, wrong Linux session,
+or changed receipt-bound generation fails loudly before adapter mutation or signal authority. Socket identity is
+then composed with that verified process identity by the shared-runtime adapter as the complete generation.
+
 The decisive invariant is that ownership does not follow a convenient process-tree edge. In particular, the
 Codex app-server is a project-shared control plane: stopping or closing one Codex session may terminate only
 that session's registered leaf. It must not signal the shared app-server, its wrapper, or any ancestor that also
@@ -120,7 +134,7 @@ and queued-without-thread entries remain visible but do not count or protect; lo
 visible, counted, and protective. An unhealthy/unknown probe reports an unknown refcount, never a synthetic zero.
 
 The existing stop transition asks the adapter-owned target-scoped mutation proof before touching tmux or a leaf.
-That proof hard-gates the shared PID/start/isolation/socket generation, uses the lightweight loaded-ID census, and
+That proof hard-gates the shared PID/start/detached-receipt/socket generation, uses the lightweight loaded-ID census, and
 reads only the exact target thread when it is loaded; full per-reference report projection is read-only evidence,
 not mutation authority. The mutation scope is exact: a target leaf with a registered PID/start token and matching
 argv/identity may be stopped even when unrelated sibling or unowned loaded references are slow or unresponsive;
@@ -128,7 +142,7 @@ their loaded IDs remain protective against any shared app-server/control-plane t
 performs. An unhealthy loaded-ID census, unknown exact target read, target active turn or descendant, or unproven
 shared-root identity fails closed before any leaf signal. A target thread that is itself ambiguous or unowned, or
 a missing/mismatched leaf PID/start/argv proof, blocks before mutation. The launch
-artifact and detached process-boundary evidence are rechecked immediately before the leaf signal and before each
+artifact and verifier-owned detached launch receipt are rechecked immediately before the leaf signal and before each
 bounded OS escalation; a PID reuse or topology change fails loudly. The report issues no token and has no mutation route;
 stop and close remain the only lifecycle verbs. Project-shared control planes and backends are reported with
 their teardown owner and references; a session stop never stands in for that owner. There is no `pkill`,

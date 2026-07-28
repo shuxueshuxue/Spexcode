@@ -5,7 +5,7 @@ import { buildSessionEvals, type SessionEvals } from '../../spec-eval/src/sessio
 import { evalTimeline } from '../../spec-eval/src/evaltab.js'
 import { issuesEnabled as issuesEnabledForReview } from './localIssues.js'
 import { issueStores as issueStoresForReview } from './issues.js'
-import { readReviewSnapshot } from './reviewSnapshot.js'
+import { hasReviewSnapshot, readReviewSnapshot } from './reviewSnapshot.js'
 // @ts-expect-error The dashboard module is deliberately plain JS so the browser and server execute the
 // exact same tokenizer/matcher. It is shipped beside the built dashboard by the root package manifest.
 import { EVAL_FILTER_KIND, evalFilterModel, evalReviewState, issueFilterModel, tokenFilterState } from '../../spec-dashboard/src/reviewFilters.js'
@@ -121,7 +121,11 @@ const issueOrder = (a: any, b: any): number => String(b.created ?? '').localeCom
   || String(a.id ?? '').localeCompare(String(b.id ?? ''))
 
 export async function issuesReview(query: string | undefined, requestedPage: unknown) {
-  const [, sessions] = await Promise.all([getBoard(), listSessions()])
+  // The first request must wait for the first atomic publication. Once one exists, a graph refresh may be
+  // rebuilding unrelated board/session state; the published review source remains a valid answer and its
+  // revision/poll path will deliver the next generation without making this page join that flight.
+  if (!hasReviewSnapshot()) await getBoard()
+  const sessions = await listSessions()
   const issues = readReviewSnapshot().issues.slice().sort(issueOrder)
   const text = String(query ?? '').trim() || ISSUE_QUERY_DEFAULT
   const model = issueFilterModel(issues, tokenFilterState(text, 'issue'), { sessions, defaultSection: '' })
@@ -337,15 +341,16 @@ export async function evalsReview(query: string | undefined, requestedPage: unkn
       }),
     }
   }
-  const board = await getBoard()
+  if (!hasReviewSnapshot()) await getBoard()
+  const sessions = await listSessions()
   const items = trunkEvalReviewItems(readReviewSnapshot().evalNodes)
-  const filtered = evalFilterModel(items, tokenFilterState(text, 'eval'), { sessions: board.sessions, defaultKind: 'all', defaultSection: '' })
+  const filtered = evalFilterModel(items, tokenFilterState(text, 'eval'), { sessions, defaultKind: 'all', defaultSection: '' })
   return {
     scope: null,
     gates: [],
     unknown: 0,
     ...paginateReview(items, filtered.shown, filtered, requestedPage, {
-      domain: 'evals', items, sessions: board.sessions.map((session) => session.id),
+      domain: 'evals', items, sessions: sessions.map((session) => session.id),
     }),
   }
 }

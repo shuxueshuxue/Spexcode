@@ -16,11 +16,12 @@ related:
 
 One graph build already reconciles resident local/forge Issues and current Eval timelines. At successful
 completion it atomically publishes those full source populations, including Eval histories needed to project
-one selected scenario, to process memory, replacing the previous
-snapshot as a unit. `/api/issues` and trunk `/api/evals` first ensure the cached graph build is current, then
-read this snapshot for stable filtering/count/slice, and trunk detail projects one selected history plus its
-bounded lightweight neighbors from the same generation; a sessions-only graph splice leaves it valid because
-session presence is joined separately at request time.
+one selected scenario, to process memory, replacing the previous snapshot as a unit. The first `/api/issues`
+or trunk `/api/evals` request waits for that first successful publication; once a snapshot exists, a request
+reads its atomic generation without joining an unrelated graph/session refresh, then joins current session
+presence separately. A later page revision/poll observes the replacement generation. Trunk detail projects
+one selected history plus its bounded lightweight neighbors from the same generation; a sessions-only graph
+splice leaves the snapshot valid because session presence is joined separately at request time.
 
 The snapshot has no enumerable attachment to the board and is never included in graph JSON, SSE full frames,
 or delta units. Reading before a successful publish fails loudly. This is a compute-sharing boundary, not a

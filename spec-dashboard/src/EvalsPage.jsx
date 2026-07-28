@@ -23,6 +23,7 @@ import { reviewPageNumber, useReviewPage } from './reviewPage.js'
 // fence drops an old address response. The scoped response additionally proves it is not older than the
 // graph session summary already rendered by the shell.
 const detailInflight = new Map()
+const EMPTY_SPECS = []
 
 export function detailMatchesProjection(detail, projection) {
   if (!detail?.evalRevision || !projection?.epoch) return true
@@ -187,7 +188,7 @@ export function EvalDetailPage({ param, detail, sessionId, loading = false, erro
   )
 }
 
-export default function EvalsPage({ specs = [], sessions = [], issuesStamp = null, reloadBoard, onOpenSession, onFocusNode = null }) {
+export default function EvalsPage({ specs = EMPTY_SPECS, sessions = [], issuesStamp = null, reloadBoard, onOpenSession, onFocusNode = null }) {
   const t = useT()
   const { param, query } = useRoute()
   // the worktree DATA-SOURCE axis ([[evals-view]]): the scope: token inside the one q param — never

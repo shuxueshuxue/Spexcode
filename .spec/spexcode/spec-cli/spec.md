@@ -151,6 +151,13 @@ heartbeat), not a stored subscription. `/api/uploads` writes a pasted file to th
 The host ledger is equally thin: `GET /api/resources` returns [[host-resource-budget]]'s latest inventory.
 It is read-only; existing lifecycle mutations consult the adapter-owned shared-runtime guard before cleanup.
 
+The same thin route layer exposes [[maintenance-lease]] at one authenticated project-scoped family:
+`POST /api/session-maintenance/acquire`, `GET /api/session-maintenance`, and POST heartbeat/release children.
+Normal auth and project checks run before lease lookup; the maintenance bearer is accepted only from its
+dedicated header. Every session write route maps the shared admission error to a structured non-2xx response
+without invoking its existing handler. Reads remain available while draining/active, and boot loads the durable
+lease before starting queue supervision or accepting any write.
+
 Issue routes follow the same thin-port rule: `GET /api/issues` returns the merged issue list plus the
 writable stores (`local` and configured forge drivers), `GET /api/issues/:id` is the single-thread detail
 (the same `findIssue` read behind `spex issue show`; unknown or eval-remark ids 404), and `POST /api/issues`

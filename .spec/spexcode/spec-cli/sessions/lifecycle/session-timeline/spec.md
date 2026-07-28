@@ -34,6 +34,11 @@ TypeScript lifecycle write compares the prior `(status, proposal, note)` and syn
 value after the new `session.json` lands. A later status may replace the current snapshot, but it can never
 replace or erase the already-appended declaration event.
 
+Internal launch-readiness-pending state is not an authored lifecycle transition. While resume validates a
+launched runtime, both the direct writer and the external-write observer compare the pending record through its
+frozen pre-resume public projection. Failure or stale recovery therefore appends nothing; success clears pending
+and appends the one real resting transition at the same write that first publishes the session online.
+
 The lifecycle also has a writer the TypeScript layer never sees: the mark-active hook value-replaces those
 three fields with pure-shell sed. The serve-process `superviseTimeline` therefore remains as the coverage and
 repair observer for external writes — an fs.watch on the sessions root, debounced, backstopped by a slow

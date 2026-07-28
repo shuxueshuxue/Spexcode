@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { lastHumanSendVia, readTimeline } from './session-timeline.js'
-import { sessionRecordPath, sessionStoreDir } from './layout.js'
+import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
 import { composeSessionPrompt, markState, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
 // The reply-channel signal must be SYMMETRIC (the [[session-timeline]] write surface): the phone's
@@ -75,6 +75,60 @@ function seedSessionRecord(home: string): void {
     }, null, 2) + '\n')
   })
 }
+
+test('timeline observation keeps a pending launch on the frozen lifecycle until final publication', () => {
+  const candidate = {
+    session_id: 'pending-timeline',
+    governed: true,
+    worktree_path: process.cwd(),
+    branch: 'main',
+    node: null,
+    title: null,
+    name: null,
+    status: 'idle',
+    proposal: null,
+    merges: 0,
+    note: 'candidate note',
+    sortkey: null,
+    createdAt: 1,
+    launch_readiness_pending: {
+      version: 1,
+      startedAt: Date.now(),
+      original: {
+        status: 'active',
+        proposal: null,
+        note: 'original note',
+        stopped: true,
+        archived: false,
+        cold_proof: null,
+        adapter_recovery: null,
+      },
+    },
+  } satisfies RawRecord
+  const pending = projectPublicRecordEntry(candidate.session_id, { kind: 'ok', raw: candidate })
+  assert.equal(pending.kind, 'ok')
+  if (pending.kind === 'ok') {
+    assert.deepEqual({ status: pending.raw.status, proposal: pending.raw.proposal, note: pending.raw.note, liveness: pending.liveness },
+      { status: 'active', proposal: null, note: 'original note', liveness: 'offline' })
+  }
+  const published = projectPublicRecordEntry(candidate.session_id, { kind: 'ok', raw: { ...candidate, launch_readiness_pending: '' } })
+  assert.equal(published.kind, 'ok')
+  if (published.kind === 'ok') {
+    assert.deepEqual({ status: published.raw.status, proposal: published.raw.proposal, note: published.raw.note, liveness: published.liveness },
+      { status: 'idle', proposal: null, note: 'candidate note', liveness: null })
+  }
+  for (const [label, original] of [
+    ['invalid lifecycle', { ...candidate.launch_readiness_pending.original, status: 'launching' }],
+    ['invalid proposal', { ...candidate.launch_readiness_pending.original, proposal: 'deploy' }],
+  ] as const) {
+    const invalid = projectPublicRecordEntry(candidate.session_id, {
+      kind: 'ok',
+      raw: { ...candidate, launch_readiness_pending: { ...candidate.launch_readiness_pending, original } },
+    })
+    assert.equal(invalid.kind, 'corrupt', `${label} is withheld from timeline observation`)
+    if (invalid.kind === 'corrupt') assert.equal(invalid.liveness, 'unknown')
+  }
+})
 
 test('a declaration note remains in the timeline after a later status replaces the current record', () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))

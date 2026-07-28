@@ -26,6 +26,10 @@ product launched. Interactive Claude/pi/opencode use the rendezvous protocol, Co
 [[claude-headless]] uses a controller that writes Claude-native stream-json stdin. Multi-line prompts and Enters
 therefore cannot be corrupted the way `tmux send-keys` could.
 
+Prompt dispatch, hard interrupt, merge delivery, and raw-key input first acquire [[maintenance-lease]]
+admission. A refused operation reaches no adapter and writes no timeline/comms side effect. Reads and monitors
+do not need a ticket.
+
 `sendText` has **no send-keys fallback** and asks the resolved adapter to confirm at the strongest layer its
 native channel exposes. Interactive Claude confirms the prompt was **parsed by the daemon**, not merely written.
 Mere write-success lies there, because claude's rendezvous daemon keeps **ONE connection** and

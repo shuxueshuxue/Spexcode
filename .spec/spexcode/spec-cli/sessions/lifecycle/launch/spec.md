@@ -87,8 +87,10 @@ package's **own** on-disk location, never a hardcoded `<repoRoot>/spec-cli`, so 
 **The backend is the single launch owner.** `spex new` / `spex session new` **POST to the running backend**,
 so the launch always runs where the launch env and cap live. The caller can be **another agent** running in a
 stripped or divergent environment, so an in-process launch there would bring workers up in the caller's context
-rather than the backend's. The CLI falls back to in-process **only when no backend answers** (warning that it then
-carries the caller's env, no cap).
+rather than the backend's. The CLI falls back to in-process **only when the target explicitly refuses the
+connection**, proving that no listener owns it (warning that it then carries the caller's env, no cap). Any
+HTTP response proves an owner, regardless of status. A probe timeout, abort, reset, DNS failure, or unknown
+transport error is indeterminate and fails loud without creating; it may hide an already accepted request.
 
 Backend launch, that no-backend fallback, and every queue-drain attempt acquire a [[maintenance-lease]]
 operation ticket before preparing, claiming, or starting anything. During an active lease they fail with

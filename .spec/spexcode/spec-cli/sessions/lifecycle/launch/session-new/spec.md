@@ -3,10 +3,17 @@ title: session-new
 status: active
 hue: 280
 desc: Public session creation is one bounded idempotent transaction: publish one recoverable queued receipt or remove every session artifact and return a structured failure.
+code:
+  - spec-dashboard/src/launch.js
 related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
   - spec-cli/src/client.ts
+  - spec-cli/src/git.ts
+  - spec-cli/src/layout.ts
+  - spec-cli/src/session-create-transaction.test.ts
+  - spec-cli/src/sessions.test.ts
+  - spec-dashboard/src/launch.test.mjs
 ---
 
 # session-new
@@ -44,8 +51,17 @@ with `session_create_key_reused` and creates nothing. Callers that omit the head
 semantics with a backend-minted key; SpexCode's own CLI always sends a fresh key and retains it across its one
 bounded request attempt.
 
+Before that attempt the CLI may enter the existing in-process fallback only after an explicit
+`ECONNREFUSED` proves the selected target has no listener. Every HTTP response, including `404` and `503`,
+proves that a backend owns the target; a slow accepted connection, abort, reset, DNS failure, or unknown
+transport outcome is indeterminate. Those cases fail loud without local creation, because the remote owner
+may already have admitted the keyed request.
+
 The record publication is the irreversible boundary. The transaction checks cancellation immediately before
-the synchronous atomic record replace; JavaScript cannot interleave an abort between that check and replace.
+the synchronous atomic record replace and re-proves that the candidate path is the exact Git top-level, is
+checked out on the recorded branch, and that exact branch ref exists. JavaScript cannot interleave an abort
+between the final check and replace. A `201` may therefore never name a detached, switched, deleted, or
+rolled-back Git candidate.
 Once the record exists, a lost connection is a lost response, not a failed create: the same idempotency key
 recovers the receipt. The published record is already a normal durable `queued` session with its prompt and
 launch payload present, so backend restart and the ordinary queue supervisor can recover it. Queue draining is
@@ -56,6 +72,10 @@ Target resolution on this write path reads the live filesystem-only spec project
 and `spec.md` path; it must not build history, drift, graph, or eval projections before publication. The
 session's raw first `[[id]]` mention remains its only scope source, and prompt preset expansion remains the one
 shared launch/dispatch seam.
+
+The existing creation owner reads [[portable-layout]]'s `main` and `branchPrefix` settings through the shared
+config seam. The worktree lives under the resolved main checkout's supported `.worktrees` directory and the
+branch uses that prefix; creation does not rebuild the full board layout merely to read those settings.
 
 Every transaction emits one-line structured phase diagnostics with an ISO timestamp, a non-secret request-id
 digest, candidate session id, phase, and event (`start`, `finish`, `abort`, or `publish`). The required phases

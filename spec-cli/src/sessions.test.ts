@@ -146,7 +146,7 @@ function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: strin
     node: 'maintenance-lease', title: '', name: '', parent: '', status: 'active', proposal: '',
     merges: 0, note: 'preserve-before-readiness', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',
     harness_session_id: `thread-${id}`, stopped: true, archived: false, cold_proof: '', adapter_recovery: '',
-    launcher: 'fixture', launch_cmd: launchCmd, launch_owner: '',
+    launcher: 'fixture', launch_cmd: launchCmd, launch_owner: '', create_request_id: '', create_payload_hash: '',
     launch_readiness_pending: '',
   }, null, 2)}\n`)
 }

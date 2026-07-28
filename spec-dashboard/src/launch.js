@@ -9,12 +9,13 @@ import { apiUrl } from './project.js'
 
 // launch a session: the one POST /api/sessions. A launcher SUBSUMES the harness ([[launcher-select]]):
 // send only the chosen launcher name; the backend derives harness from that profile. No launcher yet
-// (picker not loaded) means the backend uses its default. Plain fetch, never a retrying wrapper — a retried POST could
-// double-create. Returns { ok, error? }.
+// (picker not loaded) means the backend uses its default. The per-attempt idempotency key makes a lost response
+// recoverable without changing the prompt body contract. Returns { ok, error? }.
 export async function createSession(prompt, launcher) {
   try {
+    const requestKey = globalThis.crypto?.randomUUID?.() || `session-create-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const res = await fetch(apiUrl('/api/sessions'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestKey },
       body: JSON.stringify({ prompt, ...(launcher ? { launcher } : {}) }),
     })
     const body = await res.json().catch(() => null)

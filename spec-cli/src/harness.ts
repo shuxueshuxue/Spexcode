@@ -37,8 +37,8 @@ export type HarnessLaunchReadinessFence = {
   readonly proof: Readonly<Record<string, unknown>>
   validate(current: () => HarnessLaunchReadyRecord | null): Promise<boolean>
 }
-export type HarnessTurnFailure = { turnId: string | null; message: string; completedAt: number | null }
-export type HarnessTurnObserver = { close(): void; readonly closed: Promise<string | null> }
+export type TurnFailure = { message: string; completedAt: number | null }
+export type FailureSubscription = { close(): void; readonly closed: Promise<string | null> }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
 // one whole-box pid→(ppid, comm) table (a single `ps` spawn).
@@ -266,7 +266,7 @@ export interface Harness {
   deliver(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult>
   // Observe native turn failures that this harness does not expose as a lifecycle hook. The adapter owns the
   // transport subscription; sessions owns observer reconciliation and the active-only lifecycle CAS.
-  observeTurnOutcomes?(rec: HarnessDeliveryRecord, onFailure: (failure: HarnessTurnFailure) => void): HarnessTurnObserver
+  observeTurnFailures?(rec: HarnessDeliveryRecord, onFailure: (failure: TurnFailure) => void): FailureSubscription
   // Hard-interrupt the current turn through the harness's native control plane. Optional because a harness
   // without a confirmed native interrupt must refuse rather than emulate one with a signal or PTY key.
   interrupt?(rec: HarnessDeliveryRecord): Promise<DispatchResult>
@@ -829,10 +829,10 @@ const wsInitialize: JsonRpc = { id: 1, method: 'initialize', params: { clientInf
 // with turn/completed and a final completed/interrupted/failed status. Rejoin is atomic with subscription, so
 // this observer also survives backend replacement; a thread already in systemError is reconciled from its
 // latest turn before later live notifications take over.
-export function codexTurnObserver(
+export function codexTurnFailureObserver(
   rec: HarnessDeliveryRecord,
-  onFailure: (failure: HarnessTurnFailure) => void,
-): HarnessTurnObserver {
+  onFailure: (failure: TurnFailure) => void,
+): FailureSubscription {
   const threadId = rec.harnessSessionId
   if (!threadId) return { close: () => {}, closed: Promise.resolve(null) }
   const sock = codexAppServerSock(rec.runtimeDir || runtimeRoot())
@@ -859,11 +859,10 @@ export function codexTurnObserver(
   timer.unref?.()
   const send = (message: JsonRpc) => conn.write(wsText(JSON.stringify(message)))
   const report = (turn: unknown, fallbackMessage?: string) => {
-    const value = turn as { id?: unknown; status?: unknown; completedAt?: unknown; error?: { message?: unknown } | null }
+    const value = turn as { status?: unknown; completedAt?: unknown; error?: { message?: unknown } | null }
     if (value?.status !== 'failed' && !fallbackMessage) return
     const nativeMessage = typeof value?.error?.message === 'string' ? value.error.message.trim() : ''
     onFailure({
-      turnId: typeof value?.id === 'string' ? value.id : null,
       message: nativeMessage || fallbackMessage || 'Codex turn failed',
       completedAt: typeof value?.completedAt === 'number' && Number.isFinite(value.completedAt) ? value.completedAt : null,
     })
@@ -1997,7 +1996,7 @@ export const codexHarness: Harness = {
   },
   leafOwnerNeedle: (rec) => rec.harnessSessionId ?? null,
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
-  observeTurnOutcomes: codexTurnObserver,
+  observeTurnFailures: codexTurnFailureObserver,
   cleanupRuntime: async () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
   coldRetirementPreflight: async (rec) => {
     if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }

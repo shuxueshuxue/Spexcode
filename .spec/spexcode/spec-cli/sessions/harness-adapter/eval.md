@@ -80,9 +80,9 @@ scenarios:
   - name: codex-turn-completed-failure
     tags: [backend-api, cli]
     code:
-      - spec-cli/src/harness.ts#codexTurnObserver
-      - spec-cli/src/sessions.ts#superviseTurnOutcomes
-      - spec-cli/src/sessions.ts#markHarnessTurnFailure
+      - spec-cli/src/harness.ts#codexTurnFailureObserver
+      - spec-cli/src/sessions.ts#superviseTurnFailures
+      - spec-cli/src/sessions.ts#markTurnFailure
     description: >-
       Through a real governed interactive Codex session and its project app-server, force one model turn to
       finish with the native `turn/completed` status `failed` without reaching Codex's Stop hook. Read the

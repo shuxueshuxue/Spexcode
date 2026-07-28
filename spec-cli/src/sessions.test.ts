@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, harnessTurnFailureNote, launchPreflight, launchScript, listSessions, markHarnessTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 import { readTimeline } from './session-timeline.js'
 
@@ -873,7 +873,7 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
   }
 })
 
-test('headless turn failure is an active-only error projection', () => {
+test('machine turn failures share one active-only error projection', () => {
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-headless-turn-state-'))
   process.env.SPEXCODE_HOME = home
@@ -906,13 +906,12 @@ test('headless turn failure is an active-only error projection', () => {
 
     stored.status = 'active'
     writeFileSync(sessionRecordPath(id), JSON.stringify(stored, null, 2) + '\n')
-    const nativeNote = harnessTurnFailureNote('codex', {
-      turnId: 'native-failure',
+    const nativeNote = turnFailureNote('codex', {
       message: '  context   window exceeded  ',
       completedAt: 1_700_000_000,
     })
     assert.equal(nativeNote, 'codex turn failed at 2023-11-14T22:13:20.000Z: context window exceeded')
-    assert.equal(markHarnessTurnFailure(id, nativeNote), true)
+    assert.equal(markTurnFailure(id, nativeNote), true)
     stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(stored.status, 'error')
     assert.equal(stored.note, nativeNote)
@@ -926,7 +925,7 @@ test('headless turn failure is an active-only error projection', () => {
 
     stored.stopped = true
     writeFileSync(sessionRecordPath(id), JSON.stringify(stored, null, 2) + '\n')
-    assert.equal(markHarnessTurnFailure(id, 'late failure after stop'), false, 'explicit stop wins over a late native completion')
+    assert.equal(markTurnFailure(id, 'late failure after stop'), false, 'explicit stop wins over a late native completion')
     stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(stored.status, 'active')
     assert.equal(stored.note, nativeNote)
@@ -935,6 +934,10 @@ test('headless turn failure is an active-only error projection', () => {
     else process.env.SPEXCODE_HOME = prevHome
     rmSync(home, { recursive: true, force: true })
   }
+})
+
+test('turn failure observer retry is bounded exponential backoff', () => {
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 20].map(turnFailureRetryDelay), [1000, 2000, 4000, 8000, 16000, 30000, 30000])
 })
 
 test('owned queues are public-authority leased and raw-state fenced from legacy drainers', () => {

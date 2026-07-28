@@ -113,6 +113,10 @@ their order and hands each xterm-produced byte string to the helper, which write
 This is the same client whose stdout paints xterm, so terminal modes, paste protocol, control keys, and IME
 commits are decided by xterm and the TUI rather than re-encoded by the dashboard. Hidden, lingering, detached,
 or disconnected viewers cannot inject and never queue input for later replay.
+Each accepted browser/xterm input message first obtains [[maintenance-lease]]'s `terminal-input` ticket and
+holds it through the helper write. Draining/active maintenance therefore withholds input before PTY bytes or
+input-lock state change while the viewer remains readable; an input already admitted is a live ticket that
+lease acquisition must drain.
 
 The browser view contains the pane, not tmux's client chrome. Before native attach the helper disables the
 target session's status line, so a browser grid of N rows gives the pane N rows instead of N-1 pane rows plus

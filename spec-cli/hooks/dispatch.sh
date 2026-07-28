@@ -30,6 +30,11 @@ export SPEXCODE_HARNESS="$harness"
 # source it here too for hp_runtime_dir (the per-project store dir).
 export SPEXCODE_HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/harness.sh"
 . "$SPEXCODE_HARNESS_LIB"
+if [ -n "${SPEX:-}" ]; then
+  read -r -a spex_cmd <<< "$SPEX"
+else
+  spex_cmd=("$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/spex.mjs")
+fi
 proj="${CLAUDE_PROJECT_DIR:-$PWD}"
 # the manifest lives in THIS tree's materialize slot of the GLOBAL per-project store (mirrors layout.treeSlotDir),
 # NOT the worktree — and per tree, so a dispatch can only read the manifest of the tree it fires in
@@ -52,7 +57,25 @@ fi
 [ -f "$manifest" ] || exit 0          # no manifest yet (materialize never ran) → nothing to dispatch
 input="$(cat 2>/dev/null || true)"    # capture stdin ONCE; each handler gets its own copy
 err="/tmp/.spex-hook-$$.err"          # per-dispatch (pid-unique) stderr capture; no cross-session race
-trap 'rm -f "$err"' EXIT
+ticket=""
+cleanup() {
+  [ -z "$ticket" ] || "${spex_cmd[@]}" internal maintenance-end "$ticket" "$$" >/dev/null 2>&1 || true
+  rm -f "$err"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' HUP TERM
+sid="$(hp_session_id "$input")"
+[ -n "$sid" ] || sid=hook-dispatch
+if ! ticket="$("${spex_cmd[@]}" internal maintenance-begin "$$" "$sid" 2>"$err")"; then
+  reason="$(cat "$err" 2>/dev/null)"
+  [ -n "$reason" ] || reason='maintenance_active: hook dispatch was not admitted'
+  escaped="$(printf '%s' "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  printf '{"decision":"block","reason":"%s"}' "$escaped"
+  [ "$SPEXCODE_HARNESS" = codex ] && printf '%s\n' "$reason" >&2
+  exit 2
+fi
+export SPEXCODE_MAINTENANCE_PARENT_TICKET="$ticket"
 rc=0
 # manifest line: event<TAB>order<TAB>block<TAB>script  (pre-sorted by event,order,script)
 while IFS=$'\t' read -r ev order block script; do

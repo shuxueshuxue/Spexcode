@@ -8,6 +8,7 @@ code:
 related:
   - spec-cli/src/sessionSlug.test.ts
   - spec-cli/src/layout.ts
+  - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/src/session-record-integrity.test.ts
   - spec-cli/test/session-record-integrity-fixture.ts
 ---
@@ -55,6 +56,13 @@ under `related:`, so a change here attributes its drift and eval staleness to th
 (see [[governed-related]]). That several features hold no code of their own is the honest signal that
 `sessions.ts` is a monolith — a future code split into per-feature modules would let each reclaim ownership.
 
+All side-effectful functions in this shared layer enter [[maintenance-lease]] at their lowest common boundary,
+not only at one HTTP caller: create/new (including fallback), send, raw-key input, interrupt, rename, persisted
+sort, lifecycle transition, queue drain, stop/resume/archive/close, and merge dispatch. This makes one durable
+barrier cover API, CLI, hooks, dashboard and in-process fallback without route-by-route policy. The admission
+operation is one member of the lease's closed union; arbitrary strings cannot invent a write class. Reads and
+selector resolution remain outside the ticket set.
+
 ### Record integrity — one writer, three readings, no revival
 
 **Every field of `session.json` is produced by ONE writer here**, by serializing the typed record and landing
@@ -65,6 +73,19 @@ note-carrying entries — the agent's typed declaration and the hook's capture o
 land through the same call, and a note round-trips byte-for-byte on every surface. The shell hooks keep the
 cheap half: the one-field-per-line shape lets them READ ("already active, nothing stale to clear?") with
 exact-line greps and no jq, and every WRITE goes back through the CLI to this writer ([[state]]).
+
+Launch readiness is the one durable internal publication fence within that record. Its pending value freezes
+the exact pre-resume lifecycle/proposal/note/stopped/archived and offline projection while the raw candidate is
+available to the adapter's post-launch validator. The record/layout boundary owns one public-record parser:
+list/API/graph, resource owners and shared references, resolved-layout settings, and the timeline observer all
+consume that same three-way projected entry rather than raw candidate fields. A successful fence clear
+publishes the final record and its lifecycle event once; failure or stale recovery restores the original and
+emits nothing. Malformed pending bytes are a corrupt/unknown public entry everywhere, never a reason to reuse a
+last-known online row, perform a git walk, or infer an owner from candidate lifecycle fields. "Malformed"
+includes a structurally complete original whose lifecycle or proposal string is outside the same closed enums
+the typed session reader accepts. While the fence exists, the compact public display is pinned offline rather
+than reconciled from candidate runtime evidence, even if the frozen original says `stopped:false` with an
+`active`/`idle` lifecycle and a candidate process is live.
 
 Reading a record has **three** outcomes and collapsing them is what once made a live session answer "no
 session record". **Absent** is the legitimate nothing. **Corrupt** — present but unparseable — is a fact about

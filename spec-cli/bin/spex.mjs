@@ -65,5 +65,17 @@ if (args[0] === 'serve' || args[0] === 'dashboard') {
     .split(',').map((key) => key.trim()).filter(Boolean)
   for (const key of identityKeys) delete env[key]
 }
-spawn(process.execPath, [tsxCli, cli, ...args], { stdio: 'inherit', env })
+const inheritedMaintenanceFds = [
+  ...(env.SPEXCODE_MAINTENANCE_BROKER_FDS || '').split(','),
+  env.SPEXCODE_MAINTENANCE_DELEGATE_FD || '',
+].map(Number).filter((fd) => Number.isInteger(fd) && fd >= 3)
+if (inheritedMaintenanceFds.length) {
+  const req = createRequire(join(pkg, 'package.json'))
+  const tsxImport = req.resolve('tsx/esm')
+  const stdio = Array(Math.max(2, ...inheritedMaintenanceFds) + 1).fill('ignore')
+  stdio[0] = stdio[1] = stdio[2] = 'inherit'
+  for (const fd of inheritedMaintenanceFds) stdio[fd] = 'inherit'
+  spawn(process.execPath, ['--import', tsxImport, cli, ...args], { stdio, env })
+    .on('exit', (code) => process.exit(code ?? 0))
+} else spawn(process.execPath, [tsxCli, cli, ...args], { stdio: 'inherit', env })
   .on('exit', (code) => process.exit(code ?? 0))

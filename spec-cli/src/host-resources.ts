@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { defaultHarness, HARNESSES, harnessById, sessionIdentityEnvVars, type HarnessLivenessRecord, type SharedRuntimeDescriptor, type SharedRuntimeProbe } from './harness.js'
-import { listSessionIds, readConfig, readJsonConfig, readRawRecord, runtimeRoot, type RawRecord } from './layout.js'
+import { listSessionIds, readConfig, readJsonConfig, readPublicRecordEntry, readRawRecord, runtimeRoot, type PublicRecordEntry, type RawRecord } from './layout.js'
 import { repoRoot } from './git.js'
 import { endpointRecordPath } from './host.js'
 import { parseProcStat, processStartToken, processTopology, type ProcessIdentity } from './process-identity.js'
@@ -28,6 +28,7 @@ export type ResourceReference = {
   referenceState: 'loaded' | 'record-only' | 'queued-no-thread'
   turnPresence: 'active' | 'idle' | 'unknown' | 'none'
   protectsControlPlane: boolean
+  liveness?: 'offline' | 'unknown'
 }
 
 export type ResourceOwner = {
@@ -35,7 +36,9 @@ export type ResourceOwner = {
   id: string
   label: string
   status?: string
+  liveness?: 'offline' | 'unknown'
   proposal?: string | null
+  note?: string | null
   worktreePath?: string
   branch?: string | null
   stopped?: boolean
@@ -192,7 +195,25 @@ const descendants = (root: number, procs: Map<number, Proc>): Set<number> => {
   return ids
 }
 
-const records = (): RawRecord[] => listSessionIds().map(readRawRecord).filter((r): r is RawRecord => !!r)
+type PublicRecordInventory = {
+  entries: PublicRecordEntry[]
+  records: RawRecord[]
+  byId: Map<string, PublicRecordEntry>
+}
+const publicRecordInventory = (): PublicRecordInventory => {
+  const entries = listSessionIds().map(readPublicRecordEntry)
+  const byId = new Map<string, PublicRecordEntry>()
+  for (const entry of entries) {
+    if (entry.kind === 'ok') byId.set(entry.raw.session_id, entry)
+    else if (entry.kind === 'corrupt') byId.set(entry.sessionId, entry)
+  }
+  return {
+    entries,
+    records: entries.flatMap((entry) => entry.kind === 'ok' ? [entry.raw] : []),
+    byId,
+  }
+}
+const rawRecords = (): RawRecord[] => listSessionIds().map(readRawRecord).filter((r): r is RawRecord => !!r)
 const runtimePid = (file: string): number | null => {
   try { const pid = Number(readFileSync(file, 'utf8').trim()); return Number.isFinite(pid) && pid > 0 ? pid : null }
   catch { return null }
@@ -219,7 +240,7 @@ const sharedDescriptors = (recs: RawRecord[], retainRegistry = false): Map<strin
   return out
 }
 
-const projectReferences = (entry: SharedEntry, probe: SharedRuntimeProbe): ResourceReference[] => {
+const projectReferences = (entry: SharedEntry, probe: SharedRuntimeProbe, publicById: Map<string, PublicRecordEntry>): ResourceReference[] => {
   const byThread = new Map<string, RawRecord[]>()
   for (const rec of entry.recs) if (rec.harness_session_id) byThread.set(rec.harness_session_id, [...(byThread.get(rec.harness_session_id) ?? []), rec])
   const observed = probe.healthy ? probe.references : []
@@ -235,6 +256,7 @@ const projectReferences = (entry: SharedEntry, probe: SharedRuntimeProbe): Resou
       protectsControlPlane: true,
     }
     const rec = owners[0]
+    const publicEntry = publicById.get(rec.session_id)
     return {
       sessionId: rec.session_id,
       threadId: reference.referenceId,
@@ -243,11 +265,13 @@ const projectReferences = (entry: SharedEntry, probe: SharedRuntimeProbe): Resou
       referenceState: 'loaded',
       turnPresence: reference.turnPresence,
       protectsControlPlane: true,
+      ...(publicEntry?.kind === 'ok' && publicEntry.liveness ? { liveness: publicEntry.liveness } : {}),
     }
   })
   const loaded = new Set(observed.map((reference) => reference.referenceId))
   for (const rec of entry.recs) {
     if (rec.stopped || (rec.harness_session_id && loaded.has(rec.harness_session_id))) continue
+    const publicEntry = publicById.get(rec.session_id)
     live.push({
       sessionId: rec.session_id,
       threadId: rec.harness_session_id ?? null,
@@ -256,15 +280,16 @@ const projectReferences = (entry: SharedEntry, probe: SharedRuntimeProbe): Resou
       referenceState: rec.harness_session_id ? 'record-only' : 'queued-no-thread',
       turnPresence: 'none',
       protectsControlPlane: false,
+      ...(publicEntry?.kind === 'ok' && publicEntry.liveness ? { liveness: publicEntry.liveness } : {}),
     })
   }
   return live
 }
 
-type Inventory = { procs: Map<number, Proc>; recs: RawRecord[]; ownership: Map<number, string>; shared: ReturnType<typeof sharedDescriptors>; backendPid: number | null; backendInstance: string | null; backendInstances: BackendInstanceRecord[] }
+type Inventory = { procs: Map<number, Proc>; recs: RawRecord[]; publicById: Map<string, PublicRecordEntry>; ownership: Map<number, string>; shared: ReturnType<typeof sharedDescriptors>; backendPid: number | null; backendInstance: string | null; backendInstances: BackendInstanceRecord[] }
 
-const buildInventory = (procs: Map<number, Proc>): Inventory => {
-  const recs = records()
+const buildInventory = (procs: Map<number, Proc>, publicRecords = publicRecordInventory()): Inventory => {
+  const recs = publicRecords.records
   const activeRecs = recs.filter((rec) => {
     if (!rec.archived) return true
     // A legacy archived row with a resident leaf is a visible hazard, not clean cold storage. Keep charging
@@ -273,6 +298,7 @@ const buildInventory = (procs: Map<number, Proc>): Inventory => {
     return !!pid && procs.has(pid)
   })
   const byId = new Map(activeRecs.map((rec) => [rec.session_id, rec.session_id]))
+  for (const entry of publicRecords.entries) if (entry.kind === 'corrupt') byId.set(entry.sessionId, entry.sessionId)
   for (const rec of activeRecs) if (rec.harness_session_id) byId.set(rec.harness_session_id, rec.session_id)
   const ownership = new Map<number, string>()
   const adapterVars = sessionIdentityEnvVars().filter((v) => v !== 'SPEXCODE_SESSION_ID')
@@ -327,7 +353,7 @@ const buildInventory = (procs: Map<number, Proc>): Inventory => {
     else if (p.env.SPEXCODE_INSTANCE_ID && p.env.SPEXCODE_INSTANCE_ID !== backendInstance) ownership.set(p.pid, `orphan:backend:${p.env.SPEXCODE_INSTANCE_ID}`)
     else ownership.set(p.pid, 'unattributed:project')
   }
-  return { procs, recs, ownership, shared, backendPid, backendInstance, backendInstances }
+  return { procs, recs, publicById: publicRecords.byId, ownership, shared, backendPid, backendInstance, backendInstances }
 }
 
 const mib = (kib: number) => Math.round((kib / 1024) * 10) / 10
@@ -356,7 +382,7 @@ const probeRuntime = async (descriptor: SharedRuntimeDescriptor): Promise<Shared
 const sessionStopBlocker = async (
   id: string,
   harnessId: string | null,
-  recs = records(),
+  recs = rawRecords(),
   knownProbes?: Map<string, SharedRuntimeProbe>,
 ): Promise<string | null> => {
   const allowed = harnessId
@@ -467,15 +493,22 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
   const root = repoRoot()
   const budgets = resourceBudgets(root)
   if (platform() !== 'linux' && !opts.procRoot) {
-    const recs = records()
+    const publicRecords = publicRecordInventory()
+    const recs = publicRecords.records
     const owners: ResourceOwner[] = []
     const shared = sharedDescriptors(recs)
     const probes = await probeShared(shared)
     for (const [key, entry] of shared) {
       const probe = probes.get(key)!
-      const refs = projectReferences(entry, probe)
+      const refs = projectReferences(entry, probe, publicRecords.byId)
       owners.push({ kind: 'shared-runtime', id: key, label: entry.descriptor.label, processes: [], rssMiB: 0, pssMiB: null, cpuPercent: 0, budget: { rssMiB: null, idleCpuPercent: null }, controlPlane: { healthy: probe.healthy, refCount: probe.healthy ? probe.references.length : null, ...(probe.error ? { error: probe.error } : {}) }, references: refs, findings: sharedFindings(refs, probe) })
     }
+    for (const entry of publicRecords.entries) if (entry.kind === 'corrupt') owners.push({
+      kind: 'session', id: entry.sessionId, label: `session ${entry.sessionId.slice(0, 8)}`, status: 'corrupt', liveness: 'unknown',
+      processes: [], rssMiB: 0, pssMiB: null, cpuPercent: 0,
+      budget: { rssMiB: budgets.sessionRssMiB, idleCpuPercent: budgets.idleCpuPercent },
+      findings: [`session-record-corrupt:${entry.error}`], reclaim: { eligible: false, reason: 'session record is corrupt; ownership and lifecycle are unknown' },
+    })
     const report: ResourceReport = { version: 1, measuredAt: new Date().toISOString(), projectRoot: root, platform: platform(), available: false, unavailableReason: `host process metrics are unavailable on ${platform()}; shared runtime references remain visible`, host: { memoryTotalMiB: null, memoryUsedMiB: null, memoryAvailableMiB: null, swapTotalMiB: null, swapUsedMiB: null, cpuPercent: null }, budgets, owners, totals: { rssMiB: 0, pssMiB: null, cpuPercent: 0 }, findings: owners.reduce((n, o) => n + o.findings.length, 0) }
     if (opts.persist !== false) atomicJson(join(runtimeRoot(), 'resource-report.json'), report)
     return report
@@ -509,7 +542,7 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
     let id = owner
     let label = owner
     let status: string | undefined
-    let lifecycle: Pick<ResourceOwner, 'proposal' | 'worktreePath' | 'branch' | 'stopped' | 'archived'> | undefined
+    let lifecycle: Pick<ResourceOwner, 'liveness' | 'proposal' | 'note' | 'worktreePath' | 'branch' | 'stopped' | 'archived'> | undefined
     let rssBudget: number | null = null
     let idleBudget: number | null = null
     let references: ResourceReference[] | undefined
@@ -519,8 +552,16 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
 
     if (owner.startsWith('session:')) {
       kind = 'session'; id = owner.slice(8); label = `session ${id.slice(0, 8)}`
-      const rec = bySession.get(id); status = rec?.status; rssBudget = budgets.sessionRssMiB; idleBudget = budgets.idleCpuPercent
-      if (rec) lifecycle = { proposal: rec.proposal, worktreePath: rec.worktree_path, branch: rec.branch, stopped: rec.stopped, archived: rec.archived }
+      const publicEntry = inv.publicById.get(id)
+      const rec = bySession.get(id); status = publicEntry?.kind === 'corrupt' ? 'corrupt' : rec?.status; rssBudget = budgets.sessionRssMiB; idleBudget = budgets.idleCpuPercent
+      if (rec && publicEntry?.kind === 'ok') lifecycle = {
+        ...(publicEntry.liveness ? { liveness: publicEntry.liveness } : {}),
+        proposal: rec.proposal, note: rec.note, worktreePath: rec.worktree_path, branch: rec.branch, stopped: rec.stopped, archived: rec.archived,
+      }
+      else if (publicEntry?.kind === 'corrupt') {
+        lifecycle = { liveness: 'unknown' }
+        findings.push(`session-record-corrupt:${publicEntry.error}`)
+      }
       if (rec?.archived) findings.push('archived-runtime-hazard:leaf-still-resident')
       if (totals.rssMiB > rssBudget) findings.push(`rss-over-budget:${Math.round((totals.rssMiB - rssBudget) * 10) / 10}MiB`)
       if (status !== 'active' && status !== 'queued' && totals.cpuPercent > idleBudget) findings.push(`idle-cpu-over-budget:${Math.round((totals.cpuPercent - idleBudget) * 10) / 10}%`)
@@ -532,7 +573,7 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
       kind = 'shared-runtime'; id = owner.slice(7)
       const shared = inv.shared.get(id)!; label = shared.descriptor.label; rssBudget = budgets.backendRssMiB; idleBudget = budgets.idleCpuPercent
       const probe = sharedProbes.get(id)!
-      references = projectReferences(shared, probe)
+      references = projectReferences(shared, probe, inv.publicById)
       if (references.some((reference) => reference.sessionId && bySession.get(reference.sessionId)?.archived)) findings.push('archived-runtime-hazard:loaded-thread')
       controlPlane = { healthy: probe.healthy, refCount: probe.healthy ? probe.references.length : null, ...(probe.error ? { error: probe.error } : {}) }
       if (totals.rssMiB > rssBudget) findings.push(`rss-over-budget:${Math.round((totals.rssMiB - rssBudget) * 10) / 10}MiB`)
@@ -573,11 +614,21 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
     owners.push({ kind, id, label, ...(status ? { status } : {}), ...(lifecycle ?? {}), processes, ...totals, budget: { rssMiB: rssBudget, idleCpuPercent: idleBudget }, ...(controlPlane ? { controlPlane } : {}), ...(references ? { references } : {}), findings, ...(reclaim ? { reclaim } : {}) })
   }
 
+  // A corrupt record stays a public owner even without a currently attributable process. Its absence from a
+  // process-derived group cannot turn unknown lifecycle/ownership into disappearance.
+  for (const entry of inv.publicById.values()) if (entry.kind === 'corrupt'
+    && !owners.some((owner) => owner.kind === 'session' && owner.id === entry.sessionId)) owners.push({
+      kind: 'session', id: entry.sessionId, label: `session ${entry.sessionId.slice(0, 8)}`, status: 'corrupt', liveness: 'unknown',
+      processes: [], rssMiB: 0, pssMiB: null, cpuPercent: 0,
+      budget: { rssMiB: budgets.sessionRssMiB, idleCpuPercent: budgets.idleCpuPercent },
+      findings: [`session-record-corrupt:${entry.error}`], reclaim: { eligible: false, reason: 'session record is corrupt; ownership and lifecycle are unknown' },
+    })
+
   // A referenced shared runtime with no readable process is still operationally important: keep its live or
   // unknown refcount visible instead of silently omitting it from a process-derived report.
   for (const [key, shared] of inv.shared) if (!owners.some((o) => o.kind === 'shared-runtime' && o.id === key)) {
     const probe = sharedProbes.get(key)!
-    const references = projectReferences(shared, probe)
+    const references = projectReferences(shared, probe, inv.publicById)
     const protectedReferences = references.filter((reference) => reference.protectsControlPlane)
     owners.push({ kind: 'shared-runtime', id: key, label: shared.descriptor.label, processes: [], rssMiB: 0, pssMiB: null, cpuPercent: 0, budget: { rssMiB: budgets.backendRssMiB, idleCpuPercent: null }, controlPlane: { healthy: probe.healthy, refCount: probe.healthy ? probe.references.length : null, ...(probe.error ? { error: probe.error } : {}) }, references, findings: ['runtime-process-unavailable', ...sharedFindings(references, probe)], reclaim: { eligible: false, reason: !probe.healthy ? 'live reference count unknown; adapter/project teardown only' : protectedReferences.length ? `protected by ${protectedReferences.length} loaded/active thread reference(s)` : 'adapter/project teardown only' } })
   }

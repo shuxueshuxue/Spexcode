@@ -21,6 +21,19 @@ scenarios:
       The painted rows stay on screen through every board delta: the same-request refresh is quiet (no
       lp-empty "loading…" flash, no aria-busy wipe), and only a genuine request-identity change (new
       query/page/domain) may show the loading state again.
+  - name: cold-review-navigation
+    tags: [frontend-e2e]
+    description: >
+      Against the branch-local backend with the real session/eval/issue stores, open fresh top-level
+      #/evals and #/issues controls, record every review request and graph request, then repeat the route
+      navigation after the Sessions page has painted its board projection. Capture request URL, status,
+      ETag/revision, route shell/runtime presence, and the first painted rows.
+    expected: >
+      Each cold review route issues its committed page request and paints rows when that response completes;
+      the lightweight Evals shell does not mint a second same-identity request merely because it rendered,
+      and a cold graph build cannot overlap a first fallback poll that leaves the review request waiting on a
+      second graph flight. Sessions-first navigation is a recovery control, not a required transport for the
+      review page.
 ---
 
 # measuring page-state

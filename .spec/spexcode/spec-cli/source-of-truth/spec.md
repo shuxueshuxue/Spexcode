@@ -9,6 +9,7 @@ code:
 related:
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts
+  - docs/audits/source-of-truth-stage2-20260728.md
 ---
 # source-of-truth
 
@@ -95,6 +96,9 @@ Two principles keep that derivation cheap on a long-running server:
   rule are current-tip questions; the ledger removes repeated immutable-fact extraction, not that semantic
   lower bound. Within one build, stream count must not multiply ledger work: all consumers share one decoded
   snapshot, one integrity verdict, and one locked merge/write, with no write-then-reload verification pass.
+  The pair projector also parses the current-tip topology and tree-path listing once and passes those
+  immutable projections to both history and drift builders; a shared `rev-list --parents` or `ls-tree`
+  text must never be split into separate equivalent maps per builder.
   Cross-process writers still merge under the project-scoped lock; a corrupt or interpretation-mismatched
   snapshot rebuilds from Git, and a failed event scan remains loud rather than minting a marker.
 
@@ -109,6 +113,9 @@ Two principles keep that derivation cheap on a long-running server:
   one cache entry per rejected commit.
 - **Key the cache on real change, read from the filesystem.** A warm read spawns no git at all: the
   cache key is the current commit, read straight from `.git`, so it costs a file read, not a subprocess.
+  Shallow/graft bytes and the refs storage that can carry `refs/replace/*` are part of that filesystem
+  identity; when their bytes move, Git re-resolves the canonical replacement targets before any ledger is
+  reused, while unchanged storage reuses the already-resolved target set without another child process.
   A new commit moves the key and the board reflects the new version and drift at once; an unreadable
   key bypasses the cache and recomputes rather than ever serving stale data.
 

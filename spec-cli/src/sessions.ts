@@ -2221,7 +2221,7 @@ async function proveSessionCandidate(path: string, branch: string, signal: Abort
     gitTry(['-C', path, 'symbolic-ref', '--quiet', '--short', 'HEAD']),
     gitTry(['-C', mainRoot(), 'show-ref', '--verify', '--quiet', `refs/heads/${branch}`]),
   ]))
-  if (!top.ok || !checkedOut.ok || !ref.ok) return [top.stderr, checkedOut.stderr, ref.stderr].map((value) => value.trim()).filter(Boolean).join('; ') || 'Git identity proof failed'
+  if (!top.ok || !checkedOut.ok || !ref.ok) return [top.stderr, checkedOut.stderr, ref.stderr].map((value) => value.trim()).filter(Boolean).join('; ') || 'Git identity validation failed'
   let actualTop = top.stdout.trim()
   try { actualTop = realpathSync(actualTop) } catch { /* missing path is reported by the comparison */ }
   let expectedTop = path

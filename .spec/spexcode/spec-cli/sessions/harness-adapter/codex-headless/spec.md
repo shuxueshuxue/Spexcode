@@ -47,7 +47,11 @@ app-server remains the liveness address only when it can accept another delivery
 The session record is the liveness address: while it exists and is not explicitly stopped, the adapter reports
 `online` regardless of the empty pane or process probes. `headless: true` keeps it out of the dashboard launcher
 picker by default and the note conversation is the console trunk. Human `stop` tears down the session runtime
-and marks the retained record stopped, so it reads `offline` until resume clears the marker. Resume is
-deliberately degraded to the no-TUI form: `resumeArg` is empty because the durable thread already lives in the
-shared server and there is no TUI to reattach or restart. Closing remains the terminal operation that removes
-the record, worktree, branch, pane, and shared runtime references owned by the session.
+and marks the retained record stopped, so it reads `offline` until a proven resume clears the marker. Resume is
+the no-TUI form: `resumeArg` is empty because there is no TUI to reattach, but an absent shared server must be
+recreated through the canonical delegated spawn before the record can return online. The adapter's launch
+readiness is stricter than its steady-state record liveness: it proves one unchanged exact detached-v3
+PID/start/isolation/socket generation and the target's existing thread loaded under that shared root. Only then
+does the resume commit `stopped:false`; a refused, failed, or timed-out helper leaves the retained record
+stopped/offline and retryable. Closing remains the terminal operation that removes the record, worktree,
+branch, pane, and shared runtime references owned by the session.

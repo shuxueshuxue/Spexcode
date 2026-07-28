@@ -1,0 +1,28 @@
+---
+scenarios:
+  - name: public-create-is-bounded-and-atomic
+    tags: [backend-api, cli]
+    description: >
+      Start an explicitly targeted backend for an isolated initialized Git project and use a controllable
+      headed launcher. Through the real public POST /api/sessions surface, first stall a pre-publication Git
+      worktree phase past the configured create budget; also abort one request from the client and race two
+      requests carrying the same Idempotency-Key. Timestamp the request, creation lock, Git, record write, and
+      launcher-queue phases. After each terminal response inspect the public session list, global session store,
+      git worktree list, refs/heads/node namespace, child processes, and tmux server. Finally release the
+      controllable launcher and run one ordinary successful create with a [[node]] target.
+    expected: >
+      A timeout or disconnect settles within the configured wall with structured code and phase, kills the
+      active Git group, and leaves zero session row, store directory, worktree, branch, or launcher pane; no
+      artifact appears later. Concurrent same-key requests publish exactly one normal queued/starting receipt
+      with one id, worktree, branch, record, and launcher attempt, and either response can recover that receipt.
+      Reusing that key with another payload fails without mutation. A successful targeted create does not run
+      history/drift indexing before publication, returns inside the budget even while the headed launcher is
+      stalled, and the structured timestamps show record publication preceding launcher-queue work.
+    code: spec-cli/src/sessions.ts, spec-cli/src/index.ts, spec-cli/src/client.ts
+---
+
+# measuring session-new
+
+The closure proof uses an isolated real backend and the public HTTP route, with a real Git repository and
+tmux transport. Unit seams may make the phase stall deterministic, but an internal `newSession()` call alone
+cannot pass this scenario because it omits HTTP disconnect, response shape, and explicit backend targeting.

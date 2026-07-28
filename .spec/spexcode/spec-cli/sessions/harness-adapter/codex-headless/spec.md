@@ -50,8 +50,9 @@ picker by default and the note conversation is the console trunk. Human `stop` t
 and marks the retained record stopped, so it reads `offline` until a proven resume clears the marker. Resume is
 the no-TUI form: `resumeArg` is empty because there is no TUI to reattach, but an absent shared server must be
 recreated through the canonical delegated spawn before the record can return online. The adapter's launch
-readiness is stricter than its steady-state record liveness: it proves one unchanged exact detached-v3
-PID/start/process-group/session/isolation/socket generation, the target's existing thread loaded under that
+readiness is stricter than its steady-state record liveness: it proves one unchanged version-4 detached-launch
+receipt through the shared process adapter (exact PID/start and process group everywhere, plus `/proc` session on
+Linux, never Darwin `ps sess`) and composes it with the exact socket generation, the target's existing thread loaded under that
 shared root, and exactly one governed record owner for that thread across every adapter record sharing the
 descriptor. That owner must be the current SpexCode session; a deduplicated loaded-ID set is never ownership
 evidence. The adapter returns those facts as one readiness fence. Resume durably records an internal pending

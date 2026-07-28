@@ -55,7 +55,7 @@ Archive eligibility reads the target's fresh native turn census, not its public 
 `inProgress` turn may archive even if a hook-authored public status still reads working.
 
 For a shared resident adapter, lifecycle mutation uses a target-scoped proof rather than the resource report's
-full projection. It first proves the shared PID/start/isolation/socket generation, obtains the paginated loaded-ID
+full projection. It first proves the shared PID/start/detached-receipt/socket generation, obtains the paginated loaded-ID
 set, and checks the target's active and archived descendant collections. Ordinary stop reads only the exact target
 and still refuses a resident descendant subtree. Archive additionally reads each loaded member of the exact owned
 subtree, then archives every member that was initially active under one generation fence; members already in the

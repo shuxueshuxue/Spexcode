@@ -147,7 +147,9 @@ agent**, not a server merge — it returns `{dispatched}` and never touches main
 502, never a silent 200); `rawkey` keeps tmux send-keys for nav; `socket` streams pane bytes.
 `/api/sessions/edges` edges are DERIVED from live `spex watch` monitors (`watch`/`unwatch` register +
 heartbeat), not a stored subscription. `/api/uploads` writes a pasted file to this (worker) machine's
-/tmp and returns its path. At boot the server also runs `superviseQueue()` to launch queued sessions.
+/tmp and returns its path. At boot the server runs `superviseQueue()` to launch queued sessions and
+`superviseTurnFailures()` to reconcile adapter-owned native failure subscriptions; the route layer still
+contains no harness protocol branch.
 The host ledger is equally thin: `GET /api/resources` returns [[host-resource-budget]]'s latest inventory.
 It is read-only; existing lifecycle mutations consult the adapter-owned shared-runtime guard before cleanup.
 

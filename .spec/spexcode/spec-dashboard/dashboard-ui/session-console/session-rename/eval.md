@@ -51,6 +51,20 @@ scenarios:
       removal runs — and fires the human-only worktree removal in the background; the board reload when it
       lands drops the closed row off every surface. This is the same removal the (now-absent) header close
       once did, behind a guard.
+  - name: close-refusal-is-visible
+    tags: [frontend-e2e, backend-api, desktop]
+    description: >
+      Through the running dashboard's real session-row close confirm, exercise a target whose backend close
+      guard refuses to commit in an isolated governed fixture. Capture the network response and the selected row
+      after the refusal.
+    expected: >
+      The close request is non-2xx with a structured diagnostic, the row remains present, and the dashboard
+      renders that diagnostic through its action-error surface. A refused destructive operation never reads as
+      HTTP success or silently disappears.
+    code:
+      - spec-cli/src/index.ts#closeSession
+      - spec-dashboard/src/SessionContextMenu.jsx#confirmClose
+      - spec-dashboard/src/SessionInterface.jsx#act
 ---
 
 # session-rename — yatsu

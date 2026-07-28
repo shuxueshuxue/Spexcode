@@ -5,16 +5,21 @@ scenarios:
       Walk the three help layers as a fresh agent would, through the real CLI: (1) `spex help` — the
       map must open with the noun-first grammar, list the six noun drawers and the project verbs, and
       state the shared conventions (SEL · `.` · --json · --api routing · mentions) once; (2)
-      `spex help session` and `spex session wait --help` — a drawer's usage with its caveats (watch
-      never exits; send --keys marked last-resort/unstable) and the map/guide footer; (3)
+      `spex help session` plus `spex session send --help`, `spex session wait --help`, and
+      `spex session new --help` — the first is the complete drawer while each noun-verb probe is only
+      that verb's exact usage, projected from the shared drawer definition. The exact entries preserve
+      their caveats (watch never exits; wait is edge-triggered; send --keys is last-resort/unstable) and
+      shared safety notes (SEL grammar on selector verbs; project-bound warning on writes), plus the
+      map/guide footer; (3)
       `spex guide eval` — the skill page must footer back to the help layers. Also probe the
       dead-ends: `spex nosuch`, `spex help nosuch`, `spex guide nosuch`, bare `spex internal`, and an
       unknown drawer verb (`spex spec nosuch`) must each fail loud AND name the layer to return to;
       `spex session new --help` must print help without creating a session.
     expected: >
       Every probe answers with the right layer and a pointer onward — no output that strands the
-      reader, no side effect from a --help probe, and no machine-plumbing verb (internal trunk /
-      check-staged / session-state / nudge / codex-launch) on the `spex help` map.
+      reader, no repeated full session drawer from a noun-verb probe, no side effect from a --help probe,
+      and no machine-plumbing verb (internal trunk / check-staged / session-state / nudge / codex-launch)
+      on the `spex help` map.
     tags: [cli]
     code: [spec-cli/src/help.ts, spec-cli/src/cli.ts]
     related: [spec-cli/src/guide.ts]

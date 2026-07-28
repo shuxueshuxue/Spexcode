@@ -126,25 +126,6 @@ function signpost(oldSpelling: string, newSpelling: string): never {
 }
 if (cmd !== undefined && SIGNPOSTS[cmd]) signpost(`spex ${cmd}`, SIGNPOSTS[cmd])
 
-// After a successful launch, nudge the caller to actually MONITOR the session — launch-then-forget is a real
-// gap (a supervisor or human launches and then never watches, so a review/failure goes unnoticed). Goes to
-// STDERR so the JSON on stdout (which callers parse) stays clean; keyed to whoever's calling — a supervising
-// agent has an own-session id, a human at a terminal does not. The hint also names the COMM channel
-// (`spex session send`) — field-tested gap: callers who couldn't find it reached for raw tmux keystrokes instead.
-async function launchMonitorReminder(id: string): Promise<void> {
-  const { ownSessionId } = await import('./sessions.js')
-  const agent = ownSessionId()
-  console.error(`\nspex: launched session ${id} — now MONITOR it, or its review/failure goes unnoticed:`)
-  if (agent) {
-    // a supervising agent: the per-worker monitor is a backgrounded `spex session wait`, which is edge-triggered.
-    console.error(`  supervising agent → background \`spex session wait ${id}\` (edge-triggered: exits when it OBSERVES the session transition into an actionable status — also how you await a dispatched merge actually landing; its exit is your wake-up. Already actionable and you just want to read it? \`spex session ls\`)`)
-    console.error(`  or watch the whole stream: \`spex session watch\``)
-  } else {
-    console.error(`  \`spex session watch\` — the live stream of actionable session transitions (or \`spex session wait ${id}\` to sleep until this one's next transition into actionable)`)
-  }
-  console.error(`  talk to it: \`spex session send ${id} "<msg>"\` — plain text; \`send --keys\` is a LAST RESORT (unstable raw TUI keys — only when a text send provably can't land)`)
-}
-
 const greeted = new Set<string>()
 async function greetWatchTargets(watcher: string, selectors: string[]): Promise<void> {
   try {
@@ -285,12 +266,12 @@ async function stateKit() {
 
 // a trailing --help/-h prints help and exits BEFORE any verb runs, so a help probe never fires a
 // streaming/mutating command. It prints THAT command's usage when an entry exists (the second layer
-// of the help journey — see help.ts): a drawer sub's probe (`spex session send --help`) answers with the
-// drawer's entry. Unknown tokens fall back to the map. (Removed spellings never reach here — the signpost
-// table above already exited.)
+// of the help journey — see help.ts); session noun-verb probes project the exact verb from the shared
+// drawer definition. Unknown tokens preserve the existing drawer/map fallback. (Removed spellings never
+// reach here — the signpost table above already exited.)
 if (cmd && cmd !== 'help' && (has('help') || process.argv.includes('-h'))) {
   const { commandHelp, overviewHelp } = await import('./help.js')
-  console.log(commandHelp(cmd) ?? overviewHelp())
+  console.log(commandHelp(cmd, cmd === 'session' ? process.argv[3] : undefined) ?? overviewHelp())
   process.exit(0)
 }
 
@@ -658,7 +639,7 @@ if (cmd === 'serve') {
     }
     const created = await createSession(prompt, flag('launcher') ?? undefined)
     console.log(JSON.stringify(created, null, 2))
-    await launchMonitorReminder(created.id)
+    console.error((await import('./help.js')).sessionLaunchReceipt(created.id))
   } else if (sub === 'ls') {
     // pretty list of living sessions + states. `spex session ls [SEL...] [--status a,b] [--json]`
     // the board comes from the backend (so it shows the sessions of whatever SPEXCODE_API_URL points at,

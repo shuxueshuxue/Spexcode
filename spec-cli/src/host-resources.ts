@@ -384,6 +384,7 @@ const sessionStopBlocker = async (
   harnessId: string | null,
   recs = rawRecords(),
   knownProbes?: Map<string, SharedRuntimeProbe>,
+  opts: { coldReceipt?: unknown } = {},
 ): Promise<string | null> => {
   const allowed = harnessId
     ? new Set((harnessById(harnessId).sharedRuntimes?.(runtimeRoot()) ?? []).map((descriptor) => descriptor.key))
@@ -409,7 +410,7 @@ const sessionStopBlocker = async (
         stampBefore !== `detached-v3 ${pid} ${startToken} ${pid} ${pid}`)
         return `${descriptor.label} PID ${pid}@${startToken} has no matching live detached process-boundary record`
       let guard
-      try { guard = await descriptor.mutationGuard(targetThread) }
+      try { guard = await descriptor.mutationGuard(targetThread, opts) }
       catch (error) { return `${descriptor.label} target-scoped mutation guard failed: ${(error as Error).message}` }
       const startAfter = processStartToken(pid)
       const topologyAfter = processTopology(pid)
@@ -418,7 +419,7 @@ const sessionStopBlocker = async (
       if (startAfter !== startToken || !topologyAfter || topologyAfter.startToken !== startToken ||
         topologyAfter.processGroupId !== pid || topologyAfter.sessionId !== pid || stampAfter !== stampBefore)
         return `${descriptor.label} PID/start/isolation identity changed during target-scoped mutation guard`
-      if (guard.descendantIds.length)
+      if (guard.descendantIds.length && guard.coldTeardownAuthorized !== true)
         return `${descriptor.label} target thread ${targetThread} has owned descendants (${guard.descendantIds.join(', ')})`
       if (!guard.healthy)
         return `${descriptor.label} target thread ${targetThread} is unknown: ${guard.error || 'target-scoped mutation guard failed'}`
@@ -658,9 +659,13 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
   return report
 }
 
-export async function assertSessionStopSafe(id: string, rec: (HarnessLivenessRecord & { harness?: string }) | null): Promise<void> {
+export async function assertSessionStopSafe(
+  id: string,
+  rec: (HarnessLivenessRecord & { harness?: string }) | null,
+  opts: { coldReceipt?: unknown } = {},
+): Promise<void> {
   if (!rec) throw new ResourceConflict(`refusing to stop ${id}: no readable session record proves the adapter or leaf owner`)
-  const blocker = await sessionStopBlocker(id, rec.harness || null)
+  const blocker = await sessionStopBlocker(id, rec.harness || null, rawRecords(), undefined, opts)
   if (blocker) throw new ResourceConflict(`refusing to stop ${id}: ${blocker}`)
 }
 

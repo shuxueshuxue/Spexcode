@@ -3,15 +3,16 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, launchPreflight, launchScript, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, launchPreflight, launchScript, listSessions, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
+import { readTimeline } from './session-timeline.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const waitUntil = async (check: () => boolean, label: string, timeoutMs = 5000) => {
@@ -20,6 +21,23 @@ const waitUntil = async (check: () => boolean, label: string, timeoutMs = 5000) 
     if (Date.now() >= deadline) throw new Error(`timed out waiting for ${label}`)
     await sleep(20)
   }
+}
+
+const LIVE_PROJECT_SESSIONS = '/home/jeffry/.spexcode/projects/-home-jeffry-spexcode/sessions'
+type LiveSessionsCensus = { ids: string[]; count: number; hash: string }
+function liveSessionsCensus(): LiveSessionsCensus {
+  const ids = existsSync(LIVE_PROJECT_SESSIONS)
+    ? readdirSync(LIVE_PROJECT_SESSIONS, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()
+    : []
+  return { ids, count: ids.length, hash: createHash('sha256').update(ids.join('\0')).digest('hex') }
+}
+function assertLiveSessionsUnchanged(before: LiveSessionsCensus, label: string): void {
+  assert.deepEqual(liveSessionsCensus(), before,
+    `${label} must not create, remove, or retarget any id in ${LIVE_PROJECT_SESSIONS}`)
+}
+function assertIsolatedResumeStore(home: string, id: string): void {
+  assert.ok(sessionStoreDir(id).startsWith(`${home}/`), `resume fixture ${id} store escaped isolated SPEXCODE_HOME`)
+  assert.ok(runtimeRoot().startsWith(`${home}/`), `resume fixture ${id} runtime root escaped isolated SPEXCODE_HOME`)
 }
 
 test('command presets compose once at the backend prompt boundary while unknown slash text passes through', () => {
@@ -125,10 +143,11 @@ function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: strin
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch: 'main',
-    node: 'maintenance-lease', title: '', name: '', parent: '', status: 'idle', proposal: '',
-    merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',
+    node: 'maintenance-lease', title: '', name: '', parent: '', status: 'active', proposal: '',
+    merges: 0, note: 'preserve-before-readiness', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',
     harness_session_id: `thread-${id}`, stopped: true, archived: false, cold_proof: '', adapter_recovery: '',
     launcher: 'fixture', launch_cmd: launchCmd, launch_owner: '',
+    launch_readiness_pending: '',
   }, null, 2)}\n`)
 }
 
@@ -149,7 +168,8 @@ exit 0
   chmodSync(tmux, 0o755)
 }
 
-test('maintenance resume holds its parent ticket after delegated spawn until adapter launch readiness', { timeout: 20_000 }, async () => {
+test('maintenance resume holds its parent ticket after delegated spawn until adapter launch readiness', { timeout: 20_000, concurrency: false }, async () => {
+  const liveBefore = liveSessionsCensus()
   const previousHome = process.env.SPEXCODE_HOME
   const previousPath = process.env.PATH
   const originalLaunchCmd = codexHeadlessHarness.launchCmd
@@ -166,6 +186,7 @@ test('maintenance resume holds its parent ticket after delegated spawn until ada
   writeResumeTmuxFixture(bin, commandPath, launchPidPath)
   process.env.PATH = `${bin}:${previousPath}`
   const id = `resume-ready-delay-${process.pid}`
+  assertIsolatedResumeStore(home, id)
   const sharedDir = join(home, 'shared'); mkdirSync(sharedDir)
   const sharedPid = join(sharedDir, 'runtime.pid'); const sharedScope = join(sharedDir, 'runtime.scope')
   const consumed = join(home, 'delegate-consumed'); const helper = join(home, 'helper.sh')
@@ -189,9 +210,14 @@ touch ${JSON.stringify(consumed)}
 
   let releaseReady!: () => void
   const ready = new Promise<void>((resolve) => { releaseReady = resolve })
+  let releaseValidation!: () => void
+  const validation = new Promise<void>((resolve) => { releaseValidation = resolve })
   let readinessEntered = false
+  let validationEntered = false
   let readinessValidations = 0
   let settled = false
+  let settledResult: Awaited<ReturnType<typeof resumeSession>> | null = null
+  let pending: Promise<Awaited<ReturnType<typeof resumeSession>>> | null = null
   let runtimeIdentity: { pid: number; startToken: string } | null = null
   try {
     codexHeadlessHarness.launchCmd = () => helper
@@ -202,12 +228,18 @@ touch ${JSON.stringify(consumed)}
       await ready
       return {
         proof: { kind: 'test-ready' },
-        validate: async () => { readinessValidations++; return true },
+        validate: async () => {
+          validationEntered = true
+          await validation
+          readinessValidations++
+          return true
+        },
       }
     }
-    const pending = resumeSession(id, { force: true, authorization: { token, epoch: 41 } })
-      .then((result) => { settled = true; return result })
-    await waitUntil(() => readinessEntered, 'adapter readiness entry')
+    pending = resumeSession(id, { force: true, authorization: { token, epoch: 41 } })
+      .then((result) => { settled = true; settledResult = result; return result })
+    await waitUntil(() => readinessEntered || settled, 'adapter readiness entry or early resume result', 15_000)
+    assert.equal(settled, false, `resume returned before adapter readiness: ${JSON.stringify(settledResult)}`)
     const during = JSON.parse(readFileSync(leasePath, 'utf8'))
     assert.equal(settled, false, 'resume does not finish at FIFO handoff or delegate consumption')
     assert.equal(during.tickets.some((ticket: any) => ticket.operation === 'resume' && ticket.sessionId === id), true)
@@ -216,14 +248,41 @@ touch ${JSON.stringify(consumed)}
     assert.equal(during.delegates[0]?.state, 'completed')
     assert.equal(JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).stopped, true, 'record stays stopped before readiness')
     releaseReady()
+    await waitUntil(() => validationEntered, 'post-pending readiness validation')
+    const internalPending = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(internalPending.stopped, false, 'the internal candidate crosses its durable pending boundary')
+    assert.equal(internalPending.status, 'idle')
+    assert.equal(internalPending.launch_readiness_pending?.original?.status, 'active')
+    const [apiRows, graph] = await Promise.all([listSessions(true), sessionGraph()])
+    const apiRow = apiRows.find((row) => row.id === id)
+    const graphRow = graph.nodes.find((row) => row.id === id)
+    for (const [surface, row] of [['sessions API source', apiRow], ['session graph', graphRow]] as const) {
+      assert.ok(row, `${surface} retains the governed row during validation`)
+      assert.equal(row.lifecycle, 'active', `${surface} projects the exact pre-resume lifecycle`)
+      assert.equal(row.status, 'offline', `${surface} never projects the pending candidate online`)
+      assert.equal(row.liveness, 'offline', `${surface} remains stopped while validation is pending`)
+      assert.equal(row.note, 'preserve-before-readiness')
+    }
+    assert.deepEqual(readTimeline(id)?.events ?? [], [], 'pending publication emits no lifecycle event')
+    releaseValidation()
     assert.deepEqual(await pending, { ok: true })
     assert.equal(readinessValidations, 1, 'the same fence is validated after the record commit')
-    assert.equal(JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).stopped, false)
+    const published = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(published.stopped, false)
+    assert.equal(published.status, 'idle')
+    assert.equal(published.launch_readiness_pending, '')
+    assert.deepEqual((readTimeline(id)?.events ?? []).map((event) => event.kind === 'status'
+      ? [event.status, event.proposal, event.note]
+      : [event.kind]), [['idle', null, 'preserve-before-readiness']], 'success publishes the real lifecycle exactly once')
     await waitUntil(() => existsSync(sharedPid), 'delegated runtime pid')
     const pid = Number(readFileSync(sharedPid, 'utf8').trim()); const runtimeStart = processStartToken(pid)
     if (runtimeStart) runtimeIdentity = { pid, startToken: runtimeStart }
   } finally {
     releaseReady?.()
+    releaseValidation?.()
+    // The promise owns all record writes. It must settle while the isolated home is still installed; restoring
+    // the caller's environment first is what let a failed test continue against the live project store.
+    if (pending) await pending.catch(() => {})
     if (!runtimeIdentity && existsSync(sharedPid)) {
       const pid = Number(readFileSync(sharedPid, 'utf8').trim())
       const runtimeStart = processStartToken(pid)
@@ -240,11 +299,14 @@ touch ${JSON.stringify(consumed)}
     else process.env.SPEXCODE_HOME = previousHome
     process.env.PATH = previousPath
     rmSync(home, { recursive: true, force: true })
+    assert.equal(existsSync(home), false, 'delayed resume fixture root is removed exactly')
+    assertLiveSessionsUnchanged(liveBefore, 'delayed resume fixture')
   }
 })
 
-test('resume missing, failed, or invalidated readiness preserves the stopped offline record', async (t) => {
-  for (const outcome of ['missing', 'timeout', 'invalidated'] as const) await t.test(outcome, async () => {
+test('resume missing, failed, or invalidated readiness preserves the stopped offline record', { concurrency: false }, async (t) => {
+  for (const outcome of ['missing', 'timeout', 'thrown', 'invalidated'] as const) await t.test(outcome, async () => {
+    const liveBefore = liveSessionsCensus()
     const previousHome = process.env.SPEXCODE_HOME
     const previousPath = process.env.PATH
     const originalLaunchCmd = codexHeadlessHarness.launchCmd
@@ -260,23 +322,35 @@ test('resume missing, failed, or invalidated readiness preserves the stopped off
     const bin = join(home, 'bin'); writeResumeTmuxFixture(bin, join(home, 'tmux-command'), join(home, 'launch.pid'))
     process.env.PATH = `${bin}:${previousPath}`
     const id = `resume-ready-${outcome}-${process.pid}`
+    assertIsolatedResumeStore(home, id)
     const helper = join(home, 'helper.sh'); writeFileSync(helper, '#!/usr/bin/env bash\nexit 7\n'); chmodSync(helper, 0o755)
     writeResumeFixtureRecord(id, project, helper)
+    const original = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     try {
       codexHeadlessHarness.launchCmd = () => helper
       ;(codexHeadlessHarness as any).sharedRuntimeSpawn = false
       ;(codexHeadlessHarness as any).launchReady = outcome === 'missing'
         ? async () => null
-        : outcome === 'timeout'
-          ? async () => { throw new Error('bounded helper readiness timeout') }
-          : async () => ({ proof: { kind: 'test-invalidated' }, validate: async () => false })
+        : async () => ({
+            proof: { kind: `test-${outcome}` },
+            validate: outcome === 'timeout'
+              ? async () => { throw new Error('bounded helper readiness timeout') }
+              : outcome === 'thrown'
+                ? async () => { throw new Error('adapter validator threw') }
+                : async () => false,
+          })
       const result = await resumeSession(id, { force: true })
       assert.equal(result.ok, false)
       assert.equal(result.refused, true)
-      assert.match(result.error || '', outcome === 'timeout' ? /bounded helper readiness timeout/ : /did not become ready|readiness changed/)
+      assert.match(result.error || '', outcome === 'timeout'
+        ? /bounded helper readiness timeout/
+        : outcome === 'thrown'
+          ? /adapter validator threw/
+          : /did not become ready|readiness changed/)
       const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
-      assert.equal(stored.stopped, true)
+      assert.deepEqual(stored, original, 'every failed readiness outcome restores the complete pre-resume record')
       assert.equal(codexHeadlessHarness.liveness({ session: id, stopped: stored.stopped }, false), 'offline')
+      assert.deepEqual(readTimeline(id)?.events ?? [], [], 'failed readiness emits no lifecycle transition')
     } finally {
       codexHeadlessHarness.launchCmd = originalLaunchCmd
       ;(codexHeadlessHarness as any).sharedRuntimeSpawn = originalSharedRuntimeSpawn
@@ -285,8 +359,73 @@ test('resume missing, failed, or invalidated readiness preserves the stopped off
       else process.env.SPEXCODE_HOME = previousHome
       process.env.PATH = previousPath
       rmSync(home, { recursive: true, force: true })
+      assert.equal(existsSync(home), false, `${outcome} resume fixture root is removed exactly`)
+      assertLiveSessionsUnchanged(liveBefore, `${outcome} resume fixture`)
     }
   })
+})
+
+test('a stale launch-readiness pending record recovers fail-closed before another launch attempt', { concurrency: false }, async () => {
+  const liveBefore = liveSessionsCensus()
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousPath = process.env.PATH
+  const originalLaunchReady = (codexHeadlessHarness as any).launchReady
+  const home = mkdtempSync(join(tmpdir(), 'spex-resume-ready-stale-'))
+  const project = join(home, 'project'); mkdirSync(project)
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
+  writeFileSync(join(project, 'README.md'), 'fixture\n')
+  execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'add', '.'], { cwd: project })
+  execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
+  process.env.SPEXCODE_HOME = home
+  const id = `resume-ready-stale-${process.pid}`
+  assertIsolatedResumeStore(home, id)
+  const commandPath = join(home, 'tmux-command')
+  const bin = join(home, 'bin'); writeResumeTmuxFixture(bin, commandPath, join(home, 'launch.pid'))
+  process.env.PATH = `${bin}:${previousPath}`
+  writeResumeFixtureRecord(id, project, 'true')
+  const original = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+    ...original,
+    status: 'idle',
+    stopped: false,
+    launch_readiness_pending: {
+      version: 1,
+      startedAt: Date.now() - 60_000,
+      original: {
+        status: original.status,
+        proposal: original.proposal,
+        note: original.note,
+        stopped: original.stopped,
+        archived: original.archived,
+        cold_proof: original.cold_proof,
+        adapter_recovery: original.adapter_recovery,
+      },
+    },
+  }, null, 2)}\n`)
+  try {
+    ;(codexHeadlessHarness as any).launchReady = async () => { throw new Error('stale pending reached launch') }
+    const staleRow = (await listSessions(true)).find((row) => row.id === id)
+    assert.ok(staleRow)
+    assert.equal(staleRow.lifecycle, 'active')
+    assert.equal(staleRow.liveness, 'offline', 'a stale durable fence is fail-closed before recovery runs')
+    assert.equal(staleRow.status, 'offline')
+    const result = await resumeSession(id, { force: true })
+    assert.equal(result.ok, false)
+    assert.equal(result.refused, true)
+    assert.match(result.error || '', /stale launch readiness pending.*retry/i)
+    assert.deepEqual(JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')), original,
+      'stale recovery restores the exact frozen record and clears pending')
+    assert.equal(existsSync(commandPath), false, 'stale recovery occurs before any launch transport')
+    assert.deepEqual(readTimeline(id)?.events ?? [], [], 'stale recovery emits no lifecycle event')
+  } finally {
+    ;(codexHeadlessHarness as any).launchReady = originalLaunchReady
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    process.env.PATH = previousPath
+    rmSync(home, { recursive: true, force: true })
+    assert.equal(existsSync(home), false, 'stale resume fixture root is removed exactly')
+    assertLiveSessionsUnchanged(liveBefore, 'stale resume fixture')
+  }
 })
 
 test('stop revalidates the exact leaf after every shared guard before TERM and KILL', async () => {

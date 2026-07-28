@@ -73,6 +73,13 @@ land through the same call, and a note round-trips byte-for-byte on every surfac
 cheap half: the one-field-per-line shape lets them READ ("already active, nothing stale to clear?") with
 exact-line greps and no jq, and every WRITE goes back through the CLI to this writer ([[state]]).
 
+Launch readiness is the one durable internal publication fence within that record. Its pending value freezes
+the exact pre-resume lifecycle/proposal/note and stopped/offline projection while the raw candidate is available
+to the adapter's post-launch validator. The writer, list/API/graph projection, and timeline observer all resolve
+the same frozen public value. A successful fence clear publishes the final record and its lifecycle event once;
+failure or stale recovery restores the original and emits nothing. Malformed pending bytes are corrupt/unknown,
+never a reason to reuse a last-known online row.
+
 Reading a record has **three** outcomes and collapsing them is what once made a live session answer "no
 session record". **Absent** is the legitimate nothing. **Corrupt** — present but unparseable — is a fact about
 a session that EXISTS: it keeps its row (naming the file and the parse error, liveness `unknown` since nothing

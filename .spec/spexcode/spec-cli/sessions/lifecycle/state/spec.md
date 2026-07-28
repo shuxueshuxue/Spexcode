@@ -137,9 +137,13 @@ so the dispatch hits a live one, then sends the merge prompt — and THAT prompt
 `active` (and clears the now-obsolete proposal) through mark-active.
 
 Launch handoff is not proof that resume restored liveness. The resolved harness adapter supplies a bounded
-readiness fence and product code validates that same fence across the `stopped:false` write. If its runtime,
-target reference, or unique governed owner changes at that boundary, resume rolls the record back to
-stopped/offline and fails; no stale readiness sample can make the retained row online.
+readiness fence. Resume persists an internal launch-readiness-pending fence while every public record, list,
+API, graph, and timeline projection remains the exact pre-resume stopped/offline state. After the adapter
+revalidates the same runtime, target reference, and unique governed owner across that durable boundary, one
+final record write clears the pending fence and publishes `stopped:false` plus the real resting lifecycle
+transition exactly once. False, throw, timeout, or stale-pending recovery retains/restores the exact original
+lifecycle, proposal, and note with no transition event, leaving an offline session that can be retried. Thus
+no stale readiness sample or transient `active` to `idle` candidate can become public online state.
 
 **The resume guard — restore-on-alive must be impossible.** Relaunch is a *kill-then-respawn*, so it destroys
 a running agent's in-flight work the instant the agent is actually alive. That was the incident's kill-shot:

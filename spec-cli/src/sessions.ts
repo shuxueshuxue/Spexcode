@@ -9,7 +9,7 @@ import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type Review
 import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
 import { adapterLoadedReferenceState, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
-import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, envSessionId, type RawRecord } from './layout.js'
+import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, envSessionId, type RawRecord } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
@@ -249,7 +249,10 @@ export type SessRec = {
   launcher: string | null   // the launcher profile this session launches under ([[launcher-select]]); null only for old records predating launchers
   launchCmd: string | null  // the RESOLVED base launcher command pinned at creation ([[launcher-select]] resume-launcher-pin); null → old record → fall back to the launcher name / ambient
   launchOwner: string | null // stable public-backend authority while queued; null for active/legacy records
+  launchReadinessPending?: LaunchReadinessPending | null // internal resume candidate; every public reader projects `original` until one final publish
 }
+type LaunchReadinessOriginal = Pick<SessRec, 'status' | 'proposal' | 'note' | 'stopped' | 'archived' | 'coldProof' | 'adapterRecovery'>
+type LaunchReadinessPending = { version: 1; startedAt: number; original: LaunchReadinessOriginal }
 const LIFECYCLES = new Set<Lifecycle>(['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'])
 const PROPOSALS = new Set<Proposal>(['merge', 'nothing', 'close'])
 export const OWNED_QUEUE_RAW_STATUS = 'launch-queued'
@@ -285,7 +288,11 @@ function readRecord(id: string): SessRec | null {
   const entry = readAliasedRecordEntry(id)
   if (entry.kind === 'absent') return null
   if (entry.kind === 'corrupt') throw new SessionRecordUnusable('corrupt', id, corruptReason(entry))
-  return fromRaw(entry.raw)
+  try { return fromRaw(entry.raw) }
+  catch (error) {
+    throw new SessionRecordUnusable('corrupt', id,
+      `session record is unreadable: ${sessionRecordPath(id)} — ${error instanceof Error ? error.message : String(error)}. The file is kept as-is; nothing will rewrite it.`)
+  }
 }
 // @@@ SessionRecordUnusable - the record exists but cannot carry state, for one of two reasons, and BOTH must
 // stop a writer rather than let it invent one. `corrupt`: the bytes don't parse, so writing would DESTROY the
@@ -420,6 +427,11 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
   const proposal = raw.proposal && PROPOSALS.has(raw.proposal as Proposal) ? raw.proposal as Proposal : null
   const sk = raw.sortkey
   const sortKey = typeof sk === 'number' && Number.isFinite(sk) ? sk : null
+  const pendingRaw = rawLaunchReadinessOriginal(raw)
+  const pendingStatus = pendingRaw && LIFECYCLES.has(pendingRaw.status as Lifecycle) ? pendingRaw.status as Lifecycle : null
+  if (pendingRaw && !pendingStatus) throw new Error(`session '${raw.session_id}' launch readiness original has invalid lifecycle '${pendingRaw.status}'`)
+  const pendingProposal = pendingRaw?.proposal && PROPOSALS.has(pendingRaw.proposal as Proposal) ? pendingRaw.proposal as Proposal : null
+  if (pendingRaw?.proposal && !pendingProposal) throw new Error(`session '${raw.session_id}' launch readiness original has invalid proposal '${pendingRaw.proposal}'`)
   return {
     session: raw.session_id, governed: !!raw.governed, worktreePath: raw.worktree_path || '', branch: raw.branch || null,
     node: raw.node || null, title: raw.title || null, name: raw.name || null, parent: raw.parent || null,
@@ -433,7 +445,42 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     launcher: raw.launcher || null,     // records written before launchers → null → old-record fallback
     launchCmd: raw.launch_cmd || null,  // records written before the pin → null → fall back to launcher name / ambient
     launchOwner: launchOwner || null,
+    launchReadinessPending: pendingRaw ? {
+      version: 1,
+      startedAt: (raw.launch_readiness_pending as { startedAt: number }).startedAt,
+      original: {
+        status: pendingStatus!, proposal: pendingProposal, note: pendingRaw.note || null,
+        stopped: pendingRaw.stopped, archived: pendingRaw.archived,
+        coldProof: pendingRaw.cold_proof || null, adapterRecovery: pendingRaw.adapter_recovery || null,
+      },
+    } : null,
   }
+}
+
+function publicRecord(rec: SessRec): SessRec {
+  const original = rec.launchReadinessPending?.original
+  return original ? { ...rec, ...original } : rec
+}
+
+function launchReadinessPending(original: SessRec): LaunchReadinessPending {
+  return {
+    version: 1,
+    startedAt: Date.now(),
+    original: {
+      status: original.status,
+      proposal: original.proposal,
+      note: original.note,
+      stopped: original.stopped,
+      archived: original.archived,
+      coldProof: original.coldProof ?? null,
+      adapterRecovery: original.adapterRecovery ?? null,
+    },
+  }
+}
+
+function restoreLaunchReadinessOriginal(rec: SessRec): SessRec {
+  const original = rec.launchReadinessPending?.original
+  return original ? { ...rec, ...original, launchReadinessPending: null } : rec
 }
 // @@@ the ONE record writer - every field of session.json is produced HERE, by serializing the typed record,
 // and lands by atomic replace (temp file in the same dir, then rename). Nothing else — no hook, no shell, no
@@ -486,6 +533,19 @@ function writeRecord(rec: SessRec): void {
     launcher: rec.launcher ?? '',
     launch_cmd: rec.launchCmd ?? '',
     launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
+    launch_readiness_pending: rec.launchReadinessPending ? {
+      version: 1,
+      startedAt: rec.launchReadinessPending.startedAt,
+      original: {
+        status: rec.launchReadinessPending.original.status,
+        proposal: rec.launchReadinessPending.original.proposal ?? '',
+        note: rec.launchReadinessPending.original.note ?? '',
+        stopped: rec.launchReadinessPending.original.stopped,
+        archived: rec.launchReadinessPending.original.archived,
+        cold_proof: rec.launchReadinessPending.original.coldProof ?? '',
+        adapter_recovery: rec.launchReadinessPending.original.adapterRecovery ?? '',
+      },
+    } : '',
   }
   const dir = sessionStoreDir(rec.session)
   mkdirSync(dir, { recursive: true })
@@ -493,12 +553,16 @@ function writeRecord(rec: SessRec): void {
   const tmp = join(dir, `.session.json.${process.pid}.tmp`)
   writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n')
   renameSync(tmp, path)   // atomic within the dir: a concurrent reader sees the old record or the new one
-  // session.json is only the CURRENT projection. Persist each moved lifecycle value before this writer
-  // returns, so a later write cannot erase a declaration note between observer samples. New-record genesis
-  // stays with superviseTimeline; metadata-only writes do not manufacture status events.
-  if (rec.governed && previous && (previous.status !== rec.status
-    || previous.proposal !== rec.proposal || previous.note !== rec.note)) {
-    recordStatus(rec.session, rec.status, rec.proposal, rec.note)
+  // session.json normally is the current public projection. A launch-readiness candidate is the sole internal
+  // exception: its frozen original remains public until validation clears the fence. Persist each PUBLIC moved
+  // lifecycle value before this writer returns, so a later write cannot erase a declaration note between
+  // observer samples. New-record genesis stays with superviseTimeline; metadata-only writes do not manufacture
+  // status events.
+  const previousPublic = previous ? publicRecord(previous) : null
+  const nextPublic = publicRecord(rec)
+  if (rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
+    || previousPublic.proposal !== nextPublic.proposal || previousPublic.note !== nextPublic.note)) {
+    recordStatus(rec.session, nextPublic.status, nextPublic.proposal, nextPublic.note)
   }
 }
 
@@ -868,12 +932,25 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
   for (const id of ids) {
     try {
       const entry = readAliasedRecordEntry(id)
-      snapshots.set(id, { entry, rec: entry.kind === 'ok' ? fromRaw(entry.raw) : null })
+      if (entry.kind !== 'ok') snapshots.set(id, { entry, rec: null })
+      else {
+        try { snapshots.set(id, { entry, rec: fromRaw(entry.raw) }) }
+        catch (error) {
+          snapshots.set(id, {
+            entry: {
+              kind: 'corrupt',
+              path: sessionRecordPath(id),
+              error: error instanceof Error ? error.message : String(error),
+            },
+            rec: null,
+          })
+        }
+      }
     } catch { /* guardSession below preserves the last-known row for a transient read failure */ }
   }
   // Only archived adapter records need the resident-ID join. If there are none, this read path performs zero
   // control-plane probes; resources still owns the full turn/read probe for its detailed report.
-  const censusRecords = [...snapshots.values()].flatMap(({ rec }) => rec && rec.governed && rec.archived && rec.harnessSessionId
+  const censusRecords = [...snapshots.values()].flatMap(({ rec }) => rec && !rec.launchReadinessPending && rec.governed && rec.archived && rec.harnessSessionId
     ? [{ ...rec, harness: rec.harness || defaultHarness.id }]
     : [])
   const residentCensus = censusRecords.length ? await adapterLoadedReferenceState(censusRecords) : new Map()
@@ -898,8 +975,17 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     // hits a transient read failure has nothing to fall back on and the row vanishes — re-opening the exact
     // hole this branch closes, one poll later. `corrupt` is a true reading, so it is worth remembering.
     if (entry.kind === 'corrupt') { const c = corruptSession(id, entry); lastKnownSession.set(id, c); return c }
-    const rec = snapshot.rec
-    if (!rec || !rec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
+    const storedRec = snapshot.rec
+    if (!storedRec || !storedRec.governed) { lastKnownSession.delete(id); return null }   // no record, or a self-launched (non-board) one
+    const rec = publicRecord(storedRec)
+    // A launched candidate is deliberately internal until its adapter fence revalidates. Do not let live
+    // process/thread evidence punch through the frozen public record (including archive hazard repair): every
+    // list/API/graph consumer sees the exact original lifecycle with an offline liveness axis.
+    if (storedRec.launchReadinessPending) {
+      const pending = toSession(rec, reconcile(rec, snap), 'offline')
+      lastKnownSession.set(id, pending)
+      return pending
+    }
     // the pane title → headline activity, gated by THIS session's harness ([[harness-adapter]]): claude's title
     // is its task self-summary (used); codex's is the cwd folder name (refused → headline falls to the prompt).
     const activity = paneActivity(harnessById(rec.harness || defaultHarness.id), snap.titles.get(id))
@@ -1900,6 +1986,18 @@ async function resumeSessionUnlocked(id: string, opts: ResumeExecutionOptions = 
   try { wt = await findWorktree(id) }
   catch (e) { if (e instanceof SessionRecordUnusable) return { ok: false, refused: true, error: e.message }; throw e }
   if (!wt) return { ok: false, error: `no such session ${id}` }
+  // A process that died while validating left an internal candidate behind. This record lock proves no live
+  // resume still owns it. Restore the frozen public original before doing any transport work and require an
+  // explicit retry; stale runtime evidence is never adopted into a fresh launch attempt.
+  if (wt.rec.launchReadinessPending) {
+    writeRecord(restoreLaunchReadinessOriginal(wt.rec))
+    return {
+      ok: false,
+      refused: true,
+      error: `session ${id}: stale launch readiness pending was recovered fail-closed; the exact stopped/offline record was retained. Retry resume.`,
+    }
+  }
+  const preResume = wt.rec
   // a retired session (its worktree gone) is terminal, not offline: say so in its own words rather than in the
   // preflight's, since `close` — not a repair — is what it needs.
   const retired = retirementReason(wt.rec)
@@ -1962,7 +2060,7 @@ async function resumeSessionUnlocked(id: string, opts: ResumeExecutionOptions = 
     catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
     if (!readiness) {
       const failed = readRecord(id) || current
-      writeRecord({ ...failed, archived: false, stopped: true })
+      writeRecord({ ...failed, ...preResume, launchReadinessPending: null })
       return {
         ok: false,
         refused: true,
@@ -1970,7 +2068,15 @@ async function resumeSessionUnlocked(id: string, opts: ResumeExecutionOptions = 
       }
     }
     const latest = readRecord(id) || resumed
-    writeRecord({ ...latest, archived: false, coldProof: null, status: latest.status === 'active' ? 'idle' : latest.status, stopped: false })
+    const candidate: SessRec = {
+      ...latest,
+      archived: false,
+      coldProof: null,
+      status: latest.status === 'active' ? 'idle' : latest.status,
+      stopped: false,
+      launchReadinessPending: launchReadinessPending(preResume),
+    }
+    writeRecord(candidate)
     let stillReady = false
     try { stillReady = await readiness.validate(() => {
       const stored = readRecord(id)
@@ -1978,14 +2084,16 @@ async function resumeSessionUnlocked(id: string, opts: ResumeExecutionOptions = 
     }) }
     catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
     if (!stillReady) {
-      const failed = readRecord(id) || latest
-      writeRecord({ ...failed, archived: false, stopped: true })
+      const failed = readRecord(id) || candidate
+      writeRecord(restoreLaunchReadinessOriginal(failed))
       return {
         ok: false,
         refused: true,
-        error: `session ${id}: launch readiness changed across the online commit${readinessError ? ` - ${readinessError}` : ''}; the session remains stopped and can be retried`,
+        error: `session ${id}: launch readiness changed across the pending publication${readinessError ? ` - ${readinessError}` : ''}; the session remains stopped and can be retried`,
       }
     }
+    const published = readRecord(id) || candidate
+    writeRecord({ ...published, launchReadinessPending: null })
   } else writeRecord(resumed)
   return { ok: true }
 }

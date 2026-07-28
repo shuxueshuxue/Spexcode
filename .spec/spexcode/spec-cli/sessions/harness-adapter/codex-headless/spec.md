@@ -54,8 +54,10 @@ readiness is stricter than its steady-state record liveness: it proves one uncha
 PID/start/process-group/session/isolation/socket generation, the target's existing thread loaded under that
 shared root, and exactly one governed record owner for that thread across every adapter record sharing the
 descriptor. That owner must be the current SpexCode session; a deduplicated loaded-ID set is never ownership
-evidence. The adapter returns those facts as one readiness fence. Resume writes `stopped:false` only while the
-parent maintenance ticket is still live, then the same fence repeats the complete generation/reference/owner
-proof across the write. An unload, shared-root restart, duplicate/reassigned owner, refused helper, or bounded
-timeout rolls the retained record back to stopped/offline and returns non-success. Closing remains the terminal
+evidence. The adapter returns those facts as one readiness fence. Resume durably records an internal pending
+candidate only while the parent maintenance ticket is still live; every public projection continues to expose
+the exact stopped/offline original. The same fence then repeats the complete generation/reference/owner proof
+before one final write clears pending and publishes online state. An unload, shared-root restart,
+duplicate/reassigned owner, refused helper, bounded timeout, or stale pending recovery retains/restores the
+original record without a false lifecycle event and returns non-success. Closing remains the terminal
 operation that removes the record, worktree, branch, pane, and shared runtime references owned by the session.

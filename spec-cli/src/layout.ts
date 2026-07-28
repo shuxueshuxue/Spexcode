@@ -191,6 +191,49 @@ export type RawRecord = {
   adapter_recovery?: string // explicit lifecycle recovery required after a partial adapter mutation; absent on old records
   launcher?: string   // the launcher profile this session was created under ([[launcher-select]]); absent/empty only on old records predating launchers
   launch_cmd?: string // the RESOLVED base launcher command PINNED at creation, so a resume replays the EXACT launcher (and its config-dir env) that made the conversation, never a since-changed default ([[launcher-select]] resume-launcher-pin); absent → old record, fall back to the launcher name / ambient
+  launch_readiness_pending?: '' | RawLaunchReadinessPending
+}
+
+export type RawLaunchReadinessOriginal = {
+  status: string
+  proposal: string | null
+  note: string | null
+  stopped: boolean
+  archived: boolean
+  cold_proof: string | null
+  adapter_recovery: string | null
+}
+
+export type RawLaunchReadinessPending = {
+  version: 1
+  startedAt: number
+  original: RawLaunchReadinessOriginal
+}
+
+// A launch candidate is durable before it is public. Readers of the authored lifecycle use this one parser
+// so the board and the independent timeline observer cannot disagree about an in-flight resume. Invalid
+// pending bytes throw: a damaged publication fence is unknowable state, never permission to project online.
+export function rawLaunchReadinessOriginal(raw: RawRecord): RawLaunchReadinessOriginal | null {
+  const pending = raw.launch_readiness_pending
+  if (pending == null || pending === '') return null
+  const original = pending && typeof pending === 'object' ? pending.original : null
+  if (pending.version !== 1 || !Number.isFinite(pending.startedAt) || !original || typeof original !== 'object'
+    || typeof original.status !== 'string'
+    || !(typeof original.proposal === 'string' || original.proposal === null)
+    || !(typeof original.note === 'string' || original.note === null)
+    || typeof original.stopped !== 'boolean' || typeof original.archived !== 'boolean'
+    || !(typeof original.cold_proof === 'string' || original.cold_proof === null)
+    || !(typeof original.adapter_recovery === 'string' || original.adapter_recovery === null)) {
+    throw new Error(`session '${raw.session_id}' has an invalid launch_readiness_pending fence`)
+  }
+  return original
+}
+
+export function rawPublicLifecycle(raw: RawRecord): Pick<RawRecord, 'status' | 'proposal' | 'note'> {
+  const original = rawLaunchReadinessOriginal(raw)
+  return original
+    ? { status: original.status, proposal: original.proposal, note: original.note }
+    : { status: raw.status, proposal: raw.proposal, note: raw.note }
 }
 // the agent's OWN session id from the environment — the only locator now that the record left the worktree.
 // Three tiers, in order:

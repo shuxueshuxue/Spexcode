@@ -74,6 +74,15 @@ watching a frozen, disabled dialog wait it out — the same fire-and-forget the 
 cancelling does nothing. The menu carries only the
 decisive **close**, never the soft `/stop` — stopping-to-resume is a Command Box verb on a live session.
 
+A close refusal is a visible action failure, not a silent background no-op: the backend returns a non-2xx
+structured error when its ownership guard commits no removal, and the console keeps the selected row while
+showing that diagnostic through its shared action-error surface. A refusal never weakens the guard merely to
+make the row disappear.
+
+The right-click confirm consumes both the HTTP status and the JSON `{ok,error}` body before it asks the board
+to reload, so a legacy 200 false response cannot regress into a silent success while the endpoint is being
+rolled forward.
+
 Because both the pop-over and its prompt are opened **from** the board, each must render **above** it:
 a menu or modal that paints behind its own surface is present in the DOM yet invisible and unclickable,
 so they live on the top layer — over the board's backdrop, never beneath it. The board also suppresses

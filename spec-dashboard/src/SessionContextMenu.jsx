@@ -102,7 +102,12 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
     const { id } = closing
     setClosing(null)
     apiFetch(`/api/sessions/${id}/close`, { method: 'POST' })
-      .catch(() => { /* the next board poll reconciles */ })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null)
+        if (!response.ok || body?.ok === false)
+          onError?.(body?.error || `session close refused (HTTP ${response.status})`)
+      })
+      .catch((error) => onError?.(error instanceof Error ? error.message : String(error)))
       .finally(() => onChanged?.())
   }
 

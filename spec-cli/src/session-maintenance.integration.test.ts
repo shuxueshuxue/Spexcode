@@ -266,13 +266,18 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
     | { kind: 'pipe'; value: string }
     | { kind: 'unreadable' }
     | { kind: 'malformed' }
-  const run = async (name: string, channel: DelegateChannel) => {
+  const run = async (name: string, channel: DelegateChannel, maintenanceSessionId?: string) => {
     const runDir = join(dir, name); mkdirSync(runDir)
     const log = join(runDir, 'runtime.log'); const pidFile = join(runDir, 'runtime.pid'); const scope = join(runDir, 'runtime.scope')
     const delegateFd = channel.kind === 'absent' ? undefined : channel.kind === 'malformed' ? 'not-a-fd' : '3'
+    const childEnv: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_SESSION_ID: ID }
+    delete childEnv.SPEXCODE_MAINTENANCE_DELEGATE_FD
+    delete childEnv.SPEXCODE_MAINTENANCE_SESSION_ID
+    if (delegateFd !== undefined) childEnv.SPEXCODE_MAINTENANCE_DELEGATE_FD = delegateFd
+    if (maintenanceSessionId !== undefined) childEnv.SPEXCODE_MAINTENANCE_SESSION_ID = maintenanceSessionId
     const child = spawn(process.execPath, [spexBin, 'internal', 'shared-runtime-spawn', runDir, log, pidFile, scope, process.execPath, '-e', 'console.log("SPAWN-READY"); setInterval(() => {}, 1000)'], {
       cwd: pkgRoot,
-      env: { ...process.env, SPEXCODE_SESSION_ID: ID, ...(delegateFd === undefined ? {} : { SPEXCODE_MAINTENANCE_DELEGATE_FD: delegateFd }) },
+      env: childEnv,
       stdio: channel.kind === 'pipe' ? ['ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'],
     })
     const done = collect(child)
@@ -293,6 +298,10 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
       logReady: existsSync(log) && readFileSync(log, 'utf8').includes('SPAWN-READY'),
       scopeExact: !!token && existsSync(scope) && readFileSync(scope, 'utf8') === `detached-v3 ${pid} ${token} ${pid} ${pid}\n`,
       pidArtifact: existsSync(pidFile),
+      childEnv: {
+        delegateFdPresent: Object.hasOwn(childEnv, 'SPEXCODE_MAINTENANCE_DELEGATE_FD'),
+        maintenanceSessionId: childEnv.SPEXCODE_MAINTENANCE_SESSION_ID ?? null,
+      },
     }
     if (pid > 0 && token && processStartToken(pid) === token) {
       process.kill(pid, 'SIGTERM')
@@ -301,25 +310,43 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
     return snapshot
   }
 
-  writeFileSync(leasePath, JSON.stringify(leaseRow('open', process.pid, startToken), null, 2))
-  const openOrdinary = await run('open-ordinary', { kind: 'absent' })
-  const openExplicitEmpty = await run('open-explicit-empty', { kind: 'pipe', value: '' })
-  const openUnreadable = await run('open-unreadable', { kind: 'unreadable' })
-  const openMalformed = await run('open-malformed', { kind: 'malformed' })
-  writeFileSync(leasePath, JSON.stringify(activeResume(), null, 2))
-  const valid = await run('valid', { kind: 'pipe', value: DELEGATE })
-  const replay = await run('replay', { kind: 'pipe', value: DELEGATE })
-  writeFileSync(leasePath, JSON.stringify(activeResume(), null, 2))
-  const forged = await run('forged', { kind: 'pipe', value: 'ff'.repeat(32) })
-  writeFileSync(leasePath, JSON.stringify(activeResume(), null, 2))
-  const absent = await run('absent', { kind: 'absent' })
-  rmSync(dir, { recursive: true, force: true })
-
-  assert.deepEqual(openOrdinary, { status: 0, structured: false, pidLive: true, logReady: true, scopeExact: true, pidArtifact: true })
-  for (const refused of [openExplicitEmpty, openUnreadable, openMalformed, replay, forged, absent]) {
-    assert.deepEqual(refused, { status: 1, structured: true, pidLive: false, logReady: false, scopeExact: false, pidArtifact: false })
+  const inheritedDelegateFd = process.env.SPEXCODE_MAINTENANCE_DELEGATE_FD
+  const inheritedMaintenanceSessionId = process.env.SPEXCODE_MAINTENANCE_SESSION_ID
+  process.env.SPEXCODE_MAINTENANCE_DELEGATE_FD = '97'
+  process.env.SPEXCODE_MAINTENANCE_SESSION_ID = OTHER
+  let openOrdinary; let openExplicitEmpty; let openUnreadable; let openMalformed; let valid; let replay; let forged; let absent
+  try {
+    writeFileSync(leasePath, JSON.stringify(leaseRow('open', process.pid, startToken), null, 2))
+    openOrdinary = await run('open-ordinary', { kind: 'absent' })
+    openExplicitEmpty = await run('open-explicit-empty', { kind: 'pipe', value: '' })
+    openUnreadable = await run('open-unreadable', { kind: 'unreadable' })
+    openMalformed = await run('open-malformed', { kind: 'malformed' })
+    writeFileSync(leasePath, JSON.stringify(activeResume(), null, 2))
+    valid = await run('valid', { kind: 'pipe', value: DELEGATE }, ID)
+    replay = await run('replay', { kind: 'pipe', value: DELEGATE }, ID)
+    writeFileSync(leasePath, JSON.stringify(activeResume(), null, 2))
+    forged = await run('forged', { kind: 'pipe', value: 'ff'.repeat(32) }, ID)
+    writeFileSync(leasePath, JSON.stringify(activeResume(), null, 2))
+    absent = await run('absent', { kind: 'absent' }, ID)
+  } finally {
+    if (inheritedDelegateFd === undefined) delete process.env.SPEXCODE_MAINTENANCE_DELEGATE_FD
+    else process.env.SPEXCODE_MAINTENANCE_DELEGATE_FD = inheritedDelegateFd
+    if (inheritedMaintenanceSessionId === undefined) delete process.env.SPEXCODE_MAINTENANCE_SESSION_ID
+    else process.env.SPEXCODE_MAINTENANCE_SESSION_ID = inheritedMaintenanceSessionId
+    rmSync(dir, { recursive: true, force: true })
   }
-  assert.deepEqual(valid, { status: 0, structured: false, pidLive: true, logReady: true, scopeExact: true, pidArtifact: true })
+
+  const admitted = { status: 0, structured: false, pidLive: true, logReady: true, scopeExact: true, pidArtifact: true }
+  const refused = { status: 1, structured: true, pidLive: false, logReady: false, scopeExact: false, pidArtifact: false }
+  assert.deepEqual(openOrdinary, { ...admitted, childEnv: { delegateFdPresent: false, maintenanceSessionId: null } })
+  for (const result of [openExplicitEmpty, openUnreadable, openMalformed]) {
+    assert.deepEqual(result, { ...refused, childEnv: { delegateFdPresent: true, maintenanceSessionId: null } })
+  }
+  for (const result of [replay, forged]) {
+    assert.deepEqual(result, { ...refused, childEnv: { delegateFdPresent: true, maintenanceSessionId: ID } })
+  }
+  assert.deepEqual(absent, { ...refused, childEnv: { delegateFdPresent: false, maintenanceSessionId: ID } })
+  assert.deepEqual(valid, { ...admitted, childEnv: { delegateFdPresent: true, maintenanceSessionId: ID } })
 })
 
 async function startHttpFixture(mode: 'draining-active' | 'expiry' | 'heartbeat-loss' | 'broker-concurrent' | 'broker-transport-loss' | 'broker-pending-transport-loss' | 'resume-refused-retry' | 'resume-500-indeterminate' | 'post-acquire-validation', resultPath: string, extraEnv: Record<string, string> = {}) {

@@ -113,6 +113,9 @@ Two principles keep that derivation cheap on a long-running server:
   one cache entry per rejected commit.
 - **Key the cache on real change, read from the filesystem.** A warm read spawns no git at all: the
   cache key is the current commit, read straight from `.git`, so it costs a file read, not a subprocess.
+  Shallow/graft bytes and the refs storage that can carry `refs/replace/*` are part of that filesystem
+  identity; when their bytes move, Git re-resolves the canonical replacement targets before any ledger is
+  reused, while unchanged storage reuses the already-resolved target set without another child process.
   A new commit moves the key and the board reflects the new version and drift at once; an unreadable
   key bypasses the cache and recomputes rather than ever serving stale data.
 

@@ -360,9 +360,36 @@ type EventStreamRequest = {
 }
 
 type EventPathMemo = EventCacheLocation & {
-  common: string; shallowPath: string; grafts: string; shallow: string; replacements: string
+  common: string; shallowPath: string; grafts: string; shallow: string
+  replacementStorage: string; replacements: string
 }
 const eventPathMemo = new Map<string, EventPathMemo>()
+function replacementStorageIdentity(common: string): string {
+  const hash = createHash('sha256')
+  const addTree = (root: string, rel: string) => {
+    if (!existsSync(root)) return
+    const stack = [{ dir: root, rel }]
+    while (stack.length) {
+      const current = stack.pop()!
+      const entries = readdirSync(current.dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
+      for (const entry of entries) {
+        const path = join(current.dir, entry.name)
+        const name = `${current.rel}/${entry.name}`
+        if (entry.isDirectory()) stack.push({ dir: path, rel: name })
+        else hash.update(`\0${name}\0`).update(readFileSync(path))
+      }
+    }
+  }
+  addTree(join(common, 'refs', 'replace'), 'refs/replace')
+  for (const name of ['packed-refs']) {
+    const path = join(common, name)
+    if (existsSync(path)) hash.update(`\0${name}\0`).update(readFileSync(path))
+  }
+  // Reftable is opaque here by design: its bytes are only an invalidation signal. Git remains the one
+  // parser and supplies the canonical refs/replace targets when those bytes change.
+  addTree(join(common, 'reftable'), 'reftable')
+  return hash.digest('hex')
+}
 function eventCacheLocation(root: string): EventCacheLocation {
   const rootId = rootKey(root), old = eventPathMemo.get(rootId)
   const common = old?.common ?? git(['-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
@@ -370,7 +397,10 @@ function eventCacheLocation(root: string): EventCacheLocation {
   const shallow = existsSync(shallowPath) ? readFileSync(shallowPath, 'utf8') : 'unshallow'
   const graftsPath = join(common, 'info', 'grafts')
   const grafts = existsSync(graftsPath) ? readFileSync(graftsPath, 'utf8') : ''
-  const replacements = git(['-C', root, 'for-each-ref', 'refs/replace', '--format=%(refname) %(objectname)'])
+  const replacementStorage = replacementStorageIdentity(common)
+  const replacements = old?.replacementStorage === replacementStorage
+    ? old.replacements
+    : git(['-C', root, 'for-each-ref', 'refs/replace', '--format=%(refname) %(objectname)'])
   const objectFormat = gitObjectFormat(root)
   if (old && old.shallow === shallow && old.grafts === grafts && old.replacements === replacements && old.objectFormat === objectFormat)
     return { path: old.path, identity: old.identity, objectFormat }
@@ -382,7 +412,7 @@ function eventCacheLocation(root: string): EventCacheLocation {
   const gitDir = gitDirOf(root)
   const storeIdentity = gitDir === root && common === root ? join(common, '.git') : common
   const path = join(projectRuntimeRoot(storeIdentity), `${EVENT_CACHE_SCHEMA}-${identity}.ndjson`)
-  eventPathMemo.set(rootId, { common, shallowPath, grafts, shallow, replacements, path, identity, objectFormat })
+  eventPathMemo.set(rootId, { common, shallowPath, grafts, shallow, replacementStorage, replacements, path, identity, objectFormat })
   return { path, identity, objectFormat }
 }
 function emptyEventCache(): EventCache {

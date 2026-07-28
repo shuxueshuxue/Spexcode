@@ -51,6 +51,14 @@ driver. The two current-tip projectors are: they each rebuilt equivalent topolog
 already parsed the same `rev-list --parents` and `ls-tree` text. The exact hit's single largest JS frame is the rename
 projector closure (409 samples), followed by ancestry projection (100), `buildIndex` (73), and `buildDriftIndex` (53).
 
+A final declared cost control found one further repeated identity read after the pair projection was shared:
+the unchanged second `evalTimeline` pass still spawned three identical `git for-each-ref refs/replace` children.
+The ledger identity continues to use Git's canonical replacement targets, but now re-runs that command only when
+the common-dir ref-storage bytes (`refs/replace`, `packed-refs`, or reftable) change. The 30-anchor control moved
+from 3 second-pass children to 0; the 600-anchor control likewise produced 0 after 1,200 readings. A real replace
+ref changed the selected ledger identity, and deleting it restored the original identity, so the zero-child result
+does not come from an interpretation-stale memo.
+
 Cold and advance traces preserve the released ledger shape:
 
 | State | topology | immutable event walks | ledger I/O |
@@ -98,5 +106,7 @@ against the same `d7e7a7aa` tree. The self-contained summary and captured channe
 - Immutable-baseline five-tip oracle: 5/5 byte-identical after both positive controls passed.
 - Post-sync fixed-corpus public CLI parity: 10/10 pairs byte-identical.
 - Real-Git composite ledger scenario and `spec-cli/src/git.test.ts`: 26/26 pass.
+- Off-history repeat controls: second pass 0 Git children at 30 anchors / 300 readings and at 600 anchors /
+  1,200 readings; real add/remove `refs/replace` changed/restored ledger identity.
 - `npx tsc --noEmit`: pass.
 - `spex spec lint`: 0 errors; pre-existing warnings remain.

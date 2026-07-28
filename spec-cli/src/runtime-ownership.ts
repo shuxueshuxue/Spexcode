@@ -4,7 +4,7 @@ import { closeSync, mkdirSync, openSync, readdirSync, renameSync, rmSync, writeF
 import { dirname, join } from 'node:path'
 import { repoRoot } from './git.js'
 import { readJsonConfig, runtimeRoot } from './layout.js'
-import { processStartToken, processTopology, type ProcessIdentity } from './process-identity.js'
+import { processStartToken, writeDetachedRuntimeReceipt, type ProcessIdentity } from './process-identity.js'
 
 export type BackendInstanceRecord = {
   version: 1
@@ -51,20 +51,11 @@ export function unregisterBackendInstance(instanceId: string, pid = process.pid)
   } catch { /* not ours / already removed */ }
 }
 
-export function writeIsolationStamp(pid: number, file: string): void {
-  const topology = processTopology(pid)
-  if (!topology) throw new Error(`cannot identify shared runtime PID ${pid}`)
-  if (topology.processGroupId !== pid || topology.sessionId !== pid)
-    throw new Error(`shared runtime PID ${pid} is not detached from its launch session (pgrp=${topology.processGroupId}, session=${topology.sessionId})`)
-  mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, `detached-v3 ${pid} ${topology.startToken} ${topology.processGroupId} ${topology.sessionId}\n`, { mode: 0o600 })
-}
-
 export function spawnDetachedRuntime(opts: {
   cwd: string
   logFile: string
   pidFile: string
-  isolationFile: string
+  receiptFile: string
   command: string
   args: string[]
   env?: NodeJS.ProcessEnv
@@ -85,15 +76,13 @@ export function spawnDetachedRuntime(opts: {
   if (!child.pid) throw new Error(`could not spawn detached shared runtime: ${opts.command}`)
   child.unref()
   try {
-    writeIsolationStamp(child.pid, opts.isolationFile)
-    const startToken = processStartToken(child.pid)
-    if (!startToken) throw new Error(`cannot identify detached shared runtime PID ${child.pid}`)
+    const identity = writeDetachedRuntimeReceipt(child.pid, opts.receiptFile)
     writeFileSync(opts.pidFile, `${child.pid}\n`, { mode: 0o600 })
-    return { pid: child.pid, startToken }
+    return { pid: identity.pid, startToken: identity.startToken }
   } catch (error) {
     try { child.kill('SIGTERM') } catch { /* exact just-spawned child already exited */ }
     rmSync(opts.pidFile, { force: true })
-    rmSync(opts.isolationFile, { force: true })
+    rmSync(opts.receiptFile, { force: true })
     throw error
   }
 }

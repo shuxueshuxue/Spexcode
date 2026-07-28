@@ -14,8 +14,8 @@ const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
 const tsxCli = join(dirname(createRequire(import.meta.url).resolve('tsx/package.json')), 'dist', 'cli.mjs')
 
-async function runCreate(project: string, env: NodeJS.ProcessEnv, api: string) {
-  const child = spawn(process.execPath, [tsxCli, cli, 'session', 'new', 'probe', '--api', api], {
+async function runCreate(project: string, env: NodeJS.ProcessEnv, api?: string) {
+  const child = spawn(process.execPath, [tsxCli, cli, 'session', 'new', 'probe', ...(api ? ['--api', api] : [])], {
     cwd: project,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -23,8 +23,11 @@ async function runCreate(project: string, env: NodeJS.ProcessEnv, api: string) {
   let stdout = '', stderr = ''
   child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
   child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
-  const [code] = await once(child, 'close') as [number]
-  return { code, stdout, stderr }
+  let killed = false
+  const timer = setTimeout(() => { killed = true; child.kill('SIGKILL') }, 6_000)
+  const [code] = await once(child, 'close') as [number | null]
+  clearTimeout(timer)
+  return { code, stdout, stderr, killed }
 }
 
 test('session new rejects stale mode flags through the generic unknown-flag path', () => {
@@ -156,6 +159,20 @@ test('session new falls back only for explicit connection refusal', { timeout: 1
     assert.match(indeterminate.stderr, /backend availability is indeterminate/)
     assert.doesNotMatch(indeterminate.stderr, /launching in-process|maintenance_active/)
     assert.ok(Date.now() - started < 4_000)
+    noArtifacts()
+
+    let implicitRequests = 0
+    const implicitSlow = createServer(() => { implicitRequests++ })
+    implicitSlow.listen(0, '127.0.0.1'); await once(implicitSlow, 'listening')
+    const implicitAddress = implicitSlow.address(); assert.ok(implicitAddress && typeof implicitAddress === 'object')
+    const implicitStarted = Date.now()
+    const implicit = await runCreate(project, { ...env, SPEXCODE_API_URL: `http://127.0.0.1:${implicitAddress.port}` })
+    implicitSlow.closeAllConnections(); implicitSlow.close(); await once(implicitSlow, 'close')
+    assert.equal(implicit.code, 1)
+    assert.equal(implicit.killed, false, 'the product probe, not the test wall, settles an implicit slow target')
+    assert.match(implicit.stderr, /backend availability is indeterminate/)
+    assert.equal(implicitRequests, 1, 'authority and project match share one bounded settings request')
+    assert.ok(Date.now() - implicitStarted < 4_000)
     noArtifacts()
 
     const absent = createServer()

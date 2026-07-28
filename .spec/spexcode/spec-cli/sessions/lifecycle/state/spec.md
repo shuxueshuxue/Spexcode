@@ -143,7 +143,11 @@ revalidates the same runtime, target reference, and unique governed owner across
 final record write clears the pending fence and publishes `stopped:false` plus the real resting lifecycle
 transition exactly once. False, throw, timeout, or stale-pending recovery retains/restores the exact original
 lifecycle, proposal, and note with no transition event, leaving an offline session that can be retried. Thus
-no stale readiness sample or transient `active` to `idle` candidate can become public online state.
+no stale readiness sample or transient `active` to `idle` candidate can become public online state. The frozen
+lifecycle and proposal must be members of their closed semantic enums before any public projection accepts the
+fence; an unknown string is corrupt/unknown on every surface. A valid pending row always carries offline
+liveness and an offline compact display without running live reconciliation, including defensive readings of
+an `active`/`idle`, `stopped:false` original while candidate runtime is already live.
 
 **The resume guard — restore-on-alive must be impossible.** Relaunch is a *kill-then-respawn*, so it destroys
 a running agent's in-flight work the instant the agent is actually alive. That was the incident's kill-shot:

@@ -81,7 +81,11 @@ list/API/graph, resource owners and shared references, resolved-layout settings,
 consume that same three-way projected entry rather than raw candidate fields. A successful fence clear
 publishes the final record and its lifecycle event once; failure or stale recovery restores the original and
 emits nothing. Malformed pending bytes are a corrupt/unknown public entry everywhere, never a reason to reuse a
-last-known online row, perform a git walk, or infer an owner from candidate lifecycle fields.
+last-known online row, perform a git walk, or infer an owner from candidate lifecycle fields. "Malformed"
+includes a structurally complete original whose lifecycle or proposal string is outside the same closed enums
+the typed session reader accepts. While the fence exists, the compact public display is pinned offline rather
+than reconciled from candidate runtime evidence, even if the frozen original says `stopped:false` with an
+`active`/`idle` lifecycle and a candidate process is live.
 
 Reading a record has **three** outcomes and collapsing them is what once made a live session answer "no
 session record". **Absent** is the legitimate nothing. **Corrupt** — present but unparseable — is a fact about

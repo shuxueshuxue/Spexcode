@@ -79,7 +79,8 @@ and its cached delta is evicted rather than kept alive by a row nobody is watchi
 Layout rows are a public record projection, not an internal-readiness view. `resolveLayout()` consumes the same
 layout-owned three-way parser as the session list and resource report: a valid launch-readiness-pending row
 keeps the frozen original status/archive fields and explicit offline liveness; a malformed fence remains a
-present `corrupt` row with unknown liveness and performs no worktree delta walk. Thus `/api/settings` cannot
+present `corrupt` row with unknown liveness and performs no worktree delta walk. Semantic lifecycle/proposal
+enum violations are malformed too. Thus `/api/settings` cannot
 publish an idle/online candidate or silently drop an unreadable session while another surface stays fail-closed.
 
 Because the record left the worktree, an agent's `spex session done/park/ask` finds its OWN session in the

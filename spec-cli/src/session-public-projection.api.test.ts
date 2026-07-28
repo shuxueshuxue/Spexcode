@@ -1,14 +1,23 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
+const LIVE_PROJECT_SESSIONS = '/home/jeffry/.spexcode/projects/-home-jeffry-spexcode/sessions'
+
+function liveSessionsCensus(): { ids: string[]; hash: string } {
+  const ids = existsSync(LIVE_PROJECT_SESSIONS)
+    ? readdirSync(LIVE_PROJECT_SESSIONS, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()
+    : []
+  return { ids, hash: createHash('sha256').update(ids.join('\0')).digest('hex') }
+}
 
 function git(cwd: string, ...args: string[]): void {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
@@ -45,7 +54,7 @@ async function stopChild(child: ChildProcess | null): Promise<void> {
   }
 }
 
-function record(id: string, project: string, pending: unknown): Record<string, unknown> {
+function record(id: string, project: string, pending: unknown, harness = 'claude'): Record<string, unknown> {
   return {
     session_id: id,
     governed: true,
@@ -61,7 +70,7 @@ function record(id: string, project: string, pending: unknown): Record<string, u
     note: 'candidate note must stay internal',
     sortkey: null,
     createdAt: Date.now(),
-    harness: 'claude',
+    harness,
     harness_session_id: '',
     stopped: false,
     archived: false,
@@ -74,16 +83,21 @@ function record(id: string, project: string, pending: unknown): Record<string, u
   }
 }
 
-test('all public record APIs share pending projection and malformed fail-closed semantics', { timeout: 30_000 }, async () => {
+test('all public record APIs share pending projection and malformed fail-closed semantics', { timeout: 30_000 }, async (t) => {
+  const liveBefore = liveSessionsCensus()
   const fixture = mkdtempSync(join(tmpdir(), 'spex-public-record-projection-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const spec = join(project, '.spec', 'project', 'spec.md')
   const pendingId = 'pending-public-record'
-  const malformedId = 'malformed-public-record'
+  const livePendingId = 'live-pending-public-record'
+  const incompleteId = 'incomplete-pending-public-record'
+  const invalidLifecycleId = 'invalid-lifecycle-pending-public-record'
+  const invalidProposalId = 'invalid-proposal-pending-public-record'
   let backend: ChildProcess | null = null
   let pendingProcess: ChildProcess | null = null
-  let malformedProcess: ChildProcess | null = null
+  let livePendingProcess: ChildProcess | null = null
+  let incompleteProcess: ChildProcess | null = null
   try {
     mkdirSync(dirname(spec), { recursive: true })
     writeFileSync(spec, '---\ntitle: project\nstatus: active\n---\n# project\n\nFixture.\n')
@@ -98,11 +112,12 @@ test('all public record APIs share pending projection and malformed fail-closed 
     git(project, 'commit', '-qm', 'fixture')
 
     const sessions = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions')
-    const pendingDir = join(sessions, pendingId)
-    const malformedDir = join(sessions, malformedId)
-    mkdirSync(pendingDir, { recursive: true })
-    mkdirSync(malformedDir, { recursive: true })
-    writeFileSync(join(pendingDir, 'session.json'), JSON.stringify(record(pendingId, project, {
+    const writeRecord = (id: string, value: Record<string, unknown>) => {
+      const dir = join(sessions, id)
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'session.json'), JSON.stringify(value, null, 2) + '\n')
+    }
+    writeRecord(pendingId, record(pendingId, project, {
       version: 1,
       startedAt: Date.now(),
       original: {
@@ -114,12 +129,41 @@ test('all public record APIs share pending projection and malformed fail-closed 
         cold_proof: null,
         adapter_recovery: null,
       },
-    }), null, 2) + '\n')
-    writeFileSync(join(malformedDir, 'session.json'), JSON.stringify(record(malformedId, project, {
+    }))
+    writeRecord(livePendingId, record(livePendingId, project, {
+      version: 1,
+      startedAt: Date.now(),
+      original: {
+        status: 'active',
+        proposal: '',
+        note: 'live frozen original note',
+        stopped: false,
+        archived: false,
+        cold_proof: null,
+        adapter_recovery: null,
+      },
+    }, 'claude-headless'))
+    writeRecord(incompleteId, record(incompleteId, project, {
       version: 1,
       startedAt: Date.now(),
       original: { status: 'awaiting', proposal: 'merge', note: 'incomplete original' },
-    }), null, 2) + '\n')
+    }))
+    writeRecord(invalidLifecycleId, record(invalidLifecycleId, project, {
+      version: 1,
+      startedAt: Date.now(),
+      original: {
+        status: 'launching', proposal: 'merge', note: 'invalid lifecycle', stopped: true, archived: false,
+        cold_proof: null, adapter_recovery: null,
+      },
+    }))
+    writeRecord(invalidProposalId, record(invalidProposalId, project, {
+      version: 1,
+      startedAt: Date.now(),
+      original: {
+        status: 'awaiting', proposal: 'deploy', note: 'invalid proposal', stopped: true, archived: false,
+        cold_proof: null, adapter_recovery: null,
+      },
+    }))
 
     const processEnv = (id: string): NodeJS.ProcessEnv => ({
       ...process.env,
@@ -127,8 +171,10 @@ test('all public record APIs share pending projection and malformed fail-closed 
       SPEXCODE_SESSION_ID: id,
     })
     pendingProcess = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', env: processEnv(pendingId) })
-    malformedProcess = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', env: processEnv(malformedId) })
-    await waitFor(() => pendingProcess?.pid != null && malformedProcess?.pid != null, 'owned fixture processes')
+    livePendingProcess = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', env: processEnv(livePendingId) })
+    incompleteProcess = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', env: processEnv(incompleteId) })
+    await waitFor(() => pendingProcess?.pid != null && livePendingProcess?.pid != null && incompleteProcess?.pid != null,
+      'owned fixture processes')
 
     const bin = join(fixture, 'bin')
     mkdirSync(bin)
@@ -182,11 +228,33 @@ test('all public record APIs share pending projection and malformed fail-closed 
       assert.notEqual(row.status, 'idle', `${surface} never exposes the candidate idle lifecycle`)
       assert.notEqual(row.liveness, 'online', `${surface} never exposes candidate online liveness`)
     }
-    assertPending(rows.find((row) => row.id === pendingId), '/api/sessions')
-    assertPending(graph.sessions.find((row) => row.id === pendingId), '/api/graph')
-    assertPending(edges.nodes.find((row) => row.id === pendingId), '/api/sessions/edges')
-    assertPending(resources.owners.find((row) => row.kind === 'session' && row.id === pendingId), '/api/resources')
-    assertPending(settings.layout.worktrees.find((row) => row.session === pendingId), '/api/settings')
+    await t.test('valid stopped pending records stay frozen and offline on every surface', () => {
+      assertPending(rows.find((row) => row.id === pendingId), '/api/sessions')
+      assertPending(graph.sessions.find((row) => row.id === pendingId), '/api/graph')
+      assertPending(edges.nodes.find((row) => row.id === pendingId), '/api/sessions/edges')
+      assertPending(resources.owners.find((row) => row.kind === 'session' && row.id === pendingId), '/api/resources')
+      assertPending(settings.layout.worktrees.find((row) => row.session === pendingId), '/api/settings')
+    })
+
+    const assertLivePending = (row: any, surface: string) => {
+      assert.ok(row, `${surface} keeps the live pending row`)
+      assert.equal(row.lifecycle ?? row.status, 'active', `${surface} uses the frozen active lifecycle`)
+      if ('lifecycle' in row) assert.equal(row.status, 'offline', `${surface} pins compact display offline`)
+      if ('proposal' in row) assert.equal(row.proposal, null, `${surface} uses the frozen proposal`)
+      if ('note' in row) assert.equal(row.note, 'live frozen original note', `${surface} uses the frozen note`)
+      if ('stopped' in row) assert.equal(row.stopped, false, `${surface} preserves the frozen stopped bit`)
+      if ('archived' in row) assert.equal(row.archived, false, `${surface} preserves the frozen archive bit`)
+      assert.equal(row.liveness, 'offline', `${surface} stays offline despite the live candidate process`)
+      assert.notEqual(row.status, 'working', `${surface} never reconciles the candidate into working`)
+      assert.notEqual(row.status, 'idle', `${surface} never exposes the candidate idle lifecycle`)
+    }
+    await t.test('a live candidate cannot change the frozen display or offline liveness', () => {
+      assertLivePending(rows.find((row) => row.id === livePendingId), '/api/sessions live candidate')
+      assertLivePending(graph.sessions.find((row) => row.id === livePendingId), '/api/graph live candidate')
+      assertLivePending(edges.nodes.find((row) => row.id === livePendingId), '/api/sessions/edges live candidate')
+      assertLivePending(resources.owners.find((row) => row.kind === 'session' && row.id === livePendingId), '/api/resources live candidate')
+      assertLivePending(settings.layout.worktrees.find((row) => row.session === livePendingId), '/api/settings live candidate')
+    })
 
     const assertMalformed = (row: any, surface: string) => {
       assert.ok(row, `${surface} keeps the malformed row`)
@@ -195,14 +263,23 @@ test('all public record APIs share pending projection and malformed fail-closed 
       assert.notEqual(row.status, 'idle')
       assert.notEqual(row.liveness, 'online')
     }
-    assertMalformed(rows.find((row) => row.id === malformedId), '/api/sessions')
-    assertMalformed(graph.sessions.find((row) => row.id === malformedId), '/api/graph')
-    assertMalformed(edges.nodes.find((row) => row.id === malformedId), '/api/sessions/edges')
-    assertMalformed(resources.owners.find((row) => row.kind === 'session' && row.id === malformedId), '/api/resources')
-    assertMalformed(settings.layout.worktrees.find((row) => row.session === malformedId), '/api/settings')
+    for (const [id, label] of [
+      [incompleteId, 'structurally incomplete'],
+      [invalidLifecycleId, 'invalid lifecycle'],
+      [invalidProposalId, 'invalid proposal'],
+    ] as const) {
+      await t.test(`${label} pending records are corrupt and unknown on every surface`, () => {
+        assertMalformed(rows.find((row) => row.id === id), `/api/sessions ${label}`)
+        assertMalformed(graph.sessions.find((row) => row.id === id), `/api/graph ${label}`)
+        assertMalformed(edges.nodes.find((row) => row.id === id), `/api/sessions/edges ${label}`)
+        assertMalformed(resources.owners.find((row) => row.kind === 'session' && row.id === id), `/api/resources ${label}`)
+        assertMalformed(settings.layout.worktrees.find((row) => row.session === id), `/api/settings ${label}`)
+      })
+    }
   } finally {
-    await Promise.all([stopChild(backend), stopChild(pendingProcess), stopChild(malformedProcess)])
+    await Promise.all([stopChild(backend), stopChild(pendingProcess), stopChild(livePendingProcess), stopChild(incompleteProcess)])
     rmSync(fixture, { recursive: true, force: true })
     assert.equal(existsSync(fixture), false)
+    assert.deepEqual(liveSessionsCensus(), liveBefore, 'isolated public projection fixture leaves the live project store unchanged')
   }
 })

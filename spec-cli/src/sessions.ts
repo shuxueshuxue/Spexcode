@@ -9,7 +9,7 @@ import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, type Review
 import { loadConfig, loadSpecs, type ConfigPreset, type SpecLite } from './specs.js'
 import { adapterLoadedReferenceState, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
-import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, type PublicRecordEntry, type RawRecord } from './layout.js'
+import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
@@ -108,8 +108,8 @@ const rvEnv = (id: string, harness = HARNESS) => {
 // for the existing importers (client.ts) that read it off the sessions module.
 export type { DispatchResult }
 
-export type Lifecycle = 'active' | 'idle' | 'awaiting' | 'parked' | 'error' | 'asking' | 'queued'
-export type Proposal = 'merge' | 'nothing' | 'close'
+export type Lifecycle = SessionLifecycle
+export type Proposal = SessionProposal
 // `corrupt` and `retired` are the two RECORD-INTEGRITY readings — neither a lifecycle the agent authored nor a
 // liveness the runtime probed, but the honest answer when the record itself can no longer carry either: its
 // bytes don't parse, or the worktree it names is gone. They exist so such a row can never silently vanish.
@@ -253,8 +253,6 @@ export type SessRec = {
 }
 type LaunchReadinessOriginal = Pick<SessRec, 'status' | 'proposal' | 'note' | 'stopped' | 'archived' | 'coldProof' | 'adapterRecovery'>
 type LaunchReadinessPending = { version: 1; startedAt: number; original: LaunchReadinessOriginal }
-const LIFECYCLES = new Set<Lifecycle>(['active', 'idle', 'awaiting', 'parked', 'error', 'asking', 'queued'])
-const PROPOSALS = new Set<Proposal>(['merge', 'nothing', 'close'])
 export const OWNED_QUEUE_RAW_STATUS = 'launch-queued'
 
 // @@@ stable launch authority - the supervisor injects its PUBLIC proxy URL into every replaceable child.
@@ -421,16 +419,16 @@ function hasValidColdProof(rec: SessRec): boolean {
 // claude, absent pin → null) are unit-auditable without a store on disk.
 export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
   const ownedQueue = raw.status === OWNED_QUEUE_RAW_STATUS
-  const status = ownedQueue ? 'queued' : LIFECYCLES.has(raw.status as Lifecycle) ? raw.status as Lifecycle : 'active'
+  const status = ownedQueue ? 'queued' : isSessionLifecycle(raw.status) ? raw.status : 'active'
   const launchOwner = ownedQueue ? raw.launch_owner?.trim() : null
   if (ownedQueue && !launchOwner) throw new Error(`owned queue record '${raw.session_id}' has no launch_owner`)
-  const proposal = raw.proposal && PROPOSALS.has(raw.proposal as Proposal) ? raw.proposal as Proposal : null
+  const proposal = isSessionProposal(raw.proposal) ? raw.proposal : null
   const sk = raw.sortkey
   const sortKey = typeof sk === 'number' && Number.isFinite(sk) ? sk : null
   const pendingRaw = rawLaunchReadinessOriginal(raw)
-  const pendingStatus = pendingRaw && LIFECYCLES.has(pendingRaw.status as Lifecycle) ? pendingRaw.status as Lifecycle : null
+  const pendingStatus = pendingRaw && isSessionLifecycle(pendingRaw.status) ? pendingRaw.status : null
   if (pendingRaw && !pendingStatus) throw new Error(`session '${raw.session_id}' launch readiness original has invalid lifecycle '${pendingRaw.status}'`)
-  const pendingProposal = pendingRaw?.proposal && PROPOSALS.has(pendingRaw.proposal as Proposal) ? pendingRaw.proposal as Proposal : null
+  const pendingProposal = pendingRaw && isSessionProposal(pendingRaw.proposal) ? pendingRaw.proposal : null
   if (pendingRaw?.proposal && !pendingProposal) throw new Error(`session '${raw.session_id}' launch readiness original has invalid proposal '${pendingRaw.proposal}'`)
   return {
     session: raw.session_id, governed: !!raw.governed, worktreePath: raw.worktree_path || '', branch: raw.branch || null,
@@ -967,7 +965,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     // A forced public liveness comes only from the shared record projection. Do not let live process/thread
     // evidence punch through it (including archive hazard repair).
     if (entry.kind === 'ok' && entry.liveness === 'offline') {
-      const pending = toSession(rec, reconcile(rec, snap), 'offline')
+      const pending = toSession(rec, 'offline', 'offline')
       lastKnownSession.set(id, pending)
       return pending
     }

@@ -53,7 +53,7 @@ Three field-verified edges the mechanism must hold:
    run only when the cleaned worktree already equals the index blob, a pure stat refresh that can never
    stage a user's real unstaged edit (a genuine edit keeps its honest `M`).
 3. **Ordered unplant.** Strip the block from the working files FIRST, then remove its tree payload; remove the
-   common attributes/config/shim only after no registered tree claim needs them —
+   common attributes/config/shim only after no registered tree payload needs them —
    the reverse order leaves the block exposed as an uncommitted modification the moment the clean filter
    disappears ([[harness-delivery]]'s erase order honors this).
 

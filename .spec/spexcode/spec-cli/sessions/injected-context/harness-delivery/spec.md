@@ -81,18 +81,20 @@ plugin node. This replaces the launch-time
   codex-rs algorithm), so a user-self-launched codex skips its trust prompts entirely.
   Trust is global-only by codex's security design (a repo cannot declare itself trusted) — the one
   necessary scoped global write; everything else is project-local.
-- **the content-hash marker** (same per-tree slot as the manifest), stamped LAST — a freshness record (a
-  crash mid-materialize leaves it stale, diagnosably); the unconditional pre-commit materialize heals regardless.
+- **the content-hash marker** (same per-tree slot as the manifest), a diagnostic freshness record written
+  before the final authority; the unconditional pre-commit materialize heals a partial pass.
+- **the dispatch-family allowlist** (same slot), atomically renamed into place LAST. It is the sole success
+  receipt consumed by dispatch, so a killed writer leaves the preceding successful selection intact.
 
-The pass obeys a scoped **forgetting law**. One tree's output is exactly its current policy; shared project
-output is exactly the union of successful claims from Git-registered worktrees. Local landing points are
-ERASE-THEN-ASSERT by identity stamp, so narrowing one tree removes its contract/shim/skills without touching a
-sibling. A small claim in the existing tree runtime slot records only what that successful pass actually
-asserted; the common reconciler retains shared root hooks/trust while any registered claim needs them and
-destructs them after the last claim disappears. Git registration is the lifetime truth: a missing/locked but
-registered tree retains its last claim, while remove/prune releases it. Idempotence is the same-policy case,
-and project-wide dematerialize clears every accessible registered tree before shared substrate. A plugin target
-stays exclusive ([[plugin-harness]]) and its arbitrary bundle folders remain in the same per-tree claim.
+The pass obeys a scoped **forgetting law**. One tree's semantic output is exactly its current policy. Local
+landing points are ERASE-THEN-ASSERT by identity stamp, so narrowing one tree removes its
+contract/shim/skills without touching a sibling. Project-scoped hook/trust wiring is installation transport,
+not selection state: once a tree needs it, it may remain dormant until project-wide dematerialize/uninstall.
+The dispatch-family allowlist in each existing tree runtime slot is the single final publication of a
+successful pass, and gates that shared transport before admission or input handling; retaining the transport
+therefore cannot activate a harness that this tree did not select. Idempotence is the same-policy case, and
+project-wide dematerialize clears every accessible registered tree before shared substrate. A plugin target
+stays exclusive ([[plugin-harness]]) and its arbitrary bundle folders remain in the same per-tree ledger.
 
 The pass returns a **materialization receipt** alongside its content hash: the manifest and the exact contract,
 shim, skill/agent, plugin-bundle, and trust paths asserted by this run. The receipt is populated at those writes,
@@ -102,14 +104,14 @@ harness footprint without maintaining a second harness-artifact inventory.
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
 (never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. Ignore is projected with
 the same ownership split. Checkout-invariant machine residue (`spexcode.local.json`, `.worktrees/`, legacy
-`.session`, and a claimed shared root shim) stays in the common `.git/info/exclude`. Selection-dependent local
+`.session`, and installed shared root transport) stays in the common `.git/info/exclude`. Selection-dependent local
 shims, bundles, skills/agents, and wholly-ours contract files are one managed block in that tree's working
 `.gitignore`. [[content-filter]] keeps a tracked host `.gitignore` pristine in the index, leaves an untracked
 host file honestly visible, and lets a wholly generated one ignore itself. Contract and ignore payloads live
-under the current tree slot; one common filter driver resolves the invoking Git toplevel plus `%f`, so linked
+under the current tree slot; one common filter driver derives that slot from the invoking Git toplevel plus `%f`, so linked
 trees never overwrite one another's bytes and user global ignore configuration is untouched. The Codex trust
-hash remains global and project-scoped, but its lifetime follows the registered claim union rather than
-whichever tree materialized last.
+hash remains global and project-scoped, and is removed by project-wide dematerialize/uninstall rather than a
+sibling's selection change.
 
 The net ideal path: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`, zero
 further operation, no global pollution beyond the scoped Codex trust. The contract files are SpexCode-owned

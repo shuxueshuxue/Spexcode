@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, readFileSync, existsSync, readdirSync, rmSync, rmdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readFileSync, existsSync, readdirSync, renameSync, rmSync, rmdirSync } from 'node:fs'
 import { join, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
@@ -9,7 +9,7 @@ import { git } from './git.js'
 import { runtimeRoot, treeSlotDir, mainCheckout, readConfig } from './layout.js'
 import { resolveHarnessTargets, partitionHarnesses } from './harness-select.js'
 import { emitPlugin, cleanPlugin, pluginBundleDir, pluginVersion } from './plugin-harness.js'
-import { plantContractFilter, removeContractFilter, settleIndexStat } from './contract-filter.js'
+import { plantContractFilter, removeContractFilter, retireLegacyContractBlock, settleIndexStat, type ContractFilterBinding, type ContractFilterPayload } from './contract-filter.js'
 
 export type MaterializedArtifact = {
   kind: 'hook manifest' | 'contract' | 'shim' | 'skill' | 'agent' | 'plugin bundle' | 'trust'
@@ -64,8 +64,8 @@ export function contentHash(proj: string): string {
 // @@@ footprint kinds ([[residence]]) - the vote axis is RETIRED: materialized artifacts carry no facts, so
 // they are NEVER tracked — there is exactly ONE residence behavior, not three. `.spec` + `spexcode.json` are ALWAYS
 // tracked (git is the database — no knob can untrack them); machine facts (shims, spexcode.local.json),
-// run residue (.worktrees/), and wholly-ours artifacts are hidden by the per-clone .git/info/exclude (the
-// host's tracked .gitignore is never touched); a contract file the host TRACKS — or one the user has begun
+// run residue (.worktrees/) stays in the common exclude; tree-selected artifacts are hidden by a managed
+// working .gitignore block whose tracked bytes stay pristine through the content filter. A contract file the host TRACKS — or one the user has begun
 // writing THEIR OWN prose into — is covered by the clean/smudge content filter ([[content-filter]]). An
 // environment without the generator (a teammate's clone, CI, a cloud agent) runs `spex materialize` in its
 // setup step — there is no committed-artifact delivery mode.
@@ -74,7 +74,7 @@ export function retiredAxisNotice(cfg: { render?: string; private?: boolean }): 
   const field = cfg.render?.trim() ? `"render": "${cfg.render.trim()}"` : '"private": true'
   console.error(
     `spexcode: the render vote is retired — ${field} is ignored. Materialized artifacts are never tracked:\n` +
-    `  ignore rules live in the per-clone .git/info/exclude, a host-tracked contract file is covered by the\n` +
+    `  tree-local ignore rules live in a filtered working .gitignore, and a host-tracked contract is covered by the\n` +
     `  clean/smudge filter, and a clone without spex runs \`spex materialize\` in its setup step. Remove the\n` +
     `  field from spexcode.json / spexcode.local.json to retire this notice (see \`spex guide footprint\`).`,
   )
@@ -88,6 +88,21 @@ function infoExcludePath(proj: string): string {
 }
 function isTracked(proj: string, file: string): boolean {
   try { git(['-C', proj, 'ls-files', '--error-unmatch', file]); return true } catch { return false }
+}
+
+function registeredTrees(proj: string): string[] {
+  const rows = git(['-C', mainCheckout(proj), 'worktree', 'list', '--porcelain', '-z']).split('\0')
+  return rows.filter((row) => row.startsWith('worktree ')).map((row) => row.slice('worktree '.length))
+}
+
+function selectionBody(selected: typeof HARNESSES, plugin = false): string {
+  return [...new Set([...selected.map((h) => h.dispatchId), ...(plugin ? ['plugin'] : [])])].sort().join('\n') + '\n'
+}
+
+function publishSelection(path: string, body: string): void {
+  const prepared = `${path}.${process.pid}.tmp`
+  writeFileSync(prepared, body)
+  renameSync(prepared, path)
 }
 
 // @@@ contract kind detection ([[residence]]) - a contract file's residence is a LIVE CONTENT FACT, not
@@ -144,11 +159,11 @@ function sweepGeneratedAgents(dir: string | null): void {
 // (edge ③ in [[content-filter]] — a block outliving its clean filter surfaces as an uncommitted change).
 // `arts` (live skill/agent node names) widens the sweep to pre-stamp legacy files; the GENERATED_MARK sweep
 // covers everything materialized since, including products of renamed/deleted nodes.
-export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { skills: [], agents: [] }): void {
+function eraseTree(proj: string, arts: HarnessArtifacts, preserveProject: boolean): void {
   for (const h of HARNESSES) {
     // h.clean = the adapter's surgical inverse: contract block (sentinels, deleteIfEmpty), the dispatch.sh-
     // stamped shim + worktree anchor, the trust block, and the arts-named skill/agent files.
-    h.clean(proj, arts)
+    h.clean(proj, arts, preserveProject)
     for (const f of h.contractFiles(proj)) clearSkipWorktree(proj, f)   // legacy private-overlay bit — erase-only
     sweepGeneratedSkills(h.skillDir(proj))
     sweepGeneratedAgents(h.agentDir(proj))
@@ -156,8 +171,7 @@ export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { s
   // same authorship rule as the contract files: deleteIfEmpty only when .gitignore is UNTRACKED (wholly-ours
   // generated file); a HOST-TRACKED .gitignore that carried nothing but our block is stripped, never deleted.
   removeManagedBlock(join(proj, '.gitignore'), ['# ', ''], !isTracked(proj, '.gitignore'))
-  try { removeManagedBlock(infoExcludePath(proj), ['# ', ''], false) } catch { /* not a git repo */ }
-  removeContractFilter(proj)                                            // AFTER the blocks left the working files
+  removeContractFilter(proj, [...HARNESSES.flatMap((h) => h.contractFiles(proj)), join(proj, '.gitignore')])
   // the block-strip left tracked contract files stat-dirty (under a filter git NEVER content-verifies them,
   // and even unfiltered the phantom-`M` lingers) — settle the index stat, content-guarded so a user's real
   // unstaged edit is never staged ([[content-filter]] edge 2).
@@ -179,6 +193,22 @@ export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { s
   }
 }
 
+export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { skills: [], agents: [] }): void {
+  const trees = registeredTrees(proj)
+  const current = git(['-C', proj, 'rev-parse', '--show-toplevel']).trim()
+  for (const tree of trees) {
+    if (!existsSync(tree)) throw new Error(`cannot dematerialize project while registered worktree ${tree} is inaccessible — repair or remove/prune it first`)
+    git(['-C', tree, 'rev-parse', '--show-toplevel'])
+  }
+  for (const tree of trees) {
+    // Only the caller's live spec may widen the legacy name sweep. Siblings are identity-stamp-only: the
+    // same name there may be user-owned or may not exist in this tree's divergent spec at all.
+    eraseTree(tree, tree === current ? arts : { skills: [], agents: [] }, false)
+  }
+  try { removeManagedBlock(infoExcludePath(proj), ['# ', ''], false) } catch { /* not a git repo */ }
+  removeContractFilter(proj, [...HARNESSES.flatMap((h) => h.contractFiles(proj)), join(proj, '.gitignore')], true)
+}
+
 // the whole pay-per-change materialize. proj defaults to cwd. Its receipt is populated at each successful
 // write so callers report the actual selected footprint instead of maintaining a second artifact inventory.
 export function materialize(proj = process.cwd()): MaterializeResult {
@@ -198,9 +228,9 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   // own hand-written prose is not folded in — repo-local notes belong in the harness file's own
   // block-outside region (untracked, per-clone), and anything that must reach EVERY agent is a plugin node.
   const contract = loadSystemConfig().map((c) => c.body.trim()).filter(Boolean).join('\n\n')
-  // WHICH harnesses to deliver into ([[harness-select]]): the spexcode.json `harnesses` set (default = every
-  // native harness). resolveHarnessTargets FAILS LOUD on an illegal set (plugin+native, plugin w/o folder).
-  const cfg = readConfig(mainCheckout(proj))
+  // WHICH harnesses to deliver into ([[harness-select]]): this tree's explicit spexcode.json `harnesses` set.
+  // resolveHarnessTargets FAILS LOUD on an illegal set (plugin+native, plugin w/o folder).
+  const cfg = readConfig(proj)
   const targets = resolveHarnessTargets(cfg.harnesses)
   retiredAxisNotice(cfg)                                                  // [[residence]] — the vote axis is retired
   const { selected, plugins } = partitionHarnesses(targets)
@@ -212,7 +242,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   // ---- ERASE (the forgetting law): every landing point cleared by identity stamp, whatever policy — or
   // legacy mode — wrote it last. Unselected harnesses need no separate prune branch: the erase already
   // forgot them, and only the selected ones are asserted below.
-  dematerialize(proj, arts)
+  eraseTree(proj, arts, true)
 
   // ---- ASSERT: rewrite each landing point per the CURRENT policy.
   // a skill node → the agentskills.io SKILL.md primitive: `name`+`description` frontmatter (the load-trigger)
@@ -236,17 +266,28 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   const contractPaths: string[] = []
   for (const h of selected) {
     if (contract) for (const f of h.contractFiles(proj)) { writeManagedBlock(f, contract); contractPaths.push(f); record('contract', f) }
-    const shimFile = h.shimFile(proj)
-    mkdirSync(dirname(shimFile), { recursive: true })
     const shim = h.shim(DISPATCH, SPEX)
-    writeFileSync(shimFile, shim.content)
-    record('shim', shimFile)
-    for (const f of h.writeTrust(proj, shim.cmd)) record('trust', f)
-    machinePaths.push(shimFile)
+    if (h.shimScope === 'tree') {
+      const shimFile = h.shimFile(proj)
+      mkdirSync(dirname(shimFile), { recursive: true })
+      writeFileSync(shimFile, shim.content)
+      record('shim', shimFile)
+      machinePaths.push(shimFile)
+    }
     // a linked-worktree ANCHOR copy of the shim, when the harness needs one (codex: the shim lives at the main
     // checkout, so the worktree gets no `.codex/` unless we place one). One adapter line; null otherwise.
     const anchor = h.worktreeHookAnchor(proj)
     if (anchor) { mkdirSync(dirname(anchor), { recursive: true }); writeFileSync(anchor, shim.content); machinePaths.push(anchor); record('shim', anchor) }
+  }
+  const selectedByDispatch = new Map(selected.map((h) => [h.dispatchId, h]))
+  for (const h of selectedByDispatch.values()) {
+    const shim = h.shim(DISPATCH, SPEX)
+    if (h.shimScope === 'project') {
+      const file = h.shimFile(proj)
+      mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, shim.content)
+      record('shim', file)
+    }
+    for (const file of h.writeTrust(proj, shim.cmd)) record('trust', file)
   }
   // (6) skills + (7) sub-agents — each surface node → the file the harness auto-discovers, one per selected
   //     harness that has the primitive (skillDir/agentDir null skips — the divergence is the adapter's line).
@@ -299,44 +340,51 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     }
   }
   writeFileSync(ledger, curFolders.join('\n'))
-  // (9) the ignore rules — ALWAYS the per-clone .git/info/exclude ([[residence]]): the exclude is not a
-  //     history guard (the pre-commit surgery owns history — [[commit-surgery]]) but the ignored-bit
-  //     DECLARATION every other git door consults (checkout may overwrite, clean -fd spares, status/add -A/
-  //     stash stay silent). The host's tracked .gitignore is never touched.
-  // Entries must be CHECKOUT-INVARIANT: the exclude lives in the COMMON git dir shared by the main checkout
-  // and every worktree, so each entry is anchored to the checkout it LIVES under — proj-relative when inside
-  // proj, else MAIN-checkout-relative (the codex shim resolves to `.codex/hooks.json` from any checkout; a
-  // pattern naming a main-only path is a harmless no-op in a worktree). A path under neither root is dropped.
+  // (9) ignore + mixed text. Only checkout-invariant residue and project-shared shims belong in the COMMON
+  // info/exclude; selection-dependent paths live in this tree's filtered working .gitignore.
   const mc = mainCheckout(proj)
-  const anchor = (abs: string): string | null => {
-    const p = relative(proj, abs); if (!p.startsWith('..')) return p
-    const m = relative(mc, abs); if (!m.startsWith('..')) return m
-    return null
-  }
-  // machine facts + run residue, ignored under EVERY policy: the shims/anchors/bundles (bake this install's
-  // abs path), spexcode.local.json (the host overlay — a `git add -A` must never leak it), and the session
-  // residue (`.worktrees/` where launches plant worktrees; `.session` is the legacy per-worktree state file
-  // an old backend wrote). Static strings stay checkout-invariant.
   const bundlePaths = curFolders.map((f) => pluginBundleDir(proj, f))
-  const machineEntries = [
-    ...[...machinePaths, ...bundlePaths].map(anchor).filter((p): p is string => p !== null),
+  const commonEntries = [
+    ...[...new Set(HARNESSES.filter((h) => h.shimScope === 'project' && existsSync(h.shimFile(proj)) &&
+      readFileSync(h.shimFile(proj), 'utf8').includes('dispatch.sh')).map((h) => relative(mc, h.shimFile(proj))))]
+      .filter((p) => !p.startsWith('..')),
     'spexcode.local.json', '.worktrees/', '.session',
   ]
-  // the contract three-state ([[residence]]): tracked → filter; untracked+wholly-ours → exclude;
-  // untracked+host-content → NO exclude (never hide user prose) + the clean filter pre-armed, so the user's
-  // own eventual `git add` strips our block — tracking stays entirely their act.
+  const entries = (list: string[]) => [...new Set(list)].sort().join('\n')
+  writeManagedBlock(infoExcludePath(proj), entries(commonEntries), ['# ', ''])
+
+  // Contract residence stays a live fact. Selection-dependent untracked products are ignored by this tree's
+  // working .gitignore, whose own managed block is filtered when the host tracks/owns that file.
   const filterContracts: string[] = []
   const oursContracts: string[] = []
   for (const f of contractPaths) {
     if (isTracked(proj, f) || hostContentOf(f).trim()) filterContracts.push(f)
     else oursContracts.push(f)
   }
-  if (contract && filterContracts.length) plantContractFilter(proj, filterContracts, contract)
-  const artifactEntries = [...artifactPaths, ...oursContracts].map(anchor).filter((p): p is string => p !== null)
-  const entries = (list: string[]) => [...new Set(list)].sort().join('\n')
-  writeManagedBlock(infoExcludePath(proj), entries([...machineEntries, ...artifactEntries]), ['# ', ''])
-  // (5) stamp the content-hash marker LAST (a diagnostic freshness record; a crash mid-materialize leaves it stale).
+  const localEntries = [...machinePaths, ...bundlePaths, ...artifactPaths, ...oursContracts]
+    .map((p) => relative(proj, p)).filter((p) => !p.startsWith('..'))
+  const ignoreFile = join(proj, '.gitignore')
+  const ignoreTracked = isTracked(proj, ignoreFile)
+  const ignoreHost = existsSync(ignoreFile) ? readFileSync(ignoreFile, 'utf8') : ''
+  if (!ignoreTracked && !ignoreHost.trim()) localEntries.push('.gitignore')
+  const ignoreBody = entries(localEntries)
+  writeManagedBlock(ignoreFile, ignoreBody, ['# ', ''])
+
+  const payloads: ContractFilterPayload[] = filterContracts.map((file) => ({ file: relative(proj, file), content: contract }))
+  if (ignoreTracked || ignoreHost.trim()) payloads.push({ file: '.gitignore', content: ignoreBody })
+  const bindings: ContractFilterBinding[] = [
+    ...[...new Set(HARNESSES.flatMap((h) => h.contractFiles(proj).map((file) => relative(proj, file))))]
+      .map((file) => ({ file, start: '<!-- spexcode:start -->', end: '<!-- spexcode:end -->', legacy: true })),
+    { file: '.gitignore', start: '# spexcode:start', end: '# spexcode:end' },
+  ]
+  if (payloads.length) plantContractFilter(proj, payloads, bindings)
+  // (5) finish diagnostics/migration, then atomically publish the allowlist LAST. Dispatch consumes only that
+  // final receipt; a killed writer leaves the preceding successful selection intact.
   const h = contentHash(proj)
   writeFileSync(join(rt, 'content-hash'), h)
+  writeFileSync(join(rt, 'contract-filter-v2'), '')
+  writeFileSync(join(runtimeRoot(proj), 'harness-selection-v1'), '')
+  retireLegacyContractBlock(proj)
+  publishSelection(join(rt, 'harnesses'), selectionBody(selected, plugins.length > 0))
   return { contentHash: h, planted }
 }

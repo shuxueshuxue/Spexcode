@@ -132,6 +132,8 @@ export async function adapterLoadedReferenceState(
 
 export interface Harness {
   readonly id: HarnessId
+  // the id baked into the materialized shim. Headless variants reuse their native family's shim.
+  readonly dispatchId: 'claude' | 'codex' | 'opencode' | 'pi'
   // whether this harness runs without an interactive TUI. The dashboard launcher picker hides headless
   // adapters by default ([[launcher-visibility]]); CLI launcher resolution never consumes that policy.
   readonly headless: boolean
@@ -192,6 +194,9 @@ export interface Harness {
   // --- materialize: shim + contract + trust ([[harness-delivery]]) ---
   // the auto-discovered hook shim file for this harness (.claude/settings.json vs .codex/hooks.json).
   shimFile(proj: string): string
+  // whether that shim belongs to one checkout or the whole project. This is adapter placement data: Codex
+  // reads one root-checkout hook file for every linked tree; the other harnesses discover their tree-local file.
+  shimScope: 'tree' | 'project'
   // a LINKED WORKTREE's extra shim copy — the worktree-side `.codex` hook file that ANCHORS codex's project
   // config layer, or null when the harness needs none. codex-rs only builds a project config layer (and thus
   // only DISCOVERS a worktree thread's hooks) for a dir in [cwd..project_root] that contains a `.codex/`
@@ -304,7 +309,7 @@ export interface Harness {
   // skill/agent files named in `arts` — never the user's surrounding prose, their other settings, or any .spec
   // data. materialize calls it for every UNSELECTED harness, so dropping a harness from spexcode.json's
   // `harnesses` prunes that harness's products on the next re-materialize.
-  clean(proj: string, arts: HarnessArtifacts): void
+  clean(proj: string, arts: HarnessArtifacts, preserveProject?: boolean): void
   // the inverse of writeTrust: strip THIS project's spexcode trust block from the harness's global config.
   // Codex removes its `~/.codex/config.toml` block; Claude is a no-op (it wrote none).
   removeTrust(proj: string): void
@@ -1787,16 +1792,16 @@ function isTrackedFile(proj: string, f: string): boolean {
 // block; the skill/agent files sit at name-scoped paths reconstructed from `arts`. So it removes ONLY our own
 // blocks and our own named products — never a user's CLAUDE.md/AGENTS.md prose, a hand-made settings.json, or
 // a sibling skill/agent the user added, and NEVER any .spec data.
-function cleanHarness(h: Harness, proj: string, arts: HarnessArtifacts): void {
+function cleanHarness(h: Harness, proj: string, arts: HarnessArtifacts, preserveProject = false): void {
   // deleteIfEmpty ONLY for an UNTRACKED contract file: a wholly-ours generated file goes; a HOST-TRACKED file
   // that carried nothing but our block (an empty committed CLAUDE.md we folded into) is stripped back to its
   // pristine emptiness but never deleted — deleting a tracked file would surface as a `D` in the host's status.
   for (const f of h.contractFiles(proj)) removeManagedBlock(f, ['<!-- ', ' -->'], !isTrackedFile(proj, f))
   const shim = h.shimFile(proj)
-  if (existsSync(shim) && readFileSync(shim, 'utf8').includes('dispatch.sh')) rmSync(shim, { force: true })
+  if ((h.shimScope === 'tree' || !preserveProject) && existsSync(shim) && readFileSync(shim, 'utf8').includes('dispatch.sh')) rmSync(shim, { force: true })
   const anchor = h.worktreeHookAnchor(proj)   // the linked-worktree anchor copy, same identity gate as the shim
   if (anchor && existsSync(anchor) && readFileSync(anchor, 'utf8').includes('dispatch.sh')) rmSync(anchor, { force: true })
-  h.removeTrust(proj)
+  if (!preserveProject) h.removeTrust(proj)
   const sd = h.skillDir(proj)
   if (sd) for (const n of arts.skills) rmSync(join(sd, n), { recursive: true, force: true })
   const ad = h.agentDir(proj)
@@ -1953,6 +1958,7 @@ const noLaunchEnv = (): string[] => []
 
 export const claudeHarness: Harness = {
   id: 'claude',
+  dispatchId: 'claude',
   headless: false,
   events: CLAUDE_EVENTS,
   ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
@@ -1963,6 +1969,7 @@ export const claudeHarness: Harness = {
   sessionEnvVar: 'CLAUDE_CODE_SESSION_ID',
   launchEnv: rendezvousLaunchEnv,
   shimFile: (proj) => join(proj, '.claude', 'settings.json'),
+  shimScope: 'tree',
   worktreeHookAnchor: () => null,                    // claude's shim already lives in the worktree (.claude/settings.json) — self-anchors, no root rewrite
   contractFiles: (proj) => [join(proj, 'CLAUDE.md')],
   skillDir: (proj) => join(proj, '.claude', 'skills'),
@@ -1970,7 +1977,7 @@ export const claudeHarness: Harness = {
   shim: (dispatch, spex) => buildShim('claude', CLAUDE_EVENTS, dispatch, spex),
   writeTrust: () => [],                            // Claude relies on folder-trust — no artifact to report
   removeTrust: () => { /* Claude wrote no trust — nothing to strip */ },
-  clean(proj, arts) { cleanHarness(this, proj, arts) },
+  clean(proj, arts, preserveProject) { cleanHarness(this, proj, arts, preserveProject) },
   slashCommands: claudeSlashCommands,
   // online iff the window is up AND a LIVE LISTENER is on the rendezvous socket (`socketLive`, connect-probed by
   // the caller) — NOT the mere existence of a stale socket FILE a crashed claude leaves behind (the 30-min
@@ -2020,6 +2027,7 @@ export const claudeHeadlessHarness: Harness = {
 
 export const codexHarness: Harness = {
   id: 'codex',
+  dispatchId: 'codex',
   headless: false,
   sharedRuntimeSpawn: true,
   events: CODEX_EVENTS,
@@ -2038,6 +2046,7 @@ export const codexHarness: Harness = {
   // per-worktree (codex loads THOSE by walking the thread cwd). dispatch.sh resolves `proj` from the thread
   // cwd, so one shared shim serves every worktree.
   shimFile: (proj) => join(mainCheckout(proj), '.codex', 'hooks.json'),
+  shimScope: 'project',
   // a LINKED worktree also needs its OWN `.codex/hooks.json` so codex-rs anchors the project config layer for
   // the worktree cwd (without a `.codex/` under the worktree root, codex builds no layer, so the rewritten
   // root-checkout hooks are never discovered and NO hooks fire — bypass_hook_trust cannot rescue a layer that
@@ -2070,7 +2079,7 @@ export const codexHarness: Harness = {
   writeTrust: (proj, cmdFor) => [writeCodexTrust(mainCheckout(proj), CODEX_EVENTS, cmdFor)],
   // trust is keyed by the MAIN checkout (where the codex shim materializes) — strip it at the same key.
   removeTrust: (proj) => removeCodexTrust(mainCheckout(proj)),
-  clean(proj, arts) { cleanHarness(this, proj, arts) },
+  clean(proj, arts, preserveProject) { cleanHarness(this, proj, arts, preserveProject) },
   slashCommands: codexSlashCommands,
   // online iff the tmux window is up AND the agent is live. PRIMARY: the launch-registered `agent.pid` hot-tier
   // verdict (`pidAlive`) — a 100ms syscall (kill-0), no ps scan. LEGACY: a pre-registration session has no
@@ -2354,6 +2363,7 @@ export const codexHeadlessHarness: Harness = {
 // one-run defence. See pi-harness.ts for the extension source + trust mechanics.
 export const piHarness: Harness = {
   id: 'pi',
+  dispatchId: 'pi',
   headless: false,
   events: PI_EVENTS,
   ownsRendezvous: true,                              // the generated extension binds rvSock(id) and speaks the reclaude protocol
@@ -2364,6 +2374,7 @@ export const piHarness: Harness = {
   sessionEnvVar: 'PI_SESSION_ID',                    // exported by the generated extension at session_start; tool subprocesses inherit it
   launchEnv: rendezvousLaunchEnv,
   shimFile: (proj) => join(proj, '.pi', 'extensions', 'spexcode.ts'),
+  shimScope: 'tree',
   worktreeHookAnchor: () => null,                    // the extension lives in the worktree and self-anchors, like claude
   contractFiles: (proj) => [join(proj, 'AGENTS.md')],   // pi auto-loads AGENTS.md context files (shared with codex — writeManagedBlock is idempotent)
   skillDir: (proj) => join(proj, '.pi', 'skills'),   // Agent Skills standard dirs, discovered after project trust
@@ -2374,7 +2385,7 @@ export const piHarness: Harness = {
   }),
   writeTrust: (proj) => [writePiTrust(mainCheckout(proj))], // trust keys on the MAIN checkout; nearest-parent lookup covers worktrees
   removeTrust: (proj) => removePiTrust(mainCheckout(proj)),
-  clean(proj, arts) { cleanHarness(this, proj, arts) },
+  clean(proj, arts, preserveProject) { cleanHarness(this, proj, arts, preserveProject) },
   slashCommands: piSlashCommands,
   // claude's exact liveness: the window is up AND a live LISTENER answers on the rendezvous socket — the
   // socket the generated extension binds. socketLive is already probed for every windowed session.
@@ -2409,6 +2420,7 @@ export const piHeadlessHarness: Harness = {
 
 export const opencodeHarness: Harness = {
   id: 'opencode',
+  dispatchId: 'opencode',
   headless: false,
   events: OPENCODE_EVENTS,
   // LITERALLY true: the generated plugin ([[opencode-harness]], opencode.ts) BINDS the per-session rendezvous
@@ -2428,6 +2440,7 @@ export const opencodeHarness: Harness = {
   // the "shim" is a generated opencode PLUGIN in the worktree's own tree — opencode auto-loads project plugins
   // by walking the cwd, so like claude it self-anchors and needs no root-checkout rewrite or worktree anchor.
   shimFile: (proj) => join(proj, '.opencode', 'plugins', 'spexcode.ts'),
+  shimScope: 'tree',
   worktreeHookAnchor: () => null,
   contractFiles: (proj) => [join(proj, 'AGENTS.md')],   // opencode reads AGENTS.md natively (same file codex owns; the managed block is idempotent across writers)
   skillDir: (proj) => join(proj, '.opencode', 'skills'),
@@ -2437,7 +2450,7 @@ export const opencodeHarness: Harness = {
   shim: (dispatch, spex) => ({ content: opencodePluginSource(dispatch, spex), cmd: (e) => `SPEX='${spex}' bash ${dispatch} opencode ${e}` }),
   writeTrust: () => [],                            // permission policy stays with the launcher command; no trust artifact to report
   removeTrust: () => { /* nothing was written */ },
-  clean(proj, arts) { cleanHarness(this, proj, arts) },
+  clean(proj, arts, preserveProject) { cleanHarness(this, proj, arts, preserveProject) },
   slashCommands: opencodeSlashCommands,
   // online iff the window is up AND the agent answers on a channel: PREFER the rendezvous socket listener
   // (the plugin is alive), FALL BACK to the launch-registered agent.pid (kill-0) so a plugin that failed to

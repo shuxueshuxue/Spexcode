@@ -90,9 +90,9 @@ its harness from the shim that wired it — deterministically, never by guessing
 third baked id beyond the native two: `plugin`, written by the [[plugin-harness]] bundle's `hooks.json`. It has
 no `Harness` adapter of its own (it is a DELIVERY form, not a runtime) — `dispatch.sh` accepts it and `harness.sh`
 routes it through the **claude family** (a plugin host like adopter-a/Claude shares Claude's payload shape) via the
-default case, so the shell side needs no separate `plugin)` arm. On the TS
-side the harness is derived from the selected launcher or ALL adapters at once (materialize writes every
-harness's artifacts). The Adapter owns exactly these divergence points — its whole
+default case, so the shell side needs no separate `plugin)` arm. On the TS side the harness is derived from the
+selected launcher or the materialized tree's explicit harness set. Product code loops adapters and their
+placement facts; it never branches on a harness id. The Adapter owns exactly these divergence points — its whole
 surface:
 
 - **slashCommands()** — the `/` menu, computed the way THAT harness computes its own (Claude: a captured
@@ -170,13 +170,15 @@ surface:
   session runs, so the launch script EXPORTS `SPEXCODE_CODEX_CMD` for the codex-launch child (a fallback bare
   `codex` picks the WRONG install on a multi-codex box and mis-decides). `SPEXCODE_CODEX_BYPASS_HOOK_TRUST` forces
   the switch. Claude relies on folder-trust (often nothing).
-- **clean / removeTrust** — the materialize INVERSE: `clean(proj, arts)` surgically removes ONLY this harness's
-  own artifacts — the managed contract block (sentinels), the generated shim, the trust block (`removeTrust`,
-  the inverse of trust above), and the `arts`-named skill/agent files. Every step is gated on a SpexCode
+- **clean / removeTrust** — the materialize INVERSE: `clean(proj, arts, preserveProject)` surgically removes
+  ONLY this harness's tree-local artifacts — the managed contract block (sentinels), generated local shim,
+  and the `arts`-named skill/agent files. Project-scoped shim/trust is installation transport: ordinary
+  re-materialize preserves it and the tree's final dispatch allowlist makes it inert when unselected;
+  project-wide dematerialize/uninstall passes the destructive mode and calls `removeTrust`. Every step is gated on a SpexCode
   identity stamp (the managed-block sentinels, the shim's own `dispatch.sh` command line, the trust sentinels,
   the name-scoped on-demand paths), so it never touches a user's CLAUDE.md/AGENTS.md prose, a hand-made
   settings.json, a sibling skill the user added, or any `.spec` data. [[harness-delivery]] calls it for every
-  harness [[harness-select]] did NOT select, so dropping a harness from `harnesses` prunes its products. Adding
+  adapter, so dropping a harness from `harnesses` prunes its local products without deleting project transport. Adding
   a harness adds an adapter (with its `clean`), never a prune branch in materialize.
 - **payload accessors** — read `session_id`, the edited-file path (Claude `tool_input.file_path` vs Codex
   `apply_patch` command — Codex has NO `file_path`), and notification type, from a hook's stdin.

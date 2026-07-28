@@ -289,7 +289,7 @@ esac
       assert.equal(realpathSync(git(replacementSession.path, 'rev-parse', '--show-toplevel')), realpathSync(replacementSession.path), 'stale retry preserves replacement worktree')
       assert.ok(git(project, 'show-ref', '--verify', `refs/heads/${replacementSession.branch}`), 'stale retry preserves replacement branch')
     } else {
-      assert.equal(retirementClose.status, 500, 'unprovable receipt retirement refuses close')
+      assert.equal(retirementClose.status, 409, 'unprovable receipt retirement refuses close as a resource conflict')
       assert.deepEqual(
         { refs: nodeRefs(), worktrees: worktrees(), stores: sessionDirs(), rows: (await rows()).map((row) => row.id).sort() },
         beforeRetirementClose,

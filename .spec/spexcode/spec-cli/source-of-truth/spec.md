@@ -85,6 +85,24 @@ Two principles keep that derivation cheap on a long-running server:
   references that same HEAD. A small bounded set of current-root slots keeps several worktrees warm without
   retaining one full index for every historical commit, and concurrent readers of one HEAD share a single
   in-flight build.
+
+  The persistent event ledger has one **build-local transaction** across the history, drift, and
+  merge-authorship streams. Let `H` be reachable commits, `L` the encoded ledger bytes, and `D` the newly
+  reachable immutable events. A cold seed necessarily pays one `O(H)` Git extraction and one `O(L)` encode;
+  an exact-tip hit pays one `O(L)` read, integrity pass, and decode with no event Git walk; an advancing tip
+  pays one `O(L)` snapshot plus `O(D)` event extraction and at most one atomic `O(L + D)` replacement. The
+  topology/projector remains `O(H + events)` because reachability, rename forks, and the walk-newest version
+  rule are current-tip questions; the ledger removes repeated immutable-fact extraction, not that semantic
+  lower bound. Within one build, stream count must not multiply ledger work: all consumers share one decoded
+  snapshot, one integrity verdict, and one locked merge/write, with no write-then-reload verification pass.
+  Cross-process writers still merge under the project-scoped lock; a corrupt or interpretation-mismatched
+  snapshot rebuilds from Git, and a failed event scan remains loud rather than minting a marker.
+
+  The expected peak-memory shape is one encoded ledger payload plus one decoded event state plus the current
+  projection, not one copy of those per stream or per optimistic-lock retry. The slow full-history derivation
+  remains the correctness oracle. Release evidence compares the two implementations in separate processes
+  and homes on a fixed current tree, proves a known finding first, and reports cold, exact-tip, and advancing-tip
+  wall, CPU, and peak RSS; a hit-rate win does not excuse a material cold or append RSS regression.
 - **Keep candidates transient.** An explicit pending commit is not a checkout's current HEAD and may remain
   dangling after rejection. Its history/drift indices are shared only within the invoking lint call and are
   never registered in the root-owned HEAD cache, so it neither evicts that root's hot board index nor leaks

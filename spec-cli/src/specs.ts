@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
 import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor, fileDiffAt,
-  treeTextFiles, type HistoryIndex, type DriftIndex } from './git.js'
+  sourceIndexes, treeTextFiles, type HistoryIndex, type DriftIndex } from './git.js'
 import { parseCodeEntry, parseRelation, relationClaimsPath } from './anchors.js'
 
 // a node is any directory under .spec holding a spec.md; its parent is the nearest ancestor that also holds one.
@@ -244,17 +244,19 @@ export type LoadSpecsOptions = {
   snapshot?: SpecTreeSnapshot
 }
 export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions = {}) {
-  // Both indexes are one cached event projection each and independent — fetch them in parallel (async git,
-  // off the event loop). Every node below is then a pure in-memory lookup.
+  // The default pair shares one immutable-event snapshot; explicit sides let callers skip or supply either
+  // projection. Every node below is then a pure in-memory lookup.
   const tip = options.tip ?? 'HEAD'
   if (options.snapshot && options.snapshot.tip !== tip) {
     throw new Error(`loadSpecs snapshot tip '${options.snapshot.tip}' does not match requested tip '${tip}'`)
   }
-  const [idx, didx, allRaws] = await Promise.all([
-    options.history === null ? Promise.resolve(null) : options.history ?? historyIndex(root, tip),
-    options.drift === null ? Promise.resolve(null) : options.drift ?? driftIndex(root, tip),
-    rawsAsync(root, tip, options.snapshot),
-  ])
+  const indexes = options.history === undefined && options.drift === undefined
+    ? sourceIndexes(root, tip)
+    : Promise.all([
+      options.history === null ? Promise.resolve(null) : options.history ?? historyIndex(root, tip),
+      options.drift === null ? Promise.resolve(null) : options.drift ?? driftIndex(root, tip),
+    ])
+  const [[idx, didx], allRaws] = await Promise.all([indexes, rawsAsync(root, tip, options.snapshot)])
   const loaded = []
   for (const r of allRaws) {
     const h = idx ? rowsFor(idx, r.relPath) : []

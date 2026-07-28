@@ -1,7 +1,9 @@
 import { execFileSync, execFile, spawn } from 'node:child_process'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { readFileSync, readdirSync, statSync, existsSync, writeFileSync, mkdirSync, rmSync, renameSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, existsSync, writeFileSync, mkdirSync, rmSync, renameSync, openSync, closeSync } from 'node:fs'
 import { join, isAbsolute, resolve } from 'node:path'
+import { createHash, randomBytes } from 'node:crypto'
+import { projectRuntimeRoot } from './project-store.js'
 
 const US = '\x1f', RS = '\x1e'
 
@@ -340,8 +342,362 @@ export async function gitA(args: string[]): Promise<string> {
   }
 }
 
+type EventRecord = { hash: string; raw: string }
+type EventCache = { streams: Map<EventStreamKind, Map<string, EventRecord>>; streamTips: Map<EventStreamKind, string[]> }
+const EVENT_CACHE_SCHEMA = 'history-events-v7'
+const EVENT_STREAM_KINDS = ['numstat', 'merge', 'drift-numstat'] as const
+type EventStreamKind = typeof EVENT_STREAM_KINDS[number]
+type EventCacheLocation = { path: string; identity: string; objectFormat: GitObjectFormat }
+type EventLedgerSnapshot = {
+  payload: Buffer
+  state: EventCache
+}
+type EventStreamRequest = {
+  kind: EventStreamKind
+  argsFor: (base: string) => string[]
+  order: Map<string, number>
+  reachable: Set<string>
+}
+
+type EventPathMemo = EventCacheLocation & {
+  common: string; shallowPath: string; grafts: string; shallow: string; replacements: string
+}
+const eventPathMemo = new Map<string, EventPathMemo>()
+function eventCacheLocation(root: string): EventCacheLocation {
+  const rootId = rootKey(root), old = eventPathMemo.get(rootId)
+  const common = old?.common ?? git(['-C', root, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+  const shallowPath = old?.shallowPath ?? git(['-C', root, 'rev-parse', '--path-format=absolute', '--git-path', 'shallow']).trim()
+  const shallow = existsSync(shallowPath) ? readFileSync(shallowPath, 'utf8') : 'unshallow'
+  const graftsPath = join(common, 'info', 'grafts')
+  const grafts = existsSync(graftsPath) ? readFileSync(graftsPath, 'utf8') : ''
+  const replacements = git(['-C', root, 'for-each-ref', 'refs/replace', '--format=%(refname) %(objectname)'])
+  const objectFormat = gitObjectFormat(root)
+  if (old && old.shallow === shallow && old.grafts === grafts && old.replacements === replacements && old.objectFormat === objectFormat)
+    return { path: old.path, identity: old.identity, objectFormat }
+  const identity = createHash('sha256')
+    .update(`${EVENT_CACHE_SCHEMA}\0${objectFormat}\0${shallow}\0${grafts}\0${replacements}`)
+    .digest('hex').slice(0, 16)
+  // projectRuntimeRoot derives checkout identity from dirname(common). A bare repository is its own common
+  // dir, so a synthetic `.git` suffix preserves the repository path instead of collapsing sibling bares.
+  const gitDir = gitDirOf(root)
+  const storeIdentity = gitDir === root && common === root ? join(common, '.git') : common
+  const path = join(projectRuntimeRoot(storeIdentity), `${EVENT_CACHE_SCHEMA}-${identity}.ndjson`)
+  eventPathMemo.set(rootId, { common, shallowPath, grafts, shallow, replacements, path, identity, objectFormat })
+  return { path, identity, objectFormat }
+}
+function emptyEventCache(): EventCache {
+  return { streams: new Map(), streamTips: new Map() }
+}
+function exactKeys(value: Record<string, unknown>, expected: string[]): boolean {
+  const actual = Object.keys(value).sort()
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index])
+}
+function isGitObjectIdForFormat(format: GitObjectFormat, value: string): boolean {
+  return value.length === (format === 'sha256' ? 64 : 40) && /^[0-9a-f]+$/.test(value)
+}
+function eventPayloadDigest(payload: Buffer): string {
+  return createHash('sha256').update(payload).digest('hex')
+}
+function eventIntegrityFooter(payload: Buffer, addition: Buffer): Buffer {
+  const footer = {
+    k: 'integrity',
+    bytes: payload.length + addition.length,
+    sha256: createHash('sha256').update(payload).update(addition).digest('hex'),
+  }
+  return Buffer.from(`${JSON.stringify(footer)}\n`)
+}
+function eventStreamKind(value: unknown): EventStreamKind | null {
+  return typeof value === 'string' && (EVENT_STREAM_KINDS as readonly string[]).includes(value)
+    ? value as EventStreamKind
+    : null
+}
+function decodeEventPayload(payload: Buffer, location: EventCacheLocation): EventCache | null {
+  const state = emptyEventCache()
+  const text = payload.toString('utf8')
+  for (let start = 0; start < text.length;) {
+    const newline = text.indexOf('\n', start)
+    const end = newline < 0 ? text.length : newline
+    const line = text.slice(start, end)
+    start = end + 1
+    if (!line) continue
+    let value: unknown
+    try { value = JSON.parse(line) } catch { return null }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+    const row = value as Record<string, unknown>
+    if (exactKeys(row, ['k', 'tip'])) {
+      const kind = typeof row.k === 'string' && row.k.startsWith('tip:') ? eventStreamKind(row.k.slice(4)) : null
+      if (!kind || typeof row.tip !== 'string' || !isGitObjectIdForFormat(location.objectFormat, row.tip)) return null
+      const tips = state.streamTips.get(kind) ?? []
+      if (tips.includes(row.tip)) return null
+      tips.push(row.tip)
+      state.streamTips.set(kind, tips)
+      continue
+    }
+    const kind = eventStreamKind(row.k)
+    if (!exactKeys(row, ['h', 'k', 'r']) || !kind
+      || typeof row.h !== 'string' || !isGitObjectIdForFormat(location.objectFormat, row.h)
+      || typeof row.r !== 'string' || !row.r) return null
+    const rawHash = row.r.split(US, 1)[0].split('\n', 1)[0].trim()
+    if (rawHash !== row.h) return null
+    let stream = state.streams.get(kind)
+    if (!stream) { stream = new Map(); state.streams.set(kind, stream) }
+    if (stream.has(row.h)) return null
+    stream.set(row.h, { hash: row.h, raw: row.r })
+  }
+  return state
+}
+function loadEventLedger(location: EventCacheLocation): EventLedgerSnapshot {
+  let file: Buffer
+  try { file = readFileSync(location.path) }
+  catch (error: any) {
+    if (error?.code !== 'ENOENT') throw error
+    return { payload: Buffer.alloc(0), state: emptyEventCache() }
+  }
+  if (!file.length || file[file.length - 1] !== 0x0a)
+    return { payload: Buffer.alloc(0), state: emptyEventCache() }
+  const body = file.subarray(0, file.length - 1)
+  const footerBreak = body.lastIndexOf(0x0a)
+  const footerStart = footerBreak + 1
+  const payload = file.subarray(0, footerStart)
+  try {
+    const value = JSON.parse(body.subarray(footerStart).toString('utf8')) as unknown
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid integrity row')
+    const row = value as Record<string, unknown>
+    if (!exactKeys(row, ['bytes', 'k', 'sha256']) || row.k !== 'integrity' || row.bytes !== payload.length
+      || typeof row.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(row.sha256)
+      || row.sha256 !== eventPayloadDigest(payload)) throw new Error('invalid integrity row')
+    const state = decodeEventPayload(payload, location)
+    if (!state) throw new Error('invalid event row')
+    return { payload, state }
+  } catch {
+    return { payload: Buffer.alloc(0), state: emptyEventCache() }
+  }
+}
+
+type EventLockOwner = { pid: number; token: string }
+function readEventLockOwner(lock: string): EventLockOwner | null {
+  try {
+    const value = JSON.parse(readFileSync(join(lock, 'owner.json'), 'utf8')) as { pid?: unknown; token?: unknown }
+    return Number.isInteger(value.pid) && (value.pid as number) > 0 && typeof value.token === 'string'
+      ? { pid: value.pid as number, token: value.token }
+      : null
+  } catch { return null }
+}
+function processAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true }
+  catch (error: any) { return error?.code !== 'ESRCH' }
+}
+function retireLockPath(active: string): boolean {
+  const inert = `${active}.inert.${process.pid}.${randomBytes(8).toString('hex')}`
+  try { renameSync(active, inert) }
+  catch (error: any) {
+    if (error?.code === 'ENOENT') return false
+    throw error
+  }
+  try { rmSync(inert, { recursive: true, force: true }) } catch { /* no longer arbitrates ownership */ }
+  return true
+}
+function reclaimDeadEventLock(lock: string, held: EventLockOwner, claimant: EventLockOwner): boolean {
+  if (processAlive(held.pid)) return false
+  const reclaim = join(lock, 'reclaim')
+  if (existsSync(reclaim)) {
+    const reclaimer = readEventLockOwner(reclaim)
+    if (!reclaimer || processAlive(reclaimer.pid)) return false
+    retireLockPath(reclaim)
+  }
+  const prepared = join(lock, `reclaim-${claimant.pid}-${claimant.token}`)
+  try {
+    mkdirSync(prepared)
+    writeFileSync(join(prepared, 'owner.json'), JSON.stringify(claimant))
+    renameSync(prepared, reclaim)
+  } catch (error: any) {
+    rmSync(prepared, { recursive: true, force: true })
+    if (error?.code === 'EEXIST' || error?.code === 'ENOTEMPTY' || error?.code === 'ENOENT') return false
+    throw error
+  }
+  const current = readEventLockOwner(lock)
+  if (current?.pid !== held.pid || current.token !== held.token || processAlive(current.pid)) {
+    retireLockPath(reclaim)
+    return false
+  }
+  return retireLockPath(lock)
+}
+async function withEventCacheLock<T>(path: string, run: () => Promise<T> | T): Promise<T> {
+  const lock = `${path}.lock`
+  mkdirSync(join(path, '..'), { recursive: true })
+  const owner: EventLockOwner = { pid: process.pid, token: randomBytes(16).toString('hex') }
+  const attempts = Math.max(1, Math.ceil(GIT_TIMEOUT_MS / 5))
+  const signal = inheritedContext()?.signal
+  for (let attempt = 0; ; attempt++) {
+    if (signal?.aborted) throw gitAbortError()
+    const claimant = `${lock}.claim.${owner.pid}.${owner.token}`
+    try {
+      mkdirSync(claimant)
+      writeFileSync(join(claimant, 'owner.json'), JSON.stringify(owner))
+      renameSync(claimant, lock)
+      break
+    } catch (error: any) {
+      rmSync(claimant, { recursive: true, force: true })
+      if (error?.code !== 'EEXIST' && error?.code !== 'ENOTEMPTY') throw error
+      const held = readEventLockOwner(lock)
+      if (held && reclaimDeadEventLock(lock, held, owner)) continue
+      if (attempt >= attempts) {
+        const heldBy = readEventLockOwner(lock)?.pid
+        throw new Error(`timed out waiting for history event cache lock held by ${heldBy ? `pid ${heldBy}` : 'unknown owner'}: ${path}`)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+  }
+  try { return await run() } finally {
+    if (readEventLockOwner(lock)?.token === owner.token) retireLockPath(lock)
+  }
+}
+function removeEventTemps(path: string): void {
+  const dir = join(path, '..'), base = path.split('/').pop() ?? ''
+  try {
+    for (const name of readdirSync(dir)) if (name.startsWith(`${base}.`) && name.endsWith('.tmp'))
+      rmSync(join(dir, name), { force: true })
+  } catch { /* the writer creates the directory immediately below */ }
+}
+function replaceEventLedger(path: string, payload: Buffer, additions: string[]): void {
+  const addition = Buffer.from(additions.join(''))
+  const tmp = `${path}.${process.pid}.${randomBytes(8).toString('hex')}.tmp`
+  let fd: number | null = null
+  try {
+    fd = openSync(tmp, 'wx', 0o600)
+    writeFileSync(fd, payload)
+    writeFileSync(fd, addition)
+    writeFileSync(fd, eventIntegrityFooter(payload, addition))
+    const written = fd; fd = null; closeSync(written)
+    renameSync(tmp, path)
+  } catch (error) {
+    if (fd !== null) closeSync(fd)
+    rmSync(tmp, { force: true })
+    throw error
+  }
+}
+function renderEventStream(state: EventCache, request: EventStreamRequest): string {
+  const stream = state.streams.get(request.kind) ?? new Map<string, EventRecord>()
+  return [...stream.values()].filter((record) => request.reachable.has(record.hash)).sort((a, b) => {
+    if (request.kind === 'numstat') {
+      const ad = Date.parse(a.raw.split(US)[1] ?? ''), bd = Date.parse(b.raw.split(US)[1] ?? '')
+      if (Number.isFinite(ad) && Number.isFinite(bd) && ad !== bd) return bd - ad
+    }
+    return (request.order.get(a.hash) ?? Number.MAX_SAFE_INTEGER) - (request.order.get(b.hash) ?? Number.MAX_SAFE_INTEGER)
+  }).map((record) => RS + record.raw).join('')
+}
+function appendEventRecord(state: EventCache, kind: EventStreamKind, record: EventRecord, additions: string[]): void {
+  let stream = state.streams.get(kind)
+  if (!stream) { stream = new Map(); state.streams.set(kind, stream) }
+  if (stream.has(record.hash)) return
+  stream.set(record.hash, record)
+  additions.push(JSON.stringify({ k: kind, h: record.hash, r: record.raw }) + '\n')
+}
+function appendEventTip(state: EventCache, kind: EventStreamKind, tip: string, additions: string[]): void {
+  const tips = state.streamTips.get(kind) ?? []
+  if (tips.includes(tip)) return
+  tips.push(tip)
+  state.streamTips.set(kind, tips)
+  additions.push(JSON.stringify({ k: `tip:${kind}`, tip }) + '\n')
+}
+function parseEventRecords(out: string, kind: EventStreamKind, location: EventCacheLocation): EventRecord[] {
+  const records: EventRecord[] = []
+  for (const rec of out.split(RS)) {
+    const raw = rec.replace(/^\n/, '')
+    if (!raw) continue
+    const hash = raw.split(US, 1)[0].split('\n', 1)[0].trim()
+    if (!isGitObjectIdForFormat(location.objectFormat, hash))
+      throw new Error(`history event stream '${kind}' returned malformed object id '${hash || 'empty'}'`)
+    records.push({ hash, raw })
+  }
+  return records
+}
+function indexEventRequests(
+  root: string,
+  tip: string,
+  order: Map<string, number>,
+  reachable: Set<string>,
+): Record<EventStreamKind, EventStreamRequest> {
+  return {
+    numstat: {
+      kind: 'numstat', order, reachable,
+      argsFor: (base) => ['-C', root, '-c', 'core.quotePath=false',
+        'log', '--full-history', '--date-order', '--no-diff-merges', '-M', '--numstat',
+        `--format=${RS}%H${US}%aI${US}%s${US}%b`, ...(base ? [`^${base}`] : []), tip, '--', '.spec'],
+    },
+    'drift-numstat': {
+      kind: 'drift-numstat', order, reachable,
+      argsFor: (base) => ['-C', root, '-c', 'core.quotePath=false',
+        'log', '--full-history', '--date-order', '--no-diff-merges', '-M', '--numstat',
+        `--format=${RS}%H${US}%P${US}%T${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`,
+        ...(base ? [`^${base}`] : []), tip],
+    },
+    merge: {
+      kind: 'merge', order, reachable,
+      argsFor: (base) => ['-C', root, '-c', 'core.quotePath=false',
+        'log', '--merges', '--raw', '--patch', '--cc', '--combined-all-paths', '--unified=0', '--no-color', '--no-ext-diff', '-M',
+        `--format=${RS}%H`, ...(base ? [`^${base}`] : []), tip],
+    },
+  }
+}
+
 async function strictEventGit(args: string[]): Promise<string> {
   return gitRequiredA(args, 'cannot derive history events')
+}
+async function deriveEventStreams(
+  root: string,
+  tip: string,
+  requests: EventStreamRequest[],
+  persist = true,
+  cache = true,
+): Promise<Map<EventStreamKind, string>> {
+  if (!cache) {
+    const outputs = await Promise.all(requests.map((request) => strictEventGit(request.argsFor(''))))
+    return new Map(requests.map((request, index) => [request.kind, outputs[index]]))
+  }
+  if (new Set(requests.map((request) => request.kind)).size !== requests.length)
+    throw new Error('one event-ledger transaction cannot request the same stream twice')
+
+  const run = async (location: EventCacheLocation): Promise<Map<EventStreamKind, string> | null> => {
+    const snapshot = loadEventLedger(location)
+    const missing = requests.filter((request) => !(snapshot.state.streamTips.get(request.kind) ?? []).includes(tip))
+    const outputs = await Promise.all(missing.map((request) => {
+      const base = [...(snapshot.state.streamTips.get(request.kind) ?? [])].reverse()
+        .find((candidate) => request.reachable.has(candidate)) ?? ''
+      return strictEventGit(request.argsFor(base))
+    }))
+    if (eventCacheLocation(root).identity !== location.identity) return null
+
+    const additions: string[] = []
+    for (let index = 0; index < missing.length; index++) {
+      const request = missing[index]
+      for (const record of parseEventRecords(outputs[index], request.kind, location))
+        appendEventRecord(snapshot.state, request.kind, record, additions)
+      if (persist) appendEventTip(snapshot.state, request.kind, tip, additions)
+    }
+    if (persist && additions.length) {
+      removeEventTemps(location.path)
+      mkdirSync(join(location.path, '..'), { recursive: true })
+      replaceEventLedger(location.path, snapshot.payload, additions)
+    }
+    return new Map(requests.map((request) => [request.kind, renderEventStream(snapshot.state, request)]))
+  }
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const location = eventCacheLocation(root)
+    const result = persist ? await withEventCacheLock(location.path, () => run(location)) : await run(location)
+    if (result) return result
+  }
+  throw new Error(`history event cache identity changed repeatedly while deriving ${tip}`)
+}
+async function eventStream(
+  root: string,
+  tip: string,
+  request: EventStreamRequest,
+  persist = true,
+  cache = true,
+): Promise<string> {
+  return (await deriveEventStreams(root, tip, [request], persist, cache)).get(request.kind) ?? ''
 }
 export type GitTryFailure = 'exit' | 'spawn' | 'timeout'
 export async function gitTry(args: string[], options: { indexFile?: string } = {}): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
@@ -499,33 +855,7 @@ const INDEX_ROOT_SLOTS = Math.max(4, Number(process.env.SPEXCODE_INDEX_CACHE_ROO
 
 function rootKey(root: string): string { return resolve(root) }
 
-function gitInterpretationKey(root: string): string {
-  const common = commonDirOf(gitDirOf(root))
-  const shallowPath = join(common, 'shallow')
-  const shallow = existsSync(shallowPath) ? readFileSync(shallowPath, 'utf8') : 'unshallow'
-  const graftsPath = join(common, 'info', 'grafts')
-  const grafts = existsSync(graftsPath) ? readFileSync(graftsPath, 'utf8') : ''
-  const replacements: string[] = []
-  const packedRefs = join(common, 'packed-refs')
-  if (existsSync(packedRefs)) {
-    for (const line of readFileSync(packedRefs, 'utf8').split('\n')) {
-      if (line.includes(' refs/replace/')) replacements.push(line)
-    }
-  }
-  const replaceRoot = join(common, 'refs', 'replace')
-  if (existsSync(replaceRoot)) {
-    const pending = [replaceRoot]
-    while (pending.length) {
-      const dir = pending.pop()!
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const path = join(dir, entry.name)
-        if (entry.isDirectory()) pending.push(path)
-        else replacements.push(`${path.slice(replaceRoot.length + 1)} ${readFileSync(path, 'utf8').trim()}`)
-      }
-    }
-  }
-  return `${gitObjectFormat(root)}\0${shallow}\0${grafts}\0${replacements.sort().join('\n')}`
-}
+function gitInterpretationKey(root: string): string { return eventCacheLocation(root).identity }
 
 // HEAD plus Git's object-interpretation state identifies the immutable index contents; the root owns which
 // view is still useful. Moving a checkout or changing replace/shallow/graft state drops its old history,
@@ -586,18 +916,18 @@ export function historyIndex(root: string, tip = 'HEAD'): Promise<HistoryIndex> 
       if (parent) {
         const head = headOrEmpty(root)
         if (head === parent) return historyIndex(root)
-        return buildIndex(root, parent)
+        return buildIndex(root, parent, true, true)
       }
     }
-    return buildIndex(root, resolved)
+    return buildIndex(root, resolved, true, true)
   }
   const head = headOrEmpty(root)
-  if (!head) return buildIndex(root, 'HEAD')
+  if (!head) return buildIndex(root, 'HEAD', false, true)
   const cacheKey = `${rootKey(root)}\0${head}\0${gitInterpretationKey(root)}`
   touchRoot(indexRoots, indexCache, root, cacheKey)
   const hit = indexCache.get(cacheKey)
   if (hit) return hit
-  const p = buildIndex(root, head.startsWith('unborn:') ? 'HEAD' : head)
+  const p = buildIndex(root, head.startsWith('unborn:') ? 'HEAD' : head, false, true)
   p.catch(() => { dropFailed(indexCache, cacheKey, p) })   // don't pin a failed build
   indexCache.set(cacheKey, p)
   return p
@@ -671,19 +1001,29 @@ function canonicalPathProjector(
   }
 }
 
-async function buildIndex(root: string, tip: string): Promise<HistoryIndex> {
+type SharedIndexInputs = {
+  allPathsOut: string
+  topologyOut: string
+  historyOut: string
+  driftOut: string
+  mergeIndex: MergeHistoryEvents
+}
+
+async function buildIndex(root: string, tip: string, transient: boolean, useCache = true, shared?: SharedIndexInputs): Promise<HistoryIndex> {
   const versions = new Map<string, Version[]>()
   const stats = new Map<string, Map<string, DiffStat>>()
   const mergeVersions = new Set<string>()
   const commitVersions = new Map<string, Version>()
   const commitOrder = new Map<string, number>()
-  const [tipPathsOut, topologyOut] = await Promise.all([
-    strictEventGit(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', '--name-only', tip, '--', '.spec']),
-    strictEventGit(['-C', root, 'rev-list', '--parents', tip]),
-  ])
+  const [tipPathsOut, topologyOut] = shared
+    ? [shared.allPathsOut, shared.topologyOut]
+    : await Promise.all([
+      strictEventGit(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', '--name-only', tip, '--', '.spec']),
+      strictEventGit(['-C', root, 'rev-list', '--parents', tip]),
+    ])
   const rawVersions = new Map<string, Version[]>()
   const rawStats = new Map<string, Map<string, DiffStat>>()
-  const currentPaths = new Set(tipPathsOut.split('\0').filter(Boolean))
+  const currentPaths = new Set(tipPathsOut.split('\0').filter((path) => path.startsWith('.spec/')))
   const renamesByFrom = new Map<string, { hash: string; to: string }[]>()
   const topologyOrd = new Map<string, number>(), topologyParents = new Map<string, string[]>()
   let topologyPosition = 0
@@ -694,9 +1034,8 @@ async function buildIndex(root: string, tip: string): Promise<HistoryIndex> {
     topologyParents.set(hash, parents)
   }
   const topologyReachable = new Set(topologyOrd.keys())
-  const out = await strictEventGit(['-C', root, '-c', 'core.quotePath=false',
-    'log', '--full-history', '--date-order', '--no-diff-merges', '-M', '--numstat',
-    `--format=${RS}%H${US}%aI${US}%s${US}%b`, tip, '--', '.spec'])
+  const out = shared?.historyOut ?? await eventStream(root, tip,
+    indexEventRequests(root, tip, topologyOrd, topologyReachable).numstat, !transient, useCache)
   if (!out) return { versions, stats, mergeVersions }
   let commitPosition = 0
   for (const rec of out.split(RS)) {
@@ -784,7 +1123,8 @@ async function buildIndex(root: string, tip: string): Promise<HistoryIndex> {
     for (const hash of commitVersions.keys()) if (!ordered.includes(hash)) ordered.push(hash)
   commitOrder.clear(); ordered.forEach((hash, i) => commitOrder.set(hash, i))
 
-  const mergeIndex = await mergeHistoryEvents(root, tip)
+  const mergeIndex = shared?.mergeIndex
+    ?? await mergeHistoryEvents(root, tip, transient, topologyOrd, topologyReachable, useCache)
   for (const rename of mergeIndex.renames) {
     const renames = renamesByFrom.get(rename.from) ?? []
     renames.push({ hash: rename.hash, to: rename.to })
@@ -1002,22 +1342,33 @@ function parseMergeHistoryEvents(out: string): MergeHistoryEvents {
   return { resolutions, renames }
 }
 
-async function mergeHistoryEvents(root: string, tip: string): Promise<MergeHistoryEvents> {
-  return parseMergeHistoryEvents(await strictEventGit(['-C', root, '-c', 'core.quotePath=false',
+async function mergeHistoryEvents(
+  root: string,
+  tip: string,
+  transient: boolean,
+  order: Map<string, number>,
+  reachable: Set<string>,
+  useCache = true,
+): Promise<MergeHistoryEvents> {
+  if (!useCache) return parseMergeHistoryEvents(await strictEventGit(['-C', root, '-c', 'core.quotePath=false',
     'log', '--merges', '--raw', '--patch', '--cc', '--combined-all-paths', '--unified=0', '--no-color', '--no-ext-diff', '-M', `--format=${RS}%H`, tip]))
+  return parseMergeHistoryEvents(await eventStream(root, tip,
+    indexEventRequests(root, tip, order, reachable).merge, !transient, useCache))
 }
 
-async function buildDriftIndex(root: string, tip: string): Promise<DriftIndex> {
+async function buildDriftIndex(root: string, tip: string, transient: boolean, useCache = true, shared?: SharedIndexInputs): Promise<DriftIndex> {
   const ord = new Map<string, number>(), parents = new Map<string, string[]>()
   const fileEvents = new Map<string, DriftPathEvent[]>()
   const lineageEvents = new Map<string, DriftPathEvent[]>()
   const acks = new Map<string, Set<string>>(), selfAcks = new Map<string, Set<string>>(), specNodes = new Map<string, Set<string>>()
   const ackCandidates = new Map<string, Set<string>>(), trees = new Map<string, string>()
   const idx: DriftIndex = { tip, ord, parents, fileEvents, lineageEvents, lineageKeys: (path) => [path], resolutionEvents: new Map(), acks, selfAcks, specNodes, anc: new Map() }
-  const [tipPathsOut, topology] = await Promise.all([
-    strictEventGit(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', '--name-only', tip]),
-    strictEventGit(['-C', root, 'rev-list', '--parents', tip]),
-  ])
+  const [tipPathsOut, topology] = shared
+    ? [shared.allPathsOut, shared.topologyOut]
+    : await Promise.all([
+      strictEventGit(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', '--name-only', tip]),
+      strictEventGit(['-C', root, 'rev-list', '--parents', tip]),
+    ])
   const currentPaths = new Set(tipPathsOut.split('\0').filter(Boolean))
   const topologyOrder = new Map<string, number>(), topologyParents = new Map<string, string[]>(), topologyReachable = new Set<string>()
   let topologyPosition = 0
@@ -1031,10 +1382,8 @@ async function buildDriftIndex(root: string, tip: string): Promise<DriftIndex> {
   }
   // Numstat is the immutable identity event: unlike a name-only stream it records both sides of a rename,
   // allowing the same event-scoped projection used by spec history to follow forks and reject path reuse.
-  const out = await strictEventGit(['-C', root, '-c', 'core.quotePath=false',
-    'log', '--full-history', '--date-order', '--no-diff-merges', '-M', '--numstat',
-    `--format=${RS}%H${US}%P${US}%T${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`,
-    tip])
+  const out = shared?.driftOut ?? await eventStream(root, tip,
+    indexEventRequests(root, tip, topologyOrder, topologyReachable)['drift-numstat'], !transient, useCache)
   if (!out) return idx
   const rawFileEvents = new Map<string, DriftPathEvent[]>()
   const renamesByFrom = new Map<string, RenameProjectionEvent[]>()
@@ -1074,7 +1423,8 @@ async function buildDriftIndex(root: string, tip: string): Promise<DriftIndex> {
       }
     }
   }
-  const mergeIndex = await mergeHistoryEvents(root, tip)
+  const mergeIndex = shared?.mergeIndex
+    ?? await mergeHistoryEvents(root, tip, transient, topologyOrder, topologyReachable, useCache)
   for (const rename of mergeIndex.renames) {
     const renames = renamesByFrom.get(rename.from) ?? []
     renames.push({ hash: rename.hash, to: rename.to })
@@ -1140,21 +1490,95 @@ export function driftIndex(root: string, tip = 'HEAD'): Promise<DriftIndex> {
       if (parent) {
         const head = headOrEmpty(root)
         if (head === parent) return driftIndex(root)
-        return buildDriftIndex(root, parent)
+        return buildDriftIndex(root, parent, true, true)
       }
     }
-    return buildDriftIndex(root, resolved)
+    return buildDriftIndex(root, resolved, true, true)
   }
   const head = headOrEmpty(root) // filesystem HEAD, no subprocess — see historyIndex
-  if (!head) return buildDriftIndex(root, 'HEAD')
+  if (!head) return buildDriftIndex(root, 'HEAD', false, true)
   const cacheKey = `${rootKey(root)}\0${head}\0${gitInterpretationKey(root)}`
   touchRoot(driftRoots, driftIdxCache, root, cacheKey)
   const hit = driftIdxCache.get(cacheKey)
   if (hit) return hit
-  const p = buildDriftIndex(root, head.startsWith('unborn:') ? 'HEAD' : head)
+  const p = buildDriftIndex(root, head.startsWith('unborn:') ? 'HEAD' : head, false, true)
   p.catch(() => { dropFailed(driftIdxCache, cacheKey, p) })
   driftIdxCache.set(cacheKey, p)
   return p
+}
+
+function topologyProjection(out: string): { order: Map<string, number>; reachable: Set<string> } {
+  const order = new Map<string, number>(), reachable = new Set<string>()
+  let position = 0
+  for (const line of out.trim().split('\n')) {
+    const hash = line.split(' ', 1)[0]
+    if (!hash) continue
+    order.set(hash, position++)
+    reachable.add(hash)
+  }
+  return { order, reachable }
+}
+
+async function buildIndexPair(root: string, tip: string, transient: boolean, useCache = true): Promise<[HistoryIndex, DriftIndex]> {
+  const [allPathsOut, topologyOut] = await Promise.all([
+    strictEventGit(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', '--name-only', tip]),
+    strictEventGit(['-C', root, 'rev-list', '--parents', tip]),
+  ])
+  const topology = topologyProjection(topologyOut)
+  const requests = indexEventRequests(root, tip, topology.order, topology.reachable)
+  const streams = await deriveEventStreams(root, tip, EVENT_STREAM_KINDS.map((kind) => requests[kind]), !transient, useCache)
+  const shared: SharedIndexInputs = {
+    allPathsOut,
+    topologyOut,
+    historyOut: streams.get('numstat') ?? '',
+    driftOut: streams.get('drift-numstat') ?? '',
+    mergeIndex: parseMergeHistoryEvents(streams.get('merge') ?? ''),
+  }
+  streams.clear()
+  return Promise.all([
+    buildIndex(root, tip, transient, useCache, shared),
+    buildDriftIndex(root, tip, transient, useCache, shared),
+  ])
+}
+
+// Standing correctness oracle: same projection, but every immutable stream comes from Git root history.
+export function sourceIndexesFull(root: string, tip = 'HEAD'): Promise<[HistoryIndex, DriftIndex]> {
+  const head = tip === 'HEAD' ? headOrEmpty(root) : ''
+  const resolved = tip === 'HEAD'
+    ? (!head || head.startsWith('unborn:') ? 'HEAD' : head)
+    : git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
+  return buildIndexPair(root, resolved, true, false)
+}
+
+// History and drift are one product projection. Building them together is what gives one lint one ledger
+// transaction; the public single-index functions remain for consumers that genuinely need only one side.
+export function sourceIndexes(root: string, tip = 'HEAD'): Promise<[HistoryIndex, DriftIndex]> {
+  if (tip !== 'HEAD') {
+    const resolved = git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
+    if (pendingOnlyIssues(root, resolved)) {
+      const parent = pendingParent(root, resolved)
+      if (parent) return headOrEmpty(root) === parent
+        ? sourceIndexes(root)
+        : buildIndexPair(root, parent, true, true)
+    }
+    return buildIndexPair(root, resolved, true, true)
+  }
+  const head = headOrEmpty(root)
+  if (!head) return buildIndexPair(root, 'HEAD', false, true)
+  const cacheKey = `${rootKey(root)}\0${head}\0${gitInterpretationKey(root)}`
+  touchRoot(indexRoots, indexCache, root, cacheKey)
+  touchRoot(driftRoots, driftIdxCache, root, cacheKey)
+  const historyHit = indexCache.get(cacheKey), driftHit = driftIdxCache.get(cacheKey)
+  if (historyHit && driftHit) return Promise.all([historyHit, driftHit])
+
+  const pair = buildIndexPair(root, head.startsWith('unborn:') ? 'HEAD' : head, false, true)
+  const historyPromise = pair.then(([history]) => history)
+  const driftPromise = pair.then(([, drift]) => drift)
+  historyPromise.catch(() => { dropFailed(indexCache, cacheKey, historyPromise) })
+  driftPromise.catch(() => { dropFailed(driftIdxCache, cacheKey, driftPromise) })
+  indexCache.set(cacheKey, historyPromise)
+  driftIdxCache.set(cacheKey, driftPromise)
+  return pair
 }
 
 export function historyCacheStats(): { historyHeads: number; driftHeads: number; historyRoots: number; driftRoots: number } {
@@ -1163,8 +1587,10 @@ export function historyCacheStats(): { historyHeads: number; driftHeads: number;
 // Tests deliberately clear process-local promises and path identity to exercise both cold and read-back paths.
 // Production callers retain the bounded index caches; this is not a correctness escape hatch.
 export function resetHistoryCachesForTests(): void {
-  indexCache.clear(); driftIdxCache.clear(); indexRoots.clear(); driftRoots.clear(); gitObjectFormatMemo.clear()
+  indexCache.clear(); driftIdxCache.clear(); indexRoots.clear(); driftRoots.clear()
+  eventPathMemo.clear(); gitObjectFormatMemo.clear()
 }
+export function historyEventCachePathForTests(root: string): string { return eventCacheLocation(root).path }
 // the reachability set of `sha` — itself plus every ancestor — as a bitset over the walk's dense ids.
 // Built once per queried sha by following parent edges in memory (no git fork), memoized on the index;
 // a bitset costs history-length BITS, so hundreds of cached shas stay cheap on the board hot path.

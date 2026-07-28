@@ -72,6 +72,10 @@ boundaries. If the shared generation changes after the archive request, commit s
 `thread/unarchive` is sent to the replacement generation; recovery remains explicit rather than borrowing new
 authority from a process that was never proved by the original preflight. On an unchanged generation, compensation
 restores only members that were active before this attempt; an already-archived descendant is never unarchived.
+The same opaque preflight receipt remains available until the session record and final offline proof are committed.
+If native cold teardown succeeds but record lookup, final liveness, or filing then fails, outer compensation returns
+that exact receipt to the adapter so the complete originally-active subtree is restored on the same generation.
+Ordinary later resume carries no receipt and restores only the parent conversation.
 
 **It is the attention verb backed by the resource stop.** This is the line that must not blur:
 

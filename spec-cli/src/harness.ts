@@ -287,7 +287,7 @@ export interface Harness {
   // Optional cold-storage proof/cleanup. A harness with a per-session loaded reference must remove exactly that
   // reference or return a loud reason; adapters without such a resident reference return {ok:true}.
   coldRuntime?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }, receipt?: unknown): Promise<{ ok: true } | { ok: false; reason: string }>
-  restoreRuntime?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): Promise<{ ok: true } | { ok: false; reason: string }>
+  restoreRuntime?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }, receipt?: unknown): Promise<{ ok: true } | { ok: false; reason: string }>
   // Project-scoped runtimes are adapter facts. Resource governance consumes these descriptors to report
   // references and protect a sibling-owned control plane without learning harness command names.
   sharedRuntimes?(runtimeDir: string): readonly SharedRuntimeDescriptor[]
@@ -1221,6 +1221,40 @@ async function codexMutationGuard(
   }
 }
 
+async function codexRestoreColdPlan(plan: CodexColdPlan, dir = runtimeRoot()): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (codexRuntimeGeneration(dir) !== plan.generation)
+    return { ok: false, reason: 'shared Codex app-server generation changed, so no compensation was attempted' }
+  const sock = codexAppServerSock(dir)
+  const [activeBefore, archivedBefore] = await Promise.all([
+    codexThreadList(sock, { archived: false, sourceKinds: [] }),
+    codexThreadList(sock, { archived: true, sourceKinds: [] }),
+  ])
+  if (!activeBefore.ok || !archivedBefore.ok)
+    return { ok: false, reason: 'archive state is unknown and could not be reconciled' }
+  if (codexRuntimeGeneration(dir) !== plan.generation)
+    return { ok: false, reason: 'shared Codex app-server generation changed, so no compensation was attempted' }
+  const activeSet = new Set(activeBefore.ids)
+  const archivedSet = new Set(archivedBefore.ids)
+  if (plan.archivedIds.some((id) => !archivedSet.has(id) || activeSet.has(id)))
+    return { ok: false, reason: 'an originally-archived Codex subtree member changed collection; compensation was not authorized' }
+  if (plan.activeIds.some((id) => activeSet.has(id) === archivedSet.has(id)))
+    return { ok: false, reason: 'an originally-active Codex subtree member has ambiguous collection state' }
+  const fence = { dir, generation: plan.generation }
+  const restoreIds = [...plan.activeIds].reverse().filter((id) => archivedSet.has(id))
+  for (const id of restoreIds) {
+    const restored = await codexThreadMutation(sock, 'thread/unarchive', id, fence)
+    if (!restored.ok) return { ok: false, reason: `compensation failed for ${id}: ${restored.error}` }
+  }
+  const [activeAfter, archivedAfter] = await Promise.all([
+    codexThreadList(sock, { archived: false, sourceKinds: [] }),
+    codexThreadList(sock, { archived: true, sourceKinds: [] }),
+  ])
+  const restored = activeAfter.ok && archivedAfter.ok && codexRuntimeGeneration(dir) === plan.generation &&
+    plan.activeIds.every((id) => activeAfter.ids.includes(id) && !archivedAfter.ids.includes(id)) &&
+    plan.archivedIds.every((id) => archivedAfter.ids.includes(id) && !activeAfter.ids.includes(id))
+  return restored ? { ok: true } : { ok: false, reason: 'compensation failed or archive state is unknown' }
+}
+
 // Read a loaded thread id off the app-server via `thread/loaded/list`. With the backend now OWNING the thread
 // id at launch (codexStartThread → stored on the record), this is only the DELIVERY FALLBACK for a pre-existing
 // session whose id was never stored: it returns the first loaded thread. On a shared per-project server several
@@ -2106,29 +2140,8 @@ export const codexHarness: Harness = {
     const fence = { dir, generation: plan.generation }
 
     const compensate = async (reason: string): Promise<{ ok: false; reason: string }> => {
-      if (codexRuntimeGeneration(dir) !== plan.generation)
-        return { ok: false, reason: `${reason}; shared Codex app-server generation changed, so no compensation was attempted` }
-      const [activeBefore, archivedBefore] = await Promise.all([
-        codexThreadList(sock, { archived: false, sourceKinds: [] }),
-        codexThreadList(sock, { archived: true, sourceKinds: [] }),
-      ])
-      if (!activeBefore.ok || !archivedBefore.ok)
-        return { ok: false, reason: `${reason}; archive state is unknown and could not be reconciled` }
-      const activeSet = new Set(activeBefore.ids)
-      const archivedSet = new Set(archivedBefore.ids)
-      const restoreIds = [...plan.activeIds].reverse().filter((id) => archivedSet.has(id) && !activeSet.has(id))
-      for (const id of restoreIds) {
-        const restored = await codexThreadMutation(sock, 'thread/unarchive', id, fence)
-        if (!restored.ok) return { ok: false, reason: `${reason}; compensation failed for ${id}: ${restored.error}` }
-      }
-      const [activeAfter, archivedAfter] = await Promise.all([
-        codexThreadList(sock, { archived: false, sourceKinds: [] }),
-        codexThreadList(sock, { archived: true, sourceKinds: [] }),
-      ])
-      const restored = activeAfter.ok && archivedAfter.ok &&
-        plan.activeIds.every((id) => activeAfter.ids.includes(id) && !archivedAfter.ids.includes(id)) &&
-        plan.archivedIds.every((id) => archivedAfter.ids.includes(id) && !activeAfter.ids.includes(id))
-      return { ok: false, reason: restored ? reason : `${reason}; compensation failed or archive state is unknown` }
+      const restored = await codexRestoreColdPlan(plan, dir)
+      return { ok: false, reason: restored.ok ? reason : `${reason}; ${restored.reason}` }
     }
 
     const coldCheck = async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
@@ -2159,8 +2172,13 @@ export const codexHarness: Harness = {
     if (verified.ok) return verified
     return compensate(verified.reason)
   },
-  restoreRuntime: async (rec) => {
+  restoreRuntime: async (rec, suppliedReceipt) => {
     if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
+    if (suppliedReceipt !== undefined) {
+      if (!isCodexColdPlan(suppliedReceipt) || suppliedReceipt.threadId !== rec.harnessSessionId)
+        return { ok: false, reason: 'Codex cold compensation receipt is invalid or names a different target' }
+      return codexRestoreColdPlan(suppliedReceipt)
+    }
     const sock = codexAppServerSock(runtimeRoot())
     const reconcile = async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
       const [active, archived] = await Promise.all([

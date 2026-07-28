@@ -135,3 +135,7 @@ their teardown owner and references; a session stop never stands in for that own
 `pgrep`, command-regex signal, port-based signal, automatic close, or branch/worktree deletion in this mechanism.
 An unreadable session record proves no adapter or leaf owner, so stop and destructive close fail before signal;
 close may quarantine the corrupt control-plane bytes but preserves and reports every runtime/worktree/branch residue.
+Archive is the one narrower consumer of this stop seam: after its adapter cold preflight has frozen a uniquely-owned
+native subtree, the generic guard retains every shared-root identity and target-turn hard gate but does not reject
+that known descendant set a second time. The adapter's generation-fenced cold commit owns unloading that exact
+subtree. Ordinary stop, close, and every archive whose preflight did not establish that plan still reject descendants.

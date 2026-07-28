@@ -2437,10 +2437,11 @@ async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIde
   return { pid, startToken, ownerNeedle }
 }
 
-async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = false): Promise<void> {
+async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = false, coldReceipt?: unknown): Promise<void> {
   // The caller resolves one readable owner before entering this seam. An absent/corrupt record never reaches
   // tmux, signals, or adapter cleanup: a bare session id is an address, not ownership authority.
-  const assertOwned = () => assertSessionStopSafe(id, rec ? { ...rec, harness: rec.harness } : null)
+  const assertOwned = () => assertSessionStopSafe(id, rec ? { ...rec, harness: rec.harness } : null,
+    { ...(requireCold && coldReceipt !== undefined ? { coldReceipt } : {}) })
   await assertOwned()
   if (!rec) throw new ResourceConflict(`refusing to stop ${id}: no readable session owner`)
   const harness = harnessById(rec.harness || defaultHarness.id)
@@ -2453,7 +2454,7 @@ async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = f
   launchedAt.delete(id)
   await harness.cleanupRuntime(rec)
   if (requireCold) {
-    const cold = await harness.coldRuntime?.(rec)
+    const cold = await harness.coldRuntime?.(rec, coldReceipt)
     if (cold && !cold.ok) throw new ResourceConflict(`refusing to archive ${id}: ${cold.reason}`)
   }
 }
@@ -2521,7 +2522,7 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
       if (rootAbsent) return true
       const pre = await h.coldPreflight?.({ ...wt.rec, archived: false, stopped: true })
       if (!pre || pre.ok) {
-        const cold = await h.coldRuntime?.({ ...wt.rec, archived: false, stopped: true })
+        const cold = await h.coldRuntime?.({ ...wt.rec, archived: false, stopped: true }, pre?.ok ? pre.receipt : undefined)
         if (!cold || cold.ok) return true
       }
     }
@@ -2541,8 +2542,8 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
     : liveness({ ...wt.rec, archived: false, stopped: false }, snap)
   if (lv === 'unknown' || lv === 'starting')
     throw new ResourceConflict(`refusing to archive ${id}: session liveness is ${lv}; exact leaf ownership is unproven`)
-  // The adapter guard runs BEFORE any tmux/process signal. Active/unknown Codex turns and owned descendants
-  // refuse here, leaving the leaf/shared root/record untouched; coldRuntime is the commit cleanup after this.
+  // The adapter guard runs BEFORE any tmux/process signal. Active/unknown native turns and ambiguous descendant
+  // ownership refuse here; a verified adapter receipt carries an exact subtree through to coldRuntime's commit.
   const preflight = await h.coldPreflight?.({ ...wt.rec, archived: false, stopped: lv === 'offline' })
   if (preflight && !preflight.ok) throw new ResourceConflict(`refusing to archive ${id}: ${preflight.reason}`)
   // Even a proven-offline leaf can leave a stale rendezvous/socket or adapter artifact. Reuse the same exact
@@ -2552,7 +2553,8 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
   let coldAttempted = false
   try {
     coldAttempted = true
-    await stopAgentProcess(id, { ...wt.rec, archived: false, stopped: lv === 'offline' }, true)
+    await stopAgentProcess(id, { ...wt.rec, archived: false, stopped: lv === 'offline' }, true,
+      preflight?.ok ? preflight.receipt : undefined)
     coldCommitted = true
     const latest = readRecord(id)
     if (!latest) throw new ResourceConflict(`refusing to archive ${id}: session record disappeared before filing`)

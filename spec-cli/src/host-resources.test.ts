@@ -93,13 +93,14 @@ test('session stop guard reads only the exact governed target and fails closed o
   let activeDescendantCensuses = 0
   let archivedDescendantCensuses = 0
   let fullSiblingReads = 0
+  const coldReceipt = { fixture: 'adapter-owned-cold-receipt' }
   const descriptor = {
     key: 'codex-app-server',
     label: 'Codex app-server',
     pidFile,
     isolationFile,
     residency: async () => ({ healthy: true, referenceIds: [targetThread, 'slow-unrelated-sibling'] }),
-    mutationGuard: async (threadId: string | null) => {
+    mutationGuard: async (threadId: string | null, opts?: { coldReceipt?: unknown }) => {
       assert.equal(threadId, targetThread)
       loadedIdCensuses++
       exactTargetReads++
@@ -110,6 +111,7 @@ test('session stop guard reads only the exact governed target and fails closed o
         referenceIds: [targetThread, 'slow-unrelated-sibling'],
         targetTurnPresence: mode === 'active' ? 'active' : mode === 'unknown' ? 'unknown' : 'idle',
         descendantIds: mode === 'descendant' ? ['owned-native-child'] : [],
+        coldTeardownAuthorized: mode === 'descendant' && opts?.coldReceipt === coldReceipt,
         ...(mode === 'unknown' ? { error: 'exact target turn state is unknown' } : {}),
       }
     },
@@ -161,6 +163,14 @@ test('session stop guard reads only the exact governed target and fails closed o
       await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }), reason)
       assert.equal(processStartToken(identity.pid), identity.startToken, `${next} refusal sends no signal to the shared root`)
       assert.equal(processStartToken(targetLeaf.pid!), targetLeafStart, `${next} refusal sends no signal to the target leaf`)
+    }
+    mode = 'descendant'
+    await assert.doesNotReject(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }, { coldReceipt }),
+      'archive may pass an already-proven exact descendant collection to the adapter cold commit')
+    for (const next of ['unknown', 'active'] as const) {
+      mode = next
+      await assert.rejects(() => assertSessionStopSafe(target, { session: target, harness: 'codex' }, { coldReceipt }),
+        next === 'unknown' ? /target turn state is unknown/ : /active turn/)
     }
   } finally {
     codexHarness.sharedRuntimes = originalSharedRuntimes

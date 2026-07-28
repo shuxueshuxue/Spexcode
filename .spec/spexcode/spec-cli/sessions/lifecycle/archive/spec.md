@@ -97,6 +97,9 @@ waits on an unrelated loaded sibling.
 
 A prepared `queued` row that has never launched takes the other target-only retirement path. Close serializes
 with the drainer on the same session transition/record lock; if close wins while the record is still queued, it
+also holds the exact recorded branch/path create-resource lock and proves any matching private creation receipt
+retired before stop or deletion. An unretirable receipt leaves the public row and every resource intact, because
+the record is the fence that prevents old create authority from reaching a later collision. Once that proof lands, it
 verifies that no harness thread identity, tmux window, live/recycled leaf PID, rendezvous transport, ahead
 commit, or dirty work exists, then removes the prepared prompt, record, worktree, and branch before releasing
 capacity. It sends no signal and asks nothing of unrelated shared references because no target runtime was ever

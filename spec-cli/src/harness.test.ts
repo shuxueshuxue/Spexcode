@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerIsolation, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurnObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerIsolation, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot } from './layout.js'
 import { processStartToken } from './process-identity.js'
@@ -83,20 +83,20 @@ test('Codex turn observer reports only failed native completions with the native
   })
   const socket = codexAppServerSock(root)
   mkdirSync(dirname(socket), { recursive: true })
-  let observer: ReturnType<typeof codexTurnObserver> | null = null
+  let observer: ReturnType<typeof codexTurnFailureObserver> | null = null
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
     const failures: unknown[] = []
     let resolveFailure!: (value: unknown) => void
     const failure = new Promise<unknown>((resolve) => { resolveFailure = resolve })
-    observer = codexTurnObserver({ session: 'observer-session', harnessSessionId: threadId, runtimeDir: root }, (value) => {
+    observer = codexTurnFailureObserver({ session: 'observer-session', harnessSessionId: threadId, runtimeDir: root }, (value) => {
       failures.push(value)
       resolveFailure(value)
     })
     assert.deepEqual(await Promise.race([
       failure,
       new Promise((_, reject) => setTimeout(() => reject(new Error('turn failure was not observed')), 1_000)),
-    ]), { turnId: 'failed', message: 'context window exceeded', completedAt: 102 })
+    ]), { message: 'context window exceeded', completedAt: 102 })
     assert.equal(failures.length, 1, 'completed and interrupted outcomes are controls, not errors')
   } finally {
     observer?.close()
@@ -127,17 +127,16 @@ test('Codex turn observer reconciles a pre-existing systemError after subscripti
   })
   const socket = codexAppServerSock(root)
   mkdirSync(dirname(socket), { recursive: true })
-  let observer: ReturnType<typeof codexTurnObserver> | null = null
+  let observer: ReturnType<typeof codexTurnFailureObserver> | null = null
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
     let resolveFailure!: (value: unknown) => void
     const failure = new Promise<unknown>((resolve) => { resolveFailure = resolve })
-    observer = codexTurnObserver({ session: 'reconcile-session', harnessSessionId: threadId, runtimeDir: root }, resolveFailure)
+    observer = codexTurnFailureObserver({ session: 'reconcile-session', harnessSessionId: threadId, runtimeDir: root }, resolveFailure)
     assert.deepEqual(await Promise.race([
       failure,
       new Promise((_, reject) => setTimeout(() => reject(new Error('systemError was not reconciled')), 1_000)),
     ]), {
-      turnId: 'old-turn',
       message: 'Codex thread entered systemError before the turn observer subscribed',
       completedAt: 203,
     })
@@ -171,11 +170,11 @@ test('Codex turn observer drops restart reconciliation when a new turn starts', 
   })
   const socket = codexAppServerSock(root)
   mkdirSync(dirname(socket), { recursive: true })
-  let observer: ReturnType<typeof codexTurnObserver> | null = null
+  let observer: ReturnType<typeof codexTurnFailureObserver> | null = null
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
     const failures: unknown[] = []
-    observer = codexTurnObserver({ session: 'reconcile-race-session', harnessSessionId: threadId, runtimeDir: root }, (value) => failures.push(value))
+    observer = codexTurnFailureObserver({ session: 'reconcile-race-session', harnessSessionId: threadId, runtimeDir: root }, (value) => failures.push(value))
     await new Promise((resolve) => setTimeout(resolve, 200))
     assert.deepEqual(failures, [], 'the new native turn supersedes the historical systemError snapshot')
   } finally {

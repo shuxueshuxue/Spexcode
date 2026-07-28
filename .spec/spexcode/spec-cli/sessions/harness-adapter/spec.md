@@ -126,7 +126,7 @@ surface:
   preCompact/postCompact/sessionStart/userPromptSubmit/subagentStart/subagentStop/stop — there is no idle/
   attention "notification" event and no failed-stop event, so those two claude-only events are genuinely absent,
   not unimplemented. Failure detection therefore does not fabricate another hook: the Codex adapter's optional
-  `observeTurnOutcomes` capability subscribes to the app-server's native `turn/completed` notifications and
+  `observeTurnFailures` capability subscribes to the app-server's native `turn/completed` notifications and
   reports only structured `failed` outcomes to the shared session layer.
 - **contract file(s)** — where the `surface: system` block is materialized ([[harness-delivery]]): Claude
   `./CLAUDE.md` or `./.claude/CLAUDE.md`; Codex ONLY the repo-root `./AGENTS.md`.
@@ -398,11 +398,12 @@ the adapter can accept another delivery without a resident turn process. The one
 human `stop`: after the runtime has been torn down, the retained record carries `stopped` and every headless
 adapter's shared record-backed liveness reads it `offline`. `resume` clears that marker as it relaunches the
 same conversation; close needs no marker handling because it removes the whole record. Turn outcomes enter the
-session layer through one adapter capability: process-backed headless adapters report a non-zero child exit,
-while interactive and headless Codex inherit the app-server observer above. Both reach the same active-only
-compare-and-set, changing an undeclared `active` lifecycle to `error`; a zero process exit, native completed or
-interrupted turn, or declaration that landed first changes nothing. Process notes name the harness plus exit
-code or signal; Codex notes retain the native error message and native `completedAt`. `online` may remain true
+session layer through each harness's native signal: Claude's StopFailure hook, a process-backed headless
+adapter's non-zero child exit, or the Codex app-server observer inherited by its interactive and headless forms.
+Every source reaches the same active-only `markTurnFailure` compare-and-set, changing a live undeclared
+`active` lifecycle to `error`; a zero process exit, native completed or interrupted turn, declaration, or
+explicit stop that landed first changes nothing. Process notes name the harness plus exit code or signal;
+Codex notes retain the native error message and native `completedAt`. `online` may remain true
 when the adapter's controller, pane home, or shared server can still accept the next delivery; the orthogonal
 `error` lifecycle is the honest signal that the previous turn failed.
 

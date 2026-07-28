@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server'
-import type { Server as HttpServer } from 'node:http'
+import type { Server as HttpServer, ServerResponse as HttpServerResponse } from 'node:http'
+import { randomUUID } from 'node:crypto'
 import { installConnectionReaper } from './reaper.js'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -461,9 +462,28 @@ app.post('/api/sessions/edges/unwatch', async (c) => {
   return c.json({ ok }, ok ? 200 : 404)
 })
 app.post('/api/sessions', async (c) => {
-  const body = await c.req.json().catch(() => null)
-  const result = await sessionCreateRequest(body)
-  return result.status === 201 ? c.json(result.session, 201) : c.json({ error: result.error }, 400)
+  const requestKey = c.req.header('idempotency-key') || randomUUID()
+  const controller = new AbortController()
+  const rawSignal = c.req.raw.signal
+  const outgoing = (c.env as { outgoing?: HttpServerResponse }).outgoing
+  const cancel = () => {
+    if (!outgoing?.writableEnded) controller.abort(new Error('session-create caller disconnected'))
+  }
+  const cancelFromRequest = () => controller.abort(rawSignal.reason)
+  rawSignal.addEventListener('abort', cancelFromRequest, { once: true })
+  outgoing?.once('close', cancel)
+  try {
+    const body = await c.req.json().catch(() => null)
+    const result = await sessionCreateRequest(body, undefined, { requestKey, signal: controller.signal })
+    if (result.status === 201) {
+      c.header('Idempotency-Key', requestKey)
+      return c.json(result.session, 201)
+    }
+    return c.json({ error: result.error, ...(result.code ? { code: result.code } : {}), ...(result.phase ? { phase: result.phase } : {}) }, result.status as any)
+  } finally {
+    rawSignal.removeEventListener('abort', cancelFromRequest)
+    outgoing?.off('close', cancel)
+  }
 })
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
 // dashboard and `spex session review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].

@@ -185,7 +185,8 @@ test('real no-backend fallback refuses before launcher, tmux, record, worktree, 
   mkdirSync(runtime, { recursive: true })
   const startToken = processStartToken(process.pid); assert.ok(startToken)
   writeFileSync(join(runtime, 'session-maintenance.json'), JSON.stringify(leaseRow('active', process.pid, startToken), null, 2))
-  const child = spawn(tsx, [cli, 'session', 'new', 'fallback must be blocked', '--launcher', 'fake', '--api', 'http://127.0.0.1:1'], {
+  const refusedPort = await freePort()
+  const child = spawn(tsx, [cli, 'session', 'new', 'fallback must be blocked', '--launcher', 'fake', '--api', `http://127.0.0.1:${refusedPort}`], {
     cwd: project,
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, SPEXCODE_HOME: fallbackHome, SPEXCODE_TMUX: `fallback-${process.pid}`, SPEXCODE_API_URL: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -199,6 +200,7 @@ test('real no-backend fallback refuses before launcher, tmux, record, worktree, 
     status: result.code,
     exitedBeforeProbe,
     structured: /maintenance_active/.test(result.stdout + result.stderr),
+    fallback: /no backend reachable .* launching in-process/.test(result.stderr),
     launcherCalls: lines(launcherLog).length,
     tmuxCalls: lines(tmuxLog).length,
     sessionDirs: existsSync(join(runtime, 'sessions')) ? readdirSync(join(runtime, 'sessions')).length : 0,
@@ -206,7 +208,7 @@ test('real no-backend fallback refuses before launcher, tmux, record, worktree, 
     branchCount: execFileSync('git', ['branch', '--list', 'node/*'], { cwd: project, encoding: 'utf8' }).trim() ? 1 : 0,
   }
   rmSync(dir, { recursive: true, force: true })
-  assert.deepEqual(actual, { status: 1, exitedBeforeProbe: true, structured: true, launcherCalls: 0, tmuxCalls: 0, sessionDirs: 0, worktreeCount: 0, branchCount: 0 })
+  assert.deepEqual(actual, { status: 1, exitedBeforeProbe: true, structured: true, fallback: true, launcherCalls: 0, tmuxCalls: 0, sessionDirs: 0, worktreeCount: 0, branchCount: 0 })
 })
 
 test('real dispatcher holds one open ticket for the whole handler run and active maintenance invokes zero handlers', async () => {

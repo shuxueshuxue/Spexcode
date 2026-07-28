@@ -237,32 +237,44 @@ type GitExec = { stdout: string; stderr: string }
 const GIT_MAX_BUFFER = 1 << 24
 function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, maxBuffer = GIT_MAX_BUFFER): Promise<GitExec> {
   return new Promise((resolve, reject) => {
-    let child: ReturnType<typeof execFile> | null = null
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let aborted = false
-    let timedOut = false
+    if (signal?.aborted) { reject(gitAbortError()); return }
+    const child = spawn('git', args, { env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const stdout: Buffer[] = [], stderr: Buffer[] = []
+    let stdoutBytes = 0, stderrBytes = 0, aborted = false, timedOut = false, overflow = false
+    let spawnError: Error | null = null
     const killTree = () => {
-      if (!child?.pid) return
+      if (!child.pid) return
       try { process.kill(-child.pid, 'SIGKILL') } catch { /* group may already be gone */ }
       try { child.kill('SIGKILL') } catch { /* already exited */ }
     }
     const onAbort = () => { aborted = true; killTree() }
-    child = execFile('git', args, {
-      encoding: 'utf8', env, maxBuffer, detached: true,
-      ...(signal ? { signal, killSignal: 'SIGKILL' } : {}),
-    } as any, (error: any, stdout: string, stderr: string) => {
-      if (timer) clearTimeout(timer)
+    const append = (chunks: Buffer[], chunk: Buffer, stream: 'stdout' | 'stderr') => {
+      const total = stream === 'stdout' ? (stdoutBytes += chunk.length) : (stderrBytes += chunk.length)
+      if (total > maxBuffer) { overflow = true; killTree(); return }
+      chunks.push(chunk)
+    }
+    child.stdout.on('data', (chunk: Buffer) => append(stdout, chunk, 'stdout'))
+    child.stderr.on('data', (chunk: Buffer) => append(stderr, chunk, 'stderr'))
+    child.once('error', (error) => { spawnError = error })
+    child.once('close', (code, childSignal) => {
+      clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
-      if (error) {
-        error.stdout = stdout ?? ''
-        error.stderr = stderr ?? ''
-        if (aborted) error.name = 'AbortError'
-        if (timedOut) error.spexcodeGitTimeout = true
-        reject(error)
-      } else resolve({ stdout, stderr })
+      const result = { stdout: Buffer.concat(stdout).toString('utf8'), stderr: Buffer.concat(stderr).toString('utf8') }
+      if (code === 0 && !aborted && !timedOut && !overflow && !spawnError) { resolve(result); return }
+      const error: any = spawnError ?? new Error(overflow
+        ? `git output exceeded ${maxBuffer} bytes`
+        : `git exited with ${code ?? childSignal ?? 'unknown status'}`)
+      error.code = overflow ? 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' : code
+      error.signal = childSignal
+      error.stdout = result.stdout
+      error.stderr = result.stderr
+      if (aborted) error.name = 'AbortError'
+      if (timedOut) error.spexcodeGitTimeout = true
+      reject(error)
     })
     signal?.addEventListener('abort', onAbort, { once: true })
-    timer = setTimeout(() => { timedOut = true; killTree() }, GIT_TIMEOUT_MS)
+    if (signal?.aborted) onAbort()
+    const timer = setTimeout(() => { timedOut = true; killTree() }, GIT_TIMEOUT_MS)
     timer.unref?.()
   })
 }

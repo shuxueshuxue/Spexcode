@@ -17,8 +17,11 @@ scenarios:
       with one id, worktree, branch, record, and launcher attempt, and either response can recover that receipt.
       Reusing that key with another payload fails without mutation. A successful targeted create does not run
       history/drift indexing before publication, returns inside the budget even while the headed launcher is
-      stalled, and the structured timestamps show record publication preceding launcher-queue work.
+      stalled, and the structured timestamps show record publication preceding launcher-queue work. A
+      candidate whose checked-out branch changes before record write is rolled back with no row; `201` always
+      names the exact worktree top-level, checked-out branch, and live branch ref it publishes.
     code: spec-cli/src/sessions.ts, spec-cli/src/index.ts, spec-cli/src/client.ts
+    test: spec-cli/src/session-create-transaction.test.ts
 ---
 
 # measuring session-new

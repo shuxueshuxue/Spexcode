@@ -48,6 +48,9 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   `opencode --auto`, so that exact command is its seed rather than a plain command that would reopen the TUI.
   Thus session-create works out of the box without seeding launchers for tools the adopter never picked. The same
   starter explicitly plants `dashboard.showHeadlessLaunchers: false`, [[launcher-visibility]]'s portable default.
+  Adoption also records the root checkout's current branch as `mainBranch`: this is the one moment detection is
+  authoritative. Later ordinary `git switch` operations cannot redefine a feature branch as trunk. A re-init
+  preserves an explicit value and fills a missing one without changing the surrounding config.
 
 **What init prints is TRUE of what it planted.** The success message and the next-steps read the
 `governedRoots` value back from the just-planted (or pre-existing) file and interpolate it — never a string
@@ -72,8 +75,9 @@ pre-existing config is ignored with a loud non-fatal notice; nothing about it is
 
 **The harness delivery choice is REQUIRED, up front.** `--harness <id[,id]|plugin:<folder>>` names which
 harnesses [[harness-select]] delivers into; init stamps it into `spexcode.json` as the persistent `harnesses`
-field (an explicit `--harness` on a re-init restamps that one field of an existing config, touching nothing
-else). A pre-existing explicit field satisfies the requirement without the flag. Neither → init aborts
+field (an explicit `--harness` on a re-init restamps that field of an existing config; the same write also
+fills a missing stable `mainBranch`, preserving every other field). A pre-existing explicit field satisfies
+the requirement without the flag. Neither → init aborts
 BEFORE writing anything, like the git precondition — there is deliberately no default set, because with many
 registered harnesses "deliver to all" would litter the adopter's tree and global tool configs with artifacts
 for CLIs they never installed. An ILLEGAL set (unknown id, plugin paired with a native, plugin with no
@@ -84,7 +88,8 @@ database and the hooks live in `.git` — so a non-git target would leave a *hal
 no history, no hooks, no sessions. `init` therefore rejects a non-git target **before writing anything**,
 with one actionable error pointing at `git init`. It deliberately does **not** run `git init` itself:
 creating a repo is a side effect beyond init's remit (a subdir, a dir not meant as a repo root), and the
-repair is one command.
+repair is one command. When `mainBranch` is not already explicit, the root checkout must name a branch;
+detached adoption fails loud with the repair instead of silently stamping a guessed trunk.
 
 **Adoption is additive and preserves user ownership.** An existing `<dir>/.spec` aborts the spec phase with
 a warning. A user-owned hook is never executed as a probe and never overwritten. SpexCode-owned hook

@@ -40,7 +40,9 @@ test('public session create is bounded, rollback-clean, idempotent, and publishe
   const configuredMain = join(root, 'configured-main')
   const stallGit = join(root, 'stall-git'), mismatchGit = join(root, 'mismatch-git')
   const killAfterGit = join(root, 'kill-after-git'), killAfterStore = join(root, 'kill-after-store')
+  const blockReceiptRetire = join(root, 'block-receipt-retire')
   const launcher = join(root, 'stall-launcher'), gitWrapper = join(fakeBin, 'git')
+  const candidateDir = join(home, 'projects', project.replace(/[/.]/g, '-'), '.session-create-candidates')
   const tmux = `spex-create-${process.pid}-${Date.now()}`, port = await freePort(), base = `http://127.0.0.1:${port}`
   mkdirSync(fakeBin)
   mkdirSync(join(project, '.spec', 'target'), { recursive: true })
@@ -76,6 +78,10 @@ case " $* " in
           exit 137 ;;
       esac
     fi
+    if [ -e "$SPEX_CREATE_BLOCK_RECEIPT_RETIRE" ]; then
+      parent_cmd=$(tr '\\000' ' ' < "/proc/$PPID/cmdline" 2>/dev/null || true)
+      case "$parent_cmd" in *"cli.ts materialize"*) chmod 500 "$SPEX_CREATE_CANDIDATE_DIR" ;; esac
+    fi
     exec ${JSON.stringify(execFileSync('which', ['git'], { encoding: 'utf8' }).trim())} "$@" ;;
 esac
 `)
@@ -105,6 +111,8 @@ esac
         SPEX_CREATE_MISMATCH_GIT: mismatchGit,
         SPEX_CREATE_KILL_AFTER_GIT: killAfterGit,
         SPEX_CREATE_KILL_AFTER_STORE: killAfterStore,
+        SPEX_CREATE_BLOCK_RECEIPT_RETIRE: blockReceiptRetire,
+        SPEX_CREATE_CANDIDATE_DIR: candidateDir,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -127,18 +135,12 @@ esac
     const runtime = readdirSync(projects).map((name) => join(projects, name, 'sessions')).find(existsSync)
     return runtime ? readdirSync(runtime) : []
   }
-  const projectRuntime = () => {
-    const projects = join(home, 'projects')
-    const name = existsSync(projects) ? readdirSync(projects)[0] : null
-    return name ? join(projects, name) : null
-  }
   const candidateReceipts = () => {
-    const runtime = projectRuntime()
-    const dir = runtime ? join(runtime, '.session-create-candidates') : ''
-    return dir && existsSync(dir) ? readdirSync(dir).map((name) => join(dir, name)) : []
+    return existsSync(candidateDir) ? readdirSync(candidateDir).map((name) => join(candidateDir, name)) : []
   }
   const nodeRefs = () => git(project, 'for-each-ref', 'refs/heads/task', '--format=%(refname)')
   const worktrees = () => git(project, 'worktree', 'list', '--porcelain').match(/^worktree /gm)?.length ?? 0
+  const close = (id: string) => fetch(`${base}/api/sessions/${id}/close`, { method: 'POST' })
   const noCreateArtifacts = async () => {
     assert.deepEqual(await rows(), [], 'public state has no phantom-running row')
     assert.deepEqual(sessionDirs(), [], 'global store has no candidate session')
@@ -260,6 +262,40 @@ esac
     const storeRetry = await post('store-crash', 'store crash recovery fixture')
     const storeRetryBody = await storeRetry.json() as any
     assert.deepEqual(candidateReceipts(), [], 'matching store-stage recovery retires its private receipt')
+
+    const retirementPrompt = 'receipt retirement fixture'
+    assert.equal(id4('retire-121'), id4('retire-369'), 'retirement control keys share one resource suffix')
+    writeFileSync(blockReceiptRetire, 'block\n')
+    const retirementCreate = await post('retire-121', retirementPrompt)
+    const retirementSession = await retirementCreate.json() as any
+    rmSync(blockReceiptRetire, { force: true })
+    assert.equal(retirementCreate.status, 201, 'irreversible record publication remains a successful create')
+    const retirementReceipt = candidateReceipts().find((path) => {
+      try { return JSON.parse(readFileSync(path, 'utf8')).requestDigest === createHash('sha256').update('retire-121').digest('hex') } catch { return false }
+    })
+    assert.ok(retirementReceipt, 'forced unlink failure leaves the valid published candidate receipt')
+    const beforeRetirementClose = { refs: nodeRefs(), worktrees: worktrees(), stores: sessionDirs(), rows: (await rows()).map((row) => row.id).sort() }
+    const retirementClose = await close(retirementSession.id)
+    chmodSync(candidateDir, 0o700)
+    if (retirementClose.ok) {
+      const replacement = await post('retire-369', retirementPrompt)
+      const replacementSession = await replacement.json() as any
+      assert.equal(replacement.status, 201, 'the colliding replacement publishes after a successful close')
+      const replacementRows = (await rows()).map((row) => row.id).sort()
+      const staleRetry = await post('retire-121', retirementPrompt)
+      const staleBody = await staleRetry.json() as any
+      assert.equal(staleRetry.status, 409, `a stale published receipt cannot consume the replacement session: ${JSON.stringify(staleBody)}`)
+      assert.deepEqual((await rows()).map((row) => row.id).sort(), replacementRows, 'stale retry preserves replacement public state')
+      assert.equal(realpathSync(git(replacementSession.path, 'rev-parse', '--show-toplevel')), realpathSync(replacementSession.path), 'stale retry preserves replacement worktree')
+      assert.ok(git(project, 'show-ref', '--verify', `refs/heads/${replacementSession.branch}`), 'stale retry preserves replacement branch')
+    } else {
+      assert.equal(retirementClose.status, 500, 'unprovable receipt retirement refuses close')
+      assert.deepEqual(
+        { refs: nodeRefs(), worktrees: worktrees(), stores: sessionDirs(), rows: (await rows()).map((row) => row.id).sort() },
+        beforeRetirementClose,
+        'close refusal preserves the public record and every owned resource',
+      )
+    }
 
     await crashBackend(killAfterGit, 'invalid-crash', 'invalid receipt fixture', () => {
       const requestDigest = createHash('sha256').update('invalid-crash').digest('hex')

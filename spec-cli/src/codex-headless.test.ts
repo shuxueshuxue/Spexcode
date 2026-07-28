@@ -22,6 +22,7 @@ test('codex-headless composes Codex materialization and shared-runtime ownership
   assert.equal(codexHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.equal(typeof codexHeadlessHarness.launchReady, 'function')
   assert.equal(codexHeadlessHarness.deliver, codexHarness.deliver)
+  assert.equal(codexHeadlessHarness.observeTurnFailures, codexHarness.observeTurnFailures)
   assert.equal(codexHeadlessHarness.sharedRuntimes, codexHarness.sharedRuntimes)
   const headlessRuntime = codexHeadlessHarness.sharedRuntimes?.('/tmp/runtime') ?? []
   const interactiveRuntime = codexHarness.sharedRuntimes?.('/tmp/runtime') ?? []

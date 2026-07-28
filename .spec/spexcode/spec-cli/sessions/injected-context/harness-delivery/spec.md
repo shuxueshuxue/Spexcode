@@ -115,8 +115,10 @@ sibling's selection change.
 
 Migration cannot expose a registered tree that still depends on the old common ignore projection. Until every
 previously materialized registered tree publishes its per-tree ignore receipt, common `.git/info/exclude`
-retains the prior managed entries plus the upgrading tree's local entries. The last receipt removes that
-temporary union; from then on only checkout-invariant residue and shared transport remain common.
+retains its prior managed entries. The upgrading tree has no authority to add its local paths to that common
+set. The last receipt removes the retained entries; from then on only checkout-invariant residue and shared
+transport remain common. Receipt lookup is derived from registered path identity, so a deleted-but-not-yet-
+pruned worktree keeps protection without making sibling filesystem access a materialize prerequisite.
 
 The net ideal path: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`, zero
 further operation, no global pollution beyond the scoped Codex trust. The contract files are SpexCode-owned

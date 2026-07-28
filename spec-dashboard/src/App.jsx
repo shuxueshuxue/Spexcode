@@ -91,14 +91,23 @@ export default function App() {
   const facePending = !PROJECT_ID && !board && projAccess === null
   useEffect(() => {
     if (hub || facePending) return
-    reload()
+    let stopped = false
+    let timer = null
+    // Keep the fallback lane single-flight from the first cold build onward. A fixed interval starts its
+    // first tick from mount, so a cold graph that crosses the 15s mark launches a second refresh while the
+    // first board is still settling; review pages then join that unrelated graph flight and look stuck.
+    const poll = () => {
+      reload().finally(() => {
+        if (!stopped) timer = setTimeout(poll, 15000)
+      })
+    }
+    poll()
     const unsub = subscribeBoardLive({
       onBoard: (b, frame) => { reqSeq.current++; setLoadFailed(false); applyBoard(b, !!frame?.authoritative) },
       onLegacyChange: () => { reload() },
       onStatus: setBoardLive,
     })
-    const id = setInterval(() => { reload() }, 15000)
-    return () => { unsub(); clearInterval(id) }
+    return () => { stopped = true; unsub(); if (timer) clearTimeout(timer) }
   }, [reload, applyBoard, hub, facePending])
   // the route-selected identity, or null while it is still UNRESOLVED (no catalog row, no board yet).
   // The head effects below skip the null window ([[side-nav]]): the browser remembers a favicon per page

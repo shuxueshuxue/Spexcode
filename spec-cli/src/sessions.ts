@@ -1806,10 +1806,18 @@ const SOCKET_READY_TIMEOUT_MS = 30000   // spans launchScript's bounded fast-fai
                                         // waitForReady (slot-hold + resume) waits through a daemon-race retry
                                         // instead of returning before a recovering socket
 const SOCKET_POLL_MS = 200
-async function waitForReady(id: string, harness: Harness, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
+async function waitForReady(id: string, harness: Harness, pending?: SessRec, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<boolean> {
+  const current = () => {
+    const stored = readRecord(id)
+    const rec = stored && pending
+      ? { ...pending, ...stored, stopped: pending.stopped, archived: pending.archived }
+      : stored || pending
+    return rec ? { ...rec, runtimeDir: runtimeRoot() } : null
+  }
+  if (harness.launchReady) return harness.launchReady(current)
   const deadline = Date.now() + timeoutMs
   for (;;) {
-    const rec = readRecord(id)
+    const rec = current()
     const snap = await liveSnapshot()   // window + pane probe + live-listener set in one snapshot — all the adapter needs
     if (rec && harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online') return true
     if (Date.now() >= deadline) return false
@@ -1940,8 +1948,21 @@ async function resumeSessionUnlocked(id: string, opts: ResumeExecutionOptions = 
       await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec), transfer?.fifo)
       if (transfer) await transfer.done
     } finally { transfer?.close() }
-    writeRecord(resumed)
-    await waitForReady(id, h)   // a relaunched agent is "ready" only once the adapter reads it online
+    let ready = false
+    let readinessError = ''
+    try { ready = await waitForReady(id, h, resumed) }
+    catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
+    if (!ready) {
+      const failed = readRecord(id) || current
+      writeRecord({ ...failed, archived: false, stopped: true })
+      return {
+        ok: false,
+        refused: true,
+        error: `session ${id}: launch did not become ready${readinessError ? ` - ${readinessError}` : ''}; the session remains stopped and can be retried`,
+      }
+    }
+    const latest = readRecord(id) || resumed
+    writeRecord({ ...latest, archived: false, coldProof: null, status: latest.status === 'active' ? 'idle' : latest.status, stopped: false })
   } else writeRecord(resumed)
   return { ok: true }
 }

@@ -414,6 +414,36 @@ test('aggregate future maintenance coordinator contract', async (t) => {
     } finally { f.cleanup() }
   })
 
+  await t.test('consumed shared-spawn delegate does not complete its parent resume ticket before launch readiness', async () => {
+    const f = makeFixture()
+    try {
+      const gate = f.create()
+      const lease = await gate.acquireLease({
+        capabilities: [{ op: 'resume', sessionId: 's-1', force: true }], owner: { instanceId: 'lease-generation-a', pid: 7001, startToken: 'lease-owner-a' }, ttlMs: 30_000, waitMs: 0,
+      })
+      let releaseReady!: () => void
+      const ready = new Promise<void>((resolve) => { releaseReady = resolve })
+      let helperConsumed = false
+      let readinessEntered = false
+      const pending = gate.runOperation({ op: 'resume', sessionId: 's-1', force: true, authorization: { token: lease.token, epoch: lease.epoch } }, async (ticket) => {
+        const delegate = ticket.delegateSharedSpawn('s-1')
+        await gate.runOperation({ op: 'shared-spawn', sessionId: 's-1', delegate }, async () => { helperConsumed = true })
+        readinessEntered = true
+        await ready
+        return { ok: true }
+      })
+      while (!readinessEntered) await new Promise((resolve) => setTimeout(resolve, 1))
+      const during = gate.readState()
+      assert.equal(helperConsumed, true)
+      assert.equal(during.tickets.some((ticket) => ticket.operation === 'resume' && ticket.sessionId === 's-1'), true)
+      assert.equal(during.capabilities[0]?.state, 'inflight')
+      releaseReady()
+      assert.deepEqual(await pending, { ok: true })
+      assert.equal(gate.readState().tickets.length, 0)
+      assert.equal(gate.readState().capabilities[0]?.state, 'committed')
+    } finally { f.cleanup() }
+  })
+
   await t.test('shared spawn rechecks the live resume owner before mutating delegated authority', async () => {
     const f = makeFixture()
     try {

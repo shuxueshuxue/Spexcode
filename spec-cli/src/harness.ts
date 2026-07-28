@@ -32,6 +32,7 @@ import { processStartToken, processTopology } from './process-identity.js'
 
 export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless' | 'codex-headless' | 'opencode-headless' | 'pi-headless'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null; stopped?: boolean; archived?: boolean }
+export type HarnessLaunchReadyRecord = HarnessLivenessRecord & { governed?: boolean; runtimeDir: string }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
 // one whole-box pid→(ppid, comm) table (a single `ps` spawn).
@@ -237,6 +238,11 @@ export interface Harness {
   // to the shell). A missing probe (tmux/ps couldn't report) is not-live. The 'starting' boot
   // grace lives in the caller (sessions.ts liveness), so a still-booting pane reads starting, not offline.
   liveness(rec: HarnessLivenessRecord, tmuxAlive: boolean, runtimeDir?: string, pane?: PaneProbe, socketLive?: boolean): 'online' | 'offline'
+  // A completed launch command is only transport acceptance. An adapter with stronger runtime ownership may
+  // keep the caller waiting until the launched conversation is genuinely addressable. The lazy record source
+  // lets a one-shot launch publish its native id while readiness is pending. Returning false is a launch
+  // failure; adapters without this seam retain the generic bounded liveness wait.
+  launchReady?(current: () => HarnessLaunchReadyRecord | null): Promise<boolean>
   // Exact leaf ownership evidence consumed by lifecycle teardown. The adapter returns the one argv identity
   // token it registered for this record (session id, harness thread/generation, or null when unprovable);
   // product lifecycle code never branches on harness names to invent this identity.
@@ -2013,6 +2019,23 @@ export const codexHeadlessHarness: Harness = {
   // Record-backed liveness is the family contract for sleeping headless threads. An explicit stop is the one
   // offline marker; other app-server/thread failures surface through delivery rather than speculative liveness.
   liveness: recordOnline,
+  launchReady: async (current) => {
+    const deadline = Date.now() + 30_000
+    for (;;) {
+      const rec = current()
+      if (rec?.governed && !rec.stopped && !rec.archived && rec.harnessSessionId) {
+        const descriptor = codexHeadlessHarness.sharedRuntimes?.(rec.runtimeDir)
+          .find((candidate) => candidate.key === 'codex-app-server')
+        const before = codexRuntimeGeneration(rec.runtimeDir)
+        const resident = descriptor?.residency ? await descriptor.residency() : null
+        const after = codexRuntimeGeneration(rec.runtimeDir)
+        const exactTargetRefs = resident?.referenceIds.filter((id) => id === rec.harnessSessionId).length ?? 0
+        if (before && after === before && resident?.healthy === true && exactTargetRefs === 1) return true
+      }
+      if (Date.now() >= deadline) return false
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    }
+  },
   // There is no TUI to restart and the project app-server keeps the thread addressable. A forced reopen therefore
   // runs the headless launch's empty-tail no-op; normal resume remains guarded by record-backed online liveness.
   resumeArg: () => '',

@@ -94,7 +94,11 @@ capability bound to that live resume ticket, epoch, operation, and session id. T
 `shared-runtime-spawn` consumes it while the parent resume ticket is still live, scrubs it before exec, and never
 places it in argv, logs, records, events, or comms. Forged, stale-epoch, completed-parent, wrong-session,
 wrong-operation, and replayed delegates all fail before spawn. Thus the canonical spawn rides exactly one
-admitted resume without opening unrelated launch or queue work.
+admitted resume without opening unrelated launch or queue work. Reading the delegated FIFO and completing its
+writer is only bearer handoff, not launch success. The parent resume ticket and active lease remain live until
+the harness adapter's launch-readiness proof succeeds. Product code does not commit `stopped:false` or report a
+successful resume before that proof; helper refusal, timeout, or an explicit false readiness result returns a
+non-success and preserves or restores the retained record as stopped/offline.
 
 ### Bearer, durability, and public lifecycle
 

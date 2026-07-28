@@ -76,7 +76,7 @@ decisive **close**, never the soft `/stop` — stopping-to-resume is a Command B
 
 A close refusal is a visible action failure, not a silent background no-op: the backend returns a non-2xx
 structured error when its ownership guard commits no removal, and the console keeps the selected row while
-showing that diagnostic through its shared action-error surface. A refusal never weakens the guard merely to
+showing that diagnostic **once** through its shared action-error surface. A refusal never weakens the guard merely to
 make the row disappear.
 
 The right-click confirm consumes both the HTTP status and the JSON `{ok,error}` body before it asks the board

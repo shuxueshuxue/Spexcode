@@ -3,9 +3,9 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, sourceIndexes, sourceIndexesFull, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from './git.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -25,22 +25,47 @@ function idx(parents: Record<string, string[]>, parts: TestIndexParts = {}): Dri
 }
 const LINEAR = { TIP: ['B'], B: ['A'], A: ['VER'], VER: [] } // TIP -> B -> A -> VER
 
-test('history and drift indexes derive Git facts for a small real repository', async () => {
+test('one persistent event transaction stays full-history-equivalent across seed, reopen, and advance', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-index-oracle-'))
   const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  let cachePath = ''
   try {
     run('init', '-q', '-b', 'main'); run('config', 'user.email', 'oracle@example.com'); run('config', 'user.name', 'Oracle')
     mkdirSync(join(root, '.spec', 'project', 'a'), { recursive: true })
+    mkdirSync(join(root, 'src'), { recursive: true })
     writeFileSync(join(root, '.spec', 'project', 'spec.md'), '---\ntitle: project\n---\n# project\n')
-    writeFileSync(join(root, '.spec', 'project', 'a', 'spec.md'), '---\ntitle: a\n---\n# a\n')
+    writeFileSync(join(root, '.spec', 'project', 'a', 'spec.md'), '---\ntitle: a\ncode: src/a.ts\n---\n# a\n')
+    writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 1\n')
     run('add', '.'); run('commit', '-qm', 'seed')
-    appendFileSync(join(root, '.spec/project/a/spec.md'), '\nchanged\n'); run('add', '.'); run('commit', '-qm', 'revise a')
-    const tip = run('rev-parse', 'HEAD')
-    const h = await historyIndex(root)
-    assert.ok(rowsFor(h, '.spec/project/a/spec.md').some((row) => row.hash === tip), 'history includes the current revision')
-    const d = await driftIndex(root)
-    assert.equal(commitReachable(d, tip), true)
-  } finally { rmSync(root, { recursive: true, force: true }) }
+    const version = run('rev-parse', 'HEAD')
+    cachePath = historyEventCachePathForTests(root)
+
+    const [[history, drift], [fullHistory, fullDrift]] = await Promise.all([
+      sourceIndexes(root), sourceIndexesFull(root),
+    ])
+    assert.deepEqual(rowsFor(history, '.spec/project/a/spec.md'), rowsFor(fullHistory, '.spec/project/a/spec.md'))
+    assert.equal(driftFor(drift, version, 'src/a.ts', 'a'), driftFor(fullDrift, version, 'src/a.ts', 'a'))
+    const seeded = readFileSync(cachePath)
+    const rows = seeded.toString('utf8').trim().split('\n').map((line) => JSON.parse(line))
+    assert.deepEqual(rows.filter((row) => row.k.startsWith?.('tip:')).map((row) => row.k).sort(),
+      ['tip:drift-numstat', 'tip:merge', 'tip:numstat'])
+
+    resetHistoryCachesForTests()
+    await sourceIndexes(root)
+    assert.equal(readFileSync(cachePath).equals(seeded), true, 'an exact-tip reopen rewrote the ledger')
+
+    appendFileSync(join(root, 'src/a.ts'), 'export const b = 2\n'); run('add', '.'); run('commit', '-qm', 'move governed code')
+    resetHistoryCachesForTests()
+    const [[advancedHistory, advancedDrift], [advancedFullHistory, advancedFullDrift]] = await Promise.all([
+      sourceIndexes(root), sourceIndexesFull(root),
+    ])
+    assert.deepEqual(rowsFor(advancedHistory, '.spec/project/a/spec.md'), rowsFor(advancedFullHistory, '.spec/project/a/spec.md'))
+    assert.equal(driftFor(advancedDrift, version, 'src/a.ts', 'a'), 1)
+    assert.equal(driftFor(advancedDrift, version, 'src/a.ts', 'a'), driftFor(advancedFullDrift, version, 'src/a.ts', 'a'))
+  } finally {
+    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('batch revision/blob reads preserve exact bytes, including large newline blobs and missing entries', () => {

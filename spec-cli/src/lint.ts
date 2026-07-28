@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, git, driftIndex, historyIndex, rowsFor, treeFilePaths, treeFileText } from './git.js'
+import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText } from './git.js'
 import { loadSpecs, parseFrontmatter } from './specs.js'
 import { readJsonConfig } from './layout.js'
 import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, resolveAnchor, windowEvents, anchorHitCommits } from './anchors.js'
@@ -152,7 +152,7 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
     }]
   }
   const governed = trackedSourceFiles(root, cfg.governedRoots, cfg, tip)
-  const [didx, hidx] = await Promise.all([driftIndex(root, tip), historyIndex(root, tip)])
+  const [hidx, didx] = await sourceIndexes(root, tip)
   const specs = await loadSpecs(root, { tip, history: hidx, drift: didx })
   const out: Finding[] = []
 

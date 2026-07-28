@@ -136,6 +136,11 @@ So resume never itself makes the agent work; the `merge` dispatch, which resumes
 so the dispatch hits a live one, then sends the merge prompt — and THAT prompt is what flips the lifecycle to
 `active` (and clears the now-obsolete proposal) through mark-active.
 
+Launch handoff is not proof that resume restored liveness. The resolved harness adapter supplies a bounded
+readiness fence and product code validates that same fence across the `stopped:false` write. If its runtime,
+target reference, or unique governed owner changes at that boundary, resume rolls the record back to
+stopped/offline and fails; no stale readiness sample can make the retained row online.
+
 **The resume guard — restore-on-alive must be impossible.** Relaunch is a *kill-then-respawn*, so it destroys
 a running agent's in-flight work the instant the agent is actually alive. That was the incident's kill-shot:
 the board lied (a live worker read `offline`), the human hit relaunch, and live claude processes died mid-task.

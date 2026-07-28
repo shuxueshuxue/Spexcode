@@ -79,6 +79,122 @@ const stopCodexOwner = async (owner: ReturnType<typeof startCodexOwner> | null) 
   for (let i = 0; i < 50 && processStartToken(owner.pid) === owner.startToken; i++) await new Promise((resolve) => setTimeout(resolve, 20))
 }
 
+const writeCodexReadinessRecord = (root: string, sessionId: string, threadId: string) => {
+  const dir = join(root, 'sessions', sessionId)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'session.json'), `${JSON.stringify({
+    session_id: sessionId,
+    governed: true,
+    worktree_path: root,
+    branch: 'main',
+    node: 'codex-headless',
+    title: null,
+    name: null,
+    status: 'idle',
+    proposal: null,
+    merges: 0,
+    note: null,
+    sortkey: null,
+    createdAt: Date.now(),
+    harness: 'codex-headless',
+    harness_session_id: threadId,
+    stopped: true,
+    archived: false,
+  }, null, 2)}\n`)
+}
+
+test('codex-headless launch fence joins unique governed ownership and rejects unload or generation replacement', { timeout: 10_000 }, async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-headless-readiness-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const root = runtimeRoot()
+  mkdirSync(root, { recursive: true })
+  const target = 'readiness-thread'
+  const currentId = 'readiness-current'
+  writeCodexReadinessRecord(root, currentId, target)
+  let loaded = true
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: loaded ? [{ id: target }] : [], nextCursor: null }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const socket = codexAppServerSock(root)
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    owner = startCodexOwner(root)
+    const current = () => ({
+      session: currentId,
+      governed: true,
+      harnessSessionId: target,
+      stopped: false,
+      archived: false,
+      runtimeDir: root,
+    })
+
+    const initial = await codexHeadlessHarness.launchReady!(current, Date.now() + 2_000)
+    assert.ok(initial)
+    const socketStat = statSync(socket)
+    assert.deepEqual(initial.proof.generation, {
+      pid: owner.pid,
+      startToken: owner.startToken,
+      processGroupId: owner.pid,
+      sessionId: owner.pid,
+      isolation: `detached-v3 ${owner.pid} ${owner.startToken} ${owner.pid} ${owner.pid}`,
+      socket: { path: socket, dev: socketStat.dev, ino: socketStat.ino },
+    })
+    assert.deepEqual(initial.proof.target, {
+      sessionId: currentId,
+      threadId: target,
+      ownerSessionId: currentId,
+      ownerCount: 1,
+      ownerState: 'governed',
+      referenceState: 'loaded',
+      protectsControlPlane: true,
+    })
+    assert.equal(await initial.validate(current), true)
+
+    rmSync(join(root, 'sessions', currentId), { recursive: true, force: true })
+    writeCodexReadinessRecord(root, 'readiness-reassigned', target)
+    assert.equal(await initial.validate(current), false, 'another governed owner cannot inherit the current session fence')
+    rmSync(join(root, 'sessions', 'readiness-reassigned'), { recursive: true, force: true })
+    writeCodexReadinessRecord(root, currentId, target)
+
+    writeCodexReadinessRecord(root, 'readiness-duplicate', target)
+    const duplicateStarted = Date.now()
+    assert.equal(await codexHeadlessHarness.launchReady!(current, duplicateStarted + 250), null,
+      'two governed records claiming one loaded thread never form readiness')
+    assert.ok(Date.now() - duplicateStarted >= 180, 'duplicate ownership follows the real bounded poll path')
+    rmSync(join(root, 'sessions', 'readiness-duplicate'), { recursive: true, force: true })
+
+    const beforeUnload = await codexHeadlessHarness.launchReady!(current, Date.now() + 2_000)
+    assert.ok(beforeUnload)
+    loaded = false
+    assert.equal(await beforeUnload.validate(current), false, 'target unload invalidates the same readiness fence')
+
+    loaded = true
+    const beforeRestart = await codexHeadlessHarness.launchReady!(current, Date.now() + 2_000)
+    assert.ok(beforeRestart)
+    await stopCodexOwner(owner)
+    owner = startCodexOwner(root)
+    assert.equal(await beforeRestart.validate(current), false, 'replacement generation cannot reuse the old readiness fence')
+
+    loaded = false
+    const timeoutStarted = Date.now()
+    assert.equal(await codexHeadlessHarness.launchReady!(current, timeoutStarted + 250), null)
+    assert.ok(Date.now() - timeoutStarted >= 180, 'unloaded target times out through the actual adapter loop')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 const runReplacementArchiveCase = async (response: 'success' | 'error') => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR

@@ -282,7 +282,8 @@ see LAUNCHERS.
 
 ── LAYOUT (spexcode.json — portable; set only for a NON-DEFAULT repo layout) ──
   main          path to the source-of-truth checkout. Default: the \`main\` worktree.
-  mainBranch    the source-of-truth BRANCH worktrees fork from. Default: auto-detected.
+  mainBranch    the stable source-of-truth BRANCH worktrees fork from. spex init stamps the root checkout's
+                branch at adoption; an older omitted value uses the conventional main.
   branchPrefix  how a node branch is named. Default "node/".
 Example — a repo whose trunk is \`staging\`, not \`main\`:
   { "mainBranch": "staging" }

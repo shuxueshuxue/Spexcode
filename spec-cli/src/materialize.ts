@@ -6,7 +6,7 @@ import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadConfig } from '
 import { compileManifest } from './hooks.js'
 import { writeManagedBlock, removeManagedBlock, HARNESSES, type HarnessArtifacts } from './harness.js'
 import { git } from './git.js'
-import { runtimeRoot, treeSlotDir, mainCheckout, readConfig } from './layout.js'
+import { runtimeRoot, treeSlotDir, mainCheckout, readConfig, encodeProject } from './layout.js'
 import { resolveHarnessTargets, partitionHarnesses } from './harness-select.js'
 import { emitPlugin, cleanPlugin, pluginBundleDir, pluginVersion } from './plugin-harness.js'
 import { plantContractFilter, removeContractFilter, retireLegacyContractBlock, settleIndexStat, type ContractFilterBinding, type ContractFilterPayload } from './contract-filter.js'
@@ -100,7 +100,7 @@ const TREE_IGNORE_RECEIPT = 'tree-ignore-v1'
 
 function hasLegacyTreeIgnore(proj: string): boolean {
   return registeredTrees(proj).some((tree) => {
-    const slot = treeSlotDir(tree)
+    const slot = join(runtimeRoot(proj), 'trees', encodeProject(tree))
     return existsSync(join(slot, 'content-hash')) && !existsSync(join(slot, TREE_IGNORE_RECEIPT))
   })
 }
@@ -404,7 +404,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   writeFileSync(join(rt, TREE_IGNORE_RECEIPT), '')
   writeFileSync(join(runtimeRoot(proj), 'harness-selection-v1'), '')
   retireLegacyContractBlock(proj)
-  const legacyEntries = hasLegacyTreeIgnore(proj) ? [...priorCommonEntries, ...localEntries] : []
+  const legacyEntries = hasLegacyTreeIgnore(proj) ? priorCommonEntries : []
   writeManagedBlock(infoExcludePath(proj), entries([...commonEntries, ...legacyEntries]), ['# ', ''])
   publishSelection(join(rt, 'harnesses'), selectionBody(selected, plugins.length > 0))
   return { contentHash: h, planted }

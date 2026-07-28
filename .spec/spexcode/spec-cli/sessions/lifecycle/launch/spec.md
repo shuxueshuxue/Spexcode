@@ -22,7 +22,7 @@ launching has a **single owner**: the running backend process, never whichever s
 
 ## expanded spec
 
-`newSession` mints the governed SpexCode session `<uuid>` and derives its node from exactly one place: the
+The bounded session-create transaction mints the governed SpexCode session `<uuid>` and derives its node from exactly one place: the
 raw caller prompt's **first `[[<id>]]` mention**. That mention is the truth for the session record, the
 `node/<slug(id)>-<shortid>` branch/worktree name, board attribution, and the spec pointer
 when the id names an existing node. CJK ids, leading-dot ids such as `.plugins`, and ids that do not exist yet
@@ -88,9 +88,10 @@ package's **own** on-disk location, never a hardcoded `<repoRoot>/spec-cli`, so 
 so the launch always runs where the launch env and cap live. The caller can be **another agent** running in a
 stripped or divergent environment, so an in-process launch there would bring workers up in the caller's context
 rather than the backend's. The CLI falls back to in-process **only when the target explicitly refuses the
-connection**, proving that no listener owns it (warning that it then carries the caller's env, no cap). Any
-HTTP response proves an owner, regardless of status. A probe timeout, abort, reset, DNS failure, or unknown
-transport error is indeterminate and fails loud without creating; it may hide an already accepted request.
+connection**, proving that no listener owns it (warning that it then carries the caller's env, no cap). One
+bounded settings probe also performs the implicit target's project check. Any HTTP response proves an owner,
+regardless of status. A probe timeout, abort, reset, DNS failure, or unknown transport error is indeterminate
+and fails loud without creating; it may hide an already accepted request.
 
 Backend launch, that no-backend fallback, and every queue-drain attempt acquire a [[maintenance-lease]]
 operation ticket before preparing, claiming, or starting anything. During an active lease they fail with

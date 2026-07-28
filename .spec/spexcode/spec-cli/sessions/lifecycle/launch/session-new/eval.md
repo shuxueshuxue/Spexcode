@@ -9,7 +9,11 @@ scenarios:
       requests carrying the same Idempotency-Key. Timestamp the request, creation lock, Git, record write, and
       launcher-queue phases. After each terminal response inspect the public session list, global session store,
       git worktree list, refs/heads/node namespace, child processes, and tmux server. Finally release the
-      controllable launcher and run one ordinary successful create with a [[node]] target.
+      controllable launcher and run one ordinary successful create with a [[node]] target. Generate two
+      different keys whose deterministic ids share the same four-character branch suffix and send the same
+      prompt with both. Through the real CLI without --api, point SPEXCODE_API_URL at a listener that accepts
+      but never answers settings. Verify that issue `@new` reaches the same bounded transaction owner rather
+      than an exported preparation function.
     expected: >
       A timeout or disconnect settles within the configured wall with structured code and phase, kills the
       active Git group, and leaves zero session row, store directory, worktree, branch, or launcher pane; no
@@ -19,7 +23,12 @@ scenarios:
       history/drift indexing before publication, returns inside the budget even while the headed launcher is
       stalled, and the structured timestamps show record publication preceding launcher-queue work. A
       candidate whose checked-out branch changes before record write is rolled back with no row; `201` always
-      names the exact worktree top-level, checked-out branch, and live branch ref it publishes.
+      names the exact worktree top-level, checked-out branch, and live branch ref it publishes. A different-key
+      same-suffix collision fails without changing the first receipt's row, store, exact branch, or worktree;
+      an owned abort still removes only its own resources. The implicit-target slow listener settles inside the
+      one settings-probe wall with an indeterminate error and no POST/fallback/artifacts. `sessionCreateRequest`
+      is the sole exported create function and `@new` enters it, so maintenance/deadline ownership cannot be
+      bypassed.
     code: spec-cli/src/sessions.ts, spec-cli/src/index.ts, spec-cli/src/client.ts
     test: spec-cli/src/session-create-transaction.test.ts
 ---

@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { verifyDetachedRuntime } from './process-identity.js'
 
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
@@ -268,14 +269,14 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
     | { kind: 'malformed' }
   const run = async (name: string, channel: DelegateChannel, maintenanceSessionId?: string) => {
     const runDir = join(dir, name); mkdirSync(runDir)
-    const log = join(runDir, 'runtime.log'); const pidFile = join(runDir, 'runtime.pid'); const scope = join(runDir, 'runtime.scope')
+    const log = join(runDir, 'runtime.log'); const pidFile = join(runDir, 'runtime.pid'); const receipt = join(runDir, 'runtime.detached.json')
     const delegateFd = channel.kind === 'absent' ? undefined : channel.kind === 'malformed' ? 'not-a-fd' : '3'
     const childEnv: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_SESSION_ID: ID }
     delete childEnv.SPEXCODE_MAINTENANCE_DELEGATE_FD
     delete childEnv.SPEXCODE_MAINTENANCE_SESSION_ID
     if (delegateFd !== undefined) childEnv.SPEXCODE_MAINTENANCE_DELEGATE_FD = delegateFd
     if (maintenanceSessionId !== undefined) childEnv.SPEXCODE_MAINTENANCE_SESSION_ID = maintenanceSessionId
-    const child = spawn(process.execPath, [spexBin, 'internal', 'shared-runtime-spawn', runDir, log, pidFile, scope, process.execPath, '-e', 'console.log("SPAWN-READY"); setInterval(() => {}, 1000)'], {
+    const child = spawn(process.execPath, [spexBin, 'internal', 'shared-runtime-spawn', runDir, log, pidFile, receipt, process.execPath, '-e', 'console.log("SPAWN-READY"); setInterval(() => {}, 1000)'], {
       cwd: pkgRoot,
       env: childEnv,
       stdio: channel.kind === 'pipe' ? ['ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'],
@@ -296,7 +297,7 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
       structured: /maintenance_active|maintenance_delegate_invalid/.test(result.stdout + result.stderr),
       pidLive: !!token,
       logReady: existsSync(log) && readFileSync(log, 'utf8').includes('SPAWN-READY'),
-      scopeExact: !!token && existsSync(scope) && readFileSync(scope, 'utf8') === `detached-v3 ${pid} ${token} ${pid} ${pid}\n`,
+      receiptExact: !!token && verifyDetachedRuntime(pid, receipt).ok,
       pidArtifact: existsSync(pidFile),
       childEnv: {
         delegateFdPresent: Object.hasOwn(childEnv, 'SPEXCODE_MAINTENANCE_DELEGATE_FD'),
@@ -336,8 +337,8 @@ test('real internal shared spawn admits one valid delegate and refuses forged, r
     rmSync(dir, { recursive: true, force: true })
   }
 
-  const admitted = { status: 0, structured: false, pidLive: true, logReady: true, scopeExact: true, pidArtifact: true }
-  const refused = { status: 1, structured: true, pidLive: false, logReady: false, scopeExact: false, pidArtifact: false }
+  const admitted = { status: 0, structured: false, pidLive: true, logReady: true, receiptExact: true, pidArtifact: true }
+  const refused = { status: 1, structured: true, pidLive: false, logReady: false, receiptExact: false, pidArtifact: false }
   assert.deepEqual(openOrdinary, { ...admitted, childEnv: { delegateFdPresent: false, maintenanceSessionId: null } })
   for (const result of [openExplicitEmpty, openUnreadable, openMalformed]) {
     assert.deepEqual(result, { ...refused, childEnv: { delegateFdPresent: true, maintenanceSessionId: null } })

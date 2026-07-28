@@ -27,7 +27,8 @@ scenarios:
       It names `claude`, `codex`, `opencode`, and `pi` as the plain clean-init commands and says automatic-
       permission variants (`--dangerously-skip-permissions`, `--yolo`, `--auto`) require an explicit launcher.
       Field coverage spans layout, dashboard, sessions, serve, issues, deterministic lint policy, and
-      doctor health budgets. Active altitude and breadth thresholds appear only under `doctor.altitude`
+      doctor health budgets. The layout section says `mainBranch` is stamped once at adoption and remains
+      stable across later checkouts. Active altitude and breadth thresholds appear only under `doctor.altitude`
       and `doctor.breadth`, not under `lint`; the retired `lint.maxChildren` spelling appears only in a
       migration note naming its doctor replacement.
       The sessions section explains maxActive's default and that it counts compute slots, not total

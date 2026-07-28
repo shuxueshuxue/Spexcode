@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync, renameSync, rmSync, statSync, chmodSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { join, resolve, relative } from 'node:path'
+import { join, resolve, relative, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { readConfig, readJsonConfig } from './layout.js'
@@ -81,6 +81,20 @@ function resolveHooksDir(dir: string): string | null {
   }
 }
 
+// Detect once, at adoption, while the root checkout still names the branch being adopted. Steady-state
+// layout never re-derives trunk identity from a mutable checkout (an ordinary `git switch node/x` must not
+// turn that feature branch into trunk).
+function adoptionMainBranch(dir: string): string {
+  try {
+    const common = execFileSync('git', ['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim()
+    const branch = execFileSync('git', ['-C', dirname(common), 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim()
+    if (branch) return branch
+  } catch { /* render the one product-level repair below */ }
+  const error = new Error('cannot determine the source-of-truth branch at adoption — check out the trunk in the root checkout, or set "mainBranch" in spexcode.json before re-running `spex init`')
+  error.name = 'ConfigError'
+  throw error
+}
+
 export async function specInit(targetArg: string | undefined, presetArg?: string, harnessArg?: string): Promise<void> {
   const targetDir = resolve(targetArg ?? process.cwd())
 
@@ -153,18 +167,23 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   const cfgDest = join(targetDir, 'spexcode.json')
   const nativeChosen = (chosenHarnesses as unknown[]).filter((m): m is string => typeof m === 'string')
   if (existsSync(cfgDest)) {
-    if (flagRaw) {
-      // an explicit --harness on a re-init is a deliberate command: restamp THAT field, touch nothing else.
-      const cfg = (readJsonConfig(cfgDest) ?? {}) as Record<string, unknown>
-      cfg.harnesses = flagRaw
+    const cfg = (readJsonConfig(cfgDest) ?? {}) as Record<string, unknown>
+    const stampedBranch = typeof cfg.mainBranch !== 'string' || !cfg.mainBranch.trim()
+    if (stampedBranch) cfg.mainBranch = adoptionMainBranch(targetDir)
+    if (flagRaw) cfg.harnesses = flagRaw
+    if (flagRaw || stampedBranch) {
       writeFileSync(cfgDest, JSON.stringify(cfg, null, 2) + '\n')
-      console.log(`✓ stamped "harnesses": ${JSON.stringify(flagRaw)} into the existing spexcode.json (other fields untouched)`)
+      console.log(`✓ stamped ${[
+        flagRaw ? `"harnesses": ${JSON.stringify(flagRaw)}` : '',
+        stampedBranch ? `"mainBranch": ${JSON.stringify(cfg.mainBranch)}` : '',
+      ].filter(Boolean).join(' and ')} into the existing spexcode.json (other fields untouched)`)
     } else {
       console.warn(`• spexcode.json already exists at ${cfgDest} — left untouched (harnesses: ${JSON.stringify(chosenHarnesses)}).`)
     }
   } else {
     const cfg = (readJsonConfig(join(TEMPLATES, 'spexcode.json')) ?? {}) as Record<string, any>
     cfg.harnesses = chosenHarnesses
+    cfg.mainBranch = adoptionMainBranch(targetDir)
     if (nativeChosen.length && cfg.sessions?.launchers) {
       cfg.sessions.launchers = Object.fromEntries(
         Object.entries(cfg.sessions.launchers as Record<string, { harness?: string }>).filter(([, l]) => nativeChosen.includes(l.harness ?? 'claude')))
@@ -173,7 +192,7 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     }
     writeFileSync(cfgDest, JSON.stringify(cfg, null, 2) + '\n')
     const roots = JSON.stringify(readJsonConfig(cfgDest)?.lint?.governedRoots ?? null)
-    console.log(`✓ planted spexcode.json — harnesses ${JSON.stringify(chosenHarnesses)}, launchers ${JSON.stringify(Object.keys(cfg.sessions?.launchers ?? {}))}; lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded)`)
+    console.log(`✓ planted spexcode.json — mainBranch ${JSON.stringify(cfg.mainBranch)}, harnesses ${JSON.stringify(chosenHarnesses)}, launchers ${JSON.stringify(Object.keys(cfg.sessions?.launchers ?? {}))}; lint.governedRoots starts as ${roots} (the whole git-tracked tree, tests excluded)`)
   }
 
   // 2. install the git hooks. Unknown existing hooks are user-owned and stay byte-identical. An exact

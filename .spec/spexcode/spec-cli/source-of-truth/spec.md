@@ -95,6 +95,9 @@ Two principles keep that derivation cheap on a long-running server:
   rule are current-tip questions; the ledger removes repeated immutable-fact extraction, not that semantic
   lower bound. Within one build, stream count must not multiply ledger work: all consumers share one decoded
   snapshot, one integrity verdict, and one locked merge/write, with no write-then-reload verification pass.
+  The pair projector also parses the current-tip topology and tree-path listing once and passes those
+  immutable projections to both history and drift builders; a shared `rev-list --parents` or `ls-tree`
+  text must never be split into separate equivalent maps per builder.
   Cross-process writers still merge under the project-scoped lock; a corrupt or interpretation-mismatched
   snapshot rebuilds from Git, and a failed event scan remains loud rather than minting a marker.
 

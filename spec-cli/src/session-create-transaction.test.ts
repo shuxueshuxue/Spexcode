@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
@@ -31,13 +32,15 @@ async function waitFor(check: () => boolean | Promise<boolean>, label: string, t
 }
 const git = (project: string, ...args: string[]) => execFileSync('git', ['-C', project, ...args], { encoding: 'utf8' }).trim()
 
-test('public session create is bounded, rollback-clean, idempotent, and publishes exact Git state', { timeout: 45_000 }, async () => {
+test('public session create is bounded, rollback-clean, idempotent, and publishes exact Git state', { timeout: 70_000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-session-create-'))
   const projectPath = join(root, 'project'); mkdirSync(projectPath)
   const project = realpathSync(projectPath)
   const home = join(root, 'home'), fakeBin = join(root, 'bin'), trace = join(root, 'trace.log')
   const configuredMain = join(root, 'configured-main')
-  const stallGit = join(root, 'stall-git'), mismatchGit = join(root, 'mismatch-git'), launcher = join(root, 'stall-launcher'), gitWrapper = join(fakeBin, 'git')
+  const stallGit = join(root, 'stall-git'), mismatchGit = join(root, 'mismatch-git')
+  const killAfterGit = join(root, 'kill-after-git'), killAfterStore = join(root, 'kill-after-store')
+  const launcher = join(root, 'stall-launcher'), gitWrapper = join(fakeBin, 'git')
   const tmux = `spex-create-${process.pid}-${Date.now()}`, port = await freePort(), base = `http://127.0.0.1:${port}`
   mkdirSync(fakeBin)
   mkdirSync(join(project, '.spec', 'target'), { recursive: true })
@@ -61,8 +64,19 @@ case " $* " in
         previous=; last=; for arg in "$@"; do previous="$last"; last="$arg"; done
         ${JSON.stringify(execFileSync('which', ['git'], { encoding: 'utf8' }).trim())} -C "$previous" checkout -q --detach
       fi
+      if [ -e "$SPEX_CREATE_KILL_AFTER_GIT" ]; then kill -KILL "$PPID"; exit 137; fi
     fi ;;
-  *) exec ${JSON.stringify(execFileSync('which', ['git'], { encoding: 'utf8' }).trim())} "$@" ;;
+  *)
+    if [ -e "$SPEX_CREATE_KILL_AFTER_STORE" ]; then
+      parent_cmd=$(tr '\\000' ' ' < "/proc/$PPID/cmdline" 2>/dev/null || true)
+      case "$parent_cmd" in
+        *"cli.ts materialize"*)
+          backend_pid=$(ps -o ppid= -p "$PPID" | tr -d ' ')
+          kill -KILL "$PPID" "$backend_pid" 2>/dev/null
+          exit 137 ;;
+      esac
+    fi
+    exec ${JSON.stringify(execFileSync('which', ['git'], { encoding: 'utf8' }).trim())} "$@" ;;
 esac
 `)
   chmodSync(launcher, 0o755); chmodSync(gitWrapper, 0o755)
@@ -74,25 +88,32 @@ esac
   execFileSync('git', ['worktree', 'add', '-q', configuredMain, 'staging'], { cwd: project })
   writeFileSync(stallGit, 'stall\n')
 
-  const child = spawn(process.execPath, [tsx, api], {
-    cwd: project,
-    env: {
-      ...process.env,
-      PATH: `${fakeBin}:${process.env.PATH}`,
-      PORT: String(port),
-      SPEXCODE_HOME: home,
-      SPEXCODE_TMUX: tmux,
-      SPEXCODE_GIT_TIMEOUT_MS: '10000',
-      SPEXCODE_SESSION_CREATE_TIMEOUT_MS: '5000',
-      SPEX_CREATE_TRACE: trace,
-      SPEX_CREATE_STALL_GIT: stallGit,
-      SPEX_CREATE_MISMATCH_GIT: mismatchGit,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
   let logs = ''
-  child.stdout.setEncoding('utf8').on('data', (chunk) => { logs += chunk })
-  child.stderr.setEncoding('utf8').on('data', (chunk) => { logs += chunk })
+  const startBackend = () => {
+    const backend = spawn(process.execPath, [tsx, api], {
+      cwd: project,
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        PORT: String(port),
+        SPEXCODE_HOME: home,
+        SPEXCODE_TMUX: tmux,
+        SPEXCODE_GIT_TIMEOUT_MS: '10000',
+        SPEXCODE_SESSION_CREATE_TIMEOUT_MS: '5000',
+        SPEX_CREATE_TRACE: trace,
+        SPEX_CREATE_STALL_GIT: stallGit,
+        SPEX_CREATE_MISMATCH_GIT: mismatchGit,
+        SPEX_CREATE_KILL_AFTER_GIT: killAfterGit,
+        SPEX_CREATE_KILL_AFTER_STORE: killAfterStore,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    backend.stdout.setEncoding('utf8').on('data', (chunk) => { logs += chunk })
+    backend.stderr.setEncoding('utf8').on('data', (chunk) => { logs += chunk })
+    return backend
+  }
+  let child = startBackend()
+  const waitForHealth = () => waitFor(async () => { try { return (await fetch(`${base}/health`)).ok } catch { return false } }, 'backend health')
   const post = (key: string, prompt = '[[target]] transaction fixture', signal?: AbortSignal) => fetch(`${base}/api/sessions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'Idempotency-Key': key },
@@ -106,6 +127,16 @@ esac
     const runtime = readdirSync(projects).map((name) => join(projects, name, 'sessions')).find(existsSync)
     return runtime ? readdirSync(runtime) : []
   }
+  const projectRuntime = () => {
+    const projects = join(home, 'projects')
+    const name = existsSync(projects) ? readdirSync(projects)[0] : null
+    return name ? join(projects, name) : null
+  }
+  const candidateReceipts = () => {
+    const runtime = projectRuntime()
+    const dir = runtime ? join(runtime, '.session-create-candidates') : ''
+    return dir && existsSync(dir) ? readdirSync(dir).map((name) => join(dir, name)) : []
+  }
   const nodeRefs = () => git(project, 'for-each-ref', 'refs/heads/task', '--format=%(refname)')
   const worktrees = () => git(project, 'worktree', 'list', '--porcelain').match(/^worktree /gm)?.length ?? 0
   const noCreateArtifacts = async () => {
@@ -116,9 +147,19 @@ esac
     const ps = execFileSync('ps', ['-eo', 'args='], { encoding: 'utf8' })
     assert.ok(!ps.includes(gitWrapper), 'stalled Git process is physically gone')
   }
+  const crashBackend = async (marker: string, key: string, prompt: string, beforeRestart?: () => void) => {
+    writeFileSync(marker, 'kill\n')
+    const crashed = child
+    await assert.rejects(post(key, prompt), 'process death closes the admitted request without a response')
+    await waitFor(() => crashed.exitCode !== null || crashed.signalCode !== null, 'crashed backend exit')
+    rmSync(marker, { force: true })
+    beforeRestart?.()
+    child = startBackend()
+    await waitForHealth()
+  }
 
   try {
-    await waitFor(async () => { try { return (await fetch(`${base}/health`)).ok } catch { return false } }, 'backend health')
+    await waitForHealth()
 
     const timeoutStarted = Date.now()
     const timedOut = await post('timeout-key')
@@ -188,6 +229,51 @@ esac
     const published = phases.findIndex((row) => row.session === a.id && row.phase === 'record-write' && row.event === 'publish')
     const queued = phases.findIndex((row) => row.session === a.id && row.phase === 'launcher-queue' && row.event === 'start')
     assert.ok(published >= 0 && queued > published, 'record publication precedes launcher queue work')
+
+    const crashPrompt = 'git crash recovery fixture'
+    const id4 = (key: string) => createHash('sha256').update(`spexcode-session-create\0${key}`).digest('hex').slice(0, 4)
+    assert.equal(id4('crash-3'), id4('crash-157'), 'different crash keys deterministically share one resource suffix')
+    const beforeGitCrash = { refs: nodeRefs(), worktrees: worktrees(), stores: sessionDirs() }
+    await crashBackend(killAfterGit, 'crash-3', crashPrompt)
+    assert.equal(worktrees(), beforeGitCrash.worktrees + 1, 'real Git candidate survives backend process death before publication')
+    assert.deepEqual(sessionDirs(), beforeGitCrash.stores, 'Git-stage death precedes candidate store creation')
+    const crashedGitState = { refs: nodeRefs(), worktrees: worktrees(), stores: sessionDirs() }
+
+    const foreignRetry = await post('crash-157', crashPrompt)
+    const foreignBody = await foreignRetry.json() as any
+    assert.equal(foreignRetry.status, 409, 'a different key cannot consume the crashed candidate receipt')
+    assert.deepEqual({ code: foreignBody.code, phase: foreignBody.phase }, { code: 'session_create_failed', phase: 'git-worktree' })
+    assert.deepEqual({ refs: nodeRefs(), worktrees: worktrees(), stores: sessionDirs() }, crashedGitState, 'foreign retry preserves every crashed resource')
+
+    const gitRetry = await post('crash-3', crashPrompt)
+    const gitRetryBody = await gitRetry.json() as any
+
+    const beforeStoreCrash = { worktrees: worktrees(), stores: sessionDirs().length }
+    await crashBackend(killAfterStore, 'store-crash', 'store crash recovery fixture')
+    assert.equal(worktrees(), beforeStoreCrash.worktrees + 1, 'store-stage death leaves its real Git candidate for receipt recovery')
+    assert.equal(sessionDirs().length, beforeStoreCrash.stores + 1, 'store-stage death occurs after private session files exist')
+    const storeRetry = await post('store-crash', 'store crash recovery fixture')
+    const storeRetryBody = await storeRetry.json() as any
+
+    await crashBackend(killAfterGit, 'invalid-crash', 'invalid receipt fixture', () => {
+      const requestDigest = createHash('sha256').update('invalid-crash').digest('hex')
+      const receipt = candidateReceipts().find((path) => {
+        try { return JSON.parse(readFileSync(path, 'utf8')).requestDigest === requestDigest } catch { return false }
+      })
+      if (receipt) writeFileSync(receipt, '{ invalid receipt\n')
+    })
+    const invalidState = { refs: nodeRefs(), worktrees: worktrees(), stores: sessionDirs() }
+    const invalidRetry = await post('invalid-crash', 'invalid receipt fixture')
+    const invalidBody = await invalidRetry.json() as any
+    assert.equal(invalidRetry.status, 409, 'an invalid or absent receipt cannot authorize recovery cleanup')
+    assert.deepEqual({ code: invalidBody.code, phase: invalidBody.phase }, { code: 'session_create_failed', phase: 'git-worktree' })
+    assert.deepEqual({ refs: nodeRefs(), worktrees: worktrees(), stores: sessionDirs() }, invalidState, 'invalid-receipt retry preserves every orphan resource')
+
+    assert.deepEqual(
+      { gitDeath: gitRetry.status, storeDeath: storeRetry.status },
+      { gitDeath: 201, storeDeath: 201 },
+      `same-key restart must recover both process-death stages; git=${JSON.stringify(gitRetryBody)} store=${JSON.stringify(storeRetryBody)}`,
+    )
   } finally {
     child.kill('SIGTERM')
     try { execFileSync('tmux', ['-L', tmux, 'kill-server'], { stdio: 'ignore' }) } catch { /* no server */ }

@@ -89,6 +89,12 @@ land through the same call, and a note round-trips byte-for-byte on every surfac
 cheap half: the one-field-per-line shape lets them READ ("already active, nothing stale to clear?") with
 exact-line greps and no jq, and every WRITE goes back through the CLI to this writer ([[state]]).
 
+A published create record is also the durable fence for any private pre-publication candidate receipt whose
+best-effort retirement failed after the atomic record write. Terminal close holds the session record lock and
+the exact recorded branch/path resource lock, retires a valid matching receipt, and proves it absent before
+stopping or removing any public resource. Failure preserves the row, store, worktree, and branch; deleting the
+record first would let the old receipt regain cleanup authority over a later name collision.
+
 Launch readiness is the one durable internal publication fence within that record. Its pending value freezes
 the exact pre-resume lifecycle/proposal/note/stopped/archived and offline projection while the raw candidate is
 available to the adapter's post-launch validator. The record/layout boundary owns one public-record parser:

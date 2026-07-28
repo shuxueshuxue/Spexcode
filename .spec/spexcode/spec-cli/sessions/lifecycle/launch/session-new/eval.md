@@ -16,7 +16,9 @@ scenarios:
       than an exported preparation function. In isolated backend processes, kill the backend immediately
       after a real Git worktree add and again immediately after the candidate store files are written; restart
       on the same project/store and retry the same Idempotency-Key. Also present an occupied candidate under a
-      different key and an occupied orphan with an invalid or absent private receipt.
+      different key and an occupied orphan with an invalid or absent private receipt. Force private-receipt
+      retirement to fail after a successful record publication, then request close; if close succeeds, create
+      a different-key session with the same branch/path suffix and retry the old key.
     expected: >
       A timeout or disconnect settles within the configured wall with structured code and phase, kills the
       active Git group, and leaves zero session row, store directory, worktree, branch, or launcher pane; no
@@ -34,7 +36,10 @@ scenarios:
       bypassed. After either process death, the matching-key restart uses the atomic private receipt to remove
       only its pre-publication resources and then yields one exact published receipt (or an exact cleanup
       failure), never permanent occupied `409`. A different key or invalid/unreceipted orphan is preserved and
-      fails loud; candidate presence alone never becomes cleanup authority.
+      fails loud; candidate presence alone never becomes cleanup authority. A published-but-unretired receipt
+      remains fenced by its public row: close refuses before stop/deletion unless it can retire and prove that
+      receipt absent. Therefore the old key can never later enter matching cleanup against a different session
+      that reused the same branch/path.
     code: spec-cli/src/sessions.ts, spec-cli/src/index.ts, spec-cli/src/client.ts
     test: spec-cli/src/session-create-transaction.test.ts
 ---

@@ -60,6 +60,13 @@ mismatched payload/resource identity, malformed receipt, or occupied orphan with
 ownership: all resources are preserved and creation fails loud. Normal rollback or record publication retires
 the private receipt; a matching retry also retires a publication-left receipt after recovering the public row.
 
+Record publication itself fences any receipt that could not be retired: while that public record exists,
+create returns it and never enters candidate cleanup. Before terminal close may remove that fence, close holds
+the same session-id and exact `{branch,path}` resource locks, retires a valid matching candidate receipt, and
+proves it absent. If retirement cannot be proved, close fails before stopping or deleting the session and
+preserves its record, store, worktree, and branch. An irreversible record publication is never reported as a
+rollback, and a stale receipt can never outlive close with authority to consume a later colliding session.
+
 The public request accepts the standard `Idempotency-Key` header. The backend deterministically maps a valid
 key to one candidate session id and binds it to the normalized `{prompt,parent,launcher}` payload. Creation for
 that id is serialized at the existing per-session lock. A same-key retry, including a concurrent retry or a

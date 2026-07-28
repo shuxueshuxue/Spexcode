@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process'
 import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot } from './layout.js'
-import { processStartToken, writeDetachedRuntimeReceipt } from './process-identity.js'
+import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
 const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
@@ -1167,6 +1167,50 @@ test('codex resource probe rejects a missing, wrong, or replaced detached receip
     assert.equal(replaced.healthy, false)
     assert.match(replaced.error || '', /generation changed during ownership probe/)
     assert.equal(rpcCalls, 1)
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('Codex mutation guard promotes an exact v3 scope before target close proof', { skip: platform() !== 'linux' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), `spex-codex-legacy-receipt-${process.pid}-`))
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
+  const socket = codexAppServerSock(dir)
+  let rpcCalls = 0
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list' || message.method === 'thread/list') {
+      rpcCalls++
+      return { data: [], nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    owner = startCodexOwner(dir)
+    const prior = JSON.parse(readFileSync(codexAppServerReceipt(dir), 'utf8'))
+    rmSync(codexAppServerReceipt(dir), { force: true })
+    writeFileSync(join(dir, 'codex-app-server.scope'),
+      `detached-v3 ${prior.pid} ${prior.startToken} ${prior.processGroupId} ${prior.linuxSessionId}\n`)
+
+    const reading = await codexSharedRuntimeProbe(dir)
+    assert.equal(reading.healthy, false, 'reads expose the unproven generation without repairing it')
+    assert.equal(rpcCalls, 0, 'a read does not touch the legacy app-server or mint a receipt')
+
+    const sharedRuntimes = codexHarness.sharedRuntimes
+    if (!sharedRuntimes) throw new Error('Codex exposes its shared runtime descriptor')
+    const mutationGuard = sharedRuntimes(dir)[0]?.mutationGuard
+    if (!mutationGuard) throw new Error('Codex exposes its target mutation guard')
+    const guard = await mutationGuard('retired-target-thread')
+    assert.deepEqual(guard, { healthy: true, referenceIds: [], targetTurnPresence: 'none', descendantIds: [] })
+    if (!owner) throw new Error('Codex test owner started')
+    assert.equal(verifyDetachedRuntime(owner.pid, codexAppServerReceipt(dir)).ok, true)
+    assert.equal(rpcCalls, 3, 'the close guard makes its normal loaded and descendant reads after migration')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await stopCodexOwner(owner)

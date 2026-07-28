@@ -96,11 +96,13 @@ places it in argv, logs, records, events, or comms. Forged, stale-epoch, complet
 wrong-operation, and replayed delegates all fail before spawn. Thus the canonical spawn rides exactly one
 admitted resume without opening unrelated launch or queue work. Reading the delegated FIFO and completing its
 writer is only bearer handoff, not launch success. The parent resume ticket and active lease remain live until
-the harness adapter's launch-readiness fence succeeds and validates across the `stopped:false` record write.
+the harness adapter's launch-readiness fence succeeds and validates across a durable internal pending record.
+The pending record projects the exact pre-resume stopped/offline state everywhere and emits no lifecycle event.
 The fence re-proves the exact adapter-owned runtime, target reference, and ownership facts that admitted it;
 handoff alone or a generation/reference/owner change cannot complete the parent ticket. Product code reports a
-successful resume only after that sandwich validation; helper refusal, timeout, missing proof, or invalidation
-returns a non-success and preserves or restores the retained record as stopped/offline.
+successful resume only after that sandwich validation and one final online publication; helper refusal,
+timeout, missing proof, invalidation, or stale-pending recovery returns a non-success and preserves or restores
+the original record without consuming a false lifecycle transition.
 
 ### Bearer, durability, and public lifecycle
 

@@ -35,11 +35,13 @@ The four kinds, each with a FIXED track/transport fact (no votes anywhere):
   the SHARED REMOTE is a different question with a different answer: change the node's git HOME, never its
   tracking — that design is [[spec-local]] (a private overlay root that is its own git repository; pending).
 - **Machine facts** — `spexcode.local.json`, the hook shims (`.claude/settings.json`, `.codex/hooks.json`),
-  plugin bundles (they bake this install's paths): NEVER tracked; always in the per-clone exclude.
+  plugin bundles (they bake this install's paths): NEVER tracked; ignored by the materialized tree's working
+  `.gitignore` projection. Truly checkout-invariant residue (`spexcode.local.json`, `.worktrees/`, `.session`)
+  keeps the common per-clone exclude.
 - **Materialized artifacts** — the contract blocks in CLAUDE.md/AGENTS.md and the materialized
-  skills/agents: NEVER tracked; hidden via the per-clone `.git/info/exclude`. The host's tracked
-  `.gitignore` is **never touched** — a legacy managed block found there is erased by the next materialize
-  (the forgetting law), an honest one-time migration diff.
+  skills/agents: NEVER tracked; hidden by the same tree-local working `.gitignore` projection. That projection
+  is itself managed text: a tracked host `.gitignore` keeps pristine index/history bytes through
+  [[content-filter]], an untracked host file remains honestly `??`, and a wholly generated one ignores itself.
 - **Run residue** — `.worktrees/`, the global store, `.git/spexcode` blobs: never tracked; out of tree, or
   exclude-ruled where in-tree.
 
@@ -56,7 +58,7 @@ choice, never a question to the user):
   tracks, or commits anything for the user — tracking is always their own act, and this transition makes
   that act safe by construction.
 
-**The exclude is a citizenship declaration, not a history guard.** History is guarded by the pre-commit
+**Ignore is a citizenship declaration, not a history guard.** History is guarded by the pre-commit
 surgery ([[commit-surgery]]); the ignored-bit is what every OTHER git door consults — checkout may
 silently overwrite an ignored file (an unignored untracked one hard-fails a branch switch), `git clean
 -fd` spares it (an unexcluded `spexcode.local.json` was once wiped by routine cleanup, 401-ing every later
@@ -73,7 +75,7 @@ writes die with its worktree (a worker once wiped the host's launchers through t
 makes git-visible it hides in the shared `.git/info/exclude` — idempotent, self-healing, no force-add bait.
 
 **Retirement ledger (historical).** The `render` vote and its whole apparatus — `spex init --render`, the
-open-vote decision hint, the per-mode migration matrix, the `.gitignore` managed block, `private: true` as
+open-vote decision hint, the per-mode migration matrix, its MODE-SPECIFIC `.gitignore` block, `private: true` as
 a hidden-alias — are gone; a lingering `render`/`private` field is ignored with a loud non-fatal notice
 naming the removal recipe. The older untrack-private mode (untracked `.spec`, worktree symlinks) died
 earlier for governance reasons. What the vote's `committed` word used to buy — delivery to clones without

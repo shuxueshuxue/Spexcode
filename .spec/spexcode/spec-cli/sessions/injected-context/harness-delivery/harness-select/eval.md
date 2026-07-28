@@ -47,6 +47,23 @@ scenarios:
       (.claude gone, the generated CLAUDE.md gone / block stripped) under the narrowed set. A selection change
       self-heals at the next git transition — never via a harness event, never waiting for an unrelated
       .plugins edit.
+  - name: checkout-method-independent-selection
+    tags: [cli]
+    code:
+      - spec-cli/src/materialize.ts#materialize
+      - spec-cli/src/contract-filter.ts
+      - spec-cli/hooks/dispatch.sh
+    description: >-
+      Put a codex-only spexcode.json on a candidate commit while main carries a different valid selection.
+      Judge that same candidate first by switching the root checkout to it, then by restoring main and adding
+      the candidate as a linked worktree. Materialize both registered trees in alternating order; inspect each
+      tree's contract/filter/ignore output, the shared Codex shim/trust, and dispatch from an unselected tree.
+    expected: >-
+      Checkout method changes nothing: the candidate reads its own codex selection and materializes
+      successfully in both shapes. Each tree keeps only its selected local artifacts and its own filter payload;
+      a later sibling materialize cannot rewrite them. Shared root wiring is the union of successful registered
+      tree claims, so one tree cannot erase a sibling's Codex hook/trust, while dispatch in an unselected tree is
+      a no-op. Git status/index keep host prose honest and no user global ignore configuration is replaced.
 ---
 # eval.md — harness-select
 

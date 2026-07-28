@@ -84,21 +84,15 @@ plugin node. This replaces the launch-time
 - **the content-hash marker** (same per-tree slot as the manifest), stamped LAST — a freshness record (a
   crash mid-materialize leaves it stale, diagnosably); the unconditional pre-commit materialize heals regardless.
 
-The pass obeys the **forgetting law**: materialize(P₂) ∘ materialize(P₁) = materialize(P₂) — whatever a
-prior policy (harness set, a retired render-vote mode, or older legacy modes) wrote, one materialize under the
-current policy fully forgets it; idempotence is the special case P₂ = P₁, and **dematerialize =
-materialize(∅)** is the empty policy [[spex-uninstall]] builds on. The shape is ERASE-THEN-ASSERT over a
-CLOSED set of landing points: each is first erased unconditionally by its IDENTITY STAMP — the sentinel
-blocks, the shim's own `dispatch.sh` command line, the generated mark on skills/agents (which is also what
-lets a RENAMED or deleted node's product be forgotten), the content-filter config namespace, the legacy
-skip-worktree bit — then rewritten per the current policy, possibly to nothing. No ledger of past states,
-no pairwise migration branches: the erase IS the migration. So an UNSELECTED harness needs no separate
-prune pass — the erase already forgot it and only selected harnesses are asserted ([[harness-adapter]]'s
-`clean()` remains the per-harness surgical inverse the erase is built from). The erase order carries one
-constraint: managed blocks leave the working contract files BEFORE the content filter's config goes
-([[content-filter]] edge 3). A plugin target stays exclusive ([[plugin-harness]]); its bundle FOLDERS are
-arbitrary paths no stamp can enumerate, so they keep the one small ledger of last-emitted folders (in the
-same per-tree slot as the manifest) — the single landing point outside the stamp-erasable set.
+The pass obeys a scoped **forgetting law**. One tree's output is exactly its current policy; shared project
+output is exactly the union of successful claims from Git-registered worktrees. Local landing points are
+ERASE-THEN-ASSERT by identity stamp, so narrowing one tree removes its contract/shim/skills without touching a
+sibling. A small claim in the existing tree runtime slot records only what that successful pass actually
+asserted; the common reconciler retains shared root hooks/trust while any registered claim needs them and
+destructs them after the last claim disappears. Git registration is the lifetime truth: a missing/locked but
+registered tree retains its last claim, while remove/prune releases it. Idempotence is the same-policy case,
+and project-wide dematerialize clears every accessible registered tree before shared substrate. A plugin target
+stays exclusive ([[plugin-harness]]) and its arbitrary bundle folders remain in the same per-tree claim.
 
 The pass returns a **materialization receipt** alongside its content hash: the manifest and the exact contract,
 shim, skill/agent, plugin-bundle, and trust paths asserted by this run. The receipt is populated at those writes,
@@ -106,22 +100,16 @@ with trust paths supplied by the adapter that performed the global write, so cal
 harness footprint without maintaining a second harness-artifact inventory.
 
 Placement is harness-fact, not preference (verified): Codex auto-discovers ONLY the repo-root `./AGENTS.md`
-(never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. The materialize's ignore
-rules are one managed `#` block in the per-clone `.git/info/exclude` — the host's tracked `.gitignore` is
-never touched ([[residence]]) — carrying the MACHINE facts (the adapters' `shimFile()`s, which bake
-THIS machine's absolute install path; any plugin bundle dir; `spexcode.local.json`; and the session
-residue: `.worktrees/` — where a launch plants its worktrees — plus a legacy `.session` entry for
-worktrees an old backend labeled with the retired per-worktree state file; live session state is the
-global store's `session.json`), the materialized skills/agents, and the wholly-ours contract files; a
-tracked-or-mixed contract file is the [[content-filter]]'s domain instead, never an exclude entry. The
-block is **checkout-invariant**: the exclude lives in the COMMON git dir shared by the main checkout and
-every worktree, so if the entries differed by where materialize ran the two passes would fight. The only
-entry that varies is Codex's hooks shim, which an adapter places at the [[harness-adapter|main checkout]]
-(a worktree's codex reads the root's hooks): from main it is `.codex/hooks.json`, from a worktree it
-escapes `proj` (`../…`). So each entry is anchored to the checkout it LIVES under — project-relative when
-inside `proj`, else main-checkout-relative — which resolves that shim to `.codex/hooks.json` from ANY
-checkout (a pattern naming a main-only path is a harmless no-op in a worktree). Every checkout emits the
-identical block. The Codex trust hash is not in-tree at all — it lives in the global `~/.codex/config.toml`.
+(never `.codex/AGENTS.md`); Claude discovers `./CLAUDE.md` or `./.claude/CLAUDE.md`. Ignore is projected with
+the same ownership split. Checkout-invariant machine residue (`spexcode.local.json`, `.worktrees/`, legacy
+`.session`, and a claimed shared root shim) stays in the common `.git/info/exclude`. Selection-dependent local
+shims, bundles, skills/agents, and wholly-ours contract files are one managed block in that tree's working
+`.gitignore`. [[content-filter]] keeps a tracked host `.gitignore` pristine in the index, leaves an untracked
+host file honestly visible, and lets a wholly generated one ignore itself. Contract and ignore payloads live
+under the current tree slot; one common filter driver resolves the invoking Git toplevel plus `%f`, so linked
+trees never overwrite one another's bytes and user global ignore configuration is untouched. The Codex trust
+hash remains global and project-scoped, but its lifetime follows the registered claim union rather than
+whichever tree materialized last.
 
 The net ideal path: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`, zero
 further operation, no global pollution beyond the scoped Codex trust. The contract files are SpexCode-owned

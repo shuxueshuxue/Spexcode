@@ -62,9 +62,9 @@ scenarios:
       renders that diagnostic once through its action-error surface. A refused destructive operation never reads as
       HTTP success or silently disappears.
     code:
-      - spec-cli/src/index.ts#closeSession
-      - spec-dashboard/src/SessionContextMenu.jsx#confirmClose
-      - spec-dashboard/src/SessionInterface.jsx#act
+      - spec-cli/src/index.ts
+      - spec-dashboard/src/SessionContextMenu.jsx#SessionContextMenu
+      - spec-dashboard/src/SessionInterface.jsx#SessionInterface
 ---
 
 # session-rename — yatsu

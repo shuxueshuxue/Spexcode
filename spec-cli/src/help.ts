@@ -45,8 +45,7 @@ session to that node. --prompt-file <path>|- carries a long prompt without shell
       'One-shot table of living sessions. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
     watch: ['spex session watch [SEL…] [--as NAME] [--idle] [--interval N=5]',
-      `Streams lifecycle transitions until killed — it NEVER EXITS; the human's forever stream.
-An agent must background it or use wait; blocking a turn on watch freezes you.`, ['selector']],
+      'Streams lifecycle transitions and blocks until killed; `session wait` is the one-shot alternative.', ['selector']],
     wait: ['spex session wait <SEL> [--timeout S=1200] [--interval S=2] [--idle]',
       `EDGE-TRIGGERED wait on one session. Prints the current status immediately (stderr), then
 exits 0 only when it OBSERVES
@@ -55,9 +54,8 @@ observed path on stdout (e.g. working→review — read the LAST token as the st
 It NEVER returns just because the session is actionable ALREADY — for "what is it right NOW"
 use \`session ls\` / \`session review\` instead. --timeout is the guaranteed exit (code 1,
 observed path on stderr).`, ['selector']],
-    review: ['spex session review <SEL> [--json]', 'The merge cockpit: ahead · uncommitted · proposal · gates · merge-base diff — decide from this, don\'t hand-run git.', ['selector']],
-    merge: ['spex session merge <SEL>', `Gated merge, dispatched to the session's OWN agent. Confirm HEAD advanced before
-closing — closing unmerged discards work.`, ['selector', 'project-bound']],
+    review: ['spex session review <SEL> [--json]', 'Reports ahead · uncommitted · proposal · gates · merge-base diff.', ['selector']],
+    merge: ['spex session merge <SEL>', 'Dispatches a gated merge to the session\'s own agent; it does not close the session.', ['selector', 'project-bound']],
     send: [['spex session send <SEL> "<msg>"', 'spex session send <SEL> --keys "<keys>"'],
       `Plain send delivers a message and fails loud when dispatch is dead. --keys is the LAST RESORT:
 raw nav-mode keystrokes to a TUI dialog ("Up Up Enter", C-/M-/S- combos). The raw key surface
@@ -81,8 +79,8 @@ argv/environment. --status is the sanitized read-only lease view.`, ['selector',
     done: ['spex session done --propose merge|nothing|close [--note T]', 'Declare your own work committed and stop.'],
     park: ['spex session park --note <what-you-await>', 'Declare that a real background task will wake your own session.'],
     ask: ['spex session ask --note <your-question>', 'Declare that your own session is stopped on the human and resumes on reply.'],
-    attach: ['spex session attach <SEL>', `Sit in the worker's REAL tmux (detach: C-b d). INTERACTIVE AND BLOCKING — an agent
-must NEVER run it in a turn: use show --capture / send. LOCAL-only (fails loud on a remote backend).`, ['selector']],
+    attach: ['spex session attach <SEL>', `Attaches the current terminal to the worker's tmux (detach: C-b d) and blocks until detached.
+LOCAL-only (fails loud on a remote backend); show --capture and send are non-interactive.`, ['selector']],
   }
 }
 

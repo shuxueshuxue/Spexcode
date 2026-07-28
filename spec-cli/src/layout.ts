@@ -9,7 +9,7 @@ export { encodeProject, spexcodeHome } from './project-store.js'
 
 export type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)
-  mainBranch?: string              // source-of-truth BRANCH worktrees fork from (default: auto-detected — see mainBranch())
+  mainBranch?: string              // stable source-of-truth branch stamped by init (default: "main")
   branchPrefix?: string            // how a branch names its node (default: "node/")
   preset?: string                  // the SELECTED init preset — which cumulative .plugins tier `spex init` seeds (default 'default'; seed-time only, no launcher gate; read by init.ts; see [[init-preset]])
   // RETIRED ([[residence]]) — the old three-word footprint vote. Materialized artifacts carry no facts and are never
@@ -115,16 +115,8 @@ export function gitCommonDir(): string {
 
 export function mainBranch(): string {
   let checkout: string
-  try {
-    checkout = mainCheckout()
-  } catch { return 'main' }
-  const override = readConfig(checkout).mainBranch?.trim()
-  if (override) return override
-  try {
-    const cur = git(['-C', checkout, 'symbolic-ref', '--short', 'HEAD']).trim()
-    if (cur) return cur
-  } catch { /* detached/bare checkout: use the documented conventional default */ }
-  return 'main'
+  try { checkout = mainCheckout() } catch { return 'main' }
+  return readConfig(checkout).mainBranch?.trim() || 'main'
 }
 
 // the MAIN checkout (the root working tree) for a project — the SAME answer from main OR any linked worktree

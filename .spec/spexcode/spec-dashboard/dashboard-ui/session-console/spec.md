@@ -219,6 +219,8 @@ one of the pair is offered, keyed on `archived` alone); `/close` removes the wor
 `/eval` opens the canonical session-scoped Evals page.
 Lifecycle action failures consume both HTTP status and the structured `{ok,error}` body before the board
 reloads, so a refused stop/close remains visible instead of reading as a successful background no-op.
+Each refused action has one diagnostic on the shared action-error surface; duplicate alerts make a single
+failure look like two operations.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
 tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
 that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` and

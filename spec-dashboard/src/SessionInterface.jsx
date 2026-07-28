@@ -796,7 +796,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
           </div>
           )}
           {actErr && <div className="si-offline-err si-action-error" role="alert">{actErr}</div>}
-          {actErr && !shelvedSel && <div className="si-offline-err" role="alert">{actErr}</div>}
           {viewingShelf && !shelved.length && <div className="si-empty">{t('session.shelfEmpty')}</div>}
           {forest.map((it) => {
             // Working rows group into triage zones and fold nested sessions; the archive branch above is flat and

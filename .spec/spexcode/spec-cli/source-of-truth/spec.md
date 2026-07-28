@@ -81,8 +81,9 @@ Two principles keep that derivation cheap on a long-running server:
   starts a separate node history. A pure rename remains a zero-content move.
   Both indices are read for **several checkouts at once** — the backend's own root plus every session
   worktree (the eval surfaces root their readings at the session's branch) — so the cache shares an
-  in-flight promise for equal checkout heads while its ownership is keyed by the current checkout. When
-  a root advances to a new HEAD, its old index is released immediately unless another live root still
+  in-flight promise for equal checkout heads while its ownership is keyed by the current checkout. Its
+  immutable content key is the checkout HEAD plus Git's interpretation identity; the root path is an LRU
+  owner only, never a second content dimension. When a root advances to a new HEAD, its old index is released immediately unless another live root still
   references that same HEAD. A small bounded set of current-root slots keeps several worktrees warm without
   retaining one full index for every historical commit, and concurrent readers of one HEAD share a single
   in-flight build.

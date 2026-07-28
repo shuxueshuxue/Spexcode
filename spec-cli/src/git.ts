@@ -898,6 +898,7 @@ const INDEX_ROOT_SLOTS = Math.max(4, Number(process.env.SPEXCODE_INDEX_CACHE_ROO
 function rootKey(root: string): string { return resolve(root) }
 
 function gitInterpretationKey(root: string): string { return eventCacheLocation(root).identity }
+function indexCacheKey(root: string, head: string): string { return `${head}\0${gitInterpretationKey(root)}` }
 
 // HEAD plus Git's object-interpretation state identifies the immutable index contents; the root owns which
 // view is still useful. Moving a checkout or changing replace/shallow/graft state drops its old history,
@@ -965,7 +966,7 @@ export function historyIndex(root: string, tip = 'HEAD'): Promise<HistoryIndex> 
   }
   const head = headOrEmpty(root)
   if (!head) return buildIndex(root, 'HEAD', false, true)
-  const cacheKey = `${rootKey(root)}\0${head}\0${gitInterpretationKey(root)}`
+  const cacheKey = indexCacheKey(root, head)
   touchRoot(indexRoots, indexCache, root, cacheKey)
   const hit = indexCache.get(cacheKey)
   if (hit) return hit
@@ -1545,7 +1546,7 @@ export function driftIndex(root: string, tip = 'HEAD'): Promise<DriftIndex> {
   }
   const head = headOrEmpty(root) // filesystem HEAD, no subprocess — see historyIndex
   if (!head) return buildDriftIndex(root, 'HEAD', false, true)
-  const cacheKey = `${rootKey(root)}\0${head}\0${gitInterpretationKey(root)}`
+  const cacheKey = indexCacheKey(root, head)
   touchRoot(driftRoots, driftIdxCache, root, cacheKey)
   const hit = driftIdxCache.get(cacheKey)
   if (hit) return hit
@@ -1617,7 +1618,7 @@ export function sourceIndexes(root: string, tip = 'HEAD'): Promise<[HistoryIndex
   }
   const head = headOrEmpty(root)
   if (!head) return buildIndexPair(root, 'HEAD', false, true)
-  const cacheKey = `${rootKey(root)}\0${head}\0${gitInterpretationKey(root)}`
+  const cacheKey = indexCacheKey(root, head)
   touchRoot(indexRoots, indexCache, root, cacheKey)
   touchRoot(driftRoots, driftIdxCache, root, cacheKey)
   const historyHit = indexCache.get(cacheKey), driftHit = driftIdxCache.get(cacheKey)

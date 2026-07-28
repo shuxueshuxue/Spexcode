@@ -531,6 +531,31 @@ test('an explicit pending tip never occupies or evicts the root-owned HEAD index
   assert.equal(await driftIndex(root), headDrift, 'pending drift evicted the warm HEAD object')
 })
 
+test('linked worktrees at one head share the one immutable source-index pair', async () => {
+  const { root, run } = specRepo()
+  const parent = mkdtempSync(join(tmpdir(), 'spex-index-linked-'))
+  const linked = join(parent, 'worktree')
+  try {
+    run('worktree', 'add', '--detach', '-q', linked, 'HEAD')
+    resetHistoryCachesForTests()
+    const [firstHistory, firstDrift] = await sourceIndexes(root)
+    const [secondHistory, secondDrift] = await sourceIndexes(linked)
+    assert.equal(secondHistory, firstHistory, 'same immutable checkout view rebuilt history per worktree')
+    assert.equal(secondDrift, firstDrift, 'same immutable checkout view rebuilt drift per worktree')
+    assert.deepEqual(historyCacheStats(), {
+      historyHeads: 1,
+      driftHeads: 1,
+      historyRoots: 2,
+      driftRoots: 2,
+    })
+  } finally {
+    try { run('worktree', 'remove', '--force', linked) } catch { /* fixture cleanup continues */ }
+    rmSync(parent, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+    resetHistoryCachesForTests()
+  }
+})
+
 // A name stream of a chosen size, built from few long paths rather than many short ones — the switch reads
 // BYTES, so width per path is as good as path count and a hundredth of the fast-import cost.
 function prefixRepo(paths: number, pathLength: number): { root: string; streamBytes: number } {

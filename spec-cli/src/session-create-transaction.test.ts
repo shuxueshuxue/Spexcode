@@ -142,6 +142,7 @@ esac
   const noCreateArtifacts = async () => {
     assert.deepEqual(await rows(), [], 'public state has no phantom-running row')
     assert.deepEqual(sessionDirs(), [], 'global store has no candidate session')
+    assert.deepEqual(candidateReceipts(), [], 'private candidate receipt is retired with rollback')
     assert.equal(nodeRefs(), '', 'candidate branch is absent')
     assert.equal(worktrees(), 2, 'candidate worktree is absent')
     const ps = execFileSync('ps', ['-eo', 'args='], { encoding: 'utf8' })
@@ -237,6 +238,8 @@ esac
     await crashBackend(killAfterGit, 'crash-3', crashPrompt)
     assert.equal(worktrees(), beforeGitCrash.worktrees + 1, 'real Git candidate survives backend process death before publication')
     assert.deepEqual(sessionDirs(), beforeGitCrash.stores, 'Git-stage death precedes candidate store creation')
+    assert.equal(candidateReceipts().length, 1, 'an atomic private receipt precedes the first Git mutation')
+    assert.equal(JSON.parse(readFileSync(candidateReceipts()[0], 'utf8')).stage, 'prepared', 'a kill inside Git leaves the last durable stage honest')
     const crashedGitState = { refs: nodeRefs(), worktrees: worktrees(), stores: sessionDirs() }
 
     const foreignRetry = await post('crash-157', crashPrompt)
@@ -247,20 +250,24 @@ esac
 
     const gitRetry = await post('crash-3', crashPrompt)
     const gitRetryBody = await gitRetry.json() as any
+    assert.deepEqual(candidateReceipts(), [], 'matching Git-stage recovery retires its private receipt')
 
     const beforeStoreCrash = { worktrees: worktrees(), stores: sessionDirs().length }
     await crashBackend(killAfterStore, 'store-crash', 'store crash recovery fixture')
     assert.equal(worktrees(), beforeStoreCrash.worktrees + 1, 'store-stage death leaves its real Git candidate for receipt recovery')
     assert.equal(sessionDirs().length, beforeStoreCrash.stores + 1, 'store-stage death occurs after private session files exist')
+    assert.equal(JSON.parse(readFileSync(candidateReceipts()[0], 'utf8')).stage, 'store-created', 'the receipt records the last durable store stage')
     const storeRetry = await post('store-crash', 'store crash recovery fixture')
     const storeRetryBody = await storeRetry.json() as any
+    assert.deepEqual(candidateReceipts(), [], 'matching store-stage recovery retires its private receipt')
 
     await crashBackend(killAfterGit, 'invalid-crash', 'invalid receipt fixture', () => {
       const requestDigest = createHash('sha256').update('invalid-crash').digest('hex')
       const receipt = candidateReceipts().find((path) => {
         try { return JSON.parse(readFileSync(path, 'utf8')).requestDigest === requestDigest } catch { return false }
       })
-      if (receipt) writeFileSync(receipt, '{ invalid receipt\n')
+      assert.ok(receipt, 'invalid-orphan control starts from a real private receipt')
+      writeFileSync(receipt, '{ invalid receipt\n')
     })
     const invalidState = { refs: nodeRefs(), worktrees: worktrees(), stores: sessionDirs() }
     const invalidRetry = await post('invalid-crash', 'invalid receipt fixture')

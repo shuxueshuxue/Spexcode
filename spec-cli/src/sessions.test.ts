@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 import { readTimeline } from './session-timeline.js'
 
@@ -188,12 +188,12 @@ test('maintenance resume holds its parent ticket after delegated spawn until ada
   const id = `resume-ready-delay-${process.pid}`
   assertIsolatedResumeStore(home, id)
   const sharedDir = join(home, 'shared'); mkdirSync(sharedDir)
-  const sharedPid = join(sharedDir, 'runtime.pid'); const sharedScope = join(sharedDir, 'runtime.scope')
+  const sharedPid = join(sharedDir, 'runtime.pid'); const sharedReceipt = join(sharedDir, 'runtime.detached.json')
   const consumed = join(home, 'delegate-consumed'); const helper = join(home, 'helper.sh')
   const spex = join(process.cwd(), 'bin', 'spex.mjs')
   writeFileSync(helper, `#!/usr/bin/env bash
 set -eu
-${JSON.stringify(process.execPath)} ${JSON.stringify(spex)} internal shared-runtime-spawn ${JSON.stringify(sharedDir)} ${JSON.stringify(join(sharedDir, 'runtime.log'))} ${JSON.stringify(sharedPid)} ${JSON.stringify(sharedScope)} ${JSON.stringify(process.execPath)} -e 'setInterval(() => {}, 1000)'
+${JSON.stringify(process.execPath)} ${JSON.stringify(spex)} internal shared-runtime-spawn ${JSON.stringify(sharedDir)} ${JSON.stringify(join(sharedDir, 'runtime.log'))} ${JSON.stringify(sharedPid)} ${JSON.stringify(sharedReceipt)} ${JSON.stringify(process.execPath)} -e 'setInterval(() => {}, 1000)'
 touch ${JSON.stringify(consumed)}
 `)
   chmodSync(helper, 0o755)
@@ -455,9 +455,9 @@ test('stop revalidates the exact leaf after every shared guard before TERM and K
       }, null, 2)}\n`)
 
       const pidFile = join(home, 'shared.pid')
-      const isolationFile = join(home, 'shared.scope')
+      const receiptFile = join(home, 'shared.detached.json')
       shared = spawnDetachedRuntime({
-        cwd: home, logFile: join(home, 'shared.log'), pidFile, isolationFile,
+        cwd: home, logFile: join(home, 'shared.log'), pidFile, receiptFile,
         command: process.execPath, args: ['-e', 'setInterval(() => {}, 1000)'],
       })
       const leafProgram = signal === 'SIGKILL'
@@ -480,7 +480,7 @@ test('stop revalidates the exact leaf after every shared guard before TERM and K
         }
         return { healthy: true, references: [] }
       }
-      claudeHarness.sharedRuntimes = () => [{ key: `leaf-${signal}`, label: `${signal} leaf fixture`, pidFile, isolationFile, probe }]
+      claudeHarness.sharedRuntimes = () => [{ key: `leaf-${signal}`, label: `${signal} leaf fixture`, pidFile, receiptFile, probe }]
       claudeHarness.cleanupRuntime = async () => {}
       process.kill = ((pid: number, next?: number | NodeJS.Signals) => {
         if (pid === leaf!.pid && next && next !== 0) attempted.push(String(next))
@@ -542,7 +542,7 @@ test('closing a proven-cold archive ignores unrelated shared refs but rejects ta
   }
 
   codexHarness.sharedRuntimes = () => [{
-    key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'shared.pid'), isolationFile: join(home, 'shared.scope'),
+    key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'shared.pid'), receiptFile: join(home, 'shared.detached.json'),
     residency: async () => ({ healthy: true, referenceIds: residentIds }),
     probe: async () => { throw new Error('cold retirement must not enter the full shared-root ownership guard') },
   }]
@@ -594,6 +594,59 @@ test('closing a proven-cold archive ignores unrelated shared refs but rejects ta
   }
 })
 
+test('archive returns the exact adapter receipt when filing fails after cold runtime committed', async () => {
+  const liveBefore = liveSessionsCensus()
+  const previousHome = process.env.SPEXCODE_HOME
+  const originalShared = codexHarness.sharedRuntimes
+  const originalColdPreflight = codexHarness.coldPreflight
+  const originalColdRuntime = codexHarness.coldRuntime
+  const originalRestoreRuntime = codexHarness.restoreRuntime
+  const originalCleanup = codexHarness.cleanupRuntime
+  const home = mkdtempSync(join(tmpdir(), 'spex-archive-outer-compensation-'))
+  const id = `archive-outer-compensation-${process.pid}`
+  const threadId = `archive-outer-thread-${process.pid}`
+  const worktree = join(home, 'worktree')
+  const receipt = Object.freeze({ fixture: 'opaque-adapter-cold-receipt' })
+  let coldReceipt: unknown
+  let restoreReceipt: unknown
+  process.env.SPEXCODE_HOME = home
+  mkdirSync(worktree, { recursive: true })
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+    session_id: id, governed: true, worktree_path: worktree, branch: 'node/archive-outer-compensation',
+    node: 'archive', title: '', name: '', parent: '', status: 'idle', proposal: '', merges: 0, note: '',
+    sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: threadId, stopped: true,
+    archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
+  }, null, 2)}\n`)
+  codexHarness.sharedRuntimes = () => []
+  codexHarness.cleanupRuntime = async () => {}
+  codexHarness.coldPreflight = async () => ({ ok: true, receipt })
+  codexHarness.coldRuntime = async (_rec, actualReceipt) => {
+    coldReceipt = actualReceipt
+    rmSync(sessionRecordPath(id), { force: true })
+    return { ok: true }
+  }
+  codexHarness.restoreRuntime = async (_rec, actualReceipt) => {
+    restoreReceipt = actualReceipt
+    return { ok: true }
+  }
+  try {
+    await assert.rejects(archiveSession(id), /session record disappeared before filing/)
+    assert.equal(coldReceipt, receipt, 'cold commit receives the opaque preflight receipt')
+    assert.equal(restoreReceipt, receipt, 'outer post-cold compensation receives that exact same receipt')
+  } finally {
+    codexHarness.sharedRuntimes = originalShared
+    codexHarness.coldPreflight = originalColdPreflight
+    codexHarness.coldRuntime = originalColdRuntime
+    codexHarness.restoreRuntime = originalRestoreRuntime
+    codexHarness.cleanupRuntime = originalCleanup
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+    assertLiveSessionsUnchanged(liveBefore, 'archive outer-compensation fixture')
+  }
+})
+
 test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = codexHarness.sharedRuntimes
@@ -624,7 +677,7 @@ test('public close cancels a clean never-launched queue without entering the unr
   }
 
   codexHarness.sharedRuntimes = () => [{
-    key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'shared.pid'), isolationFile: join(home, 'shared.scope'),
+    key: 'codex-app-server', label: 'Codex app-server', pidFile: join(home, 'shared.pid'), receiptFile: join(home, 'shared.detached.json'),
     residency: async () => ({ healthy: true, referenceIds: ['unrelated-unowned-a', 'unrelated-unowned-b'] }),
     probe: async () => { throw new Error('never-launched queue close must not enter the shared-runtime guard') },
   }]

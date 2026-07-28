@@ -30,7 +30,7 @@ test('codex-headless composes Codex materialization and shared-runtime ownership
     key: descriptor.key,
     label: descriptor.label,
     pidFile: descriptor.pidFile,
-    isolationFile: descriptor.isolationFile,
+    receiptFile: descriptor.receiptFile,
     capabilities: {
       probe: typeof descriptor.probe,
       residency: typeof descriptor.residency,
@@ -42,7 +42,7 @@ test('codex-headless composes Codex materialization and shared-runtime ownership
     key: 'codex-app-server',
     label: 'Codex app-server',
     pidFile: '/tmp/runtime/codex-app-server.pid',
-    isolationFile: '/tmp/runtime/codex-app-server.scope',
+    receiptFile: '/tmp/runtime/codex-app-server.detached.json',
     capabilities: { probe: 'function', residency: 'function', mutationGuard: 'function' },
   }])
 })

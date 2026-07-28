@@ -71,6 +71,13 @@ barrier cover API, CLI, hooks, dashboard and in-process fallback without route-b
 operation is one member of the lease's closed union; arbitrary strings cannot invent a write class. Reads and
 selector resolution remain outside the ticket set.
 
+Archive may carry an opaque adapter cold-preflight receipt across its exact leaf/tmux stop, into the same adapter's
+cold commit, and through the final record/offline publication boundary. This shared layer forwards that one in-memory
+object without inspecting it, persisting it, or exposing a recursive/public option; the adapter revalidates its own
+receipt before the stop guard may admit a known native descendant collection. If publication fails after cold commit,
+the same object authorizes adapter compensation of the original collection. A missing, forged, stale, or changed
+receipt retains the ordinary descendant refusal before shared-runtime mutation and cannot authorize compensation.
+
 ### Record integrity — one writer, three readings, no revival
 
 **Every field of `session.json` is produced by ONE writer here**, by serializing the typed record and landing

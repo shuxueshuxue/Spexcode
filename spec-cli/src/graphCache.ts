@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import { buildBoard, spliceSessions } from './graph.js'
 import { headSha, repoRoot, withGitAbortSignal } from './git.js'
-import { listSessionIds, mainBranch, mainCheckout, readRawRecord, sessionArtifactPath, sessionRecordPath } from './layout.js'
+import { listSessionIds, mainBranch, mainCheckout, readPublicRecordEntry, sessionArtifactPath, sessionRecordPath } from './layout.js'
 import { boardThreads } from './issues.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { residentForgeState } from '../../spec-forge/src/resident.js'
@@ -156,7 +156,7 @@ function boardInputRevision(board: Board | null): BoardInputRevision {
     textOrNull(sessionRecordPath(id)),
     textOrNull(sessionArtifactPath(id, 'prompt')),
   ] as const)
-  const records = ids.map(readRawRecord).filter((record): record is NonNullable<typeof record> => !!record)
+  const records = ids.map(readPublicRecordEntry).flatMap((entry) => entry.kind === 'ok' ? [entry.raw] : [])
   const governed = records.filter((record) => record.governed).sort((a, b) => a.session_id.localeCompare(b.session_id))
   const activeRoots = [...new Set(governed.filter((record) => !record.archived).map((record) => record.worktree_path))].sort()
   const main = mainCheckout()

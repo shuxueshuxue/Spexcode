@@ -1,5 +1,5 @@
 import { watch, existsSync, readFileSync, appendFileSync, mkdirSync, type FSWatcher } from 'node:fs'
-import { sessionsRoot, sessionStoreDir, sessionArtifactPath, listSessionIds, rawPublicLifecycle, readAliasedRawRecord } from './layout.js'
+import { sessionsRoot, sessionStoreDir, sessionArtifactPath, listSessionIds, readAliasedRawRecord, readPublicRecordEntry } from './layout.js'
 import type { Lifecycle, Proposal } from './sessions.js'
 
 // @@@ session-timeline - the PERSISTED interaction history of a session: every authored-lifecycle
@@ -84,12 +84,11 @@ function scan(): void {
   try { ids = listSessionIds() } catch { return }
   for (const id of ids) {
     try {
-      const raw = readAliasedRawRecord(id)
-      if (!raw || !raw.governed) continue
-      const lifecycle = rawPublicLifecycle(raw)
-      const status = (lifecycle.status || 'active') as Lifecycle
-      const proposal = (lifecycle.proposal || null) as Proposal | null
-      const note = lifecycle.note || null
+      const entry = readPublicRecordEntry(id)
+      if (entry.kind !== 'ok' || !entry.raw.governed) continue
+      const status = (entry.raw.status || 'active') as Lifecycle
+      const proposal = (entry.raw.proposal || null) as Proposal | null
+      const note = entry.raw.note || null
       const fp = fpOf(status, proposal, note)
       if (lastSeen.get(id) === fp) continue
       if (!lastSeen.has(id)) {

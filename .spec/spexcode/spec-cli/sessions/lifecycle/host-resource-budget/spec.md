@@ -14,6 +14,7 @@ related:
   - spec-cli/src/index.ts
   - spec-cli/src/supervise.ts
   - spec-cli/src/layout.ts
+  - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/bin/spex.mjs
 ---
 
@@ -92,6 +93,12 @@ available through `spex session resources` and its JSON form, with:
 - each shared control plane's loaded/active references and protection reason;
 - orphan/leak findings, evidence for the classification, and whether reclaim is eligible; and
 - unattributed cost kept visible as an explicit blind spot.
+
+Session owners and shared-runtime references join through [[runtime]]'s one public-record projection, never
+directly through candidate `session.json` bytes. A launch-readiness-pending owner/reference therefore retains
+its frozen lifecycle fields and reports offline until publication. A malformed pending fence remains visible
+as a corrupt/unknown session owner with no reclaim authority; it cannot be reclassified from candidate status,
+stopped, archive, or proposal fields. This is the same reading `/api/sessions`, graph, and settings expose.
 
 The sampler must stay cheaper than the work it governs. Shared-runtime probes read lightweight loaded-thread
 status only and never load whole conversation histories during a periodic sample.

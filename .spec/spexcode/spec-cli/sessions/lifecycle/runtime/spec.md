@@ -52,6 +52,11 @@ a file in that dir:
 override → `~/.spexcode`), `encodeProject()` / `projectKey()`, `runtimeRoot()` (the per-PROJECT tier:
 `projects/<enc>`), `sessionsRoot()` (its `sessions/` child — the board's enumeration dir), `sessionStoreDir(id)`,
 `sessionRecordPath(id)`, `sessionArtifactPath(id, name)`, plus `readRawRecord` / `listSessionIds` for the board.
+Internal mutation/readiness code may inspect the exact raw record, but public consumers cross one additional
+layout-owned projection: `readPublicRecordEntry`. A valid launch-readiness-pending record replaces its candidate
+lifecycle/proposal/note/stopped/archived fields with the frozen original and carries forced offline liveness; a
+malformed fence is the same corrupt/unknown outcome on every surface. The session list/graph, resource report,
+resolved layout/settings, and timeline never parse or reinterpret pending bytes independently.
 The store has TWO slotted tiers under one per-project dir: the per-session dirs above, AND the per-TREE
 materialize slots — `trees/<enc(worktree-toplevel)>/` — that [[hook-dispatch]] / [[harness-delivery]]
 materialize into.

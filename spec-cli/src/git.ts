@@ -238,7 +238,7 @@ const GIT_MAX_BUFFER = 1 << 24
 function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, maxBuffer = GIT_MAX_BUFFER, input?: string): Promise<GitExec> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(gitAbortError()); return }
-    const child = spawn('git', args, { env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn('git', args, { env, detached: true, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] })
     const stdout: Buffer[] = [], stderr: Buffer[] = []
     let stdoutBytes = 0, stderrBytes = 0, aborted = false, timedOut = false, overflow = false
     let spawnError: Error | null = null
@@ -253,10 +253,15 @@ function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, m
       if (total > maxBuffer) { overflow = true; killTree(); return }
       chunks.push(chunk)
     }
-    child.stdout.on('data', (chunk: Buffer) => append(stdout, chunk, 'stdout'))
-    child.stderr.on('data', (chunk: Buffer) => append(stderr, chunk, 'stderr'))
-    child.stdin.end(input)
+    child.stdout!.on('data', (chunk: Buffer) => append(stdout, chunk, 'stdout'))
+    child.stderr!.on('data', (chunk: Buffer) => append(stderr, chunk, 'stderr'))
     child.once('error', (error) => { spawnError = error })
+    if (input !== undefined) {
+      // A command can reject its input before the pipe drains. Keep that write failure on the same
+      // close/reject path as spawn and exit failures instead of letting Node raise an unhandled EPIPE.
+      child.stdin!.once('error', (error) => { if (!spawnError) spawnError = error })
+      child.stdin!.end(input)
+    }
     child.once('close', (code, childSignal) => {
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
@@ -694,7 +699,7 @@ function indexEventRequests(
       kind: 'identity-raw', order, reachable,
       argsFor: (base) => ['-C', root, '-c', 'core.quotePath=false',
         'log', '--root', '--full-history', '--date-order', '--no-diff-merges', '-M', '-l0', '--raw', '-z', '--no-abbrev', '--no-ext-diff', '--no-textconv',
-        `--format=${RS}%H${US}%aI${US}%s${US}%b${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`,
+        `--format=${RS}%H%x00%aI%x00%s%x00%b%x00%(trailers:key=Spec-OK,valueonly,separator=%x2C)%x00`,
         ...(base ? [`^${base}`] : []), tip],
     },
     merge: {
@@ -917,18 +922,25 @@ function isRawObjectId(value: string, format: GitObjectFormat): boolean {
 function parseIdentityRawEventRecords(out: string, location: EventCacheLocation): EventRecord[] {
   const parsed: IdentityRawRecord[] = []
   let current: IdentityRawRecord | null = null
+  const tokens = out.split('\0')
+  let index = 0
+  const metadata = (field: string): string => {
+    const token = tokens[index++]
+    if (token === undefined) throw new Error(`raw identity stream ended before commit ${field}`)
+    return token
+  }
   const begin = (token: string): IdentityRawRecord => {
     const header = token.startsWith('\n') ? token.slice(1) : token
     if (!header.startsWith(RS)) throw new Error(`raw identity stream expected a commit header, got '${header}'`)
-    const [hash, date = '', reason = '', body = '', ack = ''] = header.slice(RS.length).split(US)
+    const hash = header.slice(RS.length)
     if (!isGitObjectIdForFormat(location.objectFormat, hash))
       throw new Error(`history event stream 'identity-raw' returned malformed object id '${hash || 'empty'}'`)
     if (current) parsed.push(current)
+    const date = metadata('date'), reason = metadata('subject'), body = metadata('body'), ack = metadata('trailers')
     const session = body.match(/Session:\s*(\S+)/)
     return { h: hash, d: date, r: reason, s: session ? session[1] : null, a: ack, c: [] }
   }
-  const tokens = out.split('\0')
-  for (let index = 0; index < tokens.length;) {
+  while (index < tokens.length) {
     const token = tokens[index++]
     if (!current) {
       if (!token) continue
@@ -1371,6 +1383,27 @@ export type DriftPathEvent = {
 export type DiffLineRange = [number, number]
 export type CombinedDiffOwnedChanges = { after: DiffLineRange[]; before: DiffLineRange[][]; parentPaths: string[] }
 
+function decodeGitCPath(value: string): string {
+  if (!value.startsWith('"')) return value
+  if (value.length < 2 || !value.endsWith('"')) throw new Error(`malformed Git C-quoted path '${value}'`)
+  const bytes: number[] = []
+  const plain = (part: string) => bytes.push(...Buffer.from(part, 'utf8'))
+  for (let index = 1; index < value.length - 1;) {
+    const point = value.codePointAt(index)!
+    const char = String.fromCodePoint(point)
+    index += char.length
+    if (char !== '\\') { plain(char); continue }
+    const escaped = value[index++]
+    if (escaped === undefined) throw new Error(`malformed Git C-quoted path '${value}'`)
+    const simple: Record<string, number> = { a: 7, b: 8, f: 12, n: 10, r: 13, t: 9, v: 11, '"': 34, '\\': 92 }
+    if (escaped in simple) { bytes.push(simple[escaped]); continue }
+    const octal = `${escaped}${value.slice(index, index + 2)}`
+    if (!/^[0-7]{3}$/.test(octal)) throw new Error(`malformed Git C-quoted path '${value}'`)
+    bytes.push(Number.parseInt(octal, 8)); index += 2
+  }
+  return Buffer.from(bytes).toString('utf8')
+}
+
 // Dense combined diff prefixes have one column per parent. Ownership is a LINE fact, not a hunk fact:
 // all `+` means the result authored a line absent from every parent; all `-` means it deleted a line present
 // in every parent. Mixed columns inherit from at least one parent. Track every cursor through all displayed
@@ -1386,14 +1419,14 @@ export function combinedDiffOwnedChanges(patch: string): Map<string, CombinedDif
 
   for (const line of patch.split('\n')) {
     if (line.startsWith('diff --cc ')) {
-      path = line.slice('diff --cc '.length)
+      path = decodeGitCPath(line.slice('diff --cc '.length))
       parents = 0
       parentPaths = []
       inHunk = false
       continue
     }
     if (!inHunk && path !== null && line.startsWith('--- ')) {
-      const raw = line.slice(4)
+      const raw = decodeGitCPath(line.slice(4))
       parentPaths.push(raw === '/dev/null' ? path : raw.replace(/^a\//, ''))
       continue
     }
@@ -1454,7 +1487,7 @@ function parseMergeHistoryEvents(out: string): MergeHistoryEvents {
       const parentCount = raw[1].length
       const fields = line.split('\t')
       const status = fields[0].trim().split(/\s+/).at(-1) ?? ''
-      const paths = fields.slice(1)
+      const paths = fields.slice(1).map(decodeGitCPath)
       if (status.length !== parentCount || paths.length !== parentCount + 1)
         throw new Error(`combined raw diff for ${hash} exposed ${status.length} statuses and ${paths.length} paths for ${parentCount} parents`)
       const resultPath = paths[parentCount]

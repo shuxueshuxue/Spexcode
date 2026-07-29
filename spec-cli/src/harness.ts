@@ -742,10 +742,6 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     'else',
     `  eval "$( ${SPEX} internal codex-generation-current "$dir" ${shQuote(server)} )" || exit 1`,
     'fi',
-    // The delegated bearer arrived only through fd 9. The shared-spawn helper consumed it (or the already-live
-    // socket made it unnecessary); close and scrub the channel before the per-session Codex client starts.
-    '[ "${SPEXCODE_MAINTENANCE_DELEGATE_FD:-}" != "9" ] || exec 9<&-',
-    'unset SPEXCODE_MAINTENANCE_DELEGATE_FD SPEXCODE_MAINTENANCE_SESSION_ID',
     // TWO launch modes, on ONE tail channel ("$@"). reopen() hands a `--resume <thread-id>` tail (see
     // codexHarness.resumeArg) to bring the SAME conversation back: resume that OWNED thread DIRECTLY — no new
     // thread, no first-turn prompt. ANY other tail is a NEW launch: BACKEND owns the thread — `codex-launch`

@@ -20,8 +20,7 @@ const cmd = process.argv[2]
 // (loadConfig on a malformed spexcode.json) surfaces as uncaughtException, not unhandledRejection, so BOTH
 // paths route through the same printer.
 function fatal(e: unknown): never {
-  if (e instanceof Error && e.name === 'SessionMaintenanceError') console.error(`spex: ${(e as Error & { code?: string }).code ?? 'maintenance_error'}: ${e.message}`)
-  else if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError'].includes(e.name)) console.error(`spex: ${e.message}`)
+  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError'].includes(e.name)) console.error(`spex: ${e.message}`)
   else console.error(e)
   process.exit(1)
 }
@@ -616,51 +615,6 @@ if (cmd === 'serve') {
     console.log((await import('./help.js')).commandHelp('session'))
   } else if (SESSION_SIGNPOSTS[sub]) {
     signpost(`spex session ${sub}`, SESSION_SIGNPOSTS[sub])
-  } else if (sub === 'maintain') {
-    const args = process.argv.slice(4)
-    if (args.length === 1 && args[0] === '--status') {
-      const state = await (await import('./client.js')).clientMaintenanceStatus()
-      console.log(JSON.stringify(state, null, 2))
-    } else {
-      const separator = args.indexOf('--')
-      if (separator < 0 || separator === args.length - 1) {
-        console.error('usage: spex session maintain [--allow-stop SEL] [--allow-resume SEL[:force]] [--ttl-ms MS] [--wait-ms MS] -- <command> [args...]')
-        process.exit(2)
-      }
-      const options = args.slice(0, separator)
-      const command = args.slice(separator + 1)
-      const capabilities: import('./session-maintenance.js').Capability[] = []
-      let ttlMs = 30_000
-      let waitMs = 10_000
-      for (let i = 0; i < options.length; i++) {
-        const option = options[i]
-        if (option === '--api' || option === '--port') { i++; continue }
-        if (option === '--ttl-ms' || option === '--wait-ms') {
-          const value = Number(options[++i])
-          if (!Number.isSafeInteger(value)) { console.error(`spex session maintain: ${option} requires an integer millisecond value`); process.exit(2) }
-          if (option === '--ttl-ms') ttlMs = value
-          else waitMs = value
-          continue
-        }
-        if (option === '--allow-stop' || option === '--allow-resume') {
-          const raw = options[++i]
-          if (!raw) { console.error(`spex session maintain: ${option} requires a session selector`); process.exit(2) }
-          if (option === '--allow-stop') {
-            capabilities.push({ op: 'stop', sessionId: await resolveSelectorOrExit(raw) })
-          } else {
-            const force = raw.endsWith(':force')
-            const selector = force ? raw.slice(0, -':force'.length) : raw
-            capabilities.push({ op: 'resume', sessionId: await resolveSelectorOrExit(selector), force })
-          }
-          continue
-        }
-        console.error(`spex session maintain: unknown option ${option}`)
-        process.exit(2)
-      }
-      if (capabilities.length === 0) { console.error('spex session maintain: at least one exact stop/resume capability is required'); process.exit(2) }
-      const { runMaintenanceWrapper } = await import('./maintenance-wrapper.js')
-      process.exit(await runMaintenanceWrapper({ capabilities, ttlMs, waitMs, command }))
-    }
   } else if (sub === 'new') {
     // spex session new "<prompt>"  (prompt = first positional or --prompt, or --prompt-file
     // <path>|- so a long multi-paragraph prompt never fights shell quoting — [[prompt-file]]).
@@ -996,32 +950,6 @@ if (cmd === 'serve') {
       if (!path) throw new Error(`governor '${owner.id}' has no live spec path`)
       console.log(`${owner.id}\t${path}`)
     }
-  } else if (sub === 'maintenance-begin') {
-    const ownerPid = Number(process.argv[4]), sessionId = process.argv[5]
-    if (!Number.isInteger(ownerPid) || ownerPid <= 0 || !sessionId) {
-      console.error('usage: spex internal maintenance-begin <owner-pid> <session-id>')
-      process.exit(2)
-    }
-    const { exactProcessIdentity, maintenanceErrorPayload, sessionMaintenance } = await import('./session-maintenance.js')
-    const owner = exactProcessIdentity(ownerPid)
-    if (!owner) { console.error('maintenance_identity_unknown: hook dispatcher owner identity is not exact'); process.exit(2) }
-    try {
-      console.log(sessionMaintenance().beginExternalOperation({ op: 'hook-state', sessionId }, owner))
-    } catch (error) {
-      const payload = maintenanceErrorPayload(error)
-      console.error(payload ? `${payload.code}: ${payload.error}` : String(error))
-      process.exit(2)
-    }
-  } else if (sub === 'maintenance-end') {
-    const ticket = process.argv[4], ownerPid = Number(process.argv[5])
-    if (!ticket || !Number.isInteger(ownerPid) || ownerPid <= 0) {
-      console.error('usage: spex internal maintenance-end <ticket-id> <owner-pid>')
-      process.exit(2)
-    }
-    const { exactProcessIdentity, sessionMaintenance } = await import('./session-maintenance.js')
-    const owner = exactProcessIdentity(ownerPid)
-    if (!owner) { console.error('maintenance_identity_unknown: hook dispatcher owner identity is not exact'); process.exit(2) }
-    sessionMaintenance().finishExternalOperation(ticket, owner)
   } else if (sub === 'shared-runtime-spawn') {
     const [cwd, logFile, pidFile, receiptFile, command] = process.argv.slice(4, 9)
     const args = process.argv.slice(9)
@@ -1029,48 +957,22 @@ if (cmd === 'serve') {
       console.error('usage: spex internal shared-runtime-spawn <cwd> <log> <pid-file> <receipt-file> <command> [args...]')
       process.exit(2)
     }
-    const { readFileSync } = await import('node:fs')
-    const { runSessionOperation } = await import('./session-maintenance.js')
     const { spawnDetachedRuntime } = await import('./runtime-ownership.js')
-    const delegateFdValue = process.env.SPEXCODE_MAINTENANCE_DELEGATE_FD
-    const delegateChannelPresent = delegateFdValue !== undefined
-    const delegateFd = Number(delegateFdValue)
-    let delegate = ''
-    if (delegateChannelPresent && Number.isInteger(delegateFd) && delegateFd >= 3) {
-      try { delegate = readFileSync(delegateFd, 'utf8').trim() } catch { delegate = '' }
-    }
-    const sessionId = process.env.SPEXCODE_MAINTENANCE_SESSION_ID?.trim()
-      || process.env.SPEXCODE_SESSION_ID?.trim() || 'shared-runtime'
     const env = { ...process.env }
-    delete env.SPEXCODE_MAINTENANCE_DELEGATE_FD
-    delete env.SPEXCODE_MAINTENANCE_SESSION_ID
     delete env.SPEXCODE_SESSION_ID
-    const runtime = await runSessionOperation({ op: 'shared-spawn', sessionId, ...(delegateChannelPresent ? { delegate } : {}) }, () =>
-      spawnDetachedRuntime({ cwd, logFile, pidFile, receiptFile, command, args, env }))
+    const runtime = await spawnDetachedRuntime({ cwd, logFile, pidFile, receiptFile, command, args, env })
     console.log(runtime.pid)
   } else if (sub === 'codex-generation-current') {
     const [root, command] = process.argv.slice(4, 6)
     if (!root || !command) { console.error('usage: spex internal codex-generation-current <runtime-root> <codex-command>'); process.exit(2) }
-    const { readFileSync } = await import('node:fs')
     const { ensureCodexCurrentGeneration } = await import('./codex-runtime-generations.js')
     const { spawnDetachedRuntime } = await import('./runtime-ownership.js')
-    const { runSessionOperation } = await import('./session-maintenance.js')
     const { sessionIdentityEnvVars } = await import('./harness.js')
-    const delegateFdValue = process.env.SPEXCODE_MAINTENANCE_DELEGATE_FD
-    const delegateFd = Number(delegateFdValue)
-    let delegate = ''
-    if (delegateFdValue !== undefined && Number.isInteger(delegateFd) && delegateFd >= 3) {
-      try { delegate = readFileSync(delegateFd, 'utf8').trim() } catch { delegate = '' }
-    }
-    const sessionId = process.env.SPEXCODE_MAINTENANCE_SESSION_ID?.trim() || process.env.SPEXCODE_SESSION_ID?.trim() || 'shared-runtime'
     const env = { ...process.env }
     for (const key of sessionIdentityEnvVars()) delete env[key]
-    delete env.SPEXCODE_MAINTENANCE_DELEGATE_FD
-    delete env.SPEXCODE_MAINTENANCE_SESSION_ID
     const endpoint = await ensureCodexCurrentGeneration(root, async (candidate) => {
-      await runSessionOperation({ op: 'shared-spawn', sessionId, ...(delegateFdValue !== undefined ? { delegate } : {}) }, () =>
-        spawnDetachedRuntime({ cwd: root, logFile: candidate.logFile, pidFile: candidate.pidFile, receiptFile: candidate.receiptFile,
-          command, args: ['app-server', '--listen', `unix://${candidate.socketPath}`], env }))
+      await spawnDetachedRuntime({ cwd: root, logFile: candidate.logFile, pidFile: candidate.pidFile, receiptFile: candidate.receiptFile,
+        command, args: ['app-server', '--listen', `unix://${candidate.socketPath}`], env })
     })
     const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`
     console.log(`sock=${quote(endpoint.socketPath)}; pid=${quote(endpoint.pidFile)}; receipt=${quote(endpoint.receiptFile)}; log=${quote(endpoint.logFile)}; export SPEXCODE_CODEX_GENERATION=${quote(endpoint.id)}`)

@@ -1,21 +1,7 @@
-// @@@ escStack - the dashboard's ONE Escape contract for overlays that float as their OWN component ABOVE
-// another surface: the proof iframe, a session row's rename / close-confirm modals, the row context-menu.
-// Each pushes itself onto a LIFO stack while open. A SINGLE capture-phase window listener — bound at module
-// load, so it is the FIRST keydown listener and beats every component's own — pops the TOPMOST layer on Esc
-// and swallows the event (stopImmediatePropagation) so the surface BEHIND never also closes. Esc therefore
-// peels exactly one layer per press, in reverse open order (the confirm peels while the panel stays; the
-// proof peels while the panel stays). When the stack is empty it does nothing, so the board's own
-// single-handler Esc — a locked-session release, help/settings modals, or Command Box/menu — is
-// untouched (and a page-level Esc with nothing open routes nowhere — pages are peers, not layers). This owns only the cross-component overlay layers: the ones that used to RACE the panel's
-// always-on window listener (whoever registered first won; proof papered over it by stealing iframe focus).
+
 import { useEffect, useRef } from 'react'
 
-// The stack and the bound-flag live on `window`, NOT in module scope, so a Vite HMR hot-swap — which
-// re-evaluates this module (a fresh array) WITHOUT a page reload — reuses the one array the already-bound
-// listener reads. Module scope would split them: an open tab that hot-swapped across a deploy would leave
-// the live listener watching the dead old array while useEscLayer pushed to the new one, so Esc would fall
-// through and close the surface BEHIND the top overlay too. Reading the global inside the listener keeps a
-// single source of truth across any number of re-evals.
+// Vite HMR keeps the existing listener, so the stack lives on window for re-evaluated modules to share.
 const stack = typeof window !== 'undefined' ? (window.__escStack || (window.__escStack = [])) : []
 
 if (typeof window !== 'undefined' && !window.__escStackBound) {

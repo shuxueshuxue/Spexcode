@@ -5,6 +5,18 @@
   "dashboard": {
     "showHeadlessLaunchers": false
   },
+  "uploads": {
+    "maxBytes": 2147483648,
+    "chunkBytes": 8388608,
+    "concurrency": 1,
+    "requestTimeoutMs": 120000,
+    "retryLimit": 2,
+    "retryDelayMs": 500,
+    "incompleteTtlMs": 86400000,
+    "cleanupIntervalMs": 3600000,
+    "minFreeBytes": 268435456,
+    "evidenceMaxBytes": 52428800
+  },
   "sessions": {
     "launchers": {
       "claude": { "harness": "claude", "cmd": "claude" },

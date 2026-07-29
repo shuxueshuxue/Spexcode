@@ -15,7 +15,8 @@ scenarios:
       landed under the upload sink and the spliced string is exactly its path. (The same gesture set works on
       a live session's Command Box; an offline session exposes no Command Box.)
     expected: |
-      The picked file is uploaded to the backend (`POST /api/uploads` → `201 {path}`) and lands in one
+      The picked file is uploaded through the resumable backend stream (`POST /api/uploads` → create,
+      ordered `PATCH` chunks → `POST /api/uploads/:id/complete` → `201 {path}`) and lands in one
       `spexcode-uploads/` sink under the backend's tmpdir, under a collision-proof, path-safe basename (the
       crafted name reduced to `[A-Za-z0-9._-]`, no directory parts, no leading dots). The returned ABSOLUTE
       path is spliced into the prompt at the caret, padded with spaces so it never abuts neighbouring words;
@@ -27,16 +28,31 @@ scenarios:
     tags: [frontend-e2e, backend-api]
     description: >
       Through the running dashboard in a real browser, open the New Session prompt and attach an EMPTY file
-      (zero bytes) through the paperclip picker. Watch the attach control and the prompt box. Separately,
-      exercise the backend contract directly: `POST /api/uploads` with an empty file part, and with no file
-      part at all, and read the HTTP status + JSON. Confirm nothing is spliced into the prompt and no empty
-      file is written into the upload sink.
+      (zero bytes) through the paperclip picker. Watch the attachment row and the prompt box. Separately,
+      exercise the backend contract directly: create a zero-byte or malformed transfer and read the HTTP
+      status + JSON. Confirm nothing is spliced into the prompt and no empty file is written into the upload
+      sink.
     expected: |
-      The upload is refused LOUD, never silently swallowed: the server answers `400 {error:"no file"}` for a
-      zero-byte or missing file (and `413` for one over the ~50MB ceiling) rather than writing it, so a stray
-      file can't quietly fill the disk. The client mirrors that — the attach surface raises its visible error
-      (`.si-attach-err`) instead of eating the file, and NO path is spliced into the prompt (the box keeps
-      exactly its prior text). No zero-byte file appears in the `spexcode-uploads/` sink.
+      The upload is refused LOUD, never silently swallowed: creation answers `400` for a zero-byte or
+      malformed file and `413` for one over the resolved `uploads.maxBytes` ceiling; a capacity refusal
+      names the disk constraint.
+      The client mirrors that in the file's visible row, with its concrete error and a retry/cancel control,
+      and NO path is spliced into the prompt (the box keeps exactly its prior text). No zero-byte file
+      appears in the `spexcode-uploads/` sink.
+  - name: interrupted-large-upload-resumes-atomically
+    tags: [frontend-e2e, backend-api]
+    test: spec-cli/src/uploads.api.test.ts
+    description: >
+      Through a real backend and the dashboard's New Session composer, attach a real file larger than the
+      former request cap. Let at least one configured `uploads.chunkBytes` chunk commit, interrupt one chunk
+      before its response, then retry from the attachment row. Read the server status between attempts and
+      finally inspect the returned path and bytes on the backend.
+    expected: |
+      Every request is at most the resolved chunk policy; the backend reports the actual committed offset
+      after interruption and retry sends only the remaining suffix. The row's byte count/progress resumes
+      rather than restarting, then completes and splices one absolute final path. The completed file's bytes
+      and declared length match exactly; no partial path ever enters the draft. A cancelled transfer removes
+      its staging state and leaves the draft unchanged.
 ---
 
 # file-attach — eval
@@ -44,10 +60,11 @@ scenarios:
 Measure through the **real dashboard surface**, YATU-style, plus the backend it hands off to. file-attach's
 whole contract is *"send the file over, hand me the path"*: a file attached to either authored composer
 (New Session or a live Command Box) is carried to the machine the session runs on — the backend — and the draft is left
-holding its **absolute path**, an ordinary local file the agent can just read. So the loss has two ends and
-both are scored: the **path splice** in the browser (an absolute `spexcode-uploads/` path padded into the
-textarea at the caret, the busy ring while in flight) and the **backend landing** (the file present under the
-one upload sink with a sanitised basename, its bytes intact). The second scenario scores the **fail-loud**
-edge — an empty/oversized/missing upload is refused with a status + reason on the server and a visible error
-on the client, never a silent drop. Evidence: the browser reading of the spliced path + the attach control's
-state, and a backend transcript that the file (or, for the refusal, no file) is where the contract says.
+holding its **absolute path**, an ordinary local file the agent can just read. So the loss has three ends and
+all are scored: the **per-file transfer row** in the browser (name, bytes, progress, retry/cancel and no
+premature splice), the **resumable stream** (policy-bounded requests, a committed offset that survives an
+interrupted request), and the **backend landing** (only a completed file promoted under the one upload sink,
+with a sanitised basename and intact bytes). The refusal edge scores empty, oversized, capacity, malformed,
+or cancelled transfers: each has a status + reason on the server and a concrete visible client row, never a
+silent drop. Evidence: browser progression and final path splice, plus an API transcript showing resume
+offsets and the final backend bytes.

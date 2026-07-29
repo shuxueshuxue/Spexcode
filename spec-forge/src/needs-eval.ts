@@ -3,7 +3,6 @@ import { resolveLinks, type LinkedIssue } from './links.js'
 
 export const NEEDS_EVAL = 'needs-eval'
 
-// a bare-marker body line: the name alone, case-insensitive, any indent, optional trailing colon — content after it (`needs-eval: foo`) is NOT a match
 const BODY_MARKER = new RegExp(`^\\s*${NEEDS_EVAL}\\s*:?\\s*$`, 'im')
 
 export function isNeedsEval(issue: ForgeIssue): boolean {

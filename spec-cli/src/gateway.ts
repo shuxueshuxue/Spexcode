@@ -1,8 +1,3 @@
-// @@@ public gateway - the internet face of `spex serve --public`. The supervisor (supervise.ts) and its
-// Hono child stay bound to 127.0.0.1; THIS is the only listener on 0.0.0.0. It terminates TLS, gates every
-// request behind one password (a designed login → signed cookie), serves the built dashboard, and reverse-
-// proxies /api + the terminal WebSocket to the loopback supervisor. Loopback is the trust boundary (local
-// agents hit the supervisor directly, no password); the gateway is the boundary crossed from outside.
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
@@ -17,10 +12,6 @@ import { loginPage } from './login-page.js'
 import { listenOrExit } from './listen.js'
 import { installConnectionReaper } from './reaper.js'
 
-// @@@ resolvePublicConfig - the cert/gate is a RESOLVED value, never hardcoded. Reads the same precedence
-// chain the spec promises: flag > env > spexcode.json > self-signed default. Returns null when public mode
-// is off (the supervisor then serves plain loopback, unchanged). process.argv carries the `spex serve …`
-// flags since the supervisor runs in the same process as the CLI command.
 export type PublicConfig = { password: string; tls: { cert: string; key: string } | null }
 function argFlag(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`)
@@ -82,10 +73,6 @@ function selfSignedCert(): { cert: string; key: string } {
   return { cert: readFileSync(certFile, 'utf8'), key: readFileSync(keyFile, 'utf8') }
 }
 
-// @@@ cookie auth - the gate is a designed login, NOT the browser's Basic dialog. The auth cookie is a
-// keyed HMAC of a constant under a secret DERIVED from the password, so it (a) survives a restart with no
-// server-side session store and (b) reveals nothing about the password. Verified in constant time. The same
-// cookie authorises /api and the WebSocket upgrade — the browser sends it on the same-origin handshake.
 const COOKIE = 'spex_auth'
 function authToken(password: string): string {
   const secret = createHmac('sha256', password).update('spexcode-public-gateway-v1').digest()
@@ -150,20 +137,11 @@ export function startGateway(opts: GatewayOpts): void {
     return serveStatic(req, res, opts.distDir, url)
   }
 
-  // server-side connection reaping ([[spec-cli]] / [[public-mode]]) - the internet-facing gateway is the
-  // public server in public mode, so it carries the SAME reaping as the child: the socket-level
-  // `installConnectionReaper` (reaper.ts), the single owner of the header/idle deadlines — it disables
-  // Node's own overlapping HTTP timeouts, which were measured to race and shadow it (issue #65), so no
-  // timeout options are passed here. Idle keep-alive / slow-loris / never-completing request only; the
-  // gated WS upgrade (handled below) is an active stream and exempt for its lifetime.
   const server = secure
     ? https.createServer({ cert: opts.tls!.cert, key: opts.tls!.key }, handler)
     : http.createServer(handler)
   installConnectionReaper(server)
 
-  // @@@ WS gate - the terminal socket rides an HTTP upgrade. Gate it by the SAME cookie (the browser sends
-  // it on the same-origin handshake), then raw-pipe to the loopback supervisor, replaying the buffered
-  // upgrade request so the child completes the WebSocket handshake. Mirrors supervise.ts's byte pipe.
   server.on('upgrade', (req, socket, head) => {
     if (gated && !isAuthed(req, token, cookieName)) { socket.destroy(); return }
     const up = net.connect(opts.upstreamPort, '127.0.0.1', () => {

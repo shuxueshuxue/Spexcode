@@ -3,20 +3,6 @@ import { relative } from 'node:path'
 import { materialize, stripSpexcodeBlock, GENERATED_MARK } from './materialize.js'
 import { HARNESSES } from './harness.js'
 
-// @@@ commit-surgery ([[commit-surgery]]) - the history anchor: pre-commit runs an UNCONDITIONAL materialize
-// (the masks are provably fresh at the only moment history is written — the temporal invariant "materialize
-// must never be stale" collapses into this one event) and then REPAIRS the staged index instead of rejecting:
-//   - a staged contract blob carrying our sentinel block → clean it IN PLACE (source = the STAGED BLOB, never
-//     the worktree: `git add -p`'s partial staging survives byte-for-byte; only the block is removed);
-//   - a staged generated/machine artifact that HEAD does not track → evict it (its tracked contribution is
-//     zero bytes by definition — an empty husk is worse than absence);
-//   - anything HEAD already tracks is never deleted by a hook — a legacy committed artifact heals by the
-//     block-strip above, converging history toward pristine without a surprise deletion commit.
-// Both operations carry zero intent ambiguity (the block's content is never the user's; a wholly-ours file
-// holds no user byte), so there is no question to ask and no rejection — one printed note per repair, and
-// the commit proceeds. The worst full path costs the user ONE bump, and it is git's own: `git add` refused
-// on an excluded path, git itself suggests -f, and this surgery makes that native escape hatch safe.
-//
 // GIT ENV, deliberately INVERTED from git.ts's git(): every call here PRESERVES the hook's environment —
 // GIT_INDEX_FILE must be honored so the surgery reads/writes the EXACT index this commit is being built
 // from (a `git commit <path>` pathspec commit and `git commit -a` both run hooks against a TEMPORARY index;

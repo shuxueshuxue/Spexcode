@@ -3219,7 +3219,7 @@ export type WatchOpts = { source: () => Promise<Session[]>; presenceSource?: () 
 // @@@ watch outcome - only the BOUNDED `until` mode resolves (that mode is what `spex session wait` runs on); a
 // plain watch (no `until`) streams forever and never resolves. The bound is what makes `wait` a one-shot
 // "block for a worker's NEXT transition, then exit" that is GUARANTEED to return. Bounded mode is
-// EDGE-TRIGGERED ([[session-edges]]): it resolves only upon OBSERVING a watched target transition from a
+// EDGE-TRIGGERED ([[session-follow]]): it resolves only upon OBSERVING a watched target transition from a
 // non-actionable status INTO an actionable one — an already-actionable first sighting is recorded and
 // narrated (`onObserved`, arrival first) but never resolves, so "wait for the dispatched merge to actually
 // land" has a real signal instead of an instant false return on the standing `review` level. Every observed
@@ -3343,7 +3343,7 @@ async function sendTextUnlocked(id: string, text: string, from?: string, opts: {
   }
   const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
   const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), ...(opts.deliveryId ? { deliveryId: opts.deliveryId } : {}) }, prompt.text)
-  // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
+  // record the delivered agent-to-agent message ([[session-timeline]]): only when it carries a sender (an agent
   // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.
   if (r.ok && from) void recordComms(id, from)
   // the durable interaction history ([[session-timeline]]): every confirmed delivery is a `sent` event.

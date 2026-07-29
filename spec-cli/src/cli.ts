@@ -640,7 +640,7 @@ if (cmd === 'serve') {
     const { clientListSessions } = await import('./client.js')
     const [id] = positionals(4)
     if (!id) { console.error('usage: spex session wait <id> [--timeout SECONDS] [--interval SECONDS] [--idle]'); process.exit(2) }
-    // point-of-use turn-freeze warning ([[session-edges]]): a managed agent that runs this wait in the FOREGROUND
+    // point-of-use turn-freeze warning ([[session-follow]]): a managed agent that runs this wait in the FOREGROUND
     // freezes its whole turn until the target produces an edge — a warning that used to live only in help
     // prose, now said where it matters. Foreground vs background is invisible from here, so the hint prints
     // for ANY managed-agent shell (harmless in a background transcript), on stderr, and changes nothing else.
@@ -672,7 +672,7 @@ if (cmd === 'serve') {
     // (e.g. review→working→close-pending across a merge dispatch), not a bare word out of context.
     if ('reached' in r) { console.log(r.path.join('→')); process.exit(0) }
     if ('gone' in r) { console.error(`spex session wait: no such (living) session ${id}`); process.exit(2) }
-    // a backend failure is a verdict about the TRANSPORT, never the session ([[session-edges]], issue #40): it prints
+    // a backend failure is a verdict about the TRANSPORT, never the session ([[session-follow]], issue #40): it prints
     // its own outcome token on stdout — a word OUTSIDE the session-status vocabulary, so a supervisor reading
     // the one status line can never mistake "I could not reach the board" for "the session is offline" — and
     // exits 3, distinct from the plain no-edge timeout (1) and the vanished target (2).

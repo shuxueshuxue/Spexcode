@@ -27,7 +27,7 @@ glance still answers "whose turn is it?" off the PARENT alone, never a muddled a
 ## expanded spec
 
 **Provenance is captured once, at creation.** When `spex new` runs from inside another session,
-`createSession` resolves its OWN session id through the same `ownSessionId` env read the [[comms-edge]]
+`createSession` resolves its OWN session id through the same `ownSessionId` env read the [[agent-reply-channel]]
 reply-hint uses (in the CLI's own process) and passes it as `parent` in the `POST /api/sessions` body;
 `newSession` writes it into the child's `session.json` ([[runtime]]) as a durable field, and it rides onto the
 public `Session` type and `/api/graph`. A human running `spex new` from a plain shell has no session id →
@@ -79,5 +79,5 @@ parked / `spex wait` / [[agent-reply-channel]] machinery, not new mechanism: aft
 supervises them (background `spex wait <child>`) and stays `parked` while they run, only becoming `asking` when
 it genuinely needs the human. Strengthened in the `supervisor` config plugin.
 
-Out of scope: any child mutation or stored tree (read-time only); the session graph's monitor/comms edges
-([[session-edges]], [[comms-edge]]) — nesting is a LIST fold, orthogonal to the live arrows.
+Out of scope: any child mutation or stored tree (read-time only); the supervision relation ([[session-follow]]) — nesting is a
+LIST fold over spawn provenance, orthogonal to who is following whom.

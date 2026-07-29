@@ -46,7 +46,7 @@ a file in that dir:
 | `launch.sh` | the whole launch invocation (`launchScript`, run via `bash <abs path>`) |
 | `rv.path` | the rendezvous socket THIS runtime handed the agent at launch ([[harness-adapter]]) — a launch-time fact like the pid, so every later reader reaches the agent by the path it actually bound rather than re-deriving one, and two worlds holding the same id never share a transport |
 | `spec-checked` / `spec-of-file-seen` | the [[inject-spec-first]] / [[inject-spec-of-file]] once-per-session sentinel + ledger |
-| `comms.ndjson` | recorded inter-agent talk ([[comms-edge]]) |
+| `cursors.json` | how far this session has read each log it follows, plus its own inbox ([[session-follow]]) |
 
 `layout.ts` owns the seam — the one place that knows where the store sits: `spexcodeHome()` (the `SPEXCODE_HOME`
 override → `~/.spexcode`), `encodeProject()` / `projectKey()`, `runtimeRoot()` (the per-PROJECT tier:

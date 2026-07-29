@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: cache-read-local-fallback
+    description: >
+      With one governed session record in the cwd project's local store and no backend listening,
+      run `spex session ls`, `show <id>`, and `review <id>`. Repeat `ls` with an explicit
+      `--api` pointing at a refused port, then against a backend which returns HTTP 500.
+    expected: >
+      The unflagged read verbs answer from the local store and name that source on stderr; their
+      session liveness is `unknown` and no local liveness probe runs. An explicit endpoint remains
+      a non-zero unreachable-transport failure, and an HTTP 500 remains a non-zero backend failure
+      rather than a local answer.
+    tags: [cli, backend-api]
+    code: spec-cli/src/client.ts
   - name: cwd-backend-wins
     description: >
       Two projects, two live backends (A and B), each started with `spex serve` from its own

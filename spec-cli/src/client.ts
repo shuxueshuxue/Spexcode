@@ -1,4 +1,9 @@
-import { apiBase, assertProjectMatch, resolveSession, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { existsSync } from 'node:fs'
+import { platform } from 'node:os'
+import { repoRoot } from './git.js'
+import { resourceBudgets, type ResourceReport } from './host-resources.js'
+import { listSessionIds, readPublicRecordEntry } from './layout.js'
+import { apiBase, apiBaseInfo, assertProjectMatch, fromRaw, resolveSession, reviewPayload, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -23,17 +28,105 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
 const guarded = (verb: string) => assertProjectMatch(`spex ${verb}`)
 const post = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
 const seg = (id: string) => encodeURIComponent(id)
+
+// A rendezvous liveness probe can displace the real delivery client.
+function cachedStatus(rec: ReturnType<typeof fromRaw>): DisplayStatus {
+  if (!rec.worktreePath || !existsSync(rec.worktreePath)) return 'retired'
+  if (rec.archived) return 'offline'
+  if (rec.status === 'awaiting') return rec.proposal === 'merge' ? 'review' : rec.proposal === 'close' ? 'close-pending' : 'done'
+  return rec.status === 'active' || rec.status === 'idle' ? 'unknown' : rec.status
+}
+
+function corruptCachedSession(id: string, reason: string): Session {
+  const label = `${id.slice(0, 8)} (unreadable record)`
+  return {
+    id, node: null, branch: null, path: '', label, headline: label, raw: { name: null, title: null },
+    parent: null, harness: 'unknown', capabilities: { headless: false }, launcher: null,
+    lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
+    note: `session record is unreadable: ${reason}`, archived: false, archiveHazard: null,
+    prompt: null, promptPreview: null, created: 0, activity: null, sortKey: null,
+  }
+}
+
+function localCachedSessions(includeArchived = false): Session[] {
+  const rows: Session[] = []
+  for (const id of listSessionIds()) {
+    const entry = readPublicRecordEntry(id)
+    if (entry.kind === 'corrupt') {
+      rows.push(corruptCachedSession(id, entry.error))
+      continue
+    }
+    if (entry.kind !== 'ok') continue
+    const rec = fromRaw(entry.raw)
+    if (!rec.governed) continue
+    rows.push(toSession(rec, cachedStatus(rec), 'unknown'))
+  }
+  return rows.filter((session) => includeArchived || !session.archived)
+    .sort((a, b) => (a.sortKey ?? a.created) - (b.sortKey ?? b.created) || a.id.localeCompare(b.id))
+}
+
+function localCachedResources(): ResourceReport {
+  const projectRoot = repoRoot()
+  const budgets = resourceBudgets(projectRoot)
+  const owners = localCachedSessions(true).map((session) => ({
+    kind: 'session' as const,
+    id: session.id,
+    label: session.label,
+    status: session.lifecycle,
+    liveness: 'unknown' as const,
+    proposal: session.proposal,
+    note: session.note,
+    worktreePath: session.path,
+    branch: session.branch,
+    archived: session.archived,
+    processes: [],
+    rssMiB: 0,
+    pssMiB: null,
+    cpuPercent: 0,
+    budget: { rssMiB: budgets.sessionRssMiB, idleCpuPercent: budgets.idleCpuPercent },
+    findings: ['local-store-only: runtime liveness and process measurements are unavailable'],
+    reclaim: { eligible: false, reason: 'local store read cannot prove runtime ownership or liveness' },
+  }))
+  return {
+    version: 1,
+    measuredAt: new Date().toISOString(),
+    projectRoot,
+    platform: platform(),
+    available: false,
+    unavailableReason: 'backend unavailable; local session store has no runtime resource measurements',
+    host: { memoryTotalMiB: null, memoryUsedMiB: null, memoryAvailableMiB: null, swapTotalMiB: null, swapUsedMiB: null, cpuPercent: null },
+    budgets,
+    owners,
+    totals: { rssMiB: 0, pssMiB: null, cpuPercent: 0 },
+    findings: owners.reduce((total, owner) => total + owner.findings.length, 0),
+  }
+}
+
+async function cachedRead<T>(remote: () => Promise<T>, local: () => T | Promise<T>): Promise<T> {
+  try {
+    return await remote()
+  } catch (error) {
+    if (!(error instanceof BackendError) || error.status !== undefined || (await apiBaseInfo()).source === 'flag') throw error
+    console.error('spex session: backend unreachable; source: local session store (liveness unknown)')
+    return await local()
+  }
+}
+
 // GET /api/sessions — the board, used by `spex session ls`, and by `spex session watch`/`wait` as their poll source.
 export async function clientListSessions(includeArchived = false): Promise<Session[]> {
-  const r = await apiFetch(includeArchived ? '/api/sessions?all=1' : '/api/sessions')
-  if (!r.ok) throw new BackendError(`backend error ${r.status} listing sessions`, r.status)
-  return await r.json() as Session[]
+  return cachedRead(async () => {
+    const r = await apiFetch(includeArchived ? '/api/sessions?all=1' : '/api/sessions')
+    if (!r.ok) throw new BackendError(`backend error ${r.status} listing sessions`, r.status)
+    return await r.json() as Session[]
+  }, () => localCachedSessions(includeArchived))
 }
 
 export async function clientResources(): Promise<import('./host-resources.js').ResourceReport> {
-  const r = await apiFetch('/api/resources')
-  if (!r.ok) throw new BackendError(`backend error ${r.status} loading resources: ${await r.text()}`, r.status)
-  return await r.json() as import('./host-resources.js').ResourceReport
+  return cachedRead(async () => {
+    const r = await apiFetch('/api/resources')
+    if (!r.ok) throw new BackendError(`backend error ${r.status} loading resources: ${await r.text()}`, r.status)
+    return await r.json() as import('./host-resources.js').ResourceReport
+  }, localCachedResources)
 }
 
 // resolve a selector (full id, id-prefix, node, or branch) against the live board, then call with the full id.
@@ -62,10 +155,12 @@ export async function clientSend(id: string, text: string, from?: string): Promi
 
 // GET /api/sessions/:id/review — the manager cockpit review bundle (null on 404).
 export async function clientReview(id: string): Promise<ReviewPayload | null> {
-  const r = await apiFetch(`/api/sessions/${seg(id)}/review`)
-  if (r.status === 404) return null
-  if (!r.ok) throw new BackendError(`backend error ${r.status} reviewing ${id}`, r.status)
-  return await r.json() as ReviewPayload
+  return cachedRead(async () => {
+    const r = await apiFetch(`/api/sessions/${seg(id)}/review`)
+    if (r.status === 404) return null
+    if (!r.ok) throw new BackendError(`backend error ${r.status} reviewing ${id}`, r.status)
+    return await r.json() as ReviewPayload
+  }, () => reviewPayload(id))
 }
 
 // GET /api/sessions/:id/evals?format=html — the rendered EXPORT artifact ([[session-eval]]): the
@@ -205,7 +300,12 @@ export async function clientSendRawKeys(id: string, keys: string[]): Promise<boo
 // originating prompt. 404 → no such session.
 export type ShowResult = { ok: true; session: Session & { prompt: string | null } } | { ok: false; status: number }
 export async function clientShow(id: string): Promise<ShowResult> {
-  const r = await apiFetch(`/api/sessions/${seg(id)}`)
-  if (r.ok) return { ok: true, session: await r.json() as Session & { prompt: string | null } }
-  return { ok: false, status: r.status }
+  return cachedRead(async () => {
+    const r = await apiFetch(`/api/sessions/${seg(id)}`)
+    if (r.ok) return { ok: true, session: await r.json() as Session & { prompt: string | null } }
+    return { ok: false, status: r.status }
+  }, () => {
+    const session = localCachedSessions(true).find((item) => item.id === id)
+    return session ? { ok: true, session } : { ok: false, status: 404 }
+  })
 }

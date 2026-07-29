@@ -73,8 +73,11 @@ Target archive and archived close prove/unload only the target's bound generatio
 subtree. They may census unrelated IDs only to protect that exact control plane; they never require
 those IDs to answer target reads, migrate, unload, or disappear. A successful archive projects the
 target offline, and close removes only that exact target's worktree, branch, record, and binding.
-Failure leaves the row and all non-target roots intact, so a close-pending session cannot be
-reported online merely because some other generation remains live.
+Before close performs destructive work it marks the exact binding record-removing. That binding
+continues to route only while its matching record exists; after a crash that removes the record it
+cannot remain routable or hold a draining root, and a successful close removes it outright. Failure
+leaves the row and all non-target roots intact, so a close-pending session cannot be reported online
+merely because some other generation remains live.
 
 The ledger's reads, bootstrap, switch, retry after restart, binding, and reclamation are idempotent.
 The isolated backend scenario covers a 22-reference legacy root (13 governed, 9 unowned protective,

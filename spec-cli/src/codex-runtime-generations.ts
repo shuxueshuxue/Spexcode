@@ -16,7 +16,7 @@ export type CodexGenerationEndpoint = Readonly<{
 type CodexGenerationState = 'current' | 'draining' | 'reclaimed' | 'starting'
 type GenerationReservation = Readonly<{ pid: number; startToken: string }>
 type CodexGeneration = Readonly<{ state: CodexGenerationState; endpoint: CodexGenerationEndpoint; reservation?: GenerationReservation }>
-export type CodexGenerationBinding = Readonly<{ generationId: string; threadId: string; phase?: 'record-pending' }>
+export type CodexGenerationBinding = Readonly<{ generationId: string; threadId: string; phase?: 'record-pending' | 'record-removing' }>
 
 export type CodexGenerationLedger = Readonly<{
   version: 3
@@ -97,7 +97,8 @@ function parseLedger(value: unknown): CodexGenerationLedger {
   for (const [sessionId, binding] of Object.entries(raw.bindings)) {
     if (!binding || typeof binding !== 'object' || typeof (binding as CodexGenerationBinding).generationId !== 'string' ||
       typeof (binding as CodexGenerationBinding).threadId !== 'string' || !(binding as CodexGenerationBinding).threadId ||
-      ((binding as CodexGenerationBinding).phase !== undefined && (binding as CodexGenerationBinding).phase !== 'record-pending')) {
+      ((binding as CodexGenerationBinding).phase !== undefined && (binding as CodexGenerationBinding).phase !== 'record-pending' &&
+        (binding as CodexGenerationBinding).phase !== 'record-removing')) {
       throw new Error(`Codex generation ledger has malformed binding ${sessionId}`)
     }
   }
@@ -298,7 +299,7 @@ function pendingBindingHasRecord(root: string, sessionId: string, binding: Codex
 }
 
 function bindingProtectsGeneration(root: string, sessionId: string, binding: CodexGenerationBinding): boolean {
-  return binding.phase !== 'record-pending' || pendingBindingHasRecord(root, sessionId, binding)
+  return binding.phase === undefined || pendingBindingHasRecord(root, sessionId, binding)
 }
 
 function bootstrapLedger(root: string): CodexGenerationLedger {
@@ -476,6 +477,22 @@ export function commitCodexGenerationRegistration(root: string, sessionId: strin
       throw new Error(`Codex session ${sessionId} registration no longer names its exact generation and thread`)
     if (binding.phase !== 'record-pending') return
     const bindings = { ...previous.bindings, [sessionId]: { generationId, threadId } }
+    writeLedger(root, previous, { current: previous.current, pending: previous.pending, generations: previous.generations, bindings })
+  })
+}
+
+// Close has the inverse crash boundary: retain the exact binding while its record still exists, but mark it
+// record-removing before any destructive step so an interrupted removal cannot leave a committed ghost binding.
+export function prepareCodexGenerationClose(root: string, sessionId: string, threadId: string): void {
+  withLedgerLockSync(root, () => {
+    const previous = readCodexGenerationLedger(root)
+    if (previous.revision === 0 && !previous.current && !Object.keys(previous.generations).length) return
+    const binding = previous.bindings[sessionId]
+    if (!binding || binding.threadId !== threadId) throw new Error(`Codex session ${sessionId} has no exact generation binding to close`)
+    if (binding.phase === 'record-removing') return
+    const generation = previous.generations[binding.generationId]
+    if (!generation || generation.state === 'reclaimed') throw new Error(`Codex session ${sessionId} binding names an absent or reclaimed generation`)
+    const bindings = { ...previous.bindings, [sessionId]: { ...binding, phase: 'record-removing' as const } }
     writeLedger(root, previous, { current: previous.current, pending: previous.pending, generations: previous.generations, bindings })
   })
 }

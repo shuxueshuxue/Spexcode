@@ -1,11 +1,3 @@
-/* @@@ theme palette - the whole app (spec-node board, react-flow, AND the session console) is built on
-   ONE set of CSS custom properties; a theme is nothing but another definition of them under a
-   :root[data-theme=<code>] attribute row. Only the palette changes; every layout / component rule reads
-   through the vars unchanged. theme.js sets/persists the attribute (see the [[dashboard-shell]] spec);
-   index.html applies it before first paint so there's no flash. Every theme is a community preset —
-   design tokens ported from an MIT-licensed Obsidian community theme (palette values only, no upstream
-   CSS rules). Upstream repos + full license notices: spec-dashboard/THEME-CREDITS.md.
-   Monospace everywhere, crisp 1px borders, square ticks, bracketed tags — deliberately not web-y. */
 
 /* Minimal (dark) — kepano/obsidian-minimal, MIT, © 2020-2024 Steph Ango (@kepano).
    Neutral graphite: the base-l 15% greyscale ramp + Minimal's shared muted accent set.
@@ -31,8 +23,6 @@
   --term-bg: #212121; /* the embedded terminal is DARK in EVERY theme (the Claude TUI is dark-designed) */
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
-  /* @@@ typography tokens - one scale for every dashboard surface. Components select the role their
-     copy performs; raw font metrics stay here so a new view cannot invent a nearby one-off value. */
   --type-caption: 10px;
   --type-meta: 11px;
   --type-control: 12px;
@@ -220,9 +210,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* @@@ themed scrollbars - the scrollbars follow the [data-theme] palette in every theme instead of
-   the raw OS default. Thin, rounded thumb (--line at rest, --muted on hover), track transparent onto the
-   --panel surface. Firefox reads scrollbar-color/-width; WebKit/Blink the ::-webkit-scrollbar rules. */
 * { scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -230,9 +217,6 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-/* @@@ app skeleton ([[side-nav]]) - the standard modern-app shell: a slim left icon RAIL (always visible,
-   one entry per top-level page) beside ONE main area the routed page fills. Pages that must stay warm
-   (graph, session board) are display-toggled in place; forum/settings mount per visit. */
 .app { display: flex; height: 100vh; }
 .app-main { flex: 1; min-width: 0; display: flex; position: relative; }
 
@@ -281,15 +265,7 @@ body {
 .si-resizer { flex: 0 0 7px; margin: 0 -3.5px; }
 /* while a drag is live the whole app keeps the col-resize cursor and text selection is off */
 body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-select: none !important; }
-/* @@@ keyboard mode - while the KEYBOARD is driving the board (App.jsx kbdMode, set by nav keys, cleared by
-   a real mouse move) the mouse gets out of the way: the cursor hides everywhere and the board takes no
-   pointer events. With no pointer over it, no :hover reaction fires under the stationary cursor — the issue
-   popover and any future hover affordance simply don't appear until you actually move the mouse. (The
-   FOCUSED node's popover still shows: that's a .focused class match, not hover, and is the keyboard reveal.)
-   Scoped to .react-flow so the modals/HUD layered ABOVE the board (legend, settings, search) stay clickable.
-   The subtree (* ) is load-bearing: React Flow re-enables pointer-events:all on its node/edge/handle layers,
-   so a rule on the .react-flow container ALONE is overridden and a stationary cursor still hits the node.
-   The window mousemove that exits kbdMode still fires — it passes through to the .graph behind. */
+/* React Flow restores pointer events on child layers, so keyboard mode blocks the canvas and descendants. */
 .app.kbd-mode, .app.kbd-mode * { cursor: none !important; }
 .app.kbd-mode .react-flow, .app.kbd-mode .react-flow * { pointer-events: none !important; }
 
@@ -345,10 +321,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .lock-hint-release:hover { border-color: var(--blue); color: var(--orange); }
 
-/* @@@ board stats - the per-node badges, totalled. A glanceable strip pinned bottom-left of the graph,
-   mirroring the minimal HUD chrome (paper chip, mono type) and the SAME glyph colours the tiles use, so
-   it reads as "the board, summed". Each chip is a button that jumps to the first node it counts; a
-   zero-count chip dims and goes inert. flex-wrap keeps it from running off a narrow viewport. */
 .graph-stats {
   position: absolute; bottom: 14px; left: 18px; z-index: 5;
   display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
@@ -423,9 +395,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .node-editors { display: flex; align-items: center; gap: 3px; }
 .av-more { font-size: var(--type-caption); font-weight: var(--weight-bold); color: var(--muted); margin-left: 1px; }
 
-/* @@@ avatar - the generated face (avatar.jsx). `av-face` is the coloured tile; shape variants change
-   only the corner radius. The wrapper carries a liveness ring (av-st-working/idle/offline) so the row
-   reads "who is here, and are they live" at a glance. A future kind:'image' provider reuses .av-face. */
 .avatar { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--panel); }
 .av-face { display: inline-flex; align-items: center; justify-content: center; line-height: var(--leading-none); font-weight: var(--weight-bold); overflow: hidden; }
 .av-circle  { border-radius: 50%; }
@@ -517,8 +486,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .ov-tab:hover { color: var(--ink2); }
 .ov-tab.on { color: var(--ink2); border-color: var(--blue); background: var(--paper); }
-/* @@@ tab counts - open/closed issue tallies shown on the issues tab face. Compact mono numbers in the
-   card vocabulary (green open · magenta closed) so the count reads without opening the tab. */
 .ov-tab-counts { display: inline-flex; gap: 3px; margin-left: 5px; vertical-align: baseline; }
 /* a caption state-count chip: the shared review-state icon + tally in one tone (issues open/closed,
    eval fresh pass/fail — zero values simply don't render). */
@@ -534,7 +501,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
    the body itself never scrolls, so the work pane can't push a horizontal bar onto the window. */
 .ov-body { flex: 1; min-width: 0; overflow: hidden; display: flex; }
 
-
 /* pane: spec doc */
 .pane-doc { flex: 1; padding: 22px 26px; overflow: auto; }
 .pane-doc h1 { font-size: var(--type-heading); color: var(--ink2); margin: 0 0 14px; }
@@ -542,9 +508,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   margin: 0 0 16px; padding: 8px 14px; border-left: 3px solid var(--blue);
   background: var(--panel2); color: var(--ink); line-height: var(--leading-body); font-size: var(--type-body);
 }
-/* @@@ stat bar - the node's at-a-glance signal line: status (the tile's dot+colour vocabulary) · version
-   · eval score · drift, with the last-editing session pushed to the end. A compact panel strip that wraps
-   on narrow. Surfaces the score + drift signals that previously lived ONLY on the tile, never in the popup. */
 .pane-doc .doc-stat {
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
   margin: 0 0 16px; padding: 6px 10px;
@@ -561,8 +524,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .stat-sess { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: var(--type-meta); color: var(--muted); min-width: 0; }
 .stat-sess b { color: var(--ink2); font-weight: var(--weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* @@@ governs - the node's owned files as a counted row of wrapping chips (compact, vs the old one-per-line
-   vertical stack); a pure-prose node (no code:) shows a muted 'no file owned' marker instead of nothing. */
 .pane-doc .doc-gov { margin: 0 0 16px; }
 .doc-gov-h { display: block; font-size: var(--type-meta); color: var(--muted); margin-bottom: 6px; }
 .doc-gov-h b { color: var(--ink2); font-weight: var(--weight-bold); }
@@ -657,12 +618,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 /* drift badge: governed code is N commits ahead of this spec (rigorous, via git rev-list) */
 .drift-badge { flex: none; font-size: var(--type-caption); font-weight: var(--weight-bold); color: var(--yellow); border: 1px solid var(--yellow); border-radius: 3px; padding: 0 3px; line-height: var(--leading-ui); }
 
-/* @@@ issue badge - the at-a-glance count of OPEN issues the forge linked to this node. Magenta,
-   deliberately distinct from the status dot AND the yellow drift-badge so the three signals never blur.
-   Just the glance — the detail card (.issue-popover) is now anchored to the WHOLE node, not this marker. */
 .issue-badge { flex: none; font-size: var(--type-caption); font-weight: var(--weight-bold); color: var(--magenta); border: 1px solid var(--magenta); border-radius: 3px; padding: 0 3px; line-height: var(--leading-ui); cursor: default; }
 
-/* @@@ score badge - the eval SCORE at a glance consumes review-chrome's ONE icon/label/tone mapping. */
 .score-badge {
   flex: none; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
   width: 14px; height: 14px; line-height: var(--leading-none); cursor: default;
@@ -673,9 +630,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .score-badge.staleFail { color: var(--muted); }                 /* the last verdict, greyed */
 .score-badge.empty     { color: var(--muted); opacity: .45; }   /* never measured — an empty ring */
 
-/* @@@ scenario count - the per-scenario tally on a node tile (score.jsx ScenarioCount): ✓ satisfied/total,
-   replacing the single fuzzy score circle. A tiny outlined pill in the worst-first colour (green all-pass,
-   red any fresh fail, grey stale/blind-spot), so a board sweep reads HOW MANY scenarios a node satisfies. */
 .scenario-count { flex: none; display: inline-flex; align-items: center; gap: 2px; font-family: var(--mono); font-size: var(--type-caption); font-weight: var(--weight-bold); line-height: var(--leading-ui);
   border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; cursor: default; }
 .scenario-count.pass { color: var(--green); }
@@ -687,9 +641,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 a.scenario-count { text-decoration: none; cursor: pointer; }
 a.scenario-count:hover { background: var(--panel2); }
 
-/* @@@ tag chips — the ONE element (score.jsx TagChips) for a scenario's classification tags, used wherever a
-   scenario surfaces (search palette and eval tab). Paper chip + mono, the SAME minimal vocabulary as
-   .stat-chip, so a tag reads identically everywhere; flex-wrap keeps a multi-tag cloud from overflowing. */
 .tag-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
 .tag-chip { font-family: var(--mono); font-size: var(--type-caption); line-height: var(--leading-relaxed); color: var(--ink2);
   background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; white-space: nowrap; }
@@ -705,10 +656,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .issue-card-title { display: block; font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--ink2);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-/* @@@ issues pane - the node-info popup's third tab: the FULL bound-work ledger (open + closed), grouped
-   under two count headings. Reuses the .issue-card vocabulary the board popover already defines; here the
-   title is un-clamped (a tab has room for the whole title, unlike the tight hover card). Scrolls its own
-   content like the spec/history panes (j/k drives it — see App.jsx bumpScroll). */
 .pane-issues { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
 .pane-issues.empty { color: var(--muted); font-size: var(--type-body); }
 .pane-issues .issue-group-head { font-size: var(--type-caption); font-weight: var(--weight-bold); text-transform: uppercase; letter-spacing: var(--tracking-normal); color: var(--muted); margin: 0 2px 6px; }
@@ -767,11 +714,6 @@ a.scenario-count:hover { background: var(--panel2); }
    ever-changing tmux task description has room; min-width:0 lets the ellipsis engage in a flex child. */
 .sess-id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sess-lock { font-size: var(--type-caption); flex: none; line-height: var(--leading-none); filter: saturate(0); }
-/* @@@ the status line - ROW 2: the small badges that used to crowd the headline (status word · op tally),
-   now on their own line. flex-basis:100% forces it onto a wrapped line spanning the WHOLE row (under the
-   avatar too); smaller + dimmer than the headline so it reads as a subtitle. The line has slack on the
-   right by design — more glance-info (ahead-count, age, …) can join it later. The same rule serves the
-   .si-item tab face. */
 .sess-meta {
   /* rendered before the headline in source (SessionRow) but kept visually LAST by order:1 in every flex
      face — so on a selected console row it can float onto the headline's first line ([[session-activity]]). */
@@ -784,10 +726,6 @@ a.scenario-count:hover { background: var(--panel2); }
 /* compact one-line face: the status word collapses to a single glyph (STATUS_GLYPH), painted by STATUS_COLOR
    inline; the exact word stays on the title/aria for hover + a11y. */
 .sess-glyph { flex: none; width: 12px; text-align: center; font-size: var(--type-meta); line-height: var(--leading-none); }
-/* @@@ nesting fold ([[session-nesting]]) — the leading gutter on a nested session row. `.sess-lead` holds the
-   file-tree connector RAILS (one 14px `.sess-rail` per depth level, drawn with thin borders like a notes-app
-   file tree) and then, for a parent, an invisible count-sized SLOT. The real count button is a sibling of the
-   row button, absolutely covering that slot: identical geometry, no button-inside-button semantics. */
 .sess-tree-row { position: relative; --sess-fold-indent: 0px; --sess-fold-pad-x: 0px; }
 .sess-lead { flex: none; align-self: stretch; display: inline-flex; align-items: stretch; --rail: color-mix(in srgb, var(--muted) 42%, transparent); }
 /* a connector column. `.rail` = a full-height vertical (an ancestor whose branch continues below this row);
@@ -998,11 +936,6 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 .set-reset:hover { border-color: var(--red); color: var(--red); }
 
-/* @@@ search palette (`/` on the board, ⌥+/ over the session board) - a command-palette over the spec
-   tree + sessions: an input + ranked result rows. Top-aligned (not centred like .legend) so the list grows
-   downward without the panel jumping as results change. Shares the dimmed/blurred .legend-backdrop look but
-   anchors the panel near the top. z-index 60 floats it ABOVE every surface — including the session-board
-   page, which is where ⌥+/ opens it — so the palette never renders behind its surface. */
 .search-backdrop {
   position: fixed; inset: 0; z-index: 60;
   background: rgba(101,123,131,.25); backdrop-filter: blur(2px);
@@ -1047,9 +980,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: var(--type-meta); }
 
 /* ---- session interface (#/sessions): two panes, right content morphs ---- */
-/* @@@ a routed PAGE ([[side-nav]]) - the session board fills the app's main area beside the rail: no
-   backdrop, no lift, no pop — it is a peer page of the graph, not a modal over it. It stays mounted
-   (display:none) while other pages show so the terminals keep their sockets/scroll warm. */
 .si-page { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .si-panel {
   /* the console follows the app theme — it uses the same :root tokens (var(--paper/--panel/--ink/--line…))
@@ -1074,11 +1004,6 @@ a.scenario-count:hover { background: var(--panel2); }
   font-family: var(--mono); font-size: var(--type-control); color: var(--ink2);
 }
 .si-item:hover { background: var(--panel2); }
-/* @@@ selected tab — obvious but in-theme: a soft blue WASH (clearly past the plain hover tint), crisp bold
-   ink, a thicker spine, and a green ❯ prompt caret for terminal flavour. The wash is a background, a
-   different axis from the thin left stripe, so it never reads as the avatar colour the way the old blue
-   border-line did; the stripe itself stays the session's own --ov hue. Mirrors the locked-row mix recipe.
-   The :hover override deepens the wash slightly so a hovered selection still gives feedback. */
 .si-item.on { background: color-mix(in srgb, var(--blue) 15%, var(--panel2)); color: var(--ink2); font-weight: var(--weight-semibold); border-left-width: 3px; }
 .si-item.on:hover { background: color-mix(in srgb, var(--blue) 24%, var(--panel2)); }
 .si-item.on::before { content: '❯'; flex: none; color: var(--green); font-weight: var(--weight-bold); }
@@ -1137,9 +1062,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-zone-need    { --zh: var(--yellow); }
 .si-zone-run     { --zh: var(--green); }
 .si-zone-offline { --zh: var(--muted); }
-/* @@@ top button row - New Session (＋, blue), the archive star, and Search: three equal compact buttons (not
-   full-width rows) so they don't sit in the ↑/↓ path to a session. Selected gets a hue wash + ring, mirroring
-   the session rows' wash. */
 .si-toprow { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 /* the archive star ([[archive]]): muted at rest, amber while you are in the archive — a different hue from
    New's blue, so "where am I looking" never reads as "what am I making". */
@@ -1570,8 +1492,6 @@ a.scenario-count:hover { background: var(--panel2); }
 /* New Session: input + avatar centred, terminal vibe. */
 .si-content.is-new { align-items: center; justify-content: center; }
 .si-new-center { width: min(560px, 86%); display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 12vh; animation: si-rise .18s ease; }
-/* @@@ launch-hero — the block-letter wordmark must stay a rigid character grid: pre + mono, font-size
-   scales the whole grid (clamp keeps it inside narrow panes), gradient inked from the theme palette. */
 .si-hero { margin: 0 0 2px; font-family: var(--mono); font-size: var(--type-hero); line-height: var(--leading-hero); white-space: pre; user-select: none;
   background: linear-gradient(180deg, var(--blue), var(--magenta)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .si-ask-gap { height: 21px; } /* the retired ask line's slot — keeps the hero↔input spacing it occupied */
@@ -1581,8 +1501,6 @@ a.scenario-count:hover { background: var(--panel2); }
   background: var(--panel); padding: 10px 12px; transition: height .12s ease;
 }
 
-/* @@@ @-mention dropdown - bare terminal completion list: square corners, hairline border, monospace
-   rows of `@id` + dim spec path. Anchored just under the input; one row is highlighted (keyboard/hover). */
 .mention-menu {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5;
   margin: 0; padding: 4px; list-style: none; max-height: 248px; overflow-y: auto;
@@ -1608,8 +1526,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .mention-id { color: var(--blue); flex: none; }
 .mention-id .mention-hit { font-weight: var(--weight-bold); }
 .mention-path { color: var(--muted); font-size: var(--type-meta); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* @@@ slash-command rows - mirror CC's `/` menu: `/name`, a dim description that ellipses, and a
-   right-aligned source tag. Same dropdown shell as @-mention (square, hairline, monospace). */
 .slash-name { color: var(--blue); flex: none; }
 .slash-name .mention-hit { font-weight: var(--weight-bold); }
 .slash-desc { color: var(--muted); font-size: var(--type-meta); min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; }
@@ -1617,10 +1533,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .slash-src.src-user { color: var(--green); opacity: .85; }
 .slash-src.src-project { color: var(--cyan); opacity: .85; }
 .slash-src.src-skill { color: var(--magenta); opacity: .85; }
-/* @@@ board-command row - one of OUR commands (type/eval/merge/stop/close): runs HERE, not in the agent. Its
-   `/name` and its `[ui]` tag both wear the command's identity hue (--sc, set by sc-<color> on the row),
-   the SAME colour as the matching toolbar tool or Eval door — so the menu and toolbar name one thing in one colour,
-   visibly apart from CC's blue `/name` rows. */
 .slash-name.ui { color: var(--sc); font-weight: var(--weight-bold); }
 .slash-src.src-ui { color: var(--sc); opacity: .9; }
 /* config-preset kinds (new-session `/` palette): a mutating preset edits the graph, a report only reads it. */
@@ -1703,9 +1615,7 @@ a.scenario-count:hover { background: var(--panel2); }
   white-space: pre-wrap; word-break: normal; overflow-wrap: anywhere;
   opacity: .75;
 }
-/* @@@ session toolbar — one compact row: current surface | Eval door | registry command tools. Identity/state
-   already belongs to the selected sidebar row. The session wrapper is the responsive boundary because the
-   list is draggable: viewport media queries cannot know how narrow the terminal pane actually is. */
+/* The resizable terminal pane, not the viewport, determines this toolbar's breakpoint. */
 .si-session-wrap { container-type: inline-size; }
 .si-tabbar {
   flex: none; min-width: 0; height: 32px; box-sizing: border-box;
@@ -1807,11 +1717,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-action-outcome.failed { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, var(--line)); }
 .si-command-tools .si-action-outcome { margin-left: auto; }
 .si-action-outcome-float { position: absolute; top: 12px; right: 12px; z-index: 2; max-width: min(360px, calc(100% - 24px)); pointer-events: none; }
-/* @@@ file attach - the paperclip-glyph button (both input surfaces) opens the picker; a paste/drop attaches
-   too. A small, muted inline-SVG affordance (the dashboard's own monochrome glyph vocabulary, currentColor
-   stroke — no color emoji) that brightens on hover, sits at the input's bottom edge, and dims while
-   disabled/uploading; while uploading it shows a spinning ring. `.dragover` rings the surface green so a
-   dragged file reads as droppable; the error chip uses the shared right-pane outcome treatment. */
 .si-attach { flex: none; align-self: flex-end; display: inline-flex; align-items: center; background: transparent; border: none; cursor: pointer; color: var(--muted); line-height: var(--leading-relaxed); padding: 0 2px; }
 .si-attach:hover:not(:disabled) { color: var(--blue); }
 .si-attach:disabled { opacity: .5; cursor: default; }
@@ -1876,10 +1781,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-act.go:hover { background: var(--blue); color: var(--paper); }
 .si-act.big { padding: 8px 18px; font-size: var(--type-body); margin-top: 8px; }
 
-/* @@@ board commands - the `/` commands Command Box runs ITSELF each own ONE
-   identity hue, carried in `--sc`. That same `--sc` paints BOTH places the command appears — its toolbar
-   tool and `/` menu row — so the typed command and clicked tool read as one thing in one colour.
-   The `sc-<color>` token is the single definition of each hue; everything downstream reads `var(--sc)`. */
 .sc-red    { --sc: var(--red); }
 .sc-blue   { --sc: var(--blue); }
 .sc-green  { --sc: var(--green); }
@@ -2171,10 +2072,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .m-new .m-senderr { padding: 0; }
 .m-new-go { height: 42px; }
 
-/* @@@ eval tab - the node's evaluation timeline (see [[eval-tab]]). Each reading is an expandable
-   card: a header (scenario + freshness badge mirroring code-drift + evaluator/sha/time), then the captured
-   pixels on expand. Same scroller shape as the other popup panes (.ov-body is overflow:hidden; the pane
-   scrolls itself, and App's bumpScroll targets .pane-eval). */
 .pane-eval { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
 .pane-eval.empty { color: var(--muted); font-size: var(--type-body); }
 /* the eval tab surfaces the WHOLE declared set in ONE list: readings ride the timeline, and an unmeasured

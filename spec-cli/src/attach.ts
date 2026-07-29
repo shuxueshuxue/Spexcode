@@ -1,10 +1,3 @@
-// @@@ session attach - the HUMAN escape hatch into a worker: every session is just a tmux session on the
-// backend's private socket, and the most direct way to see or rescue one is to sit in it. This verb is the
-// sanctioned foreground `tmux attach` — no programmatic exception-handling ambition, the user fixes it by
-// being there. It is deliberately the ONE session verb that does NOT route through the backend
-// ([[remote-client]]'s exception): a terminal cannot be brokered over HTTP, and attaching a tmux CLIENT to
-// the same server is tmux's native multi-client support, not a second actor on the socket. That makes it
-// LOCAL-only by nature — the guards below fail loud (never degrade) when the premise doesn't hold.
 import { spawnSync } from 'node:child_process'
 import { networkInterfaces } from 'node:os'
 import { alive, apiBase, TMUX_SOCK } from './sessions.js'

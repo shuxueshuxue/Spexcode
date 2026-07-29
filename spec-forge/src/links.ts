@@ -40,7 +40,6 @@ export function resolveLinks(
     return s
   }
 
-  // PRs: branch → node (free structural link), and remember which node each PR belongs to.
   const prNode = new Map<number, string>()
   for (const pr of prs) {
     const node = branchToNode(pr.headRefName, nodeIds)
@@ -49,7 +48,6 @@ export function resolveLinks(
     slot(node).prs.set(pr.number, { ...pr, via: 'branch' })
   }
 
-  // Issues by marker — the explicit convention. Unknown ids are dropped (no inventing nodes).
   const issueByNumber = new Map(issues.map((i) => [i.number, i]))
   for (const issue of issues) {
     for (const id of parseSpecMarkers(issue.body)) {
@@ -57,8 +55,6 @@ export function resolveLinks(
     }
   }
 
-  // Transitive: a PR on a node branch that closes an issue links that issue to the node — unless a marker
-  // already linked it (marker wins, so we don't overwrite the explicit source with the inferred one).
   for (const pr of prs) {
     const node = prNode.get(pr.number)
     if (!node) continue

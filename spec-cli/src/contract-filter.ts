@@ -5,20 +5,6 @@ import { git } from './git.js'
 import { writeManagedBlock, removeManagedBlock } from './harness.js'
 import { encodeProject, runtimeRoot, treeSlotDir } from './layout.js'
 
-// @@@ contract-filter ([[content-filter]]) - the answer for a MIXED-CONTENT contract file: a
-// CLAUDE.md/AGENTS.md the HOST TRACKS — or has begun writing its OWN prose into — where "generate + ignore"
-// is either a no-op (git ignores only untracked paths) or would hide USER content. A git clean/smudge
-// content filter keeps the two contents on their own sides of the index: the REPO stores the
-// pristine host prose (clean strips our sentinel block on stage/diff), the WORKING TREE carries prose + block
-// (smudge re-injects it on checkout). Everything the filter needs is PER-CLONE — `git config
-// filter.spexcode.*` + a managed block in `.git/info/attributes` + two files under `<common>/spexcode/` —
-// zero repo footprint. The sentinels are the load-bearing anchor: the invariant
-// is clean(smudge(x)) == x (for text ending in one newline — see the shim), so `git status` stays clean.
-// Planted only where mixed content EXISTS or is imminent (a tracked contract file, or an untracked one the
-// user's prose entered — pre-armed so their eventual `git add` strips the block; a wholly-ours file needs
-// only the exclude). materialize plants/refreshes/erases it per that live kind detection ([[residence]]
-// / the forgetting law).
-
 // the three field-sharpened edges this module owes ([[content-filter]]):
 //   ① the configured command points at a STABLE shim path and degrades to `cat` (identity) when the shim is
 //     missing — a bare missing filter command makes git spray "cannot fork" fatals on EVERY operation;

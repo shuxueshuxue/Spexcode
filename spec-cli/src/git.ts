@@ -1804,9 +1804,10 @@ export function resetHistoryCachesForTests(): void {
   eventPathMemo.clear(); gitObjectFormatMemo.clear()
 }
 export function historyEventCachePathForTests(root: string): string { return eventCacheLocation(root).path }
-// the reachability set of `sha` — itself plus every ancestor — as a bitset over the walk's dense ids.
-// Built once per queried sha by following parent edges in memory (no git fork), memoized on the index;
-// a bitset costs history-length BITS, so hundreds of cached shas stay cheap on the board hot path.
+// @@@ one ordinary ancestry memo, with a batch entrance - every closure below has exactly the same dense
+// bitset shape in idx.anc. A caller that already knows several bases can prime them in one child-to-parent
+// topology pass; the short-lived frontier is released before returning. Unknown or ad-hoc revisions retain
+// this direct parent DFS, so neither path introduces a second reachability representation or persistent fact.
 // undefined when `sha` is not reachable from HEAD (rebased away, an unmerged branch, or never on any
 // ref) — callers apply their own conservative rule to that "can't prove" case.
 export function ancestorsOf(idx: DriftIndex, sha: string): Uint8Array | undefined {
@@ -1829,6 +1830,69 @@ export function ancestorsOf(idx: DriftIndex, sha: string): Uint8Array | undefine
   }
   idx.anc.set(sha, bits)
   return bits
+}
+
+// Fill the existing ancestry memo for a known roster in one child-before-parent topology pass. At each
+// commit the transient row names requested descendants; emitting those bits into the ordinary closures makes
+// the resulting bytes identical to calling ancestorsOf() independently for every requested SHA.
+export function primeAncestorClosures(idx: DriftIndex, shas: Iterable<string>): void {
+  const endpoints = [...new Set(shas)].filter((sha) => !idx.anc.has(sha) && idx.ord.has(sha))
+  if (!endpoints.length) return
+  const count = idx.ord.size
+  const width = (endpoints.length + 7) >> 3
+  const closureWidth = (count + 7) >> 3
+  const endpointAt = new Map(endpoints.map((sha, position) => [sha, position]))
+  const hashAt = new Array<string>(count)
+  for (const [hash, position] of idx.ord) hashAt[position] = hash
+
+  // Every row waits until all of its children have contributed. Parents outside the walked topology are
+  // deliberately absent: they are the same shallow boundary ancestorsOf() stops at.
+  const childrenLeft = new Int32Array(count)
+  for (const parents of idx.parents.values()) for (const parent of parents) {
+    const position = idx.ord.get(parent)
+    if (position !== undefined) childrenLeft[position]++
+  }
+  const ready: number[] = []
+  for (let position = 0; position < count; position++) if (childrenLeft[position] === 0) ready.push(position)
+
+  const closures = endpoints.map(() => new Uint8Array(closureWidth))
+  const rows = new Map<number, Uint8Array>(), pool: Uint8Array[] = []
+  const rowFor = (position: number): Uint8Array => {
+    const existing = rows.get(position)
+    if (existing) return existing
+    const row = pool.pop() ?? new Uint8Array(width)
+    rows.set(position, row)
+    return row
+  }
+  let visited = 0
+  while (ready.length) {
+    const position = ready.pop()!
+    visited++
+    const row = rowFor(position)
+    rows.delete(position)
+    const endpoint = endpointAt.get(hashAt[position])
+    if (endpoint !== undefined) row[endpoint >> 3] |= 1 << (endpoint & 7)
+    for (let byte = 0; byte < width; byte++) {
+      let pending = row[byte]
+      while (pending) {
+        const bit = 31 - Math.clz32(pending & -pending)
+        closures[(byte << 3) + bit][position >> 3] |= 1 << (position & 7)
+        pending &= pending - 1
+      }
+    }
+    for (const parent of idx.parents.get(hashAt[position]) ?? []) {
+      const parentPosition = idx.ord.get(parent)
+      if (parentPosition === undefined) continue
+      const target = rowFor(parentPosition)
+      for (let byte = 0; byte < width; byte++) target[byte] |= row[byte]
+      if (--childrenLeft[parentPosition] === 0) ready.push(parentPosition)
+    }
+    row.fill(0)
+    pool.push(row)
+  }
+  if (visited !== count)
+    throw new Error(`cannot prime ancestry closures: topology yielded ${visited} of ${count} reachable commits`)
+  for (let position = 0; position < endpoints.length; position++) idx.anc.set(endpoints[position], closures[position])
 }
 export function inAncestors(idx: DriftIndex, bits: Uint8Array, sha: string): boolean {
   const o = idx.ord.get(sha)

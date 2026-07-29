@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
 import { repoRoot, historyIndex, rowsFor, historyStats, pathsStats, driftIndex, driftFor, fileDiffAt,
-  sourceIndexes, treeTextFiles, type HistoryIndex, type DriftIndex } from './git.js'
+  sourceIndexes, treeTextFiles, primeAncestorClosures, ancestorsOf, inAncestors, type HistoryIndex, type DriftIndex } from './git.js'
 import { parseCodeEntry, parseRelation, relationClaimsPath } from './anchors.js'
 
 // a node is any directory under .spec holding a spec.md; its parent is the nearest ancestor that also holds one.
@@ -257,9 +257,30 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
       options.drift === null ? Promise.resolve(null) : options.drift ?? driftIndex(root, tip),
     ])
   const [[idx, didx], allRaws] = await Promise.all([indexes, rawsAsync(root, tip, options.snapshot)])
+  const prepared = allRaws.map((r) => ({
+    r,
+    h: idx ? rowsFor(idx, r.relPath) : [],
+    codeRel: parseRelation(list(r.fm.code), 'code'),
+    relatedRel: parseRelation(list(r.fm.related), 'related'),
+  }))
+  if (didx) {
+    const queries: { hash: string; node: string }[] = []
+    for (const { r, h, codeRel, relatedRel } of prepared) {
+      if (!h[0]?.hash || (!codeRel.entries.length && !relatedRel.entries.some((entry) => !entry.selectors.length))) continue
+      queries.push({ hash: h[0].hash, node: r.id })
+    }
+    primeAncestorClosures(didx, queries.map(({ hash }) => hash))
+    // Only an ack named for this node and outside its version's ancestry becomes a cover. Discover that
+    // exact roster from the now-primed bases instead of retaining closures for older, non-covering acks.
+    const covers: string[] = []
+    for (const [hash, nodes] of didx.acks) if (queries.some(({ hash: baseHash, node }) => {
+      const base = ancestorsOf(didx, baseHash)
+      return !!base && nodes.has(node) && !inAncestors(didx, base, hash)
+    })) covers.push(hash)
+    primeAncestorClosures(didx, covers)
+  }
   const loaded = []
-  for (const r of allRaws) {
-    const h = idx ? rowsFor(idx, r.relPath) : []
+  for (const { r, h, codeRel, relatedRel } of prepared) {
     // session = the Session: trailer of the node's latest version; frontmatter `session:` is the fallback.
     const fmSession = str(r.fm.session)
     const session = h[0]?.session || (fmSession && fmSession !== 'null' ? fmSession : null)
@@ -268,8 +289,6 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
     // drift, claims, eval attribution — expects, file-level as before), the scoped entries (path +
     // selectors) ride separately for lint's anchor engine, and structural problems (duplicates,
     // bare/scoped mixing, glob selectors, the code cap) surface as lint integrity errors.
-    const codeRel = parseRelation(list(r.fm.code), 'code')
-    const relatedRel = parseRelation(list(r.fm.related), 'related')
     const code = codeRel.entries.map((e) => e.path)
     const codeScoped = codeRel.entries.filter((e) => e.selectors.length > 0)
     const related = relatedRel.entries.map((e) => e.path)

@@ -124,6 +124,12 @@ Two principles keep that derivation cheap on a long-running server:
   The pair projector also parses the current-tip topology and tree-path listing once and passes those
   immutable projections to both history and drift builders; a shared `rev-list --parents` or `ls-tree`
   text must never be split into separate equivalent maps per builder.
+  When `loadSpecs` already knows several current version bases and their named checkpoint acks, it primes
+  each finite query roster in one child-to-parent topology pass. It first resolves the bases, then retains
+  only the acks which can actually cover one of them. Each output is the same dense bitset an independent
+  `ancestorsOf` lookup would have stored; the compact endpoint frontier is discarded on return, and an arbitrary
+  later SHA still uses that normal lookup. This is a batch entrance to one current projection, never a persisted
+  matrix or another reachability truth.
   Cross-process writers still merge under the project-scoped lock; a corrupt or interpretation-mismatched
   snapshot rebuilds from Git, and a failed event scan remains loud rather than minting a marker. The raw
   identity stream is parsed once at the Git adapter boundary through its structural NUL protocol; the ledger

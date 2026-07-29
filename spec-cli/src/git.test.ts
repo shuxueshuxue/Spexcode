@@ -5,7 +5,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, exist
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, sourceIndexes, sourceIndexesFull, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, primeAncestorClosures, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, sourceIndexes, sourceIndexesFull, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from './git.js'
+import { loadSpecs } from './specs.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
 // reachability is all that matters, insertion order is only the bitset slot assignment.
@@ -49,6 +50,8 @@ test('one persistent event transaction stays full-history-equivalent across seed
     const rows = seeded.toString('utf8').trim().split('\n').map((line) => JSON.parse(line))
     assert.deepEqual(rows.filter((row) => row.k.startsWith?.('tip:')).map((row) => row.k).sort(),
       ['tip:identity-raw', 'tip:merge'])
+    await loadSpecs(root, { history, drift })
+    assert.equal(drift.anc.has(version), true, 'the loader primes its version base before projecting drift')
 
     resetHistoryCachesForTests()
     await sourceIndexes(root)
@@ -65,13 +68,17 @@ test('one persistent event transaction stays full-history-equivalent across seed
 
     appendFileSync(join(root, 'src/a.ts'), 'export const c = 3\n'); run('add', '.'); run('commit', '-qm', 'content ack\n\nSpec-OK: a')
     resetHistoryCachesForTests()
-    const [selfAck, [, fullSelfAck]] = await Promise.all([driftIndex(root), sourceIndexesFull(root)])
+    const [[selfAckHistory, selfAck], [, fullSelfAck]] = await Promise.all([sourceIndexes(root), sourceIndexesFull(root)])
+    await loadSpecs(root, { history: selfAckHistory, drift: selfAck })
     assert.equal(driftFor(selfAck, version, 'src/a.ts', 'a'), 1, 'a content-bearing Spec-OK self-acks only its own event')
     assert.equal(driftFor(selfAck, version, 'src/a.ts', 'a'), driftFor(fullSelfAck, version, 'src/a.ts', 'a'))
 
     run('commit', '--allow-empty', '-qm', 'checkpoint\n\nSpec-OK: a')
     resetHistoryCachesForTests()
-    const [checkpoint, [, fullCheckpoint]] = await Promise.all([driftIndex(root), sourceIndexesFull(root)])
+    const [[checkpointHistory, checkpoint], [, fullCheckpoint]] = await Promise.all([sourceIndexes(root), sourceIndexesFull(root)])
+    await loadSpecs(root, { history: checkpointHistory, drift: checkpoint })
+    assert.equal(checkpoint.anc.has(version), true, 'the version base is still in the primed memo')
+    assert.equal(checkpoint.anc.has(run('rev-parse', 'HEAD')), true, 'the named empty checkpoint joins the same primed memo')
     assert.equal(driftFor(checkpoint, version, 'src/a.ts', 'a'), 0, 'an advancing empty Spec-OK checkpoint covers the earlier event')
     assert.equal(driftFor(checkpoint, version, 'src/a.ts', 'a'), driftFor(fullCheckpoint, version, 'src/a.ts', 'a'))
     resetHistoryCachesForTests()
@@ -80,6 +87,28 @@ test('one persistent event transaction stays full-history-equivalent across seed
     if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('one topology pass primes the exact independent closures for a branchy fork', () => {
+  const hashes = ['tip', 'merge', 'left', 'right', 'version', 'ack', 'root']
+  const ord = new Map(hashes.map((hash, position) => [hash, position]))
+  const parents = new Map<string, string[]>([
+    ['tip', ['merge']], ['merge', ['left', 'right']], ['left', ['version']], ['right', ['ack']],
+    ['version', ['root']], ['ack', ['root']], ['root', []],
+  ])
+  const idx = {
+    ord, parents, fileEvents: new Map(), lineageEvents: new Map(), lineageKeys: (path: string) => [path],
+    acks: new Map(), selfAcks: new Map(), specNodes: new Map(), anc: new Map(),
+  } satisfies DriftIndex
+  const expected = new Map(['tip', 'left', 'right', 'ack'].map((hash) => [hash, ancestorsOf(idx, hash)!]))
+  idx.anc.clear()
+  primeAncestorClosures(idx, ['tip', 'left', 'right', 'ack', 'off-history'])
+  for (const [hash, closure] of expected) assert.deepEqual(idx.anc.get(hash), closure, `${hash} closure matches independent DFS`)
+  const members = (hash: string) => hashes.filter((candidate) => inAncestors(idx, idx.anc.get(hash)!, candidate))
+  assert.deepEqual(members('tip'), ['tip', 'merge', 'left', 'right', 'version', 'ack', 'root'])
+  assert.deepEqual(members('left'), ['left', 'version', 'root'])
+  assert.deepEqual(members('right'), ['right', 'ack', 'root'])
+  assert.equal(idx.anc.has('off-history'), false, 'unreachable inputs retain ancestorsOf\'s conservative absence')
 })
 
 test('raw identity drift preserves root, path, rename, and merge identity', async () => {

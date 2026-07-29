@@ -220,7 +220,7 @@ try {
         page.waitForResponse((candidate) => new URL(candidate.url()).pathname === `/api/sessions/${sessionId}/rename` && candidate.request().method() === 'POST'),
         page.locator('.sess-rename-save').click(),
       ])
-      assert.equal(response.ok(), true, `rename ${index} must commit`) 
+      assert.equal(response.ok(), true, `rename ${index} must commit`)
       if (!persistedAt) persistedAt = recordPersistedAt(recordPath, target)
       await waitFor(() => persistedAt || (persistedAt = recordPersistedAt(recordPath, target)), `rename ${index} record persist`)
       const frame = await waitFor(() => page.evaluate((name) => window.__sessionPushFrames.find((entry) => entry.data.includes(name)) || null, target), `rename ${index} target SSE frame`)

@@ -1,5 +1,22 @@
 ---
 scenarios:
+  - name: inherited-code-anchor-freshness
+    tags: [cli]
+    test:
+      path: spec-eval/src/scan-source.test.ts
+      name: real eval fallback inherits node anchors while explicit bare scenario code stays file-wide
+    description: >-
+      In a disposable Git repository, declare a node whose code: anchors one Python function and two
+      scenarios: one with no scenario code: declaration, and one explicitly declaring the same file as a
+      bare path. File readings at the base commit, then change only a different function and run the real
+      `spex spec lint` and `spex eval lint` CLIs. Change the anchored function in a second commit and run
+      both CLIs again.
+    expected: >-
+      The node-level anchor gate and the inherited scenario agree: a non-anchored function change is no
+      anchor-drift and leaves the inherited scenario fresh, while the explicitly bare scenario is stale for
+      the whole-file change. A later change inside the anchored function produces anchor-drift and stales
+      both scenarios. The scenario declares no code: of its own, so this proves fallback preserves the
+      node's parsed selectors rather than flattening them to a path.
   - name: persistent-event-ledger-release
     tags: [cli]
     code: spec-cli/src/git.ts

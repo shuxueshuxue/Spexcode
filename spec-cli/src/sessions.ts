@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, withGitAbortSignal, type ReviewDiffFile } from './git.js'
 import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from './specs.js'
-import { adapterLoadedReferenceState, defaultHarness, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { adapterLoadedReferenceState, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
 import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
@@ -3332,6 +3332,197 @@ async function closeSessionUnlocked(id: string): Promise<boolean> {
 export const closeSession = (id: string): Promise<boolean> =>
   runSessionOperation({ op: 'close', sessionId: id },
     () => withSessionTransition(id, () => withRecordLock(id, () => closeSessionUnlocked(id))))
+
+export type CorruptRecordQuarantineWitness = {
+  adapter: string
+  thread: string | null
+  tmux: string
+  worktree: string
+  branch: string
+}
+
+export type CorruptRecordQuarantineResult = {
+  id: string
+  bundle: string
+  sha256: string
+  observedAt: string
+}
+
+const quarantineRoot = (id: string) => join(runtimeRoot(), 'corrupt', id)
+const recordSha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
+
+function normalizeQuarantineWitness(id: string, raw: unknown): CorruptRecordQuarantineWitness {
+  if (!raw || typeof raw !== 'object') throw new ResourceConflict(`refusing to quarantine ${id}: an exact adapter/thread/tmux/worktree/branch witness is required`)
+  const value = raw as Record<string, unknown>
+  const text = (key: keyof CorruptRecordQuarantineWitness): string => typeof value[key] === 'string' ? value[key].trim() : ''
+  const adapter = text('adapter')
+  const tmux = text('tmux')
+  const worktree = text('worktree')
+  const branch = text('branch')
+  if (!Object.prototype.hasOwnProperty.call(value, 'thread'))
+    throw new ResourceConflict(`refusing to quarantine ${id}: thread witness must be explicit (a string or null)`)
+  const threadValue = value.thread
+  const thread = typeof threadValue === 'string' && threadValue.trim() ? threadValue.trim() : threadValue == null || threadValue === '' ? null : null
+  if (!adapter || !HARNESSES.some((h) => h.id === adapter)) throw new ResourceConflict(`refusing to quarantine ${id}: adapter must name one registered harness`)
+  if (tmux !== id) throw new ResourceConflict(`refusing to quarantine ${id}: tmux witness must be the exact session id ${id}`)
+  if (!worktree || !isAbsolute(worktree)) throw new ResourceConflict(`refusing to quarantine ${id}: worktree witness must be an absolute path`)
+  if (!branch || branch.startsWith('-') || branch.startsWith('refs/')) throw new ResourceConflict(`refusing to quarantine ${id}: branch witness must be one local branch name`)
+  if (threadValue !== undefined && threadValue !== null && typeof threadValue !== 'string') throw new ResourceConflict(`refusing to quarantine ${id}: thread witness must be a string or null`)
+  return { adapter, thread, tmux, worktree: resolve(worktree), branch }
+}
+
+async function proveQuarantineTmuxAbsent(id: string): Promise<{ state: 'absent' }> {
+  try { await tmux(['has-session', '-t', id], TMUX_PROBE_TIMEOUT_MS) }
+  catch (error) {
+    if (probeTimedOut(error)) throw new ResourceConflict(`refusing to quarantine ${id}: tmux absence is unknown (probe timed out)`)
+    if (typeof (error as NodeJS.ErrnoException).code === 'number') return { state: 'absent' }
+    throw new ResourceConflict(`refusing to quarantine ${id}: tmux absence is unknown (${error instanceof Error ? error.message : String(error)})`)
+  }
+  throw new ResourceConflict(`refusing to quarantine ${id}: exact tmux session ${id} is live`)
+}
+
+async function proveQuarantineGitAbsent(id: string, witness: CorruptRecordQuarantineWitness): Promise<{
+  worktree: { state: 'absent' }
+  branch: { state: 'absent' }
+}> {
+  if (existsSync(witness.worktree)) throw new ResourceConflict(`refusing to quarantine ${id}: witnessed worktree ${witness.worktree} is live`)
+  const root = mainRoot()
+  const listed = await gitTry(['-C', root, 'worktree', 'list', '--porcelain'])
+  if (!listed.ok) throw new ResourceConflict(`refusing to quarantine ${id}: worktree registry is unknown`)
+  const registered = listed.stdout.split('\n').filter((line) => line.startsWith('worktree ')).map((line) => resolve(line.slice('worktree '.length)))
+  if (registered.includes(witness.worktree)) throw new ResourceConflict(`refusing to quarantine ${id}: witnessed worktree ${witness.worktree} remains registered`)
+  const branch = await gitTry(['-C', root, 'show-ref', '--verify', '--quiet', `refs/heads/${witness.branch}`])
+  if (branch.ok) throw new ResourceConflict(`refusing to quarantine ${id}: witnessed branch ${witness.branch} is live`)
+  if (branch.failure !== 'exit') throw new ResourceConflict(`refusing to quarantine ${id}: branch absence is unknown`)
+  return { worktree: { state: 'absent' }, branch: { state: 'absent' } }
+}
+
+function proveQuarantineLeafAbsent(id: string): { state: 'absent'; artifact: 'missing' | `stale:${number}` } {
+  const path = sessionArtifactPath(id, 'agent.pid')
+  let text: string
+  try { text = readFileSync(path, 'utf8').trim() }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { state: 'absent', artifact: 'missing' }
+    throw new ResourceConflict(`refusing to quarantine ${id}: leaf PID artifact is unreadable`)
+  }
+  const pid = Number(text)
+  if (!Number.isSafeInteger(pid) || pid <= 0) throw new ResourceConflict(`refusing to quarantine ${id}: leaf PID artifact is malformed`)
+  const start = processStartToken(pid)
+  if (start) throw new ResourceConflict(`refusing to quarantine ${id}: registered agent process ${pid}@${start} is live or recycled`)
+  return { state: 'absent', artifact: `stale:${pid}` }
+}
+
+async function proveQuarantineAdapter(id: string, witness: CorruptRecordQuarantineWitness): Promise<{
+  adapter: string
+  thread: string | null
+  action: 'absent' | 'archived' | 'already-unloaded'
+  compensate: () => Promise<{ ok: true } | { ok: false; reason: string }>
+}> {
+  const harness = harnessById(witness.adapter)
+  if (harness.ownsRendezvous) {
+    const socket = await rendezvousListening(id)
+    if (socket === 'live') throw new ResourceConflict(`refusing to quarantine ${id}: ${harness.id} rendezvous transport is live`)
+    if (socket === 'unproven') throw new ResourceConflict(`refusing to quarantine ${id}: ${harness.id} rendezvous transport absence is unknown`)
+  }
+  if (witness.thread) {
+    if (!harness.quarantineOrphanThread) throw new ResourceConflict(`refusing to quarantine ${id}: ${harness.id} cannot prove and unload an exact native thread`)
+    const native = await harness.quarantineOrphanThread(witness.thread, { excludingSessionId: id })
+    if (!native.ok) throw new ResourceConflict(`refusing to quarantine ${id}: ${native.reason}`)
+    return { adapter: native.audit.adapter, thread: native.audit.threadId, action: native.audit.action, compensate: native.compensate }
+  }
+  const descriptors = harness.sharedRuntimes?.(runtimeRoot()) ?? []
+  for (const descriptor of descriptors) {
+    if (!descriptor.residency) throw new ResourceConflict(`refusing to quarantine ${id}: ${descriptor.label} has no exact absence census`)
+    let residency: Awaited<ReturnType<NonNullable<typeof descriptor.residency>>>
+    try { residency = await descriptor.residency() }
+    catch (error) { throw new ResourceConflict(`refusing to quarantine ${id}: ${descriptor.label} absence is unknown (${error instanceof Error ? error.message : String(error)})`) }
+    if (!residency.healthy) throw new ResourceConflict(`refusing to quarantine ${id}: ${descriptor.label} absence is unknown (${residency.error || 'unhealthy census'})`)
+    if (!residency.rootAbsent || residency.referenceIds.length)
+      throw new ResourceConflict(`refusing to quarantine ${id}: ${descriptor.label} is live; supply its exact native thread instead of claiming absence`)
+  }
+  return { adapter: harness.id, thread: null, action: 'absent', compensate: async () => ({ ok: true }) }
+}
+
+// @@@ quarantineCorruptRecord - the record-only escape hatch for an incident that has already lost parseability.
+// It never guesses from those bytes: the caller names the former residues, this function proves their absence,
+// and only then moves the opaque file into an auditable bundle. Close remains the destructive owner-based verb.
+export async function quarantineCorruptRecord(id: string, rawWitness: unknown): Promise<CorruptRecordQuarantineResult> {
+  return runSessionOperation({ op: 'quarantine', sessionId: id }, () => withSessionTransition(id, () => withRecordLock(id, async () => {
+    const entry = readRecordEntry(id)
+    if (entry.kind === 'absent') throw new ResourceConflict(`refusing to quarantine ${id}: no active session record exists`)
+    if (entry.kind === 'ok') throw new ResourceConflict(`refusing to quarantine ${id}: record is readable; use its ordinary lifecycle control`)
+    const witness = normalizeQuarantineWitness(id, rawWitness)
+    const original = readFileSync(entry.path)
+    const sha256 = recordSha256(original)
+    const observedAt = new Date().toISOString()
+    const leaf = proveQuarantineLeafAbsent(id)
+    const tmux = await proveQuarantineTmuxAbsent(id)
+    const git = await proveQuarantineGitAbsent(id, witness)
+    const adapter = await proveQuarantineAdapter(id, witness)
+    const bundle = join(quarantineRoot(id), `${observedAt.replace(/[:.]/g, '-')}-${randomUUID()}`)
+    const stored = join(bundle, 'session.json')
+    const provenance = join(bundle, 'provenance.json')
+    const audit = {
+      version: 1,
+      sessionId: id,
+      observedAt,
+      record: { activePath: entry.path, sha256, bytes: original.length },
+      witness,
+      observed: { leaf, tmux, ...git, adapter: { adapter: adapter.adapter, thread: adapter.thread, action: adapter.action } },
+    }
+    try {
+      mkdirSync(bundle, { recursive: true, mode: 0o700 })
+      const temp = `${provenance}.${process.pid}.${randomUUID()}.tmp`
+      writeFileSync(temp, `${JSON.stringify(audit, null, 2)}\n`, { mode: 0o600 })
+      renameSync(temp, provenance)
+      const current = readRecordEntry(id)
+      if (current.kind !== 'corrupt' || current.path !== entry.path) throw new ResourceConflict(`refusing to quarantine ${id}: active record changed during absence proof`)
+      const currentBytes = readFileSync(current.path)
+      if (recordSha256(currentBytes) !== sha256) throw new ResourceConflict(`refusing to quarantine ${id}: opaque record changed during absence proof`)
+      renameSync(current.path, stored)
+      if (recordSha256(readFileSync(stored)) !== sha256) {
+        renameSync(stored, current.path)
+        throw new ResourceConflict(`refusing to quarantine ${id}: moved record failed byte-exact verification`)
+      }
+    } catch (error) {
+      const restored = await adapter.compensate()
+      const suffix = restored.ok ? '' : `; native orphan compensation failed: ${restored.reason}`
+      if (error instanceof ResourceConflict) throw new ResourceConflict(`${error.message}${suffix}`)
+      throw new ResourceConflict(`refusing to quarantine ${id}: ${error instanceof Error ? error.message : String(error)}${suffix}`)
+    }
+    return { id, bundle, sha256, observedAt }
+  })))
+}
+
+export async function restoreQuarantinedRecord(id: string): Promise<CorruptRecordQuarantineResult> {
+  return runSessionOperation({ op: 'quarantine', sessionId: id }, () => withSessionTransition(id, () => withRecordLock(id, async () => {
+    if (readRecordEntry(id).kind !== 'absent') throw new ResourceConflict(`refusing to restore ${id}: an active session record already exists`)
+    let bundles: string[]
+    try { bundles = readdirSync(quarantineRoot(id), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort().reverse() }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new ResourceConflict(`refusing to restore ${id}: no quarantine bundle exists`)
+      throw new ResourceConflict(`refusing to restore ${id}: quarantine bundle inventory is unreadable`)
+    }
+    const bundle = bundles.map((name) => join(quarantineRoot(id), name)).find((path) => existsSync(join(path, 'session.json')) && existsSync(join(path, 'provenance.json')))
+    if (!bundle) throw new ResourceConflict(`refusing to restore ${id}: no complete quarantine bundle exists`)
+    const stored = join(bundle, 'session.json')
+    let provenance: { sessionId?: unknown; record?: { sha256?: unknown } }
+    try { provenance = JSON.parse(readFileSync(join(bundle, 'provenance.json'), 'utf8')) }
+    catch { throw new ResourceConflict(`refusing to restore ${id}: quarantine provenance is unreadable`) }
+    const bytes = readFileSync(stored)
+    if (provenance.sessionId !== id || typeof provenance.record?.sha256 !== 'string' || provenance.record.sha256 !== recordSha256(bytes))
+      throw new ResourceConflict(`refusing to restore ${id}: quarantine payload/provenance binding is invalid`)
+    const active = sessionRecordPath(id)
+    mkdirSync(dirname(active), { recursive: true })
+    try { renameSync(stored, active) }
+    catch (error) { throw new ResourceConflict(`refusing to restore ${id}: opaque record move failed (${error instanceof Error ? error.message : String(error)})`) }
+    if (recordSha256(readFileSync(active)) !== provenance.record.sha256) {
+      renameSync(active, stored)
+      throw new ResourceConflict(`refusing to restore ${id}: restored record failed byte-exact verification`)
+    }
+    return { id, bundle, sha256: provenance.record.sha256, observedAt: new Date().toISOString() }
+  })))
+}
 
 // @@@ quarantine - closing sweeps the session's whole store dir, so an UNREADABLE record would take the only
 // evidence of what corrupted it with it. Copy those bytes to the per-project `corrupt/` shelf first, named by

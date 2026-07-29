@@ -126,3 +126,19 @@ no branch, no resolvable launcher command. Those are facts about this machine th
 change, so each is one loud refusal carrying its own code — never a launch that fast-exits and is retried on a
 wall clock ([[launch]]). What the transport cannot settle stays with the bounded readiness retry, and what only
 the harness can recognize is the harness's to declare ([[harness-adapter]]).
+
+An unreadable governed record has one separate recovery control: **quarantine** is neither `close` nor a
+repair. The caller supplies the exact former adapter/thread (or explicitly no native thread), tmux session,
+worktree path, and branch it extracted from the opaque incident. The shared layer then re-proves, at execution
+time, that the session's registered leaf process is absent, that exact tmux session/worktree/branch are absent,
+and that the named adapter is healthy. A named native thread must either be absent, or be an exactly-unowned,
+idle, descendant-free native thread that its own adapter archives and re-censuses as unloaded; every live,
+active, owned, ambiguous, descendant-bearing, changed-generation, malformed, or unknown control refuses before
+the record moves. The operation never sends an OS signal, removes a worktree or branch, guesses an adapter, or
+turns opaque bytes into a lifecycle record. On success it atomically moves only `session.json` out of the active
+session directory to a per-project quarantine bundle, preserving its byte-exact payload plus the supplied claim
+and the independently observed absence proof. The ordinary record enumeration then removes the corrupt row from
+the session list, graph, and resource projection without a special hide list. `restore` is the explicit reverse:
+it atomically moves the byte-identical record back only while no active record exists, making the corrupt row
+visible again; it does not resurrect a runtime or infer lifecycle. CLI, HTTP, and the dashboard context control
+all call this one operation and surface refusal details.

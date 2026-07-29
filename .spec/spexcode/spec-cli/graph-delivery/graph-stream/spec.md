@@ -61,10 +61,11 @@ is absent. Worktree resubscription retries with bounded backoff while the hold r
 installs its replacement first, removes only that source's hold, then advances and performs an authoritative
 rebuild. A persistent failure remains held and every retry remains only an observer repair — it never certifies
 data or substitutes a periodic fingerprint build. And (0) the exported explicit nudge (`notifyBoardChanged`) for
-a server-side mutation that must show regardless of watcher health — `/rename` passes 'sessions', and the
-issue/remark write routes pass 'full' **atomically with their store persist** ([[remark-substrate]]
-write-visibility: the writer's own post-write refetch must never race an asynchronous fs event into the
-stale cache; the issue store dir is deliberately not a watched leaf — one mechanism per surface). All
+a server-side mutation that must show regardless of watcher health — `/rename` and a successful `/close`
+pass 'sessions', while the issue/remark write routes pass 'full' **atomically with their store persist**
+([[remark-substrate]] write-visibility: the writer's own post-write refetch must never race an asynchronous
+fs event into the stale cache; the issue store dir is deliberately not a watched leaf — one mechanism per
+surface). A confirmed close must not wait for a disabled store watcher or the patrol. All
 funnel into one debounced fire; the debounce is **25ms**, sized to the MEASURED fs-event burst width
 (0–5ms for real declares/renames, single-digit ms for ref moves) — the in-flight build's dirty-rerun loop
 is the coalescer for anything wider, so the old flat 150ms was pure added latency.

@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/styles.css
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
+  - spec-dashboard/test/session-close-freshness.e2e.mjs
 ---
 
 # session-rename
@@ -70,8 +71,10 @@ handle — so the human reads the very words they right-clicked and never has to
 **dismisses the prompt at once** and fires the close in the **background**: worktree + branch removal is
 seconds of real work (a `git worktree remove` plus killing the agent + tmux), and the human must never sit
 watching a frozen, disabled dialog wait it out — the same fire-and-forget the New Session launch already uses
-([[session-console]]). The board reload when the removal lands drops the closed row off every surface;
-cancelling does nothing. The menu carries only the
+([[session-console]]). A successful close invalidates the session graph before its 200 response and pushes
+the changed session units to connected boards, so the row leaves every surface when the removal lands even
+if the best-effort store/worktree watchers are unavailable; the patrol is recovery, never the normal close
+acknowledgement. Cancelling does nothing. The menu carries only the
 decisive **close**, never the soft `/stop` — stopping-to-resume is a Command Box verb on a live session.
 
 A close refusal is a visible action failure, not a silent background no-op: the backend returns a non-2xx

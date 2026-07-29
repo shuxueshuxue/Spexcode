@@ -51,8 +51,7 @@ export default function Root() {
   const t = useT()
   const { page, param } = useRoute()
   const coldReviewRoute = page === 'evals' || (page === 'issues' && !param)
-  // @@@ cold-entry latch - a tab born on Evals or the top-level Issues list may bypass App; once the board starts, its warm
-  // graph/session state survives every later route change exactly as it did before this outer selector.
+
   const [boardStarted, setBoardStarted] = useState(() => !coldReviewRoute)
   useEffect(() => {
     if (!coldReviewRoute) setBoardStarted(true)

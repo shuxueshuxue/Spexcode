@@ -50,8 +50,8 @@ the agent from one verb, picked by an optional topic:
   unknown topic fails loud (names the real topics), never a silent setup dump.
 - **`settings` → the agent-facing RUNTIME-SETTINGS manual.** SpexCode's own settings are self-documenting
   through this same primitive rather than a new mechanism: `spex guide settings` prints every `spexcode.json`
-  / `spexcode.local.json` field (launchers, dashboard icon, deterministic lint policy, doctor health budgets,
-  layout overrides) with a working
+  / `spexcode.local.json` field (launchers, dashboard icon, upload transfer policy, deterministic lint policy,
+  doctor health budgets, layout overrides) with a working
   example — crucially teaching **which of the two files each belongs in**: the committed, portable
   `spexcode.json` vs. the gitignored, host-specific `spexcode.local.json` (absolute launcher paths,
   secrets). Deterministic lint policy and the doctor's altitude/breadth health budgets remain separate
@@ -63,7 +63,9 @@ the agent from one verb, picked by an optional topic:
   sessions do not block launches.
   It mirrors the project `Config` type in `layout.ts` (the single source of truth — the manual
   restates the type's own field comments, it does not invent fields, and it omits fields the type keeps
-  only as retired compat for the loud notice), and names [[identity-config]]'s one separate host-level
+  only as retired compat for the loud notice). Its uploads section names every transfer number, says that
+  `templates/spexcode.json` is the sole numeric-default source, and teaches the ordinary local-over-portable
+  override rather than inventing an upload settings command. It also names [[identity-config]]'s one separate host-level
   gateway icon at `SPEXCODE_HOME/config.json`, so an agent can configure SpexCode
   for a user who doesn't know the schema by editing the JSON directly. There is deliberately no imperative
   `spex config set` — the guide + a direct edit is the whole surface.

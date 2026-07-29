@@ -99,14 +99,16 @@ Two principles keep that derivation cheap on a long-running server:
   **rename** commit, so the reachability closure is held per consulted rename rather than per event: for `K`
   consulted renames, at most `2K` full-size closures, `O(K(H+G))` construction time over `H` reachable commits
   and `G` parent edges, and `O(KH)` retained bits. Holding the closure at the other end instead builds one per
-  distinct EVENT commit — `Θ(events × H)` traversals and bits, and `Θ(H²)` on a linear history whose events all
-  sit on one renamed path. That improvement is bounded only where it is claimed: the `2K` ceiling bounds
-  full-size closure buffers, in count and bytes, against the event-keyed count; it does NOT bound runtime or
-  edge visits, because a rename with many unrelated descendants traverses ground the event-side ancestor walk
-  never touched. The other two terms are unchanged by that choice: one scan of the `N` immutable events, and the
-  lineage walk itself, whose frontier compares each step's applicable renames pairwise — `Σ d(candidate)²`
-  constant-time queries, worst case `Θ(NK²)` when one path carries `K` mutually incomparable renames. None of
-  this is a linear-in-history promise, and `K` approaching `H` is quadratic again.
+  distinct event commit that is actually compared against a rename — `C` of them, `O(C(H+G))` construction and
+  `Θ(CH)` retained bits — which the linear history whose events all sit on one renamed path drives to `Θ(H²)`.
+  That improvement is bounded only where it is claimed: the `2K` ceiling bounds full-size closure buffers, in
+  count and bytes, against `C`; it does NOT bound runtime or edge visits, because a rename with many unrelated
+  descendants traverses ground the event-side ancestor walk never touched. The other two terms are unchanged by
+  that choice: one scan of the `N` immutable events, and the lineage walk itself, whose frontier compares each
+  step's applicable renames pairwise — `Σ d(candidate)²` constant-time queries, worst case `Θ(NK²)` when one
+  path carries `K` mutually incomparable renames. None of this is a linear-in-history promise: the closure term
+  is quadratic once `K` approaches `H`, and the unchanged frontier term is cubic when `N`, `K` and `H` grow
+  together.
   Within one build, stream count must not multiply ledger work: all consumers share one decoded
   snapshot, one integrity verdict, and one locked merge/write, with no write-then-reload verification pass.
   The pair projector also parses the current-tip topology and tree-path listing once and passes those

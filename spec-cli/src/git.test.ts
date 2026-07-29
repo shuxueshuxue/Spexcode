@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync, readdirSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, existsSync, readFileSync, renameSync, rmSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -451,9 +451,18 @@ test('a repeated-result merge rename keeps the side hit on the new lineage', asy
 test('the rename projection holds equal-commit merge peers, an incomparable fork, and vacated reuse apart', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-rename-composite-'))
   const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
-  // both merges here are meant to conflict: the resolution is what authors content and moves the lineage
-  const conflict = (...args: string[]) => { try { run(...args) } catch { /* resolved by the writes below */ } }
   const at = (path: string) => join(root, path)
+  // Both merges here are meant to CONFLICT — the manual resolution is what authors content and moves the
+  // lineage. Swallowing every Git error would let an unrelated failure impersonate that conflict and leave
+  // the fixture measuring nothing, so this asserts the exact state a resolution needs: the merge stopped
+  // with conflict status, a merge is in progress, and the target is left unmerged in the index.
+  const conflictedMerge = (branch: string, path: string) => {
+    let status: unknown = 0
+    try { run('merge', '--no-ff', '--no-commit', branch) } catch (error) { status = (error as { status?: unknown }).status }
+    assert.equal(status, 1, `merging ${branch} must stop on the intended conflict, not succeed or fail otherwise`)
+    assert.equal(existsSync(join(root, '.git', 'MERGE_HEAD')), true, `merging ${branch} must leave a merge in progress`)
+    assert.match(run('ls-files', '-u', '--', path), /\S/, `${path} must be left unmerged for the manual resolution`)
+  }
   const write = (path: string, lines: string[]) => {
     mkdirSync(dirname(at(path)), { recursive: true })
     writeFileSync(at(path), lines.join('\n') + '\n')
@@ -473,9 +482,9 @@ test('the rename projection holds equal-commit merge peers, an incomparable fork
     run('switch', '-q', 'main')
     mkdirSync(dirname(at(midPath)), { recursive: true })
     run('mv', oldPath, midPath)
-    write(midPath, body('base', 'stable', 'main-tail'))
+    write(midPath, body('main-head', 'stable', 'main-tail'))
     run('commit', '-qam', 'rename old to mid and edit')
-    conflict('merge', '--no-ff', '--no-commit', 'fork')
+    conflictedMerge('fork', midPath)
     write(midPath, body('merge-authored', 'stable', 'main-tail'))
     run('add', '-A'); run('commit', '-qm', 'merge fork: author the resolution')
 
@@ -484,9 +493,9 @@ test('the rename projection holds equal-commit merge peers, an incomparable fork
     write(midPath, body('merge-authored', 'fork2-mid', 'main-tail'))
     run('commit', '-qam', 'fork2 edits mid')
     run('switch', '-q', 'main')
-    write(midPath, body('merge-authored', 'stable', 'main-tail-2'))
+    write(midPath, body('merge-authored', 'main-mid', 'main-tail-2'))
     run('commit', '-qam', 'main edits mid')
-    conflict('merge', '--no-ff', '--no-commit', 'fork2')
+    conflictedMerge('fork2', midPath)
     mkdirSync(dirname(at(newPath)), { recursive: true })
     renameSync(at(midPath), at(newPath))
     write(newPath, body('merge2-authored', 'fork2-mid', 'main-tail-2'))

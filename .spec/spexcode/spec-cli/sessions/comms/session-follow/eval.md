@@ -44,25 +44,61 @@ scenarios:
       use. Behavior is otherwise unchanged: the wait still runs, still times out / resolves exactly as
       before, exit codes untouched, and the one-line status on resolution stays the only stdout. A human
       shell (no session env) gets NO hint.
-  - name: wait-transport-verdict-distinct
+  - name: follow-costs-the-control-plane-nothing
     tags: [backend-api]
     description: >-
-      Run `spex wait <id>` against a backend that is unreachable (stopped or firewalled — e.g. `--api` at a
-      dead port) with a short --timeout, on a project whose session is healthy (tmux alive). Read stdout,
-      stderr, and the exit code. Contrast with the plain-timeout case: backend UP, session alive but never
-      actionable, same --timeout.
+      With N live sessions on the board, start M concurrent `spex session wait` followers on them and let
+      them run for a fixed window. Count, for that window, the connects made to the sessions' rendezvous
+      control sockets and the tmux processes spawned — measured from outside the followers (socket/process
+      accounting), not from their own logs. Contrast against the same N and M before this node's rewrite.
     expected: >-
-      Within its budget the wait RETRIES through the unreachable window (a one-line stderr warn, no verdict).
-      A transport failure is NEVER translated into a session state: exhausting the whole budget still
-      unreachable exits with a DISTINCT transport-scoped outcome — stdout prints `backend-unreachable` (a
-      token outside the session-status vocabulary) and the exit code differs from the plain timeout's — so a
-      supervisor reading the one stdout line + exit code can never confuse "I could not reach the board" with
-      "the session is offline". `offline` on stdout may only ever relay a successful backend answer that says
-      the session's tmux is gone; the plain-timeout contrast case keeps its own distinct exit.
+      Followers make ZERO rendezvous connects and spawn ZERO tmux probes, whatever M is: following reads a
+      file past a cursor, so per-observer cost is a stat and the control plane is untouched. The old poll
+      made one board build per follower per interval, each carrying a connect per live session — a probe
+      rate growing as M×N on a channel where every connect can kick a delivery in flight. This scenario is
+      the whole L1 scale claim; a nonzero probe count from a follower is a regression of the node's reason
+      to exist.
+  - name: delivery-survives-a-dead-kick
+    tags: [backend-api]
+    description: >-
+      Make the target's adapter poke impossible to land (unlink its rendezvous socket, or stop the agent so
+      no listener exists), then `spex session send <id> "<text>"` and read the command's exit and output.
+      Afterwards bring the agent back to a turn boundary and read what reaches its context.
+    expected: >-
+      The send SUCCEEDS — delivery is the append, so the bytes are durable regardless of the poke — and the
+      line is present in the target's timeline. Nothing reports a false failure and nothing reports a
+      delivery that did not happen. At the target's next turn boundary the unread line is injected into its
+      context exactly once and the cursor advances, so a message can be late but never lost and never
+      doubled. The pre-rewrite failure this replaces: a kicked socket write was the message's only copy.
+  - name: one-move-appends-one-line
+    tags: [backend-api]
+    description: >-
+      On a box running several `spex serve` instances that resolve to the SAME project (the ordinary state
+      of a dogfood machine — each supervisor hot-reloads its own child), drive one real session through a
+      sequence of authored transitions (active → awaiting → active → parked) and read its timeline.ndjson
+      raw, without any read-time folding.
+    expected: >-
+      Each authored move appears EXACTLY ONCE. The measured pre-fix behaviour was one real write plus one
+      append per serve instance observing the store — a 1-to-6 amplification that grew linearly with the
+      number of backends and was masked by a read-time adjacent-duplicate fold. The log is the delivery and
+      the supervision substrate, so a duplicate is not cosmetic: it is a false event for every follower.
+      Removing the fold is only honest once this scenario passes with the fold absent.
+  - name: follow-needs-no-backend
+    tags: [cli]
+    description: >-
+      With NO `spex serve` running for the project, start `spex session wait <id>` on a session whose agent
+      is alive, have that agent declare, and read the wait's stdout and exit code. Also read `spex session
+      ls` in the same backend-less shell.
+    expected: >-
+      The wait returns on the declaration with the observed path and exit 0 — following is reading a file,
+      so it needs no daemon and no permission. `ls` answers too, naming its source and reporting liveness
+      as `unknown` (no owner may run a probe that perturbs what it measures), and offering no relaunch
+      entry off that unknown. Nothing invents a liveness answer and nothing fails merely because no server
+      is up.
 ---
 # eval.md — graph
 
-`spex wait` is an agent's event-loop primitive (take-one-TRANSITION-and-exit, edge-triggered), and a
-foreground wait freezes the
-calling agent's turn — measured through the real CLI from a shell carrying the managed-session env, never
-by reasoning about the code.
+`spex wait` is an agent's event-loop primitive (take-one-event-and-exit, edge-triggered) that follows an
+append-only log past a durable cursor. What must be measured through the real CLI, never argued from code:
+that a follower costs the control plane nothing, that a message survives a dead poke, that one authored
+move leaves exactly one line, and that none of it needs a backend.

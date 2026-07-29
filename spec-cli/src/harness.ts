@@ -347,26 +347,23 @@ export interface Harness {
   resumeArg(rec: { session: string; harnessSessionId?: string | null }): string
 }
 
-// A prompt-dispatch outcome. `accepted` means the native control plane acknowledged the turn; `rejected` means
-// it definitely did not; `commit-unknown` means the request crossed a transport boundary but its native result
-// was lost, so replaying it could duplicate a turn. The latter is deliberately distinct from a normal rejection.
-export type DispatchOutcome = 'accepted' | 'rejected' | 'commit-unknown'
 // ok=true means delivery is confirmed at the layer that harness proves it: claude at
 // the DAEMON-PARSE layer (the atomic reply+repaint chunk answered `repaint-done`, or the wall expired on a
 // still-open connection — busy, not lost; see replyViaSocket); codex at the application layer (the app-server
-// accepted `turn/steer`/`turn/start`). `error` carries a human-readable reason that propagates to the API route
-// (non-2xx) and the CLI/dashboard. Defined here because it is the harness DELIVERY contract; sessions.ts
-// re-exports it for its existing importers.
-export type DispatchResult = { ok: boolean; outcome?: DispatchOutcome; error?: string }
+// accepted `turn/steer`/`turn/start`). `error` carries a human-readable reason. This is the POKE's own result:
+// [[dispatch]] already decided the send at the log append, so ok=false here means the agent will read the
+// message at its next turn boundary instead of this one. Defined here because it is the harness DELIVERY
+// contract; sessions.ts re-exports it for its existing importers.
+export type DispatchResult = { ok: boolean; error?: string }
 export type HarnessDeliveryRecord = {
   session: string
   worktreePath?: string
   harnessSessionId?: string | null
   runtimeDir?: string
   launchCmd?: string | null
-  // Opaque caller-owned marker. Codex maps it to its native `clientUserMessageId`, while other adapters may
-  // ignore it; product routing never needs to know which harness recognizes the marker.
-  deliveryId?: string
+  // The message's timeline id ([[session-timeline]]). Codex maps it to its native `clientUserMessageId`, while
+  // other adapters may ignore it; product routing never needs to know which harness recognizes the marker.
+  mid?: string
 }
 // the on-demand surface artifacts a materialize pass wrote, by node NAME — so clean() knows EXACTLY which
 // skill subdirs / agent files are SpexCode's to remove (name-scoped, never a blind wipe of a dir the user may
@@ -956,7 +953,7 @@ function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/un
       resolve(r)
     }
     // thread/archive may wait up to 10s in shutdown_and_wait before the server commits; keep a margin so a
-    // legitimate late response is not turned into an early commit-unknown race.
+    // legitimate late response is not turned into an early timeout race.
     const timer = setTimeout(() => done({ ok: false, error: generationError() || `Codex ${method} timed out after 15s` }), 15000)
     conn.on('error', (e) => done({ ok: false, error: generationError() || `Codex ${method} connection failed: ${rpcError(e)}` }))
     conn.on('close', () => { if (!settled) done({ ok: false, error: `Codex app-server closed during ${method}` }) })
@@ -1679,7 +1676,6 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
     let buf = Buffer.alloc(0), upgraded = false, settled = false
     let fragOp = 0, fragBuf = Buffer.alloc(0)
     let steering = false   // the id-4 message we sent was a steer → an expectedTurnId race may retry as start(5)
-    let injected = false
     const done = (r: DispatchResult) => {
       if (settled) return
       settled = true
@@ -1687,7 +1683,7 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
       try { conn.destroy() } catch { /* */ }
       resolve(r)
     }
-    const unresolved = (error: string) => done({ ok: false, outcome: injected ? 'commit-unknown' : 'rejected', error })
+    const unresolved = (error: string) => done({ ok: false, error })
     const timer = setTimeout(() => unresolved(`codex app-server did not confirm the turn within ${codexTurnConfirmMs()}ms`), codexTurnConfirmMs())
     conn.on('error', (e) => unresolved(`codex app-server connection failed: ${rpcError(e)}`))
     conn.on('close', () => unresolved('codex app-server closed the connection before the turn was confirmed'))
@@ -1704,7 +1700,7 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
           return send(codexInjectMessage(threadId, text, cwd, null, 5, clientUserMessageId))
         if (m.id === 3)                                                     // thread not readable yet (a freshly-started thread is "not materialized
           return send(codexInjectMessage(threadId, text, cwd, null, 5, clientUserMessageId)) // before its first user message") → just turn/start
-        return done({ ok: false, outcome: 'rejected', error: `codex app-server ${m.id ? `request ${m.id}` : 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}` })
+        return done({ ok: false, error: `codex app-server ${m.id ? `request ${m.id}` : 'notification'} failed: ${m.error.message || JSON.stringify(m.error)}` })
       }
       // JSON-RPC initialization is ordered. Under a quiet server the premature notification happened to win;
       // under shared app-server load it was ignored and every later turn waited until the old 5s wall expired.
@@ -1718,10 +1714,9 @@ function sendCodexAppServerTurn(sock: string, threadId: string, text: string, cw
       if (m.id === 3 && m.result) {                                        // thread read → in-progress turn? steer into it; else start a new one
         const turnId = activeTurnIdFromThread(m.result)
         steering = !!turnId
-        injected = true
         return send(codexInjectMessage(threadId, text, cwd, turnId, 4, clientUserMessageId)) // id 4: turn/steer the live turn, or turn/start
       }
-      if ((m.id === 4 || m.id === 5) && m.result) return done({ ok: true, outcome: 'accepted' }) // steer/start accepted → the model has the message
+      if ((m.id === 4 || m.id === 5) && m.result) return done({ ok: true }) // steer/start accepted → the model has the message
     }
     const drainFrames = () => {
       for (;;) {
@@ -1822,7 +1817,7 @@ async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string
     if (!r.ok) return { ok: false, error: `${r.error} — prompt NOT delivered` }
     threadId = r.threadId
   }
-  return sendCodexAppServerTurn(sock, threadId!, text, rec.worktreePath, rec.deliveryId)
+  return sendCodexAppServerTurn(sock, threadId!, text, rec.worktreePath, rec.mid)
 }
 
 // idempotent replace of the content between sentinels; the user's own content above/below is preserved. The

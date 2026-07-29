@@ -49,7 +49,7 @@ test('codex-headless composes Codex materialization and shared-runtime ownership
 
 test('codex-headless launch starts the shared app-server and first turn, then exits without attaching a TUI', () => {
   const cmd = codexHeadlessLaunchCommand('session-1', 'codex --yolo', 'codex', '/tmp/spex-project')
-  assert.match(cmd, /internal shared-runtime-spawn [^\n]* codex app-server --listen "unix:\/\/\$sock"/)
+  assert.match(cmd, /internal codex-generation-current "\$dir"/)
   assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"/)
   assert.match(cmd, /internal session-turn-fail.*codex-headless/, 'non-zero one-shot turns report through the shared outcome seam')
   assert.match(cmd, /elif \[ "\$#" -eq 0 \]; then/)

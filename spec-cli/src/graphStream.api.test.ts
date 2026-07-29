@@ -361,6 +361,11 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
   const project = join(fixture, 'project')
   const spexHome = join(fixture, 'home')
   const spec = join(project, '.spec', 'project', 'spec.md')
+  const sessionId = '66666666-6666-4666-8666-666666666666'
+  const renamed = 'patrol projection must overtake full'
+  const fullNodeId = 'patrol-structural-node'
+  const hold = join(fixture, 'hold-patrol-full')
+  const argvLog = join(fixture, 'patrol-git-argv.log')
   mkdirSync(dirname(spec), { recursive: true })
   writeFileSync(spec, [
     '---', 'title: project', 'status: active', 'hue: 180', 'desc: patrol fixture', '---',
@@ -372,6 +377,26 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
   git(project, 'config', 'user.name', 'fixture')
   git(project, 'add', '.')
   git(project, 'commit', '-qm', 'seed')
+  writeSessionRecord(spexHome, project, sessionId, project, 'main')
+
+  const bin = join(fixture, 'bin')
+  mkdirSync(bin, { recursive: true })
+  const realGit = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim()
+  assert.ok(realGit, 'fixture could not resolve the real git binary')
+  const shim = join(bin, 'git')
+  writeFileSync(shim, `#!/bin/sh
+printf '%s\\n' "$*" >> "${argvLog}"
+if [ -e "${hold}" ]; then
+  case " $* " in
+    *" rev-parse --verify "*)
+      printf 'HANG %s\\n' "$*" >> "${argvLog}"
+      while [ -e "${hold}" ]; do sleep 0.01; done
+      ;;
+  esac
+fi
+exec "${realGit}" "$@"
+`)
+  chmodSync(shim, 0o755)
 
   const port = await freePort()
   const env: NodeJS.ProcessEnv = {
@@ -381,7 +406,10 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     SPEXCODE_TMUX: `spex-fixture-${port}`,
     SPEXCODE_BOARD_DEBUG: '1',
     SPEXCODE_BOARD_BUDGET_MS: '0',
+    SPEXCODE_BOARD_BACKGROUND_START_DELAY_MS: '0',
+    SPEXCODE_BOARD_BUILD_TIMEOUT_MS: '20000',
     SPEXCODE_DISABLE_WATCHERS: 'refs',
+    PATH: `${bin}:${process.env.PATH || ''}`,
   }
   delete env.SPEXCODE_API_URL
   const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
@@ -393,7 +421,8 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
   const base = `http://127.0.0.1:${port}`
   const abort = new AbortController()
   let streamRead: Promise<void> | null = null
-  const frames: string[] = []
+  const frames: Array<{ event: string; data: string }> = []
+  const eventNames: string[] = []
 
   try {
     await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
@@ -414,16 +443,20 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
           const block = buffered.slice(0, boundary)
           buffered = buffered.slice(boundary + 2)
           const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
-          if (event) frames.push(event)
+          if (event === 'graph-full' || event === 'graph-delta') {
+            const data = block.split('\n').filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n')
+            frames.push({ event, data })
+            eventNames.push(event)
+          }
         }
       }
     })().catch((error) => { if (!abort.signal.aborted) throw error })
-    await waitFor(() => frames.includes('graph-full'), `the delta subscriber never anchored:\n${serverLog}`)
+    await waitFor(() => eventNames.includes('graph-full'), `the delta subscriber never anchored:\n${serverLog}`)
     assert.match(serverLog, /graph watcher 'refs' disabled/, 'the injection must announce itself')
 
     // let the startup fires (each poller's first sample) drain: ANY rebuild sees everything, so a
     // concurrent 'sessions' fire would absorb the commit and the patrol would have nothing left to repair.
-    await waitForQuiet(frames, 2_000)
+    await waitForQuiet(eventNames, 2_000)
 
     // Cross one unchanged cold tick first. With budget=0 every producer is visible in the log; validation
     // itself must not add one. This is the exact production regression: the old patrol rebuilt here every 15s.
@@ -435,19 +468,68 @@ test('a blinded leaf still reaches the graph through a loud patrol repair', { ti
     assert.doesNotMatch(serverLog, /PATROL-REPAIR/, 'an unchanged patrol cannot report a repair')
 
     // a real commit: with refs blinded no leaf watcher can see it (the main checkout is not a linked worktree)
+    const logBeforePatrol = serverLog.length
     const framesBefore = frames.length
-    appendFileSync(spec, '\nA commit no leaf watcher will see.\n')
-    git(project, 'add', '.spec/project/spec.md')
+    writeFileSync(hold, 'hold\n')
+    const fullNode = join(project, '.spec', 'project', fullNodeId, 'spec.md')
+    mkdirSync(dirname(fullNode), { recursive: true })
+    writeFileSync(fullNode, [
+      '---', 'title: Patrol Structural Node', 'status: active', 'hue: 195', 'desc: patrol held full', '---',
+      `# ${fullNodeId}`, '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture.', '',
+    ].join('\n'))
+    git(project, 'add', '.spec')
     git(project, 'commit', '-qm', 'blinded round')
+
+    await waitFor(() => existsSync(argvLog) && /^HANG /m.test(readFileSync(argvLog, 'utf8'))
+      && /graph patrol revision moved — scope=full/.test(serverLog),
+    `the blinded patrol never entered the controlled full hold:\n${serverLog}`, 30_000)
+
+    const framesBeforeSession = frames.length
+    const renameResponse = await fetch(`${base}/api/sessions/${sessionId}/rename`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: renamed }),
+    })
+    assert.equal(renameResponse.status, 200)
+    assert.deepEqual(await renameResponse.json(), { ok: true })
+    await waitFor(() => frames.slice(framesBeforeSession).some((frame) => frame.data.includes(renamed)),
+      `the session projection waited for the patrol full release:\n${serverLog}`, 2_000)
+    assert.equal(existsSync(hold), true, 'the session frame must overtake the held patrol full, not follow release')
+    rmSync(hold, { force: true })
+
+    await waitFor(() => frames.slice(framesBefore).some((frame) => frame.data.includes(fullNodeId)),
+      `the released patrol full never reached SSE structural convergence:\n${serverLog}`, 10_000)
 
     await waitFor(() => /PATROL-REPAIR/.test(serverLog),
       `the patrol never reported the repair it had to make:\n${serverLog}`, 60_000)
     assert.match(serverLog, /PATROL-REPAIR .*changed units: \[[^\]]+\]/, 'the repair must name the diverged units')
     assert.ok(buildCount() > buildsBeforeQuietPatrol, 'the changed patrol revision must run one real producer')
     assert.ok(frames.length > framesBefore, 'the blinded change still reached the subscriber')
+    const sessionFrames = frames.slice(framesBeforeSession)
+    const sessionNames = sessionFrames.flatMap((frame) => {
+      const payload = JSON.parse(frame.data) as { graph?: { sessions?: Array<{ id: string; raw?: { name?: string | null } }> }; set?: Record<string, { raw?: { name?: string | null } }> }
+      const full = payload.graph?.sessions?.find((session) => session.id === sessionId)
+      const delta = payload.set?.[`sess:${sessionId}`]
+      return full || delta ? [(full ?? delta)?.raw?.name ?? null] : []
+    })
+    const firstNew = sessionNames.indexOf(renamed)
+    assert.ok(firstNew >= 0, `no patrol SSE session unit carried the renamed value: ${JSON.stringify(sessionNames)}`)
+    assert.ok(sessionNames.slice(firstNew).every((name) => name === renamed),
+      `the released patrol full rolled session SSE backward: ${JSON.stringify(sessionNames)}`)
+    const targetFrame = sessionFrames.findIndex((frame) => frame.data.includes(renamed))
+    const structuralFrame = sessionFrames.findIndex((frame) => frame.data.includes(fullNodeId))
+    assert.ok(targetFrame >= 0 && structuralFrame > targetFrame,
+      `the target session frame must precede structural patrol convergence: ${JSON.stringify(sessionFrames)}`)
+    const broadcasts = [...serverLog.slice(logBeforePatrol).matchAll(/graph broadcast .*triggers \{([^}]*)\}/g)]
+      .map((match) => match[1].split(',').map((tag) => tag.trim()).filter(Boolean))
+    const sessionBroadcasts = broadcasts.filter((tags) => tags.includes('sessions'))
+    assert.equal(sessionBroadcasts.length, 1,
+      `only the target rename may consume a sessions trigger in the patrol window: ${JSON.stringify(broadcasts)}`)
+    const sessionsBroadcast = broadcasts.findIndex((tags) => tags.includes('sessions'))
+    assert.ok(broadcasts.slice(sessionsBroadcast + 1).some((tags) => tags.includes('patrol')),
+      `the session projection consumed patrol accountability before structural convergence: ${JSON.stringify(broadcasts)}`)
   } catch (error) {
-    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nframes:\n${frames.join(', ')}\nserver log:\n${serverLog}`)
+    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nframes:\n${JSON.stringify(frames)}\nserver log:\n${serverLog}`)
   } finally {
+    rmSync(hold, { force: true })
     abort.abort()
     await streamRead?.catch(() => {})
     await stopChild(child)

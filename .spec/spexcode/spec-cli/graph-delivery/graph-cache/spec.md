@@ -55,10 +55,11 @@ The graph is built **once per change, not once per poll — and only as much of 
   `.spec` walk, issue read, identity read, or topology revision sample), prev's per-path ops reused, every node/eval/issue unit returned byte-identical — so a
   lifecycle write never re-walks 180 spec files to ship a 1KB patch (the measured waste this scoping
   removed: ~250ms of unrelated fs work per push). A 'full' dirty (a ref move or worktree/.spec event) runs the
-  whole `buildBoard()`, but its one structural builder does not queue that cheap projection: the splice may use
-  the last-good topology and publish first while the full builder remains single-flight. Before any nominal
-  session splice, the cache compares current full inputs to the revision its node/meta anchor carries; a moved
-  full domain promotes that same structural flight rather than binding stale nodes to a new revision. The full
+  whole `buildBoard()`, but its one structural builder does not queue that cheap projection: the splice inherits
+  the last-good topology's full carrier and may publish first while the full builder remains single-flight. A
+  concurrent full obligation remains independently owed and starts/continues its structural producer; the splice
+  never scans topology to discover a missed full change. Its inherited full carrier lets the patrol detect that
+  mismatch later and select the owed full repair instead of falsely certifying old nodes. The full
   producer captures the session-projection publication it assembled against; if a newer projection has already
   landed while it ran, completion synchronously re-bases those **published** rows onto the new topology through
   graph's one row-decoration/ops rule before publishing, so it cannot roll a visible session row back. It never

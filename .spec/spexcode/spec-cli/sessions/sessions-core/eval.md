@@ -1,5 +1,24 @@
 ---
 scenarios:
+  - name: prompt-invariant-covers-every-delivery
+    tags: [backend-api, cli]
+    code: spec-cli/src/sessions.ts
+    description: >
+      The option-shaped-prompt guarantee is made at composeSessionPrompt, which serves LAUNCH and every
+      SEND — so measure the send half, not only the launch half. In an isolated real project through a real
+      backend running this code, launch a session with an ordinary prompt, wait until it is genuinely idle
+      and listening, then `spex session send` it a message whose FIRST CHARACTER is `-`
+      (`--force-rebuild failed with 413 …`). Do it for an interactive harness (delivery types into the pane)
+      and for a headless one whose controller passes the turn text as a child process ARGV parameter
+      (pi-headless), which is the path with no escape of its own.
+    expected: |
+      The message reaches the agent and the agent acts on it, on both routes. The headless controller may
+      pass turn text straight into argv without any separator or stdin trick of its own, because the text it
+      is handed can no longer be read as an option — that is what makes one invariant able to replace a
+      per-adapter escape. The human's words survive after at most one leading space, visible in the pane
+      exactly as delivered. A send is NOT proven by the CLI printing `sent`: delivery to an agent that is
+      not yet listening (still on a first-run trust gate) reports sent and never reaches the turn, so the
+      reading must show the agent's own response to the message's content.
   - name: slug-own-identity
     tags: [cli]
     description: >

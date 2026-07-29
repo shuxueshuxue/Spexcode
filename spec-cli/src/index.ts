@@ -662,6 +662,9 @@ app.post('/api/sessions/:id/interrupt', async (c) => {
 app.post('/api/sessions/:id/close', async (c) => {
   const sessionId = c.req.param('id')
   const ok = await closeSession(sessionId)
+  // The close route owns its write's visible boundary: filesystem watchers can be unavailable, so cache
+  // invalidation must happen before the success response rather than leaving the confirming board to patrol.
+  if (ok) notifyBoardChanged('sessions')
   return c.json(ok ? { ok: true } : { ok: false, error: `no close transition was committed for session ${sessionId}` }, ok ? 200 : 404)
 })
 // archive / legacy unarchive signpost ([[archive]]) — archive proves exact cold/offline ownership before filing;

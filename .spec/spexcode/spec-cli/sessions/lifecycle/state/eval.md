@@ -1,5 +1,20 @@
 ---
 scenarios:
+  - name: materialize-failure-note-keeps-record-structured
+    tags: [backend-api, cli]
+    code: [spec-cli/src/sessions.ts, spec-cli/src/session-create-transaction.test.ts]
+    description: >-
+      Through a real public session-create backend, force its materialize subprocess to fail with stderr that
+      contains double quotes, backslashes, a newline, and non-ASCII text. Read the published record, list and
+      show it, then stop and close it. Separately hold the shared Git config lock while two same-idempotency-key
+      public creates race through the tracked contract-filter setup, then inspect the one resulting record and
+      close it after releasing the lock.
+    expected: >-
+      A materialize failure remains a visible degraded session whose note round-trips exactly as one JSON value:
+      session.json parses and preserves its one-field-per-line shape, list/show never project corrupt, and
+      stop/close still prove the readable owner. The config-lock race either rolls back completely or publishes
+      one clean recoverable failure record for the joined key; it never leaves a corrupt or falsely active row,
+      and any partial materialized worktree residue is removed before that record is published.
   - name: explicit-stop-is-authoritative-offline
     tags: [backend-api, cli]
     code: [spec-cli/src/sessions.ts]

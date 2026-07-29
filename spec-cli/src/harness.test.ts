@@ -5,14 +5,17 @@ import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot } from './layout.js'
 import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
 const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
-const codexRpcFixture = (handler: (message: any, send: (value: unknown) => void) => unknown) => createServer((socket) => {
+const codexRpcFixture = (handler: (message: any, send: (value: unknown) => void) => unknown, lifecycle: {
+  initialize?: (message: any, send: (value: unknown) => void) => unknown
+  initialized?: (message: any, send: (value: unknown) => void) => unknown
+} = {}) => createServer((socket) => {
   let buffer = Buffer.alloc(0)
   let upgraded = false
   const send = (value: unknown) => {
@@ -23,8 +26,11 @@ const codexRpcFixture = (handler: (message: any, send: (value: unknown) => void)
     socket.write(Buffer.concat([header, payload]))
   }
   const handle = (message: any) => {
-    if (message.method === 'initialize') return send({ id: message.id, result: {} })
-    if (message.method === 'initialized') return
+    if (message.method === 'initialize') {
+      if (lifecycle.initialize) return lifecycle.initialize(message, send)
+      return send({ id: message.id, result: {} })
+    }
+    if (message.method === 'initialized') return lifecycle.initialized?.(message, send)
     try {
       const result = handler(message, send)
       if (result === NO_RPC_RESPONSE) return
@@ -48,6 +54,8 @@ const codexRpcFixture = (handler: (message: any, send: (value: unknown) => void)
       const masked = (buffer[1] & 0x80) !== 0
       let length = buffer[1] & 0x7f
       let offset = 2
+      if (length === 126) { if (buffer.length < 4) return; length = buffer.readUInt16BE(2); offset = 4 }
+      else if (length === 127) { if (buffer.length < 10) return; length = Number(buffer.readBigUInt64BE(2)); offset = 10 }
       if (length === 126) { if (buffer.length < 4) return; length = buffer.readUInt16BE(2); offset = 4 }
       const maskOffset = offset
       const dataOffset = offset + (masked ? 4 : 0)
@@ -1239,6 +1247,82 @@ test('codex inject STEERS the live turn mid-turn when one is in progress', () =>
 test('codex inject can retry a lost steer as a turn/start with id 5', () => {
   assert.equal(codexInjectMessage('thr_1', 'hi', undefined, null, 5).id, 5)
   assert.equal(codexInjectMessage('thr_1', 'hi', undefined, null, 5).method, 'turn/start')
+  assert.equal((codexInjectMessage('thr_1', 'hi', undefined, 'turn_9', 4, 'delivery-7').params as { clientUserMessageId?: string }).clientUserMessageId, 'delivery-7')
+})
+
+test('Codex delivery waits for initialize, accepts a delayed turn response, and carries one native delivery marker', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-codex-delivery-'))
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const previousConfirmMs = process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
+  process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS = '1000'
+  const socket = codexAppServerSock(dir)
+  mkdirSync(dirname(socket), { recursive: true })
+  let initializeAcknowledged = false
+  const calls: string[] = []
+  let marker: string | null = null
+  const server = codexRpcFixture((message) => {
+    calls.push(message.method)
+    if (message.method === 'thread/loaded/list') return { data: ['thread-1'] }
+    if (message.method === 'thread/read') return { thread: { turns: [] } }
+    if (message.method === 'turn/start') {
+      marker = message.params.clientUserMessageId
+      return new Promise((resolve) => setTimeout(() => resolve({ turn: { id: 'turn-1' } }), 60))
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  }, {
+    initialize: (message, send) => setTimeout(() => {
+      initializeAcknowledged = true
+      send({ id: message.id, result: {} })
+    }, 30),
+    initialized: () => assert.equal(initializeAcknowledged, true, 'initialized must follow initialize acknowledgement'),
+  })
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    const result = await codexTurn(socket, 'thread-1', 'delayed prompt', '/worktree', 'delivery-marker-1')
+    assert.deepEqual(result, { ok: true, outcome: 'accepted' })
+    assert.deepEqual(calls, ['thread/loaded/list', 'thread/read', 'turn/start'])
+    assert.equal(marker, 'delivery-marker-1')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    if (previousConfirmMs === undefined) delete process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS
+    else process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS = previousConfirmMs
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('Codex delivery reports a post-write transport silence as commit-unknown and does not replay it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-codex-delivery-unknown-'))
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const previousConfirmMs = process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(dir, 'sockets')
+  process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS = '100'
+  const socket = codexAppServerSock(dir)
+  mkdirSync(dirname(socket), { recursive: true })
+  let starts = 0
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: ['thread-1'] }
+    if (message.method === 'thread/read') return { thread: { turns: [] } }
+    if (message.method === 'turn/start') { starts++; return NO_RPC_RESPONSE }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    const result = await codexTurn(socket, 'thread-1', 'maybe committed', '/worktree', 'delivery-marker-2')
+    assert.equal(result.ok, false)
+    assert.equal(result.outcome, 'commit-unknown')
+    assert.match(result.error || '', /did not confirm/)
+    assert.equal(starts, 1, 'an unconfirmed request must never be replayed by the adapter')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    if (previousConfirmMs === undefined) delete process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS
+    else process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS = previousConfirmMs
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('activeTurnIdFromThread finds the inProgress turn, else null', () => {

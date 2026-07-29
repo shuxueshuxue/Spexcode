@@ -92,9 +92,24 @@ Two principles keep that derivation cheap on a long-running server:
   reachable immutable events. A cold seed necessarily pays one `O(H)` Git extraction and one `O(L)` encode;
   an exact-tip hit pays one `O(L)` read, integrity pass, and decode with no event Git walk; an advancing tip
   pays one `O(L)` snapshot plus `O(D)` event extraction and at most one atomic `O(L + D)` replacement. The
-  topology/projector remains `O(H + events)` because reachability, rename forks, and the walk-newest version
-  rule are current-tip questions; the ledger removes repeated immutable-fact extraction, not that semantic
-  lower bound. Within one build, stream count must not multiply ledger work: all consumers share one decoded
+  topology and the tip-relative projection are still rebuilt per build, because reachability, rename forks, and
+  the walk-newest version rule are current-tip questions; the ledger removes repeated immutable-fact extraction,
+  not that semantic lower bound. Its cost decomposes into three separate terms, and only the first is
+  parameterized by the RENAME count. Every reachability question the projection asks compares some commit with a
+  **rename** commit, so the reachability closure is held per consulted rename rather than per event: for `K`
+  consulted renames, at most `2K` full-size closures, `O(K(H+G))` construction time over `H` reachable commits
+  and `G` parent edges, and `O(KH)` retained bits. Holding the closure at the other end instead builds one per
+  distinct event commit that is actually compared against a rename — `C` of them, `O(C(H+G))` construction and
+  `Θ(CH)` retained bits — which the linear history whose events all sit on one renamed path drives to `Θ(H²)`.
+  That improvement is bounded only where it is claimed: the `2K` ceiling bounds full-size closure buffers, in
+  count and bytes, against `C`; it does NOT bound runtime or edge visits, because a rename with many unrelated
+  descendants traverses ground the event-side ancestor walk never touched. The other two terms are unchanged by
+  that choice: one scan of the `N` immutable events, and the lineage walk itself, whose frontier compares each
+  step's applicable renames pairwise — `Σ d(candidate)²` constant-time queries, worst case `Θ(NK²)` when one
+  path carries `K` mutually incomparable renames. None of this is a linear-in-history promise: at `K ≈ H` the
+  closure term is `O(H(H+G))` — quadratic only where the commit DAG is sparse enough that `G = O(H)` — and the
+  unchanged frontier term is cubic when `N`, `K` and `H` grow together.
+  Within one build, stream count must not multiply ledger work: all consumers share one decoded
   snapshot, one integrity verdict, and one locked merge/write, with no write-then-reload verification pass.
   The pair projector also parses the current-tip topology and tree-path listing once and passes those
   immutable projections to both history and drift builders; a shared `rev-list --parents` or `ls-tree`

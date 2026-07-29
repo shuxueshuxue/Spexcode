@@ -176,8 +176,6 @@ try {
   assert.ok(Array.isArray(graph.sessions), 'graph must expose structured sessions')
   assert.equal(graph.sessions.some((s) => s.id === sessionId), false, 'cold target must leave default graph sessions')
   assert.equal(graph.sessions.length, graphCountBefore - 1, 'cold target must leave the default graph count')
-  const edges = await get('/api/sessions/edges')
-  assert.equal((edges.edges || []).some((edge) => edge.from === sessionId || edge.to === sessionId), false, 'cold target must leave graph edges')
   const resources = await get('/api/resources')
   assert.equal((resources.owners || []).some((owner) => owner.kind === 'session' && owner.id === sessionId), false, 'cold target must leave active resource owners')
   assert.equal((resources.owners || []).flatMap((owner) => owner.references || []).some((ref) => ref.sessionId === sessionId || ref.threadId === beforeThread), false, 'cold target thread ref must leave resources')

@@ -152,22 +152,6 @@ async function greetWatchTargets(watcher: string, selectors: string[]): Promise<
   } catch { /* greeting is best-effort — it must never disturb the watch */ }
 }
 
-async function withWatchEdge<T>(selectors: string[], intervalMs: number, body: () => Promise<T>, greet = false): Promise<T> {
-  const { ownSessionId, reportWatch, reportUnwatch } = await import('./sessions.js')
-  const { randomUUID } = await import('node:crypto')
-  const watcher = ownSessionId()
-  if (!watcher) return body()   // not a launched session (no own id) → nothing to attribute an edge to
-  const token = randomUUID()
-  const ttlMs = intervalMs * 3   // tolerate two missed heartbeats before the edge is dropped
-  void reportWatch(token, watcher, selectors, ttlMs)
-  if (greet) void greetWatchTargets(watcher, selectors)   // one-shot connection handshake to specific targets
-  const hb = setInterval(() => void reportWatch(token, watcher, selectors, ttlMs), intervalMs)
-  const cleanup = () => { clearInterval(hb); void reportUnwatch(token) }
-  process.once('SIGINT', () => { cleanup(); process.exit(0) })
-  process.once('SIGTERM', () => { cleanup(); process.exit(0) })
-  try { return await body() } finally { cleanup() }   // one-shot `wait` clears on return; stream `watch` clears on signal
-}
-
 async function resolveSelectorOrExit(selector: string): Promise<string> {
   if (!selector) { console.error('spex: missing session selector (id | id-prefix | node | branch | . for self)'); process.exit(2) }
   const { resolveClientSession } = await import('./client.js')
@@ -633,7 +617,7 @@ if (cmd === 'serve') {
     if (has('json')) console.log(JSON.stringify(report, null, 2))
     else console.log((await import('./host-resources.js')).formatResourceReport(report))
   } else if (sub === 'watch') {
-    const { watchSessions } = await import('./sessions.js')
+    const { watchSessions, ownSessionId } = await import('./sessions.js')
     const { clientListSessions } = await import('./client.js')
     const selectors = positionals(4)
     const intervalMs = (Number(flag('interval')) || 5) * 1000
@@ -643,7 +627,9 @@ if (cmd === 'serve') {
     // remains observable.
     const history = () => clientListSessions(true)
     const events = selectors.length ? history : () => clientListSessions(false)
-    await withWatchEdge(selectors, intervalMs, () => watchSessions((line) => console.log(line), {
+    const watcher = ownSessionId()
+    if (watcher) void greetWatchTargets(watcher, selectors)
+    await watchSessions((line) => console.log(line), {
       source: events,
       presenceSource: history,
       selectors,
@@ -651,7 +637,7 @@ if (cmd === 'serve') {
       includeIdle: has('idle'),
       as: flag('as'),
       intervalMs,
-    }), true)   // greet=true: a stream watch greets its specific targets once; `wait` (one-shot) does not
+    })
   } else if (sub === 'wait') {
     const { watchSessions, ownSessionId } = await import('./sessions.js')
     const { clientListSessions } = await import('./client.js')
@@ -668,7 +654,7 @@ if (cmd === 'serve') {
     // `wait` addresses one explicit record. Read its history row for both events and presence so archive is an
     // offline transition, not a vanished session; only a missing all-record row is a genuine gone/closed result.
     const history = () => clientListSessions(true)
-    const r = await withWatchEdge([id], intervalMs, () => watchSessions(() => {}, {
+    const r = await watchSessions(() => {}, {
       source: history,
       presenceSource: history,
       selectors: [id],
@@ -683,7 +669,7 @@ if (cmd === 'serve') {
           ? `spex session wait: observed ${was} → ${st}`
           : `spex session wait: current status ${st} — recorded as the path start; returns on the next non-actionable→actionable transition`),
       },
-    }))
+    })
     // the observed status path is the stdout verdict: read the LAST token as the status reached. Printing the
     // whole path (not just the final status) is the point — a manager sees what the wait lived through
     // (e.g. review→working→close-pending across a merge dispatch), not a bare word out of context.

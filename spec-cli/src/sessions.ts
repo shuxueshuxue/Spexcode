@@ -1378,8 +1378,21 @@ export async function composeSessionPrompt(raw: string, target: SessionPromptTar
   const replyVia = opts.replyVia ?? (h.headless ? 'note' : undefined)
   const text = replyVia === 'note' ? withNoteReplyHint(prompt)
     : !opts.from && lastHumanSendVia(target.session) === 'note' ? withTerminalReplyHint(prompt) : prompt
-  return { text, ...(replyVia ? { replyVia } : {}) }
+  return { text: optionSafe(text), ...(replyVia ? { replyVia } : {}) }
 }
+// @@@ optionSafe - the ONE invariant that keeps a prompt from being read as machinery: the text SpexCode hands
+// a harness never BEGINS with `-`. Human text legitimately starts that way — a pasted browser-console line, a
+// diff hunk, a quoted flag — and downstream that first character is the difference between a prompt and an
+// argument. Every harness parses its own argv with its own rules (claude's commander honours `--`, opencode's
+// yargs drops a detached value that starts with `-`, pi's parser has no end-of-options branch AT ALL), and the
+// launch scripts additionally discriminate their resume/continue markers by comparing `$1` to a literal flag.
+// Chasing that per-harness would mean an escape per adapter plus a refusal for the harness that has none —
+// six answers to one question, and still no cover for a prompt that IS the literal `--resume`. Guaranteeing
+// the invariant once, here at the single delivery seam every launch and every send already passes through,
+// answers all of it uniformly: no adapter needs to know, and no harness can be handed something it cannot
+// take. The cost is one leading space on the prompts that would otherwise be unsendable, and the human's own
+// words follow it byte-for-byte.
+const optionSafe = (text: string) => text.startsWith('-') ? ` ${text}` : text
 // @@@ identity-token strip - an `@session` actor mention ([[mentions]]) or a bare UUID-shaped token in the
 // prompt is ANOTHER session's identity, never this one's name. A title/slug wearing it misleads every
 // board/git surface — and a worker tasked with cleaning that session can match its OWN worktree and delete
@@ -1603,24 +1616,13 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
     }
     return false
   }
-  const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness (also drives waitForReady below)
-  // the tail's prompt argument is the ADAPTER's to shape ([[harness-adapter]] promptArg): a prompt is arbitrary
-  // human text and each harness parses its own argv, so this layer asks rather than assuming a quoted
-  // positional survives everywhere. A harness that cannot carry the text says so, and that is a settled fact
-  // about this pairing — refuse ONCE and loudly, exactly like the transport's own preflight, instead of
-  // opening a window that fast-exits three times and dies offline.
-  const tailPrompt = h.promptArg(launchPrompt)
-  if ('refuse' in tailPrompt) {
-    const message = `session ${id.slice(0, 8)}: ${h.id} cannot carry this prompt — ${tailPrompt.refuse}`
-    if (wt.rec.note !== message) {
-      console.error(`spex: not launching queued session ${id}: ${message}`)
-      writeRecord({ ...wt.rec, note: message })
-    }
-    return false
-  }
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
+  const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness (also drives waitForReady below)
   try {
-    await launch(id, wt.path, `${h.sessionIdArg(id)} ${tailPrompt.arg}`.trim(), h, launcherCmd(wt.rec))
+    // ONE quoted operand for every harness. Nothing here knows how any of them parses argv, because nothing
+    // has to: composeSessionPrompt already guaranteed this text cannot be read as an option (optionSafe).
+    const sq = shQuote(launchPrompt)
+    await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
   } catch {
     launching.delete(id)
     return false   // launch failed → stays `queued`, retried on the next drain tick
@@ -2327,13 +2329,6 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
       } catch (error) {
         throw new SessionCreateError('session_create_failed', phase, error instanceof Error ? error.message : String(error), 400)
       }
-      // ask the chosen adapter whether it can carry this text BEFORE any resource exists ([[harness-adapter]]
-      // promptArg). A harness that cannot is a fact about this prompt/launcher pairing that no retry changes,
-      // so it belongs here, where the human is still watching their own request — not later as a queued row
-      // whose note nobody reads. Refusing early also leaves no worktree, branch, or record behind.
-      const carriable = h.promptArg(launchPrompt)
-      if ('refuse' in carriable)
-        throw new SessionCreateError('session_create_failed', phase, `${h.id} cannot carry this prompt — ${carriable.refuse}`, 400)
       traceSessionCreate(id, requestDigest, phase, 'finish')
 
       phase = 'git-worktree'

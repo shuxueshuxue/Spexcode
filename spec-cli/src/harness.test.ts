@@ -828,35 +828,6 @@ test('launchEnv keeps rendezvous bootstrap knowledge in the owning adapters', ()
   }
 })
 
-test('promptArg keeps "how do I carry arbitrary text" with the harness that parses its own argv', () => {
-  // a prompt is human text and may begin with `-`: a pasted browser-console line, a diff hunk, a quoted flag.
-  const hyphen = '-home-app/api/uploads:1  Failed to load resource: 413 (Payload Too Large)'
-  const plain = 'fix the login bug'
-
-  // claude's tail IS claude's argv, so it needs the POSIX end-of-options separator — without it commander
-  // reads the human's own words back as `unknown option` and the launcher dies before the agent ever starts.
-  assert.deepEqual(claudeHarness.promptArg(hyphen), { arg: `-- ${shQuote(hyphen)}` })
-  assert.deepEqual(claudeHarness.promptArg(plain), { arg: `-- ${shQuote(plain)}` })
-
-  // everyone else's tail is read by OUR argv handling (spex internal …-launch/-run) or by their own launch
-  // script, which place the separator where the text actually meets a parser — never here.
-  for (const harness of [codexHarness, codexHeadlessHarness, opencodeHarness, opencodeHeadlessHarness, claudeHeadlessHarness, piHeadlessHarness]) {
-    assert.deepEqual(harness.promptArg(hyphen), { arg: shQuote(hyphen) }, harness.id)
-    assert.deepEqual(harness.promptArg(plain), { arg: shQuote(plain) }, harness.id)
-  }
-
-  // pi's parser (dist/cli/args.js) has NO `--` branch and errors on any leading-`-` token, and its TUI owns
-  // stdin, so an interactive pi genuinely cannot be handed this text. It refuses and names the repair rather
-  // than editing what the human typed until the parser swallows it.
-  const refusal = piHarness.promptArg(hyphen)
-  assert.ok('refuse' in refusal, 'interactive pi refuses a leading-hyphen prompt')
-  assert.match(refusal.refuse, /end-of-options separator/)
-  assert.deepEqual(piHarness.promptArg(plain), { arg: shQuote(plain) }, 'an ordinary prompt is still carried')
-
-  // pi-headless is NOT its base's refusal: the controller owns the child's stdio and feeds pi on stdin.
-  assert.deepEqual(piHeadlessHarness.promptArg(hyphen), { arg: shQuote(hyphen) })
-})
-
 test('codex handshake initializes, confirms the loaded thread, then reads it to decide steer-vs-start', () => {
   const msgs = codexHandshakeMessages('thr_1')
   assert.equal(msgs[0].method, 'initialize')

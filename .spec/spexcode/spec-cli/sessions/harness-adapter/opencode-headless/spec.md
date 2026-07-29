@@ -31,12 +31,9 @@ changes only its id and runtime capabilities. There is no second plugin generato
 materialize or session product code.
 
 Each governed session keeps one tmux window as the home for its current turn. A fresh launch runs
-`opencode run <configured flags> -- <prompt>` there: `run` is inserted immediately after the launcher
-executable, so the seeded `opencode --auto` becomes OpenCode's valid `opencode run --auto`, never the invalid
-`opencode --auto run`. The `--` before the message is what lets a prompt BEGIN with `-` — a pasted console
-line, a diff hunk — instead of being read by OpenCode's yargs as an unknown flag and answered with its help
-text ([[harness-adapter]]'s `promptArg`). It is placed at the call site rather than inside the run helper
-because the resume and continue markers travel that same channel and must stay real flags. OpenCode mints its native session id and the existing plugin reports the first
+`opencode run <configured flags> <prompt>` there: `run` is inserted immediately after the launcher executable,
+so the seeded `opencode --auto` becomes OpenCode's valid `opencode run --auto`, never the invalid
+`opencode --auto run`. OpenCode mints its native session id and the existing plugin reports the first
 event through `opencode-capture`. When the turn exits, the pane returns to a shell and the conversation sleeps.
 The ordinary output format is used because SpexCode does not scrape stdout; `--format json` is deliberately
 absent.

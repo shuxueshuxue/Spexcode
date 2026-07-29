@@ -381,29 +381,6 @@ surface:
   on the same worktree/record. The discriminator is sound because a new launch's tail is always ONE
   single-quoted prompt arg, never the literal `--resume` — so a resume can never be mistaken for a prompt and
   fed to `codex-launch` (which would mint a NEW thread whose first message is the marker text).
-  `promptArg(prompt)` is the same rule applied to the OTHER tail: the human's own text. A prompt is arbitrary —
-  it may legitimately BEGIN with `-` (a pasted browser-console line, a diff hunk, a quoted flag) — and every
-  harness parses its own argv, so whether an end-of-options `--` is needed, where it goes, and whether that
-  harness even honours one are adapter facts. Product code asking rather than assuming is the whole point: it
-  once assumed a single-quoted positional reaches every harness intact, and a dashboard-created session had its
-  author's own words quoted back as `unknown option`, fast-exited three times inside the readiness retry, and
-  settled `offline` having run nothing. The four answers are each decided by WHERE the text meets a parser.
-  **claude**'s tail is claude's argv, so it carries the separator (`-- '<prompt>'`) and commander reads the rest
-  as text however it begins. **codex** and the **headless** families hand their tail to OUR own argv handling
-  (`spex internal codex-launch` / `…-headless-run`), which takes a plain operand; claude-headless then streams
-  the text to claude over stdin as stream-json, so it never becomes claude argv at all, and a separator there
-  would be read as part of the prompt. **opencode** fixes it INSIDE its launch script, the layer that actually
-  calls opencode: `--prompt=<text>` attached (a detached value beginning with `-` is read by its yargs as the
-  next flag and the text is silently dropped) and `run -- <text>` for the headless turn, placed at the call
-  site because the resume/continue markers travel that same channel. **pi** is the honest refusal: its parser
-  (`dist/cli/args.js`) has three branches — `--x` becomes an unknown flag, any other `-x` is an error, and only
-  a token not starting with `-` becomes message text — with no `--` case anywhere, and its TUI owns stdin, so an
-  interactive pi has no channel for this text. It refuses, naming the fact and the repair, and the session is
-  refused at CREATE where the human is still watching, leaving no worktree, branch, or record behind. Its
-  HEADLESS sibling does not inherit that refusal: the controller owns its child's stdio and gives pi the turn on
-  stdin, one route for every turn rather than a leading-`-` special case, so any text is carriable there.
-  The refusal is deliberate over the alternative of prepending a space until pi's parser accepts the line:
-  SpexCode delivers what the human wrote or says why it cannot, and never a third thing.
   The adapter also declares its own **settled launch failures** — the patterns of ITS output for a launch that
   running again cannot fix (claude: a `--resume` id it has no conversation for, a rejected credential; codex: a
   thread id with no rollout on disk). That declaration is the ONLY place a harness's error wording is ever

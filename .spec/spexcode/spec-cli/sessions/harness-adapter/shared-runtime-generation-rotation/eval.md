@@ -16,11 +16,12 @@ scenarios:
   - name: restart-retry-and-ambiguity-retain-roots
     test: spec-cli/src/codex-runtime-generations.test.ts
     description: >
-      Restart or retry a switch after current publication, then replace or corrupt one draining generation's
-      identity while current traffic remains available.
+      Restart after a coordinator crashes with a dead owner lock and a fully-proved pending endpoint, retry a
+      completed switch, then replace or corrupt one draining generation's identity while current traffic remains
+      available.
     expected: >
-      Retry returns the already-published current generation without another spawn. An ambiguous identity
-      refuses reclaim and retains both the draining and current roots; only a zero-reference exact identity
-      may be reclaimed.
+      Retry publishes the one proven pending endpoint without another spawn and reclaims only a dead-owner lock.
+      An ambiguous identity refuses reclaim and retains both the draining and current roots; only a zero-reference
+      exact identity may be reclaimed.
     tags: [backend-api]
 ---

@@ -841,7 +841,15 @@ export function codexTurnFailureObserver(
 ): FailureSubscription {
   const threadId = rec.harnessSessionId
   if (!threadId) return { close: () => {}, closed: Promise.resolve(null) }
-  const sock = codexAppServerSock(rec.runtimeDir || runtimeRoot())
+  const runtimeDir = rec.runtimeDir || runtimeRoot()
+  const endpoint = codexEndpointForRecord(rec, runtimeDir)
+  if (!endpoint) {
+    return {
+      close: () => {},
+      closed: Promise.resolve(`Codex turn observer refused: no exact generation binding for session ${rec.session}`),
+    }
+  }
+  const sock = endpoint.socketPath
   const conn: Socket = createConnection(sock)
   const frames: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
   let upgraded = false, settled = false

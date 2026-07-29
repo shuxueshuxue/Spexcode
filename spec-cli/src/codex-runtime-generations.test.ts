@@ -79,6 +79,23 @@ test('detached-v3 switch preserves a populated legacy generation while new traff
     assert.equal((await ensureCodexCurrentGeneration(root, async () => { starts++ })).id, current.id)
     assert.equal(starts, 1, 'restart/retry reads the published current generation instead of spawning another root')
 
+    // Simulate a coordinator crash after the endpoint came up but before it atomically published current.
+    // A later process must publish this exact proven endpoint, not wait forever or create a second root.
+    const pendingPath = join(root, 'codex-app-server-generations.json')
+    const pending = JSON.parse(readFileSync(pendingPath, 'utf8'))
+    pending.current = null
+    pending.pending = current.id
+    pending.generations[current.id].state = 'starting'
+    pending.generations[current.id].reservation = { pid: 999_999_999, startToken: 'dead-coordinator' }
+    pending.revision++
+    writeFileSync(pendingPath, `${JSON.stringify(pending, null, 2)}\n`)
+    const strandedLock = join(root, 'codex-app-server-generations.lock')
+    mkdirSync(strandedLock)
+    writeFileSync(join(strandedLock, 'owner.json'), '{"pid":999999999,"startToken":"dead-coordinator"}\n')
+    assert.equal((await ensureCodexCurrentGeneration(root, async () => { starts++ })).id, current.id)
+    assert.equal(starts, 1, 'restart recovers a dead coordinator lock and publishes the one proven pending endpoint')
+    assert.equal(readCodexGenerationLedger(root).pending, null)
+
     const protectedResult = await reclaimDrainingCodexGeneration(root, legacy.id, async () => ({
       healthy: true,
       referenceIds: [...unowned, `thread-${governed[0]}`],

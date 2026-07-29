@@ -14,7 +14,8 @@ export type CodexGenerationEndpoint = Readonly<{
 }>
 
 type CodexGenerationState = 'current' | 'draining' | 'reclaimed' | 'starting'
-type CodexGeneration = Readonly<{ state: CodexGenerationState; endpoint: CodexGenerationEndpoint }>
+type GenerationReservation = Readonly<{ pid: number; startToken: string }>
+type CodexGeneration = Readonly<{ state: CodexGenerationState; endpoint: CodexGenerationEndpoint; reservation?: GenerationReservation }>
 type CodexGenerationBinding = Readonly<{ generationId: string; threadId: string }>
 
 export type CodexGenerationLedger = Readonly<{
@@ -29,7 +30,8 @@ export type CodexGenerationLedger = Readonly<{
 const generationsDir = (root: string) => join(root, 'codex-app-server-generations')
 const ledgerPath = (root: string) => join(root, 'codex-app-server-generations.json')
 const lockPath = (root: string) => join(root, 'codex-app-server-generations.lock')
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const lockOwnerPath = (root: string) => join(lockPath(root), 'owner.json')
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 export function codexGenerationSocketPath(root: string, generationId?: string): string {
   const base = process.env.SPEXCODE_CODEX_SOCKET_DIR || join(tmpdir(), `spexcode-cx-${process.getuid?.() ?? 0}`)
@@ -69,6 +71,12 @@ function isEndpoint(value: unknown): value is CodexGenerationEndpoint {
     typeof candidate.logFile === 'string' && typeof candidate.socketPath === 'string'
 }
 
+function isReservation(value: unknown): value is GenerationReservation {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Partial<GenerationReservation>
+  return Number.isInteger(candidate.pid) && candidate.pid! > 0 && typeof candidate.startToken === 'string' && !!candidate.startToken
+}
+
 function parseLedger(value: unknown): CodexGenerationLedger {
   if (!value || typeof value !== 'object') throw new Error('Codex generation ledger is malformed')
   const raw = value as Partial<CodexGenerationLedger>
@@ -79,7 +87,8 @@ function parseLedger(value: unknown): CodexGenerationLedger {
   }
   for (const [id, generation] of Object.entries(raw.generations)) {
     if (!generation || typeof generation !== 'object' || !['current', 'draining', 'reclaimed', 'starting'].includes((generation as CodexGeneration).state) ||
-      !isEndpoint((generation as CodexGeneration).endpoint) || (generation as CodexGeneration).endpoint.id !== id) {
+      !isEndpoint((generation as CodexGeneration).endpoint) || (generation as CodexGeneration).endpoint.id !== id ||
+      ((generation as CodexGeneration).state === 'starting' && !isReservation((generation as CodexGeneration).reservation))) {
       throw new Error(`Codex generation ledger has malformed generation ${id}`)
     }
   }
@@ -113,39 +122,63 @@ function writeLedger(root: string, previous: CodexGenerationLedger, next: Ledger
   return value
 }
 
-async function withLedgerLock<T>(root: string, body: () => Promise<T>): Promise<T> {
+type LedgerLockOwner = Readonly<{ pid: number; startToken: string }>
+
+function ledgerLockOwner(root: string): LedgerLockOwner | null {
+  try {
+    const value: unknown = JSON.parse(readFileSync(lockOwnerPath(root), 'utf8'))
+    return isReservation(value) ? value : null
+  } catch { return null }
+}
+
+function staleLedgerLock(root: string): boolean {
+  const owner = ledgerLockOwner(root)
+  if (owner) return processStartToken(owner.pid) !== owner.startToken
+  // A creator publishes owner.json immediately after mkdir. A short grace avoids mistaking that tiny window
+  // for an abandoned lock, while a crashed creator remains recoverable instead of wedging every retry.
+  try { return Date.now() - statSync(lockPath(root)).mtimeMs > 500 }
+  catch { return false }
+}
+
+function acquireLedgerLock(root: string, timeoutMs: number, pause: () => void | Promise<void>): void | Promise<void> {
   const lock = lockPath(root)
-  const deadline = Date.now() + 10_000
-  for (;;) {
-    try {
-      mkdirSync(lock, { mode: 0o700 })
-      break
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-      if (Date.now() >= deadline) throw new Error('Codex generation ledger lock is busy; retry')
-      await sleep(25)
+  const token = processStartToken(process.pid)
+  if (!token) throw new Error('cannot prove coordinator process identity for Codex generation ledger lock')
+  const deadline = Date.now() + timeoutMs
+  const attempt = (): void | Promise<void> => {
+    for (;;) {
+      try {
+        mkdirSync(lock, { mode: 0o700 })
+        try { writeFileSync(lockOwnerPath(root), `${JSON.stringify({ pid: process.pid, startToken: token })}\n`, { mode: 0o600 }) }
+        catch (error) { rmSync(lock, { recursive: true, force: true }); throw error }
+        return
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+        if (staleLedgerLock(root)) {
+          rmSync(lock, { recursive: true, force: true })
+          continue
+        }
+        if (Date.now() >= deadline) throw new Error('Codex generation ledger lock is busy; retry')
+        const next = pause()
+        if (next instanceof Promise) return next.then(attempt)
+      }
     }
   }
+  return attempt()
+}
+
+async function withLedgerLock<T>(root: string, body: () => Promise<T>): Promise<T> {
+  await acquireLedgerLock(root, 10_000, () => sleep(25))
   try { return await body() }
-  finally { rmSync(lock, { recursive: true, force: true }) }
+  finally { rmSync(lockPath(root), { recursive: true, force: true }) }
 }
 
 function withLedgerLockSync<T>(root: string, body: () => T): T {
-  const lock = lockPath(root)
-  const deadline = Date.now() + 5_000
   const sleeper = new Int32Array(new SharedArrayBuffer(4))
-  for (;;) {
-    try {
-      mkdirSync(lock, { mode: 0o700 })
-      break
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-      if (Date.now() >= deadline) throw new Error('Codex generation ledger lock is busy; retry')
-      Atomics.wait(sleeper, 0, 0, 10)
-    }
-  }
+  const acquired = acquireLedgerLock(root, 5_000, () => { Atomics.wait(sleeper, 0, 0, 10) })
+  if (acquired instanceof Promise) throw new Error('synchronous Codex generation ledger lock acquisition became asynchronous')
   try { return body() }
-  finally { rmSync(lock, { recursive: true, force: true }) }
+  finally { rmSync(lockPath(root), { recursive: true, force: true }) }
 }
 
 type EndpointIdentity = { pid: number; token: string; socketDev: number; socketIno: number }
@@ -222,10 +255,35 @@ async function waitForEndpoint(endpoint: CodexGenerationEndpoint, timeoutMs = 10
   return false
 }
 
-type EnsureAction = { kind: 'start'; endpoint: CodexGenerationEndpoint } | { kind: 'wait' } | { kind: 'current'; endpoint: CodexGenerationEndpoint }
+type EnsureAction =
+  | { kind: 'start'; endpoint: CodexGenerationEndpoint }
+  | { kind: 'publish'; endpoint: CodexGenerationEndpoint }
+  | { kind: 'wait' }
+  | { kind: 'current'; endpoint: CodexGenerationEndpoint }
+
+function publishPendingGeneration(root: string, endpoint: CodexGenerationEndpoint): Promise<CodexGenerationEndpoint> {
+  return withLedgerLock(root, async () => {
+    const previous = readCodexGenerationLedger(root)
+    if (previous.current) {
+      const current = previous.generations[previous.current]
+      if (!current || current.state !== 'current' || !endpointIdentity(current.endpoint))
+        throw new Error('another Codex generation switch published an unproven current endpoint')
+      return current.endpoint
+    }
+    if (previous.pending !== endpoint.id || !endpointIdentity(endpoint))
+      throw new Error('Codex generation switch CAS lost or candidate identity changed before publication')
+    const generations = {
+      ...previous.generations,
+      [endpoint.id]: { state: 'current' as const, endpoint },
+    }
+    writeLedger(root, previous, { current: endpoint.id, pending: null, generations, bindings: previous.bindings })
+    return endpoint
+  })
+}
 
 export async function ensureCodexCurrentGeneration(root: string, start: (endpoint: CodexGenerationEndpoint) => Promise<void>): Promise<CodexGenerationEndpoint> {
-  for (let attempt = 0; attempt < 4; attempt++) {
+  const deadline = Date.now() + 30_000
+  for (;;) {
     const action = await withLedgerLock(root, async (): Promise<EnsureAction> => {
       let previous = readCodexGenerationLedger(root)
       if (previous.revision === 0 && !existsSync(ledgerPath(root))) {
@@ -241,24 +299,32 @@ export async function ensureCodexCurrentGeneration(root: string, start: (endpoin
       if (previous.pending) {
         const pending = previous.generations[previous.pending]
         if (!pending || pending.state !== 'starting') throw new Error('Codex generation ledger pending switch is malformed')
-        if (endpointIdentity(pending.endpoint)) return { kind: 'wait' }
+        // A coordinator can crash after the detached endpoint proves live but before the CAS publish. The
+        // durable pending record is sufficient for any later coordinator to complete that same switch.
+        if (endpointIdentity(pending.endpoint)) return { kind: 'publish', endpoint: pending.endpoint }
+        if (pending.reservation && processStartToken(pending.reservation.pid) === pending.reservation.startToken)
+          return { kind: 'wait' }
         const generations = { ...previous.generations }
         delete generations[pending.endpoint.id]
         writeLedger(root, previous, { current: null, pending: null, generations, bindings: previous.bindings })
       }
       const latest = readCodexGenerationLedger(root)
       const endpoint = newEndpoint(root)
+      const startToken = processStartToken(process.pid)
+      if (!startToken) throw new Error('cannot prove coordinator process identity for Codex generation reservation')
       mkdirSync(dirname(endpoint.pidFile), { recursive: true, mode: 0o700 })
       writeLedger(root, latest, {
         current: latest.current,
         pending: endpoint.id,
-        generations: { ...latest.generations, [endpoint.id]: { state: 'starting', endpoint } },
+        generations: { ...latest.generations, [endpoint.id]: { state: 'starting', endpoint, reservation: { pid: process.pid, startToken } } },
         bindings: latest.bindings,
       })
       return { kind: 'start', endpoint }
     })
     if (action.kind === 'current') return action.endpoint
+    if (action.kind === 'publish') return publishPendingGeneration(root, action.endpoint)
     if (action.kind === 'wait') {
+      if (Date.now() >= deadline) throw new Error('Codex generation switch reservation owner is still live but did not publish; retry after it exits')
       await sleep(50)
       continue
     }
@@ -267,31 +333,25 @@ export async function ensureCodexCurrentGeneration(root: string, start: (endpoin
       await withLedgerLock(root, async () => {
         const previous = readCodexGenerationLedger(root)
         if (previous.pending !== action.endpoint.id) return
+        if (endpointIdentity(action.endpoint)) return
         const generations = { ...previous.generations }
         delete generations[action.endpoint.id]
         writeLedger(root, previous, { current: previous.current, pending: null, generations, bindings: previous.bindings })
       })
       throw error
     }
-    if (!await waitForEndpoint(action.endpoint)) throw new Error(`candidate Codex generation ${action.endpoint.id} did not prove a live detached endpoint; current pointer was not switched`)
-    return await withLedgerLock(root, async () => {
-      const previous = readCodexGenerationLedger(root)
-      if (previous.current) {
-        const current = previous.generations[previous.current]
-        if (!current || !endpointIdentity(current.endpoint)) throw new Error('another Codex generation switch published an unproven current endpoint')
-        return current.endpoint
-      }
-      if (previous.pending !== action.endpoint.id || !endpointIdentity(action.endpoint))
-        throw new Error('Codex generation switch CAS lost or candidate identity changed before publication')
-      const generations = {
-        ...previous.generations,
-        [action.endpoint.id]: { state: 'current' as const, endpoint: action.endpoint },
-      }
-      writeLedger(root, previous, { current: action.endpoint.id, pending: null, generations, bindings: previous.bindings })
-      return action.endpoint
-    })
+    if (!await waitForEndpoint(action.endpoint)) {
+      await withLedgerLock(root, async () => {
+        const previous = readCodexGenerationLedger(root)
+        if (previous.pending !== action.endpoint.id || endpointIdentity(action.endpoint)) return
+        const generations = { ...previous.generations }
+        delete generations[action.endpoint.id]
+        writeLedger(root, previous, { current: previous.current, pending: null, generations, bindings: previous.bindings })
+      })
+      throw new Error(`candidate Codex generation ${action.endpoint.id} did not prove a live detached endpoint; current pointer was not switched`)
+    }
+    return publishPendingGeneration(root, action.endpoint)
   }
-  throw new Error('Codex generation switch remained in progress; retry')
 }
 
 export function bindCodexGeneration(root: string, sessionId: string, threadId: string, generationId: string | null): void {
@@ -315,6 +375,10 @@ export function resolveCodexGenerationForSession(root: string, sessionId: string
   if (!binding || binding.threadId !== threadId) return null
   const generation = ledger.generations[binding.generationId]
   return generation && generation.state !== 'reclaimed' ? generation.endpoint : null
+}
+
+export function codexGenerationBindingForSession(root: string, sessionId: string): CodexGenerationBinding | null {
+  return readCodexGenerationLedger(root).bindings[sessionId] ?? null
 }
 
 export function currentCodexGeneration(root: string): CodexGenerationEndpoint | null {

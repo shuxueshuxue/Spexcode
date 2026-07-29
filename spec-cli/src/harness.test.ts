@@ -89,8 +89,27 @@ test('Codex turn observer reports only failed native completions with the native
     }, 10)
     return { thread: { status: { type: 'active' } } }
   })
-  const socket = codexAppServerSock(root)
-  mkdirSync(dirname(socket), { recursive: true })
+  const socket = join(home, 'bound-current.sock')
+  mkdirSync(root, { recursive: true })
+  writeFileSync(join(root, 'codex-app-server-generations.json'), `${JSON.stringify({
+    version: 3,
+    revision: 1,
+    current: 'detached-v3-observer',
+    pending: null,
+    generations: {
+      'detached-v3-observer': {
+        state: 'current',
+        endpoint: {
+          id: 'detached-v3-observer',
+          pidFile: codexAppServerPid(root),
+          receiptFile: codexAppServerReceipt(root),
+          logFile: join(root, 'current.log'),
+          socketPath: socket,
+        },
+      },
+    },
+    bindings: { 'observer-session': { generationId: 'detached-v3-observer', threadId } },
+  }, null, 2)}\n`)
   let observer: ReturnType<typeof codexTurnFailureObserver> | null = null
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
@@ -114,6 +133,37 @@ test('Codex turn observer reports only failed native completions with the native
     else process.env.SPEXCODE_HOME = previousHome
     if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
     else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('Codex turn observer refuses an unbound detached-v3 thread without falling back to legacy', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-turn-unbound-'))
+  process.env.SPEXCODE_HOME = home
+  const root = runtimeRoot()
+  try {
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, 'codex-app-server-generations.json'), `${JSON.stringify({
+      version: 3, revision: 1, current: 'detached-v3-current', pending: null,
+      generations: {
+        'detached-v3-current': {
+          state: 'current',
+          endpoint: {
+            id: 'detached-v3-current', pidFile: join(root, 'current.pid'), receiptFile: join(root, 'current.json'),
+            logFile: join(root, 'current.log'), socketPath: join(home, 'current.sock'),
+          },
+        },
+      },
+      bindings: {},
+    }, null, 2)}\n`)
+    const observer = codexTurnFailureObserver({ session: 'unbound-session', harnessSessionId: 'unbound-thread', runtimeDir: root }, () => {})
+    const closed = await observer.closed
+    assert.ok(closed)
+    assert.match(closed, /no exact generation binding/)
+  } finally {
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
     rmSync(home, { recursive: true, force: true })
   }
 })

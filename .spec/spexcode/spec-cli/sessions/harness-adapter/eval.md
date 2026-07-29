@@ -515,6 +515,22 @@ scenarios:
       All 40 runnable cells pass delivery confirmation, answer visibility, liveness, and declaration checks;
       the eight launch/in-turn cells are explicitly BLOCKED as structurally inapplicable; no cell is skipped,
       silently inferred, or replaced by an internal transport.
+  - name: legacy-codex-receipt-migration-unblocks-close
+    tags: [backend-api, frontend-e2e]
+    test:
+      path: spec-cli/src/harness.test.ts
+      name: Codex mutation guard promotes an exact v3 scope before target close proof
+    description: >-
+      In an isolated project, leave a detached Codex app-server with its exact legacy v3 scope and live socket,
+      remove only its v4 receipt, and keep a close-pending governed target record whose native thread is not
+      loaded. First read resources, then use the dashboard's session-row close confirmation against the real
+      backend. Repeat with a malformed or mismatched v3 scope.
+    expected: >-
+      The read reports an unproven shared generation and creates no receipt. The close mutation promotes only an
+      exact live Linux v3 PID/start/PGID/SID witness to a verified v4 receipt, proves the target has no loaded or
+      active thread, and removes that target's session record, worktree, and branch without disturbing the shared
+      process or any sibling. A malformed or mismatched v3 witness remains a visible 409 refusal and creates no
+      receipt or teardown side effect.
   # harness-delivery-campaign:end
 ---
 # eval.md — harness-adapter

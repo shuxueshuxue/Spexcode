@@ -142,6 +142,26 @@ export function verifyDetachedRuntime(pid: number, receiptFile: string, adapter:
   return live
 }
 
+// A v3 scope is only a migration witness when every recorded and live Linux identity agrees. Readers never
+// call this: minting a v4 receipt belongs to the write admission path that needs the shared runtime.
+export function migrateLegacyDetachedRuntimeReceipt(
+  pid: number,
+  legacyScopeFile: string,
+  receiptFile: string,
+  adapter: ProcessAdapter = hostProcessAdapter,
+): boolean {
+  if (adapter.platform !== 'linux' || verifyDetachedRuntime(pid, receiptFile, adapter).ok) return false
+  let fields: string[]
+  try { fields = readFileSync(legacyScopeFile, 'utf8').trim().split(/\s+/) }
+  catch { return false }
+  const observed = observeDetachedRuntime(pid, adapter)
+  if (!observed.ok || observed.identity.linuxSessionId === undefined) return false
+  const expected = ['detached-v3', String(pid), observed.identity.startToken, String(observed.identity.processGroupId), String(observed.identity.linuxSessionId)]
+  if (fields.length !== expected.length || fields.some((field, index) => field !== expected[index])) return false
+  try { writeDetachedRuntimeReceipt(pid, receiptFile, adapter); return true }
+  catch { return false }
+}
+
 export function writeDetachedRuntimeReceipt(pid: number, receiptFile: string, adapter: ProcessAdapter = hostProcessAdapter): VerifiedDetachedRuntime {
   const observed = observeDetachedRuntime(pid, adapter)
   if (!observed.ok) throw new Error(`cannot prove detached shared runtime: ${observed.reason}`)

@@ -223,6 +223,10 @@ surface:
   originally-active members and only on the unchanged generation. That generation exists only for one verifier-owned
   version-4 detached launch receipt whose live PID/start and process group agree, whose Linux `/proc` session also
   agrees when running on Linux, and whose socket inode is unchanged. Darwin never consumes `ps sess` as evidence.
+  During the one-way v3 receipt migration, a **mutation guard only** may atomically promote the retired
+  `detached-v3 PID start PGID SID` scope to that v4 receipt, and only when every stored field equals the exact
+  live Linux identity; reporting and all other reads never mint or repair a receipt. Missing, malformed, or
+  mismatched legacy evidence remains an unproven generation and refuses the mutation before any session teardown.
   Unknown/active subtree state, ambiguous ancestry, or a generation change fails closed, and compensating mutation
   is permitted only on the unchanged original generation.
   The adapter receipt also owns post-cold compensation outside the native RPC boundary: until the product commits

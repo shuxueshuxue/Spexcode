@@ -7,6 +7,7 @@ import { platform, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   processStartToken,
+  migrateLegacyDetachedRuntimeReceipt,
   verifyDetachedRuntime,
   writeDetachedRuntimeReceipt,
   type ProcessAdapter,
@@ -114,6 +115,29 @@ test('Linux requires both receipt and live /proc SID to equal PID', () => {
     const wrongReceiptSid = verifyDetachedRuntime(83, receipt, adapter)
     assert.equal(wrongReceiptSid.ok, false)
     if (!wrongReceiptSid.ok) assert.match(wrongReceiptSid.reason, /wrong Linux session 1/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('a matching Linux v3 scope may be promoted once, while malformed or changed evidence remains unreadable', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-legacy-detached-'))
+  const scope = join(root, 'runtime.scope')
+  const receipt = join(root, 'runtime.detached.json')
+  const state: FakeState = { start: 'legacy-start', processGroupId: 91, linuxSessionId: 91 }
+  const adapter = fakeAdapter('linux', state)
+  try {
+    writeFileSync(scope, 'detached-v3 91 legacy-start 91 91\n')
+    assert.equal(migrateLegacyDetachedRuntimeReceipt(91, scope, receipt, adapter), true)
+    assert.equal(verifyDetachedRuntime(91, receipt, adapter).ok, true)
+    assert.equal(migrateLegacyDetachedRuntimeReceipt(91, scope, receipt, adapter), false, 'a valid v4 receipt is never replaced')
+
+    rmSync(receipt, { force: true })
+    writeFileSync(scope, 'detached-v3 91 stale-start 91 91\n')
+    assert.equal(migrateLegacyDetachedRuntimeReceipt(91, scope, receipt, adapter), false)
+    assert.equal(existsSync(receipt), false, 'a mismatched v3 scope cannot mint a receipt')
+
+    writeFileSync(scope, 'detached-v3 91 legacy-start 91\n')
+    assert.equal(migrateLegacyDetachedRuntimeReceipt(91, scope, receipt, adapter), false)
+    assert.equal(existsSync(receipt), false, 'a malformed v3 scope cannot mint a receipt')
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 

@@ -64,13 +64,6 @@ failure reaches one record-locked compare-and-set that changes only a live, unde
 A declaration that landed first is authoritative, so a late process close, delayed native completion, or
 restart reconciliation cannot overwrite it.
 
-All side-effectful functions in this shared layer enter [[maintenance-lease]] at their lowest common boundary,
-not only at one HTTP caller: create/new (including fallback), send, raw-key input, interrupt, rename, persisted
-sort, lifecycle transition, queue drain, stop/resume/archive/close, and merge dispatch. This makes one durable
-barrier cover API, CLI, hooks, dashboard and in-process fallback without route-by-route policy. The admission
-operation is one member of the lease's closed union; arbitrary strings cannot invent a write class. Reads and
-selector resolution remain outside the ticket set.
-
 A text send takes the session record lock only for its durable delivery-marker reservation and terminal receipt;
 the adapter RPC itself runs after releasing it. A native turn can synchronously invoke lifecycle hooks that re-enter
 the same record writer, so holding that lock across the confirmation would deadlock a truthful adapter response.

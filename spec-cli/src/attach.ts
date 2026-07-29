@@ -8,7 +8,6 @@
 import { spawnSync } from 'node:child_process'
 import { networkInterfaces } from 'node:os'
 import { alive, apiBase, TMUX_SOCK } from './sessions.js'
-import { runSessionOperation } from './session-maintenance.js'
 
 const AGENT_ALTERNATIVES = 'read the pane with `spex session show <SEL> --capture`, drive it with `session send` (plain text first; `--keys` only as a last resort)'
 
@@ -40,14 +39,12 @@ export async function attachSession(id: string): Promise<number> {
 An agent must not run it inside a turn (it freezes you); ${AGENT_ALTERNATIVES}.`)
     process.exit(2)
   }
-  return runSessionOperation({ op: 'attach', sessionId: id }, async () => {
-    if (!(await alive(id))) {
-      console.error(`spex session attach: ${id} is offline — no live tmux session to attach.
+  if (!(await alive(id))) {
+    console.error(`spex session attach: ${id} is offline — no live tmux session to attach.
 Bring it back with \`spex session resume ${id}\`, or read its record with \`spex session show ${id}\`.`)
-      return 1
-    }
-    console.log(`attaching to ${id} — detach with C-b d (the session keeps running)`)
-    const r = spawnSync('tmux', ['-u', '-L', TMUX_SOCK, 'attach-session', '-t', id], { stdio: 'inherit' })
-    return r.status ?? 1
-  })
+    return 1
+  }
+  console.log(`attaching to ${id} — detach with C-b d (the session keeps running)`)
+  const r = spawnSync('tmux', ['-u', '-L', TMUX_SOCK, 'attach-session', '-t', id], { stdio: 'inherit' })
+  return r.status ?? 1
 }

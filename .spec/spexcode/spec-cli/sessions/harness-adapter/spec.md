@@ -250,11 +250,7 @@ surface:
   re-verifies it through that adapter, while Darwin deliberately asks no `ps sess` question. A receipt alone never
   proves the live boundary.
   Killing the pane that happened to launch the daemon therefore cannot HUP unrelated turns.
-  Shared-runtime spawn also acquires [[maintenance-lease]] admission. During active maintenance it is allowed
-  only by consuming the resume ticket's opaque one-use delegated capability, bound to that live ticket's
-  epoch/session/operation and inherited outside argv/logs; forged, stale, completed, mismatched, and replayed
-  delegates refuse before spawn. A direct launch, fallback, or queue drain never receives the lease bearer or
-  authority to start a shared root. Launch acceptance and launch readiness are separate adapter facts. The
+  Launch acceptance and launch readiness are separate adapter facts. The
   optional `launchReady` seam returns an adapter-owned readiness fence, not a boolean: its immutable proof names
   the runtime/reference facts that made the launched session addressable, and its validator re-proves those same
   facts after product code crosses a durable internal pending boundary. Public readers project the exact

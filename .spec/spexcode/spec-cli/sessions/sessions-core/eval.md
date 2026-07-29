@@ -1,5 +1,21 @@
 ---
 scenarios:
+  - name: a-dead-leaf-never-wedges-a-session
+    tags: [backend-api, cli]
+    code: spec-cli/src/sessions.ts
+    description: >
+      Take a governed session whose recorded leaf pid is DEAD — the state a launcher that exits before
+      readiness leaves behind — and drive the real `spex session stop` and `spex session close` against a
+      backend running this code. Then confirm the opposite case still refuses: a leaf that is ALIVE but whose
+      start identity cannot be matched must not be signalled.
+    expected: |
+      A dead recorded pid is not an obstacle to retiring the session: there is nothing to signal and nothing a
+      signal could hit by mistake, so teardown proceeds record-only and `close` removes the row, worktree and
+      branch. The live-but-unprovable leaf still refuses loudly, naming that it is alive and will not prove its
+      start identity — signalling it could kill whatever now wears that pid. The failure this locks: both cases
+      answered with ONE refusal, which left a session that could be neither launched nor closed, with
+      `quarantine` inapplicable because the record parses fine. Refusal text must not say "is not alive or has
+      no start identity", since that sentence is the conflation itself.
   - name: prompt-invariant-covers-every-delivery
     tags: [backend-api, cli]
     code: spec-cli/src/sessions.ts

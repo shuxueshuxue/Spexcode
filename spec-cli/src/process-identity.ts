@@ -47,6 +47,15 @@ export function parseProcStat(text: string): { ppid: number; processGroupId: num
   }
 }
 
+// @@@ processAlive - does this pid name a process right now? Lives beside processStartToken because the two
+// answer the two halves of one question, and callers that only get the token cannot tell "the process is gone"
+// from "the process will not identify itself" — a conflation that once made a session impossible to stop.
+// EPERM counts as alive: a process we may not signal is still a process. Only ESRCH is absence.
+export function processAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true }
+  catch (error) { return (error as NodeJS.ErrnoException)?.code !== 'ESRCH' }
+}
+
 export function processStartToken(pid: number, procRoot = '/proc'): string | null {
   if (platform() === 'linux' || procRoot !== '/proc') {
     try { return parseProcStat(readFileSync(join(procRoot, String(pid), 'stat'), 'utf8')).startToken }

@@ -1402,33 +1402,18 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST = '0'   // pin the no-flag baseline (the real --help probe is machine-dependent)
   try {
   const cmd = codexLaunchCommand('sess-1', 'codex --yolo', 'codex', '/tmp/spex-project')
-  // POSIX-portable mkdir mutex, NOT flock (absent on macOS): the check-and-start is serialized on `mkdir "$lock.d"`
-  // and there is no flock / fd-9 gymnastics left on the daemon spawn.
-  assert.match(cmd, /mkdir "\$lockd"/)
-  assert.doesNotMatch(cmd, /flock/)
-  assert.doesNotMatch(cmd, /9>&-/)
-  assert.match(cmd, /internal shared-runtime-spawn [^\n]* codex app-server --listen "unix:\/\/\$sock"/)
-  // the shared per-project daemon runs in the STABLE runtime dir "$dir", NOT the transient worktree — else a
-  // later worktree deletion dead-cwds the daemon and every future thread's config load fails with ENOENT.
-  assert.match(cmd, /unset [^\n]*; [^\n]*internal shared-runtime-spawn "\$dir" "\$log" "\$pid" "\$receipt" [^\n]*app-server --listen "unix:\/\/\$sock"/)
-  // ...and it carries NO session identity: it is started by whichever session launched first, serves every
-  // later thread, and outlives them all — so an inherited SPEXCODE_SESSION_ID / adapter sessionEnvVar in its
-  // env is a stale lie every consumer downstream reads as the acting session (github#76).
-  for (const v of sessionIdentityEnvVars()) assert.match(cmd, new RegExp(`unset [^\\n]*\\b${v}\\b[^\\n]*internal shared-runtime-spawn`))
-  assert.ok(sessionIdentityEnvVars().includes('SPEXCODE_SESSION_ID'))
-  assert.ok(sessionIdentityEnvVars().includes('CODEX_THREAD_ID'))
-  assert.doesNotMatch(cmd, /\bnohup\b/)
+  // The detached-v3 ledger owns the mutex, exact receipt proof, and switch. A new turn resolves canonical
+  // current; resume resolves the bound session/thread generation and cannot jump to current by accident.
+  assert.match(cmd, /internal codex-generation-current "\$dir"/)
+  assert.match(cmd, /internal codex-generation-session "\$dir" "\$SPEXCODE_SESSION_ID" "\$2"/)
+  assert.match(cmd, /export SPEXCODE_CODEX_CMD/)
   // design C: the BACKEND owns the thread — codex-launch does thread/start { cwd } + first turn, prints the id,
   // and the visible TUI resumes THAT thread on the same project socket.
   assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"/)
   assert.match(cmd, /exec codex --yolo [^\n]*--remote unix:\/\/"\$sock" resume "\$tid"/)
-  // the app-server socket lives on a SHORT sun_path-safe path (spexcode-cx-<hash>.sock off tmpdir), NOT the old
-  // `<runtimeDir>/codex-app-server.sock` that blew past macOS's ~104-byte sun_path cap on a deep project path.
-  assert.match(cmd, /spexcode-cx-[0-9a-f]+\.sock/)
+  // Endpoint paths are emitted by the ledger only after detached identity and socket proof; the static launch
+  // script therefore carries no stale singleton socket/PID path.
   assert.doesNotMatch(cmd, /codex-app-server\.sock/)
-  // pid/log/lock (no sun_path limit) still live under the runtime dir; self-heal drops the orphaned pre-fix lock FILE.
-  assert.match(cmd, /codex-app-server\.lock/)
-  assert.match(cmd, /rm -f "\$lock"/)
   assert.match(cmd, /\/tmp\/spex-project/)
   // resume mode: a `--resume <tid>` tail (resumeSession's resumeArg) takes the OWNED thread id DIRECTLY — it must NOT
   // run codex-launch (which would mint a NEW thread and fire the tail as a first-turn prompt — the resume bug).
@@ -1452,7 +1437,7 @@ test('codex launch puts --dangerously-bypass-hook-trust on the RESUME TUI, not o
   try {
     const cmd = codexLaunchCommand('s', 'codex --yolo', 'codex', '/tmp/spex-project')
     assert.match(cmd, /exec codex --yolo --dangerously-bypass-hook-trust [^\n]*--remote/)  // on the resume TUI (forwarded to thread config)
-    assert.match(cmd, /(?:^|\s)codex app-server --listen/m)                          // app-server carries NO bypass flag
+    assert.match(cmd, /internal codex-generation-current "\$dir"/)                  // ledger starts the app-server separately
     assert.doesNotMatch(cmd, /--dangerously-bypass-hook-trust app-server/)           // never on the inert app-server invocation
   } finally { delete process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST }
 })
@@ -1503,7 +1488,7 @@ test('codex app-server runs the SAME install as the launcher/resume (version par
   assert.equal(codexBinary('  /abs/codex  '), '/abs/codex')
   // With no explicit serverCmd, the app-server line uses the launcher's OWN binary — never bare `codex`.
   const derived = codexLaunchCommand('s', '/opt/foo/codex --yolo', undefined, '/tmp/spex-project')
-  assert.match(derived, /internal shared-runtime-spawn [^\n]* \/opt\/foo\/codex app-server --listen "unix:\/\/\$sock"/)
+  assert.match(derived, /internal codex-generation-current "\$dir" [^\n]*\/opt\/foo\/codex/)
   assert.match(derived, /exec \/opt\/foo\/codex --yolo [^\n]*--remote unix:\/\/"\$sock" resume "\$tid"/)
   // the app-server token and the resume token are the SAME install — no bare `codex app-server`.
   assert.doesNotMatch(derived, /(?:^|\s)codex app-server/m)
@@ -1512,7 +1497,7 @@ test('codex app-server runs the SAME install as the launcher/resume (version par
   try {
     process.env.SPEXCODE_CODEX_SERVER_CMD = '/custom/codex-server'
     const overridden = codexLaunchCommand('s', '/opt/foo/codex --yolo', undefined, '/tmp/spex-project')
-    assert.match(overridden, /internal shared-runtime-spawn [^\n]* \/custom\/codex-server app-server --listen "unix:\/\/\$sock"/)
+    assert.match(overridden, /internal codex-generation-current "\$dir" [^\n]*\/custom\/codex-server/)
     // resume still tracks the launcher binary — the override targets ONLY the app-server.
     assert.match(overridden, /exec \/opt\/foo\/codex --yolo [^\n]*--remote/)
   } finally {
@@ -1540,8 +1525,9 @@ test('codex app-server socket path is short (sun_path-safe), stable per project,
   assert.equal(codexAppServerSock(deep), sock)
   // DISTINCT per project: a different identity → a different sock (one app-server per project, no cross-talk).
   assert.notEqual(codexAppServerSock(deep + '/other'), sock)
-  // the launch script embeds EXACTLY the sock that liveness/delivery compute for the same project identity.
-  assert.ok(codexLaunchCommand('s', 'codex --yolo', 'codex', deep).includes(sock))
+  // A detached-v3 endpoint is minted at launch time, so the static script carries the project root into the
+  // ledger rather than baking the legacy socket path.
+  assert.match(codexLaunchCommand('s', 'codex --yolo', 'codex', deep), /codex-generation-current "\$dir"/)
   // SPEXCODE_CODEX_SOCKET_DIR relocates the socket base while keeping the per-project hashed filename.
   const prev = process.env.SPEXCODE_CODEX_SOCKET_DIR
   const override = mkdtempSync(join(tmpdir(), 'cx-base-'))

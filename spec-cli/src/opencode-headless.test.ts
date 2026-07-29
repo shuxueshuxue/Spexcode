@@ -53,14 +53,19 @@ test('launch and wake commands preserve the native id capture/resume markers and
   run(opencodeHeadlessLaunchCommand('opencode --auto'), "'first prompt'")
   run(opencodeHeadlessLaunchCommand('opencode --auto'), '--resume oc_abc')
   run(opencodeHeadlessLaunchCommand('opencode --auto'), '--continue')
+  // a prompt is arbitrary human text and may BEGIN with `-` (a pasted console line, a diff hunk): it must
+  // still arrive as the message, which is what the `--` before it buys — and it must not be mistaken for
+  // the resume/continue markers this same channel carries ([[harness-adapter]] promptArg).
+  run(opencodeHeadlessLaunchCommand('opencode --auto'), "'-home-app/api/uploads:1 failed with 413'")
   run(opencodeHeadlessWakeCommand('opencode --auto', 'oc_abc', 'wake with spaces'))
   run(opencodeHeadlessWakeCommand('opencode --auto', null, 'wake by continue'))
 
   const calls = readFileSync(log, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
   assert.deepEqual(calls, [
-    { argv: ['run', '--auto', 'first prompt'], rid: '', cont: '', auth: 'from-login-shell' },
+    { argv: ['run', '--auto', '--', 'first prompt'], rid: '', cont: '', auth: 'from-login-shell' },
     { argv: ['run', '--auto', '--session', 'oc_abc'], rid: 'oc_abc', cont: '', auth: 'from-login-shell' },
     { argv: ['run', '--auto', '--continue'], rid: '', cont: '1', auth: 'from-login-shell' },
+    { argv: ['run', '--auto', '--', '-home-app/api/uploads:1 failed with 413'], rid: '', cont: '', auth: 'from-login-shell' },
     { argv: ['run', '--auto', '--session', 'oc_abc', 'wake with spaces'], rid: 'oc_abc', cont: '', auth: 'from-login-shell' },
     { argv: ['run', '--auto', '--continue', 'wake by continue'], rid: '', cont: '1', auth: 'from-login-shell' },
   ])

@@ -53,8 +53,8 @@ await page.route('**/api/graph*', async (route) => {
 })
 await page.route(`**/api/sessions/${SESSION}/input`, async (route) => {
   inputs.push(route.request().postDataJSON())
-  if (failNext) await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'forced failure' }) })
-  else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+  if (failNext) await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ ok: false, outcome: 'commit-unknown', error: 'forced transport loss' }) })
+  else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, outcome: 'accepted' }) })
 })
 await page.route('**/api/uploads', async (route) => {
   await route.fulfill({
@@ -209,7 +209,8 @@ failNext = false
 await page.locator('.si-command-send').click()
 await command.waitFor({ state: 'hidden' })
 await page.waitForFunction(() => document.activeElement?.classList?.contains('xterm-helper-textarea'))
-assert.deepEqual(inputs.at(-1), { kind: 'text', text: expandedDraft })
+assert.deepEqual({ ...inputs.at(-1), deliveryId: typeof inputs.at(-1).deliveryId }, { kind: 'text', text: expandedDraft, deliveryId: 'string' })
+assert.equal(inputs.at(-2).deliveryId, inputs.at(-1).deliveryId, 'retry keeps the same exactly-once delivery marker')
 step('successful atomic send clears, closes, returns TUI focus')
 
 const composerProbe = async () => page.locator('.composer-surface').first().evaluate((surface) => {

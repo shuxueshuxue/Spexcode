@@ -17,6 +17,7 @@ import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath } from './la
 import { git } from './git.js'
 import { shQuote } from './sh.js'
 import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from './process-identity.js'
+import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -56,6 +57,9 @@ export type SharedRuntimeDescriptor = {
   label: string
   pidFile: string
   receiptFile: string
+  // When a resident adapter has several immutable generations, this resolves the one exact descriptor a
+  // governed target owns. Product code consumes the selection without learning adapter-specific identities.
+  targetDescriptorKey?: (rec: HarnessLivenessRecord & { harnessSessionId?: string | null }) => string | null
   // Lightweight project-wide resident census used by read projections. It must return exact loaded IDs without
   // per-thread reads; the full probe remains the resource/lifecycle surface that also reads turn state.
   residency?: () => Promise<{ healthy: boolean; referenceIds: string[]; error?: string; rootAbsent?: boolean }>
@@ -110,7 +114,9 @@ export async function adapterLoadedReferenceState(
   const recordKeys = new Map<string, string[]>()
   for (const rec of records) {
     if (!rec.harnessSessionId) continue
-    const keys = (harnessById(rec.harness || defaultHarness.id).sharedRuntimes?.(runtimeDir) ?? []).map((descriptor) => {
+    const harness = harnessById(rec.harness || defaultHarness.id)
+    const exactKey = harness.targetDescriptorKey?.(rec) ?? null
+    const keys = (harness.sharedRuntimes?.(runtimeDir) ?? []).filter((descriptor) => !exactKey || descriptor.key === exactKey).map((descriptor) => {
       descriptors.set(descriptor.key, descriptor)
       return descriptor.key
     })
@@ -311,6 +317,9 @@ export interface Harness {
   // Project-scoped runtimes are adapter facts. Resource governance consumes these descriptors to report
   // references and protect a sibling-owned control plane without learning harness command names.
   sharedRuntimes?(runtimeDir: string): readonly SharedRuntimeDescriptor[]
+  // Select the exact shared descriptor a record owns when an adapter has more than one resident generation.
+  // Null is an unproven binding and must fail closed before lifecycle mutation.
+  targetDescriptorKey?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): string | null
   // the ONE pane state where this harness SWALLOWS a prompt that its delivery channel confirms (so no
   // socket-side check can see it): given the live pane text, return the loud human-readable refusal (naming
   // the recovery) or null when the pane can take a prompt. sendText captures the pane once and consults this
@@ -451,9 +460,7 @@ export const rendezvousListening = (id: string, timeoutMs = 800): Promise<Listen
 // (idempotent mkdir) so every consumer — launch bake, liveness connect, delivery, tests — shares one creation
 // point. The `.pid`/`.log`/`.lock` files carry no sun_path limit and stay in `runtimeRoot`.
 export const codexAppServerSock = (dir = runtimeRoot()) => {
-  const base = process.env.SPEXCODE_CODEX_SOCKET_DIR || join(tmpdir(), `spexcode-cx-${process.getuid?.() ?? 0}`)
-  mkdirSync(base, { recursive: true, mode: 0o700 })
-  return join(base, `spexcode-cx-${createHash('sha1').update(dir).digest('hex').slice(0, 16)}.sock`)
+  return codexGenerationSocketPath(dir)
 }
 export const codexAppServerPid = (dir = runtimeRoot()) => join(dir, 'codex-app-server.pid')
 export const codexAppServerReceipt = (dir = runtimeRoot()) => join(dir, 'codex-app-server.detached.json')
@@ -462,11 +469,11 @@ type CodexRuntimeGenerationProof = Readonly<{
   identity: VerifiedDetachedRuntime
   socket: Readonly<{ path: string; dev: number; ino: number }>
 }>
-function codexRuntimeGenerationProof(dir = runtimeRoot()): CodexRuntimeGenerationProof | null {
+function codexRuntimeGenerationProof(dir = runtimeRoot(), endpoint = legacyCodexGenerationEndpoint(dir)): CodexRuntimeGenerationProof | null {
   try {
-    const pid = Number(readFileSync(codexAppServerPid(dir), 'utf8').trim())
-    const detached = verifyDetachedRuntime(pid, codexAppServerReceipt(dir))
-    const socketPath = codexAppServerSock(dir)
+    const pid = Number(readFileSync(endpoint.pidFile, 'utf8').trim())
+    const detached = verifyDetachedRuntime(pid, endpoint.receiptFile)
+    const socketPath = endpoint.socketPath
     const socket = statSync(socketPath)
     if (!(pid > 0) || !detached.ok || !socket.isSocket()) return null
     return Object.freeze({
@@ -477,21 +484,31 @@ function codexRuntimeGenerationProof(dir = runtimeRoot()): CodexRuntimeGeneratio
 }
 const codexRuntimeGenerationToken = (proof: CodexRuntimeGenerationProof) =>
   `${detachedRuntimeGenerationToken(proof.identity)}|${proof.socket.path}|${proof.socket.dev}:${proof.socket.ino}`
-function codexRuntimeGeneration(dir = runtimeRoot()): string | null {
-  const proof = codexRuntimeGenerationProof(dir)
+function codexRuntimeGeneration(dir = runtimeRoot(), endpoint = legacyCodexGenerationEndpoint(dir)): string | null {
+  const proof = codexRuntimeGenerationProof(dir, endpoint)
   return proof ? codexRuntimeGenerationToken(proof) : null
 }
 
-function codexMutationGeneration(dir = runtimeRoot()): string | null {
-  const current = codexRuntimeGeneration(dir)
+function codexMutationGeneration(dir = runtimeRoot(), endpoint = legacyCodexGenerationEndpoint(dir)): string | null {
+  const current = codexRuntimeGeneration(dir, endpoint)
   if (current) return current
+  if (endpoint.id !== 'legacy') return null
   let pid: number
   try {
     pid = Number(readFileSync(codexAppServerPid(dir), 'utf8').trim())
     if (!Number.isInteger(pid) || pid <= 0 || !statSync(codexAppServerSock(dir)).isSocket()) return null
   } catch { return null }
   if (!migrateLegacyDetachedRuntimeReceipt(pid, codexAppServerLegacyScope(dir), codexAppServerReceipt(dir))) return null
-  return codexRuntimeGeneration(dir)
+  return codexRuntimeGeneration(dir, endpoint)
+}
+
+const codexDescriptorKey = (endpoint: CodexGenerationEndpoint) => endpoint.id === 'legacy' ? 'codex-app-server' : `codex-app-server:${endpoint.id}`
+
+function codexEndpointForRecord(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }, dir = runtimeRoot()): CodexGenerationEndpoint | null {
+  if (!rec.harnessSessionId) return null
+  const ledger = readCodexGenerationLedger(dir)
+  if (ledger.revision === 0 && !ledger.current && !Object.keys(ledger.generations).length) return legacyCodexGenerationEndpoint(dir)
+  return resolveCodexGenerationForSession(dir, rec.session, rec.harnessSessionId)
 }
 
 // the spex launcher (bin/spex.mjs), baked into the codex launch script (mirrors materialize.ts's SPEX) so
@@ -708,18 +725,8 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
   // fresh app-server (where codex-launch never runs) still trusts our hooks. Hence the flag lives on the resume
   // TUI, never on the app-server invocation. Guarded against a double-flag when an env override already carries it.
   const tuiBypass = !codexCmd.includes('--dangerously-bypass-hook-trust') && codexSupportsBypassHookTrust(codexBinary(codexCmd)) ? ' --dangerously-bypass-hook-trust' : ''
-  const sock = codexAppServerSock(dir)         // short sun_path-safe path in the owned tmp subdir/override — NOT under "$dir"
-  const pid = codexAppServerPid(dir)
-  const receipt = codexAppServerReceipt(dir)
-  const log = join(dir, 'codex-app-server.log')
-  const lock = join(dir, 'codex-app-server.lock')
   const script = [
     `dir=${shQuote(dir)}`,
-    `sock=${shQuote(sock)}`,
-    `pid=${shQuote(pid)}`,
-    `receipt=${shQuote(receipt)}`,
-    `log=${shQuote(log)}`,
-    `lock=${shQuote(lock)}`,
     // codex-launch's bypass-trust gate (and writeTrust's) resolves the codex binary from SPEXCODE_CODEX_CMD;
     // WE already hold the launcher's real cmd here (it drives the app-server + resume TUI + tuiBypass above), so
     // pin it into the environment the codex-launch child inherits. Without this the child falls back to a bare
@@ -727,51 +734,14 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     // probes the WRONG binary — deciding "no --dangerously-bypass-hook-trust support" and silently dropping the
     // thread/start bypass, so the worktree's hooks stay untrusted and NO lifecycle hooks fire.
     `export SPEXCODE_CODEX_CMD=${shQuote(codexCmd)}`,
-    'mkdir -p "$dir"',
-    'mkdir -p -m 700 "$(dirname "$sock")"',    // the socket base (owned tmp subdir or the SPEXCODE_CODEX_SOCKET_DIR override) — re-created here because a tmp cleaner may have wiped it since the bake; NEVER bare /tmp (codex EPERMs binding there on hardened hosts, github#30)
-    // self-heal: the pre-fix flock design left an orphaned `codex-app-server.lock` FILE; the mkdir mutex now
-    // uses `"$lock.d"`, so drop that dead residue on already-run deployments (harmless if absent).
-    'rm -f "$lock"',
-    // POSIX-portable mutex: mkdir is atomic on every POSIX fs, so it serializes the check-and-start with NO
-    // dependency on util-linux `flock` (absent on macOS — where the old flock path failed the whole app-server
-    // bootstrap, leaving the pane at the shell). Spin on `mkdir "$lock.d"` with a bounded wait; after ~10s
-    // (200 * 0.05s, safely above the ~5s socket-wait a legit holder needs) treat the dir as orphaned by a dead
-    // launcher and clear it, so a stale lock can never deadlock a launch. Held ONLY across the check-and-start,
-    // released immediately after. Unlike flock (held until every fd on its open file description closes) a mkdir
-    // lock has no inherited-fd hazard, so the long-lived daemon can't pin it — no fd-9 gymnastics needed.
-    'lockd="$lock.d"',
-    '_lk=0',
-    'until mkdir "$lockd" 2>/dev/null; do',
-    '  _lk=$((_lk+1)); [ "$_lk" -ge 200 ] && { rm -rf "$lockd" 2>/dev/null; _lk=0; }',
-    '  sleep 0.05',
-    'done',
-    'if [ -S "$sock" ] && [ -s "$pid" ] && ! kill -0 "$(cat "$pid")" 2>/dev/null; then rm -f "$sock"; fi',
-    'if [ ! -S "$sock" ]; then',
-    // The app-server is a per-PROJECT daemon SHARED across every worktree's threads, so it must run in a STABLE
-    // cwd — the runtime dir "$dir", NOT the launch.sh's transient worktree. A daemon started inside a worktree
-    // keeps that worktree as its process cwd for its whole life; when the session closes and the worktree is
-    // removed, the daemon's cwd becomes a DELETED dir, and codex then fails EVERY new thread's config load with
-    // `failed to load configuration: No such file or directory` — bricking codex launch for the whole project
-    // until the daemon is killed. Running it from "$dir" (which never gets deleted) makes it deletion-proof.
-    // For the SAME reason it must carry no session IDENTITY: it is started by whichever session happened to
-    // launch first and then serves every later thread, whose tool shells inherit its env — so a baked
-    // SPEXCODE_SESSION_ID (or any adapter's `sessionEnvVar`) is a stale lie for every session but one, and
-    // still a lie after that session closes and its record is swept (measured: daemons here running for days
-    // under a long-gone session's id). Everything downstream that resolves identity from the env then
-    // mis-attributes; the id it needs — the ACTING thread's — codex injects per command, so stripping the
-    // inherited ones removes a wrong answer without removing a right one ([[harness-adapter]]).
-    // The adapter launches its shared control plane in a new OS process group + session. `nohup` alone was not
-    // a boundary: the Codex Node launcher reset signal handling and died with the tmux pane. The internal helper
-    // uses child_process detached=true, then the process adapter publishes a private receipt only after proving
-    // exact PID/start + PGID (and Linux SID). Every consumer re-verifies that same receipt.
-    `  ( unset ${sessionIdentityEnvVars().join(' ')}; ${SPEX} internal shared-runtime-spawn "$dir" "$log" "$pid" "$receipt" ${server} app-server --listen "unix://$sock" ) || { rmdir "$lockd" 2>/dev/null; exit 1; }`,
-    '  for i in $(seq 1 100); do [ -S "$sock" ] && break; sleep 0.05; done',
+    // The runtime command is the single generation-ledger boundary. A new turn receives canonical `current`;
+    // resume resolves its existing session/thread binding and therefore cannot jump an old conversation to a
+    // replacement root. It prints only shell assignments for the exact proven endpoint.
+    'if [ "$1" = "--resume" ]; then',
+    `  eval "$( ${SPEX} internal codex-generation-session "$dir" "$SPEXCODE_SESSION_ID" "$2" )" || exit 1`,
+    'else',
+    `  eval "$( ${SPEX} internal codex-generation-current "$dir" ${shQuote(server)} )" || exit 1`,
     'fi',
-    'rmdir "$lockd" 2>/dev/null',
-    // The delegated bearer arrived only through fd 9. The shared-spawn helper consumed it (or the already-live
-    // socket made it unnecessary); close and scrub the channel before the per-session Codex client starts.
-    '[ "${SPEXCODE_MAINTENANCE_DELEGATE_FD:-}" != "9" ] || exec 9<&-',
-    'unset SPEXCODE_MAINTENANCE_DELEGATE_FD SPEXCODE_MAINTENANCE_SESSION_ID',
     // TWO launch modes, on ONE tail channel ("$@"). reopen() hands a `--resume <thread-id>` tail (see
     // codexHarness.resumeArg) to bring the SAME conversation back: resume that OWNED thread DIRECTLY — no new
     // thread, no first-turn prompt. ANY other tail is a NEW launch: BACKEND owns the thread — `codex-launch`
@@ -867,7 +837,15 @@ export function codexTurnFailureObserver(
 ): FailureSubscription {
   const threadId = rec.harnessSessionId
   if (!threadId) return { close: () => {}, closed: Promise.resolve(null) }
-  const sock = codexAppServerSock(rec.runtimeDir || runtimeRoot())
+  const runtimeDir = rec.runtimeDir || runtimeRoot()
+  const endpoint = codexEndpointForRecord(rec, runtimeDir)
+  if (!endpoint) {
+    return {
+      close: () => {},
+      closed: Promise.resolve(`Codex turn observer refused: no exact generation binding for session ${rec.session}`),
+    }
+  }
+  const sock = endpoint.socketPath
   const conn: Socket = createConnection(sock)
   const frames: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
   let upgraded = false, settled = false
@@ -959,9 +937,9 @@ export function codexTurnFailureObserver(
 
 // Protocol-verified cold/restore seam. The Codex schema (`codex app-server generate-json-schema --experimental`)
 // defines thread/archive and thread/unarchive with {threadId}; no guessed method or process command is used.
-type CodexGenerationFence = { dir: string; generation: string }
+type CodexGenerationFence = { dir: string; endpoint: CodexGenerationEndpoint; generation: string }
 function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/unarchive', threadId: string, fence?: CodexGenerationFence): Promise<{ ok: true } | { ok: false; error: string }> {
-  const generationError = () => fence && codexRuntimeGeneration(fence.dir) !== fence.generation
+  const generationError = () => fence && codexRuntimeGeneration(fence.dir, fence.endpoint) !== fence.generation
     ? `Codex ${method} refused because the shared app-server generation changed`
     : null
   const before = generationError()
@@ -1168,10 +1146,10 @@ function codexThreadCollection(sock: string, params: Record<string, unknown>): P
   })
 }
 
-async function codexTargetMutationGuard(threadId: string, dir = runtimeRoot()): Promise<SharedRuntimeMutationGuard> {
-  const generationBefore = codexMutationGeneration(dir)
+async function codexTargetMutationGuard(threadId: string, dir = runtimeRoot(), endpoint = legacyCodexGenerationEndpoint(dir)): Promise<SharedRuntimeMutationGuard> {
+  const generationBefore = codexMutationGeneration(dir, endpoint)
   if (!generationBefore) return { healthy: false, referenceIds: [], targetTurnPresence: 'unknown', descendantIds: [], error: 'Codex shared app-server generation is unproven' }
-  const sock = codexAppServerSock(dir)
+  const sock = endpoint.socketPath
   const [loaded, activeDescendants, archivedDescendants] = await Promise.all([
     codexLoadedReferenceIds(sock),
     codexThreadList(sock, { ancestorThreadId: threadId, archived: false, sourceKinds: [] }),
@@ -1190,7 +1168,7 @@ async function codexTargetMutationGuard(threadId: string, dir = runtimeRoot()): 
     if (!target.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: target.error }
     targetTurnPresence = target.turnPresence
   }
-  if (codexRuntimeGeneration(dir) !== generationBefore)
+  if (codexRuntimeGeneration(dir, endpoint) !== generationBefore)
     return { healthy: false, referenceIds, targetTurnPresence, descendantIds, error: 'shared Codex app-server generation changed during target guard' }
   return { healthy: true, referenceIds, targetTurnPresence, descendantIds }
 }
@@ -1201,6 +1179,7 @@ type CodexColdPlan = Readonly<{
   kind: 'codex-cold-subtree-v1'
   threadId: string
   generation: string
+  endpoint: CodexGenerationEndpoint
   guard: SharedRuntimeMutationGuard
   descendantIds: readonly string[]
   parentEdges: readonly (readonly [string, string])[]
@@ -1220,16 +1199,22 @@ const isCodexColdPlan = (value: unknown): value is CodexColdPlan => {
   if (!value || typeof value !== 'object') return false
   const plan = value as Partial<CodexColdPlan>
   return plan[CODEX_COLD_PLAN] === true && plan.kind === 'codex-cold-subtree-v1' && typeof plan.threadId === 'string' &&
-    typeof plan.generation === 'string' && Array.isArray(plan.descendantIds) &&
+    typeof plan.generation === 'string' && isEndpointLike(plan.endpoint) && Array.isArray(plan.descendantIds) &&
     Array.isArray(plan.parentEdges) && Array.isArray(plan.subtreeIds) &&
     Array.isArray(plan.activeIds) && Array.isArray(plan.archivedIds) && !!plan.guard
 }
 
-async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expectedGeneration?: string): Promise<CodexColdPreflight> {
-  const generation = expectedGeneration ?? codexMutationGeneration(dir)
-  if (!generation || codexRuntimeGeneration(dir) !== generation)
+function isEndpointLike(value: unknown): value is CodexGenerationEndpoint {
+  return !!value && typeof value === 'object' && typeof (value as CodexGenerationEndpoint).id === 'string' &&
+    typeof (value as CodexGenerationEndpoint).pidFile === 'string' && typeof (value as CodexGenerationEndpoint).receiptFile === 'string' &&
+    typeof (value as CodexGenerationEndpoint).socketPath === 'string'
+}
+
+async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expectedGeneration?: string, endpoint = legacyCodexGenerationEndpoint(dir)): Promise<CodexColdPreflight> {
+  const generation = expectedGeneration ?? codexMutationGeneration(dir, endpoint)
+  if (!generation || codexRuntimeGeneration(dir, endpoint) !== generation)
     return { ok: false, reason: 'Codex shared app-server generation is unproven or changed before subtree census' }
-  const sock = codexAppServerSock(dir)
+  const sock = endpoint.socketPath
   const [loaded, activeDescendants, archivedDescendants, archivedList, activeList] = await Promise.all([
     codexLoadedReferenceIds(sock),
     codexThreadCollection(sock, { ancestorThreadId: threadId, archived: false, sourceKinds: [] }),
@@ -1237,7 +1222,7 @@ async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expecte
     codexThreadList(sock, { archived: true, sourceKinds: [] }),
     codexThreadList(sock, { archived: false, sourceKinds: [] }),
   ])
-  if (codexRuntimeGeneration(dir) !== generation)
+  if (codexRuntimeGeneration(dir, endpoint) !== generation)
     return { ok: false, reason: 'shared Codex app-server generation changed during subtree census' }
   if (!loaded.ok) return { ok: false, reason: loaded.error }
   if (!activeDescendants.ok) return { ok: false, reason: activeDescendants.error }
@@ -1290,7 +1275,7 @@ async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expecte
   const loadedSet = new Set(loaded.referenceIds)
   const loadedSubtreeIds = subtreeIds.filter((id) => loadedSet.has(id))
   const turnStates = await Promise.all(loadedSubtreeIds.map(async (id) => ({ id, state: await codexTargetTurnPresence(sock, id) })))
-  if (codexRuntimeGeneration(dir) !== generation)
+  if (codexRuntimeGeneration(dir, endpoint) !== generation)
     return { ok: false, reason: 'shared Codex app-server generation changed during subtree turn census' }
   for (const { id, state } of turnStates) {
     if (!state.ok) return { ok: false, reason: state.error }
@@ -1316,6 +1301,7 @@ async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expecte
     kind: 'codex-cold-subtree-v1',
     threadId,
     generation,
+    endpoint,
     guard,
     descendantIds: Object.freeze([...descendantIds]),
     parentEdges: Object.freeze(parentEdges),
@@ -1354,7 +1340,8 @@ async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSe
   if (plan.activeIds.length !== 1 || plan.activeIds[0] !== threadId || plan.archivedIds.length)
     return { ok: false, reason: `Codex native thread ${threadId} is not one exact active orphan` }
   const siblingIds = plan.guard.referenceIds.filter((id) => id !== threadId)
-  const archived = await codexThreadMutation(codexAppServerSock(dir), 'thread/archive', threadId, { dir, generation })
+  const legacy = legacyCodexGenerationEndpoint(dir)
+  const archived = await codexThreadMutation(legacy.socketPath, 'thread/archive', threadId, { dir, endpoint: legacy, generation })
   if (!archived.ok) return { ok: false, reason: `${archived.error} while archiving orphan Codex thread ${threadId}` }
   const after = await codexColdPreflight(threadId, dir, generation)
   const failed = (reason: string): HarnessOrphanThreadQuarantine => ({ ok: false, reason })
@@ -1379,13 +1366,15 @@ async function codexMutationGuard(
   threadId: string,
   dir = runtimeRoot(),
   opts: { coldReceipt?: unknown } = {},
+  endpoint = legacyCodexGenerationEndpoint(dir),
 ): Promise<SharedRuntimeMutationGuard> {
-  if (opts.coldReceipt === undefined) return codexTargetMutationGuard(threadId, dir)
+  if (opts.coldReceipt === undefined) return codexTargetMutationGuard(threadId, dir, endpoint)
   if (!isCodexColdPlan(opts.coldReceipt) || opts.coldReceipt.threadId !== threadId)
     return { healthy: false, referenceIds: [], targetTurnPresence: 'unknown', descendantIds: [], error: 'adapter cold teardown receipt is invalid' }
-  const current = await codexColdPreflight(threadId, dir, opts.coldReceipt.generation)
+  if (opts.coldReceipt.endpoint.id !== endpoint.id) return { healthy: false, referenceIds: [], targetTurnPresence: 'unknown', descendantIds: [], error: 'adapter cold teardown receipt names a different generation' }
+  const current = await codexColdPreflight(threadId, dir, opts.coldReceipt.generation, endpoint)
   if (!current.ok) {
-    const guard = await codexTargetMutationGuard(threadId, dir)
+    const guard = await codexTargetMutationGuard(threadId, dir, endpoint)
     return { ...guard, healthy: false, coldTeardownAuthorized: false, error: current.reason }
   }
   const authorized = sameIdSet(opts.coldReceipt.descendantIds, current.receipt.descendantIds) &&
@@ -1401,16 +1390,16 @@ async function codexMutationGuard(
 }
 
 async function codexRestoreColdPlan(plan: CodexColdPlan, dir = runtimeRoot()): Promise<{ ok: true } | { ok: false; reason: string }> {
-  if (codexRuntimeGeneration(dir) !== plan.generation)
+  if (codexRuntimeGeneration(dir, plan.endpoint) !== plan.generation)
     return { ok: false, reason: 'shared Codex app-server generation changed, so no compensation was attempted' }
-  const sock = codexAppServerSock(dir)
+  const sock = plan.endpoint.socketPath
   const [activeBefore, archivedBefore] = await Promise.all([
     codexThreadList(sock, { archived: false, sourceKinds: [] }),
     codexThreadList(sock, { archived: true, sourceKinds: [] }),
   ])
   if (!activeBefore.ok || !archivedBefore.ok)
     return { ok: false, reason: 'archive state is unknown and could not be reconciled' }
-  if (codexRuntimeGeneration(dir) !== plan.generation)
+  if (codexRuntimeGeneration(dir, plan.endpoint) !== plan.generation)
     return { ok: false, reason: 'shared Codex app-server generation changed, so no compensation was attempted' }
   const activeSet = new Set(activeBefore.ids)
   const archivedSet = new Set(archivedBefore.ids)
@@ -1418,7 +1407,7 @@ async function codexRestoreColdPlan(plan: CodexColdPlan, dir = runtimeRoot()): P
     return { ok: false, reason: 'an originally-archived Codex subtree member changed collection; compensation was not authorized' }
   if (plan.activeIds.some((id) => activeSet.has(id) === archivedSet.has(id)))
     return { ok: false, reason: 'an originally-active Codex subtree member has ambiguous collection state' }
-  const fence = { dir, generation: plan.generation }
+  const fence = { dir, endpoint: plan.endpoint, generation: plan.generation }
   const restoreIds = [...plan.activeIds].reverse().filter((id) => archivedSet.has(id))
   for (const id of restoreIds) {
     const restored = await codexThreadMutation(sock, 'thread/unarchive', id, fence)
@@ -1428,7 +1417,7 @@ async function codexRestoreColdPlan(plan: CodexColdPlan, dir = runtimeRoot()): P
     codexThreadList(sock, { archived: false, sourceKinds: [] }),
     codexThreadList(sock, { archived: true, sourceKinds: [] }),
   ])
-  const restored = activeAfter.ok && archivedAfter.ok && codexRuntimeGeneration(dir) === plan.generation &&
+  const restored = activeAfter.ok && archivedAfter.ok && codexRuntimeGeneration(dir, plan.endpoint) === plan.generation &&
     plan.activeIds.every((id) => activeAfter.ids.includes(id) && !archivedAfter.ids.includes(id)) &&
     plan.archivedIds.every((id) => archivedAfter.ids.includes(id) && !activeAfter.ids.includes(id))
   return restored ? { ok: true } : { ok: false, reason: 'compensation failed or archive state is unknown' }
@@ -1485,19 +1474,19 @@ export function codexThreadId(sock: string): Promise<{ ok: true; threadId: strin
 // Resource ownership asks the adapter for what the shared server actually owns now. Records are joined later;
 // they are never treated as references by themselves. A loaded thread is a control-plane reference and its
 // fresh inProgress turn (the same predicate used by delivery) distinguishes active from addressable-idle.
-export function codexSharedRuntimeProbe(dir = runtimeRoot()): Promise<SharedRuntimeProbe> {
-  const sock = codexAppServerSock(dir)
+export function codexSharedRuntimeProbe(dir = runtimeRoot(), endpoint = legacyCodexGenerationEndpoint(dir)): Promise<SharedRuntimeProbe> {
+  const sock = endpoint.socketPath
   return (async () => {
     // File presence is not process identity. A dead PID plus a stale socket file is the normal crash residue;
     // only a live PID and a live listener establish a resident control plane. This keeps a deliberately absent
     // root a healthy empty census while leaving live-but-ambiguous roots loud and visible.
     let pid = 0
-    try { pid = Number(readFileSync(codexAppServerPid(dir), 'utf8').trim()) } catch { /* absent/stale */ }
+    try { pid = Number(readFileSync(endpoint.pidFile, 'utf8').trim()) } catch { /* absent/stale */ }
     const pidLive = pid > 0 && !!processStartToken(pid)
     const listener = await listenerAt(sock, 800)
     if (!pidLive && listener === 'dead') return { healthy: true, references: [] }
     if (!pidLive || listener !== 'live') return { healthy: false, references: [], error: 'Codex shared root state is unknown (PID/listener identity is not proven)' }
-    const generation = codexRuntimeGeneration(dir)
+    const generation = codexRuntimeGeneration(dir, endpoint)
     if (!generation) return { healthy: false, references: [], error: 'Codex shared root detached receipt/socket generation is not proven' }
     return new Promise<SharedRuntimeProbe>((resolve) => {
     const conn: Socket = createConnection(sock)
@@ -1516,7 +1505,7 @@ export function codexSharedRuntimeProbe(dir = runtimeRoot()): Promise<SharedRunt
       settled = true
       clearTimeout(timer)
       try { conn.destroy() } catch { /* */ }
-      resolve(result.healthy && codexRuntimeGeneration(dir) !== generation
+      resolve(result.healthy && codexRuntimeGeneration(dir, endpoint) !== generation
         ? { healthy: false, references: result.references, error: 'Codex shared root detached receipt/socket generation changed during ownership probe' }
         : result)
     }
@@ -1820,7 +1809,10 @@ const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
 async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult> {
   // the socket is PER-PROJECT (the runtime root), shared by every worktree's thread; the owned thread id on
   // the record picks out THIS session's thread.
-  const sock = codexAppServerSock(rec.runtimeDir)
+  const runtimeDir = rec.runtimeDir ?? runtimeRoot()
+  const endpoint = rec.harnessSessionId ? codexEndpointForRecord(rec, runtimeDir) : currentCodexGeneration(runtimeDir)
+  if (!endpoint) return { ok: false, error: `no exact Codex generation binding for session ${rec.session} — prompt NOT delivered` }
+  const sock = endpoint.socketPath
   if (!existsSync(sock)) return { ok: false, error: `no Codex app-server socket for this project — prompt NOT delivered` }
   // use the backend-owned thread id stored at launch; fall back to reading the one loaded thread only if it's
   // empty (a pre-existing session from before the id was stored).
@@ -1830,7 +1822,7 @@ async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string
     if (!r.ok) return { ok: false, error: `${r.error} — prompt NOT delivered` }
     threadId = r.threadId
   }
-  return sendCodexAppServerTurn(sock, threadId, text, rec.worktreePath, rec.deliveryId)
+  return sendCodexAppServerTurn(sock, threadId!, text, rec.worktreePath, rec.deliveryId)
 }
 
 // idempotent replace of the content between sentinels; the user's own content above/below is preserved. The
@@ -2220,6 +2212,36 @@ export const claudeHeadlessHarness: Harness = {
   deliveryBlockedBy: undefined,
 }
 
+function codexRuntimeDescriptor(endpoint: CodexGenerationEndpoint, runtimeDir: string): SharedRuntimeDescriptor {
+  return {
+    key: codexDescriptorKey(endpoint),
+    label: endpoint.id === 'legacy' ? 'Codex app-server' : `Codex app-server ${endpoint.id.slice(0, 18)}`,
+    pidFile: endpoint.pidFile,
+    receiptFile: endpoint.receiptFile,
+    residency: async () => {
+      let pid = 0
+      try { pid = Number(readFileSync(endpoint.pidFile, 'utf8').trim()) } catch { /* stale/missing pid */ }
+      const pidLive = pid > 0 && !!processStartToken(pid)
+      const listener = await listenerAt(endpoint.socketPath, 800)
+      if (!pidLive && listener === 'dead') return { healthy: true, referenceIds: [], rootAbsent: true }
+      if (pidLive && (!codexRuntimeGeneration(runtimeDir, endpoint) || listener !== 'live'))
+        return { healthy: false, referenceIds: [], error: 'Codex shared root identity/socket generation is not proven' }
+      if (!pidLive || listener !== 'live')
+        return { healthy: false, referenceIds: [], error: 'Codex shared root state is unknown' }
+      const result = await codexLoadedReferenceIds(endpoint.socketPath)
+      return result.ok ? { healthy: true, referenceIds: result.referenceIds } : { healthy: false, referenceIds: [], error: result.error }
+    },
+    mutationGuard: (targetReferenceId, opts) => codexMutationGuard(targetReferenceId, runtimeDir, opts, endpoint),
+    probe: () => codexSharedRuntimeProbe(runtimeDir, endpoint),
+  }
+}
+
+function codexRuntimeDescriptors(runtimeDir: string): SharedRuntimeDescriptor[] {
+  const endpoints = codexGenerationEndpoints(runtimeDir)
+  return (endpoints.length ? endpoints : [legacyCodexGenerationEndpoint(runtimeDir)])
+    .map((endpoint) => codexRuntimeDescriptor(endpoint, runtimeDir))
+}
+
 export const codexHarness: Harness = {
   id: 'codex',
   dispatchId: 'codex',
@@ -2292,14 +2314,20 @@ export const codexHarness: Harness = {
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   observeTurnFailures: codexTurnFailureObserver,
   cleanupRuntime: async () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
+  targetDescriptorKey: (rec) => {
+    const endpoint = codexEndpointForRecord(rec)
+    return endpoint ? codexDescriptorKey(endpoint) : null
+  },
   coldRetirementPreflight: async (rec) => {
     if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
     const threadId = rec.harnessSessionId
     const dir = runtimeRoot()
-    const generationBefore = codexRuntimeGeneration(dir)
+    const endpoint = codexEndpointForRecord(rec, dir)
+    if (!endpoint) return { ok: false, reason: 'no exact Codex generation binding is registered for this target' }
+    const generationBefore = codexRuntimeGeneration(dir, endpoint)
     if (!generationBefore) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
-    const result = await codexColdPreflight(threadId, dir, generationBefore)
-    if (codexRuntimeGeneration(dir) !== generationBefore)
+    const result = await codexColdPreflight(threadId, dir, generationBefore, endpoint)
+    if (codexRuntimeGeneration(dir, endpoint) !== generationBefore)
       return { ok: false, reason: 'shared Codex app-server generation changed during cold retirement guard' }
     if (!result.ok) return result
     if (!result.alreadyCold)
@@ -2308,21 +2336,25 @@ export const codexHarness: Harness = {
   },
   coldPreflight: async (rec) => {
     if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
-    return codexColdPreflight(rec.harnessSessionId)
+    const endpoint = codexEndpointForRecord(rec)
+    return endpoint ? codexColdPreflight(rec.harnessSessionId, runtimeRoot(), undefined, endpoint)
+      : { ok: false, reason: 'no exact Codex generation binding is registered for this target' }
   },
   coldRuntime: async (rec, suppliedReceipt) => {
     if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
     const threadId = rec.harnessSessionId
     const dir = runtimeRoot()
-    const sock = codexAppServerSock(dir)
-    const generationBefore = codexRuntimeGeneration(dir)
+    const endpoint = codexEndpointForRecord(rec, dir)
+    if (!endpoint) return { ok: false, reason: 'no exact Codex generation binding is registered for this target' }
+    const sock = endpoint.socketPath
+    const generationBefore = codexRuntimeGeneration(dir, endpoint)
     if (!generationBefore) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
     if (suppliedReceipt !== undefined && (!isCodexColdPlan(suppliedReceipt) || suppliedReceipt.threadId !== threadId))
       return { ok: false, reason: 'Codex cold teardown receipt is missing, malformed, or names a different target' }
     const frozenPlan = isCodexColdPlan(suppliedReceipt) ? suppliedReceipt : null
-    if (frozenPlan && frozenPlan.generation !== generationBefore)
+    if (frozenPlan && (frozenPlan.generation !== generationBefore || frozenPlan.endpoint.id !== endpoint.id))
       return { ok: false, reason: 'shared Codex app-server generation changed after archive preflight' }
-    const preflight = await codexColdPreflight(threadId, dir, frozenPlan?.generation ?? generationBefore)
+    const preflight = await codexColdPreflight(threadId, dir, frozenPlan?.generation ?? generationBefore, endpoint)
     if (!preflight.ok) return preflight
     const plan = frozenPlan ?? preflight.receipt
     if (frozenPlan && (!sameIdSet(frozenPlan.descendantIds, preflight.receipt.descendantIds) ||
@@ -2330,12 +2362,12 @@ export const codexHarness: Harness = {
       !sameIdSet(frozenPlan.activeIds, preflight.receipt.activeIds) ||
       !sameIdSet(frozenPlan.archivedIds, preflight.receipt.archivedIds)))
       return { ok: false, reason: 'Codex target subtree ownership or collection assignment changed after archive preflight' }
-    if (codexRuntimeGeneration(dir) !== plan.generation)
+    if (codexRuntimeGeneration(dir, endpoint) !== plan.generation)
       return { ok: false, reason: 'shared Codex app-server generation changed during target subtree guard' }
     if (plan.activeIds.length === 0) return { ok: true }
     const subtreeSet = new Set(plan.subtreeIds)
     const siblingBefore = plan.guard.referenceIds.filter((referenceId) => !subtreeSet.has(referenceId))
-    const fence = { dir, generation: plan.generation }
+    const fence = { dir, endpoint, generation: plan.generation }
 
     const compensate = async (reason: string): Promise<{ ok: false; reason: string }> => {
       const restored = await codexRestoreColdPlan(plan, dir)
@@ -2343,9 +2375,9 @@ export const codexHarness: Harness = {
     }
 
     const coldCheck = async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
-      const after = await codexColdPreflight(threadId, dir, plan.generation)
+      const after = await codexColdPreflight(threadId, dir, plan.generation, endpoint)
       if (!after.ok) return after
-      if (codexRuntimeGeneration(dir) !== plan.generation) return { ok: false, reason: 'shared Codex app-server generation changed during archive' }
+      if (codexRuntimeGeneration(dir, endpoint) !== plan.generation) return { ok: false, reason: 'shared Codex app-server generation changed during archive' }
       if (!sameIdSet(plan.descendantIds, after.receipt.descendantIds) || !sameParentEdges(plan.parentEdges, after.receipt.parentEdges))
         return { ok: false, reason: `Codex target descendant closure changed during archive (before=${plan.descendantIds.join(', ')}; after=${after.receipt.descendantIds.join(', ')})` }
       if (after.receipt.activeIds.length)
@@ -2378,7 +2410,9 @@ export const codexHarness: Harness = {
         return { ok: false, reason: 'Codex cold compensation receipt is invalid or names a different target' }
       return codexRestoreColdPlan(suppliedReceipt)
     }
-    const sock = codexAppServerSock(runtimeRoot())
+    const endpoint = codexEndpointForRecord(rec)
+    if (!endpoint) return { ok: false, reason: 'no exact Codex generation binding is registered for this target' }
+    const sock = endpoint.socketPath
     const reconcile = async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
       const [active, archived] = await Promise.all([
         codexThreadList(sock, { archived: false, sourceKinds: [] }),
@@ -2395,28 +2429,7 @@ export const codexHarness: Harness = {
     if (!restored.ok) return reconcile()
     return reconcile()
   },
-  sharedRuntimes: (runtimeDir) => [{
-    key: 'codex-app-server',
-    label: 'Codex app-server',
-    pidFile: codexAppServerPid(runtimeDir),
-    receiptFile: codexAppServerReceipt(runtimeDir),
-    residency: async () => {
-      const sock = codexAppServerSock(runtimeDir)
-      let pid = 0
-      try { pid = Number(readFileSync(codexAppServerPid(runtimeDir), 'utf8').trim()) } catch { /* stale/missing pid */ }
-      const pidLive = pid > 0 && !!processStartToken(pid)
-      const listener = await listenerAt(sock, 800)
-      if (!pidLive && listener === 'dead') return { healthy: true, referenceIds: [], rootAbsent: true }
-      if (pidLive && (!codexRuntimeGeneration(runtimeDir) || listener !== 'live'))
-        return { healthy: false, referenceIds: [], error: 'Codex shared root identity/socket generation is not proven' }
-      if (!pidLive || listener !== 'live')
-        return { healthy: false, referenceIds: [], error: 'Codex shared root state is unknown' }
-      const result = await codexLoadedReferenceIds(sock)
-      return result.ok ? { healthy: true, referenceIds: result.referenceIds } : { healthy: false, referenceIds: [], error: result.error }
-    },
-    mutationGuard: (targetReferenceId, opts) => codexMutationGuard(targetReferenceId, runtimeDir, opts),
-    probe: () => codexSharedRuntimeProbe(runtimeDir),
-  }],
+  sharedRuntimes: codexRuntimeDescriptors,
   // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
   // a tail handed to a bare `codex` — the script's final `codex … resume "$tid"` performs codex's own resume on
   // the owned id, the SAME conversation); none → empty tail → relaunch a FRESH thread on the same worktree/record.
@@ -2485,10 +2498,12 @@ const governedSharedRuntimeOwners = (runtimeDir: string, descriptorKey: string, 
 async function codexHeadlessReadinessProof(current: () => HarnessLaunchReadyRecord | null): Promise<CodexHeadlessLaunchReadinessProof | null> {
   const record = current()
   if (!record?.governed || record.stopped || record.archived || !record.harnessSessionId) return null
+  const endpoint = codexEndpointForRecord(record, record.runtimeDir)
+  if (!endpoint) return null
   const descriptor = codexHeadlessHarness.sharedRuntimes?.(record.runtimeDir)
-    .find((candidate) => candidate.key === 'codex-app-server')
+    .find((candidate) => candidate.key === codexDescriptorKey(endpoint))
   if (!descriptor?.residency) return null
-  const generationBefore = codexRuntimeGenerationProof(record.runtimeDir)
+  const generationBefore = codexRuntimeGenerationProof(record.runtimeDir, endpoint)
   if (!generationBefore) return null
   let resident: Awaited<ReturnType<NonNullable<SharedRuntimeDescriptor['residency']>>>
   try { resident = await descriptor.residency() }
@@ -2497,7 +2512,7 @@ async function codexHeadlessReadinessProof(current: () => HarnessLaunchReadyReco
   if (!resident.referenceIds.includes(record.harnessSessionId)) return null
   const owners = governedSharedRuntimeOwners(record.runtimeDir, descriptor.key, record.harnessSessionId)
   if (!owners || owners.length !== 1 || owners[0] !== record.session) return null
-  const generationAfter = codexRuntimeGenerationProof(record.runtimeDir)
+  const generationAfter = codexRuntimeGenerationProof(record.runtimeDir, endpoint)
   if (!generationAfter || codexRuntimeGenerationToken(generationBefore) !== codexRuntimeGenerationToken(generationAfter)) return null
   return Object.freeze({
     kind: 'codex-headless-shared-runtime',

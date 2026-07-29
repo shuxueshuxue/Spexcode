@@ -53,6 +53,11 @@ scenarios:
 
 # session-cursors — yatsu
 
+Only `shell-readable-inbox` has a product surface on this branch: the `spex internal session-cursor` verb
+and the hook that reads the file. The follow half — expiry-by-read, the full advance matrix, and the edge
+slice — becomes measurable when `spex session wait` / `watch` land on cursors, and those three are
+deliberately left as declared blind spots until then rather than measured through an import.
+
 Measure the module the way its two real callers do — the sender advancing past a landed poke, and the
 pure-shell hook reading its own position — never by reasoning about the file format. The loss being scored
 is asymmetric and worth naming: a cursor that ends up too low costs a message shown twice, while a cursor

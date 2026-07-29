@@ -139,11 +139,6 @@ export async function adapterLoadedReferenceState(
   return result
 }
 
-// @@@ PromptArg - one harness's answer to "can you carry THIS prompt text, and how?". `arg` is the launch
-// tail's prompt argument, already shell-quoted; `refuse` is the harness saying its own parser has no way to
-// carry it, so nothing should be launched at all.
-export type PromptArg = { arg: string } | { refuse: string }
-
 export interface Harness {
   readonly id: HarnessId
   // the id baked into the materialized shim. Headless variants reuse their native family's shim.
@@ -199,15 +194,6 @@ export interface Harness {
   // the flag that pins the session id at launch. Claude lets the caller choose (`--session-id <id>`); Codex
   // assigns its own, so there is nothing to pass (the id is captured/resumed afterwards).
   sessionIdArg(id: string): string
-  // @@@ promptArg - how THIS harness's launch tail carries the human's prompt. A prompt is arbitrary text and
-  // may legitimately BEGIN with `-`: a pasted browser-console line, a diff hunk, a quoted flag. Every harness
-  // parses its OWN argv, so where an end-of-options `--` belongs — or whether that harness has one at all — is
-  // an adapter fact. Product code assuming "a quoted positional reaches every harness intact" is what let a
-  // dashboard-created session echo the human's own text back as `unknown option`, fast-exit three times, and
-  // settle offline having run nothing. `refuse` is the honest answer for a harness whose parser has NO escape:
-  // ONE loud refusal naming the fact beats three retries of a certain failure, and beats editing the human's
-  // text until the parser swallows it — SpexCode never delivers words nobody wrote.
-  promptArg(prompt: string): PromptArg
   // the env var the agent's OWN process carries so its `spex …` calls know their session id.
   readonly sessionEnvVar: string
   // transport bootstrap variables scoped to this launch. Rendezvous adapters own their daemon mode + socket;
@@ -2109,10 +2095,7 @@ export function opencodeLaunchCommand(opencodeCmd = 'opencode'): string {
     `  export SPEXCODE_OPENCODE_CONTINUE=1`,
     `  exec ${opencodeCmd} --continue`,
     `elif [ -n "\${1:-}" ]; then`,
-    // `--prompt=<text>`, not `--prompt <text>`: opencode's yargs reads a separate value that starts with `-`
-    // as the NEXT flag, leaving --prompt empty and dropping the human's text (measured: it printed help and
-    // launched no prompt). The attached form binds the value whatever it begins with.
-    `  exec ${opencodeCmd} --prompt="$1"`,
+    `  exec ${opencodeCmd} --prompt "$1"`,
     `else`,
     `  exec ${opencodeCmd}`,
     `fi`,
@@ -2168,16 +2151,6 @@ const rendezvousLaunchEnv = (id: string): string[] => [
 ]
 const noLaunchEnv = (): string[] => []
 
-// @@@ prompt tails - the two shapes an adapter needs. `quotedPromptArg` is the bare shell-quoted prompt, for a
-// harness whose launch tail is consumed by something that already accepts a leading `-`: codex's and the
-// headless families' tails are read by OUR own argv handling (`spex internal …-launch/-run`), which takes the
-// prompt as a plain operand. `separatedPromptArg` prepends the POSIX end-of-options `--` for a harness whose
-// tail is handed straight to its own option parser — claude's commander then reads the rest as the prompt it
-// is, however it begins. Which one an adapter picks is decided by where its prompt actually meets a parser,
-// so an adapter that wraps its tail in a script fixes the separator INSIDE that script, not here.
-const quotedPromptArg = (prompt: string): PromptArg => ({ arg: shQuote(prompt) })
-const separatedPromptArg = (prompt: string): PromptArg => ({ arg: `-- ${shQuote(prompt)}` })
-
 export const claudeHarness: Harness = {
   id: 'claude',
   dispatchId: 'claude',
@@ -2188,7 +2161,6 @@ export const claudeHarness: Harness = {
   launchCmd: (_id, _rt, cmd) => claudeBaseCmd(cmd),  // claude's full invocation IS its base command (the tail is appended by the caller)
   baseCmd: claudeBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
-  promptArg: separatedPromptArg,                     // the tail IS claude's own argv → `--` ends option parsing
   sessionEnvVar: 'CLAUDE_CODE_SESSION_ID',
   launchEnv: rendezvousLaunchEnv,
   shimFile: (proj) => join(proj, '.claude', 'settings.json'),
@@ -2237,10 +2209,6 @@ export const claudeHeadlessHarness: Harness = {
   ownsRendezvous: false,
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => claudeHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), claudeBaseCmd(cmd)),
-  // NOT claude's `--`: this tail is read by our own controller (`spex internal claude-headless-run … --`),
-  // which takes the prompt as a plain operand and then feeds the text to claude over stdin as stream-json —
-  // it never becomes claude argv. A separator here would be parsed as part of the prompt.
-  promptArg: quotedPromptArg,
   launchEnv: noLaunchEnv,
   // Liveness is the intact, non-stopped record's property. A missing controller/child fails loudly at control
   // time rather than turning an idle (no child) session into a speculative offline row.
@@ -2263,9 +2231,6 @@ export const codexHarness: Harness = {
   launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
   baseCmd: codexBaseCmd,
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
-  // the tail reaches `spex internal codex-launch <sock> <cwd> "$@"`, whose prompt operand already takes a
-  // leading `-`; codex itself never parses this text as argv (it arrives as a thread/start turn).
-  promptArg: quotedPromptArg,
   sessionEnvVar: 'CODEX_THREAD_ID',
   launchEnv: noLaunchEnv,
   // Codex discovers a LINKED worktree's PROJECT hooks from the ROOT CHECKOUT's `.codex`, NOT the worktree's
@@ -2604,15 +2569,6 @@ export const piHarness: Harness = {
   launchCmd: (_id, _rt, cmd) => `${piBaseCmd(cmd)} --approve`,   // --approve = one-run project trust (belt to writeTrust's braces)
   baseCmd: piBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // caller pins the exact session id, claude-style (created if missing)
-  // @@@ pi has no end-of-options escape - pi's own parser (dist/cli/args.js) walks argv with three branches:
-  // `--x` becomes an unknown flag, any other `-x` is an "Unknown option" error, and ONLY a token that does not
-  // start with `-` becomes message text. There is no `--` branch, so a prompt beginning with `-` cannot be
-  // handed to an interactive pi at all — its TUI also owns stdin, so the headless family's stdin channel is
-  // not available here. Refuse and say exactly that: the human can start the prompt with any other character
-  // or pick another launcher, and either way nothing silently rewrites what they typed.
-  promptArg: (prompt) => prompt.startsWith('-')
-    ? { refuse: "pi's CLI parser has no end-of-options separator, so it reads a prompt beginning with `-` as an option and never as text. Start the prompt with any other character (a quote, a space, a word), or dispatch this one under a different launcher." }
-    : { arg: shQuote(prompt) },
   sessionEnvVar: 'PI_SESSION_ID',                    // exported by the generated extension at session_start; tool subprocesses inherit it
   launchEnv: rendezvousLaunchEnv,
   shimFile: (proj) => join(proj, '.pi', 'extensions', 'spexcode.ts'),
@@ -2652,10 +2608,6 @@ export const piHeadlessHarness: Harness = {
   runtimeOwnership: 'adapter',
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => piHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), piBaseCmd(cmd)),
-  // NOT pi's refusal: the headless family owns its child's stdio, and pi reads a prompt from stdin when it is
-  // given none in argv. So the text never meets pi's argv parser and any prompt is carriable here — the tail
-  // itself is read by our own controller (`spex internal pi-headless-run … --`) as a plain operand.
-  promptArg: quotedPromptArg,
   liveness: recordOnline,
   deliver: deliverViaPiHeadless,
   cleanupRuntime: (rec) => unlinkSocks(piHeadlessSock(rec.session), rvSock(rec.session)),
@@ -2677,9 +2629,6 @@ export const opencodeHarness: Harness = {
   launchCmd: (_id, _rt, cmd) => opencodeLaunchCommand(opencodeBaseCmd(cmd)),   // the tail-branching script (prompt vs --resume/--continue marker)
   baseCmd: opencodeBaseCmd,
   sessionIdArg: () => '',                            // opencode mints its own session id; the plugin's first event reports it back (opencode-capture)
-  // the tail is one operand of the launch script, which is where the separator belongs for this family: the
-  // script hands it to opencode as `--prompt=<text>` (see opencodeLaunchCommand), never as a bare positional.
-  promptArg: quotedPromptArg,
   // opencode exports NO per-session env var to its tool subprocesses (probed, 1.18.3). Identity flows through
   // the launch-injected SPEXCODE_SESSION_ID — honest here because each opencode TUI is a per-session process
   // (no codex-style shared-server contamination). This var is therefore never set; envSessionId's

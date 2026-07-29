@@ -127,14 +127,18 @@ a transient fault must read as neither. **Retired** is the third integrity readi
 recorded worktree is gone, so there is nothing left to be active *in*. It is terminal — no lifecycle writer may
 put it back to `active`/`idle`, no launch is assembled for it, only `close` remains.
 
-The launch tail's prompt argument is the ADAPTER's to shape, never this layer's ([[harness-adapter]]'s
-`promptArg`). A prompt is arbitrary human text whose first character carries no meaning to SpexCode, and each
-harness parses its own argv, so this layer asks how to carry it instead of hand-quoting a positional and
-assuming it survives — the assumption that it did is what let a prompt beginning with `-` reach a harness as an
-option and die. When the adapter answers that it cannot carry the text at all, that is a settled fact about
-this prompt/launcher pairing, so the refusal lands at CREATE, before a worktree, branch, or record exists and
-while the human is still watching their own request; the queue drain refuses the same way for a record that
-predates the answer, rather than opening a window that fast-exits into the retry budget.
+The prompt seam carries ONE invariant for every harness: **the text handed to an agent never begins with `-`**.
+Human prompts legitimately do — a pasted browser-console line, a diff hunk, a quoted flag — and downstream that
+first character decides whether the text is read as a prompt or as machinery. Each harness parses its own argv
+by its own rules (one honours an end-of-options `--`, one silently drops a detached value starting with `-`,
+one has no end-of-options branch at all), and the launch scripts additionally recognize their resume/continue
+markers by comparing the tail to a literal flag. Answering that per harness would mean an escape per adapter
+plus a refusal for whichever harness has none — several answers to one question, and still nothing covering a
+prompt that IS the literal marker. So the guarantee is made once, here, where every launch and every send
+already passes through, and everything downstream hands over one plain quoted operand knowing nothing about
+who parses it. The cost is a single leading space on the prompts that would otherwise be undeliverable, with
+the human's own words following byte-for-byte; the alternative was refusing to carry them at all. This is why
+no `if (harness)` and no per-adapter prompt escape exists in the launch path ([[harness-adapter]]).
 
 A launch is likewise refused **before** a window opens when the transport can already settle it: no worktree,
 no branch, no resolvable launcher command. Those are facts about this machine that no number of attempts can

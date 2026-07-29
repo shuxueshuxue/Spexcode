@@ -52,11 +52,7 @@ test('launch script: prompt tail → --prompt; --resume marker → --session; --
   const run = (tail: string) =>
     execFileSync('bash', ['-c', `${opencodeLaunchCommand('opencode --auto')} ${tail}`], { encoding: 'utf8', env })
       .split('\n').find((l) => l.startsWith('STUB:'))
-  // `--prompt=<text>`, attached: opencode's yargs reads a DETACHED value beginning with `-` as the next flag
-  // and drops the human's text, so a prompt is passed the one way that binds whatever it starts with
-  // ([[harness-adapter]] promptArg). The leading-`-` case is the one that proves it.
-  assert.equal(run(`'fix the login bug'`), 'STUB:--auto --prompt=fix the login bug rid= cont=')
-  assert.equal(run(`'-home-app/api/uploads:1 failed with 413'`), 'STUB:--auto --prompt=-home-app/api/uploads:1 failed with 413 rid= cont=')
+  assert.equal(run(`'fix the login bug'`), 'STUB:--auto --prompt fix the login bug rid= cont=')
   assert.equal(run('--resume oc_abc'), 'STUB:--auto --session oc_abc rid=oc_abc cont=')
   assert.equal(run('--continue'), 'STUB:--auto --continue rid= cont=1')
   assert.equal(run(''), 'STUB:--auto rid= cont=')

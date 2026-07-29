@@ -26,17 +26,17 @@ scenarios:
       a diff hunk, or a quoted flag. Do it per configured harness family, and read the generated `launch.sh`,
       the worker pane, the session's status through `/api/sessions`, and whether the agent received the text.
     expected: |
-      The prompt is arbitrary human text: its first character carries no meaning to SpexCode, so the worker
-      boots and receives the text VERBATIM. Every harness parses its own argv, so where the end-of-options
-      separator goes — or whether that harness even has one — is an ADAPTER fact and never a product-code
-      assumption that a quoted positional works everywhere. No harness may echo the prompt back as
-      `unknown option`, fast-exit into the bounded readiness retry, and settle `offline` with nothing run:
-      that is the field failure this locks (a dashboard-created claude session died on three identical
-      retries, its own prompt quoted in the parser error).
-      Where a harness's parser genuinely has NO escape — pi's `dist/cli/args.js` has no `--` branch and
-      errors on any leading-`-` token — the create is refused ONCE and loudly, naming the harness fact and
-      the repair. A refusal is the honest answer there; silently editing the human's text so the parser
-      accepts it is not, and neither is three retries of a certain failure.
+      EVERY harness boots and receives the human's words, with no harness left out and no per-adapter escape
+      in the launch path. One invariant does it: the text SpexCode hands an agent never BEGINS with `-`,
+      guaranteed once at the single prompt-delivery seam every launch and send already passes through, so
+      the launch tail is one plain quoted operand that knows nothing about who parses it. No harness may echo
+      the prompt back as `unknown option`, fast-exit into the bounded readiness retry, and settle `offline`
+      with nothing run — the field failure this locks (a dashboard-created claude session died on three
+      identical retries with its own prompt quoted in the parser error) — and none may silently drop it
+      either (opencode's yargs discards a detached value starting with `-`). The same invariant covers a
+      prompt that IS a literal `--resume`/`--continue`, which the launch scripts would otherwise mistake for
+      their own resume marker. The human's words survive byte-for-byte after at most one leading space; a
+      prompt not starting with `-` is untouched entirely.
   - name: cap-counts-only-the-working-set
     tags: [backend-api]
     description: >

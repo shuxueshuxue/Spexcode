@@ -29,17 +29,10 @@ delivery as a loud transport error. Human `stop` tears down the runtime and mark
 so it reads `offline` until `resume` clears the marker and relaunches the same conversation. Its text output
 remains a transport detail; the note timeline is the terminal-free conversation.
 
-The controller starts a fresh turn with `pi -p --session-id <id>` and gives pi the turn's TEXT on **stdin**,
-never in argv. pi's own parser has no end-of-options separator and errors on any argv token beginning with `-`,
-so a turn whose text starts with one — a pasted console line, a diff hunk — would die at parse time with the
-human's own words quoted back; pi reads its prompt from stdin when argv carries none, and the controller owns
-its child's stdio, so that channel is available here even though the interactive sibling (whose TUI owns stdin)
-must refuse such a prompt outright ([[harness-adapter]]'s `promptArg`). Every turn takes that one route: the
-text is delivered byte-for-byte whatever it begins with, and there is no leading-`-` special case to get wrong.
-A delivery first probes pi's
+The controller starts a fresh turn with `pi -p --session-id <id> <prompt>`. A delivery first probes pi's
 rendezvous socket. When a listener is present, the existing `deliverViaRendezvous` protocol sends
 `sendUserMessage(..., deliverAs: steer)` into the live turn. When the listener is proven absent, the controller
-spawns a `--session <id>` turn to wake the exact saved conversation; `--session-id` is never used for this
+spawns `pi -p --session <id> <msg>` to wake the exact saved conversation; `--session-id` is never used for this
 path because it can silently create a new session. The controller remains resident so the tmux window is a
 stable home for later deliveries and resumes.
 

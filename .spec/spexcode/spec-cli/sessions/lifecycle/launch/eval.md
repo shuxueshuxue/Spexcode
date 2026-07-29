@@ -16,6 +16,27 @@ scenarios:
       reaches `active`, and lands a commit whose trailer names ITS OWN record. The failure this locks:
       github#76, where a shared daemon's inherited id reached workers' commits and 48 of them in the SpexCode
       repo name a session that no longer exists.
+  - name: launch-prompt-may-begin-with-a-hyphen
+    tags: [backend-api, cli]
+    code: spec-cli/src/sessions.ts
+    description: >
+      In an isolated `spex init` project through a real backend running this code, create a session through
+      the real `POST /api/sessions` whose prompt's FIRST CHARACTER is `-` — the shape a human actually
+      produces by pasting a browser console line (`-home-…/api/uploads:1  Failed to load resource: … 413 …`),
+      a diff hunk, or a quoted flag. Do it per configured harness family, and read the generated `launch.sh`,
+      the worker pane, the session's status through `/api/sessions`, and whether the agent received the text.
+    expected: |
+      The prompt is arbitrary human text: its first character carries no meaning to SpexCode, so the worker
+      boots and receives the text VERBATIM. Every harness parses its own argv, so where the end-of-options
+      separator goes — or whether that harness even has one — is an ADAPTER fact and never a product-code
+      assumption that a quoted positional works everywhere. No harness may echo the prompt back as
+      `unknown option`, fast-exit into the bounded readiness retry, and settle `offline` with nothing run:
+      that is the field failure this locks (a dashboard-created claude session died on three identical
+      retries, its own prompt quoted in the parser error).
+      Where a harness's parser genuinely has NO escape — pi's `dist/cli/args.js` has no `--` branch and
+      errors on any leading-`-` token — the create is refused ONCE and loudly, naming the harness fact and
+      the repair. A refusal is the honest answer there; silently editing the human's text so the parser
+      accepts it is not, and neither is three retries of a certain failure.
   - name: cap-counts-only-the-working-set
     tags: [backend-api]
     description: >

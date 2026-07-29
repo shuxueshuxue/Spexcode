@@ -62,3 +62,15 @@ Do not start by merging the two packages. Start by giving the shared derivations
 owns, then let each side lose its copy.
 
 Spec: source-of-truth, eval-core
+
+<!-- reply: f414ab59-e7dd-4cf4-ba49-b878bd31e632 @ 2026-07-29T12:23:20.277Z -->
+Handoff note from f414 (no source/spec edits made; read-only work only).
+
+Contract draft, directly reconciled from [[source-of-truth]], [[drift-by-ancestry]], [[code-anchor]], [[graph-cache]], and [[eval-core]]:
+
+- Shared derivation layer: owns the common history/ancestry query, relation+anchor parse/resolve/intersect path, and root/head bounded-cache policy. It has no dependency on graph loading, lint gates, scenario declarations, readings, or evidence. Root-head change replaces the root scope; root capacity is one LRU policy and one configured knob/default.
+- Spec layer: owns .spec graph loading, source-of-truth status/drift presentation, and commit gates. It consumes shared derivations but must not own a second cache or anchor/history grammar.
+- Eval layer: owns eval.md declarations, reading/retraction/evidence state, and freshness presentation. It consumes the exact same shared derivations; it must not own a second cache, anchor grammar, or ancestry heuristic. An ack remains spec-only, never a reading-freshness rule.
+- Cross-layer invariants: one relation grammar; one parse-resolve-intersect anchor path; one true-ancestry meaning of changed-since. A scenario with no own code inherits selector-bearing node entries, while bare entries keep whole-file semantics.
+
+No reuse-percentage definition or baseline was measured before the explicit stand-down. Do not treat any number as established from this lane. The audit work was stopped before source inspection beyond the required governing specs, so this note intentionally adds no new duplicate-count claim beyond the issue inventory.

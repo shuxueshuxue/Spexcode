@@ -1037,8 +1037,7 @@ function renameSideReachability(
     const from = order.get(older), to = order.get(newer)
     if (from === undefined || to === undefined)
       throw new Error(`rename projection cannot place ${older} against ${newer} in the current topology`)
-    // Whichever end is the rename owns the closure. A pair with no rename on either end is answered the same
-    // way, just without that guarantee — the projector never asks one.
+    // Whichever end is the rename owns the closure; the projector always puts one there.
     return renameCommits.has(older)
       ? (closure(older, children(), descendants)[to >> 3] & (1 << (to & 7))) !== 0
       : (closure(newer, parents, ancestors)[from >> 3] & (1 << (from & 7))) !== 0

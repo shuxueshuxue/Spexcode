@@ -184,3 +184,12 @@ disguise the pathology as an innocently-empty result. A caller's awaited promise
 hook can't misdirect repository discovery; the local commit gate avoids the hook index entirely by judging
 the real pending commit oid. The HTTP
 entrypoint that serves the results belongs to [[spec-cli]].
+
+`loadSpecs` publishes a node's relation as PARSED ENTRIES, and the flat shapes beside them are views of that
+one source. `codeEntries`/`relatedEntries` are the relation; `code`/`related` are its base paths for the many
+consumers that want files, and `codeScoped`/`relatedScoped` the selector-bearing subset for the anchor
+engine. Deriving all of them here, once, from a single parse is what keeps every downstream layer from
+re-deriving one shape out of another: a consumer handed only the views had to mint `path#selector` strings
+and re-parse them to recover entries the loader already held, which is precisely the round-trip the eval
+layer's fixed-revision projection used to perform. Publish the source, derive the views; never ship only the
+views and make someone reconstruct the source.

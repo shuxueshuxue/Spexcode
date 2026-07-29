@@ -74,3 +74,47 @@ Contract draft, directly reconciled from [[source-of-truth]], [[drift-by-ancestr
 - Cross-layer invariants: one relation grammar; one parse-resolve-intersect anchor path; one true-ancestry meaning of changed-since. A scenario with no own code inherits selector-bearing node entries, while bare entries keep whole-file semantics.
 
 No reuse-percentage definition or baseline was measured before the explicit stand-down. Do not treat any number as established from this lane. The audit work was stopped before source inspection beyond the required governing specs, so this note intentionally adds no new duplicate-count claim beyond the issue inventory.
+
+<!-- reply: c89038e2-6b56-4b4c-8b4a-4ff4ec2c886e @ 2026-07-29T13:37:06.609Z -->
+Progress: milestones 1 and 2 are landed on main.
+
+**M1 — the bounded root cache exists once** (merge 30e0fb1b). `touchRoot` was written twice, verbatim in
+logic and in NAME, as git.ts's index/drift bound and scenariofresh.ts's scenario-chain bound. It now lives in
+`spec-cli/src/root-lru.ts`, a leaf module importing nothing from the graph, the sidecar, or git — so both
+layers depend on it without depending on each other. Consolidation surfaced a latent bug both copies shared:
+`Math.max(4, Number(env || fallback))` is NaN for a mistyped env value and `size > NaN` is always false, so
+one typo silently turned the bound OFF. Caught by the first test written against the extracted policy.
+scenariofresh's hardcoded 16 got a knob. freshness.ts's per-root scope is deliberately NOT folded in — one
+scope per root, replaced on head change, no sharing: a different policy, and forcing unlike things together
+is how a shared layer becomes a second special-case pile.
+
+**M2 — "changed since" has one meaning** (merge 863b3d54). The reachability rule (a commit touching `path`
+is in `sha..HEAD` iff it is NOT an ancestor of `sha`) was retyped at four sites: `driftPathWindow` in the
+spec layer, `changedSince` / the eval code window / `codeDrift` in the eval layer — each with its own
+handling of the unreachable-anchor case, the part easiest to get subtly wrong and impossible to diff across
+four homes. `eventsSince()` is that rule now; `null` is its honest third answer. Each layer decorates the
+same window with what is genuinely its own (ack cover is spec-only; the content fallback is eval-only) —
+which is exactly the shared-derivation / layer-policy split the contract asks for. Two wrappers collapsed on
+contact: the eval code window had become a pure alias, and codeDrift's separate ancestry probe was dead.
+
+**M3 — next: retire the relation-entry round-trip.** `sessioneval.ts:169 loadedRelationRows` takes a spec
+snapshot's SPLIT fields (`code` paths + `codeScoped` path/selector pairs), mints `path#selector` STRINGS from
+them, and hands those to `parseRelation` to be parsed back into `RelationEntry[]` — a serialize/reparse
+round-trip through a form nobody stored. Five call sites do it (268, 269, 532, 533, 563).
+
+The shallow fix is a `loadedRelationEntries` returning entries directly. It is NOT the right one: sites
+532-535 also consume `scenarioCodeAxis(...).problems` to reject an invalid snapshot `code:`, and bypassing
+the parse would quietly drop that validation — narrowing a check by inspection, which taste 19 forbids.
+
+The honest fix is upstream: the snapshot should CARRY `RelationEntry[]` instead of the split
+`code`/`codeScoped` pair the round-trip exists to reassemble. That is a shape change to
+`SessionImpactSpecSnapshot` and its Git-read producer, so it is its own milestone with its own before/after —
+not a tail-end edit. Note the constraint 125240d8 flagged: do not collapse the ordinary loader's and the
+fixed-revision snapshot's history/window semantics while unifying their relation projection.
+
+Metric note: the reuse figure must stay capability-based. A line-level clone detector finds ONE pair in this
+repo and an identifier-normalised structural detector at an 8-line window finds two, both import headers —
+neither would have found any of the duplication M1 and M2 removed, because it was the same responsibility in
+different shapes. Percentages from text similarity are not evidence here.
+
+Spec: source-of-truth, eval-core

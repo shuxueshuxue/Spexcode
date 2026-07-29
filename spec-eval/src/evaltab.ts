@@ -8,14 +8,8 @@ import { staleAxes, codeDrift, contentProbeFor, anchorProbeFor, type StaleAxis }
 import { scenarioIndex, type ScenarioIndex } from './scenariofresh.js'
 import { hasBlob, getBlob, MISS_BLOB } from './cache.js'
 
-// one evidence entry as the tab renders it: the content hash, its kind, and its LIVE blob state (present, or
-// miss when the bytes were pruned). The whole list is the gallery the dashboard maps.
 export type EvidenceView = { hash: string; kind: EvidenceKind; state: 'present' | 'miss' }
 
-// a remark overlaid onto the reading it judged ([[remark-teeth]] R2): the resolvable fields the eval
-// surfaces read, plus `dangling` when its targetCodeSha matched no reading (so it was attached to the
-// scenario's latest as a fallback, never hidden). The teeth read the whole scenario track; THIS is the
-// per-reading display attachment.
 export type RemarkView = {
   rid: string
   ref: string             // `<thread-id>#<rid>` — the address `spex remark resolve`/`spex remark retract` take
@@ -33,44 +27,23 @@ export type EvalEntry = {
   scenario: string
   expected: string
   codeSha: string
-  // the reading's whole evidence list (N images and/or a video and/or a transcript). Always populated —
-  // a legacy scalar reading normalizes to a one-entry list — so every read surface sees a gallery.
   evidence?: EvidenceView[]
-  // primary scalar view (the video entry if any, else the first) — the single-evidence compat face for
-  // consumers that still read one blob (the session proof, the board fold's kind hint).
   blob: string | null
   blobKind?: EvidenceKind
   timelineBlob?: string
-  // legacy instrument tag ('manual@1') — surfaced for old readings only, never written by new filings.
   evaluator?: string
-  // the SESSION that filed this reading ([[event-detail]] originator liveness / [[mentions]] loop-in): the
-  // reachable actor an un-@'d eval remark courtesy-delivers to (the latest reading's filer is the chain's
-  // first link). Surfaced so the eval detail can show whether that session is still alive. Absent on a legacy
-  // reading (no `by`) — the pane simply shows no originator, exactly as the offline chain runs dry silently.
   by?: string
   verdict?: Verdict
   ts: string
   fresh: boolean
   staleAxes: StaleAxis[]
   blobState: 'present' | 'miss' | 'none'
-  // the code axis's drift detail for a code-stale reading ([[eval-core]]'s codeDrift): each governed file
-  // that moved since this reading + how many commits behind, so the eval detail can EXPLAIN the staleness
-  // ("EvalsFeed.jsx +3") rather than just flag it. Absent when the reading isn't code-stale.
   codeDrift?: { file: string; behind: number }[]
-  // the trunk remark track overlaid onto THIS reading ([[remark-teeth]]): the remarks whose targetCodeSha
-  // pins here (or the latest reading, for a dangling target). Absent when the scenario has no remark.
   remarks?: RemarkView[]
-  // the (node, scenario) eval-remark THREAD ([[eval-issue-split]]): the SAME join the teeth read, attached
-  // so the eval detail pane reads its whole comment thread from the reading overlay — the counterpart to
-  // splitting eval-remark threads OUT of the issue surfaces (mergedIssues). Absent until the first remark.
   thread?: Issue
-  // the human sign-off bound to THIS reading ([[human-ok]]) — present only on the exact reading an ok row
-  // anchors (by scenario + ts), so a newer reading arrives unblessed and the feed's hide releases itself.
-  // Rides the board fold verbatim (latestPerScenario is a filter, never a projection).
   humanOk?: { by: string; ts: string }
 }
 
-// a remark overlaid onto its display host (a reading, above) → the RemarkView the surfaces read.
 function toRemarkView(rm: Reply, threadId: string, dangling: boolean): RemarkView {
   return {
     rid: rm.rid!,
@@ -84,32 +57,16 @@ function toRemarkView(rm: Reply, threadId: string, dangling: boolean): RemarkVie
   }
 }
 
-// a DANGLING track ([[remark-teeth]]'s dangling clause / directive 5): a (node, scenario) remark track whose
-// scenario no reading joins — the scenario was renamed or deleted, so today the track loads but surfaces
-// nowhere. It ages NOTHING (there is no reading to stale — the teeth read per-reading), but its remarks must
-// stay VISIBLE and resolvable/retractable via their refs, so evalTimeline emits one synthetic row per orphan
-// at NODE level. `scenario` is the orphaned name (rendered struck-through / gone); `remarks` are all dangling.
 export type DanglingTrack = { scenario: string; threadId: string; thread: Issue; remarks: RemarkView[] }
 
 export type ScenarioInfo = { name: string; expected: string; tags?: string[]; test?: ScenarioTestReference; code?: string[] }
 
-// `hasEvalFile` distinguishes a node that declares no scenarios (no eval.md) from one that declares some but
-// has no readings yet — the tab says different things for each. `scenarios` is the declared set; `readings`
-// is NEWEST-FIRST (the sidecar is append-only oldest→newest; the tab leads with the latest measurement,
-// like the history tab).
 export type EvalTimeline = {
   node: string
   hasEvalFile: boolean
   scenarios: ScenarioInfo[]
   readings: EvalEntry[]
-  // retraction events ([[eval-core]]'s retract verb), newest first — the sanctioned-undo TRACE. `readings`
-  // above is already the effective view (a retracted reading is dropped from the scoreboard everywhere);
-  // this list is how a surface still shows that the undo happened: which (scenario, ts) was withdrawn,
-  // by whom, why. Additive — a consumer that ignores it sees exactly the effective scoreboard.
   retractions: Retraction[]
-  // orphaned remark tracks (renamed/deleted scenarios) — surfaced at node level so their remarks never vanish
-  // ([[remark-teeth]] dangling clause). SEPARATE from `readings` on purpose: a dangling track has no reading,
-  // so it must NOT flow into latestPerScenario / the board scoreboard — it ages nothing.
   dangling: DanglingTrack[]
 }
 
@@ -118,24 +75,18 @@ export type EvalContext = {
   specs: Awaited<ReturnType<typeof loadSpecs>>
   idx: DriftIndex
   hidx: HistoryIndex
-  scidx: ScenarioIndex   // per-scenario block-change history ([[scenariofresh]]) — the SCENARIO axis, built ONCE per build
+  scidx: ScenarioIndex
   ynodes: EvalNode[]
-  // the trunk remark tracks ([[remark-teeth]]), keyed (node, scenario) — loaded ONCE per board/proof build
-  // and reused for every node, so the fold never re-reads the issue store per node.
   remarks: Map<string, RemarkTrack>
 }
 
-// build the shared context with ONE eval-file walk, reusing the caller's already-computed specs + the two
-// HEAD-keyed git indices (drift for the code axis, history for the rename-safe scenario axis — both warm
-// hits, loadSpecs already derived them). The remark tracks are the fourth, non-git freshness input
-// ([[remark-teeth]]); a caller that omits them gets a live load, so a bare evalTimeline still has teeth.
 export async function evalContext(
   root: string,
   specs: Awaited<ReturnType<typeof loadSpecs>>,
   idx: DriftIndex,
   hidx: HistoryIndex,
   remarks?: Map<string, RemarkTrack>,
-  ynodes?: EvalNode[],   // the hot board build precomputes these off the event loop (evalNodesAsync); a bare caller walks sync
+  ynodes?: EvalNode[],
 ): Promise<EvalContext> {
   const nodes = ynodes ?? evalNodes(root)
   const scidx = await scenarioIndex(root, nodes.map((n) => n.evalPath))
@@ -144,21 +95,14 @@ export async function evalContext(
 
 export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalTimeline> {
   const root = ctx?.root ?? repoRoot()
-  // short-circuit a non-measurable node on the (short) eval-file walk — the board attaches `evals` to every node, so
-  // this is the common case and must stay cheap (a list the size of the few measurable nodes, not the whole tree).
   const ynode = (ctx?.ynodes ?? evalNodes(root)).find((n) => n.id === id)
   if (!ynode) return { node: id, hasEvalFile: false, scenarios: [], readings: [], retractions: [], dangling: [] }
-  // the governed `code:` files are the freshness CODE axis; read them from the canonical spec loader so a
-  // reparent/rename is seen the same way `spex spec lint` and `spex eval add` see it (joined by directory).
   const specs = ctx?.specs ?? await loadSpecs()
-  const codeFiles = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.code ?? []
+  const codeEntries = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.codeEntries ?? []
   const idx = ctx?.idx ?? await driftIndex(root)
   const hidx = ctx?.hidx ?? await historyIndex(root)
-  // the SCENARIO axis: per-scenario block-change history, built once per HEAD (cached). A bare call builds it
-  // for the WHOLE measurable set (not just this node) so the shared HEAD-keyed cache is complete for later callers.
   const scidx = ctx?.scidx ?? await scenarioIndex(root, (ctx?.ynodes ?? evalNodes(root)).map((n) => n.evalPath))
-  const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))   // join each reading to its scenario's expected + code
-  // the trunk remark track per scenario ([[remark-teeth]]) — the non-git freshness input, fed to the teeth.
+  const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))
   const tracks = ctx?.remarks ?? loadEvalRemarkTracks()
   const remarksFor = (scenario: string): RemarkTrack['remarks'] => tracks.get(trackKey(id, scenario))?.remarks ?? []
   const threadFor = (scenario: string): Issue | undefined => tracks.get(trackKey(id, scenario))?.thread
@@ -167,36 +111,20 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     ...(s.tags?.length ? { tags: s.tags } : {}), ...(s.test ? { test: s.test } : {}),
     ...(s.code?.length ? { code: s.code } : {}),
   }))
-  // one raw sidecar read: the effective readings feed the scoreboard rows below; the retraction events ride
-  // along as the undo trace (newest-first, like the readings), the human-ok events as the sign-off overlay.
   const { readings: rawReadings, retractions, oks } = readSidecar(ynode.sidecarPath)
-  // the off-history content fallback ([[eval-core]]): fed to both git axes so a rebased/folded-away
-  // anchor with byte-identical governed content reads fresh. An in-history reading never probes.
   const probe = contentProbeFor(root)
   const anchors = anchorProbeFor(root, idx)
   const readings: EvalEntry[] = []
   for (const r of applyRetractions(rawReadings, retractions)) {
-    // a scenario's own `code` is its freshness code axis when it declares one; else the whole node's list.
     const sc = byName.get(r.scenario)
-    // the teeth feed the WHOLE scenario track against THIS reading — an unresolved (or not-yet-out-run)
-    // remark makes it remark-stale (T1). Display attachment (which reading each remark pins to) is a separate
-    // read-time overlay below; freshness never depends on that pin.
-    const cf = sc?.code?.length ? sc.code : codeFiles
-    // an entry may be anchored (`path#symbol`); every PATH consumer below reads base paths, the narrowing
-    // reads the folded selectors ([[eval-core]]).
-    const axis = scenarioCodeAxis(sc?.code, codeFiles)
+    const axis = scenarioCodeAxis(sc?.code, codeEntries)
     if (!commitReachable(idx, r.codeSha)) await probe.prime?.(r.codeSha, axis.paths, ynode.evalPath)
     await anchors.prime?.(r.codeSha, axis.entries)
-    const axes = staleAxes(r, cf, ynode.evalPath, idx, scidx,
+    const axes = staleAxes(r, axis.entries, ynode.evalPath, idx, scidx,
       remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc, anchors)
-    // when the code axis is stale, explain it: which of THIS reading's governed files moved, by how many commits.
-    const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, cf, probe) : []
-    // the reading's evidence list, each entry resolved to its live blob state; the primary (video-first, else
-    // first) drives the scalar compat fields for single-evidence consumers.
+    const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, axis.entries, probe) : []
     const evidence: EvidenceView[] = evidenceOf(r).map((e) => ({ hash: e.hash, kind: e.kind, state: hasBlob(e.hash) ? 'present' : 'miss' }))
     const primary = evidence.find((e) => e.kind === 'video') ?? evidence[0]
-    // the sign-off join ([[human-ok]]): the ok binds by exact (scenario, ts), so only the very reading the
-    // human blessed carries it — a newer or retract-revealed reading reads unblessed.
     const okRow = humanOkFor(oks, r.scenario, r.ts)
     readings.push({
       scenario: r.scenario,
@@ -218,21 +146,13 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       ...(okRow ? { humanOk: { by: okRow.by, ts: okRow.ts } } : {}),
     })
   }
-  readings.reverse()   // newest-first
-  // R2 display overlay ([[remark-teeth]]): pin each remark to the reading it JUDGED (targetCodeSha match),
-  // else the scenario's latest reading (first in newest-first order) — a dangling target never HIDES the
-  // remark. A track whose SCENARIO no reading joins (renamed/deleted) has no reading to attach to, so it
-  // becomes a synthetic DANGLING row at node level (directive 5) instead of vanishing — visible, its remarks
-  // resolvable/retractable via their refs, and ageing nothing (there is no reading for the teeth to stale).
+  readings.reverse()
   const declared = new Set(ynode.scenarios.map((s) => s.name))
   const dangling: DanglingTrack[] = []
   for (const [, track] of tracks) {
     if (track.node !== id || !track.remarks.length) continue
     const rows = readings.filter((r) => r.scenario === track.scenario)
     if (!rows.length) {
-      // no reading joins this track. If the scenario is still DECLARED it is just a blind spot (unmeasured),
-      // not orphaned — its remarks wait for a reading. Only a scenario that is BOTH gone from eval.md AND
-      // has no reading is truly dangling (renamed/deleted), and that is the one we surface at node level.
       if (!declared.has(track.scenario)) {
         dangling.push({
           scenario: track.scenario, threadId: track.threadId, thread: track.thread,
@@ -264,11 +184,6 @@ export function readBlobByHash(hash: string, dir?: string): BlobResult {
   return { ok: true, bytes, mime: sniffBlobMime(bytes) }
 }
 
-// PNG/JPEG/GIF/WebP cover every screenshot (a manual --image); MP4/WebM cover a recorded clip (--video), so
-// the blob route serves it with a playable Content-Type. Text bytes (no NUL, no known header) split by
-// CONTENT ([[evidence-kind-taxonomy]]): a structured export (JSON) sniffs to application/json — so the
-// `data` renderer knows to validate/pretty-print it — while free-form terminal text stays text/plain;
-// anything else falls back to a generic binary type so it still downloads rather than being mislabeled.
 export function sniffBlobMime(b: Buffer): string {
   if (b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png'
   if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg'

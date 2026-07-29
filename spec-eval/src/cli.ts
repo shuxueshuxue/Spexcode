@@ -160,7 +160,7 @@ async function scan(args: string[] = []): Promise<number> {
         // ONE resolution of the axis: base paths for every path consumer (existence, changed-scan selection,
         // drift display), folded selectors for the narrowing. A raw `path#symbol` matches no real file, so
         // reading it as a path would report a ghost and drop the scenario out of --changed selection.
-        const axis = scenarioCodeAxis(sc.code, s.code)
+        const axis = scenarioCodeAxis(sc.code, s.codeEntries)
         if (nodeSelected) {
           for (const [field, paths] of [['code', axis.paths], ['related', parseRelation(sc.related ?? [], 'related').entries.map((e) => e.path)]] as const) {
             const ghosts = paths.filter((p) => !existsSync(join(root, p)))
@@ -194,7 +194,7 @@ async function scan(args: string[] = []): Promise<number> {
         const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
         if (!commitReachable(idx, r.codeSha)) await probe.prime?.(r.codeSha, codeFiles, y.evalPath)
         await anchors.prime?.(r.codeSha, axis.entries)
-        const axes = staleAxes(r, sc.code?.length ? sc.code : s.code, y.evalPath, idx, scidx, remSignals, probe, sc, anchors)
+        const axes = staleAxes(r, axis.entries, y.evalPath, idx, scidx, remSignals, probe, sc, anchors)
         if (axes.length) {
           staleScores++
           // a remark-stale scenario is unlocked by a second-party resolve, then a fresh reading; the git axes

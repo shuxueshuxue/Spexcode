@@ -1,16 +1,3 @@
-// @@@ gateway auth - the ONE authorization mechanism of the multi-project gateway ([[gateway-hub]]).
-// Everything about passwords and visitors lives HERE, at the gateway: the project backends stay loopback
-// internal services that never see a credential, a cookie, or a visitor identity. Two signed scopes only:
-// an ADMIN session grants /projects (management) plus every /p/:projectId route; a PROJECT session grants
-// exactly its own /p/:projectId route. A project with no configured password is open; with no admin
-// password, loopback may manage implicitly while non-loopback /projects stays locked.
-//
-// Secrets discipline: password VERIFIERS (scrypt, salted) live only in the per-user private store
-// (~/.spexcode/gateway/auth.json, 0600) — never in a repo, never in a backend record, never plaintext.
-// Session tokens are HMAC-signed claims under a random per-user secret, so they survive a gateway restart
-// with no server-side session table, verified in constant time. Each verifier carries a random `gen` that
-// rotates on every set/clear and is embedded in the tokens it authenticates — changing or clearing a
-// password instantly invalidates every session it minted.
 import { createHmac, createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'

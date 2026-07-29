@@ -2,11 +2,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { sessionRuntimeBlock } from './runtime-guard.js'
 
-// @@@ platform-support guard ([[platform-support]]) - the session runtime needs a POSIX host; when its
-// load-bearing primitive (tmux) is absent, the gate must print ONE actionable line pointing at the fix
-// instead of letting a cryptic downstream ENOENT be the user's first signal. `sessionRuntimeBlock` is the
-// pure core, so the message contract is asserted without spawning tmux or exiting the process.
-
 test('runtime OK (tmux present) → no block, whatever the platform', () => {
   assert.equal(sessionRuntimeBlock({ hasTmux: true, platform: 'win32' }), null)
   assert.equal(sessionRuntimeBlock({ hasTmux: true, platform: 'linux' }), null)

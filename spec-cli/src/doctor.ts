@@ -1,8 +1,3 @@
-// @@@ spex doctor - the opt-in, read-only project DIAGNOSIS surface ([[doctor]]). Bare doctor composes
-// spec-health findings with the delivery audit: when a user launches their OWN agent with no SpexCode
-// process in the launch, the workflow reaches it only through the files materialize() writes. The audit
-// loops the same HARNESSES adapter materialize uses and catches missing delivery or duplicate discovery.
-// `--contract` and `--conflicts` remain focused representations of that same diagnosis.
 import { existsSync, readFileSync, readdirSync, accessSync, constants } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -179,8 +174,6 @@ function healthReport(findings: HealthFinding[], adopted: boolean): string[] {
   return lines
 }
 
-// @@@ contractText - the layer-2 payload: the composed `surface:system` bodies, the SAME join materialize()
-// folds into each harness's contract file — so a BYOA agent reads byte-identical guidance.
 function contractText(): { names: string[]; body: string } {
   let cfgs: { name: string; body: string }[] = []
   try { cfgs = loadSystemConfig().map((c) => ({ name: c.name, body: c.body })) } catch { /* tree-less cwd → empty */ }
@@ -222,15 +215,6 @@ function manifestScripts(text: string): string[] {
   }
   return [...out]
 }
-
-// @@@ double-delivery - the SILENT conflict on the OTHER axis from under-delivery: not "did the contract
-// land?" but "did it land TWICE?". A self-launched agent can be reached by BOTH the loose native delivery
-// materialize() writes into the worktree AND a `spexcode` plugin bundle the user installed independently
-// (Claude marketplace) or a stale leftover — doubling every hook (dispatch.sh fires per copy), shadowing
-// skills, confusing the `/` menu. We never sniff payload: every count is by IDENTITY STAMP — a shim's
-// `dispatch.sh` command line (the hook-routing stamp, the same one cleanHarness keys on), a plugin.json
-// `name:"spexcode"` (the bundle stamp), and our own materialized skill NAMES. Per harness we count, on three
-// channels, how many spexcode-stamped copies reach the agent; any channel >1 is a double-delivery conflict.
 
 // a plugin bundle dir found under a harness's plugins root, carrying a spexcode stamp.
 type Bundle = { dir: string; name: string; scope: string; hooksToDispatch: boolean; skillsDir: string }

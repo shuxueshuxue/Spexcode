@@ -17,27 +17,6 @@ export type MaterializedArtifact = {
 }
 export type MaterializeResult = { contentHash: string; planted: MaterializedArtifact[] }
 
-// @@@ materialize - the materialize step (≈0.85s), anchored on GIT-NATIVE events only ([[commit-surgery]]):
-// spex verbs (init/materialize), session-worktree creation, and the planted git hooks (pre-commit,
-// post-checkout, post-merge) — never a harness event; the harness is a READER of the materialized files, not
-// a trigger. It turns the spec tree's surface nodes into the flat artifacts each consumer reads
-// cheaply, so a USER-self-launched claude/codex (no SpexCode process in the launch) gets the whole system via
-// harness-auto-discovered files: (1) the hook MANIFEST (our dispatcher reads it), (2) the CONTRACT — the
-// surface:system plugin bodies (in name order) — written WHOLE into each
-// harness's contract file(s), (3) the thin SHIMS (every event → dispatch.sh), (4) the per-harness TRUST
-// (Codex's deterministic trusted_hash; Claude none). EVERY harness-specific fact is owned by the
-// [[harness-adapter]] (harness.ts) — this file just loops over HARNESSES.
-//
-// THE FORGETTING LAW ([[harness-delivery]]): materialize(P₂) ∘ materialize(P₁) = materialize(P₂) — one pass
-// under the current policy fully forgets every prior policy's artifacts; idempotence is the special case
-// P₂ = P₁, and dematerialize (= materialize(∅), what `spex uninstall` builds on) is the empty policy. The
-// implementation is ERASE-THEN-ASSERT over a CLOSED set of landing points: each is first erased
-// unconditionally by its IDENTITY STAMP (sentinel blocks, the shim's dispatch.sh command line, the generated
-// mark on skills/agents, the filter config namespace, the skip-worktree bit), then rewritten per the current
-// policy (possibly to nothing). There are no policy-pair branches. The one cross-tree migration receipt below
-// preserves old common ignore entries until every registered tree owns its local projection; it never reads or
-// reconstructs a sibling policy.
-
 const PKG = fileURLToPath(new URL('..', import.meta.url))                 // installed spec-cli root
 const DISPATCH = join(PKG, 'hooks', 'dispatch.sh')
 // the ONE spex entry: the launcher (bin/spex.mjs), never a raw `tsx cli.ts` pair — the launcher owns tsx
@@ -62,14 +41,6 @@ export function contentHash(proj: string): string {
   } catch { return '' }
 }
 
-// @@@ footprint kinds ([[residence]]) - the vote axis is RETIRED: materialized artifacts carry no facts, so
-// they are NEVER tracked — there is exactly ONE residence behavior, not three. `.spec` + `spexcode.json` are ALWAYS
-// tracked (git is the database — no knob can untrack them); machine facts (shims, spexcode.local.json),
-// run residue (.worktrees/) stays in the common exclude; tree-selected artifacts are hidden by a managed
-// working .gitignore block whose tracked bytes stay pristine through the content filter. A contract file the host TRACKS — or one the user has begun
-// writing THEIR OWN prose into — is covered by the clean/smudge content filter ([[content-filter]]). An
-// environment without the generator (a teammate's clone, CI, a cloud agent) runs `spex materialize` in its
-// setup step — there is no committed-artifact delivery mode.
 export function retiredAxisNotice(cfg: { render?: string; private?: boolean }): void {
   if (!cfg.render?.trim() && !cfg.private) return
   const field = cfg.render?.trim() ? `"render": "${cfg.render.trim()}"` : '"private": true'
@@ -123,12 +94,6 @@ function publishSelection(path: string, body: string): void {
   renameSync(prepared, path)
 }
 
-// @@@ contract kind detection ([[residence]]) - a contract file's residence is a LIVE CONTENT FACT, not
-// an install-time choice, re-judged on every materialize: TRACKED → filter domain; untracked + wholly ours
-// (nothing left after stripping our sentinel block) → exclude domain; untracked + HOST CONTENT present (the
-// user began writing their own prose into it) → neither hidden nor tracked-for-them: the exclude entry is
-// withheld (hiding user content would make their prose invisible to git — data-loss shaped) and the clean
-// filter is pre-armed so their eventual, entirely-their-own `git add` strips our block automatically.
 const SENTINEL_RE = /\n*<!-- spexcode:start -->[\s\S]*?<!-- spexcode:end -->\n*/
 export function stripSpexcodeBlock(text: string): string {
   const m = SENTINEL_RE.exec(text)
@@ -170,13 +135,6 @@ function sweepGeneratedAgents(dir: string | null): void {
   }
 }
 
-// @@@ dematerialize - materialize(∅): the ERASE phase, also the whole of a backout ([[spex-uninstall]] adds
-// only the global store + plugin sweep + optional git hooks on top). Every removal is gated on an identity
-// stamp, so it deletes ONLY what a materialize wrote — never the user's prose, settings, or any .spec data. Order
-// matters once: the managed blocks leave the WORKING contract files before the content filter's config goes
-// (edge ③ in [[content-filter]] — a block outliving its clean filter surfaces as an uncommitted change).
-// `arts` (live skill/agent node names) widens the sweep to pre-stamp legacy files; the GENERATED_MARK sweep
-// covers everything materialized since, including products of renamed/deleted nodes.
 function eraseTree(proj: string, arts: HarnessArtifacts, preserveProject: boolean): void {
   for (const h of HARNESSES) {
     // h.clean = the adapter's surgical inverse: contract block (sentinels, deleteIfEmpty), the dispatch.sh-

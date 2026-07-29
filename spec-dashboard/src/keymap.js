@@ -1,24 +1,4 @@
-// @@@ keymap.js - the ONE keyboard keymap registry: every board binding as data, not a literal scattered
-// through the keydown handler. Two readers project from this single table so they can never drift: App's
-// capture-phase handler DISPATCHES from it (via bindings.firesKey), and the help Legend RENDERS it. Add a
-// verb once here and both follow.
-//
-// The registry owns the BINDING (which physical key names an action), never the action's BEHAVIOR — the
-// handler bodies (chord buffer, focus-follow pan, scope-following cycle) stay in App.jsx. So this is a
-// name→keys map, not a re-implementation of the keys.
-//
-// Game-controller support is deliberately NOT here: it lives entirely OUTSIDE the browser as the
-// game-controller extension (its own package/repo), which maps the pad to the SAME keys this table names,
-// as REAL OS keystrokes — so it reaches the board (and OS-level facilities a synthetic in-page event never
-// could). The two are kept consistent BY HAND, on purpose: no runtime link, no sync.
-//
-// Scope: the BOARD layer (where rebinding matters). The node-info popup's internal pane-switch / scroll keys
-// are a fixed structural set handled literally in App.jsx and listed separately by the Legend.
-//
-//   - `keys`   default keyboard key(s) (KeyboardEvent.key values).
-//   - `rebind` false = structural (the relationship-walk nav, the n/d chords): shown in the UI, fixed.
-//   - `desc`   i18n key for the one-line description; rows sharing a desc render as ONE legend row (so
-//              up+down read as a single "move" line while staying two actions for dispatch).
+
 
 export const ACT = [
   // relationship walk — structural (the nav IS the tree-walk, not a remappable verb). The capitals make

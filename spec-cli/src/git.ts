@@ -1878,10 +1878,22 @@ export function pathRangeEvents(idx: DriftIndex, sinceHash: string, path: string
   })
 }
 
-export function driftPathWindow(idx: DriftIndex, sinceHash: string, path: string, nodeId?: string): DriftPathEvent[] | null {
+// @@@ eventsSince - THE meaning of "this path changed since <sha>", in one place. A commit touching `path`
+// lies in `sha..HEAD` exactly when it is NOT an ancestor of `sha` — true DAG reachability, wherever a
+// date-ordered log happens to place it. `null` is the honest third answer: the anchor commit is not reachable
+// (folded, rebased, cherry-picked away), so ancestry cannot testify at all and the caller must decide what to
+// do about that — the spec layer reports no window, the eval layer falls back to comparing content.
+// Callers add their OWN layer's decoration on top (ack cover is spec-only; the content probe is eval-only);
+// what none of them may do is restate the reachability rule, which is how it came to exist four times.
+export function eventsSince(idx: DriftIndex, sinceHash: string, path: string): DriftPathEvent[] | null {
   const base = ancestorsOf(idx, sinceHash)
   if (!base) return null
-  const events = pathEvents(idx, path).filter((event) => !inAncestors(idx, base, event.commit))
+  return pathEvents(idx, path).filter((event) => !inAncestors(idx, base, event.commit))
+}
+
+export function driftPathWindow(idx: DriftIndex, sinceHash: string, path: string, nodeId?: string): DriftPathEvent[] | null {
+  const events = eventsSince(idx, sinceHash, path)
+  if (!events) return null
   const cover = ackCoverFor(idx, sinceHash, nodeId)
   return events.filter((event) => !cover.some((a) => inAncestors(idx, a, event.commit))
       && !selfAckCovers(idx, sinceHash, event.commit, nodeId))

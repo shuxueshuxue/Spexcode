@@ -863,6 +863,7 @@ exec "${realGit}" "$@"
     await waitQuickly(() => existsSync(argvLog) && /^HANG /m.test(readFileSync(argvLog, 'utf8')),
       `the route-owned full never entered the controlled layout hold:\n${serverLog}`, 1_000)
     mark('route-owned full producer is held')
+    await waitForQuiet(eventNames, 500)
     const logBeforeClose = serverLog.length
     const framesBeforeClose = frames.length
 

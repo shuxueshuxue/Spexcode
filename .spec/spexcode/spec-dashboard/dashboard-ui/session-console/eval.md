@@ -51,12 +51,18 @@ scenarios:
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/command-box.e2e.mjs
     description: >-
-      Author a multi-line prompt in Command Box, force one dispatch failure, then restore the live control
-      channel and send successfully while observing the draft, surface, request count, and TUI.
+      Author a multi-line prompt in Command Box, force a public 502 dispatch failure, retry, then restore the
+      live control channel and send successfully while observing the draft, outcome surface, request count,
+      and TUI. Force the selected session's relaunch endpoint to return the public readiness refusal, retry it,
+      and inspect both desktop and phone list geometry.
     expected: >-
-      The failure leaves Command Box open with the complete draft and visible error. Success sends one atomic
-      control prompt, clears the draft, closes the box, and focuses xterm. Neither attempt types the prompt
-      character-by-character through the PTY.
+      The Command Box exposes sending then one visible 502 failure while retaining its complete draft and
+      delivery marker for retry; no left-list action alert appears. A successful retry reuses that marker,
+      sends one atomic control prompt, visibly acknowledges delivery in that same surface, then clears the
+      draft, closes the box, and focuses xterm. The public
+      `launch did not become ready; the session remains stopped and can be retried` refusal appears once in the
+      selected right-side relaunch panel, survives until retry, and never changes list geometry on desktop or
+      phone. Neither attempt types the prompt character-by-character through the PTY.
   - name: command-box-commands-mentions-and-files
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/command-box.e2e.mjs

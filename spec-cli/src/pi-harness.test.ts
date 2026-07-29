@@ -136,7 +136,7 @@ test('pi extension: a stdout decision:block JSON (the stop-gate shape — exit 2
   assert.equal(sent[0].text, expected)
 })
 
-test('pi extension: binds the rendezvous socket and speaks the reclaude protocol (reply → sendUserMessage, repaint → repaint-done)', async () => {
+test('pi extension: binds the rendezvous socket and accepts a reply poke', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'pi-ext-'))
   const sock = join(dir, 'rv.sock')
   const { factory } = await loadExtension(dir, 'exit 0')
@@ -147,14 +147,12 @@ test('pi extension: binds the rendezvous socket and speaks the reclaude protocol
     factory(api)
     // the server binds asynchronously; wait for the listener like liveness does
     for (let i = 0; i < 100 && !existsSync(sock); i++) await new Promise((r) => setTimeout(r, 10))
-    const answered = await new Promise<string>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const c = createConnection({ path: sock })
       c.on('error', reject)
-      c.on('connect', () => c.write(JSON.stringify({ type: 'reply', text: 'hello worker' }) + '\n' + JSON.stringify({ type: 'repaint' }) + '\n'))
-      let buf = ''
-      c.on('data', (d) => { buf += d.toString(); if (buf.includes('\n')) { c.destroy(); resolve(buf.trim()) } })
+      c.on('connect', () => c.end(JSON.stringify({ type: 'reply', text: 'hello worker', mid: 'mid-pi' }) + '\n', resolve))
     })
-    assert.equal(JSON.parse(answered).type, 'repaint-done', 'the repaint barrier answers — deliverViaRendezvous confirms parse')
+    await new Promise((resolve) => setTimeout(resolve, 10))
     assert.deepEqual(sent.map((s) => s.text), ['hello worker'], 'the reply landed as a user message')
     await handlers.get('session_shutdown')!({}, { })
     assert.ok(!existsSync(sock), 'shutdown unlinks the socket')

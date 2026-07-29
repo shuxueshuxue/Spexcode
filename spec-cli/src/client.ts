@@ -143,8 +143,8 @@ export async function clientCapture(id: string): Promise<CaptureResult> {
   return { ok: false, status: r.status, reason: (await r.text().catch(() => '')) || `status ${r.status}` }
 }
 
-// POST /api/sessions/:id/input {kind:"text"} — prompt dispatch (the backend routes it through the rendezvous
-// socket, socket-only + fail-loud; a non-accepted prompt comes back ok:false / HTTP 502).
+// POST /api/sessions/:id/input {kind:"text"} appends the prompt to the durable timeline, then best-effort
+// pokes the resolved adapter. HTTP failure means the append itself was refused.
 export async function clientSend(id: string, text: string, from?: string): Promise<DispatchResult> {
   await guarded('session send')
   // `from` = the sending agent's own session id; the recipient's log records the sender ([[session-timeline]]) only when

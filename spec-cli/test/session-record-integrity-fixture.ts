@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { codexAppServerPid, codexAppServerSock, rvSock } from '../src/harness.js'
 import { runtimeRoot } from '../src/layout.js'
@@ -22,6 +22,7 @@ const BASE = process.env.BASE || 'http://127.0.0.1:8787'
 const LAUNCHER = process.env.LAUNCHER || 'claude'
 const SPEX = process.env.SPEX_BIN || join(packageRoot, 'bin', 'spex.mjs')
 const DISPATCH = join(packageRoot, 'hooks', 'dispatch.sh')
+const DASHBOARD_BASE = process.env.DASHBOARD_BASE || ''
 const SESSION_PROMPT = `record integrity fixture ${process.pid}-${Date.now()}`
 
 // The one payload every entry is measured with: a double quote (the reported corruption), a backslash (the
@@ -164,6 +165,32 @@ async function readSession(id: string): Promise<any> {
   const response = await jsonRequest(`/api/sessions/${id}`)
   assert.equal(response.status, 200, `GET /api/sessions/${id} failed: ${response.status} ${response.text}`)
   return response.body
+}
+
+async function openDashboardQuarantine(id: string, witness: { adapter: string; tmux: string; worktree: string; branch: string }) {
+  if (!DASHBOARD_BASE) return null
+  const playwright = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
+  const chromiumPath = process.env.SPEXCODE_CHROMIUM_PATH || process.env.CHROMIUM || '/snap/bin/chromium'
+  const { chromium } = await import(pathToFileURL(playwright).href)
+  const browser = await chromium.launch({ executablePath: chromiumPath, headless: true, args: ['--no-sandbox'] })
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+  const page = await context.newPage()
+  await page.goto(`${DASHBOARD_BASE}/#/sessions/${id}`, { waitUntil: 'domcontentloaded' })
+  const row = page.locator(`.si-item[data-sid="${id}"]`)
+  await row.waitFor({ state: 'visible', timeout: 20_000 })
+  await row.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /quarantine record/i }).click()
+  const dialog = page.getByRole('dialog', { name: /quarantine unreadable record/i })
+  await dialog.getByLabel('adapter').fill(witness.adapter)
+  await dialog.getByLabel('tmux session').fill(witness.tmux)
+  await dialog.getByLabel('worktree path').fill(witness.worktree)
+  await dialog.getByLabel('branch').fill(witness.branch)
+  return {
+    submit: async () => { await dialog.getByRole('button', { name: 'quarantine', exact: true }).click() },
+    waitRefusal: async () => page.getByRole('alert').waitFor({ state: 'visible', timeout: 10_000 }),
+    waitRemoved: async () => row.waitFor({ state: 'hidden', timeout: 20_000 }),
+    close: async () => { await context.close(); await browser.close() },
+  }
 }
 
 // ---- phase 2: a record nothing can parse ------------------------------------------------------------
@@ -347,7 +374,109 @@ async function duplicateLoadedThreadIsBlocked(home: string, project: string): Pr
   console.log(`PASS: duplicate records for one loaded thread block public stop and close without signals or deletion (${thread})`)
 }
 
-// ---- phase 3: a session whose work merged and whose worktree AND branch are both gone ----------------
+// ---- phase 3: exact-proof quarantine is the record-only recovery -------------------------------------
+// This is deliberately a fresh incident row, not a repaired JSON object. The control must prove the supplied
+// residues are gone before it moves the opaque bytes, then ordinary projections must forget the active row.
+async function corruptRecordCanBeQuarantined(home: string, project: string): Promise<void> {
+  const incident = readFileSync(join(packageRoot, 'test', 'fixtures', 'corrupt-session-record.json'), 'utf8')
+  const cid = JSON.parse(incident.split('\n')[1].replace(/^\s*"session_id":\s*/, '').replace(/,$/, ''))
+  const worktree = join(dirname(project), `quarantine-record-residue-${process.pid}`)
+  const branch = `node/quarantine-record-residue-${process.pid}`
+  const rec = await recordPath(home, project, cid)
+  const sample = incident
+    .replace('/tmp/spexcode-fixture-worktree/corrupt-record-0000', worktree)
+    .replace('node/corrupt-record-fixture-0000', branch)
+  mkdirSync(dirname(rec), { recursive: true })
+  writeFileSync(rec, sample)
+  const original = readFileSync(rec, 'utf8')
+  const witness = ['--adapter', 'claude', '--tmux', cid, '--worktree', worktree, '--branch', branch]
+  const agent = spawn(process.execPath, ['-e', 'setTimeout(() => process.exit(0), 120000)', cid], { stdio: 'ignore' })
+  let agentStart: string | null = null
+  for (let i = 0; i < 50 && !(agentStart = processStartToken(agent.pid!)); i++) await sleep(20)
+  assert.ok(agentStart, 'quarantine control acquired an exact live agent identity')
+  writeFileSync(join(dirname(rec), 'agent.pid'), `${agent.pid}\n`)
+  const cleanupAgent = () => {
+    if (agent.pid && processStartToken(agent.pid) === agentStart) {
+      try { process.kill(agent.pid, 'SIGTERM') } catch { /* already gone */ }
+    }
+  }
+  let dashboard: Awaited<ReturnType<typeof openDashboardQuarantine>> = null
+  try {
+    dashboard = await openDashboardQuarantine(cid, { adapter: 'claude', tmux: cid, worktree, branch })
+    if (dashboard) {
+      await dashboard.submit()
+      await dashboard.waitRefusal()
+    }
+    const liveRefusal = await spex(project, 'session', 'quarantine', cid, ...witness)
+      .then(() => '')
+      .catch((error) => `${error.stdout ?? ''}${error.stderr ?? ''}${error.message ?? ''}`)
+    assert.match(liveRefusal, /agent.*live|live.*agent|process.*live/i,
+      `a live claimed leaf must refuse quarantine loudly: ${liveRefusal}`)
+    assert.equal(readFileSync(rec, 'utf8'), original, 'live-control refusal preserves the opaque active record')
+
+    cleanupAgent()
+    for (let i = 0; i < 50 && processStartToken(agent.pid!) === agentStart; i++) await sleep(20)
+    assert.notEqual(processStartToken(agent.pid!), agentStart, 'fixture removed the exact claimed agent before recovery')
+    rmSync(join(dirname(rec), 'agent.pid'), { force: true })
+
+    const refused = async (label: string, pattern: RegExp) => {
+      const output = await spex(project, 'session', 'quarantine', cid, ...witness)
+        .then(() => '')
+        .catch((error) => `${error.stdout ?? ''}${error.stderr ?? ''}${error.message ?? ''}`)
+      assert.match(output, pattern, `${label} rejects quarantine loudly: ${output}`)
+      assert.equal(readFileSync(rec, 'utf8'), original, `${label} leaves the active opaque record byte-identical`)
+    }
+    writeFileSync(join(dirname(rec), 'agent.pid'), 'not-a-pid\n')
+    await refused('malformed leaf identity', /leaf PID artifact is malformed/i)
+    rmSync(join(dirname(rec), 'agent.pid'), { force: true })
+    const tmux = process.env.SPEXCODE_TMUX!
+    await pexec('tmux', ['-L', tmux, 'new-session', '-d', '-s', cid, 'sleep 300'])
+    await refused('live tmux session', /tmux session .* is live/i)
+    await pexec('tmux', ['-L', tmux, 'kill-session', '-t', cid])
+    const rendezvous = createServer()
+    await new Promise<void>((resolve, reject) => { rendezvous.once('error', reject); rendezvous.listen(rvSock(cid), resolve) })
+    await refused('live rendezvous transport', /rendezvous transport is live/i)
+    await new Promise<void>((resolve) => rendezvous.close(() => resolve()))
+    mkdirSync(worktree, { recursive: true })
+    await refused('live worktree', /witnessed worktree .* is live/i)
+    rmSync(worktree, { recursive: true, force: true })
+    await pexec('git', ['-C', project, 'branch', branch])
+    await refused('live branch', /witnessed branch .* is live/i)
+    await pexec('git', ['-C', project, 'branch', '-D', branch])
+
+    if (dashboard) {
+      await dashboard.submit()
+      await dashboard.waitRemoved()
+    } else {
+      const quarantined = await spex(project, 'session', 'quarantine', cid, ...witness)
+      assert.match(quarantined, /quarantined/i, `CLI exact-proof quarantine succeeds: ${quarantined}`)
+    }
+    assert.equal(existsSync(rec), false, 'only the active session record left its enumeration path')
+    const listed = await jsonRequest('/api/sessions')
+    assert.equal(listed.status, 200, `active API list remains readable: ${listed.text}`)
+    assert.equal((listed.body as any[]).some((row) => row.id === cid), false, 'quarantined corrupt row leaves the active API projection')
+    const graph = await jsonRequest('/api/graph')
+    assert.equal(graph.status, 200, `dashboard graph remains readable after quarantine: ${graph.text}`)
+    assert.equal((graph.body?.sessions ?? []).some((row: any) => row.id === cid), false, 'dashboard projection drops the quarantined row')
+    const resources = await jsonRequest('/api/resources')
+    assert.equal(resources.status, 200, `resource report recovers after active corrupt row removal: ${resources.text}`)
+    assert.equal((resources.body?.owners ?? []).some((owner: any) => owner.id === cid), false, 'resource projection has no quarantined corrupt owner')
+
+    const restored = await spex(project, 'session', 'quarantine', cid, '--restore')
+    assert.match(restored, /restored quarantined record/i, `CLI restore returns the opaque record: ${restored}`)
+    assert.equal(readFileSync(rec, 'utf8'), original, 'restore is byte-exact, not a record repair')
+    assert.equal((await readSession(cid)).status, 'corrupt', 'restore returns the diagnosable corrupt dashboard row')
+    console.log(`PASS: exact-proof quarantine removes and restores only opaque corrupt record bytes (${cid})`)
+  } finally {
+    await dashboard?.close()
+    cleanupAgent()
+    rmSync(dirname(rec), { recursive: true, force: true })
+    rmSync(worktree, { recursive: true, force: true })
+    await pexec('git', ['-C', project, 'branch', '-D', branch]).catch(() => null)
+  }
+}
+
+// ---- phase 4: a session whose work merged and whose worktree AND branch are both gone ----------------
 // Nothing may bring it back: not the hooks' state writers, not resume. The reported failure had a hook
 // rewrite a retired session into a fresh `idle` record and regenerate a launch script for it.
 async function retiredSessionNeverRevives(home: string, project: string): Promise<void> {
@@ -392,7 +521,7 @@ async function retiredSessionNeverRevives(home: string, project: string): Promis
   console.log(`PASS: a retired session refuses every revival path and stays closable (${id})`)
 }
 
-// PHASE selects one scenario's measurement (`notes` | `corrupt` | `retired`), so each scenario files its own
+// PHASE selects one scenario's measurement (`notes` | `corrupt` | `quarantine` | `retired`), so each scenario files its own
 // transcript; unset runs all three in one pass, which is the regression form.
 const PHASE = process.env.PHASE || 'all'
 const runs = (name: string): boolean => PHASE === 'all' || PHASE === name
@@ -496,10 +625,11 @@ async function main(): Promise<void> {
     await corruptRecordIsDiagnosable(home!, project)
     await duplicateLoadedThreadIsBlocked(home!, project)
   }
+  if (runs('quarantine')) await corruptRecordCanBeQuarantined(home!, project)
   if (runs('retired')) await retiredSessionNeverRevives(home!, project)
   if (runs('resume')) await ordinaryStopResumeStillWorks(home!)
   // one summary line whatever ran, so a single-phase measurement is as self-contained as the whole regression.
-  console.log(`PASS: session record integrity — ${PHASE === 'all' ? 'notes round-trip, corrupt is diagnosable, retired never revives, ordinary resume intact' : PHASE}`)
+  console.log(`PASS: session record integrity — ${PHASE === 'all' ? 'notes round-trip, corrupt is diagnosable/quarantinable, retired never revives, ordinary resume intact' : PHASE}`)
 }
 
 main().catch((error) => { console.error('FAIL:', error); process.exit(1) })

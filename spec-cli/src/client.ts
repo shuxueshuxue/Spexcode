@@ -276,6 +276,27 @@ export async function clientClose(id: string): Promise<boolean> {
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
+export async function clientQuarantine(
+  id: string,
+  witness: { adapter: string; thread: string | null; tmux: string; worktree: string; branch: string },
+): Promise<{ id: string; bundle: string; sha256: string; observedAt: string }> {
+  await guarded('session quarantine')
+  const r = await apiFetch(`/api/sessions/${seg(id)}/quarantine`, post(witness))
+  if (!r.ok) throw new BackendError(`backend refused to quarantine ${id}: ${await r.text()}`, r.status)
+  const body = await r.json() as { ok?: boolean; id?: string; bundle?: string; sha256?: string; observedAt?: string }
+  if (!body.ok || !body.id || !body.bundle || !body.sha256 || !body.observedAt) throw new BackendError(`backend returned an invalid quarantine result for ${id}`, r.status)
+  return { id: body.id, bundle: body.bundle, sha256: body.sha256, observedAt: body.observedAt }
+}
+
+export async function clientRestoreQuarantine(id: string): Promise<{ id: string; bundle: string; sha256: string; observedAt: string }> {
+  await guarded('session quarantine')
+  const r = await apiFetch(`/api/sessions/${seg(id)}/quarantine/restore`, post({}))
+  if (!r.ok) throw new BackendError(`backend refused to restore ${id}: ${await r.text()}`, r.status)
+  const body = await r.json() as { ok?: boolean; id?: string; bundle?: string; sha256?: string; observedAt?: string }
+  if (!body.ok || !body.id || !body.bundle || !body.sha256 || !body.observedAt) throw new BackendError(`backend returned an invalid quarantine restore for ${id}`, r.status)
+  return { id: body.id, bundle: body.bundle, sha256: body.sha256, observedAt: body.observedAt }
+}
+
 // POST /api/sessions/:id/archive — cold-archive the session ([[archive]]). The legacy on=false spelling is a
 // signpost to the same resume transition; it never performs a record-only unarchive.
 export async function clientArchive(id: string, on = true): Promise<boolean> {

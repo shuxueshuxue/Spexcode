@@ -216,6 +216,17 @@ scenarios:
       Selecting one mounts exactly its conversation and performs its bounded reads; switching away stops its
       refresh timer without discarding the rendered history, and returning resumes from that history without a
       duplicate mount storm. Live pane-backed terminals keep their existing warm sockets.
+  - name: corrupt-record-quarantine-context-control
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Open a real corrupt governed row in Chromium, open its right-click action menu, fill the exact
+      adapter/thread/tmux/worktree/branch witness in the quarantine modal, first submit with a live claimed
+      resource and then after the real absence proof is true.
+    expected: >-
+      Only a corrupt row exposes Quarantine. The live/unknown control refusal remains visible through the
+      shared action-error surface and preserves the row. A verified submission removes the row from the active
+      dashboard without inventing a lifecycle, while the matching API resource report has no corrupt owner.
+      Restore returns the same corrupt row rather than a runtime or readable replacement record.
 ---
 
 Measure these scenarios through the running dashboard and real sessions. Dynamic focus, terminal input,

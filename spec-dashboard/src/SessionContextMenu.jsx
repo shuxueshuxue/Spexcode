@@ -12,9 +12,11 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
   const [closing, setClosing] = useState(null)     // the session whose close-confirm prompt is open | null
+  const [quarantining, setQuarantining] = useState(null) // corrupt row whose opaque record needs witnessed quarantine
   const [attaching, setAttaching] = useState(null) // the session whose attach modal is open | null ([[attach-menu]])
   const [tmuxSocket, setTmuxSocket] = useState('spexcode') // the private tmux server's -L label; the default until settings load
   const [value, setValue] = useState('')
+  const [witness, setWitness] = useState({ adapter: 'claude', thread: '', tmux: '', worktree: '', branch: '' })
   const [busy, setBusy] = useState(false)
   const inputRef = useRef(null)
 
@@ -36,6 +38,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
   useEscLayer(!!menu, onClose)
   useEscLayer(!!renaming, () => setRenaming(null))
   useEscLayer(!!closing, () => setClosing(null))
+  useEscLayer(!!quarantining, () => setQuarantining(null))
   // attach's own Esc layer lives inside SessionAttach (it owns the modal); nothing to peel here.
 
   // select the prefilled name when the prompt opens, so a human can just type the replacement.
@@ -94,6 +97,39 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
     onClose()
   }
 
+  const startQuarantine = (e) => {
+    e.stopPropagation()
+    const { id } = menu.session
+    setWitness({ adapter: 'claude', thread: '', tmux: id, worktree: '', branch: '' })
+    setQuarantining(menu.session)
+    onClose()
+  }
+
+  const updateWitness = (key) => (e) => setWitness((current) => ({ ...current, [key]: e.target.value }))
+
+  const confirmQuarantine = async (e) => {
+    e.preventDefault()
+    if (busy || !quarantining) return
+    setBusy(true)
+    try {
+      const response = await apiFetch(`/api/sessions/${quarantining.id}/quarantine`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...witness, thread: witness.thread.trim() || null }),
+      })
+      const body = await response.json().catch(() => null)
+      if (!response.ok || body?.ok === false) {
+        onError?.(body?.error || `session quarantine refused (HTTP ${response.status})`)
+        return
+      }
+      setQuarantining(null)
+    } catch (error) {
+      onError?.(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+      onChanged?.()
+    }
+  }
+
   // confirmed close: dismiss the confirm AT ONCE and fire the worktree removal in the BACKGROUND — it's
   // seconds of real work (git worktree remove + killing the agent/tmux), and (like New Session's launch)
   // the human must never watch a frozen, disabled dialog wait it out. The board reload when it lands drops
@@ -143,6 +179,9 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
                 {t(menu.session.archived ? 'sessionWindow.resume' : 'sessionWindow.archive')}
               </ContextMenuItem>
             )}
+            {menu.session.status === 'corrupt' && (
+              <ContextMenuItem icon="archive" onClick={startQuarantine}>{t('sessionWindow.quarantine')}</ContextMenuItem>
+            )}
           </ContextMenuGroup>
           <ContextMenuSeparator />
           <ContextMenuGroup>
@@ -186,6 +225,26 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
               <button type="button" className="sess-rename-btn danger" onClick={confirmClose}>{t('sessionWindow.close')}</button>
             </div>
           </div>
+        </Modal>
+      )}
+      {quarantining && (
+        <Modal
+          title={t('sessionWindow.quarantineTitle')}
+          closeLabel={t('common.close')}
+          className="sess-rename-modal"
+          onClose={() => setQuarantining(null)}
+        >
+          <form className="sess-rename" onSubmit={confirmQuarantine}>
+            <label><span>{t('sessionWindow.quarantineAdapter')}</span><input className="sess-rename-input" value={witness.adapter} onChange={updateWitness('adapter')} autoFocus /></label>
+            <label><span>{t('sessionWindow.quarantineThread')}</span><input className="sess-rename-input" value={witness.thread} onChange={updateWitness('thread')} /></label>
+            <label><span>{t('sessionWindow.quarantineTmux')}</span><input className="sess-rename-input" value={witness.tmux} onChange={updateWitness('tmux')} /></label>
+            <label><span>{t('sessionWindow.quarantineWorktree')}</span><input className="sess-rename-input" value={witness.worktree} onChange={updateWitness('worktree')} /></label>
+            <label><span>{t('sessionWindow.quarantineBranch')}</span><input className="sess-rename-input" value={witness.branch} onChange={updateWitness('branch')} /></label>
+            <div className="sess-rename-actions">
+              <button type="button" className="sess-rename-btn" onClick={() => setQuarantining(null)}>{t('common.cancel')}</button>
+              <button type="submit" className="sess-rename-btn" disabled={busy}>{t('sessionWindow.quarantineConfirm')}</button>
+            </div>
+          </form>
         </Modal>
       )}
     </>

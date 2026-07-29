@@ -231,7 +231,7 @@ session concern; spec-awareness is universal.
   git goes through the shared `git()` helper, so a stray exported git dir can't misdirect repo discovery.
 
 `asking` resumes only on a human prompt (unlike self-resuming `parked`); `idle` is its inferred opposite,
-a stop with no declaration. Surfacing an `asking` is the manager's job (see [[session-edges]]). The lifecycle
+a stop with no declaration. Surfacing an `asking` is the manager's job (see [[session-follow]]). The lifecycle
 writers live in `sessions.ts`; state's only stake in the shared `cli.ts` hub is the `spex session`
 declaration commands and the `spex ls` table — a sibling verb's churn there, like the `eval` usage line
 rewritten in the measure-and-score reframe, moves the file but is not state's drift. A declaration echoes a one-line confirmation — recorded for

@@ -3652,7 +3652,7 @@ export async function watchSessions(emit: (line: string) => void, opts: WatchOpt
 // ok:false with a reason that propagates to the caller (API non-2xx, `spex session send`, the merge dispatch),
 // instead of reporting a false success. The harness is resolved from the record; an unknown id fails before any
 // harness transport is addressed. (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
-async function sendTextUnlocked(id: string, text: string, from?: string, opts: { replyVia?: 'note' } = {}): Promise<DispatchResult> {
+async function sendTextUnlocked(id: string, text: string, from?: string, opts: { replyVia?: 'note'; deliveryId?: string } = {}): Promise<DispatchResult> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
   const rec = readRecord(id)
   if (!rec) return { ok: false, error: `no session record for ${id} — prompt NOT delivered` }
@@ -3668,7 +3668,7 @@ async function sendTextUnlocked(id: string, text: string, from?: string, opts: {
     } catch { /* no pane to consult — let the delivery channel decide */ }
   }
   const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
-  const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot() }, prompt.text)
+  const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), ...(opts.deliveryId ? { deliveryId: opts.deliveryId } : {}) }, prompt.text)
   // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
   // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.
   if (r.ok && from) void recordComms(id, from)
@@ -3676,10 +3676,69 @@ async function sendTextUnlocked(id: string, text: string, from?: string, opts: {
   if (r.ok) recordSent(id, text, from ?? null, prompt.replyVia)
   return r
 }
-export async function sendText(id: string, text: string, from?: string, opts: { replyVia?: 'note' } = {}): Promise<DispatchResult> {
-  // The record lock spans the delivery RPC. Archive preflight and leaf teardown cannot race a product turn
-  // start/steer/input from another CLI process and then discover it only after killing the pane.
-  return runSessionOperation({ op: 'send', sessionId: id }, () => withRecordLock(id, () => sendTextUnlocked(id, text, from, opts)))
+
+// A native request can commit after its client loses the response. Reserve a caller's opaque marker BEFORE
+// crossing that boundary, under the session lock, so a retry has one safe answer after a backend restart: the
+// stored terminal result, or commit-unknown for a reservation whose result could not be durably recorded.
+// This is session-generic idempotency; adapters only decide whether they can also carry the marker natively.
+type DeliveryLedgerEntry = { deliveryId: string; fingerprint: string; result?: DispatchResult }
+const deliveryLedgerPath = (id: string) => sessionArtifactPath(id, 'deliveries.ndjson')
+const deliveryFingerprint = (text: string, from?: string, replyVia?: 'note') =>
+  createHash('sha256').update(JSON.stringify([text, from ?? null, replyVia ?? null])).digest('hex')
+function readDeliveryLedger(id: string, deliveryId: string): DeliveryLedgerEntry | null {
+  try {
+    const lines = readFileSync(deliveryLedgerPath(id), 'utf8').split('\n')
+    for (let index = lines.length - 1; index >= 0; index--) {
+      try {
+        const entry = JSON.parse(lines[index]) as DeliveryLedgerEntry
+        if (entry?.deliveryId === deliveryId && typeof entry.fingerprint === 'string') return entry
+      } catch { /* one corrupt append must not invent a delivery result */ }
+    }
+  } catch { /* no delivery ledger yet */ }
+  return null
+}
+function appendDeliveryLedger(id: string, entry: DeliveryLedgerEntry): void {
+  appendFileSync(join(storeDir(id), 'deliveries.ndjson'), JSON.stringify(entry) + '\n')
+}
+function terminalDispatch(result: DispatchResult): DispatchResult {
+  return { ...result, outcome: result.outcome ?? (result.ok ? 'accepted' : 'rejected') }
+}
+export async function sendText(id: string, text: string, from?: string, opts: { replyVia?: 'note'; deliveryId?: string } = {}): Promise<DispatchResult> {
+  // The lock owns only the durable reservation and result. Codex's native turn can synchronously run hooks
+  // that write this same record, so holding it across an adapter RPC deadlocks the app-server's confirmation.
+  return runSessionOperation({ op: 'send', sessionId: id }, async () => {
+    const deliveryId = opts.deliveryId?.trim()
+    if (!deliveryId) return terminalDispatch(await sendTextUnlocked(id, text, from, opts))
+    const fingerprint = deliveryFingerprint(text, from, opts.replyVia)
+    const prior = await withRecordLock(id, async () => {
+      const existing = readDeliveryLedger(id, deliveryId)
+      if (existing) return existing
+      try {
+        appendDeliveryLedger(id, { deliveryId, fingerprint })
+        return null
+      } catch (error) {
+        return { deliveryId, fingerprint, result: { ok: false, outcome: 'rejected', error: `could not reserve delivery marker: ${error instanceof Error ? error.message : String(error)} — prompt NOT delivered` } satisfies DispatchResult }
+      }
+    })
+    if (prior) {
+      if (prior.fingerprint !== fingerprint)
+        return { ok: false, outcome: 'rejected', error: 'delivery marker belongs to a different prompt — prompt NOT delivered' }
+      return prior.result
+        ? terminalDispatch(prior.result)
+        : { ok: false, outcome: 'commit-unknown', error: 'delivery marker is already reserved without a terminal outcome — prompt NOT replayed' }
+    }
+    const result = terminalDispatch(await sendTextUnlocked(id, text, from, { ...opts, deliveryId }))
+    try {
+      return await withRecordLock(id, async () => {
+        if (!readRecord(id))
+          return { ok: false, outcome: 'commit-unknown', error: 'session closed before delivery outcome could be recorded — prompt NOT replayed' }
+        appendDeliveryLedger(id, { deliveryId, fingerprint, result })
+        return result
+      })
+    } catch (error) {
+      return { ok: false, outcome: 'commit-unknown', error: `delivery outcome could not be recorded: ${error instanceof Error ? error.message : String(error)} — prompt NOT replayed` }
+    }
+  })
 }
 
 // Hard interrupt is adapter-native control, distinct from stop's process teardown. A harness without a

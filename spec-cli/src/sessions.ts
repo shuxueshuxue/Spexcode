@@ -3497,9 +3497,9 @@ export async function quarantineCorruptRecord(id: string, rawWitness: unknown): 
       writeFileSync(temp, `${JSON.stringify(audit, null, 2)}\n`, { mode: 0o600 })
       renameSync(temp, provenance)
       const current = readRecordEntry(id)
-      if (current.kind !== 'corrupt' || current.path !== entry.path) throw new ResourceConflict(`refusing to quarantine ${id}: active record changed during absence proof`)
+      if (current.kind !== 'corrupt' || current.path !== entry.path) throw new ResourceConflict(`refusing to quarantine ${id}: active record changed during absence verification`)
       const currentBytes = readFileSync(current.path)
-      if (recordSha256(currentBytes) !== sha256) throw new ResourceConflict(`refusing to quarantine ${id}: opaque record changed during absence proof`)
+      if (recordSha256(currentBytes) !== sha256) throw new ResourceConflict(`refusing to quarantine ${id}: opaque record changed during absence verification`)
       renameSync(current.path, stored)
       if (recordSha256(readFileSync(stored)) !== sha256) {
         renameSync(stored, current.path)

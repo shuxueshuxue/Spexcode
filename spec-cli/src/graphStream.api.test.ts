@@ -92,13 +92,13 @@ function fakeTmuxDir(fixture: string): string {
   return bin
 }
 
-function writeSessionRecord(spexHome: string, project: string, id: string, worktreePath: string, branch: string): void {
+function writeSessionRecord(spexHome: string, project: string, id: string, worktreePath: string, branch: string, status = 'active'): void {
   const enc = project.replace(/[/.]/g, '-')
   const dir = join(spexHome, 'projects', enc, 'sessions', id)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'session.json'), JSON.stringify({
     session_id: id, governed: true, worktree_path: worktreePath, branch,
-    node: null, title: '', name: '', parent: null, status: 'active', proposal: '',
+    node: null, title: '', name: '', parent: null, status, proposal: '',
     merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude',
     harness_session_id: '', launcher: 'fixture', launch_cmd: 'true',
   }, null, 2) + '\n')

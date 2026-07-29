@@ -7,6 +7,7 @@ import { join } from 'node:path'
 
 import {
   TreeWatcherRegistry,
+  addPendingGraphChange,
   consolidatedRecursiveWatch,
   graphWatcherCensus,
   sessionWorktreeWatchPaths,
@@ -40,6 +41,17 @@ test('the transport adapter is the only place the platform appears', () => {
   assert.equal(consolidatedRecursiveWatch('win32'), true)
   assert.equal(consolidatedRecursiveWatch('linux'), false)
   assert.equal(consolidatedRecursiveWatch('freebsd'), false)
+})
+
+test('one debounce window retains both full and sessions obligations in either arrival order', () => {
+  assert.deepEqual(
+    addPendingGraphChange(addPendingGraphChange({ full: false, sessions: false }, 'full'), 'sessions'),
+    { full: true, sessions: true },
+  )
+  assert.deepEqual(
+    addPendingGraphChange(addPendingGraphChange({ full: false, sessions: false }, 'sessions'), 'full'),
+    { full: true, sessions: true },
+  )
 })
 
 test('exact-directory transport reconciles directory paths idempotently and closes/reopens cleanly', () => {

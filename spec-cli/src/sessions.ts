@@ -16,6 +16,7 @@ import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
 import { processStartToken } from './process-identity.js'
+import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationClose, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
 // SOURCE OF TRUTH is an untracked record (`session.json`) in a per-user GLOBAL store keyed by the harness
@@ -2667,7 +2668,38 @@ export function markHarnessSessionId(sessionId: string | undefined, harnessSessi
   return withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
     if (!rec) return false
-    writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
+    if (rec.harnessSessionId && rec.harnessSessionId !== harnessSessionId)
+      throw new ResourceConflict(`refusing to replace exact harness thread identity for ${id}; create a new governed session instead`)
+    const codex = rec.harness === 'codex' || rec.harness === 'codex-headless'
+    const root = runtimeRoot()
+    let priorBinding: ReturnType<typeof codexGenerationBindingForSession> = null
+    let generationId: string | undefined
+    let registrationPrepared = false
+    if (codex) {
+      generationId = process.env.SPEXCODE_CODEX_GENERATION?.trim()
+      const ledger = readCodexGenerationLedger(root)
+      if (ledger.revision > 0 && !generationId) throw new ResourceConflict(`refusing to bind Codex thread ${harnessSessionId}: launch did not provide an exact generation id`)
+      priorBinding = codexGenerationBindingForSession(root, id)
+      if (priorBinding && (!generationId || priorBinding.generationId !== generationId || priorBinding.threadId !== harnessSessionId))
+        throw new ResourceConflict(`refusing to replace exact Codex generation binding for ${id}`)
+      if (generationId && !priorBinding) {
+        prepareCodexGenerationRegistration(root, id, harnessSessionId, generationId)
+        registrationPrepared = true
+      }
+    }
+    try {
+      writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
+    } catch (error) {
+      if (codex && generationId && registrationPrepared) {
+        try {
+          bindCodexGeneration(root, id, harnessSessionId, null)
+        } catch (rollback) {
+          throw new ResourceConflict(`Codex generation binding persisted but session ${id} record write failed and rollback failed: ${rollback instanceof Error ? rollback.message : String(rollback)}`)
+        }
+      }
+      throw error
+    }
+    if (codex && generationId) commitCodexGenerationRegistration(root, id, harnessSessionId, generationId)
     return true
   })
 }
@@ -3236,6 +3268,8 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   const root = mainRoot()
   const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(wt.rec, root)
   if (receiptFailure) throw new ResourceConflict(`refusing destructive close for ${id}: ${receiptFailure}; public record and resources remain the authority fence`)
+  const closesCodexBinding = (wt.rec.harness === 'codex' || wt.rec.harness === 'codex-headless') && !!wt.rec.harnessSessionId
+  if (closesCodexBinding) prepareCodexGenerationClose(runtimeRoot(), id, wt.rec.harnessSessionId!)
   if (wt.rec.archived) await assertColdRetirementSafe(id, wt.rec)
   else if (wt.rec.status === 'queued') await assertQueuedRetirementSafe(id, wt.rec, wt.path, wt.branch)
   else await stopAgentProcess(id, wt.rec)
@@ -3263,6 +3297,9 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) }
   catch (error) { throw new ResourceConflict(`refusing to finish close for ${id}: session record/prompt removal failed (${error instanceof Error ? error.message : String(error)})`) }
   if (existsSync(sessionStoreDir(id))) throw new ResourceConflict(`refusing to finish close for ${id}: session record removal failed`)
+  if (closesCodexBinding && wt.rec.harnessSessionId) {
+    bindCodexGeneration(runtimeRoot(), id, wt.rec.harnessSessionId, null)
+  }
   requestQueueDrain()   // a close frees a slot — start the next queued session if any
   return true
 }

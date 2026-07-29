@@ -16,7 +16,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
+import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
 import { superviseTimeline, readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
@@ -440,20 +440,6 @@ app.delete('/api/uploads/:id', (c) => {
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions(c.req.query('all') === '1' || c.req.query('all') === 'true')))
 app.get('/api/resources', async (c) => c.json(await collectResourceReport()))
-// edges derived live from `spex session watch` monitors (A→B = agent A is watching B), not a stored subscription;
-// watch/unwatch register + heartbeat. A literal `edges` segment so it never collides with the `:id` routes.
-app.get('/api/sessions/edges', async (c) => c.json(await sessionGraph()))
-app.post('/api/sessions/edges/watch', async (c) => {
-  const b = await c.req.json().catch(() => ({}))
-  const selectors = Array.isArray(b?.selectors) ? b.selectors.map(String) : []
-  const ok = registerWatch(String(b?.token || ''), String(b?.watcher || ''), selectors, Number(b?.ttlMs) || undefined)
-  return c.json({ ok }, ok ? 200 : 400)
-})
-app.post('/api/sessions/edges/unwatch', async (c) => {
-  const b = await c.req.json().catch(() => ({}))
-  const ok = deregisterWatch(String(b?.token || ''))
-  return c.json({ ok }, ok ? 200 : 404)
-})
 app.post('/api/sessions', async (c) => {
   const requestKey = c.req.header('idempotency-key') || randomUUID()
   const controller = new AbortController()
@@ -625,7 +611,7 @@ app.post('/api/sessions/:id/input', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   if (body?.kind === 'text') {
     // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
-    // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged. `replyVia:"note"` marks a
+    // edge ([[session-timeline]]); a raw human dispatch omits it and is not logged. `replyVia:"note"` marks a
     // terminal-free sender ([[session-timeline]]): the server appends the note-reply insert to the delivery.
     const r = await sendText(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined, {
       ...(body?.replyVia === 'note' ? { replyVia: 'note' as const } : {}),

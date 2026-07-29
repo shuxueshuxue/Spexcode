@@ -48,6 +48,9 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   `opencode --auto`, so that exact command is its seed rather than a plain command that would reopen the TUI.
   Thus session-create works out of the box without seeding launchers for tools the adopter never picked. The same
   starter explicitly plants `dashboard.showHeadlessLaunchers: false`, [[launcher-visibility]]'s portable default.
+  The template is also the one numeric-default source for the `uploads` transfer policy; its portable values
+  can be committed as-is or locally overridden through the normal `spexcode.local.json` overlay, never through
+  an upload-specific config file.
   Adoption also records the root checkout's current branch as `mainBranch`: this is the one moment detection is
   authoritative. Later ordinary `git switch` operations cannot redefine a feature branch as trunk. A re-init
   preserves an explicit value and fills a missing one without changing the surrounding config.

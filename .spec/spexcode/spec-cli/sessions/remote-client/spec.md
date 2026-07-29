@@ -6,6 +6,7 @@ desc: Every session verb asks what the backend IS for it — owner, cache, or re
 code:
   - spec-cli/src/client.ts
 related:
+  - spec-cli/src/remote-client-cache.test.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/supervise.ts
 ---

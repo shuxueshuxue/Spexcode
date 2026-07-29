@@ -111,12 +111,6 @@ function MobileNode({ node, childrenOf, sessions, onOpenChild }) {
   )
 }
 
-// @@@ the terminal-free conversation ([[session-timeline]]) — the phone's session detail, now a THIN
-// wrapper: the chat body (timeline poll + board-push refresh + send-then-refresh, replyVia:'note' fixed)
-// is TimelineChat. What stays here is the phone chrome: the identity card with its back control, and the
-// header's one extra control — the eval DOOR, a REAL anchor to the session-scoped Evals list
-// ([[session-eval]]: the canonical scoped default address `?q=is:eval state:current scope:<id>`, minted
-// by [[address-routing]] — the same pages the desktop uses, one ordinary hash push).
 function MobileSessionDetail({ s, sessions, onBack }) {
   const t = useT()
   return (
@@ -138,14 +132,6 @@ function MobileSessionDetail({ s, sessions, onBack }) {
   )
 }
 
-// @@@ the phone's create entry — the desktop New Session tab's touch twin, all substance shared: the SAME
-// launch path (./launch.js — raw grammar POST, launcher fetch + default resolution + the remembered
-// per-browser launcher pick, the one POST /api/sessions; backend newSession invokes command presets for
-// every caller). Only the chrome is phone-shaped: a full-screen composer (textarea + native launcher
-// <select> + one launch button). Unlike the desktop's fire-in-the-background
-// box (type-ready for the next launch at once), the phone AWAITS the create — the button reads busy while
-// the backend builds worktree+branch+agent (seconds) — because busy-gating is also the double-tap guard a
-// touch surface needs; success returns to the list, where the new session lands on the next board push.
 function MobileNewSession({ draft, setDraft, onBack, onLaunched }) {
   const t = useT()
   const { launchers, launcher, pickLauncher } = useLaunchers()

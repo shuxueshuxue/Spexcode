@@ -68,7 +68,13 @@ fs event into the stale cache; the issue store dir is deliberately not a watched
 surface). A confirmed close must not wait for a disabled store watcher or the patrol. All
 funnel into one debounced fire; the debounce is **25ms**, sized to the MEASURED fs-event burst width
 (0–5ms for real declares/renames, single-digit ms for ref moves) — the in-flight build's dirty-rerun loop
-is the coalescer for anything wider, so the old flat 150ms was pure added latency.
+is the coalescer for anything wider, so the old flat 150ms was pure added latency. The debounce retains two
+facts, not one max scope: a `full` input owes structural convergence, and a `sessions` input owes a session
+projection. Thus full+sessions in one window starts/retains the one full builder **and** asks the cache for the
+last-good sessions splice first; a later sessions input wakes that same projection lane even if an earlier
+route-owned full rebuild is still held. The delta serializer sends that projection before awaiting full, then
+re-enters its normal full convergence. No max-scope reduction may silently turn a persisted lifecycle write into
+time behind unrelated graph assembly.
 
 **One registry owns filesystem observation, and its cardinality follows the canonical roots.** Every source
 is one reusable `(root, scope)` registry which is the sole owner of every handle taken for it. What this

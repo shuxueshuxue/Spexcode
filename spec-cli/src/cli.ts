@@ -6,6 +6,20 @@ import { stripRefSigil } from './mentions.js'
 
 const cmd = process.argv[2]
 
+const DAEMON_DEPENDENCIES = ['hono', '@hono/node-server', '@hono/node-ws', 'node-pty']
+
+async function assertDaemonDependencies(command: 'spex serve' | 'spex dashboard'): Promise<void> {
+  const { createRequire } = await import('node:module')
+  const resolve = createRequire(import.meta.url).resolve
+  const missing = DAEMON_DEPENDENCIES.filter((dependency) => {
+    try { resolve(dependency); return false } catch { return true }
+  })
+  if (!missing.length) return
+  console.error(`${command}: missing optional daemon dependencies: ${missing.join(', ')}`)
+  console.error(`Install them with: npm install ${missing.join(' ')}`)
+  process.exit(1)
+}
+
 // Registered before any await so a fatal top-level error lands here. Errors we OWN — BackendError, the
 // loud malformed-config ConfigError, the --api/--port UsageError, the write-guard GuardError — are
 // matched BY NAME (to avoid importing them) and rendered as a one-line `spex: <message>` (a user's
@@ -266,6 +280,7 @@ if (cmd === 'serve') {
   // two processes, two verbs in one operator drawer.
   const target = positionals(3)[0]
   if (target === 'ui') {
+    await assertDaemonDependencies('spex serve')
     // the natural post-install UI: serve the bundled dashboard on its OWN port (loopback by default;
     // --host widens the bind for LAN/tailnet viewing), proxying /api + the terminal socket to a
     // separately-run `spex serve`. Replaces the dogfood-only `npm run web` (vite).
@@ -276,6 +291,7 @@ if (cmd === 'serve') {
     if (!Number.isInteger(port) || !Number.isInteger(apiPort)) { console.error('spex serve ui: --port and --api-port must be integers'); process.exit(2) }
     serveDashboardLocal({ port, apiPort, host })
   } else if (target === undefined || target === 'api') {
+    await assertDaemonDependencies('spex serve')
     // fail loud, not cryptic ([[platform-support]]): serve IS the entry to the session runtime, which needs a
     // POSIX host (tmux/bash/unix-sockets). On a non-POSIX host (native Windows) point at WSL2 and exit here,
     // before importing the supervisor spawns tsx into a downstream ENOENT.
@@ -297,6 +313,7 @@ if (cmd === 'serve') {
     process.exit(2)
   }
 } else if (cmd === 'dashboard') {
+  await assertDaemonDependencies('spex dashboard')
   // the HOST-level dashboard ([[host-gateway]]): ONE gateway for every project this user serves. The
   // engine is [[gateway-hub]] (routing + [[gateway-auth]] authorization: admin scope implicit from
   // loopback until an admin password is set; per-project gates as configured); the host layer mounts the

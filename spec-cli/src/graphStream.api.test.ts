@@ -865,6 +865,8 @@ exec "${realGit}" "$@"
     await waitQuickly(() => existsSync(argvLog) && /^HANG /m.test(readFileSync(argvLog, 'utf8')),
       `the route-owned full never entered the controlled layout hold:\n${serverLog}`, 1_000)
     mark('route-owned full producer is held')
+    const logBeforeClose = serverLog.length
+    const framesBeforeClose = frames.length
 
     const closeResponse = await fetch(`${base}/api/sessions/${sessionId}/close`, { method: 'POST' })
     assert.equal(closeResponse.status, 200)
@@ -878,13 +880,13 @@ exec "${realGit}" "$@"
       const payload = JSON.parse(frame.data) as { del?: string[] }
       return payload.del?.includes(`sess:${sessionId}`) ?? false
     }
-    await waitFor(() => frames.slice(framesBeforeFull).some(deletesSession),
-      `the session projection/SSE waited for releaseFull; timeline=${JSON.stringify(timeline)}; frames=${JSON.stringify(frames.slice(framesBeforeFull))}; server=${serverLog}`,
+    await waitFor(() => frames.slice(framesBeforeClose).some(deletesSession),
+      `the session projection/SSE waited for releaseFull; timeline=${JSON.stringify(timeline)}; frames=${JSON.stringify(frames.slice(framesBeforeClose))}; server=${serverLog}`,
       2_000)
 
     rmSync(hold, { force: true })
     mark('releaseFull')
-    await waitFor(() => frames.slice(framesBeforeFull).some((frame) => frame.data.includes(fullNodeId)),
+    await waitFor(() => frames.slice(framesBeforeClose).some((frame) => frame.data.includes(fullNodeId)),
       `the held structural full never reached SSE after release:\n${serverLog}`, 5_000)
     await waitFor(async () => {
       const response = await fetch(`${base}/api/graph`)
@@ -896,15 +898,17 @@ exec "${realGit}" "$@"
         && !graph.sessions.some((session) => session.id === sessionId)
         && graph.nodes.some((node) => node.id === fullNodeId)
     }, `the full completion rolled back the newer session projection:\n${serverLog}`, 5_000)
-    const resurrected = frames.slice(framesBeforeFull).flatMap((frame) => {
+    const deletedAt = frames.findIndex(deletesSession)
+    assert.ok(deletedAt >= 0, 'the close delete must be present before checking for a later resurrection')
+    const resurrected = frames.slice(deletedAt + 1).flatMap((frame) => {
       const payload = JSON.parse(frame.data) as { graph?: { sessions?: Array<{ id: string }> }; set?: Record<string, unknown> }
       return payload.graph?.sessions?.some((session) => session.id === sessionId) || `sess:${sessionId}` in (payload.set ?? {})
         ? [frame.data] : []
     })
     assert.deepEqual(resurrected, [], `full completion rolled the closed session back into SSE: ${JSON.stringify(resurrected)}`)
-    assert.equal(frames.slice(framesBeforeFull).filter(deletesSession).length, 1,
+    assert.equal(frames.slice(framesBeforeClose).filter(deletesSession).length, 1,
       'the same closed session projection broadcast twice')
-    const broadcasts = [...serverLog.slice(logBeforeFull).matchAll(/graph broadcast .*triggers \{([^}]*)\}/g)]
+    const broadcasts = [...serverLog.slice(logBeforeClose).matchAll(/graph broadcast .*triggers \{([^}]*)\}/g)]
       .map((match) => match[1].split(',').map((tag) => tag.trim()).filter(Boolean))
     const sessionBroadcast = broadcasts.findIndex((tags) => tags.includes('sessions'))
     assert.ok(sessionBroadcast >= 0, `the session projection had no attributable broadcast: ${JSON.stringify(broadcasts)}`)

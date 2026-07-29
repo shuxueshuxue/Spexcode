@@ -1378,8 +1378,21 @@ export async function composeSessionPrompt(raw: string, target: SessionPromptTar
   const replyVia = opts.replyVia ?? (h.headless ? 'note' : undefined)
   const text = replyVia === 'note' ? withNoteReplyHint(prompt)
     : !opts.from && lastHumanSendVia(target.session) === 'note' ? withTerminalReplyHint(prompt) : prompt
-  return { text, ...(replyVia ? { replyVia } : {}) }
+  return { text: optionSafe(text), ...(replyVia ? { replyVia } : {}) }
 }
+// @@@ optionSafe - the ONE invariant that keeps a prompt from being read as machinery: the text SpexCode hands
+// a harness never BEGINS with `-`. Human text legitimately starts that way — a pasted browser-console line, a
+// diff hunk, a quoted flag — and downstream that first character is the difference between a prompt and an
+// argument. Every harness parses its own argv with its own rules (claude's commander honours `--`, opencode's
+// yargs drops a detached value that starts with `-`, pi's parser has no end-of-options branch AT ALL), and the
+// launch scripts additionally discriminate their resume/continue markers by comparing `$1` to a literal flag.
+// Chasing that per-harness would mean an escape per adapter plus a refusal for the harness that has none —
+// six answers to one question, and still no cover for a prompt that IS the literal `--resume`. Guaranteeing
+// the invariant once, here at the single delivery seam every launch and every send already passes through,
+// answers all of it uniformly: no adapter needs to know, and no harness can be handed something it cannot
+// take. The cost is one leading space on the prompts that would otherwise be unsendable, and the human's own
+// words follow it byte-for-byte.
+const optionSafe = (text: string) => text.startsWith('-') ? ` ${text}` : text
 // @@@ identity-token strip - an `@session` actor mention ([[mentions]]) or a bare UUID-shaped token in the
 // prompt is ANOTHER session's identity, never this one's name. A title/slug wearing it misleads every
 // board/git surface — and a worker tasked with cleaning that session can match its OWN worktree and delete
@@ -1447,7 +1460,6 @@ export function launchPreflight(rec: SessRec): LaunchBlock | null {
 
 // @@@ launch quoting - single-quote a string for a POSIX shell, `'` → `'\''`. Used to nest the whole agent
 // invocation inside the birth-registration `sh -c '…'` wrapper without any segment double-expanding.
-const shq1 = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
   const file = join(storeDir(id), 'launch.sh')
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
@@ -1461,11 +1473,11 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   // agent.pid, then `exec env` REPLACES that sh in place — so the pid persists down the whole command chain
   // (claude: env→(reclaude→)claude; codex: env→bash -lc <script> whose last line is `exec codex … resume`), and
   // `$$` therefore IS the launched agent's pid. `env` carries the leading `VAR=val` assignments (an env prefix
-  // can't lead an `exec`), and the whole payload is single-quoted for the outer shell (shq1) so the
+  // can't lead an `exec`), and the whole payload is single-quoted for the outer shell (shQuote) so the
   // invocation's own single-quoted segments — the codex `$@`/`$tid` script, the prompt — reach sh verbatim,
   // parsed exactly ONCE, never double-expanded. Each retry attempt rewrites agent.pid with a fresh `$$`.
   const pidPath = join(storeDir(id), 'agent.pid')
-  const born = `sh -c ${shq1(`printf %s "$$" > ${shq1(pidPath)}; exec env ${invocation}`)}`
+  const born = `sh -c ${shQuote(`printf %s "$$" > ${shQuote(pidPath)}; exec env ${invocation}`)}`
   // Bounded relaunch on a FAST exit: the agent launcher can exit within seconds before the rendezvous socket
   // ever appears. That is enough evidence to retry, but not enough evidence to name the cause. Once the agent
   // has run past LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal
@@ -1508,7 +1520,7 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
       // -t "$TMUX_PANE" names THIS pane explicitly (tmux still resolves the server from $TMUX), so the capture
       // can never land on a neighbouring pane; run outside tmux the call fails, nothing matches, and the plain
       // bounded retry stands.
-      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shq1(fatal)}; then`,
+      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shQuote(fatal)}; then`,
       `    printf '[spex launch] attempt %s exited in %ss (rc=%s) - the launcher reported a failure retrying cannot fix (see above); not retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
       `    exit $__spex_rc`,
       `  fi`,
@@ -1600,7 +1612,9 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
   const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness (also drives waitForReady below)
   try {
-    const sq = `'${launchPrompt.replace(/'/g, `'\\''`)}'`
+    // ONE quoted operand for every harness. Nothing here knows how any of them parses argv, because nothing
+    // has to: composeSessionPrompt already guaranteed this text cannot be read as an option (optionSafe).
+    const sq = shQuote(launchPrompt)
     await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
   } catch {
     launching.delete(id)
@@ -2946,9 +2960,7 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, l
     throw new ResourceConflict(`refusing to stop ${id}: session leaf identity changed before signal`)
   if (!Number.isFinite(pid) || pid <= 0) return
   const startToken = leaf.startToken
-  const alive = (): boolean => {
-    try { process.kill(pid, 0); return true } catch (e) { return (e as NodeJS.ErrnoException).code === 'EPERM' }
-  }
+  const alive = (): boolean => leafAlive(pid)
   const identityState = (): 'same' | 'gone' | 'changed' => {
     if (readAgentPid(sessionArtifactPath(id, 'agent.pid')) !== leaf.pid) return 'changed'
     const current = processStartToken(pid)
@@ -2988,6 +3000,14 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, l
 // the resolved adapter to sweep its ephemeral runtime transport — in that order, because the adapter only
 // removes a transport whose listener is PROVEN dead.
 // Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
+// @@@ leafAlive - does this pid name a live process? EPERM counts as alive (a process we may not signal is
+// still a process); only ESRCH is absence. Kept local: git.ts carries its own copy for lock reclamation, and
+// collapsing the two is part of the spec/eval unification lane, not of this fix.
+const leafAlive = (pid: number): boolean => {
+  try { process.kill(pid, 0); return true }
+  catch (error) { return (error as NodeJS.ErrnoException)?.code !== 'ESRCH' }
+}
+
 async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIdentity | null> {
   const harness = harnessById(rec.harness || defaultHarness.id)
   if (harness.runtimeOwnership === 'adapter') return null
@@ -3000,8 +3020,17 @@ async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIde
   }
   const startToken = processStartToken(pid)
   if (!startToken) {
-    if (rec.stopped) return null
-    throw new ResourceConflict(`refusing to stop ${id}: session-owned leaf PID ${pid} is not alive or has no start identity`)
+    // @@@ dead leaf is not an unprovable leaf - a missing start token means one of TWO different things, and
+    // collapsing them is what made a session unclosable. If the process is GONE there is nothing to signal and
+    // nothing a signal could hit by mistake, so the leaf is already in the state stop wants: hand back a
+    // record-only teardown, exactly as for an explicitly stopped record. Only a process that is still ALIVE
+    // while refusing to prove its identity is the dangerous case the guard exists for — that one still refuses,
+    // because signalling it could kill whatever now wears the pid. The distinction is the same `kill(pid, 0)`
+    // the escalation path below already uses to tell `gone` from `changed`; this guard simply asks it too.
+    // The failure it closes: a launcher that dies before readiness leaves a dead pid on the record, and every
+    // later `stop`/`close` refused it, so the row could be neither run nor retired.
+    if (rec.stopped || !leafAlive(pid)) return null
+    throw new ResourceConflict(`refusing to stop ${id}: session-owned leaf PID ${pid} is alive but will not prove its start identity`)
   }
   const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
   const ownerNeedle = harness.leafOwnerNeedle?.(rec)

@@ -130,12 +130,6 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
   return range
 }
 
-// @@@ the terminal-free conversation body ([[session-timeline]]) — the phone's session detail
-// ([[mobile-ui]]). Without a pane to read, the persisted timeline IS the interaction record: every
-// authored status transition (with the full declaration note — the agent's reply) and every delivered
-// prompt, timestamped, oldest first, with the composer docked below. Freshness: an 8s poll while shown,
-// plus an immediate refetch whenever the board push moves this session's status/note (the board stream is
-// already live in the host app), plus one after every send.
 export default function TimelineChat({ s, sessions = [], active = true }) {
   const t = useT()
   const isMobile = useIsMobile()
@@ -201,9 +195,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
 
   useEffect(() => () => clearTimeout(copyStatusTimerRef.current), [])
 
-  // @@@ The composer is a continuous sink. Conversation selection is painted by CSS Custom Highlight,
-  // so no document Selection ever competes with the textarea's real caret. Like xterm's
-  // SelectionService, click detail chooses the mode on mousedown; there is no late dblclick override.
+  // Custom Highlight preserves the textarea caret while conversation text is selected.
   const beginTimelineSelection = (e) => {
     const timeline = scrollRef.current
     const target = e.target

@@ -1,8 +1,4 @@
-// @@@ bindings.js - the override store + resolver over the keymap.js registry. The registry holds the
-// DEFAULT keys for each action; this layer merges a per-user override (saved in localStorage) on top and
-// answers the question the readers ask: "what KEYS fire action X?" — for the keydown handler (firesKey)
-// and the settings editor (keysOf). One key change moves the dispatch and the legend together, because
-// both read through here.
+
 import { ACT } from './keymap.js'
 
 const LS_KEY = 'spex.keybindings.v1'

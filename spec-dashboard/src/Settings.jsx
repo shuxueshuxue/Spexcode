@@ -12,15 +12,6 @@ import {
   TERMINAL_FONT_STEP,
 } from './terminalFont.js'
 
-// @@@ Settings - the settings PAGE (`,`, or the sidebar's bottom entry — #/settings, [[side-nav]]): a
-// routed page like every other top-level surface, not a popup. It accretes sections (see the `settings`
-// spec): today LANGUAGE, THEME and SHORTCUTS. The shortcuts section is the EDITABLE twin of the read-only
-// help legend — both project the one keymap registry (keymap.js). A row's keyboard cell is clicked to
-// capture the next key as that action's new binding (saved via bindings.js to localStorage); structural
-// rows (nav, the n/d chords) are shown but fixed.
-// (Game-controller mapping is NOT here — the pad binds to action ids in [[game-controller]]'s controller
-// mode, so a key rebind never touches it.)
-
 // Shortcuts editor — one row per action; a click on a rebindable cell captures the next keypress.
 function Shortcuts({ t }) {
   const [tick, setTick] = useState(0)        // re-render after a binding changes

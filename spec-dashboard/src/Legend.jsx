@@ -4,13 +4,6 @@ import { ACT, keyCap } from './keymap.js'
 import { keysOf } from './bindings.js'
 import { useT } from './i18n/index.jsx'
 
-// @@@ Legend - the single home for the keymap + visual vocabulary, shown in the shared centered Modal
-// opened by the HUD's discreet `?` (key or click). The BOARD keymap is rendered straight from the keymap
-// registry (keymap.js, resolved through bindings.js), so the help can NEVER drift from what the handler
-// dispatches. Status dots / op glyphs read STATUS & GLYPH from SpecNode.jsx so the swatches match the
-// board. The node-info popup's own pane/scroll keys are a fixed structural set (POPUP_KEYS), listed but
-// not in the rebindable registry. All COPY routes through t(); keys/glyphs are language-neutral.
-
 // alt keys not worth showing in the legend are dropped (the shift-less zoom variants, the capital of a
 // letter that's already shown). Glyphs come from keymap.js so the legend and the editor read the same.
 const KEY_SKIP = new Set(['=', '_', 'I', 'H', 'J', 'K', 'L'])

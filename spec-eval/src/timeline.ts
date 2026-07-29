@@ -1,30 +1,12 @@
-// step-timeline — the map from a POSITION on a piece of evidence's own axis to a named step. SpexCode owns
-// only this FORMAT (a tiny data contract any userland emitter satisfies — a Playwright reporter, a WebDriver
-// listener, a computer-use hand narrating as it drives, a CLI run stamping line numbers); aligning the
-// emitter's positions to the evidence is the emitter's own job. The map rides as a second content-addressed
-// blob on the reading, never a new ndjson column beyond the one hash.
-//
-// The step is anchored to the evidence's OWN axis, tagged by `axis`: `time` (ms, a video), `frame` (a still
-// SEQUENCE by index), `line` (a transcript by line number), `index` (a bare action ordinal). The set is
-// OPEN by convention — an unknown axis is legal and a reader renders its positions as bare numbers. `stepAt`
-// (last step at or before a position) is axis-agnostic and unchanged.
-
 export type TimelineEvent = { at: number; step: string; node?: string }
 export type StepTimeline = { v: 2; axis: string; events: TimelineEvent[] }
 
-// legacy v1 is the TIME axis with `tMs` as the position — read losslessly, normalized to the axis-tagged
-// shape (`axis: 'time'`, `at: tMs`). Kept forever: an emitter that only knew `{ v: 1, events: [{ tMs }] }`
-// still files a valid video step-map.
 export type LegacyTimelineEvent = { tMs: number; step: string; node?: string }
 export type LegacyStepTimeline = { v: 1; events: LegacyTimelineEvent[] }
 
 const V2_EVENT_KEYS = new Set(['at', 'step', 'node'])
 const V1_EVENT_KEYS = new Set(['tMs', 'step', 'node'])
 
-// validate LOUD — every violation named, [] when well-formed. Both schema versions are accepted: v1 (legacy
-// time axis, `tMs`) and v2 (axis-tagged, `at`). The key set is closed per version (like the eval.md
-// scenario schema): a malformed timeline is rejected at filing time, never silently reshaped. The `axis`
-// string itself is open — only its ABSENCE is an error, never an unrecognized value.
 export function validateTimeline(raw: unknown): string[] {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return ['timeline must be a JSON object { v, axis, events }']
   const o = raw as Record<string, unknown>
@@ -55,9 +37,6 @@ export function validateTimeline(raw: unknown): string[] {
   return errs
 }
 
-// normalize any VALID timeline (v1 or v2) to the axis-tagged shape every reader uses: v1 IS the time axis
-// with `tMs` as the position. Call only on input `validateTimeline` accepted. This is the whole of the
-// lossless back-compat: an old v1 blob and a new `{ v: 2, axis: 'time' }` render identically.
 export function normalizeTimeline(raw: unknown): { axis: string; events: TimelineEvent[] } {
   const o = (raw ?? {}) as Record<string, any>
   const events: any[] = Array.isArray(o.events) ? o.events : []
@@ -65,8 +44,6 @@ export function normalizeTimeline(raw: unknown): { axis: string; events: Timelin
   return { axis: typeof o.axis === 'string' ? o.axis : 'time', events: events.map((e) => ({ at: e.at, step: e.step, ...(e.node ? { node: e.node } : {}) })) }
 }
 
-// the whole of "which step is this position": the last event at or before `pos`; null before the first event
-// (a plain moment, no step to name — graceful, never an error). Axis-agnostic — `pos` is on the events' axis.
 export function stepAt(events: TimelineEvent[], pos: number): TimelineEvent | null {
   let hit: TimelineEvent | null = null
   for (const e of events) {

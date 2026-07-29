@@ -636,8 +636,10 @@ app.post('/api/sessions/:id/input', async (c) => {
     // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
     // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged. `replyVia:"note"` marks a
     // terminal-free sender ([[session-timeline]]): the server appends the note-reply insert to the delivery.
-    const r = await sendText(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined,
-      body?.replyVia === 'note' ? { replyVia: 'note' } : {})
+    const r = await sendText(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined, {
+      ...(body?.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
+      ...(typeof body?.deliveryId === 'string' && body.deliveryId ? { deliveryId: body.deliveryId } : {}),
+    })
     return c.json(r, r.ok ? 200 : 502)
   }
   if (body?.kind === 'keys') {

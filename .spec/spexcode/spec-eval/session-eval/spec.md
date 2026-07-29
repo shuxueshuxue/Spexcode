@@ -235,3 +235,15 @@ without the dashboard. `proof` is no longer a user-facing word at all: the expor
 its `--export` flag, and the old `spex review proof` spelling is gone — a signpost names the canonical
 form and exits non-zero, never running ([[cli-surface]]). The read/write split stays intact: `spex eval
 ls --session` READS a session's evaluation; filing a reading remains `spex eval add`.
+
+The impact snapshot carries PARSED relation entries, not a pair of projections to be reassembled. A node's
+relation is one list of `{path, selectors}`; `code`/`related` (bare paths) and `codeScoped`/`relatedScoped`
+(the selector-bearing subset) are views derived from it for consumers that want exactly those, and the
+snapshot ships the entries themselves alongside. It used to ship only the two views, so the exact-revision
+projection minted `path#selector` STRINGS back out of them and handed those to the relation parser to
+recover the entries the loader had all along — a serialize/reparse round-trip through a form nobody ever
+stored, at five call sites. Nothing validated by that reparse was load-bearing: a snapshot's relation
+problems are already carried on the snapshot and already throw before any of it runs, and a reparse of rows
+minted from parsed entries cannot surface a problem the original parse did not. One parse, one shape, and
+the ordinary loader's and the fixed-revision snapshot's history/window semantics stay distinct — sharing the
+relation projection is not licence to collapse those.

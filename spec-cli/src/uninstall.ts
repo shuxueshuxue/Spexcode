@@ -8,15 +8,6 @@ import { resolveHarnessTargets } from './harness-select.js'
 import { loadSkillConfig, loadAgentConfig } from './specs.js'
 import { dematerialize } from './materialize.js'
 
-// @@@ spex-uninstall - materialize(∅) plus the store: the in-tree/global-config backout IS dematerialize (the
-// same identity-stamped erase phase every materialize runs first — the forgetting law's empty policy), and this
-// command adds only what a materialize never owns per-run: the global per-project store, the plugin-bundle sweep,
-// and the optional git hooks. EVERY removal is gated on a SpexCode IDENTITY STAMP (the managed-block
-// sentinels, the shim's own dispatch.sh command line, the trust sentinels, the generated mark / name-scoped
-// on-demand paths, the plugin name stamp), so it can only ever delete what SpexCode itself generated. The one
-// inviolable rule: the user's tracked intent ASSET (.spec/.plugins + spexcode.json) is NEVER touched — uninstall
-// removes only generated WIRING and local runtime state, not the spec graph and adoption config they served.
-
 // the standard plugin-host folders a host agent scans (in addition to any named in spexcode.json's `harnesses`).
 const DEFAULT_PLUGIN_HOSTS = ['.claude', '.codex', '.zcode'] as const
 

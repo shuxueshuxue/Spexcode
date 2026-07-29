@@ -10,17 +10,6 @@ import { residentForgeState } from '../../spec-forge/src/resident.js'
 import { resolveProjectIdentity } from './project-identity.js'
 import { sessionEvalProjection } from '../../spec-eval/src/sessioneval.js'
 
-// @@@ graph-cache — single-flight + cache for the hot /api/graph build ([[graph-lean]]). Assembling the
-// board is expensive (two full-history git-log walks cold, a full `.spec` fs walk every build), so the
-// route MUST NOT rebuild per request: index.ts once ran `buildBoard()` inline on EVERY poll, so a normal
-// dashboard's overlapping polls (+ SSE-triggered refetches) multiplied into N simultaneous builds and
-// starved the event loop — one real user could wedge the backend. Here ONE build is shared by all
-// concurrent callers (a promise memo — this IS the max-concurrent-builds cap: at most one runs) and its
-// result is cached until a REAL change invalidates it. The cache is invalidated by the SAME freshness
-// signals [[graph-stream]] already watches (session-store writes, git-ref/worktree moves); the cold patrol
-// enters this cache's input-revision validation flight instead of manufacturing a change. So a poll storm
-// costs ONE build, a quiet stretch costs ZERO, and the SSE rebuild and the route share the same operation.
-
 export type Board = Awaited<ReturnType<typeof buildBoard>>
 export type BoardConsistency = 'fresh' | 'stale-ok'
 export type BoardRead = { board: Board; freshness: 'fresh' | 'stale'; refreshing: boolean; error?: string }

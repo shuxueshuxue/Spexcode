@@ -2,22 +2,6 @@ import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync } fro
 import { dirname, join } from 'node:path'
 import { git } from './git.js'
 
-// @@@ worktree-sources ([[residence]]) - a fresh session worktree is fed by THREE transports, one per
-// source kind, and the kind decides the transport — never a mode branch:
-//   - TRACKED project state (`.spec`, `spexcode.json`) arrives by GIT CHECKOUT: the sources are always
-//     tracked (git is the database), so `git worktree add` alone delivers them. No symlink — a link is a
-//     WRITE-SEMANTICS declaration (write-through to the main tree), and spec writes go back through the
-//     branch/merge ritual, not through a side channel.
-//   - MATERIALIZED ARTIFACTS (contract blocks, shims, skills) are DERIVED — transported by re-materialize,
-//     not by link or copy:
-//     sessions.ts materializes into the worktree at creation, and the git-native anchors (pre-commit /
-//     post-checkout / post-merge — [[commit-surgery]]) re-materialize on change.
-//   - HOST state (`spexcode.local.json`, machine-local and never tracked) is COPIED — a snapshot: the worker
-//     reads the same launchers/policy the host had at dispatch, but its writes land on its own copy and die
-//     with the worktree, never on the host's real config (a worker once wrote "its" test config through the
-//     old symlink and wiped the host's launchers → every later dispatch 401'd).
-// This module owns only the third transport (plus hiding what it seeds). A failure degrades that worker
-// (default launchers/policy), so it is reported, not swallowed.
 export function seedWorktreeHostState(main: string, wt: string): void {
   const f = 'spexcode.local.json'
   try {

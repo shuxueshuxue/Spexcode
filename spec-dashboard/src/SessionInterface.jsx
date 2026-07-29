@@ -34,9 +34,6 @@ const MEBIBYTES_PER_GIBIBYTE = 1024
 const BYTES_PER_MEBIBYTE = BYTES_PER_KIBIBYTE * KIBIBYTES_PER_MEBIBYTE
 const BYTES_PER_GIBIBYTE = BYTES_PER_MEBIBYTE * MEBIBYTES_PER_GIBIBYTE
 
-// @@@ launch-hero — the New-Session splash speaks the terminal language of code-CLI openers: a
-// block-letter ANSI-Shadow "SPEXCODE" wordmark instead of an app-icon glyph. Pure text in the app's
-// mono font; the gradient reads the active theme's --blue→--magenta so re-theming re-inks it.
 const HERO_WORDMARK = [
   '███████╗██████╗ ███████╗██╗  ██╗ ██████╗ ██████╗ ██████╗ ███████╗',
   '██╔════╝██╔══██╗██╔════╝╚██╗██╔╝██╔════╝██╔═══██╗██╔══██╗██╔════╝',
@@ -115,15 +112,6 @@ function SessionEvalStats({ summary }) {
 // the `/` matcher + dropdown render (matchSlash, SlashMenu) are the SHARED module ./mentions.jsx too —
 // one ranking and one row markup for every `/` palette (this console's two + the eval detail's review menu).
 
-// @@@launcher pop-out picker ([[launcher-select]]) — the desktop launch choice: a clean pill button (the
-// selected launcher's harness vendor mark + name, no caret, no label) that opens a CENTRED pop-out card —
-// a viewport-centred dialog over a light backdrop, deliberately not an anchored dropdown. The card has one
-// row per configured launcher: its harness glyph + name, and beneath them its command in full as PLAIN
-// READ-ONLY display text. The WHOLE row is one pick target — the row itself is the button, so a
-// click anywhere on it (the cmd line included) picks the launcher; the cmd never forms an independent
-// selection/control surface that could swallow the pick. The
-// trigger's tooltip points at spexcode.json / spexcode.local.json as the one place launchers change.
-// Selecting closes the pop; backdrop click or Esc closes it too.
 function LauncherPicker({ launchers, launcher, pickLauncher }) {
   const t = useT()
   const [pop, setPop] = useState(false)
@@ -245,8 +233,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // by the header's leading count pod, and the selected session stays visible while the zone is folded.
   const { expanded, toggle: toggleFold, expand: expandFolds } = useFold()
   const [offlineOpen, setOfflineOpen] = useState(false)
-  // @@@ the shelf is a flat cold collection, not a status zone or nested working forest ([[archive]]). The working
-  // population keeps its triage/nesting presentation; archived rows are rendered as standalone offline records.
+
   const [showShelf, setShowShelf] = useState(false)
   const [archiveRows, setArchiveRows] = useState([])
   const refreshArchive = useCallback(() => fetch(apiUrl('/api/sessions?all=1'))
@@ -262,12 +249,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     return [...byId.values()]
   }, [sessions, archiveRows])
   const { live: liveSessions, archived: shelved } = useMemo(() => splitArchived(allSessions), [allSessions])
-  // @@@ the human's toggle is authoritative ([[archive]]). An earlier version derived this view away when the
-  // archive was empty, and made the star inert to match — which produced a permanently-visible control that
-  // silently did nothing, the exact "why did clicking do nothing?" the human hit. The trap the derivation was
-  // guarding against was never the EMPTY ROOM; it was a DEAD EXIT: an effect could open the view off a stale
-  // board snapshot, and with the star not responding there was no way back. Keep the star working and an empty
-  // archive is somewhere you can simply leave, so the view can just be what the human asked for.
+
   const viewingShelf = showShelf
   const listed = viewingShelf ? shelved : liveSessions
   const forest = useMemo(() => viewingShelf
@@ -319,10 +301,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
   // (it self-starts as a slot frees, so it gets no relaunch button).
   const noLivePane = selSession?.liveness === 'offline'
-  // @@@ the archive card OUTRANKS both console surfaces ([[archive]]). Opening an archived session should
-  // answer "this is filed away — want it back?" in one button, not drop you into a terminal you deliberately
-  // put out of sight. It is the only panel shown, so relaunch stands down and folds its button into the card:
-  // one card, one decision, and an archived session whose process died still gets its restore, no second panel.
+
   const shelvedSel = !!selSession?.archived
   const showRelaunch = !shelvedSel && noLivePane && selSession?.status !== 'queued'
   // the active session's Command Box draft (per-session, see `drafts`).

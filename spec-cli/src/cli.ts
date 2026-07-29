@@ -4,12 +4,6 @@ export {} // make this a module so top-level await is allowed
 // sigil ([[mentions]]).
 import { stripRefSigil } from './mentions.js'
 
-// @@@ noun-first dispatch ([[cli-surface]]) - `spex <noun> <verb> [object] [flags]`: the verb is always the
-// second token after its noun, a bare noun prints its drawer's help, and a bare verb exists only where the
-// object is invariably THIS PROJECT (graph · init · materialize · doctor · uninstall · serve). There is no
-// verb mirror and no promoted spelling — one verb, one spelling. Every REMOVED spelling lives in the
-// signpost tables below: it REPORTS the new spelling and exits non-zero, never executes (a signpost is not
-// an alias; the tables die in 0.4.0).
 const cmd = process.argv[2]
 
 // Registered before any await so a fatal top-level error lands here. Errors we OWN — BackendError, the
@@ -73,9 +67,6 @@ function rejectUnknownFlags(command: string, from: number, allowed: readonly str
   }
 }
 
-// @@@ signposts (one version only — delete in 0.4.0) - every spelling v0.3.0 removed maps to its new home.
-// A signpost REPORTS and exits 2; it never executes (not an alias): a stale hook or a human's muscle memory
-// gets a readable failure that names the migration, and nothing old keeps silently working.
 const SIGNPOSTS: Record<string, string> = {
   search: 'spex spec search <query>',
   owner: 'spex spec owner <path>',
@@ -107,8 +98,6 @@ const SIGNPOSTS: Record<string, string> = {
   resolve: 'spex remark resolve <ref>',
   retract: 'spex remark retract <ref>',
 }
-// the session drawer's removed sub-spellings: rawkey folded into send; capture/prompt folded into show;
-// exit/reopen respelled stop/resume; the hook-only verbs moved to internal.
 const SESSION_SIGNPOSTS: Record<string, string> = {
   rawkey: 'spex session send <SEL> --keys "<keys>"',
   exit: 'spex session stop <SEL>',
@@ -203,9 +192,6 @@ const DECLARED = ' — recorded; the human sees it in the dashboard. This declar
 // appended ONLY to a propose-close declaration: a worktree about to be discarded may still own ephemeral things the agent started to test this change; nudge (not gate) it to reclaim them before the worktree goes, keyed on whether the thing should outlive the task — never on who started it (a deliberately long-running service / a production build is started-by-you yet must be left alone). Project-agnostic on purpose.
 const CLOSE_CLEANUP = '\n\nBefore this worktree closes, check whether you left anything running that you started to test this change — a background process, a dev or preview server, a bound port, a scratch session. If nothing depends on it anymore, shut it down, or it keeps running as an orphan. Leave anything meant to keep running: a service you deliberately stood up, a production build, anything other work relies on. What matters is whether it still needs to exist after this task, not whether you started it. If unsure, leave it. This is a reminder to check, not a required step.'
 
-// @@@ session-state kit - the shared machinery behind the agent-authored state writers, used by BOTH the
-// typeable worker declarations (`spex session done|park|ask`) and the hook-only writers under
-// `spex internal session-*` — one diagnosis, one truncation-echo, either drawer.
 async function stateKit() {
   const s = await import('./sessions.js')
   const l = await import('./layout.js')
@@ -343,10 +329,6 @@ if (cmd === 'serve') {
   }
   console.log(text)
 } else if (cmd === 'graph') {
-  // @@@ graph - the ONE assembled view (tree + worktree overlay + sessions), both faces of it: bare (with
-  // --focus/--depth) renders the human-readable status-coloured tree; --json dumps the full payload —
-  // identical to GET /api/graph, machine food. Colour degrades cleanly: off unless stdout is a tty, and
-  // NO_COLOR always wins.
   if (flag('node') !== undefined) { console.error('spex graph: --node was renamed — use --focus <id>'); process.exit(2) }
   const { buildBoard } = await import('./graph.js')
   const focusRaw = flag('focus')
@@ -373,8 +355,6 @@ if (cmd === 'serve') {
   }
   await flushExit(0)
 } else if (cmd === 'spec') {
-  // @@@ spec drawer - the governance graph's own verbs: search (topic → node), owner (file → node, the
-  // reverse edge), lint (the spec↔code graph check — errors gate commits), ack (the drift stamp).
   const sub = process.argv[3]
   if (sub === undefined) {
     console.log((await import('./help.js')).commandHelp('spec'))
@@ -498,10 +478,6 @@ if (cmd === 'serve') {
   const { uninstall } = await import('./uninstall.js')
   uninstall(positionals(3)[0], { hooks: has('hooks') })
 } else if (cmd === 'eval') {
-  // @@@ eval drawer - the measurement system's verbs: add (file a reading) · ls (read a node's timeline, or
-  // — with an explicit --session, never type-sniffed — a session's aggregate) · lint (the measurement-layer
-  // lint, pure advisory) · retract · clean. Node-scoped verbs live in spec-eval; the session read lives
-  // here (it talks to the backend).
   const sub = process.argv[3]
   if (sub === undefined) {
     console.log((await import('./help.js')).commandHelp('eval'))
@@ -547,9 +523,6 @@ if (cmd === 'serve') {
     process.exit(2)
   }
 } else if (cmd === 'evidence') {
-  // @@@ evidence drawer - the bare content-addressed transport pair ([[evidence-put]], [[evidence-get]]): put bytes
-  // in the shared evidence cache / read them back by hash, decoupled from filing a reading. Thin route — the
-  // cache lives in spec-eval. flushExit matters here: `get` pipes raw blob bytes to stdout.
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('evidence'))
   } else {
@@ -557,11 +530,6 @@ if (cmd === 'serve') {
     await flushExit(await runEvidence(process.argv.slice(3)))
   }
 } else if (cmd === 'issue') {
-  // @@@ issue drawer - the ONE issue surface ([[issues]]): `ls` is THE read — local + forge issues as ONE
-  // store-tagged list, the supervisor's/human's drain view; `show <id>` the single-thread detail (the same
-  // read GET /api/issues/:id serves); open/reply/close are store-routed (the SAME
-  // createIssue/replyIssue/closeIssue the dashboard's API calls); `promote` moves a thread cross-store;
-  // `links` traces forge issues/PRs onto spec nodes (read-only, spec-forge).
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('issue'))
   } else {
@@ -569,10 +537,6 @@ if (cmd === 'serve') {
     await flushExit(await runIssues(process.argv.slice(3)))
   }
 } else if (cmd === 'remark') {
-  // @@@ remark drawer - the resolvable interaction primitive ([[remark-substrate]]): `add` pins a concern to
-  // a HOST (a local issue, or a scenario `<node> --scenario <name>`), a second agent `resolve`s it, the
-  // author `retract`s it. CLI-first — the whole loop is these thin store-write wrappers, so the dashboard
-  // adds no capability.
   const sub = process.argv[3]
   const m = sub === 'add' || sub === 'resolve' || sub === 'retract' ? await import('./localIssues.js') : null
   if (sub === undefined) {
@@ -589,9 +553,6 @@ if (cmd === 'serve') {
     process.exit(2)
   }
 } else if (cmd === 'materialize') {
-  // @@@ materialize - surface nodes → manifest + AGENTS.md/CLAUDE.md block + shims + Codex
-  // trust, for cwd's project. Anchored on git-native events only ([[commit-surgery]]): this verb, init,
-  // session-worktree creation, and the planted pre-commit/post-checkout/post-merge hooks.
   const { materialize } = await import('./materialize.js')
   try {
     console.log(`materialized — content-hash ${materialize().contentHash}`)
@@ -602,11 +563,6 @@ if (cmd === 'serve') {
     process.exit(1)
   }
 } else if (cmd === 'doctor') {
-  // @@@ doctor - the diagnosis surface ([[doctor]], né `self` — renamed: "self" read as the tool itself /
-  // the global install, while the report is about THIS agent's wiring): does the materialized workflow
-  // actually reach this agent? Bare `doctor` reports per-layer coverage (preconditions · git-hook floor ·
-  // contract · hooks+handler-existence · backend) over the same HARNESSES materialize delivers through;
-  // `--contract` prints the surface:system text; `--conflicts` just the double-delivery check. Thin route.
   const { runDoctor } = await import('./doctor.js')
   await flushExit(await runDoctor(process.argv.slice(3)))
 } else if (cmd === 'session') {
@@ -928,8 +884,6 @@ if (cmd === 'serve') {
     }
   }
 } else if (cmd === 'internal') {
-  // @@@ internal - the machine-plumbing namespace: verbs only generated hooks and launch scripts call,
-  // kept OUT of the porcelain top level so `spex help`'s vocabulary is exactly what a human/agent types.
   const sub = process.argv[3]
   if (sub === 'trunk') {
     // print the resolved source-of-truth branch (layout.ts mainBranch(): config override → the main

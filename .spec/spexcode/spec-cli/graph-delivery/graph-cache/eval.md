@@ -149,6 +149,23 @@ scenarios:
       timing out once a last-good board exists, an overlapping second flight,
       changed graph units/ETag semantics, any per-reading `merge-base --is-ancestor` fanout, a corpus-sized
       process peak, unreaped descendants, or monotonic RSS.
+  - name: session-projection-overtakes-structural-full
+    tags: [backend-api]
+    test: spec-cli/src/graphStream.api.test.ts
+    code: spec-cli/src/graphCache.ts
+    related: [spec-cli/src/graphStream.ts, spec-cli/src/graph.ts]
+    description: >-
+      Warm a real isolated backend and delta subscriber, create a real full-domain change, and hold the
+      route-owned or patrol-owned full producer at a controlled git barrier. Persist a real session rename through
+      its HTTP route while that full remains held; retain the full across a second cold-tick interval, then release
+      it and inspect the raw SSE frames, final graph, and DEBUG trigger ledger.
+    expected: >-
+      The target session delta arrives before the held full is released, using a session-only projection over
+      last-good topology. The one structural full remains single-flight and completes once released; its new
+      nodes/ops survive, its session rows never regress after the target frame, and at most one later session
+      generation remains owed for cheap convergence. A sessions splice does not walk full topology inputs, stale
+      reads do not manufacture a full beside a held splice, and a patrol-owned full retains patrol attribution
+      through the early session frame without amplifying into a patrol successor treadmill.
 ---
 # eval.md — board-cache
 

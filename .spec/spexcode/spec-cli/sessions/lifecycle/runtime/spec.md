@@ -75,12 +75,7 @@ matching record on a clean exit. `backend.json` names the endpoint generation cl
 replacing that pointer does not erase an older still-live supervisor's ownership. This lets
 [[host-resource-budget]] charge a superseded or crashed generation to its exact backend owner without pretending
 it belongs to the session that happened to start it. Identity stripping is proven separately from the live
-process environment rather than by a registry claim. The project tier also holds [[maintenance-lease]]'s one
-atomically replaced admission row: its monotonic epoch, hashed bearer, immutable capability states, exact
-supervisor-generation lease owner, exact PID/start ticket owners, and operation tickets are project runtime
-facts, never session-record or worktree content.
-Backend generations share this row, so restart and cross-instance acquisition cannot reopen writes by losing
-process memory. All of it lives under `runtimeRoot()`, NOT the worktree. So
+process environment rather than by a registry claim. All of it lives under `runtimeRoot()`, NOT the worktree. So
 the worktree holds ZERO
 SpexCode-materialized runtime; the only in-tree artifacts are the harness-discovered contract files (CLAUDE.md/
 AGENTS.md block) + shims, which MUST sit in-tree for the harness to find them. `sessions.ts` writes through `storeDir(id)` (mkdir-and-return) and the full typed

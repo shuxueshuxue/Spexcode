@@ -110,18 +110,6 @@ test('session new falls back only for explicit connection refusal', { timeout: 1
 
   const runtime = join(home, 'projects', project.replace(/[/.]/g, '-'))
   mkdirSync(runtime, { recursive: true })
-  const { processStartToken } = await import('./process-identity.js')
-  const startToken = processStartToken(process.pid); assert.ok(startToken)
-  writeFileSync(join(runtime, 'session-maintenance.json'), JSON.stringify({
-    version: 1,
-    state: 'active',
-    epoch: 1,
-    tokenHash: createHash('sha256').update('dispatch-fixture').digest('hex'),
-    owner: { instanceId: 'dispatch-fixture', pid: process.pid, startToken },
-    heartbeatDeadline: Date.now() + 60_000,
-    capabilities: [],
-    tickets: [],
-  }))
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     PATH: `${bin}:${process.env.PATH}`,
@@ -145,7 +133,7 @@ test('session new falls back only for explicit connection refusal', { timeout: 1
       server.close(); await once(server, 'close')
       assert.equal(result.code, 1)
       assert.match(result.stderr, new RegExp(`backend rejected session \\(${status}\\)`))
-      assert.doesNotMatch(result.stderr, /launching in-process|maintenance_active/)
+      assert.doesNotMatch(result.stderr, /launching in-process/)
       noArtifacts()
     }
 
@@ -157,7 +145,7 @@ test('session new falls back only for explicit connection refusal', { timeout: 1
     slow.closeAllConnections(); slow.close(); await once(slow, 'close')
     assert.equal(indeterminate.code, 1)
     assert.match(indeterminate.stderr, /backend availability is indeterminate/)
-    assert.doesNotMatch(indeterminate.stderr, /launching in-process|maintenance_active/)
+    assert.doesNotMatch(indeterminate.stderr, /launching in-process/)
     assert.ok(Date.now() - started < 4_000)
     noArtifacts()
 
@@ -183,7 +171,9 @@ test('session new falls back only for explicit connection refusal', { timeout: 1
     const refused = await runCreate(project, env, `http://127.0.0.1:${refusedPort}`)
     assert.equal(refused.code, 1)
     assert.match(refused.stderr, /no backend reachable .* launching in-process/)
-    assert.match(refused.stderr, /maintenance_active/)
+    // the fallback IS attempted, then settles on its own preflight: this fixture names no default launcher,
+    // so creation aborts at launcher-resolution before any branch, worktree, or record exists.
+    assert.match(refused.stderr, /session_create_failed: sessions\.defaultLauncher is required/)
     noArtifacts()
   } finally {
     rmSync(root, { recursive: true, force: true })

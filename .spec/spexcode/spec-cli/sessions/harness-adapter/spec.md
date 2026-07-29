@@ -345,10 +345,10 @@ surface:
   Claude also carries the adapter's **`deliveryBlockedBy(paneText)`** predicate — the ONE pane state where a
   parsed reply is still swallowed: the TUI's **sessions panel** ("← for agents"), which enqueues the injected
   reply to the panel context and never drains it, with the daemon emitting nothing (verified live: enqueue
-  with no dequeue, no turn, no trace) — so no socket-side confirmation can see it. sendText captures the pane
-  once before delivering and, when the predicate names the panel, REFUSES the send loudly with the recovery
-  in the message (press Enter in the terminal to return to the composer); a missing pane (no window) skips the
-  guard and lets the socket path decide. Codex has no such predicate (its delivery is app-server JSON-RPC;
+  with no dequeue, no turn, no trace) — so no socket-side confirmation can see it. It no longer decides a send:
+  delivery is the log append ([[dispatch]]), so the predicate only tells the courtesy poke not to bother —
+  the message is already delivered and the turn-boundary reader shows it. A missing pane (no window) skips the
+  guard and lets the poke itself decide. Codex has no such predicate (its delivery is app-server JSON-RPC;
   pane state is irrelevant). **codex** confirms at the application layer through the same
   per-PROJECT Codex app-server JSON-RPC control plane the visible TUI uses, addressing the **owned** thread id
   (the one stored at launch). The handshake is `initialize → initialized → thread/loaded/list` (PROVE our

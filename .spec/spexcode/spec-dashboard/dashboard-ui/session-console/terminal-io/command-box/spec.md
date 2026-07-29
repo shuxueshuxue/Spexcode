@@ -33,12 +33,11 @@ grows upward to a bounded cap; the box never walks toward the screen bottom or t
 open above the caret/footer inside the available upper space. At phone width the desktop Command Box does not
 replace [[mobile-ui]]'s existing composer.
 
-Sending uses the session's control socket, never PTY typing, so one authored prompt lands atomically even while
-the terminal is in copy mode. The box owns one right-pane action-outcome surface: it exposes sending while the
-request is pending, retains the complete draft and returned HTTP/body error for a rejected or commit-unknown
-delivery, and therefore stays ready for retry. The unchanged draft keeps one opaque delivery marker, so that
-retry has the same native exactly-once identity and a late acceptance cannot create a second turn; editing the
-draft starts a new delivery. On an accepted 2xx it visibly acknowledges delivery in that same surface before
+Sending appends the prompt to the target's durable log ([[dispatch]]), so one authored prompt lands atomically
+even while the terminal is in copy mode. The box owns one right-pane action-outcome surface: it exposes sending
+while the request is pending, retains the complete draft and returned HTTP/body error for a refused delivery,
+and therefore stays ready for retry. It carries no delivery marker of its own: a send either put the bytes in
+the log or did not, so a retry is only ever a retry of something that never landed. On a 2xx it visibly acknowledges delivery in that same surface before
 clearing the draft and closing; disappearing is never the only success signal. A close, session switch, or the
 next send owns clearing that outcome; the session list never mirrors it. Enter sends only when it is not
 committing an IME composition; Shift+Enter adds a line. The box uses the one shared [[composer]] shell also used

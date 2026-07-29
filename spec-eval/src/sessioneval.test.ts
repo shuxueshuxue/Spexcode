@@ -645,6 +645,41 @@ test('projection cache batches initial misses into one publication', async () =>
   assert.equal(publishes, 1, 'the batch completion emits one canonical graph nudge, not N pushes')
 })
 
+test('projection batch keeps its cohort invisible until one atomic publication', async () => {
+  const gates = new Map<string, ReturnType<typeof deferred<any>>>()
+  let publishes = 0
+  const cache = new SessionEvalProjectionCache(async (id) => {
+    const gate = deferred<any>()
+    gates.set(id, gate)
+    return gate.promise
+  }, () => { publishes++ }, 'epoch')
+  const initial = ['a', 'b', 'c'].map((id) => ({ id, path: `/wt/${id}` }))
+
+  assert.deepEqual([...cache.snapshot(initial).values()].map((row) => row.phase), ['loading', 'loading', 'loading'])
+  while (!gates.has('a')) await Promise.resolve()
+  gates.get('a')!.resolve({ kind: 'stable', revision: 'r-a', summary: summary(1) })
+  while (!gates.has('b')) await Promise.resolve()
+
+  const middle = cache.snapshot([...initial, { id: 'd', path: '/wt/d' }])
+  assert.deepEqual([...middle.values()].map((row) => row.phase), ['loading', 'loading', 'loading', 'loading'],
+    'a completed worker must not leak a partial ready cohort')
+  assert.equal(publishes, 0, 'partial cohort completion has no graph publication')
+
+  gates.get('b')!.resolve({ kind: 'stable', revision: 'r-b', summary: summary(1) })
+  while (!gates.has('c')) await Promise.resolve()
+  gates.get('c')!.resolve({ kind: 'stable', revision: 'r-c', summary: summary(1) })
+  for (let attempt = 0; cache.get('a')?.phase !== 'ready' && attempt < 100; attempt++) await Promise.resolve()
+  assert.deepEqual(initial.map(({ id }) => cache.get(id)?.phase), ['ready', 'ready', 'ready'])
+  assert.equal(cache.get('d')?.phase, 'loading', 'a later miss belongs to the next cohort')
+  assert.equal(publishes, 1, 'the frozen cohort publishes exactly once before later work')
+
+  while (!gates.has('d')) await Promise.resolve()
+  gates.get('d')!.resolve({ kind: 'stable', revision: 'r-d', summary: summary(1) })
+  await cache.idle()
+  assert.equal(cache.get('d')?.phase, 'ready')
+  assert.equal(publishes, 2, 'the later cohort publishes after, rather than starving, the first')
+})
+
 test('offline history projections stay demand-only', async () => {
   let builds = 0
   const cache = new SessionEvalProjectionCache(async () => {

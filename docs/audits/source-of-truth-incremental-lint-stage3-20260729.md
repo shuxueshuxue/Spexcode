@@ -1,5 +1,9 @@
 # Incremental lint boundary audit, stage 3
 
+> Historical checkpoint. Its `{HEAD, interpretation}` process-key claim was superseded by the v15
+> `{project-namespaced ledger path, HEAD}` identity after independent same-HEAD clones proved cross-repository
+> promise poisoning. Current evidence is in `source-of-truth-raw-identity-v15-20260729.md`.
+
 ## Scope
 
 - Baseline source: `ac8253742f4ca74ea8dd6bd33d29be19204d36aa`.

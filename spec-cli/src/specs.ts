@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative, basename } from 'node:path'
-import { repoRoot, historyIndex, rowsFor, statsFor, pathsStats, driftIndex, driftFor, fileDiffAt,
+import { repoRoot, historyIndex, rowsFor, historyStats, pathsStats, driftIndex, driftFor, fileDiffAt,
   sourceIndexes, treeTextFiles, type HistoryIndex, type DriftIndex } from './git.js'
 import { parseCodeEntry, parseRelation, relationClaimsPath } from './anchors.js'
 
@@ -324,7 +324,7 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
   return loaded
 }
 
-// per-node version timeline; each row sums the node's spec.md stat (rename-followed, via statsFor) and its
+// per-node version timeline; each row sums the node's spec.md stat (rename-followed, read on demand) and its
 // governed-code stat (pathsStats) — separate because spec.md needs rename-following a plain `git log -- path` can't do.
 export async function specHistory(id: string) {
   const node = raws().find((r) => r.id === id)
@@ -332,7 +332,7 @@ export async function specHistory(id: string) {
   const codePaths = [...new Set(list(node.fm.code).map((e) => parseCodeEntry(e).path))]
   // index (cached) and the code-path walk are independent — run them in parallel, both async git.
   const [idx, cStats] = await Promise.all([historyIndex(ROOT), pathsStats(ROOT, codePaths)])
-  const sStats = statsFor(idx, node.relPath)
+  const sStats = await historyStats(ROOT, idx, node.relPath)
   return rowsFor(idx, node.relPath).map((v) => {
     const s = sStats.get(v.hash) ?? { additions: 0, deletions: 0, files: 0 }
     const c = cStats.get(v.hash) ?? { additions: 0, deletions: 0, files: 0 }

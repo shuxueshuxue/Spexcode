@@ -32,6 +32,9 @@ The graph is built **once per change, not once per poll — and only as much of 
 
 - **Single-flight.** One assembly runs at a time; concurrent callers share the in-flight promise. This IS
   the max-concurrent-builds cap — a poll storm can never fan out into N builds, it joins the one.
+  Under `SPEXCODE_BOARD_DEBUG=1`, each successful full or sessions cache publication emits one structured
+  `cache-commit` row after its anchor is committed, carrying `stage=cache-commit`, `at`, `scope` and `buildMs`; validation hits,
+  stale reads and failed, aborted or timed-out producers emit no such row.
 - **Patrol verification is cache-owned.** Graph-stream's existing ~15s patrol does not manufacture a full
   invalidation. It asks the cache for the same single-flight refresh every other fresh reader uses. On a clean
   cache that refresh first compares one compact board-input revision: the served checkout's HEAD, `.spec` tree

@@ -151,7 +151,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   // the governed `code:` files are the freshness CODE axis; read them from the canonical spec loader so a
   // reparent/rename is seen the same way `spex spec lint` and `spex eval add` see it (joined by directory).
   const specs = ctx?.specs ?? await loadSpecs()
-  const codeFiles = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.code ?? []
+  const codeEntries = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.codeEntries ?? []
   const idx = ctx?.idx ?? await driftIndex(root)
   const hidx = ctx?.hidx ?? await historyIndex(root)
   // the SCENARIO axis: per-scenario block-change history, built once per HEAD (cached). A bare call builds it
@@ -181,16 +181,15 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     // the teeth feed the WHOLE scenario track against THIS reading — an unresolved (or not-yet-out-run)
     // remark makes it remark-stale (T1). Display attachment (which reading each remark pins to) is a separate
     // read-time overlay below; freshness never depends on that pin.
-    const cf = sc?.code?.length ? sc.code : codeFiles
     // an entry may be anchored (`path#symbol`); every PATH consumer below reads base paths, the narrowing
     // reads the folded selectors ([[eval-core]]).
-    const axis = scenarioCodeAxis(sc?.code, codeFiles)
+    const axis = scenarioCodeAxis(sc?.code, codeEntries)
     if (!commitReachable(idx, r.codeSha)) await probe.prime?.(r.codeSha, axis.paths, ynode.evalPath)
     await anchors.prime?.(r.codeSha, axis.entries)
-    const axes = staleAxes(r, cf, ynode.evalPath, idx, scidx,
+    const axes = staleAxes(r, axis.entries, ynode.evalPath, idx, scidx,
       remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc, anchors)
     // when the code axis is stale, explain it: which of THIS reading's governed files moved, by how many commits.
-    const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, cf, probe) : []
+    const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, axis.entries, probe) : []
     // the reading's evidence list, each entry resolved to its live blob state; the primary (video-first, else
     // first) drives the scalar compat fields for single-evidence consumers.
     const evidence: EvidenceView[] = evidenceOf(r).map((e) => ({ hash: e.hash, kind: e.kind, state: hasBlob(e.hash) ? 'present' : 'miss' }))

@@ -4,7 +4,6 @@ import { readFileSync, readdirSync, statSync, existsSync, writeFileSync, mkdirSy
 import { join, isAbsolute, resolve } from 'node:path'
 import { createHash, randomBytes } from 'node:crypto'
 import { projectRuntimeRoot } from './project-store.js'
-import { processAlive } from './process-identity.js'
 
 const US = '\x1f', RS = '\x1e'
 
@@ -545,6 +544,10 @@ function readEventLockOwner(lock: string): EventLockOwner | null {
       ? { pid: value.pid as number, token: value.token }
       : null
   } catch { return null }
+}
+function processAlive(pid: number): boolean {
+  try { process.kill(pid, 0); return true }
+  catch (error: any) { return error?.code !== 'ESRCH' }
 }
 function retireLockPath(active: string): boolean {
   const inert = `${active}.inert.${process.pid}.${randomBytes(8).toString('hex')}`

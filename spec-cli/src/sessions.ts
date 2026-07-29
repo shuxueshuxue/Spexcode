@@ -15,7 +15,7 @@ import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.j
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
-import { processAlive, processStartToken } from './process-identity.js'
+import { processStartToken } from './process-identity.js'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationClose, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
@@ -2960,7 +2960,7 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, l
     throw new ResourceConflict(`refusing to stop ${id}: session leaf identity changed before signal`)
   if (!Number.isFinite(pid) || pid <= 0) return
   const startToken = leaf.startToken
-  const alive = (): boolean => processAlive(pid)
+  const alive = (): boolean => leafAlive(pid)
   const identityState = (): 'same' | 'gone' | 'changed' => {
     if (readAgentPid(sessionArtifactPath(id, 'agent.pid')) !== leaf.pid) return 'changed'
     const current = processStartToken(pid)
@@ -3000,6 +3000,14 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, l
 // the resolved adapter to sweep its ephemeral runtime transport — in that order, because the adapter only
 // removes a transport whose listener is PROVEN dead.
 // Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
+// @@@ leafAlive - does this pid name a live process? EPERM counts as alive (a process we may not signal is
+// still a process); only ESRCH is absence. Kept local: git.ts carries its own copy for lock reclamation, and
+// collapsing the two is part of the spec/eval unification lane, not of this fix.
+const leafAlive = (pid: number): boolean => {
+  try { process.kill(pid, 0); return true }
+  catch (error) { return (error as NodeJS.ErrnoException)?.code !== 'ESRCH' }
+}
+
 async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIdentity | null> {
   const harness = harnessById(rec.harness || defaultHarness.id)
   if (harness.runtimeOwnership === 'adapter') return null
@@ -3021,7 +3029,7 @@ async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIde
     // the escalation path below already uses to tell `gone` from `changed`; this guard simply asks it too.
     // The failure it closes: a launcher that dies before readiness leaves a dead pid on the record, and every
     // later `stop`/`close` refused it, so the row could be neither run nor retired.
-    if (rec.stopped || !processAlive(pid)) return null
+    if (rec.stopped || !leafAlive(pid)) return null
     throw new ResourceConflict(`refusing to stop ${id}: session-owned leaf PID ${pid} is alive but will not prove its start identity`)
   }
   const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')

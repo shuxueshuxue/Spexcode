@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path'
 import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent } from '../../spec-cli/src/git.js'
 import { anchorHitCommits, extOf, extractorFor, extractors, resolveAnchor, type Extractor, type RelationEntry } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
-import { scenarioCodeAxis, scenarioHash, type Scenario } from './scenarios.js'
+import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
 
 // the CODE axis is touch-based (DriftIndex), so a code-file rename is out of scope — the same blind spot lint's code-drift has
@@ -366,10 +366,10 @@ export function changedSince(idx: DriftIndex, sinceSha: string, path: string, pr
 // an off-history sinceSha reports through the same content fallback (only files whose content differs, counted
 // by rev-list); with no probe or a gone anchor it counts every touch (conservative, matching changedSince).
 // Reporting only — it never decides freshness (staleAxes does); it explains a decision already made.
-export function codeDrift(idx: DriftIndex, sinceSha: string, codeAxis: string[], probe?: ContentProbe): { file: string; behind: number }[] {
+export function codeDrift(idx: DriftIndex, sinceSha: string, codeAxis: ScenarioCodeAxisSource, probe?: ContentProbe): { file: string; behind: number }[] {
   // an entry may be anchored (`path#symbol`); drift is reported per BASE FILE — a raw selector string names
   // no real path, so counting commits against it would silently report nothing.
-  const codeFiles = scenarioCodeAxis(codeAxis).paths
+  const codeFiles = scenarioCodeAxis(undefined, codeAxis).paths
   const anc = ancestorsOf(idx, sinceSha)
   const out: { file: string; behind: number }[] = []
   for (const f of codeFiles) {
@@ -428,7 +428,7 @@ function entryMoved(idx: DriftIndex, sinceSha: string, entry: RelationEntry, pro
 
 export function staleAxes(
   reading: Reading,
-  codeAxis: string[],
+  codeAxis: ScenarioCodeAxisSource,
   evalPath: string,
   didx: DriftIndex,
   scIdx: ScenarioIndex,
@@ -445,7 +445,7 @@ export function staleAxes(
     axes.push('anchor')
     if (byHash) axes.push('scenario')
   } else {
-    if (scenarioCodeAxis(codeAxis).entries.some((e) => entryMoved(didx, reading.codeSha, e, probe, anchors))) axes.push('code')
+    if (scenarioCodeAxis(undefined, codeAxis).entries.some((e) => entryMoved(didx, reading.codeSha, e, probe, anchors))) axes.push('code')
     if (byHash ?? scenarioMoved(scIdx, didx, reading.codeSha, evalPath, reading.scenario, probe)) axes.push('scenario')
   }
   if (remarkStale(reading, remarks)) axes.push('remark')
@@ -454,7 +454,7 @@ export function staleAxes(
 
 export function isStale(
   reading: Reading,
-  codeAxis: string[],
+  codeAxis: ScenarioCodeAxisSource,
   evalPath: string,
   didx: DriftIndex,
   scIdx: ScenarioIndex,

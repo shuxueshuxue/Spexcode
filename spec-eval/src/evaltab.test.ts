@@ -6,7 +6,9 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import { putBlob, MISS_BLOB } from './cache.js'
-import { evalTimeline, readBlobByHash } from './evaltab.js'
+import { driftIndex, historyIndex } from '../../spec-cli/src/git.js'
+import { loadSpecs } from '../../spec-cli/src/specs.js'
+import { evalContext, evalTimeline, readBlobByHash } from './evaltab.js'
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'evaltab-test-'))
 
@@ -97,7 +99,7 @@ test('evalTimeline primes off-history content fallback without probing reachable
     }
     const timeline = await evalTimeline('n', {
       root,
-      specs: [{ path: '.spec/n/spec.md', code: ['src/x.ts'] }],
+      specs: [{ path: '.spec/n/spec.md', code: ['src/x.ts'], codeEntries: [{ path: 'src/x.ts', selectors: [] }] }],
       idx,
       hidx: {} as any,
       scidx: new Map(),
@@ -105,6 +107,59 @@ test('evalTimeline primes off-history content fallback without probing reachable
       remarks: new Map(),
     } as any)
     assert.deepEqual(timeline.readings[0].staleAxes, ['code'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('evalTimeline inherits node anchors while an explicit bare scenario code stays file-wide', async () => {
+  const root = tmp()
+  const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const commit = (message: string) => { git('add', '-A'); git('commit', '-qm', message); return git('rev-parse', 'HEAD') }
+  const write = (path: string, content: string) => {
+    mkdirSync(join(root, path, '..'), { recursive: true })
+    writeFileSync(join(root, path), content)
+  }
+  const source = (rate: number, helper: number) => `def apply_rate():\n    return ${rate}\n\ndef helper():\n    return ${helper}\n`
+  const timeline = async () => {
+    const specs = await loadSpecs(root)
+    return evalTimeline('calc', await evalContext(root, specs, await driftIndex(root), await historyIndex(root), new Map()))
+  }
+
+  try {
+    git('init', '-q', '-b', 'main')
+    git('config', 'user.email', 'eval@example.test')
+    git('config', 'user.name', 'Eval')
+    write('.spec/project/spec.md', '---\ntitle: project\n---\n# project\n')
+    write('.spec/project/calc/spec.md', '---\ntitle: calc\ncode: src/calc.py#apply_rate\n---\n# calc\n')
+    write('.spec/project/calc/eval.md', [
+      '---', 'scenarios:',
+      '  - name: inherited', '    tags: [cli]', '    description: inherited anchor', '    expected: only apply_rate stales',
+      '  - name: whole-file', '    tags: [cli]', '    code: src/calc.py', '    description: bare path', '    expected: any file change stales',
+      '---', '',
+    ].join('\n'))
+    write('src/calc.py', source(1, 2))
+    const base = commit('base')
+    write('.spec/project/calc/evals.ndjson', [
+      JSON.stringify({ scenario: 'inherited', codeSha: base, ts: '2026-07-29T00:00:00.000Z' }),
+      JSON.stringify({ scenario: 'whole-file', codeSha: base, ts: '2026-07-29T00:00:00.000Z' }),
+      '',
+    ].join('\n'))
+    commit('file readings')
+
+    write('src/calc.py', source(1, 20))
+    commit('change helper')
+    let rows = new Map((await timeline()).readings.map((r) => [r.scenario, r]))
+    assert.equal(rows.get('inherited')!.fresh, true)
+    assert.deepEqual(rows.get('inherited')!.staleAxes, [])
+    assert.equal(rows.get('whole-file')!.fresh, false)
+    assert.deepEqual(rows.get('whole-file')!.staleAxes, ['code'])
+
+    write('src/calc.py', source(10, 20))
+    commit('change anchored function')
+    rows = new Map((await timeline()).readings.map((r) => [r.scenario, r]))
+    assert.deepEqual(rows.get('inherited')!.staleAxes, ['code'])
+    assert.deepEqual(rows.get('whole-file')!.staleAxes, ['code'])
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

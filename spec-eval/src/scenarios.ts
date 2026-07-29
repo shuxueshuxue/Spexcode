@@ -306,8 +306,14 @@ export function scenarioHash(s: Pick<Scenario, 'description' | 'expected'>): str
 }
 
 export type ScenarioCodeAxis = { entries: RelationEntry[]; paths: string[]; problems: string[] }
-export function scenarioCodeAxis(scenarioCode: readonly string[] | undefined, nodeCode: readonly string[] = []): ScenarioCodeAxis {
-  const { entries, problems } = parseRelation([...(scenarioCode?.length ? scenarioCode : nodeCode)], 'code')
+export type ScenarioCodeAxisSource = readonly string[] | readonly RelationEntry[]
+export function scenarioCodeAxis(scenarioCode: readonly string[] | undefined, nodeCode: ScenarioCodeAxisSource = []): ScenarioCodeAxis {
+  const parsed = scenarioCode?.length
+    ? parseRelation([...scenarioCode], 'code')
+    : nodeCode.length && typeof nodeCode[0] !== 'string'
+      ? { entries: (nodeCode as readonly RelationEntry[]).map((e) => ({ path: e.path, selectors: [...e.selectors] })), problems: [] }
+      : parseRelation([...(nodeCode as readonly string[])], 'code')
+  const { entries, problems } = parsed
   return { entries, paths: entries.map((e) => e.path), problems }
 }
 

@@ -98,7 +98,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   const ynode = (ctx?.ynodes ?? evalNodes(root)).find((n) => n.id === id)
   if (!ynode) return { node: id, hasEvalFile: false, scenarios: [], readings: [], retractions: [], dangling: [] }
   const specs = ctx?.specs ?? await loadSpecs()
-  const codeFiles = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.code ?? []
+  const codeEntries = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.codeEntries ?? []
   const idx = ctx?.idx ?? await driftIndex(root)
   const hidx = ctx?.hidx ?? await historyIndex(root)
   const scidx = ctx?.scidx ?? await scenarioIndex(root, (ctx?.ynodes ?? evalNodes(root)).map((n) => n.evalPath))
@@ -117,13 +117,12 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   const readings: EvalEntry[] = []
   for (const r of applyRetractions(rawReadings, retractions)) {
     const sc = byName.get(r.scenario)
-    const cf = sc?.code?.length ? sc.code : codeFiles
-    const axis = scenarioCodeAxis(sc?.code, codeFiles)
+    const axis = scenarioCodeAxis(sc?.code, codeEntries)
     if (!commitReachable(idx, r.codeSha)) await probe.prime?.(r.codeSha, axis.paths, ynode.evalPath)
     await anchors.prime?.(r.codeSha, axis.entries)
-    const axes = staleAxes(r, cf, ynode.evalPath, idx, scidx,
+    const axes = staleAxes(r, axis.entries, ynode.evalPath, idx, scidx,
       remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc, anchors)
-    const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, cf, probe) : []
+    const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, axis.entries, probe) : []
     const evidence: EvidenceView[] = evidenceOf(r).map((e) => ({ hash: e.hash, kind: e.kind, state: hasBlob(e.hash) ? 'present' : 'miss' }))
     const primary = evidence.find((e) => e.kind === 'video') ?? evidence[0]
     const okRow = humanOkFor(oks, r.scenario, r.ts)

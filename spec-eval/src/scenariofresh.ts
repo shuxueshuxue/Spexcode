@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { git, gitA, gitTry, headSha } from '../../spec-cli/src/git.js'
 import { parseScenarios } from './scenarios.js'
+import { rootSlots, touchRoot as touchRootLru } from '../../spec-cli/src/root-lru.js'
 
 // @@@ per-scenario content freshness — the SCENARIO axis, sub-file
 // An eval.md holds many scenarios, but a reading measures ONE. eval-core's contract says "a scenario is the
@@ -159,29 +160,15 @@ async function build(root: string, evalPaths: string[]): Promise<ScenarioIndex> 
 
 // HEAD-keyed LRU, mirroring historyIndex/driftIndex in git.ts: same head ⇒ same per-scenario history,
 // whatever the caller. Holds the in-flight promise so concurrent board builds share one build.
-const SLOTS = 16
+const SLOTS = rootSlots(process.env.SPEXCODE_SCENARIO_CACHE_ROOTS, 16)   // was a bare literal — now tunable like its siblings
 const cache = new Map<string, Promise<ScenarioIndex>>()
 const roots = new Map<string, string>()
 
 // A checkout moving from HEAD A to HEAD B no longer needs A's full scenario chains. Keep an old index only
-// while another checkout still points at that immutable HEAD; otherwise a sequence of successful rebuilds
-// retains one whole history-shaped index per commit until the broad LRU fills.
+// while another checkout still points at that immutable HEAD — the reference-counted bound is [[root-lru]]'s,
+// shared with the index/drift caches it used to be a hand copy of.
 function touchRoot(root: string, head: string): void {
-  const previous = roots.get(root)
-  if (previous === head) {
-    roots.delete(root)
-    roots.set(root, head)
-    return
-  }
-  roots.set(root, head)
-  if (previous && ![...roots.values()].includes(previous)) cache.delete(previous)
-  while (roots.size > SLOTS) {
-    const oldest = roots.keys().next().value as string | undefined
-    if (oldest === undefined) break
-    const oldHead = roots.get(oldest)
-    roots.delete(oldest)
-    if (oldHead && ![...roots.values()].includes(oldHead)) cache.delete(oldHead)
-  }
+  touchRootLru(roots, cache, root, head, SLOTS)
 }
 
 export function scenarioIndex(root: string, evalPaths: string[]): Promise<ScenarioIndex> {

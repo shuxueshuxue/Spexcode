@@ -41,6 +41,7 @@ test('public session create is bounded, rollback-clean, idempotent, and publishe
   const stallGit = join(root, 'stall-git'), mismatchGit = join(root, 'mismatch-git')
   const killAfterGit = join(root, 'kill-after-git'), killAfterStore = join(root, 'kill-after-store')
   const blockReceiptRetire = join(root, 'block-receipt-retire')
+  const materializeFailure = join(root, 'materialize-failure')
   const launcher = join(root, 'stall-launcher'), gitWrapper = join(fakeBin, 'git')
   const candidateDir = join(home, 'projects', project.replace(/[/.]/g, '-'), '.session-create-candidates')
   const tmux = `spex-create-${process.pid}-${Date.now()}`, port = await freePort(), base = `http://127.0.0.1:${port}`
@@ -55,6 +56,7 @@ test('public session create is bounded, rollback-clean, idempotent, and publishe
     sessions: { maxActive: 1, launchers: { stall: { harness: 'claude', cmd: launcher } }, defaultLauncher: 'stall' },
   }, null, 2))
   writeFileSync(join(project, 'README.md'), 'fixture\n')
+  writeFileSync(join(project, '.gitignore'), 'host-ignore\n')
   writeFileSync(launcher, '#!/bin/sh\nprintf "%s launcher pid=%s\\n" "$(date -Iseconds)" "$$" >> "$SPEX_CREATE_TRACE"\nsleep 30\n')
   writeFileSync(gitWrapper, `#!/bin/sh
 case " $* " in
@@ -69,6 +71,15 @@ case " $* " in
       if [ -e "$SPEX_CREATE_KILL_AFTER_GIT" ]; then kill -KILL "$PPID"; exit 137; fi
     fi ;;
   *)
+    if [ -e "$SPEX_CREATE_MATERIALIZE_FAILURE" ]; then
+      parent_cmd=$(tr '\\000' ' ' < "/proc/$PPID/cmdline" 2>/dev/null || true)
+      case "$parent_cmd" in
+        *"cli.ts materialize"*)
+          printf '%s\\n' 'fatal: config command "sh -c [test -r "$0" && exec bash "$0" clean "$1"]" C:\\broken\\path' >&2
+          printf '%s\\n' 'second line: non-ASCII e\u0301' >&2
+          exit 17 ;;
+      esac
+    fi
     if [ -e "$SPEX_CREATE_KILL_AFTER_STORE" ]; then
       parent_cmd=$(tr '\\000' ' ' < "/proc/$PPID/cmdline" 2>/dev/null || true)
       case "$parent_cmd" in
@@ -112,6 +123,7 @@ esac
         SPEX_CREATE_KILL_AFTER_GIT: killAfterGit,
         SPEX_CREATE_KILL_AFTER_STORE: killAfterStore,
         SPEX_CREATE_BLOCK_RECEIPT_RETIRE: blockReceiptRetire,
+        SPEX_CREATE_MATERIALIZE_FAILURE: materializeFailure,
         SPEX_CREATE_CANDIDATE_DIR: candidateDir,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -137,6 +149,11 @@ esac
   }
   const candidateReceipts = () => {
     return existsSync(candidateDir) ? readdirSync(candidateDir).map((name) => join(candidateDir, name)) : []
+  }
+  const recordPath = (id: string) => {
+    const runtime = readdirSync(join(home, 'projects')).map((name) => join(home, 'projects', name, 'sessions')).find(existsSync)
+    assert.ok(runtime, 'the public session store exists')
+    return join(runtime, id, 'session.json')
   }
   const nodeRefs = () => git(project, 'for-each-ref', 'refs/heads/task', '--format=%(refname)')
   const worktrees = () => git(project, 'worktree', 'list', '--porcelain').match(/^worktree /gm)?.length ?? 0
@@ -233,6 +250,49 @@ esac
     const queued = phases.findIndex((row) => row.session === a.id && row.phase === 'launcher-queue' && row.event === 'start')
     assert.ok(published >= 0 && queued > published, 'record publication precedes launcher queue work')
 
+    writeFileSync(materializeFailure, 'inject quoted materialize stderr\n')
+    const degradedCreate = await post('quoted-materialize-failure', '[[target]] quoted materialize failure')
+    const degraded = await degradedCreate.json() as any
+    rmSync(materializeFailure, { force: true })
+    assert.equal(degradedCreate.status, 201, `materialize failure still publishes one recoverable session: ${JSON.stringify(degraded)}`)
+    const record = JSON.parse(readFileSync(recordPath(degraded.id), 'utf8'))
+    assert.match(record.note, /"\$0"/)
+    assert.match(record.note, /C:\\broken\\path/)
+    assert.match(record.note, /second line: non-ASCII é/)
+    assert.equal(record.session_id, degraded.id)
+    assert.deepEqual(Object.keys(record).filter((key) => key === 'note'), ['note'], 'the quoted stderr stays one JSON field')
+
+    const listed = (await rows()).find((row) => row.id === degraded.id)
+    assert.ok(listed, 'list retains the degraded session')
+    assert.notEqual(listed.status, 'corrupt', 'list never projects the failure note as a corrupt row')
+    const shown = await fetch(`${base}/api/sessions/${degraded.id}`)
+    assert.equal(shown.status, 200, 'show reads the failure note through the public record')
+    assert.equal((await shown.json() as any).note, record.note)
+    const stopped = await fetch(`${base}/api/sessions/${degraded.id}/stop`, { method: 'POST' })
+    assert.equal(stopped.status, 200, 'stop can still prove the record owner')
+    assert.equal(JSON.parse(readFileSync(recordPath(degraded.id), 'utf8')).stopped, true)
+    const closed = await close(degraded.id)
+    assert.equal(closed.status, 200, 'close can still prove and retire the record owner')
+    assert.equal((await fetch(`${base}/api/sessions/${degraded.id}`)).status, 404)
+
+    const configLock = join(project, '.git', 'config.lock')
+    writeFileSync(configLock, 'hold the shared Git config lock\n')
+    const [configLockLeft, configLockRight] = await Promise.all([post('concurrent-config-lock'), post('concurrent-config-lock')])
+    const [configLockA, configLockB] = await Promise.all([configLockLeft.json() as Promise<any>, configLockRight.json() as Promise<any>])
+    rmSync(configLock, { force: true })
+    assert.equal(configLockLeft.status, 201, `first config-lock create publishes a recoverable failure: ${JSON.stringify(configLockA)}`)
+    assert.equal(configLockRight.status, 201, `same-key concurrent create joins its recoverable failure: ${JSON.stringify(configLockB)}`)
+    assert.equal(configLockA.id, configLockB.id, 'concurrent callers publish at most one session record')
+    const configLockRecord = JSON.parse(readFileSync(recordPath(configLockA.id), 'utf8'))
+    assert.match(configLockRecord.note, /could not lock config file/)
+    assert.equal((await rows()).filter((row) => row.id === configLockA.id && row.status === 'corrupt').length, 0,
+      'a shared config lock never leaves a corrupt active row')
+    const configLockStatus = git(configLockA.path, 'status', '--porcelain', '--untracked-files=all')
+    assert.equal(configLockStatus, '', `materialize recovery restores the prepared candidate: ${JSON.stringify(configLockStatus)}`)
+    const configLockClose = await close(configLockA.id)
+    const configLockCloseBody = await configLockClose.json() as any
+    assert.equal(configLockClose.status, 200, `the clean config-lock failure record stays closable: ${JSON.stringify(configLockCloseBody)}`)
+
     const crashPrompt = 'git crash recovery fixture'
     const id4 = (key: string) => createHash('sha256').update(`spexcode-session-create\0${key}`).digest('hex').slice(0, 4)
     assert.equal(id4('crash-3'), id4('crash-157'), 'different crash keys deterministically share one resource suffix')
@@ -317,6 +377,7 @@ esac
       { gitDeath: 201, storeDeath: 201 },
       `same-key restart must recover both process-death stages; git=${JSON.stringify(gitRetryBody)} store=${JSON.stringify(storeRetryBody)}`,
     )
+
   } finally {
     child.kill('SIGTERM')
     try { execFileSync('tmux', ['-L', tmux, 'kill-server'], { stdio: 'ignore' }) } catch { /* no server */ }

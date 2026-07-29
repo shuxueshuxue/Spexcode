@@ -17,7 +17,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
-import { superviseTimeline, readTimeline } from './session-timeline.js'
+import { readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
@@ -629,7 +629,6 @@ app.post('/api/sessions/:id/input', async (c) => {
     // terminal-free sender ([[session-timeline]]): the server appends the note-reply insert to the delivery.
     const r = await sendText(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined, {
       ...(body?.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
-      ...(typeof body?.deliveryId === 'string' && body.deliveryId ? { deliveryId: body.deliveryId } : {}),
     })
     return c.json(r, r.ok ? 200 : 502)
   }
@@ -714,7 +713,6 @@ injectWebSocket(server)
 superviseBridges()   // restore visible helpers after failure; their viewer subscriptions survive replacement
 superviseQueue()     // launch queued sessions as slots free (catches agent-authored proposals/crashes the server never sees directly)
 superviseTurnFailures() // reconcile adapter-owned native failure subscriptions across backend replacement
-superviseTimeline()  // record authored-lifecycle transitions to each session's durable timeline ([[session-timeline]])
 console.log(`spec-cli serving .spec (from git) on http://localhost:${port}`)
 
 let graphWatchersClosed = false

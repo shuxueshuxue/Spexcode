@@ -1036,6 +1036,23 @@ if (cmd === 'serve') {
     const st = process.argv[4] as any
     const ok = mark(() => s.markState(st, { proposal: flag('propose') as any, note: flag('note'), sessionId: sess }))
     console.log(ok.ok ? `state -> ${st}${noteEcho(flag('note'))}` : ok.reason ?? noRecord())
+  } else if (sub === 'session-cursor') {
+    // the turn-boundary mail reader advances its own inbox cursor here ([[session-cursors]]) — the same
+    // one-writer discipline as session-state: shell reads the file, it never rewrites it, so a follower's
+    // entries in the same file cannot be clobbered by a partial shell write.
+    const to = Number(flag('to'))
+    const sess = flag('session')
+    if (process.argv[4] !== 'inbox' || !sess || !Number.isFinite(to)) {
+      console.error('usage: spex internal session-cursor inbox --session <id> --to <event-index>')
+      process.exit(2)
+    }
+    const { advanceInbox } = await import('./session-cursors.js')
+    const { readAliasedRawRecord } = await import('./layout.js')
+    // the hook may address a codex THREAD id; the cursor file is keyed by the record id, so resolve the alias
+    // through the one seam that owns that rule.
+    const record = readAliasedRawRecord(sess)
+    if (!record) console.log('noop (no session record)')
+    else { advanceInbox(record.session_id, to); console.log(`inbox -> ${to}`) }
   } else if (sub === 'session-fail') {
     // StopFailure is one native source for the shared active-only turn-failure CAS. A declaration or explicit
     // stop that landed first is authoritative, just as it is for Codex notifications and headless exits.

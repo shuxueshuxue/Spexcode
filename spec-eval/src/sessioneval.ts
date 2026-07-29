@@ -101,7 +101,7 @@ export type SessionImpactOverlay = {
 }
 
 export type SessionImpactSpecSnapshot = Pick<LoadedSpec,
-  'id' | 'path' | 'code' | 'codeScoped' | 'related' | 'relatedScoped' | 'relationProblems'>
+  'id' | 'path' | 'code' | 'codeEntries' | 'codeScoped' | 'related' | 'relatedEntries' | 'relatedScoped' | 'relationProblems'>
 
 export class SessionEvalUnavailableError extends Error {
   override name = 'SessionEvalUnavailableError'
@@ -166,12 +166,12 @@ async function revisionFile(root: string, revision: string, path: string): Promi
   return impactGit(root, ['show', `${revision}:${path}`], `read ${revision}:${path}`)
 }
 
-function loadedRelationRows(spec: SessionImpactSpecSnapshot | undefined, relation: 'code' | 'related'): string[] {
+// the snapshot already carries parsed entries; a caller wanting one relation just picks it. This used to mint
+// `path#selector` STRINGS from the split path/scoped pair and hand them back to the parser to be turned into
+// the entries the loader had all along — a serialize/reparse round-trip through a form nobody stored.
+function loadedRelationEntries(spec: SessionImpactSpecSnapshot | undefined, relation: 'code' | 'related'): readonly RelationEntry[] {
   if (!spec) return []
-  const paths = relation === 'code' ? spec.code : spec.related
-  const scoped = relation === 'code' ? spec.codeScoped : spec.relatedScoped
-  const selectors = new Map(scoped.map((entry) => [entry.path, entry.selectors]))
-  return paths.flatMap((path) => selectors.get(path)?.map((selector) => `${path}#${selector}`) ?? [path])
+  return relation === 'code' ? spec.codeEntries : spec.relatedEntries
 }
 
 function scenarioMetadata(scenario: Scenario, effectiveCode: readonly RelationEntry[]): string {
@@ -265,8 +265,8 @@ function selectorEntriesForSnapshot(
 ): RelationEntry[] {
   const entries: RelationEntry[] = []
   for (const spec of specs) {
-    entries.push(...parsedRelation(loadedRelationRows(spec, 'code'), 'code', `node '${spec.id}'`))
-    entries.push(...parsedRelation(loadedRelationRows(spec, 'related'), 'related', `node '${spec.id}'`))
+    entries.push(...loadedRelationEntries(spec, 'code'))
+    entries.push(...loadedRelationEntries(spec, 'related'))
     for (const scenario of scenariosById.get(spec.id) ?? []) {
       entries.push(...parsedRelation(scenario.code ?? [], 'code', `scenario '${spec.id} · ${scenario.name}'`))
       entries.push(...parsedRelation(scenario.related ?? [], 'related', `scenario '${spec.id} · ${scenario.name}'`))
@@ -529,23 +529,18 @@ export async function projectSessionImpact(root: string, options: SessionImpactO
     const evalChanged = [...changedPaths].filter((path) => evalPaths.some((claim) => codeClaims([claim], path)))
     if (evalChanged.length) pushNodeCause(causes, 'eval', evalChanged)
 
-    const baseNodeCodeRows = loadedRelationRows(baseSpec, 'code')
-    const headNodeCodeRows = loadedRelationRows(headSpec, 'code')
-    const baseNodeCode = scenarioCodeAxis(undefined, baseNodeCodeRows)
-    const headNodeCode = scenarioCodeAxis(undefined, headNodeCodeRows)
-    if (baseNodeCode.problems.length || headNodeCode.problems.length) {
-      throw new SessionImpactUnavailableError(`session impact node '${id}' has invalid code: ${[
-        ...baseNodeCode.problems, ...headNodeCode.problems,
-      ].join('; ')}`)
-    }
+    // no second validity gate here: relationProblems above already threw for either side, and it is the
+    // SAME parse — a re-parse of rows minted from those entries cannot surface a problem the loader did not.
+    const baseNodeCodeEntries = loadedRelationEntries(baseSpec, 'code')
+    const headNodeCodeEntries = loadedRelationEntries(headSpec, 'code')
     const nodeCodeMoved = !!baseSpec && !!headSpec
-      && JSON.stringify(baseNodeCode.entries) !== JSON.stringify(headNodeCode.entries)
+      && JSON.stringify(baseNodeCodeEntries) !== JSON.stringify(headNodeCodeEntries)
     const nodeCodeReads = nodeCodeMoved
       ? await Promise.all([
-        impactForEntries(context, baseNodeCode.entries, { validateUnchanged: true, validationRevision: base, validationSide: 'base' }),
-        impactForEntries(context, headNodeCode.entries, { validateUnchanged: true, validationRevision: head, validationSide: 'head' }),
+        impactForEntries(context, baseNodeCodeEntries, { validateUnchanged: true, validationRevision: base, validationSide: 'base' }),
+        impactForEntries(context, headNodeCodeEntries, { validateUnchanged: true, validationRevision: head, validationSide: 'head' }),
       ])
-      : [await impactForEntries(context, (headSpec ? headNodeCode : baseNodeCode).entries, {
+      : [await impactForEntries(context, headSpec ? headNodeCodeEntries : baseNodeCodeEntries, {
         validateUnchanged: !baseSpec || !headSpec,
         validationRevision: headSpec ? head : base,
         validationSide: headSpec ? 'head' : 'base',
@@ -560,7 +555,7 @@ export async function projectSessionImpact(root: string, options: SessionImpactO
     // parsing one synthetic concatenated relation would turn two legitimate owners naming the same path into
     // a fake duplicate/mixed-form schema error.
     const relatedFor = (spec: SessionImpactSpecSnapshot | undefined, scenarios: readonly Scenario[]) => [
-      ...parsedRelation(loadedRelationRows(spec, 'related'), 'related', `node '${id}'`),
+      ...loadedRelationEntries(spec, 'related'),
       ...scenarios.flatMap((scenario) => (
         parsedRelation(scenario.related ?? [], 'related', `scenario '${id} · ${scenario.name}'`)
       )),
@@ -597,8 +592,8 @@ export async function projectSessionImpact(root: string, options: SessionImpactO
       const baseScenarioHash = before ? scenarioHash(before) : null
       const headScenarioHash = after ? scenarioHash(after) : null
       const semantic = !before || !after || baseScenarioHash !== headScenarioHash
-      const baseAxis = before ? scenarioCodeAxis(before.code, loadedRelationRows(baseSpec, 'code')) : { entries: [], paths: [], problems: [] }
-      const headAxis = after ? scenarioCodeAxis(after.code, loadedRelationRows(headSpec, 'code')) : { entries: [], paths: [], problems: [] }
+      const baseAxis = before ? scenarioCodeAxis(before.code, loadedRelationEntries(baseSpec, 'code')) : { entries: [], paths: [], problems: [] }
+      const headAxis = after ? scenarioCodeAxis(after.code, loadedRelationEntries(headSpec, 'code')) : { entries: [], paths: [], problems: [] }
       if (baseAxis.problems.length || headAxis.problems.length) {
         throw new SessionImpactUnavailableError(`session impact scenario '${id} · ${name}' has invalid code: ${[
           ...baseAxis.problems, ...headAxis.problems,
@@ -1107,8 +1102,10 @@ export async function sessionImpactOverlay(
     id: spec.id,
     path: spec.path,
     code: spec.code,
+    codeEntries: spec.codeEntries,
     codeScoped: spec.codeScoped,
     related: spec.related,
+    relatedEntries: spec.relatedEntries,
     relatedScoped: spec.relatedScoped,
     relationProblems: spec.relationProblems,
   }))

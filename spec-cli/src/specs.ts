@@ -273,8 +273,9 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
     const codeEntries = codeRel.entries
     const code = codeEntries.map((e) => e.path)
     const codeScoped = codeEntries.filter((e) => e.selectors.length > 0)
-    const related = relatedRel.entries.map((e) => e.path)
-    const relatedScoped = relatedRel.entries.filter((e) => e.selectors.length > 0)
+    const relatedEntries = relatedRel.entries
+    const related = relatedEntries.map((e) => e.path)
+    const relatedScoped = relatedEntries.filter((e) => e.selectors.length > 0)
     const relationProblems = [...codeRel.problems, ...relatedRel.problems]
     const S = h[0]?.hash || ''
     const driftFiles = []
@@ -288,7 +289,7 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
     // A SCOPED related entry is excluded here: its file-level movement is silent by design — only a
     // selector HIT warns, and that verdict needs the anchor engine, so lint derives it, not the loader.
     const relatedDriftFiles = []
-    for (const e of relatedRel.entries) {
+    for (const e of relatedEntries) {
       if (e.selectors.length) continue
       const d = didx ? { file: e.path, behind: driftFor(didx, S, e.path, r.id) } : { file: e.path, behind: 0 }
       if (d.behind > 0) relatedDriftFiles.push(d)
@@ -308,6 +309,7 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
       codeEntries,
       codeScoped,
       related,
+      relatedEntries,
       relatedScoped,
       relationProblems,
       version: h.length,

@@ -16,7 +16,7 @@ export type CodexGenerationEndpoint = Readonly<{
 type CodexGenerationState = 'current' | 'draining' | 'reclaimed' | 'starting'
 type GenerationReservation = Readonly<{ pid: number; startToken: string }>
 type CodexGeneration = Readonly<{ state: CodexGenerationState; endpoint: CodexGenerationEndpoint; reservation?: GenerationReservation }>
-type CodexGenerationBinding = Readonly<{ generationId: string; threadId: string }>
+export type CodexGenerationBinding = Readonly<{ generationId: string; threadId: string; phase?: 'record-pending' }>
 
 export type CodexGenerationLedger = Readonly<{
   version: 3
@@ -31,6 +31,8 @@ const generationsDir = (root: string) => join(root, 'codex-app-server-generation
 const ledgerPath = (root: string) => join(root, 'codex-app-server-generations.json')
 const lockPath = (root: string) => join(root, 'codex-app-server-generations.lock')
 const lockOwnerPath = (root: string) => join(lockPath(root), 'owner.json')
+const lockReaperPath = (root: string) => join(lockPath(root), 'reaper')
+const lockReaperOwnerPath = (root: string) => join(lockReaperPath(root), 'owner.json')
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 export function codexGenerationSocketPath(root: string, generationId?: string): string {
@@ -94,7 +96,8 @@ function parseLedger(value: unknown): CodexGenerationLedger {
   }
   for (const [sessionId, binding] of Object.entries(raw.bindings)) {
     if (!binding || typeof binding !== 'object' || typeof (binding as CodexGenerationBinding).generationId !== 'string' ||
-      typeof (binding as CodexGenerationBinding).threadId !== 'string' || !(binding as CodexGenerationBinding).threadId) {
+      typeof (binding as CodexGenerationBinding).threadId !== 'string' || !(binding as CodexGenerationBinding).threadId ||
+      ((binding as CodexGenerationBinding).phase !== undefined && (binding as CodexGenerationBinding).phase !== 'record-pending')) {
       throw new Error(`Codex generation ledger has malformed binding ${sessionId}`)
     }
   }
@@ -122,63 +125,127 @@ function writeLedger(root: string, previous: CodexGenerationLedger, next: Ledger
   return value
 }
 
-type LedgerLockOwner = Readonly<{ pid: number; startToken: string }>
+type LedgerLockOwner = Readonly<{ pid: number; startToken: string; nonce: string | null }>
+type LedgerLockObservation = Readonly<{ owner: LedgerLockOwner | null; mtimeMs: number }>
 
-function ledgerLockOwner(root: string): LedgerLockOwner | null {
+function readLedgerLockOwner(path: string): LedgerLockOwner | null {
   try {
-    const value: unknown = JSON.parse(readFileSync(lockOwnerPath(root), 'utf8'))
-    return isReservation(value) ? value : null
+    const value: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    if (!isReservation(value)) return null
+    const nonce = (value as { nonce?: unknown }).nonce
+    return typeof nonce === 'string' && nonce ? { ...(value as GenerationReservation), nonce } : { ...(value as GenerationReservation), nonce: null }
   } catch { return null }
 }
 
-function staleLedgerLock(root: string): boolean {
-  const owner = ledgerLockOwner(root)
+function ledgerLockObservation(root: string): LedgerLockObservation | null {
+  try { return { owner: readLedgerLockOwner(lockOwnerPath(root)), mtimeMs: statSync(lockPath(root)).mtimeMs } }
+  catch { return null }
+}
+
+const sameLedgerLockOwner = (left: LedgerLockOwner | null, right: LedgerLockOwner | null) =>
+  !!left && !!right && left.pid === right.pid && left.startToken === right.startToken && left.nonce === right.nonce
+
+function staleLedgerLock(observation: LedgerLockObservation): boolean {
+  const owner = observation.owner
   if (owner) return processStartToken(owner.pid) !== owner.startToken
   // A creator publishes owner.json immediately after mkdir. A short grace avoids mistaking that tiny window
   // for an abandoned lock, while a crashed creator remains recoverable instead of wedging every retry.
-  try { return Date.now() - statSync(lockPath(root)).mtimeMs > 500 }
-  catch { return false }
+  return Date.now() - observation.mtimeMs > 500
 }
 
-function acquireLedgerLock(root: string, timeoutMs: number, pause: () => void | Promise<void>): void | Promise<void> {
+function releaseLedgerLock(root: string, owner: LedgerLockOwner): void {
+  if (!sameLedgerLockOwner(readLedgerLockOwner(lockOwnerPath(root)), owner) || existsSync(lockReaperPath(root))) return
+  rmSync(lockPath(root), { recursive: true, force: true })
+}
+
+function releaseLedgerReaper(root: string, owner: LedgerLockOwner): void {
+  if (sameLedgerLockOwner(readLedgerLockOwner(lockReaperOwnerPath(root)), owner))
+    rmSync(lockReaperPath(root), { recursive: true, force: true })
+}
+
+function reapStaleLedgerLock(root: string, observed: LedgerLockObservation): boolean {
+  const token = processStartToken(process.pid)
+  if (!token) throw new Error('cannot prove coordinator process identity for Codex generation ledger reaper')
+  const reaper: LedgerLockOwner = { pid: process.pid, startToken: token, nonce: randomUUID() }
+  try {
+    mkdirSync(lockReaperPath(root), { mode: 0o700 })
+    try { writeFileSync(lockReaperOwnerPath(root), `${JSON.stringify(reaper)}\n`, { mode: 0o600 }) }
+    catch (error) { rmSync(lockReaperPath(root), { recursive: true, force: true }); throw error }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    const existing = readLedgerLockOwner(lockReaperOwnerPath(root))
+    let stale = existing ? processStartToken(existing.pid) !== existing.startToken : false
+    if (!existing) { try { stale = Date.now() - statSync(lockReaperPath(root)).mtimeMs > 500 } catch { stale = false } }
+    if (stale) rmSync(lockReaperPath(root), { recursive: true, force: true })
+    return false
+  }
+  const current = ledgerLockObservation(root)
+  const sameObservedOwner = !!current && ((!current.owner && !observed.owner) || sameLedgerLockOwner(current.owner, observed.owner))
+  // Creating reaper/ updates the parent directory mtime, so an ownerless creator crash is judged from the
+  // stable observation made before that child directory existed. An owned lock is judged from its identity.
+  const remainsStale = current && current.owner ? staleLedgerLock(current) : staleLedgerLock(observed)
+  if (!sameObservedOwner || !current || !remainsStale ||
+    !sameLedgerLockOwner(readLedgerLockOwner(lockReaperOwnerPath(root)), reaper)) {
+    releaseLedgerReaper(root, reaper)
+    return false
+  }
+  // The reaper lease is an atomic election inside the still-present lock directory. A live owner sees that
+  // lease and never releases the parent; another reaper cannot remove this one while its exact PID/start lives.
+  rmSync(lockPath(root), { recursive: true, force: true })
+  return true
+}
+
+function createLedgerLock(root: string): LedgerLockOwner | null {
   const lock = lockPath(root)
   const token = processStartToken(process.pid)
   if (!token) throw new Error('cannot prove coordinator process identity for Codex generation ledger lock')
-  const deadline = Date.now() + timeoutMs
-  const attempt = (): void | Promise<void> => {
-    for (;;) {
-      try {
-        mkdirSync(lock, { mode: 0o700 })
-        try { writeFileSync(lockOwnerPath(root), `${JSON.stringify({ pid: process.pid, startToken: token })}\n`, { mode: 0o600 }) }
-        catch (error) { rmSync(lock, { recursive: true, force: true }); throw error }
-        return
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-        if (staleLedgerLock(root)) {
-          rmSync(lock, { recursive: true, force: true })
-          continue
-        }
-        if (Date.now() >= deadline) throw new Error('Codex generation ledger lock is busy; retry')
-        const next = pause()
-        if (next instanceof Promise) return next.then(attempt)
-      }
-    }
+  const owner: LedgerLockOwner = { pid: process.pid, startToken: token, nonce: randomUUID() }
+  mkdirSync(root, { recursive: true, mode: 0o700 })
+  try { mkdirSync(lock, { mode: 0o700 }) }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return null
+    throw error
   }
-  return attempt()
+  try { writeFileSync(lockOwnerPath(root), `${JSON.stringify(owner)}\n`, { mode: 0o600 }) }
+  catch (error) { rmSync(lock, { recursive: true, force: true }); throw error }
+  return owner
+}
+
+async function acquireLedgerLock(root: string): Promise<LedgerLockOwner> {
+  const deadline = Date.now() + 10_000
+  for (;;) {
+    const owner = createLedgerLock(root)
+    if (owner) return owner
+    const observed = ledgerLockObservation(root)
+    if (observed && staleLedgerLock(observed) && reapStaleLedgerLock(root, observed)) continue
+    if (Date.now() >= deadline) throw new Error('Codex generation ledger lock is busy; retry')
+    await sleep(25)
+  }
+}
+
+function acquireLedgerLockSync(root: string): LedgerLockOwner {
+  const deadline = Date.now() + 5_000
+  const sleeper = new Int32Array(new SharedArrayBuffer(4))
+  for (;;) {
+    const owner = createLedgerLock(root)
+    if (owner) return owner
+    const observed = ledgerLockObservation(root)
+    if (observed && staleLedgerLock(observed) && reapStaleLedgerLock(root, observed)) continue
+    if (Date.now() >= deadline) throw new Error('Codex generation ledger lock is busy; retry')
+    Atomics.wait(sleeper, 0, 0, 10)
+  }
 }
 
 async function withLedgerLock<T>(root: string, body: () => Promise<T>): Promise<T> {
-  await acquireLedgerLock(root, 10_000, () => sleep(25))
+  const owner = await acquireLedgerLock(root)
   try { return await body() }
-  finally { rmSync(lockPath(root), { recursive: true, force: true }) }
+  finally { releaseLedgerLock(root, owner) }
 }
 
 function withLedgerLockSync<T>(root: string, body: () => T): T {
-  const sleeper = new Int32Array(new SharedArrayBuffer(4))
-  const acquired = acquireLedgerLock(root, 5_000, () => { Atomics.wait(sleeper, 0, 0, 10) })
-  if (acquired instanceof Promise) throw new Error('synchronous Codex generation ledger lock acquisition became asynchronous')
+  const owner = acquireLedgerLockSync(root)
   try { return body() }
-  finally { rmSync(lockPath(root), { recursive: true, force: true }) }
+  finally { releaseLedgerLock(root, owner) }
 }
 
 type EndpointIdentity = { pid: number; token: string; socketDev: number; socketIno: number }
@@ -219,6 +286,19 @@ function bootstrapBindings(root: string, generationId: string): Record<string, C
     } catch { /* unreadable records remain unbound and fail loud at use */ }
   }
   return result
+}
+
+function pendingBindingHasRecord(root: string, sessionId: string, binding: CodexGenerationBinding): boolean {
+  if (!sessionId || sessionId.includes('/') || sessionId.includes('\\')) return false
+  try {
+    const record = JSON.parse(readFileSync(join(root, 'sessions', sessionId, 'session.json'), 'utf8')) as Record<string, unknown>
+    const harness = record.harness
+    return record.governed === true && (harness === 'codex' || harness === 'codex-headless') && record.harness_session_id === binding.threadId
+  } catch { return false }
+}
+
+function bindingProtectsGeneration(root: string, sessionId: string, binding: CodexGenerationBinding): boolean {
+  return binding.phase !== 'record-pending' || pendingBindingHasRecord(root, sessionId, binding)
 }
 
 function bootstrapLedger(root: string): CodexGenerationLedger {
@@ -369,10 +449,41 @@ export function bindCodexGeneration(root: string, sessionId: string, threadId: s
   })
 }
 
+// Native thread creation and session.json persistence are separate writes. A pending registration can be
+// recovered only when the durable record names the same exact thread; otherwise it cannot pin a root forever.
+export function prepareCodexGenerationRegistration(root: string, sessionId: string, threadId: string, generationId: string): void {
+  withLedgerLockSync(root, () => {
+    const previous = readCodexGenerationLedger(root)
+    const generation = previous.generations[generationId]
+    if (!generation || generation.state === 'reclaimed') throw new Error(`Codex generation ${generationId} is absent or reclaimed`)
+    const existing = previous.bindings[sessionId]
+    if (existing) {
+      if (existing.generationId !== generationId || existing.threadId !== threadId)
+        throw new Error(`Codex session ${sessionId} already has a different exact generation binding`)
+      return
+    }
+    const bindings = { ...previous.bindings, [sessionId]: { generationId, threadId, phase: 'record-pending' as const } }
+    writeLedger(root, previous, { current: previous.current, pending: previous.pending, generations: previous.generations, bindings })
+  })
+}
+
+export function commitCodexGenerationRegistration(root: string, sessionId: string, threadId: string, generationId: string): void {
+  withLedgerLockSync(root, () => {
+    const previous = readCodexGenerationLedger(root)
+    const binding = previous.bindings[sessionId]
+    const generation = previous.generations[generationId]
+    if (!binding || binding.generationId !== generationId || binding.threadId !== threadId || !generation || generation.state === 'reclaimed')
+      throw new Error(`Codex session ${sessionId} registration no longer names its exact generation and thread`)
+    if (binding.phase !== 'record-pending') return
+    const bindings = { ...previous.bindings, [sessionId]: { generationId, threadId } }
+    writeLedger(root, previous, { current: previous.current, pending: previous.pending, generations: previous.generations, bindings })
+  })
+}
+
 export function resolveCodexGenerationForSession(root: string, sessionId: string, threadId: string): CodexGenerationEndpoint | null {
   const ledger = readCodexGenerationLedger(root)
   const binding = ledger.bindings[sessionId]
-  if (!binding || binding.threadId !== threadId) return null
+  if (!binding || binding.threadId !== threadId || !bindingProtectsGeneration(root, sessionId, binding)) return null
   const generation = ledger.generations[binding.generationId]
   return generation && generation.state !== 'reclaimed' ? generation.endpoint : null
 }
@@ -406,7 +517,7 @@ export async function reclaimDrainingCodexGeneration(
     if (generation.state !== 'draining') return { reclaimed: false, reason: 'only draining generations may be reclaimed' }
     const identity = endpointIdentity(generation.endpoint)
     if (!identity) return { reclaimed: false, reason: 'exact PID/start/receipt/socket identity is unproven' }
-    const bound = Object.values(previous.bindings).filter((binding) => binding.generationId === generationId)
+    const bound = Object.entries(previous.bindings).filter(([sessionId, binding]) => binding.generationId === generationId && bindingProtectsGeneration(root, sessionId, binding))
     if (bound.length) return { reclaimed: false, reason: `generation retains ${bound.length} governed binding(s)` }
     const before = await census(generation.endpoint)
     if (!before.healthy) return { reclaimed: false, reason: 'native reference census is unhealthy' }

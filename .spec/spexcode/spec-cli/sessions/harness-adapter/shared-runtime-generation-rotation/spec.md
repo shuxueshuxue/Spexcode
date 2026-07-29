@@ -39,14 +39,18 @@ rewritten, or treated as the new root. The compare-and-swap is durable and resta
 or competing switch leaves either the old published pointer or an owner-stamped `starting` reservation.
 A retry recovers only a dead coordinator lock, publishes a fully-proved pending endpoint through the
 same CAS, and removes an unproved reservation only after its exact coordinator identity has died. A
+lock reaper carries its own exact owner nonce, so a stale reaper cannot delete a newer live lock. A
 live reservation that does not finish fails loudly rather than being stolen. An incomplete, replaced,
 or ambiguous candidate is not adopted by signature.
 
 New Spex Codex traffic resolves the current pointer at the launch boundary. A newly started native
 thread is bound to that exact generation before it is accepted as the governed session's thread; a
-binding failure leaves the durable session record unchanged, and a record writer failure restores the
-prior binding. Legacy governed records with an already-known native thread are bound to the observed legacy
-generation during ledger bootstrap. A session operation may only use its stored exact binding;
+binding is first written as a durable record-pending transaction. A matching session record recovers and
+routes that exact binding after a crash, while a missing record cannot route or pin a draining generation;
+the final commit marks both halves observed. A binding failure leaves the durable session record unchanged,
+and a record writer failure removes a newly prepared binding. Legacy governed records with an already-known
+native thread are bound to the observed legacy generation during ledger bootstrap. A session operation may
+only use its stored exact binding;
 missing, mismatched, or ambiguous bindings are refusals, never a fallback to the current root.
 
 ### Drain

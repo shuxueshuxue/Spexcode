@@ -16,7 +16,7 @@ import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
 import { processStartToken } from './process-identity.js'
-import { bindCodexGeneration, codexGenerationBindingForSession, readCodexGenerationLedger } from './codex-runtime-generations.js'
+import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { maintenanceBrokerDescriptors, runSessionOperation, runSessionOperationSync, SessionMaintenanceError, type Authorization, type MaintenanceTicket } from './session-maintenance.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
@@ -2734,26 +2734,32 @@ export function markHarnessSessionId(sessionId: string | undefined, harnessSessi
     const root = runtimeRoot()
     let priorBinding: ReturnType<typeof codexGenerationBindingForSession> = null
     let generationId: string | undefined
+    let registrationPrepared = false
     if (codex) {
       generationId = process.env.SPEXCODE_CODEX_GENERATION?.trim()
       const ledger = readCodexGenerationLedger(root)
       if (ledger.revision > 0 && !generationId) throw new ResourceConflict(`refusing to bind Codex thread ${harnessSessionId}: launch did not provide an exact generation id`)
       priorBinding = codexGenerationBindingForSession(root, id)
-      if (generationId) bindCodexGeneration(root, id, harnessSessionId, generationId)
+      if (priorBinding && (!generationId || priorBinding.generationId !== generationId || priorBinding.threadId !== harnessSessionId))
+        throw new ResourceConflict(`refusing to replace exact Codex generation binding for ${id}`)
+      if (generationId && !priorBinding) {
+        prepareCodexGenerationRegistration(root, id, harnessSessionId, generationId)
+        registrationPrepared = true
+      }
     }
     try {
       writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
     } catch (error) {
-      if (codex && generationId) {
+      if (codex && generationId && registrationPrepared) {
         try {
-          if (priorBinding) bindCodexGeneration(root, id, priorBinding.threadId, priorBinding.generationId)
-          else bindCodexGeneration(root, id, harnessSessionId, null)
+          bindCodexGeneration(root, id, harnessSessionId, null)
         } catch (rollback) {
           throw new ResourceConflict(`Codex generation binding persisted but session ${id} record write failed and rollback failed: ${rollback instanceof Error ? rollback.message : String(rollback)}`)
         }
       }
       throw error
     }
+    if (codex && generationId) commitCodexGenerationRegistration(root, id, harnessSessionId, generationId)
     return true
   }))
 }

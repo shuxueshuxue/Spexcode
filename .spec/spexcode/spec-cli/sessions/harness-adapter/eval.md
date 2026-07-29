@@ -191,20 +191,23 @@ scenarios:
       - spec-cli/src/harness.ts#replyViaSocket
       - spec-cli/src/harness.ts#deliverViaRendezvous
       - spec-cli/src/harness.ts#DELIVER_ATTEMPTS
-  - name: claude-delivery-refuses-sessions-panel
+  - name: claude-delivery-survives-sessions-panel
     tags: [backend-api]
     description: >-
       With a REAL claude session IDLE and its TUI focus moved to the sessions/agents panel (← from the
       composer — the "← for agents" screen), deliver a prompt through the real send surface. Compare against
-      the same send with the TUI on the normal composer.
+      the same send with the TUI on the normal composer. Then return the TUI to the composer and let the
+      session reach a turn boundary.
     expected: >-
-      The panel state is detected from the live pane (the claude adapter's pane predicate) and the send FAILS
-      LOUD with a reason naming the panel and the recovery (press Enter in the terminal to return), so the
-      dashboard/CLI user sees undelivered instead of nothing; the composer-state send still lands. The failure
-      this locks: a reply injected while the panel has focus is parsed and enqueued by the daemon (transcript
-      shows `enqueue`) but NEVER dequeued — no turn, no pane trace, and the daemon emits nothing, so no
-      transport-layer confirmation can catch it; only the pane state can. Silent-swallow here is claude's own
-      bug, but the adapter must not report a false success into it.
+      Both sends SUCCEED and both messages are in the target's log: delivery is the append ([[dispatch]]),
+      and the pane predicate no longer decides it. What the predicate still buys is that the panel-state
+      send does not waste a kick it knows will be swallowed — so the composer-state message arrives in the
+      current turn, while the panel-state one is simply left unread and is delivered by the turn-boundary
+      reader once the TUI is back. The failure this locks is now recoverable rather than merely visible: a
+      reply injected while the panel has focus is parsed and enqueued by the daemon (transcript shows
+      `enqueue`) but NEVER dequeued — no turn, no pane trace, nothing for any transport-layer confirmation
+      to see. Before, the only honest answer was to refuse the send; now the message survives claude's bug
+      instead of depending on a human resending it.
     code:
       - spec-cli/src/harness.ts#claudeHarness
   - name: codex-liveness-reflects-live-tui-not-sock

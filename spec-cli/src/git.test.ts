@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync, readdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -92,7 +92,7 @@ test('raw identity drift preserves root, path, rename, and merge identity', asyn
     run('config', 'diff.renameLimit', '1')
     mkdirSync(join(root, '.spec', 'project', 'a'), { recursive: true })
     mkdirSync(join(root, 'src'), { recursive: true })
-    const rsPath = `src/a${String.fromCharCode(0x1e)}b.ts`
+    const rsPath = `src/a${String.fromCharCode(0x1e)}b.ts`, us = String.fromCharCode(0x1f)
     writeFileSync(join(root, '.spec', 'project', 'a', 'spec.md'), '---\ntitle: a\ncode: src/**\n---\n# a\n')
     writeFileSync(join(root, 'src', 'keep.ts'), `${'line\n'.repeat(24)}`)
     writeFileSync(join(root, 'src', 'deleted.ts'), 'delete me\n')
@@ -133,15 +133,20 @@ test('raw identity drift preserves root, path, rename, and merge identity', asyn
 
     run('switch', '-qc', 'side')
     appendFileSync(join(root, 'src', 'added.ts'), 'side edit\n')
+    writeFileSync(join(root, rsPath), 'side parent\n')
     run('add', '.'); run('commit', '-qm', 'side edit')
     const side = run('rev-parse', 'HEAD')
     run('switch', '-q', 'main')
     writeFileSync(join(root, 'src', 'merge.ts'), 'main merge line\n')
+    writeFileSync(join(root, rsPath), 'main parent\n')
     run('add', '.'); run('commit', '-qm', 'main edit')
-    run('merge', '--quiet', '--no-ff', '--no-commit', 'side')
+    const mergeAttempt = spawnSync('git', ['-C', root, 'merge', '--quiet', '--no-ff', '--no-commit', 'side'], { encoding: 'utf8' })
+    assert.equal(mergeAttempt.status, 1, `${mergeAttempt.stdout}\n${mergeAttempt.stderr}`)
     writeFileSync(join(root, 'src', 'merge.ts'), 'merge-authored line\n')
+    writeFileSync(join(root, rsPath), 'merge authored third line\n')
     run('add', '.'); run('commit', '-qm', 'merge side with authored line')
     const merge = run('rev-parse', 'HEAD')
+    assert.match(run('show', '--format=', '--cc', '--combined-all-paths', '--unified=0', merge), /diff --cc "src\/a\\036b\.ts"/)
 
     cachePath = historyEventCachePathForTests(root)
     const cached = await driftIndex(root)
@@ -159,7 +164,19 @@ test('raw identity drift preserves root, path, rename, and merge identity', asyn
     assert.ok(commits('src/added.ts', cached).has(side), 'side branch event retained')
     assert.equal(commits('src/added.ts', cached).has(merge), false, 'merge transport is not a duplicate path event')
     assert.ok(cached.resolutionEvents?.get('src/merge.ts')?.some((event) => event.commit === merge), 'merge-authored line belongs to the independent combined merge stream')
+    assert.ok(cached.resolutionEvents?.get(rsPath)?.some((event) => event.commit === merge), 'a C-quoted merge path decodes into its current identity')
+    assert.ok(commits(rsPath, cached).has(merge), 'a C-quoted merge path remains in path-range projection')
+    assert.deepEqual(pathRangeEvents(cached, version, rsPath)?.find((event) => event.commit === merge)?.parents.map((parent) => parent.historicalPath), [rsPath, rsPath], 'C-quoted parent headers retain both merge images')
     assert.equal([...cached.lineageEvents.values()].flat().some((event) => event.commit === merge && event.parents.length <= 1), false, 'raw identity stream does not duplicate merge-owned change')
+
+    run('commit', '--allow-empty', '-qm', 'checkpoint\n\nSpec-OK: a')
+    appendFileSync(join(root, rsPath), 'metadata subject ack\n')
+    run('add', rsPath); run('commit', '-qm', `hit${us}tail\n\nSpec-OK: a`)
+    const metadataAck = run('rev-parse', 'HEAD')
+    resetHistoryCachesForTests()
+    const metadataIndex = await driftIndex(root)
+    assert.ok(metadataIndex.selfAcks?.get(metadataAck)?.has('a'), 'a control byte in the subject cannot reframe Spec-OK metadata')
+    assert.equal(driftFor(metadataIndex, version, rsPath, 'a'), 0, 'the only post-checkpoint content ack quiets itself')
   } finally {
     if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
     rmSync(root, { recursive: true, force: true })
@@ -803,6 +820,9 @@ test('the pack-footprint bound does not change what a build reads, and an abort 
     await assert.rejects(
       withGitAbortSignal(aborted.signal, () => gitA(['-C', root, 'log', '--format=%H', 'HEAD'])),
       (error: unknown) => (error as Error)?.name === 'AbortError')
+
+    assert.equal(await gitA(['definitely-not-a-git-command'], 'x'.repeat(8 << 20)), '', 'a large stdin write survives an immediate command failure')
+    assert.equal(await gitA(['-C', join(root, 'missing'), 'cat-file', '--batch-check'], `${'0'.repeat(40)}\n`.repeat(200_000)), '', 'a large stdin write survives an immediate repository failure')
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

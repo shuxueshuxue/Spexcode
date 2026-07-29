@@ -723,17 +723,18 @@ exec "${realGit}" "$@"
   }
 })
 
-// A full graph flight is allowed to remain single-flight. It is not allowed to turn the session projection
-// into its queue: a route-owned active full and a later lifecycle write owe two different pieces of work.
-// This fixture holds a full-only layout revision. The graph, session mutation, GET route, and SSE transport
-// are all the real production surfaces.
-test('a session delta overtakes an active route-owned full cache flight', { timeout: 30_000 }, async () => {
+// A full graph flight is allowed to remain single-flight. It is not allowed to turn the close route's
+// session deletion into its queue: a route-owned active full and a later lifecycle write owe two different
+// pieces of work. This fixture holds a full-only layout revision. The graph, close mutation, GET route,
+// and SSE transport are all the real production surfaces.
+test('a closed session delta overtakes an active route-owned full cache flight', { timeout: 30_000 }, async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-route-owned-flight-'))
   const project = join(fixture, 'project')
   const spexHome = join(fixture, 'home')
   const spec = join(project, '.spec', 'project', 'spec.md')
   const sessionId = '55555555-5555-4555-8555-555555555555'
-  const renamed = 'session projection must overtake full'
+  const sessionBranch = 'node/route-owned-close'
+  const sessionWorktree = join(fixture, 'close-target-worktree')
   const fullNodeId = 'full-after-session'
   const hold = join(fixture, 'hold-history')
   const argvLog = join(fixture, 'git-argv.log')
@@ -751,7 +752,8 @@ test('a session delta overtakes an active route-owned full cache flight', { time
   git(project, 'config', 'user.name', 'fixture')
   git(project, 'add', '.')
   git(project, 'commit', '-qm', 'seed')
-  writeSessionRecord(spexHome, project, sessionId, project, 'main')
+  git(project, 'worktree', 'add', '-q', '-b', sessionBranch, sessionWorktree, 'main')
+  writeSessionRecord(spexHome, project, sessionId, sessionWorktree, sessionBranch, 'queued')
 
   const bin = join(fixture, 'bin')
   mkdirSync(bin, { recursive: true })
@@ -762,7 +764,8 @@ test('a session delta overtakes an active route-owned full cache flight', { time
 printf '%s\\n' "$*" >> "${argvLog}"
 if [ -e "${hold}" ]; then
   case " $* " in
-    *" rev-parse --verify "*)
+    # Hold resolveLayout's main revision, not the close candidate's own branch preflight.
+    *" rev-parse --verify main^{commit} "*)
       printf 'HANG %s\\n' "$*" >> "${argvLog}"
       while [ -e "${hold}" ]; do sleep 0.01; done
       ;;
@@ -834,8 +837,6 @@ exec "${realGit}" "$@"
     await waitFor(() => frames.some((frame) => frame.event === 'graph-full'), `the delta stream never anchored:\n${serverLog}`)
     await waitForQuiet(eventNames, 500)
 
-    const logBeforeFull = serverLog.length
-    const framesBeforeFull = frames.length
     const fullWorktree = join(fixture, 'full-domain-worktree')
     writeFileSync(hold, 'hold\n')
     const fullNode = join(project, '.spec', 'project', fullNodeId, 'spec.md')
@@ -862,59 +863,57 @@ exec "${realGit}" "$@"
     await waitQuickly(() => existsSync(argvLog) && /^HANG /m.test(readFileSync(argvLog, 'utf8')),
       `the route-owned full never entered the controlled layout hold:\n${serverLog}`, 1_000)
     mark('route-owned full producer is held')
+    const logBeforeClose = serverLog.length
+    const framesBeforeClose = frames.length
 
-    const renameResponse = await fetch(`${base}/api/sessions/${sessionId}/rename`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: renamed }),
-    })
-    assert.equal(renameResponse.status, 200)
-    assert.deepEqual(await renameResponse.json(), { ok: true })
-    mark('POST /rename committed session change')
+    const closeResponse = await fetch(`${base}/api/sessions/${sessionId}/close`, { method: 'POST' })
+    assert.equal(closeResponse.status, 200)
+    assert.deepEqual(await closeResponse.json(), { ok: true })
+    assert.equal(existsSync(sessionWorktree), false, 'the real close must retire its owned worktree')
+    mark('POST /close committed session deletion')
 
     // Keep the full producer held until this assertion settles. This is a causal control, not a latency
-    // threshold: a session frame must arrive before releaseFull, whatever scheduler delay the host has.
-    await waitFor(() => frames.slice(framesBeforeFull).some((frame) => frame.data.includes(renamed)),
-      `the session projection/SSE waited for releaseFull; timeline=${JSON.stringify(timeline)}; frames=${JSON.stringify(frames.slice(framesBeforeFull))}; server=${serverLog}`,
+    // threshold: the deleted session unit must arrive before releaseFull, whatever scheduler delay the host has.
+    const deletesSession = (frame: { data: string }) => {
+      const payload = JSON.parse(frame.data) as { del?: string[] }
+      return payload.del?.includes(`sess:${sessionId}`) ?? false
+    }
+    await waitFor(() => frames.slice(framesBeforeClose).some(deletesSession),
+      `the session projection/SSE waited for releaseFull; timeline=${JSON.stringify(timeline)}; frames=${JSON.stringify(frames.slice(framesBeforeClose))}; server=${serverLog}`,
       2_000)
 
     rmSync(hold, { force: true })
     mark('releaseFull')
-    await waitFor(() => frames.slice(framesBeforeFull).some((frame) => frame.data.includes(fullNodeId)),
+    await waitFor(() => frames.slice(framesBeforeClose).some((frame) => frame.data.includes(fullNodeId)),
       `the held structural full never reached SSE after release:\n${serverLog}`, 5_000)
     await waitFor(async () => {
       const response = await fetch(`${base}/api/graph`)
       const graph = await response.json() as {
         nodes: Array<{ id: string }>
-        sessions: Array<{ id: string; raw?: { name?: string | null } }>
+        sessions: Array<{ id: string }>
       }
       return response.headers.get('x-spexcode-graph') === 'fresh'
-        && graph.sessions.find((session) => session.id === sessionId)?.raw?.name === renamed
+        && !graph.sessions.some((session) => session.id === sessionId)
         && graph.nodes.some((node) => node.id === fullNodeId)
     }, `the full completion rolled back the newer session projection:\n${serverLog}`, 5_000)
-    const sessionNames = frames.slice(framesBeforeFull).flatMap((frame) => {
-      const payload = JSON.parse(frame.data) as { graph?: { sessions?: Array<{ id: string; raw?: { name?: string | null } }> }; set?: Record<string, { raw?: { name?: string | null } }> }
-      const full = payload.graph?.sessions?.find((session) => session.id === sessionId)
-      const delta = payload.set?.[`sess:${sessionId}`]
-      return full || delta ? [(full ?? delta)?.raw?.name ?? null] : []
+    const deletedAt = frames.findIndex(deletesSession)
+    assert.ok(deletedAt >= 0, 'the close delete must be present before checking for a later resurrection')
+    const resurrected = frames.slice(deletedAt + 1).flatMap((frame) => {
+      const payload = JSON.parse(frame.data) as { graph?: { sessions?: Array<{ id: string }> }; set?: Record<string, unknown> }
+      return payload.graph?.sessions?.some((session) => session.id === sessionId) || `sess:${sessionId}` in (payload.set ?? {})
+        ? [frame.data] : []
     })
-    const firstNew = sessionNames.indexOf(renamed)
-    assert.ok(firstNew >= 0, `no SSE session unit carried the renamed value: ${JSON.stringify(sessionNames)}`)
-    assert.ok(sessionNames.slice(firstNew).every((name) => name === renamed),
-      `full completion rolled a session SSE unit backward: ${JSON.stringify(sessionNames)}`)
-    const sessionOnlyNames = frames.slice(framesBeforeFull).flatMap((frame) => {
-      const payload = JSON.parse(frame.data) as { set?: Record<string, { raw?: { name?: string | null } }> }
-      const keys = Object.keys(payload.set ?? {})
-      return keys.length === 1 && keys[0] === `sess:${sessionId}` ? [payload.set![keys[0]].raw?.name ?? null] : []
-    })
-    assert.equal(sessionOnlyNames.filter((name) => name === renamed).length, 1,
-      `the same session-only projection broadcast twice: ${JSON.stringify(sessionOnlyNames)}`)
-    const broadcasts = [...serverLog.slice(logBeforeFull).matchAll(/graph broadcast .*triggers \{([^}]*)\}/g)]
+    assert.deepEqual(resurrected, [], `full completion rolled the closed session back into SSE: ${JSON.stringify(resurrected)}`)
+    assert.equal(frames.slice(framesBeforeClose).filter(deletesSession).length, 1,
+      'the same closed session projection broadcast twice')
+    const broadcasts = [...serverLog.slice(logBeforeClose).matchAll(/graph broadcast .*triggers \{([^}]*)\}/g)]
       .map((match) => match[1].split(',').map((tag) => tag.trim()).filter(Boolean))
     const sessionBroadcast = broadcasts.findIndex((tags) => tags.includes('sessions'))
     assert.ok(sessionBroadcast >= 0, `the session projection had no attributable broadcast: ${JSON.stringify(broadcasts)}`)
     assert.ok(broadcasts.slice(sessionBroadcast + 1).some((tags) => tags.includes('full')),
       `the session projection consumed the full trigger before structural convergence: ${JSON.stringify(broadcasts)}`)
     if (process.env.SPEXCODE_ROUTE_OWNED_TRACE === '1')
-      console.log(`route-owned-flight ${JSON.stringify({ timeline, sessionNames })}`)
+      console.log(`route-owned-flight ${JSON.stringify({ timeline, closeDeletedBeforeRelease: true })}`)
   } catch (error) {
     assert.fail(`${error instanceof Error ? error.stack : String(error)}\ntimeline=${JSON.stringify(timeline)}\nframes=${JSON.stringify(frames)}\nserver log:\n${serverLog}`)
   } finally {

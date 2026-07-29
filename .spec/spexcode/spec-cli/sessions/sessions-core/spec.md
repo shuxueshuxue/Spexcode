@@ -127,6 +127,15 @@ a transient fault must read as neither. **Retired** is the third integrity readi
 recorded worktree is gone, so there is nothing left to be active *in*. It is terminal — no lifecycle writer may
 put it back to `active`/`idle`, no launch is assembled for it, only `close` remains.
 
+The launch tail's prompt argument is the ADAPTER's to shape, never this layer's ([[harness-adapter]]'s
+`promptArg`). A prompt is arbitrary human text whose first character carries no meaning to SpexCode, and each
+harness parses its own argv, so this layer asks how to carry it instead of hand-quoting a positional and
+assuming it survives — the assumption that it did is what let a prompt beginning with `-` reach a harness as an
+option and die. When the adapter answers that it cannot carry the text at all, that is a settled fact about
+this prompt/launcher pairing, so the refusal lands at CREATE, before a worktree, branch, or record exists and
+while the human is still watching their own request; the queue drain refuses the same way for a record that
+predates the answer, rather than opening a window that fast-exits into the retry budget.
+
 A launch is likewise refused **before** a window opens when the transport can already settle it: no worktree,
 no branch, no resolvable launcher command. Those are facts about this machine that no number of attempts can
 change, so each is one loud refusal carrying its own code — never a launch that fast-exits and is retried on a

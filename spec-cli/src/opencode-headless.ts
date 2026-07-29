@@ -79,7 +79,10 @@ export function opencodeHeadlessLaunchCommand(opencodeCmd = 'opencode'): string 
     '  __spex_run --continue',
     'elif [ -n "${1:-}" ]; then',
     '  unset SPEXCODE_OPENCODE_RESUME_ID SPEXCODE_OPENCODE_CONTINUE',
-    '  __spex_run "$1"',
+    // `--` before the message: `opencode run` is yargs, which reads a leading-`-` positional as an unknown
+    // flag and prints help instead of running the turn (measured). The separator goes HERE rather than inside
+    // __spex_run, because the resume/continue branches pass real flags through that same channel.
+    '  __spex_run -- "$1"',
     'else',
     '  __spex_run',
     'fi',

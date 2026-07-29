@@ -115,9 +115,17 @@ export class PiHeadlessController {
     if (this.closing) throw new Error('pi-headless controller is closing')
     const mode = resume ? ['--session', this.id] : ['--session-id', this.id]
     // Keep pi's default text mode. `--mode json` is intentionally omitted: it can hang in this runtime.
-    const args = ['-p', ...mode, text]
+    // @@@ turn text goes on STDIN, never argv - pi's parser has no end-of-options separator and errors on any
+    // argv token beginning with `-`, so a turn whose text starts with one (a pasted console line, a diff hunk)
+    // would die at parse time with the human's own words quoted back. pi reads the prompt from stdin when
+    // argv carries none, which the controller owns here — so every turn takes the same path and the text is
+    // delivered byte-for-byte whatever it begins with. This is the whole channel, not a leading-`-` special
+    // case: one route is the reason there is nothing to get wrong.
+    const args = ['-p', ...mode]
     const command = `exec ${this.piCmd} ${args.map(shQuote).join(' ')}`
-    const childProcess = spawn('/bin/sh', ['-lc', command], { cwd: this.cwd, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const childProcess = spawn('/bin/sh', ['-lc', command], { cwd: this.cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] })
+    childProcess.stdin?.on('error', (error) => console.error(`[spex pi-headless] could not write the turn to pi's stdin: ${error.message}`))
+    childProcess.stdin?.end(text)
     let resolveExit!: (code: number | null) => void
     const exited = new Promise<number | null>((resolve) => { resolveExit = resolve })
     const turn: ChildTurn = { process: childProcess, exited }

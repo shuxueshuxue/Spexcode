@@ -1723,7 +1723,24 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-attach-busy { animation: si-attach-spin .8s linear infinite; }
 @keyframes si-attach-spin { to { transform: rotate(360deg); } }
 .si-inputwrap.dragover { border-color: var(--green); }
-.si-attach-err { flex: none; align-self: center; color: var(--orange); font-size: var(--type-meta); white-space: nowrap; }
+.si-attach-queue { display: grid; gap: 4px; min-width: 0; }
+.si-attach-queue.new { width: 100%; margin-top: 6px; }
+.si-attach-queue.command { padding: 5px 0 1px; border-top: 1px solid color-mix(in srgb, var(--line) 65%, transparent); }
+.si-attach-row { display: grid; grid-template-columns: minmax(72px, 1fr) minmax(76px, 1.2fr) minmax(0, auto) auto; align-items: center; gap: 6px; min-width: 0; min-height: 23px; font-size: var(--type-meta); color: var(--muted); }
+.si-attach-name { display: flex; align-items: center; gap: 4px; min-width: 0; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.si-attach-progress { width: 100%; height: 5px; accent-color: var(--blue); }
+.si-attach-status { min-width: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.si-attach-row.complete .si-attach-status { color: var(--green); }
+.si-attach-row.failed .si-attach-status { color: var(--red); }
+.si-attach-row.cancelled .si-attach-status { color: var(--orange); }
+.si-attach-action { width: 22px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); border: 0; background: transparent; border-radius: 4px; cursor: pointer; }
+.si-attach-action:hover:not(:disabled) { color: var(--blue); background: var(--panel2); }
+.si-attach-action:disabled { opacity: .45; cursor: default; }
+
+@media (max-width: 620px) {
+  .si-attach-row { grid-template-columns: minmax(74px, 1fr) minmax(64px, 1fr) auto auto; gap: 4px; }
+  .si-attach-status { display: none; }
+}
 
 @keyframes si-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 /* Live interactive tmux terminal: xterm owns keyboard/IME input while tmux owns render and history. */

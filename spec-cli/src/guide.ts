@@ -39,8 +39,8 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
 Look these up on demand — the formats an agent authors, and the settings it configures:
   spex guide spec       the spec.md format (frontmatter + body + the rules lint enforces)
   spex guide eval       the eval.md format (scenario schema + how loss is measured and filed)
-  spex guide settings   the spexcode.json / spexcode.local.json settings (launchers, dashboard icon, lint
-                        budgets, layout) — every field, and which of the two files it belongs in
+  spex guide settings   the spexcode.json / spexcode.local.json settings (launchers, dashboard icon, upload,
+                        lint budgets, layout) — every field, and which of the two files it belongs in
   spex guide footprint  the footprint model — what SpexCode plants in a repo, and who sees it
                         (committed | ignored | hidden), and every migration recipe`
 
@@ -252,21 +252,23 @@ code file or the scenario (the eval.md) moves since it was filed.
   spex eval scenario ls [<node>] the declared contracts; text --unmeasured = blind-spot worklist; --json = canonical declaration index
   spex eval clean                GC the content-addressed evidence cache`
 
+const UPLOAD_DEFAULTS = uploadPolicyDefaults()
+
 const SETTINGS = `spex guide settings — SpexCode's runtime settings (spexcode.json / spexcode.local.json)
 
 SpexCode reads PROJECT runtime settings from TWO optional JSON files at the repo root. There is no imperative
 settings verb — an agent CONFIGURES SpexCode by EDITING these files directly. The two split by
 PORTABILITY, and picking the right one is the whole discipline:
 
-  spexcode.json         COMMITTED — portable, shared by everyone on the repo. Layout, policy, dashboard
-                        identity and launcher visibility, lint policy, resource and doctor health budgets, launcher NAMES. "Git is the database": tracked so the
+  spexcode.json         COMMITTED — portable, shared by everyone on the repo. Layout, upload policy,
+                        dashboard identity and launcher visibility, lint policy, resource and doctor health budgets, launcher NAMES. "Git is the database": tracked so the
                         team shares ONE configuration.
   spexcode.local.json   GITIGNORED — host-specific, never committed. Absolute launcher paths, cert/secret
                         paths. Layered OVER spexcode.json (see MERGE
                         below); a targeted env override (SPEXCODE_CODEX_SERVER_CMD, …) still wins at its read site.
 
 Rule of thumb — is the value TRUE FOR THE PROJECT or TRUE FOR THIS MACHINE? A branch name, a dashboard
-icon or launcher-visibility policy, lint policy, resource and doctor health budgets, and a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
+icon or launcher-visibility policy, upload policy, lint policy, resource and doctor health budgets, and a launcher's name+harness are project facts → committed spexcode.json. The ABSOLUTE
 PATH of a launcher wrapper or a TLS cert path are machine facts → gitignored spexcode.local.json.
 Both files are optional; omit any field to take its default, except \`sessions.defaultLauncher\` when using
 \`spex session new\` or the dashboard without an explicit launcher choice.
@@ -275,7 +277,7 @@ The host-wide gateway has one separate per-user setting, \`gateway.icon\` in
 \`$SPEXCODE_HOME/config.json\`. It is documented below and never belongs to either project file.
 
 MERGE: spexcode.local.json is layered over spexcode.json ONE LEVEL DEEP — per top-level section (dashboard,
-sessions, …), the two objects are shallow-merged with LOCAL WINNING per key; sections only one file names
+uploads, sessions, …), the two objects are shallow-merged with LOCAL WINNING per key; sections only one file names
 pass through untouched. This is exactly what lets a launcher's portable NAME reference (defaultLauncher)
 sit in the committed file while its host-specific DEFINITION (with the abs cmd) sits in the local file —
 see LAUNCHERS.
@@ -335,6 +337,26 @@ must stay free of machine paths.
 The report is read-only: \`spex session resources [--json]\`. Reclaim eligibility is advisory and the
 projection never issues mutation authority or signals a process. Budgets are project policy and belong in committed spexcode.json;
 host-specific tuning may override this top-level section in spexcode.local.json.
+
+── UPLOADS (spexcode.json — portable transfer policy; local overrides are useful for one machine's disk/network) ──
+  uploads.maxBytes          maximum bytes in one attached file. Default ${UPLOAD_DEFAULTS.maxBytes}.
+  uploads.chunkBytes        maximum raw PATCH body and client slice size. Default ${UPLOAD_DEFAULTS.chunkBytes}.
+  uploads.concurrency       simultaneous attachment streams from one dashboard batch. Default ${UPLOAD_DEFAULTS.concurrency}.
+  uploads.requestTimeoutMs  browser timeout for one chunk or completion request. Default ${UPLOAD_DEFAULTS.requestTimeoutMs}.
+  uploads.retryLimit        automatic retries after the initial transient chunk failure. Default ${UPLOAD_DEFAULTS.retryLimit}.
+  uploads.retryDelayMs      wait between those retries. Default ${UPLOAD_DEFAULTS.retryDelayMs}.
+  uploads.incompleteTtlMs   idle staging lifetime before an unfinished transfer expires. Default ${UPLOAD_DEFAULTS.incompleteTtlMs}.
+  uploads.cleanupIntervalMs stale-staging reaper cadence. Default ${UPLOAD_DEFAULTS.cleanupIntervalMs}.
+  uploads.minFreeBytes      bytes retained on the backend filesystem while reserving a new attachment.
+                            Default ${UPLOAD_DEFAULTS.minFreeBytes}.
+  uploads.evidenceMaxBytes  retained POST-body ceiling for eval evidence. Default ${UPLOAD_DEFAULTS.evidenceMaxBytes}.
+All fields are positive integers except retryLimit, retryDelayMs, and minFreeBytes, which may be zero.
+The seed template is the one default source; omit a field to use it. The backend reads the merged files for
+each transfer and cleanup pass. The dashboard receives chunk, concurrency, timeout, and retry policy from
+the create/status response, so a portable project policy takes effect without another browser setting.
+Put team-wide transfer policy in committed spexcode.json; use the same keys in gitignored spexcode.local.json
+only when the backend machine needs a local override. The normal top-level shallow merge lets a local
+uploads.chunkBytes replace only that key.
 
 ── LAUNCHERS (the profile block, split across the two files) ──
 A named launcher profile fixes BOTH a session's harness AND its exact launch command; a create picks one
@@ -566,3 +588,4 @@ export function guideText(topic?: string): string | null {
   const t = TOPICS[topic]
   return t ? t + FOOTER : null
 }
+import { uploadPolicyDefaults } from './layout.js'

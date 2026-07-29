@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { git, gitA, gitTry, headSha } from '../../spec-cli/src/git.js'
 import { parseScenarios } from './scenarios.js'
+import { rootSlots, touchRoot as touchRootLru } from '../../spec-cli/src/root-lru.js'
 
 const RS = '\x1e'
 
@@ -115,26 +116,12 @@ async function build(root: string, evalPaths: string[]): Promise<ScenarioIndex> 
   return idx
 }
 
-const SLOTS = 16
+const SLOTS = rootSlots(process.env.SPEXCODE_SCENARIO_CACHE_ROOTS, 16)
 const cache = new Map<string, Promise<ScenarioIndex>>()
 const roots = new Map<string, string>()
 
 function touchRoot(root: string, head: string): void {
-  const previous = roots.get(root)
-  if (previous === head) {
-    roots.delete(root)
-    roots.set(root, head)
-    return
-  }
-  roots.set(root, head)
-  if (previous && ![...roots.values()].includes(previous)) cache.delete(previous)
-  while (roots.size > SLOTS) {
-    const oldest = roots.keys().next().value as string | undefined
-    if (oldest === undefined) break
-    const oldHead = roots.get(oldest)
-    roots.delete(oldest)
-    if (oldHead && ![...roots.values()].includes(oldHead)) cache.delete(oldHead)
-  }
+  touchRootLru(roots, cache, root, head, SLOTS)
 }
 
 export function scenarioIndex(root: string, evalPaths: string[]): Promise<ScenarioIndex> {

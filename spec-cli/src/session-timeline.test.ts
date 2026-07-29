@@ -193,6 +193,33 @@ test('composeSessionPrompt owns headless defaults, explicit overrides, and final
   })
 })
 
+test('composeSessionPrompt guarantees no harness is handed a prompt that begins with a hyphen', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-optionsafe-'))
+  await withHomeAsync(home, async () => {
+    // the shape a human actually produces: a pasted browser-console line. Downstream that leading `-` is the
+    // difference between a prompt and an argument — claude's commander answers `unknown option`, opencode's
+    // yargs drops it, pi's parser has no end-of-options branch at all — so the guarantee is made ONCE here
+    // rather than as an escape per adapter plus a refusal for the harness that has none.
+    const pasted = '-home-app/api/uploads:1  Failed to load resource: 413 (Payload Too Large)'
+    for (const harness of ['claude', 'codex', 'opencode', 'pi', 'claude-headless', 'codex-headless', 'opencode-headless', 'pi-headless']) {
+      const composed = await composeSessionPrompt(pasted, { session: ID, harness })
+      assert.ok(!composed.text.startsWith('-'), `${harness} was handed an option-shaped prompt: ${composed.text.slice(0, 20)}`)
+      assert.ok(composed.text.includes(pasted), `${harness} lost the human's own words`)
+    }
+
+    // the launch scripts also discriminate their resume/continue markers by comparing $1 to a literal flag,
+    // so a prompt that IS such a marker must not be able to impersonate one.
+    for (const marker of ['--resume', '--continue']) {
+      const composed = await composeSessionPrompt(marker, { session: ID, harness: 'codex' })
+      assert.notEqual(composed.text, marker, `a raw ${marker} prompt could be read as a resume marker`)
+      assert.ok(composed.text.includes(marker))
+    }
+
+    // anything not starting with `-` is untouched, byte for byte.
+    assert.deepEqual(await composeSessionPrompt('fix the login bug', { session: ID, harness: 'claude' }), { text: 'fix the login bug' })
+  })
+})
+
 test('composeSessionPrompt owns the one-shot note-to-terminal counter-insert', async () => {
   const home = seedTimeline([sent(null, 'note')])
   await withHomeAsync(home, async () => {

@@ -207,12 +207,6 @@ refuses (an unreadable record, a retired session — [[sessions-core]]) says so 
 global session dir (created on demand even for a session with no `session.json`). So board state is a managed-
 session concern; spec-awareness is universal.
 
-The manifest dispatcher acquires one [[maintenance-lease]] ticket before invoking ANY handler, including
-spec-discipline handlers: their sentinel/ledger writes are still side effects even though they do not mutate
-board lifecycle. During draining/active maintenance every manifest handler is withheld with structured
-`maintenance_active` and zero handler side effect. Only non-hook reads remain open. Once admitted, one dispatcher
-ticket spans the complete ordered handler run and is released on every exit.
-
 - **`UserPromptSubmit` + `PreToolUse` → one `mark-active` hook**: it writes **`asking`** on an
   **AskUserQuestion** (the question → the note), else **`active`** — the freshness signal that also flips
   a stale `idle`/`asking` back the moment work resumes.

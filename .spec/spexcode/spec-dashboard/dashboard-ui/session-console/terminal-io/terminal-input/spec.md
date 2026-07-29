@@ -48,10 +48,6 @@ Only the visible, live viewer may write. Hidden or disconnected browsers never q
 and an input message from a stale viewer is ignored. A transport loss remains visibly reconnecting and fails
 loudly by withholding input until the socket is open; it never pretends a key landed. The helper bounds each
 input message before writing it, while preserving the byte string and event order xterm produced.
-The backend also subjects each accepted message to [[maintenance-lease]] `terminal-input` admission before the
-PTY write. A maintenance refusal leaves the visible terminal readable but sends no bytes and reports the
-structured conflict on the socket; an input ticket already live when draining begins must finish before the
-lease becomes active.
 
 Dashboard-global shortcuts are the narrow exception. The capture layer may consume its documented navigation
 chords and the reserved Command Box chord before xterm sees them. The terminal adapter also encodes

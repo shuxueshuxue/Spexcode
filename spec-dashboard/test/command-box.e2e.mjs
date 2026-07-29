@@ -57,7 +57,7 @@ await page.route(`**/api/sessions/${SESSION}/input`, async (route) => {
   inputs.push(route.request().postDataJSON())
   if (failNext) {
     await new Promise((resolve) => setTimeout(resolve, 120))
-    await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, outcome: 'commit-unknown', error: 'upstream 502: control socket unavailable' }) })
+    await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'upstream 502: append unavailable' }) })
   }
   else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, outcome: 'accepted' }) })
 })
@@ -233,9 +233,8 @@ assert.equal(await input.inputValue(), '')
 await page.screenshot({ path: join(OUT, 'command-box-delivered.png'), fullPage: true })
 await command.waitFor({ state: 'hidden' })
 await page.waitForFunction(() => document.activeElement?.classList?.contains('xterm-helper-textarea'))
-assert.deepEqual({ ...inputs.at(-1), deliveryId: typeof inputs.at(-1).deliveryId }, { kind: 'text', text: expandedDraft, deliveryId: 'string' })
-assert.equal(inputs.at(-2).deliveryId, inputs.at(-1).deliveryId, 'retry keeps the same exactly-once delivery marker')
-step('successful atomic send acknowledges before clearing, closing, and returning TUI focus')
+assert.deepEqual(inputs.at(-1), { kind: 'text', text: expandedDraft })
+step('successful append-backed send clears, closes, and returns TUI focus')
 
 sessionLiveness = 'offline'
 await page.reload({ waitUntil: 'domcontentloaded' })

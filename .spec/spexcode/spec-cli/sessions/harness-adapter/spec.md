@@ -319,37 +319,16 @@ surface:
   app-server `--listen unix://<sock>` endpoint is a WebSocket at path `/rpc` (the same upgrade the `--remote`
   TUI performs); delivery speaks WebSocket JSON-RPC over that Unix socket directly — NOT `codex app-server
   proxy` (a dumb byte relay that performs no HTTP upgrade, which the server rejects).
-  `deliver(rec, text)` sends a
-  follow-up prompt and reports whether it landed, but the two harnesses confirm delivery at DIFFERENT layers.
-  **claude** confirms **parse, atomically**: the socket's presence IS the liveness gate (deliver fails loud
-  before writing when the rendezvous socket is absent — a missing/dead socket, never tmux, is the not-alive
-  signal), then it connects and writes the `{type:reply}` line AND a `{type:repaint}` probe line as **ONE
-  chunk**. This shape is forced by the daemon's **single-connection design**: claude's rendezvous server keeps
-  exactly one connection and `destroy()`s the previous socket the moment a new one connects, discarding any
-  received-but-not-yet-parsed data with it — and `rendezvousListening` (our own liveness probe, fired for every
-  session on every board snapshot) IS such a connect. So a bare optimistic write (the previous design) lost
-  prompts whenever a probe landed in the write→parse window and still reported ok — a false success whose
-  window WIDENS exactly when claude is busy mid-turn (measured: 2/10 real sends lost under a 20ms probe
-  hammer; 40/40 in the tight race). The daemon parses a chunk's lines in one synchronous loop, so the atomic
-  pair can only be lost WHOLE, which makes the outcome decidable from the delivery connection alone:
-  `repaint-done` arriving = the reply line before it was parsed (in-order barrier) → ok, CONFIRMED;
-  the connection CLOSING before `repaint-done` — as a clean close OR as ECONNRESET/EPIPE (destroying a socket
-  with our chunk still unread raises RST; a parsed chunk answers first) = the chunk was never parsed (kicked
-  by a concurrent connect) → proven loss, safe to **reconnect and resend** (bounded retries + jitter;
-  exhausted retries fail loud);
-  the WALL (generous, default 10s) expiring with the connection still open = a busy event loop is delaying,
-  not losing → ok, OPTIMISTIC — so the earlier design's lesson stands (its 2500ms `repaint-done`-or-fail wall
-  false-failed on every busy worker; absence of the ack within a wall is NOT non-delivery), while the kick —
-  which that design could not see and the optimistic reversal knowingly ignored — is now detected and
-  retried instead of silently dropped. `reply-rejected`/`auth-rejected`/`shutting-down` fail loud, not retried.
-  Claude also carries the adapter's **`deliveryBlockedBy(paneText)`** predicate — the ONE pane state where a
-  parsed reply is still swallowed: the TUI's **sessions panel** ("← for agents"), which enqueues the injected
-  reply to the panel context and never drains it, with the daemon emitting nothing (verified live: enqueue
-  with no dequeue, no turn, no trace) — so no socket-side confirmation can see it. It no longer decides a send:
-  delivery is the log append ([[dispatch]]), so the predicate only tells the courtesy poke not to bother —
-  the message is already delivered and the turn-boundary reader shows it. A missing pane (no window) skips the
-  guard and lets the poke itself decide. Codex has no such predicate (its delivery is app-server JSON-RPC;
-  pane state is irrelevant). **codex** confirms at the application layer through the same
+  `deliver(rec, text)` is a **best-effort immediate poke**, never a second delivery decision. The log append
+  already made the message durable ([[dispatch]]), so every adapter returns only whether this attempt reached
+  its native input channel; failure leaves the same `mid` unread for the turn-boundary reader. **claude** writes
+  one `{type:reply,text,mid}` line and retries the write a small fixed number of times. Its single-connection
+  daemon may still lose a poke when another connection replaces it, but that cannot lose the message; no
+  repaint, receipt, kick classification, or transport outcome state remains. Claude's
+  **`deliveryBlockedBy(paneText)`** predicate recognizes the sessions panel ("← for agents"), which swallows
+  injected replies. It merely suppresses that known-useless poke: the line is already delivered and the reader
+  shows it at the next boundary. Codex has no such predicate (its poke is app-server JSON-RPC; pane state is
+  irrelevant). **codex** reaches its same-turn poke through the
   per-PROJECT Codex app-server JSON-RPC control plane the visible TUI uses, addressing the **owned** thread id
   (the one stored at launch). The handshake is `initialize → initialized → thread/loaded/list` (PROVE our
   thread is loaded) `→ thread/read{includeTurns}`. That read decides the inject: if a turn is **in progress** (the

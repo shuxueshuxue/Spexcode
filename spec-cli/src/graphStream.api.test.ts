@@ -589,6 +589,209 @@ exec "${realGit}" "$@"
   }
 })
 
+// A full graph flight is allowed to remain single-flight. It is not allowed to turn the session projection
+// into its queue: a route-owned active full and a later lifecycle write owe two different pieces of work.
+// This fixture holds a full-only layout revision. The graph, session mutation, GET route, and SSE transport
+// are all the real production surfaces.
+test('a session delta overtakes an active route-owned full cache flight', { timeout: 30_000 }, async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-route-owned-flight-'))
+  const project = join(fixture, 'project')
+  const spexHome = join(fixture, 'home')
+  const spec = join(project, '.spec', 'project', 'spec.md')
+  const sessionId = '55555555-5555-4555-8555-555555555555'
+  const renamed = 'session projection must overtake full'
+  const fullNodeId = 'full-after-session'
+  const hold = join(fixture, 'hold-history')
+  const argvLog = join(fixture, 'git-argv.log')
+  const timeline: string[] = []
+  const mark = (event: string) => timeline.push(event)
+
+  mkdirSync(dirname(spec), { recursive: true })
+  writeFileSync(spec, [
+    '---', 'title: Before route-owned full', 'status: active', 'hue: 180', 'desc: route-owned fixture', '---',
+    '# project', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
+  ].join('\n'))
+  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  git(project, 'init', '-q', '-b', 'main')
+  git(project, 'config', 'user.email', 'fixture@example.test')
+  git(project, 'config', 'user.name', 'fixture')
+  git(project, 'add', '.')
+  git(project, 'commit', '-qm', 'seed')
+  writeSessionRecord(spexHome, project, sessionId, project, 'main')
+
+  const bin = join(fixture, 'bin')
+  mkdirSync(bin, { recursive: true })
+  const realGit = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim()
+  assert.ok(realGit, 'fixture could not resolve the real git binary')
+  const shim = join(bin, 'git')
+  writeFileSync(shim, `#!/bin/sh
+printf '%s\\n' "$*" >> "${argvLog}"
+if [ -e "${hold}" ]; then
+  case " $* " in
+    *" rev-parse --verify "*)
+      printf 'HANG %s\\n' "$*" >> "${argvLog}"
+      while [ -e "${hold}" ]; do sleep 0.01; done
+      ;;
+  esac
+fi
+exec "${realGit}" "$@"
+`)
+  chmodSync(shim, 0o755)
+
+  const port = await freePort()
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(port),
+    PATH: `${bin}:${process.env.PATH || ''}`,
+    SPEXCODE_HOME: spexHome,
+    SPEXCODE_TMUX: `spex-route-owned-${port}`,
+    SPEXCODE_BOARD_DEBUG: '1',
+    SPEXCODE_BOARD_BUDGET_MS: '0',
+    SPEXCODE_BOARD_BACKGROUND_START_DELAY_MS: '0',
+    SPEXCODE_BOARD_BUILD_TIMEOUT_MS: '10000',
+  }
+  delete env.SPEXCODE_API_URL
+  const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
+    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let serverLog = ''
+  child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
+  child.stderr?.on('data', (chunk) => { serverLog += String(chunk) })
+  const base = `http://127.0.0.1:${port}`
+  const abort = new AbortController()
+  let streamRead: Promise<void> | null = null
+  const frames: Array<{ event: string; data: string }> = []
+  const eventNames: string[] = []
+
+  const waitQuickly = async (predicate: () => boolean | Promise<boolean>, message: string, timeoutMs: number) => {
+    const deadline = Date.now() + timeoutMs
+    while (!await predicate()) {
+      if (Date.now() >= deadline) assert.fail(message)
+      await new Promise((resolve) => setTimeout(resolve, 1))
+    }
+  }
+
+  try {
+    await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
+      `backend did not become healthy:\n${serverLog}`)
+    const stream = await fetch(`${base}/api/graph/stream?mode=delta`, { signal: abort.signal })
+    assert.equal(stream.status, 200)
+    streamRead = (async () => {
+      const reader = stream.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffered = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) return
+        buffered += decoder.decode(value, { stream: true })
+        let boundary: number
+        while ((boundary = buffered.indexOf('\n\n')) >= 0) {
+          const block = buffered.slice(0, boundary)
+          buffered = buffered.slice(boundary + 2)
+          const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
+          if (event === 'graph-full' || event === 'graph-delta') {
+            const data = block.split('\n').filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n')
+            frames.push({ event, data })
+            eventNames.push(event)
+          }
+        }
+      }
+    })().catch((error) => { if (!abort.signal.aborted) throw error })
+    await waitFor(() => frames.some((frame) => frame.event === 'graph-full'), `the delta stream never anchored:\n${serverLog}`)
+    await waitForQuiet(eventNames, 500)
+
+    const logBeforeFull = serverLog.length
+    const framesBeforeFull = frames.length
+    const fullWorktree = join(fixture, 'full-domain-worktree')
+    writeFileSync(hold, 'hold\n')
+    const fullNode = join(project, '.spec', 'project', fullNodeId, 'spec.md')
+    mkdirSync(dirname(fullNode), { recursive: true })
+    writeFileSync(fullNode, [
+      '---', 'title: Full After Session', 'status: active', 'hue: 190', 'desc: held full fixture', '---',
+      '# full-after-session', '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture.', '',
+    ].join('\n'))
+    git(project, 'worktree', 'add', '--detach', '-q', fullWorktree, 'HEAD')
+    mark('created real worktree-registry full input')
+
+    let stale: Response | null = null
+    await waitQuickly(async () => {
+      const response = await fetch(`${base}/api/graph`)
+      const header = response.headers.get('x-spexcode-graph')
+      await response.arrayBuffer()
+      if (header !== 'stale, refreshing') return false
+      stale = response
+      return true
+    }, `the GET route never owned a stale full flight:\n${serverLog}`, 1_000)
+    assert.ok(stale, 'the stale GET response is the route-owned flight proof')
+    mark('GET /api/graph returned stale, refreshing')
+
+    await waitQuickly(() => existsSync(argvLog) && /^HANG /m.test(readFileSync(argvLog, 'utf8')),
+      `the route-owned full never entered the controlled layout hold:\n${serverLog}`, 1_000)
+    mark('route-owned full producer is held')
+
+    const renameResponse = await fetch(`${base}/api/sessions/${sessionId}/rename`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: renamed }),
+    })
+    assert.equal(renameResponse.status, 200)
+    assert.deepEqual(await renameResponse.json(), { ok: true })
+    mark('POST /rename committed session change')
+
+    // Keep the full producer held until this assertion settles. This is a causal control, not a latency
+    // threshold: a session frame must arrive before releaseFull, whatever scheduler delay the host has.
+    await waitFor(() => frames.slice(framesBeforeFull).some((frame) => frame.data.includes(renamed)),
+      `the session projection/SSE waited for releaseFull; timeline=${JSON.stringify(timeline)}; frames=${JSON.stringify(frames.slice(framesBeforeFull))}; server=${serverLog}`,
+      2_000)
+
+    rmSync(hold, { force: true })
+    mark('releaseFull')
+    await waitFor(() => frames.slice(framesBeforeFull).some((frame) => frame.data.includes(fullNodeId)),
+      `the held structural full never reached SSE after release:\n${serverLog}`, 5_000)
+    await waitFor(async () => {
+      const response = await fetch(`${base}/api/graph`)
+      const graph = await response.json() as {
+        nodes: Array<{ id: string }>
+        sessions: Array<{ id: string; raw?: { name?: string | null } }>
+      }
+      return response.headers.get('x-spexcode-graph') === 'fresh'
+        && graph.sessions.find((session) => session.id === sessionId)?.raw?.name === renamed
+        && graph.nodes.some((node) => node.id === fullNodeId)
+    }, `the full completion rolled back the newer session projection:\n${serverLog}`, 5_000)
+    const sessionNames = frames.slice(framesBeforeFull).flatMap((frame) => {
+      const payload = JSON.parse(frame.data) as { graph?: { sessions?: Array<{ id: string; raw?: { name?: string | null } }> }; set?: Record<string, { raw?: { name?: string | null } }> }
+      const full = payload.graph?.sessions?.find((session) => session.id === sessionId)
+      const delta = payload.set?.[`sess:${sessionId}`]
+      return full || delta ? [(full ?? delta)?.raw?.name ?? null] : []
+    })
+    const firstNew = sessionNames.indexOf(renamed)
+    assert.ok(firstNew >= 0, `no SSE session unit carried the renamed value: ${JSON.stringify(sessionNames)}`)
+    assert.ok(sessionNames.slice(firstNew).every((name) => name === renamed),
+      `full completion rolled a session SSE unit backward: ${JSON.stringify(sessionNames)}`)
+    const sessionOnlyNames = frames.slice(framesBeforeFull).flatMap((frame) => {
+      const payload = JSON.parse(frame.data) as { set?: Record<string, { raw?: { name?: string | null } }> }
+      const keys = Object.keys(payload.set ?? {})
+      return keys.length === 1 && keys[0] === `sess:${sessionId}` ? [payload.set![keys[0]].raw?.name ?? null] : []
+    })
+    assert.equal(sessionOnlyNames.filter((name) => name === renamed).length, 1,
+      `the same session-only projection broadcast twice: ${JSON.stringify(sessionOnlyNames)}`)
+    const broadcasts = [...serverLog.slice(logBeforeFull).matchAll(/graph broadcast .*triggers \{([^}]*)\}/g)]
+      .map((match) => match[1].split(',').map((tag) => tag.trim()).filter(Boolean))
+    const sessionBroadcast = broadcasts.findIndex((tags) => tags.includes('sessions'))
+    assert.ok(sessionBroadcast >= 0, `the session projection had no attributable broadcast: ${JSON.stringify(broadcasts)}`)
+    assert.ok(broadcasts.slice(sessionBroadcast + 1).some((tags) => tags.includes('full')),
+      `the session projection consumed the full trigger before structural convergence: ${JSON.stringify(broadcasts)}`)
+    if (process.env.SPEXCODE_ROUTE_OWNED_TRACE === '1')
+      console.log(`route-owned-flight ${JSON.stringify({ timeline, sessionNames })}`)
+  } catch (error) {
+    assert.fail(`${error instanceof Error ? error.stack : String(error)}\ntimeline=${JSON.stringify(timeline)}\nframes=${JSON.stringify(frames)}\nserver log:\n${serverLog}`)
+  } finally {
+    rmSync(hold, { force: true })
+    abort.abort()
+    await streamRead?.catch(() => {})
+    await stopChild(child)
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
 // A blinded leaf must be blind from EVERY entry point. Reconciliation is reached from the liveness poller
 // and from registry events too, so gating only the ensure pass left the per-worktree observers attaching
 // anyway — the injection reads as applied while the leaf still sees everything, which would quietly make

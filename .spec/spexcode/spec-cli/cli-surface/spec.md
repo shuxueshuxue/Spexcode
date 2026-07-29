@@ -45,13 +45,6 @@ branch, process, or readable lifecycle record: the backend consumes its exact ab
 opaque bytes out of active projection. Both it and `--restore` require the original exact id rather than a
 selector, because corrupt rows never belong to selector enumeration.
 
-Project session maintenance stays inside the six-noun grammar as one scoped porcelain verb:
-`spex session maintain --allow-stop <SEL> ... --allow-resume <SEL>[:force] ... -- <command...>`; sanitized
-status is `spex session maintain --status`. The wrapper acquires, heartbeats, and releases through the ordinary
-authenticated/project-bound backend client while the command runs. It never prints or exports the bearer.
-Nested `spex` commands inherit only the anonymous broker FD numbers and ask the still-live wrapper to perform
-an exact allowed request; no token flag, environment value, output, alias, or force-break spelling exists.
-
 **One verb, one spelling.** The old verb mirror (promoted session verbs + bare session subs) is
 gone, as is every deprecated alias: there are no two spellings that reach one handler, and nothing
 that "still runs but warns". The raw-key escape hatch is not a verb but the last-resort face of one:

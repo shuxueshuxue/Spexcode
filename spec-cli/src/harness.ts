@@ -1348,7 +1348,7 @@ async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSe
     if (plan.archivedIds.length !== 1 || plan.archivedIds[0] !== threadId || plan.guard.referenceIds.includes(threadId))
       return { ok: false, reason: `Codex native thread ${threadId} is not uniquely archived and unloaded` }
     const afterOwners = unchangedOwners()
-    if (afterOwners === null || afterOwners.length) return { ok: false, reason: 'governed Codex thread-owner census changed during quarantine proof' }
+    if (afterOwners === null || afterOwners.length) return { ok: false, reason: 'governed Codex thread-owner census changed during quarantine verification' }
     return { ok: true, audit: { adapter: 'codex', threadId, action: 'already-unloaded' }, compensate: async () => ({ ok: true }) }
   }
   if (plan.activeIds.length !== 1 || plan.activeIds[0] !== threadId || plan.archivedIds.length)

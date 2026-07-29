@@ -15,7 +15,7 @@ import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.j
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
-import { processStartToken } from './process-identity.js'
+import { processAlive, processStartToken } from './process-identity.js'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationClose, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { maintenanceBrokerDescriptors, runSessionOperation, runSessionOperationSync, SessionMaintenanceError, type Authorization, type MaintenanceTicket } from './session-maintenance.js'
 
@@ -1461,7 +1461,6 @@ export function launchPreflight(rec: SessRec): LaunchBlock | null {
 
 // @@@ launch quoting - single-quote a string for a POSIX shell, `'` → `'\''`. Used to nest the whole agent
 // invocation inside the birth-registration `sh -c '…'` wrapper without any segment double-expanding.
-const shq1 = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string, delegateFifo?: string): string {
   const file = join(storeDir(id), 'launch.sh')
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
@@ -1475,11 +1474,11 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   // agent.pid, then `exec env` REPLACES that sh in place — so the pid persists down the whole command chain
   // (claude: env→(reclaude→)claude; codex: env→bash -lc <script> whose last line is `exec codex … resume`), and
   // `$$` therefore IS the launched agent's pid. `env` carries the leading `VAR=val` assignments (an env prefix
-  // can't lead an `exec`), and the whole payload is single-quoted for the outer shell (shq1) so the
+  // can't lead an `exec`), and the whole payload is single-quoted for the outer shell (shQuote) so the
   // invocation's own single-quoted segments — the codex `$@`/`$tid` script, the prompt — reach sh verbatim,
   // parsed exactly ONCE, never double-expanded. Each retry attempt rewrites agent.pid with a fresh `$$`.
   const pidPath = join(storeDir(id), 'agent.pid')
-  const born = `sh -c ${shq1(`printf %s "$$" > ${shq1(pidPath)}; exec env ${invocation}`)}`
+  const born = `sh -c ${shQuote(`printf %s "$$" > ${shQuote(pidPath)}; exec env ${invocation}`)}`
   // Bounded relaunch on a FAST exit: the agent launcher can exit within seconds before the rendezvous socket
   // ever appears. That is enough evidence to retry, but not enough evidence to name the cause. Once the agent
   // has run past LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal
@@ -1522,7 +1521,7 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
       // -t "$TMUX_PANE" names THIS pane explicitly (tmux still resolves the server from $TMUX), so the capture
       // can never land on a neighbouring pane; run outside tmux the call fails, nothing matches, and the plain
       // bounded retry stands.
-      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shq1(fatal)}; then`,
+      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shQuote(fatal)}; then`,
       `    printf '[spex launch] attempt %s exited in %ss (rc=%s) - the launcher reported a failure retrying cannot fix (see above); not retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
       `    exit $__spex_rc`,
       `  fi`,
@@ -1534,10 +1533,10 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
     ``,
   ]
   const delegatePreamble = delegateFifo ? [
-    `exec 9<${shq1(delegateFifo)}`,
-    `rm -f ${shq1(delegateFifo)}`,
+    `exec 9<${shQuote(delegateFifo)}`,
+    `rm -f ${shQuote(delegateFifo)}`,
     'export SPEXCODE_MAINTENANCE_DELEGATE_FD=9',
-    `export SPEXCODE_MAINTENANCE_SESSION_ID=${shq1(id)}`,
+    `export SPEXCODE_MAINTENANCE_SESSION_ID=${shQuote(id)}`,
   ] : []
   writeFileSync(file, [...delegatePreamble, ...launchBody].join('\n'))
   return file
@@ -3021,9 +3020,7 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, l
     throw new ResourceConflict(`refusing to stop ${id}: session leaf identity changed before signal`)
   if (!Number.isFinite(pid) || pid <= 0) return
   const startToken = leaf.startToken
-  const alive = (): boolean => {
-    try { process.kill(pid, 0); return true } catch (e) { return (e as NodeJS.ErrnoException).code === 'EPERM' }
-  }
+  const alive = (): boolean => processAlive(pid)
   const identityState = (): 'same' | 'gone' | 'changed' => {
     if (readAgentPid(sessionArtifactPath(id, 'agent.pid')) !== leaf.pid) return 'changed'
     const current = processStartToken(pid)
@@ -3075,8 +3072,17 @@ async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIde
   }
   const startToken = processStartToken(pid)
   if (!startToken) {
-    if (rec.stopped) return null
-    throw new ResourceConflict(`refusing to stop ${id}: session-owned leaf PID ${pid} is not alive or has no start identity`)
+    // @@@ dead leaf is not an unprovable leaf - a missing start token means one of TWO different things, and
+    // collapsing them is what made a session unclosable. If the process is GONE there is nothing to signal and
+    // nothing a signal could hit by mistake, so the leaf is already in the state stop wants: hand back a
+    // record-only teardown, exactly as for an explicitly stopped record. Only a process that is still ALIVE
+    // while refusing to prove its identity is the dangerous case the guard exists for — that one still refuses,
+    // because signalling it could kill whatever now wears the pid. The distinction is the same `kill(pid, 0)`
+    // the escalation path below already uses to tell `gone` from `changed`; this guard simply asks it too.
+    // The failure it closes: a launcher that dies before readiness leaves a dead pid on the record, and every
+    // later `stop`/`close` refused it, so the row could be neither run nor retired.
+    if (rec.stopped || !processAlive(pid)) return null
+    throw new ResourceConflict(`refusing to stop ${id}: session-owned leaf PID ${pid} is alive but will not prove its start identity`)
   }
   const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
   const ownerNeedle = harness.leafOwnerNeedle?.(rec)

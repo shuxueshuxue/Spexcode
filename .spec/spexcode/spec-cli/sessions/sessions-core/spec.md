@@ -127,6 +127,17 @@ a transient fault must read as neither. **Retired** is the third integrity readi
 recorded worktree is gone, so there is nothing left to be active *in*. It is terminal — no lifecycle writer may
 put it back to `active`/`idle`, no launch is assembled for it, only `close` remains.
 
+The leaf-ownership guard that gates every stop distinguishes **a dead leaf from an unprovable one**. Both look
+alike from the recorded pid — neither yields a start identity — but they call for opposite answers. A pid that
+names no live process has nothing to signal and nothing a signal could hit by mistake, so the leaf is already
+in the state stop wants and teardown proceeds record-only, exactly as for an explicitly stopped record. A pid
+that IS alive while refusing to prove its identity is the case the guard exists for, and it still refuses
+loudly, because signalling it could kill whatever now wears that number. Collapsing the two into one refusal is
+what made a session impossible to retire: a launcher that dies before readiness leaves a dead pid on the
+record, and `stop` and `close` then both refused it forever — the row could be neither run nor closed, and
+`quarantine` does not apply because the record is perfectly readable. Liveness is asked with the same probe the
+escalation path already uses to tell a vanished leaf from a replaced one, so one question has one answer here.
+
 The prompt seam carries ONE invariant for every harness: **the text handed to an agent never begins with `-`**.
 Human prompts legitimately do — a pasted browser-console line, a diff hunk, a quoted flag — and downstream that
 first character decides whether the text is read as a prompt or as machinery. Each harness parses its own argv

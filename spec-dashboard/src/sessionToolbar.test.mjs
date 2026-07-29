@@ -59,6 +59,18 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.doesNotMatch(source, /actErr && !shelvedSel/)
 })
 
+test('only corrupt rows expose the witnessed quarantine control', () => {
+  assert.match(contextMenu, /menu\.session\.status === 'corrupt'/)
+  assert.match(contextMenu, /<ContextMenuItem icon="archive" onClick=\{startQuarantine\}>\{t\('sessionWindow\.quarantine'\)\}/)
+  assert.match(contextMenu, /apiFetch\(`\/api\/sessions\/\$\{quarantining\.id\}\/quarantine`/)
+  assert.match(contextMenu, /JSON\.stringify\(\{ \.\.\.witness, thread: witness\.thread\.trim\(\) \|\| null \}\)/)
+  for (const key of ['Adapter', 'Thread', 'Tmux', 'Worktree', 'Branch'])
+    assert.match(contextMenu, new RegExp(`sessionWindow\\.quarantine${key}`))
+  assert.match(contextMenu, /onError\?\.\(body\?\.error \|\| `session quarantine refused/)
+  assert.match(en, /quarantine: 'quarantine record'/)
+  assert.match(zh, /quarantine: '隔离记录'/)
+})
+
 test('cold archive rows render without paying for a git ops projection', () => {
   assert.match(sessionWindow, /if \(!ops\?\.length\) return null/)
 })

@@ -4,6 +4,7 @@ import { readFileSync, readdirSync, statSync, existsSync, writeFileSync, mkdirSy
 import { join, isAbsolute, resolve } from 'node:path'
 import { createHash, randomBytes } from 'node:crypto'
 import { projectRuntimeRoot } from './project-store.js'
+import { rootSlots, touchRoot as touchRootLru } from './root-lru.js'
 
 const US = '\x1f', RS = '\x1e'
 
@@ -990,7 +991,7 @@ const indexCache = new Map<string, Promise<HistoryIndex>>()
 const indexRoots = new Map<string, string>()
 const driftRoots = new Map<string, string>()
 const driftIdxCache = new Map<string, Promise<DriftIndex>>()
-const INDEX_ROOT_SLOTS = Math.max(4, Number(process.env.SPEXCODE_INDEX_CACHE_ROOTS || 32))
+const INDEX_ROOT_SLOTS = rootSlots(process.env.SPEXCODE_INDEX_CACHE_ROOTS, 32)
 
 function rootKey(root: string): string { return resolve(root) }
 
@@ -999,23 +1000,9 @@ function indexCacheKey(root: string, head: string): string { return `${eventCach
 // A project-namespaced ledger path plus HEAD identifies immutable index contents. Its path is scoped to the
 // common Git store and interpretation state, so linked worktrees share while independent same-HEAD clones do not.
 // The checkout root owns which live view is useful; the root bound keeps closed worktrees from leaking.
+// The bookkeeping itself is [[root-lru]]'s — this only names the store and the bound.
 function touchRoot(roots: Map<string, string>, cache: Map<string, Promise<unknown>>, root: string, cacheKey: string): void {
-  const key = rootKey(root)
-  const previous = roots.get(key)
-  if (previous !== cacheKey) {
-    roots.set(key, cacheKey)
-    if (previous && ![...roots.values()].includes(previous)) cache.delete(previous)
-  } else {
-    roots.delete(key)
-    roots.set(key, cacheKey)
-  }
-  while (roots.size > INDEX_ROOT_SLOTS) {
-    const oldest = roots.keys().next().value as string | undefined
-    if (oldest === undefined) break
-    const oldHead = roots.get(oldest)
-    roots.delete(oldest)
-    if (oldHead && ![...roots.values()].includes(oldHead)) cache.delete(oldHead)
-  }
+  touchRootLru(roots, cache, rootKey(root), cacheKey, INDEX_ROOT_SLOTS)
 }
 
 function dropFailed(cache: Map<string, Promise<unknown>>, head: string, promise: Promise<unknown>): void {

@@ -152,11 +152,14 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
     if (busy) return
     setBusy(true)
     try {
-      await apiFetch(`/api/sessions/${renaming.id}/rename`, {
+      const response = await apiFetch(`/api/sessions/${renaming.id}/rename`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: value }),
       })
-      onChanged?.()
+      const body = await response.json().catch(() => null)
+      // A successful route nudge is the graph-stream delivery authority. Reloading here races that same
+      // change over HTTP and can hide a delayed delta; failure still asks the normal recovery path to reconcile.
+      if (!response.ok || body?.ok === false) onChanged?.()
     } catch { /* the next board poll reconciles; nothing destructive to recover */ }
     finally { setBusy(false); setRenaming(null) }
   }

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
-import { buildBoard, spliceSessions } from './graph.js'
+import { buildBoard, rebasePublishedSessions, spliceSessions } from './graph.js'
 import { headSha, repoRoot, withGitAbortSignal } from './git.js'
 import { listSessionIds, mainBranch, mainCheckout, readPublicRecordEntry, sessionArtifactPath, sessionRecordPath } from './layout.js'
 import { boardThreads } from './issues.js'
@@ -34,6 +34,7 @@ type BoardInputRevision = {
   fullParts: Record<string, string>
   projectionIds: string[]
 }
+type SessionInputRevision = Pick<BoardInputRevision, 'sessions' | 'projections' | 'projectionIds'>
 const DEBUG = process.env.SPEXCODE_BOARD_DEBUG === '1'
 
 function textOrNull(path: string): string | null {
@@ -146,8 +147,7 @@ function digest(value: unknown): string {
 // the issue-store carrier, and the already-resident session-eval projections. It intentionally does not call
 // listSessions or sessionEvalProjections: verification must neither poll tmux again nor mint/schedule eval work.
 // The hot/warm liveness signatures and eval generations remain graph-stream's canonical event-owned axes.
-function boardInputRevision(board: Board | null): BoardInputRevision {
-  const root = repoRoot()
+function sessionInputRevision(): SessionInputRevision {
   const ids = listSessionIds().sort()
   // listSessions projects both the structured record and the separately-stored originating prompt into each
   // board row. Fold both exact artifacts so a missed store event cannot leave a stale label/prompt forever.
@@ -156,13 +156,19 @@ function boardInputRevision(board: Board | null): BoardInputRevision {
     textOrNull(sessionRecordPath(id)),
     textOrNull(sessionArtifactPath(id, 'prompt')),
   ] as const)
-  const records = ids.map(readPublicRecordEntry).flatMap((entry) => entry.kind === 'ok' ? [entry.raw] : [])
+  const projections = digest(ids.map((id) => [id, sessionEvalProjection(id)]))
+  return { sessions: digest(sessionInputs), projections, projectionIds: ids }
+}
+
+function boardInputRevision(board: Board | null): BoardInputRevision {
+  const root = repoRoot()
+  const session = sessionInputRevision()
+  const records = listSessionIds().map(readPublicRecordEntry).flatMap((entry) => entry.kind === 'ok' ? [entry.raw] : [])
   const governed = records.filter((record) => record.governed).sort((a, b) => a.session_id.localeCompare(b.session_id))
   const activeRoots = [...new Set(governed.filter((record) => !record.archived).map((record) => record.worktree_path))].sort()
   const main = mainCheckout()
   const base = mainBranch()
   const mainTip = refSha(main, base)
-
   const nodeIds = (board?.nodes ?? []).map((node) => node.id)
   const issuesStamp = boardThreads({ host: resolveForgeHost(), state: residentForgeState() }, nodeIds).stamp
   const fullInputs = {
@@ -180,14 +186,12 @@ function boardInputRevision(board: Board | null): BoardInputRevision {
   }
   const fullParts = Object.fromEntries(Object.entries(fullInputs).map(([key, value]) => [key, digest(value)]))
   const full = digest(fullParts)
-  const sessions = digest(sessionInputs)
-
-  // Every board row carries an evalSummary, including non-governed sessions. Governed filtering owns only
-  // worktree observation; projection identity follows the whole store enumeration so a blind observer cannot
-  // strand a non-governed row on an older resident phase/value.
-  const projectionIds = ids
-  const projections = digest(projectionIds.map((id) => [id, sessionEvalProjection(id)]))
-  return { full, sessions, projections, combined: digest([full, sessions, projections]), fullParts, projectionIds }
+  return {
+    full,
+    ...session,
+    combined: digest([full, session.sessions, session.projections]),
+    fullParts,
+  }
 }
 
 // Bind an input sample to what the completed board actually carries. The sample supplies the graph/session
@@ -206,6 +210,38 @@ function revisionCarriedByBoard(sample: BoardInputRevision, board: Board): Board
     combined: digest([full, sample.sessions, projections]),
     fullParts,
     projectionIds: sample.projectionIds,
+  }
+}
+
+// A sessions splice reuses its base topology. It may sample fresh record/projection inputs, but it must never
+// certify that those old nodes carry a full revision sampled after the base was built.
+function revisionCarriedBySessionSplice(base: BoardInputRevision, sample: SessionInputRevision, board: Board, stable: boolean): BoardInputRevision {
+  const boardProjections = new Map(board.sessions.map((session) => [session.id, session.evalSummary ?? null]))
+  const projections = stable
+    ? digest(sample.projectionIds.map((id) => [id, boardProjections.get(id) ?? null]))
+    : sample.projections
+  return {
+    full: base.full,
+    sessions: sample.sessions,
+    projections,
+    combined: digest([base.full, sample.sessions, projections]),
+    fullParts: base.fullParts,
+    projectionIds: sample.projectionIds,
+  }
+}
+
+// The full producer's topology may be newer than the last published session projection. When completion
+// re-bases that already-visible projection onto the new topology, keep the full carrier from the producer and
+// only the sessions/projections carrier from the published rows. Do not sample current inputs here: that would
+// certify a write that neither producer actually carried.
+function revisionCarriedByPublishedSessionRebase(full: BoardInputRevision, published: BoardInputRevision): BoardInputRevision {
+  return {
+    full: full.full,
+    sessions: published.sessions,
+    projections: published.projections,
+    combined: digest([full.full, published.sessions, published.projections]),
+    fullParts: full.fullParts,
+    projectionIds: published.projectionIds,
   }
 }
 
@@ -228,11 +264,8 @@ const BUILD_TIMEOUT_MS = Number(process.env.SPEXCODE_BOARD_BUILD_TIMEOUT_MS || 1
 const RETRY_BACKOFF_MS = Number(process.env.SPEXCODE_BOARD_RETRY_BACKOFF_MS || 1000)
 const BACKGROUND_START_DELAY_MS = Number(process.env.SPEXCODE_BOARD_BACKGROUND_START_DELAY_MS || 300)
 
-// the cache's staleness has a DOMAIN, not just a bit: a 'sessions' change (a lifecycle write, a
-// liveness/activity poll flip) touches only the session rows, so the next read can SPLICE fresh sessions
-// onto the still-valid node/meta units instead of re-walking git+`.spec`; a 'full' change (a ref move, a
-// worktree `.spec` edit, or a changed graph-domain patrol revision) can reshape anything, so the next read
-// does the whole buildBoard(). 'none' = clean.
+// The structural/full and sessions obligations are deliberately separate. A full build can take seconds;
+// a persisted session row cannot be silently converted into time behind that unrelated topology work.
 type Scope = 'sessions' | 'full'
 let cached: Board | null = null   // last completed build; served while `dirty === 'none'`
 let cachedJson: string | null = null   // JSON.stringify(cached), serialized ONCE per build (see getBoardJson)
@@ -240,16 +273,19 @@ let cachedRevision: BoardInputRevision | null = null // input revision represent
 let dirty: Scope | 'none' = 'full'   // no cached board yet → the first read builds fully
 type Flight = { wait: Promise<Board>; settle: Promise<Board> }
 let inflight: Flight | null = null
+let sessionFlight: Flight | null = null
+let sessionOwed = false
+let sessionGeneration = 0
+let sessionProjectionPublication = 0
+let topologyGeneration = 0
 let gen = 0                       // bumped on invalidation so patrol validation cannot certify across an event
 let retryAt = 0
 let lastFailure: Error | null = null
 
 // mark the cache stale at a SCOPE. Called by every board-stream freshness source (see
 // boardStream.fireChanged), so a real change forces the next getBoard() to rebuild while a quiet poll storm
-// keeps hitting the cache. The scope only ESCALATES within a dirty window: none→sessions→full, and a
-// 'sessions' signal arriving while 'full' is already pending stays 'full' (a full rebuild subsumes a
-// sessions splice). The last-good JSON stays intact while dirty so stale readers can return it without
-// paying serialization again; a successful replacement clears it.
+// keeps hitting the cache. `dirty` is the structural producer's scope; `sessionOwed` is intentionally not
+// folded into it, because full+sessions owes both a full convergence and a cheap first projection.
 function mergeDirty(scope: Scope): void {
   if (scope === 'full' || dirty === 'full') dirty = 'full'
   else dirty = 'sessions'
@@ -257,9 +293,71 @@ function mergeDirty(scope: Scope): void {
 
 export function invalidateBoard(scope: Scope = 'full'): void {
   gen++
+  if (scope === 'sessions') { sessionOwed = true; sessionGeneration++ }
   mergeDirty(scope)
   retryAt = 0
   lastFailure = null
+}
+
+function startSessionSplice(): Flight | null {
+  if (!cached || !cachedRevision || !sessionOwed) return null
+  if (sessionFlight) return sessionFlight
+  sessionOwed = false
+  if (dirty === 'sessions') dirty = 'none'
+  let timedOut = false
+  let watchdog: ReturnType<typeof setTimeout> | undefined
+  const timeoutError = () => new Error(`graph session splice did not settle within ${BUILD_TIMEOUT_MS}ms`)
+  const producer = Promise.resolve().then(async () => {
+    // A full completion may replace the topology while listSessions is in flight. Rebase before publishing;
+    // the splice is a projection over whatever last-good structure is current, never a whole-board write race.
+    while (true) {
+      const base = cached, revision = cachedRevision, generation = topologyGeneration
+      if (!base || !revision) throw new Error('graph session splice lost its cached topology')
+      const before = sessionInputRevision()
+      const board = await spliceSessions(base)
+      const after = sessionInputRevision()
+      if (base !== cached || revision !== cachedRevision || generation !== topologyGeneration) continue
+      const stable = before.sessions === after.sessions && before.projections === after.projections
+      cached = board
+      cachedJson = null
+      cachedRevision = revisionCarriedBySessionSplice(revision, before, board, stable)
+      sessionProjectionPublication++
+      if (!stable) {
+        sessionOwed = true
+        sessionGeneration++
+        mergeDirty('sessions')
+      }
+      return board
+    }
+  })
+    .then((board) => {
+      if (timedOut) throw timeoutError()
+      return board
+    })
+    .catch((error) => {
+      sessionOwed = true
+      mergeDirty('sessions')
+      throw error
+    })
+  let settle!: Promise<Board>
+  settle = producer.finally(() => {
+    clearTimeout(watchdog)
+    if (sessionFlight?.settle === settle) sessionFlight = null
+  })
+  const wait = new Promise<Board>((resolve, reject) => {
+    watchdog = setTimeout(() => {
+      timedOut = true
+      console.warn(`spec-cli: graph session splice did not settle within ${BUILD_TIMEOUT_MS}ms`)
+      reject(timeoutError())
+    }, BUILD_TIMEOUT_MS)
+    watchdog.unref?.()
+    settle.then((board) => { if (!timedOut) resolve(board) }, (error) => { if (!timedOut) reject(error) })
+  })
+  const flight = { wait, settle }
+  sessionFlight = flight
+  void wait.catch(() => {})
+  void settle.catch(() => {})
+  return flight
 }
 
 // One flight owns BOTH patrol validation and a producer. A patrol first folds the cheap input revision; an
@@ -279,6 +377,9 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
   let buildScope: Scope = 'full'
   let buildFullStable = true
   let buildSessionsStable = true
+  let buildSessionGeneration = sessionGeneration
+  let buildSessionProjectionPublication = sessionProjectionPublication
+  let buildStartedWithSessionOwed = false
   let completedRevision: BoardInputRevision | null = null
   // Do not invoke the producer inline. buildBoard() has an asynchronous signature but performs a sizeable
   // synchronous setup before its first await (Promise.all evaluates its arguments immediately). A stale HTTP
@@ -315,8 +416,12 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
               const moved = Object.keys(observed.fullParts)
                 .filter((key) => observed.fullParts[key] !== anchorRevision.fullParts[key])
               console.warn(`spec-cli: graph patrol revision moved — scope=${observed.full === anchorRevision.full ? 'sessions' : 'full'} inputs=[${moved.join(', ')}]`)
-            }
-            dirty = observed.full === anchorRevision.full ? 'sessions' : 'full'
+          }
+            if (observed.full === anchorRevision.full) {
+              dirty = 'sessions'
+              sessionOwed = true
+              sessionGeneration++
+            } else dirty = 'full'
           }
         }
 
@@ -337,7 +442,11 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
         // window with its own domain: a session completion during a long full build owes one splice, not
         // another full build. The occupied `inflight` slot keeps fresh/stale readers joined while dirty is clean.
         dirty = 'none'
+        if (sessionsOnly) sessionOwed = false
         built = true
+        buildSessionGeneration = sessionGeneration
+        buildSessionProjectionPublication = sessionProjectionPublication
+        buildStartedWithSessionOwed = sessionOwed
         buildStartedAt = Date.now()
         const board = await (sessionsOnly ? spliceSessions(prev!) : buildBoard())
         const after = await boardInputRevision(prev)
@@ -368,14 +477,30 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
   // `settle` owns the real builder. The watchdog only rejects `wait`; the slot remains occupied until this
   // promise settles, so a next read can never overlap an abandoned git/fs build.
   let settle!: Promise<Board>
-  settle = build.then((board) => {
+  settle = build.then(async (board) => {
     if (timedOut) throw timeoutError()
     if (built) {
+      // A full build's session snapshot may predate a session projection that clients already saw. Rebase those
+      // published rows in memory on the new topology. This completion path must stay bounded: a later/unpublished
+      // session generation remains owed to the independent cheap splice rather than making full wait for quiet.
+      const publishedDuringBuild = sessionProjectionPublication !== buildSessionProjectionPublication
+      if (buildScope === 'full' && publishedDuringBuild && cached && cachedRevision) {
+        board = rebasePublishedSessions(board, cached)
+        completedRevision = revisionCarriedByPublishedSessionRebase(completedRevision!, cachedRevision)
+      }
+      const sessionStillOwed = sessionOwed || (!publishedDuringBuild && (
+        buildStartedWithSessionOwed || !buildSessionsStable || buildSessionGeneration !== sessionGeneration
+      ))
+      if (sessionStillOwed) {
+        sessionOwed = true
+        mergeDirty('sessions')
+      }
       cached = board
       cachedJson = null
       cachedRevision = completedRevision
+      if (buildScope === 'full') topologyGeneration++
+      else sessionProjectionPublication++
       if (!buildFullStable) mergeDirty('full')
-      else if (!buildSessionsStable) mergeDirty('sessions')
     }
     retryAt = 0
     lastFailure = null
@@ -422,10 +547,26 @@ export function getBoard(): Promise<Board> {
   // A clean-looking cache can be under patrol validation. Fresh readers join that flight before taking the
   // cache fast path, otherwise one can return stale bytes while the flight is discovering a missed change.
   if (inflight) return inflight.wait
+  if (dirty === 'full') {
+    const flight = startBuild('dirty')
+    if (flight) return flight.wait
+  }
+  if (sessionFlight) return sessionFlight.wait
   if (dirty === 'none' && cached) return Promise.resolve(cached)
   const flight = startBuild('dirty')
   if (flight) return flight.wait
   return Promise.reject(lastFailure ?? new Error('graph build retry is temporarily backing off'))
+}
+
+// Delta delivery may choose the sessions obligation while a route-owned full is still in flight. Starting
+// the full first preserves structural convergence; returning the splice first keeps the lifecycle surface live.
+export function getBoardForSessionRefresh(): Promise<Board> {
+  if (cached && sessionOwed) {
+    if (!inflight && dirty === 'full') startBuild('dirty')
+    const flight = startSessionSplice()
+    if (flight) return flight.wait
+  }
+  return getBoard()
 }
 
 // The delta-gated cold tick calls this instead of invalidating. Equal inputs resolve to the cached object;
@@ -439,8 +580,14 @@ export function patrolBoard(): Promise<Board> {
 
 export async function readBoard(consistency: BoardConsistency = 'fresh'): Promise<BoardRead> {
   if (consistency === 'stale-ok' && cached) {
-    const stale = dirty !== 'none' || inflight !== null
-    const flight = stale ? startBuild('dirty') : null
+    const stale = dirty !== 'none' || inflight !== null || sessionFlight !== null || sessionOwed
+    // A held session splice already owns this refresh. Returning stale bytes must not manufacture a full
+    // producer beside it; a real full obligation still starts its one structural producer independently.
+    const flight = inflight
+      ?? (dirty === 'full' ? startBuild('dirty') : null)
+      ?? sessionFlight
+      ?? (sessionOwed ? startSessionSplice() : null)
+      ?? (dirty === 'sessions' ? startBuild('dirty') : null)
     return { board: cached, freshness: stale ? 'stale' : 'fresh', refreshing: !!flight, ...(lastFailure ? { error: lastFailure.message } : {}) }
   }
   const board = await getBoard()

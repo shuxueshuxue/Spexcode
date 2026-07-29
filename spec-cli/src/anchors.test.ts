@@ -1,12 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, chmodSync, readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
-import { parseRelation, anchorHitCommits, diffHunkRanges, selectorsHitRanges, tsAstExtractor } from './anchors.js'
+import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, tsAstExtractor } from './anchors.js'
 
 // [[code-anchor]] — the structured relation grammar (ONE parser for code: and related:) and the
 // multi-selector hit engine: selectors on one base file are OR'd, a commit counts ONCE, and each hit
@@ -136,6 +136,34 @@ test('multi-selector hits across file revisions: a commit counts ONCE and unpars
     { commit: c3, selectors: ['f', 'g'], unparseable: false }, // both units in one commit — one row
     { commit: c5, selectors: ['f', 'g'], unparseable: true },  // c4 (outside both units) is absent
   ])
+})
+
+test('anchor query batch reads one shared immutable window for distinct selectors', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-anchor-batch-'))
+  const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const oldPath = process.env.PATH
+  try {
+    g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'src/x.ts'), 'export function f() { return 1 }\nexport function g() { return 2 }\n')
+    g('add', '-A'); g('commit', '-qm', 'v1')
+    writeFileSync(join(root, 'src/x.ts'), 'export function f() { return 10 }\nexport function g() { return 20 }\n')
+    g('add', '-A'); g('commit', '-qm', 'change both'); const change = g('rev-parse', 'HEAD')
+    const bin = mkdtempSync(join(tmpdir(), 'spex-git-count-'))
+    const count = join(bin, 'count')
+    writeFileSync(join(bin, 'git'), `#!/bin/sh\nprintf x >> ${count}\nexec /usr/bin/git \"$@\"\n`)
+    chmodSync(join(bin, 'git'), 0o755)
+    process.env.PATH = `${bin}:${oldPath}`
+    const x = tsAstExtractor(ROOT)
+    const win = [{ commit: change, historicalPath: 'src/x.ts', parents: [] }]
+    const hits = await anchorHitQueries(root, [{ win, symbols: ['f'] }, { win, symbols: ['g'] }], [x])
+    assert.deepEqual(hits.map((rows) => rows.map((row) => row.selectors)), [[['f']], [['g']]])
+    assert.equal(readFileSync(count, 'utf8').length, 4, 'one format probe, two object batches, and one shared hunk batch')
+    rmSync(bin, { recursive: true, force: true })
+  } finally {
+    process.env.PATH = oldPath
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('historical extractor memo stays stable across order and same-process repetition', { skip: !gitAvailable() && 'git not available' }, async () => {

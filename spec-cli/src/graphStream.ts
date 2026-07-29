@@ -4,7 +4,7 @@ import { watch, mkdirSync, readdirSync, readFileSync, type FSWatcher } from 'nod
 import { join, dirname, relative, resolve } from 'node:path'
 import { sessionsRoot, gitCommonDir } from './layout.js'
 import { hotSignature, warmSignature, listSessions } from './sessions.js'
-import { getBoard, invalidateBoard, patrolBoard } from './graphCache.js'
+import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard } from './graphCache.js'
 import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
 import {
   holdSessionEvalProjectionObserver,
@@ -230,11 +230,19 @@ export class TreeWatcherRegistry {
 const plainSubs = new Set<Notify>()
 const deltaSubs = new Set<DeltaSend>()
 let debounce: ReturnType<typeof setTimeout> | null = null
-let pendingScope: Scope | null = null   // the MAX change scope accumulated across the current debounce window
-const maxScope = (a: Scope | null, b: Scope): Scope => (a === 'full' || b === 'full' ? 'full' : 'sessions')
+let pendingFull = false
+let pendingSessions = false
+export type PendingGraphChanges = { full: boolean; sessions: boolean }
+export const addPendingGraphChange = (pending: PendingGraphChanges, scope: Scope): PendingGraphChanges => ({
+  full: pending.full || scope === 'full',
+  sessions: pending.sessions || scope === 'sessions',
+})
 
 // under SPEXCODE_BOARD_DEBUG=1, every broadcast logs its changed unit keys + trigger tags + build ms.
 const DEBUG = process.env.SPEXCODE_BOARD_DEBUG === '1'
+function traceLatency(stage: 'sessions-signal' | 'session-projection-complete' | 'broadcast', detail: Record<string, unknown> = {}): void {
+  if (DEBUG) console.warn(`spec-cli: graph latency ${JSON.stringify({ at: Date.now(), stage, ...detail })}`)
+}
 // the set of trigger tags accrued SINCE THE LAST BROADCAST — each fireChanged adds its scope, the cold tick
 // adds 'patrol'. Cleared on every broadcast. Its job: prove WHO caused a broadcast, so a change that only
 // the patrol saw (tag set === {'patrol'}) is flagged as a repair — some leaf watcher was blind.
@@ -261,23 +269,59 @@ let lastFullFrame: Frame | null = null
 let building = false
 let dirty = false
 let patrolPending = false
+let sessionRefreshRequested = false
+let wakeSessionRefresh: (() => void) | null = null
 
-async function rebuildAndBroadcast(patrol = false): Promise<void> {
+async function rebuildAndBroadcast(patrol = false, sessions = false, full = false): Promise<void> {
   if (patrol) patrolPending = true
-  if (building) { dirty = true; return }
+  if (sessions) sessionRefreshRequested = true
+  if (building) {
+    dirty = true
+    if (sessions) {
+      wakeSessionRefresh?.()
+      wakeSessionRefresh = null
+    }
+    return
+  }
   building = true
   try {
     do {
       dirty = false
       const validate = patrolPending
       patrolPending = false
+      const sessionsFirst = sessionRefreshRequested
+      sessionRefreshRequested = false
+      let servedSessionProjection = sessionsFirst
       let board: unknown
       // share the route's single-flight build ([[graph-cache]]); fireChanged() already invalidated the
       // cache (at the accumulated scope), so this gets a fresh build/splice (or joins one a concurrent poll
       // already started). The patrol instead asks that same cache flight to validate its input revision;
       // equal inputs return the anchor without invoking a producer.
       const t0 = Date.now()
-      try { board = await (validate ? patrolBoard() : getBoard()) }
+      try {
+        if (sessionsFirst) {
+          board = await getBoardForSessionRefresh()
+          if (validate) { patrolPending = true; dirty = true }
+        }
+        else {
+          let wake!: () => void
+          const sessionWake = new Promise<void>((resolve) => { wake = resolve })
+          wakeSessionRefresh = wake
+          const boardWait = validate ? patrolBoard() : getBoard()
+          const outcome = await Promise.race([
+            boardWait.then((value) => ({ value })),
+            sessionWake.then(() => ({ value: null as unknown })),
+          ])
+          if (wakeSessionRefresh === wake) wakeSessionRefresh = null
+          if (outcome.value === null) {
+            boardWait.catch(() => {})
+            board = await getBoardForSessionRefresh()
+            servedSessionProjection = true
+            if (validate) patrolPending = true
+            dirty = true // the full wait was preempted only for delivery; it remains owed.
+          } else board = outcome.value
+        }
+      }
       catch {
         // A failed refresh consumes no cause: graph-cache restores the producer scope, so its stream-side
         // attribution must remain owed too. This also retains watcher causes that arrived while the failed
@@ -287,15 +331,18 @@ async function rebuildAndBroadcast(patrol = false): Promise<void> {
         continue
       }
       const buildMs = Date.now() - t0
+      if (servedSessionProjection) traceLatency('session-projection-complete', { patrol: validate })
       const boardJson = JSON.stringify(board)
       const { units, ok } = unitize(board as Record<string, unknown>)
       const tag = tagOf(units)
-      // the trigger set describes who caused THIS rebuild, so it is consumed by the rebuild — not by the
-      // broadcast. Clearing it only when content moved let a no-op fire (every poller's first sample is
-      // one) leave its tag behind forever, and the next genuine patrol repair then read as leaf-signalled
-      // and went silent — the alarm suppressing itself on the very machines that need it.
+      // A session-first frame consumes its own cause, but a full/patrol cause remains owed until structural
+      // convergence. Otherwise the first cheap projection would erase patrol accountability before the full
+      // result could name it. A normal frame consumes its whole trigger set, including a no-op frame.
       const tags = [...triggerTags]
       triggerTags.clear()
+      if (servedSessionProjection)
+        for (const tag of tags) if (tag === 'full' || tag === 'patrol') triggerTags.add(tag)
+      if (sessionsFirst && full) dirty = true
       if (tag === lastTag) continue
       // the changed unit keys — computed against the prior anchor when we have one (a first paint has no
       // anchor, so no repair claim can be made against it).
@@ -314,6 +361,7 @@ async function rebuildAndBroadcast(patrol = false): Promise<void> {
       // (stopSourcesIfIdle cleared the anchor; leaving lastTag/lastUnits stale-cleared is consistent —
       // rebuilds only run while delta subscribers exist, so nothing chains from them meanwhile).
       if (deltaSubs.size) { lastUnits = ok ? units : null; lastTag = tag; lastFullFrame = fullFrame }
+      traceLatency('broadcast', { event: frame.event, sessionProjection: servedSessionProjection, tags, changedKeys })
       for (const send of [...deltaSubs]) { try { send(frame) } catch { /* swept on abort */ } }
       for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }
       // ---- repair accounting: a real (tag-moved) broadcast whose ONLY trigger was the cold-tick patrol
@@ -329,18 +377,21 @@ async function rebuildAndBroadcast(patrol = false): Promise<void> {
 }
 
 // a merge/launch/close touches several record files at once; collapse the burst into ONE signal. Each call
-// carries its change SCOPE; the window accumulates the MAX ([[graph-cache]] escalates none→sessions→full).
+// carries its own change SCOPE: full and sessions are independent obligations, not a max-scope replacement.
 // With delta subscribers the debounced fire rebuilds and broadcasts (plain subs then ride the same
 // tag-moved gate — no spurious refetches); without them it stays the zero-build legacy notify.
 function fireChanged(scope: Scope = 'full', evalTarget?: EvalTarget): void {
   // Advance eval input generations BEFORE invalidating/building the board, so the first frame caused by an
   // input event is `updating(lastKnown)`. Summary completion calls this function without a target.
+  if (scope === 'sessions') traceLatency('sessions-signal')
   if (evalTarget) invalidateSessionEvalProjections(evalTarget)
-  pendingScope = maxScope(pendingScope, scope)
-  // invalidate the route's board cache ([[graph-cache]]) on EVERY change signal, at the accumulated scope,
+  const pending = addPendingGraphChange({ full: pendingFull, sessions: pendingSessions }, scope)
+  pendingFull = pending.full
+  pendingSessions = pending.sessions
+  // invalidate the route's board cache ([[graph-cache]]) on EVERY change signal at its OWN scope,
   // before the debounce guard — a plain-mode client that polls /api/graph (no delta rebuild here) must
   // still see fresh data on its next poll, and a delta rebuild below re-reads the same now-stale cache.
-  invalidateBoard(pendingScope)
+  invalidateBoard(scope)
   triggerTags.add(scope)
   // DEBOUNCE = 25ms. Real fs-event bursts (a merge touching many records) were MEASURED to span 0–5ms, so a
   // 25ms window collapses them with room to spare while shaving ~125ms off the old 150ms lag; anything
@@ -349,8 +400,10 @@ function fireChanged(scope: Scope = 'full', evalTarget?: EvalTarget): void {
   if (debounce) return
   debounce = setTimeout(() => {
     debounce = null
-    pendingScope = null
-    if (deltaSubs.size) void rebuildAndBroadcast()
+    const full = pendingFull, sessions = pendingSessions
+    pendingFull = false
+    pendingSessions = false
+    if (deltaSubs.size) void rebuildAndBroadcast(false, sessions, full)
     else for (const notify of [...plainSubs]) { try { notify() } catch { /* swept on abort */ } }
   }, 25)
 }

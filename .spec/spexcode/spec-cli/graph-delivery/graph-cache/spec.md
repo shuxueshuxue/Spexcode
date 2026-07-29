@@ -46,19 +46,30 @@ The graph is built **once per change, not once per poll — and only as much of 
   projection values become the cache anchor, so verification never certifies a value the board did not carry.
   A slow validation or producer stays inside the same watchdog/abort/backoff path, and a patrol arriving during
   another refresh joins it rather than queueing a second operation.
-- **Scoped invalidation (the dirty bit carries a domain).** `invalidateBoard(scope)` marks the cache
-  'sessions'-dirty or 'full'-dirty, escalating (sessions∪full=full) and never downgrading. A
-  'sessions'-dirty read with a cached graph takes the SPLICE path — `spliceSessions(prev)`: one fresh
-  `listSessions()`, prev's per-path ops reused, every node/eval/issue unit returned byte-identical — so a
+- **Scoped invalidation (the dirty state carries independent obligations).** `invalidateBoard(scope)` records
+  a structural `full` obligation and a session-projection obligation separately. A full signal still subsumes
+  nothing except another structural full: when a sessions signal arrives in the same debounce window or while a
+  route-owned/full producer is running, the cache owes **both** a full convergence and a sessions splice. A
+  'sessions' read with a cached graph takes the SPLICE path — `spliceSessions(prev)`: one fresh
+  `listSessions()` bracketed only by the record/prompt/resident-projection carrier (never a root/worktree
+  `.spec` walk, issue read, identity read, or topology revision sample), prev's per-path ops reused, every node/eval/issue unit returned byte-identical — so a
   lifecycle write never re-walks 180 spec files to ship a 1KB patch (the measured waste this scoping
   removed: ~250ms of unrelated fs work per push). A 'full' dirty (a ref move or worktree/.spec event) runs the
-  whole `buildBoard()`. Before any nominal session splice, the cache compares current full inputs to the revision
-  its node/meta anchor carries; a moved full domain promotes that same flight rather than binding stale nodes to
-  a new revision. The producer consumes its starting scope, so a later event opens a new dirty window in that
-  event's own domain: a session completion during a long full build owes one follow-up splice, not another full
-  build, while a full invalidation landing mid-splice still leaves the cache full-dirty. Failure restores the
-  consumed producer scope. The splice runs under the SAME single-flight promise and watchdog as a full build.
-  The equivalence obligation — at one fixed eval-projection generation, a
+  whole `buildBoard()`, but its one structural builder does not queue that cheap projection: the splice inherits
+  the last-good topology's full carrier and may publish first while the full builder remains single-flight. A
+  concurrent full obligation remains independently owed and starts/continues its structural producer; the splice
+  never scans topology to discover a missed full change. Its inherited full carrier lets the patrol detect that
+  mismatch later and select the owed full repair instead of falsely certifying old nodes. The full
+  producer captures the session-projection publication it assembled against; if a newer projection has already
+  landed while it ran, completion synchronously re-bases those **published** rows onto the new topology through
+  graph's one row-decoration/ops rule before publishing, so it cannot roll a visible session row back. It never
+  waits for session-store quiet or performs another `listSessions()` in the full completion path: a later or
+  not-yet-published session generation remains one owed cheap splice after the full commits. Thus continuous
+  lifecycle writes cannot pin structural convergence, while a published lifecycle value cannot be replaced by an
+  older full snapshot. The producer consumes only its own starting obligation: a later session completion during a
+  long full build owes one splice, not another full build, while a full invalidation landing mid-splice still leaves structural full owed. Failure
+  restores the consumed obligation. The structural builder remains single-flight; the session splice shares its
+  watchdog/error discipline but is not serialized behind unrelated full assembly. The equivalence obligation — at one fixed eval-projection generation, a
   splice is indistinguishable from a full rebuild whenever only session state moved — is pinned by test,
   and the patrol's repair accounting
   ([[graph-stream]]) is the live alarm if it ever breaks.
@@ -74,7 +85,10 @@ The graph is built **once per change, not once per poll — and only as much of 
   never invents a snapshot. Once a last-good board exists, a dirty ordinary HTTP read returns that exact
   serialized board immediately with an explicit stale/refreshing signal and starts at most one background
   rebuild. Fresh waiters (the stream, delta path, and callers that need current content) join that same
-  flight and wait for its completion, so a stale HTTP read cannot consume a stream update. A failed
+  flight and wait for its completion, so a stale HTTP read cannot consume a stream update. While a session splice
+  already owns the refresh, stale reads report that last-good board as refreshing and join neither a synthetic
+  full build nor another splice; a full dirty obligation still starts its one structural builder alongside that
+  independent splice. A failed
   background build keeps the last-good board, logs loudly, exposes a non-refreshing stale state during a
   bounded retry backoff, and never creates an unhandled rejection or a retry storm. A successful fresh
   completion replaces the JSON/ETag anchor and is the only event that makes the stale signal disappear.

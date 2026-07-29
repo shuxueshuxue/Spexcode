@@ -1,9 +1,9 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText } from './git.js'
+import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, type DriftPathEvent } from './git.js'
 import { loadSpecs, parseFrontmatter } from './specs.js'
 import { readJsonConfig } from './layout.js'
-import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, resolveAnchor, windowEvents, anchorHitCommits } from './anchors.js'
+import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, resolveAnchor, windowEvents, anchorHitQueries } from './anchors.js'
 import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
@@ -321,25 +321,28 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
   // silent for either relation: a dead or ambiguous selector, a selector on a directory, and an
   // unparseable working-tree file ERROR. An extension with no designated extractor, or a designated
   // extractor that cannot run here, also ERRORS but skips those anchors so the remaining checks continue.
+  type AnchorLintQuery = { id: string; version: number; relation: 'code' | 'related'; path: string; symbols: string[]; win: DriftPathEvent[] }
+  type AnchorLintStep = { finding: Finding } | { query: AnchorLintQuery }
   const readyWarned = new Set<string>()
+  const anchorSteps: AnchorLintStep[] = []
   for (const s of specs) {
     for (const { relation, entries } of [{ relation: 'code' as const, entries: s.codeScoped }, { relation: 'related' as const, entries: s.relatedScoped }]) {
       for (const { path, selectors } of entries) {
         if (pending && !changed.some((file) => relationClaimsPath(path, file))) continue
         const x = extractorFor(regs, extOf(path))
         if (!x) {
-          out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — anchor validation was skipped and remains unverified; add a LangSpec row (anchors.ts) or drop the selector(s)` })
+          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — anchor validation was skipped and remains unverified; add a LangSpec row (anchors.ts) or drop the selector(s)` } })
           continue
         }
         const ready = x.ready()
         if (ready !== true) {
           // once per (extractor, reason), even across several anchored nodes — one repair, one message.
-          if (!readyWarned.has(x.id + ready)) { readyWarned.add(x.id + ready); out.push({ level: 'error', rule: 'integrity', msg: `anchor extractor '${x.id}' cannot run: ${ready}` }) }
+          if (!readyWarned.has(x.id + ready)) { readyWarned.add(x.id + ready); anchorSteps.push({ finding: { level: 'error', rule: 'integrity', msg: `anchor extractor '${x.id}' cannot run: ${ready}` } }) }
           continue
         }
         if (!existsAtTip(path)) continue // the missing FILE already errored above
         if (isDirectoryAtTip(path)) {
-          out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' puts a selector on a directory (${relation}: ${path}#${selectors[0]}) — a selector scopes ONE real file` })
+          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' puts a selector on a directory (${relation}: ${path}#${selectors[0]}) — a selector scopes ONE real file` } })
           continue
         }
         let units
@@ -348,7 +351,7 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
           if (source === null) throw new Error(`candidate tree has no file '${path}'`)
           units = x.extract(source, path)
         } catch (e: any) {
-          out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${selectors.join(', #')} ('${s.id}') is unverifiable — the current file does not parse: ${e?.message ?? e}` })
+          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${selectors.join(', #')} ('${s.id}') is unverifiable — the current file does not parse: ${e?.message ?? e}` } })
           continue
         }
         // each selector resolves (or errors) on its own; only the live ones feed the window engine.
@@ -356,42 +359,49 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
         for (const sym of selectors) {
           const res = resolveAnchor(units, sym)
           if ('dead' in res) {
-            out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `dead anchor: ${path}#${sym} ('${s.id}') names no unit on the current tree — the unit was deleted or renamed; update the spec's ${relation}: entry to follow it` })
+            anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `dead anchor: ${path}#${sym} ('${s.id}') names no unit on the current tree — the unit was deleted or renamed; update the spec's ${relation}: entry to follow it` } })
             continue
           }
           if ('ambiguous' in res) {
-            out.push({ level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `ambiguous anchor: ${path}#${sym} ('${s.id}') names ${res.ambiguous} same-named units in one file — an anchor must be unique; rename one unit` })
+            anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `ambiguous anchor: ${path}#${sym} ('${s.id}') names ${res.ambiguous} same-named units in one file — an anchor must be unique; rename one unit` } })
             continue
           }
           if (res.ok.typeOnly)
-            out.push({ level: 'warn', rule: 'anchor', spec: s.id, file: path, msg: `${path}#${sym} anchors a ${res.ok.kind} — anchoring a type is usually wrong (types reshape with every refactor); anchor the behaviour-bearing unit instead` })
+            anchorSteps.push({ finding: { level: 'warn', rule: 'anchor', spec: s.id, file: path, msg: `${path}#${sym} anchors a ${res.ok.kind} — anchoring a type is usually wrong (types reshape with every refactor); anchor the behaviour-bearing unit instead` } })
           live.push(sym)
         }
         if (!live.length) continue
         const since = rowsFor(hidx, s.path)[0]?.hash || ''
         const win = windowEvents(didx, since, path, s.id)
         if (!win.length) continue
-        const hits = await anchorHitCommits(root, win, live, regs)
-        if (!hits.length) continue
-        const hitSyms = [...new Set(hits.flatMap((h) => h.selectors))]
-        const shas = hits.map((h) => h.commit.slice(0, 8)).join(', ')
-        const unparseable = hits.filter((h) => h.unparseable)
-        const parseNote = unparseable.length ? ` (${unparseable.length} of these could not be parsed at that commit — counted as hits conservatively)` : ''
-        if (relation === 'code') {
-          const current = pending && hits.some((hit) => hit.commit === tip)
-          const older = pending && hits.some((hit) => hit.commit !== tip)
-          const remedy = !pending
-            ? `update the spec, or 'spex spec ack ${s.id} --reason "…"' if the contract still holds`
-            : current && older
-              ? `update the spec in this commit; its own hit can be declared by retrying with 'git commit --trailer "Spec-OK: ${s.id}" …', but the listed older debt must be cleared first (an in-commit declaration never pardons ancestors)`
-              : current
-                ? `update the spec in this commit, or retry with 'git commit --trailer "Spec-OK: ${s.id}" …'; a later empty ack cannot pre-author this candidate`
-                : `update the spec in this commit, or clear this older debt with 'spex spec ack ${s.id} --reason "…"' before retrying the candidate`
-          out.push({ level: 'error', rule: 'anchor-drift', spec: s.id, file: path, msg: `${path}#${hitSyms.join(', #')} was changed by ${hits.length} commit(s) since spec '${s.id}' v${s.version} [${shas}]${parseNote} — the anchored contract's code moved: ${remedy}` })
-        } else
-          out.push({ level: 'warn', rule: 'related-drift', spec: s.id, file: path, msg: `related ${path}#${hitSyms.join(', #')} ('${s.id}') was changed by ${hits.length} commit(s) since v${s.version} [${shas}]${parseNote} — a scoped dependency shifted, worth a glance (SOFT: never blocks, no ack, no eval staleness)` })
+        anchorSteps.push({ query: { id: s.id, version: s.version, relation, path, symbols: live, win } })
       }
     }
+  }
+  const anchorHits = await anchorHitQueries(root, anchorSteps.flatMap((step) => 'query' in step ? [{ win: step.query.win, symbols: step.query.symbols }] : []), regs)
+  let hitIndex = 0
+  for (const step of anchorSteps) {
+    if ('finding' in step) { out.push(step.finding); continue }
+    const { id, version, relation, path } = step.query
+    const hits = anchorHits[hitIndex++]
+    if (!hits.length) continue
+    const hitSyms = [...new Set(hits.flatMap((h) => h.selectors))]
+    const shas = hits.map((h) => h.commit.slice(0, 8)).join(', ')
+    const unparseable = hits.filter((h) => h.unparseable)
+    const parseNote = unparseable.length ? ` (${unparseable.length} of these could not be parsed at that commit — counted as hits conservatively)` : ''
+    if (relation === 'code') {
+      const current = pending && hits.some((hit) => hit.commit === tip)
+      const older = pending && hits.some((hit) => hit.commit !== tip)
+      const remedy = !pending
+        ? `update the spec, or 'spex spec ack ${id} --reason "…"' if the contract still holds`
+        : current && older
+          ? `update the spec in this commit; its own hit can be declared by retrying with 'git commit --trailer "Spec-OK: ${id}" …', but the listed older debt must be cleared first (an in-commit declaration never pardons ancestors)`
+          : current
+            ? `update the spec in this commit, or retry with 'git commit --trailer "Spec-OK: ${id}" …'; a later empty ack cannot pre-author this candidate`
+            : `update the spec in this commit, or clear this older debt with 'spex spec ack ${id} --reason "…"' before retrying the candidate`
+      out.push({ level: 'error', rule: 'anchor-drift', spec: id, file: path, msg: `${path}#${hitSyms.join(', #')} was changed by ${hits.length} commit(s) since spec '${id}' v${version} [${shas}]${parseNote} — the anchored contract's code moved: ${remedy}` })
+    } else
+      out.push({ level: 'warn', rule: 'related-drift', spec: id, file: path, msg: `related ${path}#${hitSyms.join(', #')} ('${id}') was changed by ${hits.length} commit(s) since v${version} [${shas}]${parseNote} — a scoped dependency shifted, worth a glance (SOFT: never blocks, no ack, no eval staleness)` })
   }
 
   // drift: a governed file has commits NOT yet reflected in its spec. Judged by true git ancestry —

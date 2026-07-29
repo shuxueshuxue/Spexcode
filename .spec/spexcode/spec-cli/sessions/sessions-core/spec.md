@@ -71,6 +71,12 @@ barrier cover API, CLI, hooks, dashboard and in-process fallback without route-b
 operation is one member of the lease's closed union; arbitrary strings cannot invent a write class. Reads and
 selector resolution remain outside the ticket set.
 
+A text send takes the session record lock only for its durable delivery-marker reservation and terminal receipt;
+the adapter RPC itself runs after releasing it. A native turn can synchronously invoke lifecycle hooks that re-enter
+the same record writer, so holding that lock across the confirmation would deadlock a truthful adapter response.
+The reserved marker blocks replay while the RPC is in flight, and normal adapter/runtime guards remain the authority
+for any concurrent lifecycle operation.
+
 Archive may carry an opaque adapter cold-preflight receipt across its exact leaf/tmux stop, into the same adapter's
 cold commit, and through the final record/offline publication boundary. This shared layer forwards that one in-memory
 object without inspecting it, persisting it, or exposing a recursive/public option; the adapter revalidates its own

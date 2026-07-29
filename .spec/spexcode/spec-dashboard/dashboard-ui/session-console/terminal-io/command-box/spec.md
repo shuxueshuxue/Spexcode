@@ -34,9 +34,13 @@ open above the caret/footer inside the available upper space. At phone width the
 replace [[mobile-ui]]'s existing composer.
 
 Sending uses the session's control socket, never PTY typing, so one authored prompt lands atomically even while
-the terminal is in copy mode. A successful send clears the draft and closes the box. A failed send leaves it
-open, restores the draft, and shows the error. Enter sends only when it is not committing an IME composition;
-Shift+Enter adds a line. The box uses the one shared [[composer]] shell also used by Issues and Evals.
+the terminal is in copy mode. A successful **accepted** send clears the draft and closes the box. A rejected or
+commit-unknown delivery leaves it open, restores the draft, and renders the returned terminal outcome. The box
+keeps one opaque delivery marker with that unchanged draft, so an immediate retry has the same native exactly-once
+identity instead of creating a second turn if a late acceptance arrives; the shared session ledger returns the
+first terminal result without another adapter call. Editing the draft starts a new delivery.
+Enter sends only when it is not committing an IME composition; Shift+Enter adds a line. The box uses the one shared
+[[composer]] shell also used by Issues and Evals.
 
 Its grammar is the old control plane, kept in one place: `[[node]]` resolves at send to the node id plus its
 live `spec.md` pointer; `@session` and `@new` use [[mentions]]; `/` lists available board commands first,

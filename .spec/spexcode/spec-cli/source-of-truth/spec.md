@@ -106,9 +106,9 @@ Two principles keep that derivation cheap on a long-running server:
   descendants traverses ground the event-side ancestor walk never touched. The other two terms are unchanged by
   that choice: one scan of the `N` immutable events, and the lineage walk itself, whose frontier compares each
   step's applicable renames pairwise — `Σ d(candidate)²` constant-time queries, worst case `Θ(NK²)` when one
-  path carries `K` mutually incomparable renames. None of this is a linear-in-history promise: the closure term
-  is quadratic once `K` approaches `H`, and the unchanged frontier term is cubic when `N`, `K` and `H` grow
-  together.
+  path carries `K` mutually incomparable renames. None of this is a linear-in-history promise: at `K ≈ H` the
+  closure term is `O(H(H+G))` — quadratic only where the commit DAG is sparse enough that `G = O(H)` — and the
+  unchanged frontier term is cubic when `N`, `K` and `H` grow together.
   Within one build, stream count must not multiply ledger work: all consumers share one decoded
   snapshot, one integrity verdict, and one locked merge/write, with no write-then-reload verification pass.
   The pair projector also parses the current-tip topology and tree-path listing once and passes those

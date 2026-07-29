@@ -998,8 +998,9 @@ function headOrEmpty(root: string): string {
 // traverses ground the event-side ancestor walk never touched. The projector's own work is unchanged and is
 // NOT covered by that term: one scan of the N events, plus a lineage walk whose frontier compares each step's
 // applicable renames pairwise — Σ d(candidate)² O(1) queries, worst case Θ(NK²) when one path carries K
-// mutually incomparable renames. So: no linear-in-history promise — the closure term is quadratic once K
-// approaches H, and the untouched frontier term is cubic when N, K and H grow together. It is also why a
+// mutually incomparable renames. So: no linear-in-history promise — at K≈H the closure term is O(H(H+G)),
+// quadratic only where the DAG is sparse enough that G=O(H), and the untouched frontier term is cubic when
+// N, K and H grow together. It is also why a
 // reachability matrix over the rename commits is not worth it: same O(KH) bits, but eagerly.
 function renameSideReachability(
   renameCommits: Set<string>,

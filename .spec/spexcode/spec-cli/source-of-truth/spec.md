@@ -92,9 +92,16 @@ Two principles keep that derivation cheap on a long-running server:
   reachable immutable events. A cold seed necessarily pays one `O(H)` Git extraction and one `O(L)` encode;
   an exact-tip hit pays one `O(L)` read, integrity pass, and decode with no event Git walk; an advancing tip
   pays one `O(L)` snapshot plus `O(D)` event extraction and at most one atomic `O(L + D)` replacement. The
-  topology/projector remains `O(H + events)` because reachability, rename forks, and the walk-newest version
-  rule are current-tip questions; the ledger removes repeated immutable-fact extraction, not that semantic
-  lower bound. Within one build, stream count must not multiply ledger work: all consumers share one decoded
+  topology and the tip-relative projection are still rebuilt per build, because reachability, rename forks, and
+  the walk-newest version rule are current-tip questions; the ledger removes repeated immutable-fact extraction,
+  not that semantic lower bound. That projection is parameterized by the RENAME count, never the event count:
+  its only reachability question compares some commit with a rename commit, so the reachability closure is held
+  per consulted rename — at most two history-wide bitsets each, built on demand — giving `O(K(H+E))` time and
+  `O(KH)` bits for `K` consulted renames. Holding the closure at the other end instead makes the identical
+  verdict cost `O(events × H)`, and a linear history whose events all sit on one renamed path Θ(H²) in both time
+  and retained bits. This is a ceiling, not a linear-in-history promise: `K` approaching `H` is quadratic again,
+  bounded by twice the event-keyed shape because every rename commit is already an event commit there.
+  Within one build, stream count must not multiply ledger work: all consumers share one decoded
   snapshot, one integrity verdict, and one locked merge/write, with no write-then-reload verification pass.
   The pair projector also parses the current-tip topology and tree-path listing once and passes those
   immutable projections to both history and drift builders; a shared `rev-list --parents` or `ls-tree`

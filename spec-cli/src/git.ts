@@ -985,39 +985,77 @@ function headOrEmpty(root: string): string {
   }
 }
 
-type RenameProjectionEvent = { hash: string; to: string }
-function canonicalPathProjector(
-  renamesByFrom: Map<string, RenameProjectionEvent[]>,
-  topologyOrd: Map<string, number>,
-  topologyParents: Map<string, string[]>,
-): (path: string, event: string) => string[] {
-  const ancestryCache = new Map<string, Uint8Array>()
-  const ancestryOf = (hash: string): Uint8Array | undefined => {
-    const hit = ancestryCache.get(hash)
+// @@@ reachability memoized on the rename side, never the event side - every comparison the projector makes
+// has a RENAME commit on one end, and a history holds far fewer renames than file events. Keying the memo on
+// the OTHER end rebuilds a history-wide ancestor set per distinct event commit: 2.3M parent-edge visits and
+// 1,219 retained bitsets served 9k one-bit questions on this repository, and a linear history whose events all
+// sit on one renamed path degenerates to Θ(H²) time and Θ(H²) retained bits. Asking the rename end instead —
+// its descendants when it is the older commit, its ancestors when it is the newer one — bounds the whole
+// projection by the RENAME count K, not the event count: at most two lazily built H-bit closures per consulted
+// rename, so O(K(H+E)) time and O(KH) bits. That is a reparameterization, not a linear-in-history promise. A
+// history where nearly every commit renames (K≈H) stays quadratic — but never worse than twice the event-keyed
+// shape it replaces, since every rename commit is already an event commit there. It is also why a reachability
+// matrix over the rename commits is not worth it: same O(HK) bits, but eagerly and with no such ceiling.
+function renameSideReachability(
+  renameCommits: Set<string>,
+  topology: TopologyProjection,
+): (older: string, newer: string) => boolean {
+  const { order, parents } = topology
+  const size = (order.size + 7) >> 3
+  let childEdges: Map<string, string[]> | null = null
+  const children = (): Map<string, string[]> => {
+    if (childEdges) return childEdges
+    childEdges = new Map()
+    for (const [hash] of order) for (const parent of parents.get(hash) ?? []) {
+      if (!order.has(parent)) continue // shallow boundary: an unwalked parent ends the chain
+      const kids = childEdges.get(parent)
+      if (kids) kids.push(hash)
+      else childEdges.set(parent, [hash])
+    }
+    return childEdges
+  }
+  const closure = (start: string, edges: Map<string, string[]>, memo: Map<string, Uint8Array>): Uint8Array => {
+    const hit = memo.get(start)
     if (hit) return hit
-    const start = topologyOrd.get(hash)
-    if (start === undefined) return undefined
-    const bits = new Uint8Array((topologyOrd.size + 7) >> 3)
-    bits[start >> 3] |= 1 << (start & 7)
-    const stack = [hash]
-    while (stack.length) for (const parent of topologyParents.get(stack.pop()!) ?? []) {
-      const position = topologyOrd.get(parent)
+    const bits = new Uint8Array(size)
+    const at = order.get(start)!
+    bits[at >> 3] |= 1 << (at & 7)
+    const stack = [start]
+    while (stack.length) for (const next of edges.get(stack.pop()!) ?? []) {
+      const position = order.get(next)
       if (position === undefined) continue
       const mask = 1 << (position & 7)
       if (bits[position >> 3] & mask) continue
       bits[position >> 3] |= mask
-      stack.push(parent)
+      stack.push(next)
     }
-    ancestryCache.set(hash, bits)
+    memo.set(start, bits)
     return bits
   }
-  const precedes = (older: string, newer: string): boolean => {
-    const position = topologyOrd.get(older), ancestry = ancestryOf(newer)
-    if (position === undefined || ancestry === undefined)
+  const ancestors = new Map<string, Uint8Array>(), descendants = new Map<string, Uint8Array>()
+  return (older, newer) => {
+    const from = order.get(older), to = order.get(newer)
+    if (from === undefined || to === undefined)
       throw new Error(`rename projection cannot place ${older} against ${newer} in the current topology`)
-    return (ancestry[position >> 3] & (1 << (position & 7))) !== 0
+    // Whichever end is the rename owns the closure. A pair with no rename on either end is answered the same
+    // way, just without that guarantee — the projector never asks one.
+    return renameCommits.has(older)
+      ? (closure(older, children(), descendants)[to >> 3] & (1 << (to & 7))) !== 0
+      : (closure(newer, parents, ancestors)[from >> 3] & (1 << (from & 7))) !== 0
   }
+}
+
+type RenameProjectionEvent = { hash: string; to: string }
+function canonicalPathProjector(
+  renamesByFrom: Map<string, RenameProjectionEvent[]>,
+  topology: TopologyProjection,
+): (path: string, event: string) => string[] {
+  const renameCommits = new Set<string>()
+  for (const renames of renamesByFrom.values()) for (const rename of renames) renameCommits.add(rename.hash)
+  const precedes = renameSideReachability(renameCommits, topology)
   return (path, event) => {
+    // A path no rename ever left keeps its own identity at every event; there is no lineage to walk.
+    if (!renamesByFrom.has(path)) return [path]
     const pending = [path], resolved = new Set<string>(), seen = new Set<string>()
     while (pending.length) {
       const candidate = pending.pop()!
@@ -1179,7 +1217,7 @@ async function buildIndex(root: string, tip: string, transient: boolean, useCach
     renames.push({ hash: rename.hash, to: rename.to })
     renamesByFrom.set(rename.from, renames)
   }
-  const canonical = canonicalPathProjector(renamesByFrom, topologyOrd, topologyParents)
+  const canonical = canonicalPathProjector(renamesByFrom, topology)
   for (const [path, pathRows] of rawVersions) {
     for (const row of pathRows) for (const head of canonical(path, row.hash).filter((candidate) => currentPaths.has(candidate))) {
       const rows = versions.get(head) ?? []
@@ -1478,10 +1516,11 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
     renames.push({ hash: rename.hash, to: rename.to })
     renamesByFrom.set(rename.from, renames)
   }
-  const canonical = canonicalPathProjector(renamesByFrom, topologyOrder, topologyParents)
+  const canonical = canonicalPathProjector(renamesByFrom, topology)
   idx.lineageKeys = canonical
-  const addEvent = (path: string, event: DriftPathEvent, target: Map<string, DriftPathEvent[]>) => {
-    const keys = canonical(path, event.commit)
+  // One projection per event serves both the lineage index and the current-path index; asking the
+  // projector the same question twice per event only pays for it twice.
+  const addEvent = (keys: string[], event: DriftPathEvent, target: Map<string, DriftPathEvent[]>) => {
     for (const key of keys) {
       const events = target.get(key) ?? []
       if (!events.some((existing) => existing.commit === event.commit && existing.historicalPath === event.historicalPath)) events.push(event)
@@ -1489,8 +1528,9 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
     }
   }
   for (const [path, rawEvents] of rawFileEvents) for (const event of rawEvents) {
-    addEvent(path, event, lineageEvents)
-    for (const head of canonical(path, event.commit).filter((candidate) => currentPaths.has(candidate))) {
+    const keys = canonical(path, event.commit)
+    addEvent(keys, event, lineageEvents)
+    for (const head of keys.filter((candidate) => currentPaths.has(candidate))) {
       const events = fileEvents.get(head) ?? []
       if (!events.some((existing) => existing.commit === event.commit && existing.historicalPath === event.historicalPath)) events.push(event)
       fileEvents.set(head, events)
@@ -1516,8 +1556,9 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
       historicalPath: path,
       parents: mergeParents.map((commit, index) => ({ commit, historicalPath: mergeEvent.parentPaths[index] })),
     }
-    addEvent(path, event, lineageEvents)
-    for (const head of canonical(path, mergeEvent.hash).filter((candidate) => currentPaths.has(candidate))) {
+    const keys = canonical(path, mergeEvent.hash)
+    addEvent(keys, event, lineageEvents)
+    for (const head of keys.filter((candidate) => currentPaths.has(candidate))) {
       const events = idx.resolutionEvents!.get(head) ?? []
       if (!events.some((existing) => existing.commit === event.commit && existing.historicalPath === event.historicalPath)) events.push(event)
       idx.resolutionEvents!.set(head, events)

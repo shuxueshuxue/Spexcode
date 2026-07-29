@@ -444,6 +444,93 @@ test('a repeated-result merge rename keeps the side hit on the new lineage', asy
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
+// One branchy fixture for the whole rename projection: a merge that renames against BOTH parents (its
+// combined raw reports the same rename once per parent), an incomparable fork editing the pre-rename path,
+// and a later node created at the vacated path. Whatever answers ancestry underneath, these three must keep
+// the same lineages — and the ledger projection must equal the full-history one on the same tree.
+test('the rename projection holds equal-commit merge peers, an incomparable fork, and vacated reuse apart', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-rename-composite-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  // both merges here are meant to conflict: the resolution is what authors content and moves the lineage
+  const conflict = (...args: string[]) => { try { run(...args) } catch { /* resolved by the writes below */ } }
+  const at = (path: string) => join(root, path)
+  const write = (path: string, lines: string[]) => {
+    mkdirSync(dirname(at(path)), { recursive: true })
+    writeFileSync(at(path), lines.join('\n') + '\n')
+  }
+  const oldPath = '.spec/p/old/spec.md', midPath = '.spec/p/mid/spec.md', newPath = '.spec/p/new/spec.md'
+  const body = (head: string, mid: string, tail: string) => [head, ...Array.from({ length: 10 }, (_, i) => `line ${i}`), mid, tail]
+  let cachePath = ''
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'test@example.com'); run('config', 'user.name', 'test')
+    write(oldPath, body('base', 'stable', 'base-tail'))
+    run('add', '.'); run('commit', '-qm', 'base')
+
+    // an incomparable fork: it edits the pre-rename path while main renames that same path away
+    run('switch', '-qc', 'fork')
+    write(oldPath, body('fork-head', 'stable', 'base-tail'))
+    run('commit', '-qam', 'fork edits the old path')
+    run('switch', '-q', 'main')
+    mkdirSync(dirname(at(midPath)), { recursive: true })
+    run('mv', oldPath, midPath)
+    write(midPath, body('base', 'stable', 'main-tail'))
+    run('commit', '-qam', 'rename old to mid and edit')
+    conflict('merge', '--no-ff', '--no-commit', 'fork')
+    write(midPath, body('merge-authored', 'stable', 'main-tail'))
+    run('add', '-A'); run('commit', '-qm', 'merge fork: author the resolution')
+
+    // a merge that renames relative to BOTH parents, so its combined raw reports one rename per parent
+    run('switch', '-qc', 'fork2')
+    write(midPath, body('merge-authored', 'fork2-mid', 'main-tail'))
+    run('commit', '-qam', 'fork2 edits mid')
+    run('switch', '-q', 'main')
+    write(midPath, body('merge-authored', 'stable', 'main-tail-2'))
+    run('commit', '-qam', 'main edits mid')
+    conflict('merge', '--no-ff', '--no-commit', 'fork2')
+    mkdirSync(dirname(at(newPath)), { recursive: true })
+    renameSync(at(midPath), at(newPath))
+    write(newPath, body('merge2-authored', 'fork2-mid', 'main-tail-2'))
+    run('add', '-A'); run('commit', '-qm', 'merge fork2: rename mid to new')
+
+    // the vacated path is reused by an unrelated node
+    write(oldPath, ['reused', 'body'])
+    run('add', '-A'); run('commit', '-qm', 'reuse the vacated old path')
+    write(oldPath, ['reused-edit', 'body'])
+    run('commit', '-qam', 'edit the reused node')
+
+    const raw = run('log', '--merges', '--raw', '--cc', '--combined-all-paths', '-M', '--format=', '--', '.spec')
+    assert.match(raw, /\bRR\t\S*mid\/spec\.md\t\S*mid\/spec\.md\t\S*new\/spec\.md/,
+      'fixture must exercise a merge-authored rename reported once per parent')
+
+    cachePath = historyEventCachePathForTests(root)
+    const [[history, drift], [fullHistory, fullDrift]] = await Promise.all([sourceIndexes(root), sourceIndexesFull(root)])
+
+    assert.deepEqual(rowsFor(history, newPath).map((row) => row.reason), [
+      'merge fork2: rename mid to new',      // the equal-commit peer rename authored content: one version, not two
+      'main edits mid', 'fork2 edits mid',
+      'merge fork: author the resolution',
+      'rename old to mid and edit',
+      'fork edits the old path',             // the incomparable fork joins the renamed lineage
+      'base',
+    ], 'every reachable version of the lineage lands on the current path exactly once')
+    assert.deepEqual(rowsFor(history, oldPath).map((row) => row.reason), [
+      'edit the reused node', 'reuse the vacated old path',
+      'fork edits the old path',             // incomparable with the rename, so it keeps the event-side path too
+    ], 'reuse starts its own history: nothing from before the rename except the fork that never saw it')
+
+    assert.deepEqual(rowsFor(history, newPath), rowsFor(fullHistory, newPath))
+    assert.deepEqual(rowsFor(history, oldPath), rowsFor(fullHistory, oldPath))
+    const events = (index: DriftIndex, path: string) =>
+      (index.fileEvents.get(path) ?? []).map((event) => `${event.commit}\0${event.historicalPath}`).sort()
+    assert.deepEqual(events(drift, newPath), events(fullDrift, newPath))
+    assert.deepEqual(events(drift, oldPath), events(fullDrift, oldPath))
+    assert.deepEqual([...drift.lineageEvents.keys()].sort(), [...fullDrift.lineageEvents.keys()].sort())
+  } finally {
+    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 // ---- worktreeSpecDelta ([[worktree-linker]]): an op = differs-from-main-tip AND branch-touched-since-fork ----
 
 // one fixture, four judgments: main gains .spec after a pre-spec root commit; worktrees exercise each

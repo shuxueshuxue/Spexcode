@@ -24,7 +24,7 @@ import { putBlob } from '../../spec-eval/src/cache.js'
 import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
 import { buildExportModel, renderExportHtml, SessionEvalUnavailableError } from '../../spec-eval/src/sessioneval.js'
-import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
+import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBytes, startUploadReaper, UploadError, uploadStatus } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
@@ -38,6 +38,7 @@ import { readBackendInstanceRecords } from './runtime-ownership.js'
 installProcessGuards()
 
 const app = new Hono()
+startUploadReaper()
 app.use('/api/*', cors())
 app.onError((error, c) => {
   if (error instanceof SessionEvalUnavailableError) return c.json({ error: error.message }, 503)
@@ -190,7 +191,7 @@ app.get('/api/evidence/:hash', (c) => {
 app.post('/api/evidence', async (c) => {
   const buf = Buffer.from(await c.req.arrayBuffer())
   if (buf.length === 0) return c.json({ error: 'empty evidence' }, 400)
-  if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: 'evidence too large' }, 413)
+  if (buf.length > evidenceMaxBytes()) return c.json({ error: 'evidence too large' }, 413)
   return c.json({ hash: putBlob(buf) }, 201)
 })
 // the SETTINGS read surface — one route for everything spexcode.json / spexcode.local.json resolves to:
@@ -389,17 +390,52 @@ app.get('/api/slash-commands', (c) => {
   return c.json(h.slashCommands())
 })
 
-// write a pasted/dropped/picked file to this (worker) machine's /tmp and return its absolute path for the
-// client to splice into the prompt. Fail-loud: no/empty file → 400, over the size cap → 413, write error → 500.
+function uploadFailure(error: unknown): Response {
+  if (!(error instanceof UploadError)) throw error
+  const body: { error: string; offset?: number } = { error: error.message }
+  if (error.offset != null) body.offset = error.offset
+  return new Response(JSON.stringify(body), { status: error.status, headers: { 'content-type': 'application/json' } })
+}
+
+// One offset protocol for every attachment. Chunks stream through the existing /api proxy and stage only on
+// the worker machine; completion is the one boundary that makes a prompt-visible absolute path exist.
 app.post('/api/uploads', async (c) => {
-  const body = await c.req.parseBody().catch(() => ({} as Record<string, string | File>))
-  const file = body['file']
-  if (!(file instanceof File) || file.size === 0) return c.json({ error: 'no file' }, 400)
-  if (file.size > MAX_UPLOAD_BYTES) return c.json({ error: 'file too large' }, 413)
+  const body = await c.req.json().catch(() => null) as { name?: unknown; size?: unknown } | null
   try {
-    return c.json({ path: await saveUpload(file) }, 201)
-  } catch (e) {
-    return c.json({ error: String((e as Error)?.message || e) }, 500)
+    return c.json(createUpload(body?.name, body?.size), 201)
+  } catch (error) {
+    return uploadFailure(error)
+  }
+})
+app.get('/api/uploads/:id', (c) => {
+  try {
+    return c.json(uploadStatus(c.req.param('id')))
+  } catch (error) {
+    return uploadFailure(error)
+  }
+})
+app.patch('/api/uploads/:id', async (c) => {
+  try {
+    return c.json(await appendUpload(
+      c.req.param('id'), Number(c.req.header('upload-offset')), c.req.raw.body, c.req.header('content-length'),
+    ))
+  } catch (error) {
+    return uploadFailure(error)
+  }
+})
+app.post('/api/uploads/:id/complete', (c) => {
+  try {
+    return c.json({ path: completeUpload(c.req.param('id')) }, 201)
+  } catch (error) {
+    return uploadFailure(error)
+  }
+})
+app.delete('/api/uploads/:id', (c) => {
+  try {
+    cancelUpload(c.req.param('id'))
+    return c.body(null, 204)
+  } catch (error) {
+    return uploadFailure(error)
   }
 })
 

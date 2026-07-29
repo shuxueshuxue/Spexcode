@@ -8,10 +8,12 @@ code:
   - spec-cli/src/layout.ts#resolveLayout
   - spec-cli/src/layout.ts#mainBranch
   - spec-cli/src/layout.ts#readJsonConfig
+  - spec-cli/src/layout.ts#readUploadPolicy
 related:
   - spec-cli/src/layout-session-id.test.ts
   - spec-cli/src/session-public-projection.api.test.ts
   - spexcode.json
+  - spec-cli/templates/spexcode.json
   - .nvmrc
 ---
 # portable-layout
@@ -46,8 +48,14 @@ than baked in — including the `harnesses` delivery-target set [[harness-select
 materialize` delivers into; default = every native harness). Layout resolution doesn't consume it, but it rides
 the same committed-config-with-a-`spexcode.local.json`-overlay seam: persistent, re-read on every materialize.
 The same seam carries [[host-resource-budget]]'s per-session RSS, per-backend RSS, idle-CPU, and sampling
-budgets. Machine-local overrides tune one host without committing its capacity profile, while malformed values
-fail loud rather than silently disabling governance.
+budgets, and [[file-attach]]'s one `uploads` policy: attachment limit, chunk size, batch concurrency, request
+timeout/retry, stale-transfer lifetime/reaper cadence, backend free-space reserve, and eval-evidence ceiling.
+`readUploadPolicy()` takes the numeric defaults only from the shipped `templates/spexcode.json`, then overlays
+the resolved project/local `uploads` object and validates every field loudly. Thus a pre-existing project may
+omit the section and still receive the portable defaults, while one host can override only (for example) its
+chunk size in gitignored `spexcode.local.json`; no upload-only configuration reader or environment-variable
+shadow path exists. Machine-local overrides tune one host without committing its capacity profile, while
+malformed values fail loud rather than silently disabling governance.
 
 The config read is the ONE fail-loud seam here (`readJsonConfig`): an **absent** file is the legitimate
 default (yields `{}`), but a **present-but-malformed** one is a user error we never swallow — a JSON typo

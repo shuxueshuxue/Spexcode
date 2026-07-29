@@ -10,9 +10,10 @@ import { join } from 'node:path'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 import { readTimeline } from './session-timeline.js'
+import { readCodexGenerationLedger } from './codex-runtime-generations.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const waitUntil = async (check: () => boolean, label: string, timeoutMs = 5000) => {
@@ -71,6 +72,37 @@ test('the live rename command resolves to the self-rename prompt through the sha
   assert.match(prompt, /spex session rename \. "<name>"/)
   assert.doesNotMatch(prompt, /No target was mentioned/)
   assert.equal(await resolveCommandPrompt('/not-a-preset'), '/not-a-preset')
+})
+
+test('Codex registration does not persist an unbound thread when exact generation binding fails', () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousGeneration = process.env.SPEXCODE_CODEX_GENERATION
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-registration-'))
+  const id = `codex-registration-${process.pid}`
+  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_GENERATION = 'missing-generation'
+  try {
+    mkdirSync(sessionStoreDir(id), { recursive: true })
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+      session_id: id, governed: true, worktree_path: worktree, branch: 'main', node: '', title: '', name: '', parent: '',
+      status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
+      stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
+    }, null, 2)}\n`)
+    const before = readFileSync(sessionRecordPath(id), 'utf8')
+    const root = runtimeRoot()
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, 'codex-app-server-generations.json'), '{"version":3,"revision":1,"current":null,"pending":null,"generations":{},"bindings":{}}\n')
+    assert.throws(() => markHarnessSessionId(id, 'native-thread'), /absent or reclaimed/)
+    assert.equal(readFileSync(sessionRecordPath(id), 'utf8'), before)
+    assert.equal(readCodexGenerationLedger(root).bindings[id], undefined)
+  } finally {
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousGeneration === undefined) delete process.env.SPEXCODE_CODEX_GENERATION
+    else process.env.SPEXCODE_CODEX_GENERATION = previousGeneration
+    rmSync(home, { recursive: true, force: true })
+  }
 })
 
 test('session-create API rejects stale fields before entering the transaction', async () => {

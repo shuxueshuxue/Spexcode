@@ -70,6 +70,8 @@ provably cannot land.`, ['selector', 'project-bound']],
     archive: ['spex session archive <SEL>', 'Cold-archive it: exact leaf/runtime stopped, worktree and conversation kept.', ['selector']],
     unarchive: ['spex session unarchive <SEL>', 'Deprecated compatibility spelling: same behavior as resume, relaunching the same conversation.', ['selector']],
     close: ['spex session close <SEL>', 'Retire the session and its worktree.', ['selector', 'project-bound']],
+    quarantine: ['spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]',
+      'Move only an unreadable record after the backend proves every named residue absent. Quarantine and --restore both require the original exact id because corrupt rows are outside selectors.', ['project-bound']],
     maintain: [[
       'spex session maintain --allow-stop <SEL> [--allow-resume <SEL>[:force]] … -- <command> [args…]',
       'spex session maintain --status',
@@ -86,7 +88,7 @@ LOCAL-only (fails loud on a remote backend); show --capture and send are non-int
 
 const SESSION_HELP_GROUPS = [
   { title: 'Manager verbs (dispatch, monitor, land)', verbs: ['new', 'ls', 'resources', 'watch', 'wait', 'review', 'merge'] },
-  { title: 'Control another session', verbs: ['send', 'interrupt', 'rename', 'show', 'resume', 'stop', 'archive', 'unarchive', 'close', 'maintain'] },
+  { title: 'Control another session', verbs: ['send', 'interrupt', 'rename', 'show', 'resume', 'stop', 'archive', 'unarchive', 'close', 'quarantine', 'maintain'] },
   { title: 'Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on)', verbs: ['done', 'park', 'ask'] },
   { title: 'Human escape hatch', verbs: ['attach'] },
 ] as const

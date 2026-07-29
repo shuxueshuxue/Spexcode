@@ -50,7 +50,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -873,6 +873,23 @@ if (cmd === 'serve') {
       const closed = await c.clientClose(full)
       if (!closed) { console.error(`spex session close: no such session ${full} (record remains; no close was committed)`); process.exit(1) }
       console.log(`closed ${full}`)
+    } else if (sub === 'quarantine') {
+      rejectUnknownFlags('spex session quarantine', 4, ['adapter', 'thread', 'tmux', 'worktree', 'branch', 'restore', 'api', 'port'])
+      if (!id) { console.error('usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <session-id> --worktree <absent-path> --branch <absent-branch>') ; process.exit(2) }
+      if (has('restore')) {
+        // Quarantine addresses an unreadable row which selector resolution intentionally excludes. Both the
+        // move and its reverse therefore take the literal exact id, with the backend proving record state.
+        const restored = await c.clientRestoreQuarantine(id)
+        console.log(`restored quarantined record ${restored.id} from ${restored.bundle}`)
+      } else {
+        const adapter = flag('adapter'), tmux = flag('tmux'), worktree = flag('worktree'), branch = flag('branch')
+        if (!adapter || !tmux || !worktree || !branch) {
+          console.error('usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <session-id> --worktree <absent-path> --branch <absent-branch>')
+          process.exit(2)
+        }
+        const quarantined = await c.clientQuarantine(id, { adapter, thread: flag('thread') ?? null, tmux, worktree, branch })
+        console.log(`quarantined ${quarantined.id} -> ${quarantined.bundle}`)
+      }
     } else if (sub === 'send') {
       const full = await resolveSelectorOrExit(id)
       if (has('keys')) {

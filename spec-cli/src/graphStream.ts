@@ -240,6 +240,9 @@ export const addPendingGraphChange = (pending: PendingGraphChanges, scope: Scope
 
 // under SPEXCODE_BOARD_DEBUG=1, every broadcast logs its changed unit keys + trigger tags + build ms.
 const DEBUG = process.env.SPEXCODE_BOARD_DEBUG === '1'
+function traceLatency(stage: 'sessions-signal' | 'session-projection-complete' | 'broadcast', detail: Record<string, unknown> = {}): void {
+  if (DEBUG) console.warn(`spec-cli: graph latency ${JSON.stringify({ at: Date.now(), stage, ...detail })}`)
+}
 // the set of trigger tags accrued SINCE THE LAST BROADCAST — each fireChanged adds its scope, the cold tick
 // adds 'patrol'. Cleared on every broadcast. Its job: prove WHO caused a broadcast, so a change that only
 // the patrol saw (tag set === {'patrol'}) is flagged as a repair — some leaf watcher was blind.
@@ -328,6 +331,7 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
         continue
       }
       const buildMs = Date.now() - t0
+      if (servedSessionProjection) traceLatency('session-projection-complete', { patrol: validate })
       const boardJson = JSON.stringify(board)
       const { units, ok } = unitize(board as Record<string, unknown>)
       const tag = tagOf(units)
@@ -357,6 +361,7 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
       // (stopSourcesIfIdle cleared the anchor; leaving lastTag/lastUnits stale-cleared is consistent —
       // rebuilds only run while delta subscribers exist, so nothing chains from them meanwhile).
       if (deltaSubs.size) { lastUnits = ok ? units : null; lastTag = tag; lastFullFrame = fullFrame }
+      traceLatency('broadcast', { event: frame.event, sessionProjection: servedSessionProjection, tags, changedKeys })
       for (const send of [...deltaSubs]) { try { send(frame) } catch { /* swept on abort */ } }
       for (const n of [...plainSubs]) { try { n() } catch { /* swept on abort */ } }
       // ---- repair accounting: a real (tag-moved) broadcast whose ONLY trigger was the cold-tick patrol
@@ -378,6 +383,7 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
 function fireChanged(scope: Scope = 'full', evalTarget?: EvalTarget): void {
   // Advance eval input generations BEFORE invalidating/building the board, so the first frame caused by an
   // input event is `updating(lastKnown)`. Summary completion calls this function without a target.
+  if (scope === 'sessions') traceLatency('sessions-signal')
   if (evalTarget) invalidateSessionEvalProjections(evalTarget)
   const pending = addPendingGraphChange({ full: pendingFull, sessions: pendingSessions }, scope)
   pendingFull = pending.full

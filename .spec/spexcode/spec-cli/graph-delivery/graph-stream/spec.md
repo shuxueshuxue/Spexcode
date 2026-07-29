@@ -148,7 +148,10 @@ single flight as a real rebuild. An unchanged tick returns the anchor and starts
 revision selects the cache's existing session-splice or full-build domain (so an uncommitted worktree edit or
 ref move a leaf missed still lands). A resulting diff when NO leaf watcher signalled logs a loud
 `PATROL-REPAIR` naming the changed units: a repair means some leaf is blind, and the target state is
-repairs/hour = 0. The trigger set is what
+repairs/hour = 0. `SPEXCODE_BOARD_DEBUG=1` also emits structured in-process timestamps for a sessions signal,
+its projection completion, and the queued SSE broadcast; the broadcast record carries its changed unit keys as
+well as its trigger tags, so a product latency reading can allocate route/store, projection, structural content,
+transport, and browser time without treating a wall-clock gap as one opaque number. The trigger set is what
 caused ONE refresh, so the refresh consumes it whether or not content moved — a no-op patrol must not leave its
 tag behind to make the next genuine repair read as leaf-signalled, which is the alarm silencing itself on
 exactly the machines that need it. `SPEXCODE_DISABLE_WATCHERS` (csv: store, refs, worktrees) deliberately blinds

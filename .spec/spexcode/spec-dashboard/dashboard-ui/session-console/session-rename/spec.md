@@ -48,8 +48,10 @@ the board, never on a read-only at-a-glance summary. It opens a cursor-anchored 
 **rename** swaps the menu for a centred prompt (the shared modal chrome) that **titles itself with the
 session's headline** — the same words its row shows ([[session-activity]]), not the stable rename handle,
 so the human reads the very label they right-clicked and never renames what looks like a different
-session — and is prefilled with the current override and ready to type over. Submitting hands the new name to the backend and asks the board to
-reload, so the new label appears on every surface at once rather than only where it was triggered. A
+session — and is prefilled with the current override and ready to type over. Submitting hands the new name to the backend;
+its successful sessions-domain nudge advances the shared board through graph-stream, so the new label appears on
+every surface at once rather than only where it was triggered or behind an action-local graph refetch. A failed
+write may recover through the ordinary board reload path. A
 **blank** name is a **reset**, not an error: it clears the override and the session falls back to its
 derived label. Renaming an unknown session fails loudly — the endpoint answers 404 — never a silent
 success.

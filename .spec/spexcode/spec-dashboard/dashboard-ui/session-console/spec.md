@@ -33,6 +33,13 @@ at-a-glance summary. Both are **thin views of `/api/graph`** (i.e. `spex graph -
 what the backend reports and never invents session state, so a human watching the dashboard and an agent
 driving the same sessions through the CLI see identical state.
 
+A persisted session **rename** is a graph-stream action, not a private action-refetch: after the route commits
+the name and nudges the sessions domain, the visible row advances from the delta stream. A
+concurrent structural full may continue in the background, but the newest session projection reaches the console
+first and structural convergence must not replace it with an older row. The rename surface may recover a failed
+write, but a successful rename does not hide the push path behind a second `/api/graph` request. Archive and
+close retain their own action/recovery contracts.
+
 ## expanded spec
 
 The interface is a **routed page** (`#/sessions`, [[side-nav]]) — it fills the app's main area beside the

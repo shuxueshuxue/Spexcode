@@ -2039,6 +2039,25 @@ function sessionCreateFailureRecord(rec: SessRec, error: unknown): SessRec {
   return { ...rec, note: `materialize failed at creation — worker ungoverned (no hooks/contract): ${msg}` }
 }
 
+// A materialize failure can leave a tracked contract or .gitignore half-written. Until publication this is
+// still creation-owned preparation: no worker can have authored work here, so restore HEAD and remove its
+// untracked artifacts rather than publish a queued record that close must preserve as possibly-user-dirty.
+// Disable checkout hooks: recovery is not another anchor that may recreate the failed materialization.
+async function resetFailedMaterializeCandidate(rec: SessRec, signal: AbortSignal): Promise<void> {
+  throwIfCreateAborted(signal, 'materialize')
+  const reset = await gitTry(['-C', rec.worktreePath, '-c', 'core.hooksPath=/dev/null', 'reset', '--hard', '--quiet', 'HEAD'])
+  if (!reset.ok) {
+    const detail = (reset.stderr || reset.stdout || 'git reset failed without diagnostic').trim()
+    throw new SessionCreateError('session_create_failed', 'materialize',
+      `materialize failed and its prepared worktree could not be restored: ${detail}`, 500)
+  }
+  const clean = await gitTry(['-C', rec.worktreePath, '-c', 'core.hooksPath=/dev/null', 'clean', '-fd', '-e', 'spexcode.local.json'])
+  if (clean.ok) return
+  const detail = (clean.stderr || clean.stdout || 'git clean failed without diagnostic').trim()
+  throw new SessionCreateError('session_create_failed', 'materialize',
+    `materialize failed and its prepared worktree could not be restored: ${detail}`, 500)
+}
+
 async function materializeSessionCandidate(rec: SessRec, signal: AbortSignal): Promise<SessRec> {
   throwIfCreateAborted(signal, 'materialize')
   try {
@@ -2079,7 +2098,9 @@ async function materializeSessionCandidate(rec: SessRec, signal: AbortSignal): P
     return rec
   } catch (error) {
     if (signal.aborted || error instanceof SessionCreateError) throw createAbortError(signal, 'materialize')
-    return sessionCreateFailureRecord(rec, error)
+    const failed = sessionCreateFailureRecord(rec, error)
+    await resetFailedMaterializeCandidate(rec, signal)
+    return failed
   }
 }
 

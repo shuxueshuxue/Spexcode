@@ -9,6 +9,7 @@ code:
 related:
   - scripts/anchor-drift-golden-proof.mjs
   - scripts/anchor-drift-fold-proof.mjs
+  - docs/audits/source-of-truth-anchor-batch-20260729.md
   - spec-cli/src/anchors.test.ts
   - spec-cli/src/lint.ts
   - spec-cli/src/git.ts

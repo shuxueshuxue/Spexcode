@@ -28,6 +28,8 @@ const started = Date.now()
 const step = (name) => events.push({ at: Date.now() - started, step: name })
 const inputs = []
 let failNext = true
+let sessionLiveness = 'online'
+let resumeFails = true
 
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true })
 const context = await browser.newContext({
@@ -45,16 +47,30 @@ const page = await context.newPage()
 await page.route('**/api/graph*', async (route) => {
   const fixture = structuredClone(graph)
   const session = fixture.sessions.find((candidate) => candidate.id === SESSION)
-  session.status = 'working'
-  session.lifecycle = 'active'
-  session.liveness = 'online'
+  session.status = sessionLiveness === 'online' ? 'working' : 'asking'
+  session.lifecycle = sessionLiveness === 'online' ? 'active' : 'asking'
+  session.liveness = sessionLiveness
   session.headline = 'A deliberately long selected session headline proving the compact sidebar reveals useful context but never grows beyond exactly three stable lines'
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture) })
 })
 await page.route(`**/api/sessions/${SESSION}/input`, async (route) => {
   inputs.push(route.request().postDataJSON())
-  if (failNext) await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'forced failure' }) })
+  if (failNext) {
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'upstream 502: control socket unavailable' }) })
+  }
   else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+})
+await page.route(`**/api/sessions/${SESSION}/resume`, async (route) => {
+  if (resumeFails) {
+    await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({
+      ok: false,
+      error: 'launch did not become ready; the session remains stopped and can be retried',
+    }) })
+    return
+  }
+  sessionLiveness = 'online'
+  await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
 })
 await page.route('**/api/uploads', async (route) => {
   await route.fulfill({
@@ -200,17 +216,47 @@ await input.evaluate((element) => element.dispatchEvent(new KeyboardEvent('keydo
 assert.equal(inputs.length, beforeIme)
 
 await page.locator('.si-command-send').click()
-await page.locator('.si-send-err').waitFor({ state: 'visible' })
+await page.locator('.si-command-box .si-action-outcome.sending').waitFor({ state: 'visible' })
+await page.locator('.si-command-box .si-action-outcome.failed').waitFor({ state: 'visible' })
 assert.equal(await input.inputValue(), draft)
 assert.equal(await command.count(), 1)
-step('failed send preserves visible draft')
+assert.match((await page.locator('.si-command-box .si-action-outcome.failed').textContent()) || '', /upstream 502/i)
+assert.equal(await page.locator('[role="alert"]').count(), 1)
+assert.equal(await page.locator('.si-list [role="alert"]').count(), 0)
+await page.screenshot({ path: join(OUT, 'command-box-502-retry.png'), fullPage: true })
+step('public 502 keeps Command Box draft and one right-pane retry outcome')
 
 failNext = false
 await page.locator('.si-command-send').click()
+await page.locator('.si-command-box .si-action-outcome.delivered').waitFor({ state: 'visible' })
+assert.equal(await input.inputValue(), '')
+await page.screenshot({ path: join(OUT, 'command-box-delivered.png'), fullPage: true })
 await command.waitFor({ state: 'hidden' })
 await page.waitForFunction(() => document.activeElement?.classList?.contains('xterm-helper-textarea'))
 assert.deepEqual(inputs.at(-1), { kind: 'text', text: expandedDraft })
-step('successful atomic send clears, closes, returns TUI focus')
+step('successful atomic send acknowledges before clearing, closing, and returning TUI focus')
+
+sessionLiveness = 'offline'
+await page.reload({ waitUntil: 'domcontentloaded' })
+await page.locator('.si-offline .si-act.go.big').waitFor({ state: 'visible' })
+const beforeRelaunch = await page.locator('.si-list').evaluate((element) => element.getBoundingClientRect().toJSON())
+await page.locator('.si-offline .si-act.go.big').click()
+const relaunchOutcome = page.locator('.si-offline .si-action-outcome.failed')
+await relaunchOutcome.waitFor({ state: 'visible' })
+assert.match((await relaunchOutcome.textContent()) || '', /launch did not become ready; the session remains stopped and can be retried/i)
+assert.equal(await page.locator('[role="alert"]').count(), 1)
+assert.equal(await page.locator('.si-list [role="alert"]').count(), 0)
+const failedRelaunch = await page.locator('.si-list').evaluate((element) => element.getBoundingClientRect().toJSON())
+assert.deepEqual(failedRelaunch, beforeRelaunch)
+await page.screenshot({ path: join(OUT, 'relaunch-readiness-refusal.png'), fullPage: true })
+
+resumeFails = false
+await page.locator('.si-offline .si-act.go.big').click()
+await page.waitForTimeout(500)
+await page.screenshot({ path: join(OUT, 'relaunch-retry-success.png'), fullPage: true })
+assert.equal(await page.locator('.si-offline').count(), 0)
+assert.equal(await page.locator('[role="alert"]').count(), 0)
+step('readiness refusal is one selected relaunch outcome and retry restores the pane')
 
 const composerProbe = async () => page.locator('.composer-surface').first().evaluate((surface) => {
   const textarea = surface.querySelector('.composer-textarea')

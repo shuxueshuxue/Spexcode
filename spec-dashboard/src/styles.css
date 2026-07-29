@@ -1796,12 +1796,21 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-command-tool:hover { color: var(--blue); border-color: var(--blue); }
 .si-command-send { margin-left: auto; color: var(--paper); background: var(--blue); border: 1px solid var(--blue); }
 .si-command-tool:disabled, .si-command-send:disabled { opacity: .45; cursor: default; }
-.si-send-err { flex: none; color: var(--orange); font-size: var(--type-meta); white-space: nowrap; }
+.si-action-outcome {
+  flex: 0 1 auto; min-width: 0; max-width: 300px; padding: 2px 6px; border: 1px solid var(--line);
+  border-radius: 4px; background: var(--panel2); color: var(--muted); font-size: var(--type-meta);
+  line-height: var(--leading-relaxed); overflow-wrap: anywhere;
+}
+.si-action-outcome.sending { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
+.si-action-outcome.delivered { color: var(--green); border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
+.si-action-outcome.failed { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, var(--line)); }
+.si-command-tools .si-action-outcome { margin-left: auto; }
+.si-action-outcome-float { position: absolute; top: 12px; right: 12px; z-index: 2; max-width: min(360px, calc(100% - 24px)); pointer-events: none; }
 /* @@@ file attach - the paperclip-glyph button (both input surfaces) opens the picker; a paste/drop attaches
    too. A small, muted inline-SVG affordance (the dashboard's own monochrome glyph vocabulary, currentColor
    stroke — no color emoji) that brightens on hover, sits at the input's bottom edge, and dims while
    disabled/uploading; while uploading it shows a spinning ring. `.dragover` rings the surface green so a
-   dragged file reads as droppable; the error chip mirrors .si-send-err. */
+   dragged file reads as droppable; the error chip uses the shared right-pane outcome treatment. */
 .si-attach { flex: none; align-self: flex-end; display: inline-flex; align-items: center; background: transparent; border: none; cursor: pointer; color: var(--muted); line-height: var(--leading-relaxed); padding: 0 2px; }
 .si-attach:hover:not(:disabled) { color: var(--blue); }
 .si-attach:disabled { opacity: .5; cursor: default; }
@@ -1894,6 +1903,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-offline-sub { font-size: var(--type-control); color: var(--muted); max-width: 460px; line-height: var(--leading-body); }
 .si-offline-sub code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 .si-offline-err { margin-top: 10px; font-size: var(--type-control); color: var(--yellow); max-width: 460px; line-height: var(--leading-relaxed); border: 1px solid var(--yellow); border-radius: 4px; padding: 8px 10px; background: var(--panel2); }
+.si-offline > .si-action-outcome { margin-top: 10px; max-width: 460px; font-size: var(--type-control); padding: 8px 10px; }
 /* the shelf card ([[archive]]) reuses the offline panel's geometry — same centred column, same type scale — so
    the two read as one family of "this session is in a state" cards. Only the mark and the action row differ. */
 .si-shelf-card .si-shelf-mark { color: var(--yellow); display: flex; margin-bottom: 2px; }

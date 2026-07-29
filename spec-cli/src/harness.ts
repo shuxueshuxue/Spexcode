@@ -86,6 +86,13 @@ export type HarnessColdPreflight =
   | { ok: true; alreadyCold?: boolean; receipt?: unknown }
   | { ok: false; reason: string }
 
+// The corrupt-record quarantine path has no typed session record to pass into cold storage. The adapter therefore
+// owns this separate proof: it can archive one exact native orphan, return only public audit facts, and retain an
+// in-memory compensation closure for the caller's atomic record move. Product code never sees a native receipt.
+export type HarnessOrphanThreadQuarantine =
+  | { ok: true; audit: { adapter: string; threadId: string; action: 'archived' | 'already-unloaded' }; compensate(): Promise<{ ok: true } | { ok: false; reason: string }> }
+  | { ok: false; reason: string }
+
 export type AdapterLoadedReferenceState = {
   healthy: boolean
   loaded: boolean
@@ -298,6 +305,9 @@ export interface Harness {
   // reference or return a loud reason; adapters without such a resident reference return {ok:true}.
   coldRuntime?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }, receipt?: unknown): Promise<{ ok: true } | { ok: false; reason: string }>
   restoreRuntime?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }, receipt?: unknown): Promise<{ ok: true } | { ok: false; reason: string }>
+  // Recovery for an unreadable governed record. This accepts no record-shaped ownership claim: the adapter must
+  // prove the native target has zero other governed owners, is idle and descendant-free, then archive only it.
+  quarantineOrphanThread?(threadId: string, opts: { excludingSessionId: string }): Promise<HarnessOrphanThreadQuarantine>
   // Project-scoped runtimes are adapter facts. Resource governance consumes these descriptors to report
   // references and protect a sibling-owned control plane without learning harness command names.
   sharedRuntimes?(runtimeDir: string): readonly SharedRuntimeDescriptor[]
@@ -1308,6 +1318,55 @@ async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expecte
   return { ok: true, ...(activeIds.length ? {} : { alreadyCold: true }), receipt }
 }
 
+async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSessionId: string }): Promise<HarnessOrphanThreadQuarantine> {
+  const dir = runtimeRoot()
+  const generation = codexMutationGeneration(dir)
+  if (!generation) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
+  const owners = governedSharedRuntimeOwners(dir, 'codex-app-server', threadId, opts.excludingSessionId)
+  if (owners === null) return { ok: false, reason: 'governed Codex thread-owner census is unreadable' }
+  if (owners.length) return { ok: false, reason: `Codex native thread ${threadId} has governed owner(s) ${owners.join(', ')}` }
+  const before = await codexColdPreflight(threadId, dir, generation)
+  if (!before.ok) return before
+  const plan = before.receipt
+  if (plan.descendantIds.length || plan.guard.descendantIds.length)
+    return { ok: false, reason: `Codex native thread ${threadId} has descendants (${[...new Set([...plan.descendantIds, ...plan.guard.descendantIds])].join(', ')})` }
+  if (plan.guard.targetTurnPresence === 'active' || plan.guard.targetTurnPresence === 'unknown')
+    return { ok: false, reason: `Codex native thread ${threadId} is ${plan.guard.targetTurnPresence === 'active' ? 'active' : 'unknown'}` }
+  if (plan.subtreeIds.length !== 1 || plan.subtreeIds[0] !== threadId)
+    return { ok: false, reason: `Codex native thread ${threadId} has an ambiguous ownership closure` }
+  const unchangedOwners = () => governedSharedRuntimeOwners(dir, 'codex-app-server', threadId, opts.excludingSessionId)
+  const rollback = () => codexRestoreColdPlan(plan, dir)
+  if (plan.activeIds.length === 0) {
+    if (plan.archivedIds.length !== 1 || plan.archivedIds[0] !== threadId || plan.guard.referenceIds.includes(threadId))
+      return { ok: false, reason: `Codex native thread ${threadId} is not uniquely archived and unloaded` }
+    const afterOwners = unchangedOwners()
+    if (afterOwners === null || afterOwners.length) return { ok: false, reason: 'governed Codex thread-owner census changed during quarantine proof' }
+    return { ok: true, audit: { adapter: 'codex', threadId, action: 'already-unloaded' }, compensate: async () => ({ ok: true }) }
+  }
+  if (plan.activeIds.length !== 1 || plan.activeIds[0] !== threadId || plan.archivedIds.length)
+    return { ok: false, reason: `Codex native thread ${threadId} is not one exact active orphan` }
+  const siblingIds = plan.guard.referenceIds.filter((id) => id !== threadId)
+  const archived = await codexThreadMutation(codexAppServerSock(dir), 'thread/archive', threadId, { dir, generation })
+  if (!archived.ok) return { ok: false, reason: `${archived.error} while archiving orphan Codex thread ${threadId}` }
+  const after = await codexColdPreflight(threadId, dir, generation)
+  const failed = (reason: string): HarnessOrphanThreadQuarantine => ({ ok: false, reason })
+  if (!after.ok) {
+    const restored = await rollback()
+    return failed(restored.ok ? after.reason : `${after.reason}; ${restored.reason}`)
+  }
+  const afterOwners = unchangedOwners()
+  const afterPlan = after.receipt
+  const valid = afterPlan.descendantIds.length === 0 && afterPlan.subtreeIds.length === 1 && afterPlan.subtreeIds[0] === threadId &&
+    afterPlan.activeIds.length === 0 && afterPlan.archivedIds.length === 1 && afterPlan.archivedIds[0] === threadId &&
+    !afterPlan.guard.referenceIds.includes(threadId) && siblingIds.every((id) => afterPlan.guard.referenceIds.includes(id)) &&
+    afterOwners !== null && afterOwners.length === 0
+  if (!valid) {
+    const restored = await rollback()
+    return failed(restored.ok ? `Codex orphan thread ${threadId} changed during archive verification` : `Codex orphan thread ${threadId} changed during archive verification; ${restored.reason}`)
+  }
+  return { ok: true, audit: { adapter: 'codex', threadId, action: 'archived' }, compensate: rollback }
+}
+
 async function codexMutationGuard(
   threadId: string,
   dir = runtimeRoot(),
@@ -2293,6 +2352,7 @@ export const codexHarness: Harness = {
     if (verified.ok) return verified
     return compensate(verified.reason)
   },
+  quarantineOrphanThread: codexQuarantineOrphanThread,
   restoreRuntime: async (rec, suppliedReceipt) => {
     if (!rec.harnessSessionId) return { ok: false, reason: 'no exact Codex thread identity is registered' }
     if (suppliedReceipt !== undefined) {
@@ -2376,7 +2436,7 @@ const sameCodexHeadlessReadinessProof = (left: CodexHeadlessLaunchReadinessProof
   left.target.referenceState === right.target.referenceState &&
   left.target.protectsControlPlane === right.target.protectsControlPlane
 
-const governedSharedRuntimeOwners = (runtimeDir: string, descriptorKey: string, threadId: string): string[] | null => {
+const governedSharedRuntimeOwners = (runtimeDir: string, descriptorKey: string, threadId: string, excludingSessionId?: string): string[] | null => {
   const root = join(runtimeDir, 'sessions')
   let entries
   try { entries = readdirSync(root, { withFileTypes: true }) }
@@ -2384,6 +2444,7 @@ const governedSharedRuntimeOwners = (runtimeDir: string, descriptorKey: string, 
   const owners: string[] = []
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
+    if (entry.name === excludingSessionId) continue
     let parsed: unknown
     try { parsed = JSON.parse(readFileSync(join(root, entry.name, 'session.json'), 'utf8')) }
     catch (error) {

@@ -369,6 +369,72 @@ const runReplacementArchiveCase = async (response: 'success' | 'error') => {
   }
 }
 
+test('Codex corrupt-record quarantine archives only an exact orphan native thread', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-orphan-quarantine-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const root = runtimeRoot()
+  const target = 'orphan-native-thread'
+  const corruptId = 'corrupt-record-owner'
+  let archived = false
+  let loaded = true
+  let descendant = false
+  let archiveCalls = 0
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: loaded ? [{ id: target }] : [], nextCursor: null }
+    if (message.method === 'thread/read') return { thread: { turns: [] } }
+    if (message.method === 'thread/archive') { archiveCalls++; archived = true; loaded = false; return {} }
+    if (message.method === 'thread/list') {
+      if (message.params.ancestorThreadId) return { data: descendant && !message.params.archived ? [{ id: 'native-child', parentThreadId: target }] : [], nextCursor: null }
+      const active = !archived && message.params.archived === false
+      return { data: active ? [{ id: target }, ...(descendant ? [{ id: 'native-child', parentThreadId: target }] : [])] : message.params.archived === archived ? [{ id: target }] : [], nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const socket = codexAppServerSock(root)
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(join(root, 'sessions', corruptId), { recursive: true })
+    writeFileSync(join(root, 'sessions', corruptId, 'session.json'), '{ unreadable incident bytes')
+    owner = startCodexOwner(root)
+
+    const quarantined = await codexHarness.quarantineOrphanThread?.(target, { excludingSessionId: corruptId })
+    assert.equal(quarantined?.ok, true)
+    if (!quarantined?.ok) throw new Error('orphan quarantine did not return an adapter proof')
+    assert.deepEqual(quarantined.audit, { adapter: 'codex', threadId: target, action: 'archived' })
+    assert.equal(archiveCalls, 1, 'only the exact unowned target receives thread/archive')
+    assert.equal(loaded, false, 'post-mutation census leaves the target unloaded')
+
+    archived = false; loaded = true
+    mkdirSync(join(root, 'sessions', 'readable-owner'), { recursive: true })
+    writeFileSync(join(root, 'sessions', 'readable-owner', 'session.json'), JSON.stringify({
+      session_id: 'readable-owner', governed: true, harness: 'codex', harness_session_id: target,
+    }))
+    const owned = await codexHarness.quarantineOrphanThread?.(target, { excludingSessionId: corruptId })
+    assert.equal(owned?.ok, false)
+    if (owned && !owned.ok) assert.match(owned.reason, /governed owner/)
+    assert.equal(archiveCalls, 1, 'a readable owner refuses before any archive RPC')
+
+    rmSync(join(root, 'sessions', 'readable-owner'), { recursive: true, force: true })
+    descendant = true
+    const child = await codexHarness.quarantineOrphanThread?.(target, { excludingSessionId: corruptId })
+    assert.equal(child?.ok, false)
+    if (child && !child.ok) assert.match(child.reason, /descendants/)
+    assert.equal(archiveCalls, 1, 'a descendant-bearing target refuses before any archive RPC')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('Codex archive ignores a non-returning unrelated read when the exact target is unloaded and descendant-free', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR

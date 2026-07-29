@@ -45,6 +45,24 @@ scenarios:
       still works on it, and it preserves the original bytes as evidence outside the swept session dir.
     code: spec-cli/src/sessions.ts
     test: spec-cli/src/session-record-integrity.test.ts
+  - name: corrupt-record-exact-proof-quarantine
+    tags: [backend-api, cli, frontend-e2e]
+    description: >
+      Plant the incident-shaped unreadable governed record in a real served store. First attempt quarantine while
+      one claimed control is live or unproven. Then remove the exact agent, tmux session, worktree, branch, and
+      shared-thread reference (or supply one idle, uniquely unowned native thread), submit the same explicit
+      adapter/thread/tmux/worktree/branch witness through the CLI, and observe the HTTP API plus the real dashboard.
+      Finally restore the bundle.
+    expected: >
+      Every live, ambiguous, malformed, active, descendant-bearing, changed-generation, or unknown control is a
+      loud refusal that leaves the active record byte-identical and sends no signal. A verified absence witness
+      moves only the opaque `session.json` into an auditable bundle containing its exact bytes and observed proof;
+      the row vanishes from the active CLI/API/dashboard and the real resource report becomes available without
+      inventing lifecycle. Restore atomically returns the exact unreadable bytes and row, without recreating or
+      signaling runtime resources. An idle native thread may be archived only after the adapter proves it is exact,
+      unowned, and descendant-free, and its post-mutation census proves it unloaded.
+    code: spec-cli/src/sessions.ts
+    test: spec-cli/src/session-record-integrity.test.ts
   - name: retired-session-never-revives
     tags: [cli]
     description: >

@@ -16,6 +16,7 @@ import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
 import { processStartToken } from './process-identity.js'
+import { bindCodexGeneration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 import { maintenanceBrokerDescriptors, runSessionOperation, runSessionOperationSync, SessionMaintenanceError, type Authorization, type MaintenanceTicket } from './session-maintenance.js'
 
 // @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
@@ -2728,6 +2729,12 @@ export function markHarnessSessionId(sessionId: string | undefined, harnessSessi
     const rec = readLiveRecord(id)
     if (!rec) return false
     writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
+    if (rec.harness === 'codex' || rec.harness === 'codex-headless') {
+      const generationId = process.env.SPEXCODE_CODEX_GENERATION?.trim()
+      const ledger = readCodexGenerationLedger(runtimeRoot())
+      if (ledger.revision > 0 && !generationId) throw new ResourceConflict(`refusing to bind Codex thread ${harnessSessionId}: launch did not provide an exact generation id`)
+      if (generationId) bindCodexGeneration(runtimeRoot(), id, harnessSessionId, generationId)
+    }
     return true
   }))
 }
@@ -3325,6 +3332,9 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) }
   catch (error) { throw new ResourceConflict(`refusing to finish close for ${id}: session record/prompt removal failed (${error instanceof Error ? error.message : String(error)})`) }
   if (existsSync(sessionStoreDir(id))) throw new ResourceConflict(`refusing to finish close for ${id}: session record removal failed`)
+  if ((wt.rec.harness === 'codex' || wt.rec.harness === 'codex-headless') && wt.rec.harnessSessionId) {
+    bindCodexGeneration(runtimeRoot(), id, wt.rec.harnessSessionId, null)
+  }
   requestQueueDrain()   // a close frees a slot — start the next queued session if any
   return true
 }

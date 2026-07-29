@@ -1048,6 +1048,40 @@ if (cmd === 'serve') {
     const runtime = await runSessionOperation({ op: 'shared-spawn', sessionId, ...(delegateChannelPresent ? { delegate } : {}) }, () =>
       spawnDetachedRuntime({ cwd, logFile, pidFile, receiptFile, command, args, env }))
     console.log(runtime.pid)
+  } else if (sub === 'codex-generation-current') {
+    const [root, command] = process.argv.slice(4, 6)
+    if (!root || !command) { console.error('usage: spex internal codex-generation-current <runtime-root> <codex-command>'); process.exit(2) }
+    const { readFileSync } = await import('node:fs')
+    const { ensureCodexCurrentGeneration } = await import('./codex-runtime-generations.js')
+    const { spawnDetachedRuntime } = await import('./runtime-ownership.js')
+    const { runSessionOperation } = await import('./session-maintenance.js')
+    const { sessionIdentityEnvVars } = await import('./harness.js')
+    const delegateFdValue = process.env.SPEXCODE_MAINTENANCE_DELEGATE_FD
+    const delegateFd = Number(delegateFdValue)
+    let delegate = ''
+    if (delegateFdValue !== undefined && Number.isInteger(delegateFd) && delegateFd >= 3) {
+      try { delegate = readFileSync(delegateFd, 'utf8').trim() } catch { delegate = '' }
+    }
+    const sessionId = process.env.SPEXCODE_MAINTENANCE_SESSION_ID?.trim() || process.env.SPEXCODE_SESSION_ID?.trim() || 'shared-runtime'
+    const env = { ...process.env }
+    for (const key of sessionIdentityEnvVars()) delete env[key]
+    delete env.SPEXCODE_MAINTENANCE_DELEGATE_FD
+    delete env.SPEXCODE_MAINTENANCE_SESSION_ID
+    const endpoint = await ensureCodexCurrentGeneration(root, async (candidate) => {
+      await runSessionOperation({ op: 'shared-spawn', sessionId, ...(delegateFdValue !== undefined ? { delegate } : {}) }, () =>
+        spawnDetachedRuntime({ cwd: root, logFile: candidate.logFile, pidFile: candidate.pidFile, receiptFile: candidate.receiptFile,
+          command, args: ['app-server', '--listen', `unix://${candidate.socketPath}`], env }))
+    })
+    const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`
+    console.log(`sock=${quote(endpoint.socketPath)}; pid=${quote(endpoint.pidFile)}; receipt=${quote(endpoint.receiptFile)}; log=${quote(endpoint.logFile)}; export SPEXCODE_CODEX_GENERATION=${quote(endpoint.id)}`)
+  } else if (sub === 'codex-generation-session') {
+    const [root, sessionId, threadId] = process.argv.slice(4, 7)
+    if (!root || !sessionId || !threadId) { console.error('usage: spex internal codex-generation-session <runtime-root> <session-id> <thread-id>'); process.exit(2) }
+    const { resolveCodexGenerationForSession } = await import('./codex-runtime-generations.js')
+    const endpoint = resolveCodexGenerationForSession(root, sessionId, threadId)
+    if (!endpoint) { console.error(`no exact Codex generation binding for session ${sessionId} thread ${threadId}`); process.exit(1) }
+    const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`
+    console.log(`sock=${quote(endpoint.socketPath)}; pid=${quote(endpoint.pidFile)}; receipt=${quote(endpoint.receiptFile)}; log=${quote(endpoint.logFile)}; export SPEXCODE_CODEX_GENERATION=${quote(endpoint.id)}`)
   } else if (sub === 'codex-launch') {
     // BACKEND-owned codex thread. On the shared per-project app-server: thread/start { cwd = this worktree }
     // (codex loads that worktree's config/hooks/AGENTS.md), store the new id on the governed record (keyed by

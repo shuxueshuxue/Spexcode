@@ -829,89 +829,6 @@ function guardSession(id: string, primary: () => Session | null, degraded: () =>
   catch { return existsSync(sessionStoreDir(id)) ? degraded() : null }
 }
 
-export type Edge = { from: string; to: string; kind: 'monitor' | 'comms'; count?: number }
-
-function commsLog(id: string): string { return sessionArtifactPath(id, 'comms.ndjson') }
-async function recordComms(toId: string, fromId: string): Promise<void> {
-  if (!fromId || fromId === toId) return
-  try {
-    if (!readRecord(toId)) return
-    appendFileSync(join(storeDir(toId), 'comms.ndjson'), JSON.stringify({ peer: fromId, ts: new Date().toISOString() }) + '\n')
-  } catch { /* a recording failure must not fail the delivered send */ }
-}
-// the peers this session has exchanged messages with — one entry per message, newest appended last.
-function readComms(id: string): string[] {
-  try {
-    const path = commsLog(id)
-    if (!existsSync(path)) return []
-    return readFileSync(path, 'utf8').split('\n').filter(Boolean)
-      .map((l) => { try { return String(JSON.parse(l).peer || '') } catch { return '' } }).filter(Boolean)
-  } catch { return [] }
-}
-// keyed by an opaque per-watch token (one per `spex session watch` process), so a single agent may run several
-// monitors without them clobbering each other. `selectors` is what the watch targets (resolved LIVE at
-// read time, not frozen here); empty / @all = a GLOBAL watcher. `expires` is the heartbeat backstop.
-type WatchReg = { watcher: string; selectors: string[]; expires: number }
-const watches = new Map<string, WatchReg>()
-const DEFAULT_WATCH_TTL_MS = 15000
-// register OR heartbeat a live monitor. watcher = the watching agent's OWN session id; ttlMs = how long
-// this stays live without another beat. Returns false on a bad pair (the route answers 400).
-export function registerWatch(token: string, watcher: string, selectors: string[], ttlMs = DEFAULT_WATCH_TTL_MS): boolean {
-  if (!token || !watcher) return false
-  watches.set(token, { watcher, selectors: selectors.filter(Boolean), expires: Date.now() + Math.max(1000, ttlMs) })
-  return true
-}
-// deregister a watch (its `spex session watch` exited); false if the token wasn't registered.
-export function deregisterWatch(token: string): boolean { return watches.delete(token) }
-// the still-live registrations, pruning any whose heartbeat lapsed — the backstop for a watch that died
-// without a clean unwatch (SIGKILL, a dropped connection, a backend that was down at exit time).
-function liveWatches(): WatchReg[] {
-  const now = Date.now()
-  const out: WatchReg[] = []
-  for (const [token, reg] of watches) {
-    if (reg.expires <= now) watches.delete(token)
-    else out.push(reg)
-  }
-  return out
-}
-// the graph: live sessions as nodes; edges DERIVED from live monitor registrations. Edge A→B = watcher A
-// is currently watching B. Selectors are resolved LIVE here via selectSessions (the same matcher `spex
-// ls/watch` use), so a global (@all/empty) watcher links to every CURRENT session — incl. ones launched
-// after the watch started — and a node/branch selector picks up future matches too. Self-edges and edges
-// touching a non-live session are dropped; duplicate A→B (two watches over the same pair) collapse to one.
-export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] }> {
-  const nodes = await listSessions()
-  const live = new Set(nodes.map((s) => s.id))
-  const edges: Edge[] = []
-  const seen = new Set<string>()
-  for (const reg of liveWatches()) {
-    if (!live.has(reg.watcher)) continue   // the watching agent itself is gone
-    for (const t of selectSessions(nodes, reg.selectors)) {
-      if (t.id === reg.watcher) continue
-      const key = `${reg.watcher} ${t.id}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      edges.push({ from: reg.watcher, to: t.id, kind: 'monitor' })
-    }
-  }
-  // comms edges: undirected direct-talk, one per pair, carrying the message count — read from each live
-  // session's per-worktree log and aggregated by sorted pair so A→B and B→A fold into one A↔B count. An
-  // edge to a non-live session is dropped, like the monitor edges.
-  const commsCount = new Map<string, number>()
-  for (const n of nodes) {
-    for (const peer of readComms(n.id)) {
-      if (peer === n.id || !live.has(peer)) continue
-      const key = n.id < peer ? `${n.id}\t${peer}` : `${peer}\t${n.id}`
-      commsCount.set(key, (commsCount.get(key) ?? 0) + 1)
-    }
-  }
-  for (const [key, count] of commsCount) {
-    const [from, to] = key.split('\t')
-    edges.push({ from, to, kind: 'comms', count })
-  }
-  return { nodes, edges }
-}
-
 export type ApiBaseSource = 'flag' | 'worker-env' | 'record' | 'env-fallback' | 'default'
 export type ApiBaseInfo = { url: string; source: ApiBaseSource }
 const usageError = (msg: string): Error => { const e = new Error(msg); e.name = 'UsageError'; return e }
@@ -981,15 +898,6 @@ export const withNoteReplyHint = (text: string): string =>
   `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For a simple answer awaiting the next message, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.`
 export const withTerminalReplyHint = (text: string): string =>
   `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).`
-async function postJSON(path: string, body: unknown): Promise<void> {
-  try {
-    await fetch(`${await apiBase()}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-  } catch { /* best-effort: backend may be down; the next heartbeat / TTL reconciles */ }
-}
-export const reportWatch = (token: string, watcher: string, selectors: string[], ttlMs: number): Promise<void> =>
-  postJSON('/api/sessions/edges/watch', { token, watcher, selectors, ttlMs })
-export const reportUnwatch = (token: string): Promise<void> => postJSON('/api/sessions/edges/unwatch', { token })
-
 // Match by name to avoid the client.ts <-> sessions.ts runtime import cycle.
 export const isBackendDown = (e: unknown): boolean => e instanceof Error && e.name === 'BackendError'
 // An unreachable backend has no HTTP status; a reachable non-2xx response does.
@@ -3219,7 +3127,7 @@ export type WatchOpts = { source: () => Promise<Session[]>; presenceSource?: () 
 // @@@ watch outcome - only the BOUNDED `until` mode resolves (that mode is what `spex session wait` runs on); a
 // plain watch (no `until`) streams forever and never resolves. The bound is what makes `wait` a one-shot
 // "block for a worker's NEXT transition, then exit" that is GUARANTEED to return. Bounded mode is
-// EDGE-TRIGGERED ([[session-edges]]): it resolves only upon OBSERVING a watched target transition from a
+// EDGE-TRIGGERED ([[session-follow]]): it resolves only upon OBSERVING a watched target transition from a
 // non-actionable status INTO an actionable one — an already-actionable first sighting is recorded and
 // narrated (`onObserved`, arrival first) but never resolves, so "wait for the dispatched merge to actually
 // land" has a real signal instead of an instant false return on the standing `review` level. Every observed
@@ -3343,9 +3251,6 @@ async function sendTextUnlocked(id: string, text: string, from?: string, opts: {
   }
   const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
   const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), ...(opts.deliveryId ? { deliveryId: opts.deliveryId } : {}) }, prompt.text)
-  // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
-  // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.
-  if (r.ok && from) void recordComms(id, from)
   // the durable interaction history ([[session-timeline]]): every confirmed delivery is a `sent` event.
   if (r.ok) recordSent(id, text, from ?? null, prompt.replyVia)
   return r

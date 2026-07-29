@@ -249,7 +249,10 @@ banner explaining the empty grip. The shared `sessionName` puts a rename first i
 The row order is **automatic** — the two-zone grouping below, newest-first within a zone — with no manual
 drag-to-reorder gesture. Both authored composers accept an **attached file** (paste, drop, or the paperclip picker — a monochrome inline-SVG
 glyph in the dashboard's own icon vocabulary, swapping to a spinning ring while uploading, **never a colour
-emoji**), uploaded to the backend (= worker) `/tmp` with its path spliced in — see [[file-attach]].
+emoji**). Their shared file-attach projection is per file — name, byte progress, final/failure state, and retry or
+cancel affordance — so one failed item never collapses a batch into a generic spinner. Only a completed backend
+(= worker) `/tmp` path is spliced into the composer; transfer protocol, policy, and storage semantics belong to
+[[file-attach]].
 
 Pane-backed terminals are **warm and always connected**: every live pane mounts and opens its socket when the
 console is first entered — never lazily on focus — and stays mounted even while the console is closed, so

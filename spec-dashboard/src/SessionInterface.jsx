@@ -27,6 +27,12 @@ const isHeadlessSession = (session) => session?.capabilities?.headless === true
 // state, the spinning `loader` ring.
 const AttachGlyph = () => <Icon name="paperclip" size={15} />
 const BusyGlyph = () => <Icon name="loader" size={15} className="si-attach-busy" />
+const SINGLE_UPLOAD_WORKER = 1
+const BYTES_PER_KIBIBYTE = 1024
+const KIBIBYTES_PER_MEBIBYTE = 1024
+const MEBIBYTES_PER_GIBIBYTE = 1024
+const BYTES_PER_MEBIBYTE = BYTES_PER_KIBIBYTE * KIBIBYTES_PER_MEBIBYTE
+const BYTES_PER_GIBIBYTE = BYTES_PER_MEBIBYTE * MEBIBYTES_PER_GIBIBYTE
 
 // @@@ launch-hero — the New-Session splash speaks the terminal language of code-CLI openers: a
 // block-letter ANSI-Shadow "SPEXCODE" wordmark instead of an app-icon glyph. Pure text in the app's
@@ -199,10 +205,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [actionOutcome, setActionOutcome] = useState(null)
   const [commandOpen, setCommandOpen] = useState(false)
   const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
-  const [uploading, setUploading] = useState(false)
-  const [uploadErr, setUploadErr] = useState(false)
   const [dragTarget, setDragTarget] = useState(null)
-  const [attachAt, setAttachAt] = useState(null)  // surface the in-flight/last upload targets — drives the spinner + error placement
+  const [attachments, setAttachments] = useState([])
   const taRef = useRef(null)
   const msgRef = useRef(null)
   const msgDeliveryRef = useRef(null)
@@ -211,6 +215,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
   const listRef = useRef(null)
   const outcomeTimerRef = useRef(null)
+  const attachmentsRef = useRef([])
+  const uploadControllersRef = useRef(new Map())
+  const uploadQueueBusyRef = useRef(false)
+
+  const replaceAttachments = (next) => {
+    attachmentsRef.current = next
+    setAttachments(next)
+  }
+  const patchAttachment = (id, patch) => replaceAttachments(attachmentsRef.current.map((item) =>
+    item.id === id ? { ...item, ...patch } : item,
+  ))
+  const uploadingAt = (target) => attachments.some((item) => item.target === target && (item.phase === 'queued' || item.phase === 'uploading'))
 
   const closeCommandBox = () => {
     if (outcomeTimerRef.current) window.clearTimeout(outcomeTimerRef.current)
@@ -569,19 +585,61 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
   }
 
-  const uploadFile = async (file) => {
-    const fd = new FormData()
-    fd.append('file', file, file.name || 'pasted')
-    const res = await fetch(apiUrl('/api/uploads'), { method: 'POST', body: fd })
-    if (!res.ok) throw new Error(`upload ${res.status}`)
-    const data = await res.json().catch(() => null)
-    if (!data?.path) throw new Error('upload: no path')
-    return data.path
+  const responseError = async (res) => {
+    const body = await res.json().catch(() => null)
+    return body?.error || `upload failed (HTTP ${res.status})`
+  }
+  const validUploadTransfer = (transfer, size) => transfer?.size === size &&
+    Number.isSafeInteger(transfer.chunkBytes) && transfer.chunkBytes > 0 &&
+    Number.isSafeInteger(transfer.concurrency) && transfer.concurrency > 0 &&
+    Number.isSafeInteger(transfer.requestTimeoutMs) && transfer.requestTimeoutMs > 0 &&
+    Number.isSafeInteger(transfer.retryLimit) && transfer.retryLimit >= 0 &&
+    Number.isSafeInteger(transfer.retryDelayMs) && transfer.retryDelayMs >= 0 &&
+    Number.isSafeInteger(transfer.offset) && transfer.offset >= 0 && transfer.offset <= size
+  const waitForUploadRetry = (delayMs, controller) => new Promise((resolve, reject) => {
+    if (controller.signal.aborted) { reject(new Error('upload cancelled')); return }
+    const timer = window.setTimeout(() => {
+      controller.signal.removeEventListener('abort', abort)
+      resolve()
+    }, delayMs)
+    const abort = () => {
+      window.clearTimeout(timer)
+      reject(new Error('upload cancelled'))
+    }
+    controller.signal.addEventListener('abort', abort, { once: true })
+  })
+  const uploadFetch = async (url, init, controller, timeoutMs) => {
+    const request = new AbortController()
+    const abort = () => request.abort()
+    controller.signal.addEventListener('abort', abort, { once: true })
+    const timer = window.setTimeout(() => request.abort(), timeoutMs)
+    try {
+      return await fetch(url, { ...init, signal: request.signal })
+    } catch (error) {
+      if (!controller.signal.aborted && request.signal.aborted) throw new Error('upload request timed out')
+      throw error
+    } finally {
+      window.clearTimeout(timer)
+      controller.signal.removeEventListener('abort', abort)
+    }
+  }
+  const retryTransientUpload = async (run, transfer, controller) => {
+    let retries = 0
+    for (;;) {
+      try {
+        return await run()
+      } catch (error) {
+        if (controller.signal.aborted || retries >= transfer.retryLimit) throw error
+        retries += 1
+        await waitForUploadRetry(transfer.retryDelayMs, controller)
+      }
+    }
   }
   // splice `text` at the caret of a textarea (ref+value+setter), padding with spaces so it never glues to
   // neighbouring words, then drop the caret after it. The auto-grow effects re-run on the new value.
   const insertAtCaret = (ref, value, setValue, text) => {
     const el = ref.current
+    value = el?.value ?? value
     const start = el ? el.selectionStart : value.length
     const end = el ? el.selectionEnd : value.length
     const pre = value.slice(0, start)
@@ -594,23 +652,163 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       el.setSelectionRange(c, c)
     })
   }
-  // upload every file in a list (paste/drop/pick), then insert the joined /tmp paths into the target surface.
+  const transferAttachment = async (id, onPolicy = null) => {
+    const item = attachmentsRef.current.find((candidate) => candidate.id === id)
+    if (!item || item.phase === 'cancelled') return null
+    patchAttachment(id, { phase: 'uploading', error: null })
+    const controller = new AbortController()
+    uploadControllersRef.current.set(id, controller)
+    try {
+      let transferId = item.transferId
+      let transfer = null
+      if (transferId) {
+        const resumed = await fetch(apiUrl(`/api/uploads/${transferId}`), { signal: controller.signal })
+        if (resumed.ok) transfer = await resumed.json()
+        else if (resumed.status !== 404) throw new Error(await responseError(resumed))
+      }
+      if (!transfer) {
+        const created = await fetch(apiUrl('/api/uploads'), {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: item.file.name || 'pasted', size: item.file.size }), signal: controller.signal,
+        })
+        if (!created.ok) throw new Error(await responseError(created))
+        transfer = await created.json()
+        transferId = transfer?.id
+        if (!transferId) throw new Error('upload did not return a transfer id')
+        patchAttachment(id, { transferId })
+      }
+      if (!validUploadTransfer(transfer, item.file.size)) {
+        throw new Error('upload transfer metadata is invalid')
+      }
+      onPolicy?.(transfer.concurrency)
+      let offset = transfer.offset
+      patchAttachment(id, { offset })
+      while (offset < item.file.size) {
+        const bytes = item.file.slice(offset, Math.min(item.file.size, offset + transfer.chunkBytes))
+        const sent = await retryTransientUpload(async () => {
+          const response = await uploadFetch(apiUrl(`/api/uploads/${transferId}`), {
+            method: 'PATCH', headers: { 'content-type': 'application/offset+octet-stream', 'upload-offset': String(offset) }, body: bytes,
+          }, controller, transfer.requestTimeoutMs)
+          if (response.status >= 500) throw new Error(await responseError(response))
+          return response
+        }, transfer, controller)
+        const next = await sent.json().catch(() => null)
+        if (sent.status === 409 && Number.isSafeInteger(next?.offset) && next.offset >= 0 && next.offset <= item.file.size) {
+          offset = next.offset
+          patchAttachment(id, { offset })
+          continue
+        }
+        if (!sent.ok) throw new Error(next?.error || `upload failed (HTTP ${sent.status})`)
+        if (!Number.isSafeInteger(next?.offset) || next.offset <= offset || next.offset > item.file.size) {
+          throw new Error('upload did not advance its committed offset')
+        }
+        offset = next.offset
+        patchAttachment(id, { offset })
+      }
+      const completed = await uploadFetch(apiUrl(`/api/uploads/${transferId}/complete`), { method: 'POST' }, controller, transfer.requestTimeoutMs)
+      if (!completed.ok) throw new Error(await responseError(completed))
+      const result = await completed.json().catch(() => null)
+      if (!result?.path) throw new Error('upload did not return a path')
+      const latest = attachmentsRef.current.find((candidate) => candidate.id === id)
+      if (latest?.phase === 'cancelled') return
+      if (item.target === 'new') insertAtCaret(taRef, prompt, setPrompt, result.path)
+      else insertAtCaret(msgRef, msg, setMsg, result.path)
+      patchAttachment(id, { phase: 'complete', offset: item.file.size, path: result.path })
+      return transfer.concurrency
+    } catch (error) {
+      onPolicy?.(null)
+      if (controller.signal.aborted) patchAttachment(id, { phase: 'cancelled', offset: 0, transferId: null, error: null })
+      else patchAttachment(id, { phase: 'failed', error: error instanceof Error ? error.message : String(error) })
+    } finally {
+      uploadControllersRef.current.delete(id)
+    }
+    return null
+  }
+  const runQueuedAttachments = async (ids) => {
+    if (uploadQueueBusyRef.current) return
+    uploadQueueBusyRef.current = true
+    try {
+      const [first, ...rest] = ids
+      let resolvePolicy
+      const firstPolicy = new Promise((resolve) => { resolvePolicy = resolve })
+      const firstTransfer = first ? transferAttachment(first, resolvePolicy) : Promise.resolve(SINGLE_UPLOAD_WORKER)
+      const concurrency = first ? await firstPolicy : SINGLE_UPLOAD_WORKER
+      const workerCount = Math.min(Math.max(0, (concurrency || SINGLE_UPLOAD_WORKER) - SINGLE_UPLOAD_WORKER), rest.length)
+      if (workerCount === 0) {
+        await firstTransfer
+        for (const id of rest) await transferAttachment(id)
+        return
+      }
+      let next = 0
+      const workers = Array.from({ length: workerCount }, async () => {
+        while (next < rest.length) {
+          const id = rest[next]
+          next += 1
+          await transferAttachment(id)
+        }
+      })
+      await Promise.all([firstTransfer, ...workers])
+    } finally {
+      uploadQueueBusyRef.current = false
+    }
+  }
+  const retryAttachment = (id) => {
+    if (!uploadQueueBusyRef.current) void runQueuedAttachments([id])
+  }
+  const cancelAttachment = async (id) => {
+    const item = attachmentsRef.current.find((candidate) => candidate.id === id)
+    if (!item) return
+    uploadControllersRef.current.get(id)?.abort()
+    if (item.transferId) await fetch(apiUrl(`/api/uploads/${item.transferId}`), { method: 'DELETE' }).catch(() => {})
+    patchAttachment(id, { phase: 'cancelled', offset: 0, transferId: null, error: null })
+  }
+  const dismissAttachment = (id) => {
+    const item = attachmentsRef.current.find((candidate) => candidate.id === id)
+    if (!item) return
+    if (item.phase !== 'complete' && item.phase !== 'cancelled') void cancelAttachment(id)
+    replaceAttachments(attachmentsRef.current.filter((candidate) => candidate.id !== id))
+  }
+  // The policy's default is one writer; a project may raise it, while every row retains independent resume,
+  // retry, and cancellation state.
   const attachFiles = async (fileList, target) => {
     const files = [...(fileList || [])]
-    if (!files.length || uploading) return
-    setUploadErr(false)
-    setAttachAt(target)
-    setUploading(true)
-    try {
-      const paths = []
-      for (const f of files) paths.push(await uploadFile(f))
-      if (target === 'new') insertAtCaret(taRef, prompt, setPrompt, paths.join(' '))
-      else insertAtCaret(msgRef, msg, setMsg, paths.join(' '))
-    } catch {
-      setUploadErr(true)
-    } finally {
-      setUploading(false)
-    }
+    if (!files.length || uploadQueueBusyRef.current) return
+    const added = files.map((file) => ({ id: crypto.randomUUID(), target, file, phase: 'queued', offset: 0, transferId: null, error: null }))
+    replaceAttachments([...attachmentsRef.current, ...added])
+    await runQueuedAttachments(added.map((item) => item.id))
+  }
+  const formatUploadBytes = (bytes) => {
+    if (bytes < BYTES_PER_KIBIBYTE) return `${bytes} B`
+    if (bytes < BYTES_PER_MEBIBYTE) return `${Math.round(bytes / BYTES_PER_KIBIBYTE)} KB`
+    if (bytes < BYTES_PER_GIBIBYTE) return `${(bytes / BYTES_PER_MEBIBYTE).toFixed(1)} MB`
+    return `${(bytes / BYTES_PER_GIBIBYTE).toFixed(2)} GB`
+  }
+  const attachmentQueue = (target) => {
+    const rows = attachments.filter((item) => item.target === target)
+    if (!rows.length) return null
+    return (
+      <div className={`si-attach-queue ${target === 'command' ? 'command' : 'new'}`} aria-live="polite">
+        {rows.map((item) => {
+          const active = item.phase === 'queued' || item.phase === 'uploading'
+          const status = item.phase === 'queued' ? t('session.attachQueued')
+            : item.phase === 'uploading' ? `${formatUploadBytes(item.offset)} / ${formatUploadBytes(item.file.size)}`
+              : item.phase === 'complete' ? t('session.attachDone') : item.phase === 'cancelled' ? t('session.attachCancelled') : item.error
+          return (
+            <div key={item.id} className={`si-attach-row ${item.phase}`}>
+              <span className="si-attach-name" title={item.file.name}><Icon name="paperclip" size={12} />{item.file.name}</span>
+              <progress className="si-attach-progress" value={item.offset} max={item.file.size} aria-label={`${item.file.name}: ${status}`} />
+              <span className="si-attach-status" role={item.phase === 'failed' ? 'alert' : 'status'}>{status}</span>
+              {item.phase === 'failed' && <IconButton icon="rotate-ccw" size={13} className="si-attach-action" label={t('session.attachRetry')}
+                disabled={uploadQueueBusyRef.current} onClick={() => retryAttachment(item.id)} />}
+              {(active || item.phase === 'failed') && <IconButton icon="x" size={13} className="si-attach-action" label={t('session.attachCancel')}
+                onClick={() => { void cancelAttachment(item.id) }} />}
+              {(item.phase === 'complete' || item.phase === 'cancelled') && <IconButton icon="x" size={13} className="si-attach-action" label={t('session.attachDismiss')}
+                onClick={() => dismissAttachment(item.id)} />}
+            </div>
+          )
+        })}
+      </div>
+    )
   }
   // a paste carrying file(s) (a screenshot, a copied file) attaches them instead of pasting text; a plain
   // text paste has no files and falls through to the textarea's normal behaviour untouched.
@@ -915,13 +1113,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   className="si-attach"
                   data-tip={t('session.attachTitle')}
                   onClick={() => pickFiles('new')}
-                  disabled={uploading}
-                >{uploading && attachAt === 'new' ? <BusyGlyph /> : <AttachGlyph />}</button>
-                {uploadErr && attachAt === 'new' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
+                  disabled={uploadingAt('new')}
+                >{uploadingAt('new') ? <BusyGlyph /> : <AttachGlyph />}</button>
                 {menu && (menu.kind === 'mention' || menu.kind === 'actor') && mentionMenuEl(false)}
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
+              {attachmentQueue('new')}
               {/* launcher picker — the only launch choice ([[launcher-select]]): the pop-out button picker
                   (LauncherPicker above) with per-launcher harness marks and read-only cmd details. */}
               {launchers.length ? <LauncherPicker launchers={launchers} launcher={launcher} pickLauncher={pickLauncher} /> : null}
@@ -1062,6 +1260,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       onDragLeave={() => setDragTarget(null)}
                       onDrop={(e) => onDropFiles(e, 'command')}
                       editor={(
+                        <>
                         <div className="fv-tawrap">
                           <ComposerTextarea ref={msgRef} className="si-command-input" rows={1} value={msg}
                             data-focus-sink
@@ -1078,6 +1277,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
                           {menu && (menu.kind === 'mention' || menu.kind === 'actor') && mentionMenuEl(true)}
                         </div>
+                        {attachmentQueue('command')}
+                        </>
                       )}
                       footer={(
                         <div className="si-command-tools">
@@ -1091,11 +1292,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           <button type="button" className="fv-trigger-btn" data-tip={t('session.menuCommands')}
                             aria-label={t('session.menuCommands')}
                             onClick={() => insertCommandTrigger('/')}>/</button>
-                          <IconButton icon={uploading && attachAt === 'command' ? 'loader' : 'paperclip'} size={14}
-                            iconClassName={uploading && attachAt === 'command' ? 'si-attach-busy' : undefined}
+                          <IconButton icon={uploadingAt('command') ? 'loader' : 'paperclip'} size={14}
+                            iconClassName={uploadingAt('command') ? 'si-attach-busy' : undefined}
                             className="si-command-tool" label={t('session.attachTitle')}
-                            disabled={uploading} onClick={() => pickFiles('command')} />
-                          {uploadErr && attachAt === 'command' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
+                            disabled={uploadingAt('command')} onClick={() => pickFiles('command')} />
                           {actionOutcome?.owner === 'command' && <ActionOutcome outcome={actionOutcome} />}
                           <IconButton icon="send" size={14} className="si-command-send" label={t('session.commandSend')}
                             disabled={!msg.trim() || (actionOutcome?.owner === 'command' && actionOutcome.phase === 'sending')} onClick={sendMsg} />

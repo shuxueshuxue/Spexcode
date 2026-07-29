@@ -617,6 +617,12 @@ export default {
     msgError: '⚠ not delivered — retry',
     attachTitle: 'attach a file (or paste / drop) — uploaded to the session machine, its /tmp path inserted',
     attachError: '⚠ upload failed',
+    attachQueued: 'queued',
+    attachDone: 'attached',
+    attachCancelled: 'cancelled',
+    attachRetry: 'retry upload',
+    attachCancel: 'cancel upload',
+    attachDismiss: 'dismiss attachment status',
     // board commands — the `/` commands Command Box runs HERE (not in the agent), each the typed twin of a
     // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
     cmd: {

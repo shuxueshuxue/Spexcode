@@ -356,7 +356,7 @@ test('a refused watcher source fails loud once and repairs on a bounded schedule
 // Coverage may degrade to the patrol's cadence; it may never degrade to silence. With the refs leaf
 // deliberately blinded, a real commit reaches no leaf watcher — the cold tick must still land it AND say
 // it repaired something, because a repair means a leaf went blind and repairs are supposed to be zero.
-test('a blinded leaf still reaches the graph through a loud patrol repair', { timeout: 90_000 }, async () => {
+test('a blinded leaf still reaches the graph through a loud patrol repair', { timeout: 120_000 }, async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-patrol-'))
   const project = join(fixture, 'project')
   const spexHome = join(fixture, 'home')
@@ -407,7 +407,9 @@ exec "${realGit}" "$@"
     SPEXCODE_BOARD_DEBUG: '1',
     SPEXCODE_BOARD_BUDGET_MS: '0',
     SPEXCODE_BOARD_BACKGROUND_START_DELAY_MS: '0',
-    SPEXCODE_BOARD_BUILD_TIMEOUT_MS: '20000',
+    // This test intentionally holds one real producer through a second 15s cold tick. Keep the fixture
+    // watchdog outside that causal window; it is not a product budget change.
+    SPEXCODE_BOARD_BUILD_TIMEOUT_MS: '30000',
     SPEXCODE_DISABLE_WATCHERS: 'refs',
     PATH: `${bin}:${process.env.PATH || ''}`,
   }
@@ -421,8 +423,15 @@ exec "${realGit}" "$@"
   const base = `http://127.0.0.1:${port}`
   const abort = new AbortController()
   let streamRead: Promise<void> | null = null
-  const frames: Array<{ event: string; data: string }> = []
+  const frames: Array<{ event: string; data: string; at: number }> = []
   const eventNames: string[] = []
+  const heldTimeline = {
+    fullHeldAt: 0,
+    sessionFrameAt: 0,
+    fullReleasedAt: 0,
+    structuralBroadcastAt: 0,
+    structuralFrameAt: 0,
+  }
 
   try {
     await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
@@ -445,7 +454,7 @@ exec "${realGit}" "$@"
           const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
           if (event === 'graph-full' || event === 'graph-delta') {
             const data = block.split('\n').filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n')
-            frames.push({ event, data })
+            frames.push({ event, data, at: Date.now() })
             eventNames.push(event)
           }
         }
@@ -483,6 +492,8 @@ exec "${realGit}" "$@"
     await waitFor(() => existsSync(argvLog) && /^HANG /m.test(readFileSync(argvLog, 'utf8'))
       && /graph patrol revision moved — scope=full/.test(serverLog),
     `the blinded patrol never entered the controlled full hold:\n${serverLog}`, 30_000)
+    heldTimeline.fullHeldAt = Date.now()
+    const buildsBeforeHeldPatrol = buildCount()
 
     const framesBeforeSession = frames.length
     const renameResponse = await fetch(`${base}/api/sessions/${sessionId}/rename`, {
@@ -492,15 +503,52 @@ exec "${realGit}" "$@"
     assert.deepEqual(await renameResponse.json(), { ok: true })
     await waitFor(() => frames.slice(framesBeforeSession).some((frame) => frame.data.includes(renamed)),
       `the session projection waited for the patrol full release:\n${serverLog}`, 2_000)
+    heldTimeline.sessionFrameAt = frames.slice(framesBeforeSession).find((frame) => frame.data.includes(renamed))!.at
     assert.equal(existsSync(hold), true, 'the session frame must overtake the held patrol full, not follow release')
+    // Cross the following cold tick while the SAME patrol producer remains blocked. The tick may leave its
+    // validation obligation owed, but it must not start a second structural producer or hold the session row.
+    await new Promise((resolve) => setTimeout(resolve, 17_000))
+    assert.equal(existsSync(hold), true, 'the controlled patrol producer must remain held across the second cold tick')
+    assert.ok(Date.now() - heldTimeline.fullHeldAt >= 15_000,
+      `the active patrol full did not span a full cold-tick interval: ${JSON.stringify(heldTimeline)}`)
+    assert.equal(buildCount(), buildsBeforeHeldPatrol,
+      `a second cold tick started another full while the controlled producer was held:\n${serverLog}`)
+    heldTimeline.fullReleasedAt = Date.now()
     rmSync(hold, { force: true })
 
     await waitFor(() => frames.slice(framesBefore).some((frame) => frame.data.includes(fullNodeId)),
       `the released patrol full never reached SSE structural convergence:\n${serverLog}`, 10_000)
+    heldTimeline.structuralFrameAt = frames.slice(framesBefore).find((frame) => frame.data.includes(fullNodeId))!.at
+    let structuralBroadcast: { at?: number; stage?: string; sessionProjection?: boolean; tags?: string[]; changedKeys?: string[] } | undefined
+    await waitFor(() => {
+      structuralBroadcast = [...serverLog.matchAll(/spec-cli: graph latency (\{.+\})/g)]
+        .flatMap((match) => { try { return [JSON.parse(match[1]) as { at?: number; stage?: string; sessionProjection?: boolean; tags?: string[]; changedKeys?: string[] }] } catch { return [] } })
+        .find((trace) => trace.stage === 'broadcast' && trace.at && trace.at >= heldTimeline.fullReleasedAt
+          && trace.tags?.includes('patrol') && trace.changedKeys?.some((key) => key === `node:${fullNodeId}` || key === 'nodes#order'))
+      return !!structuralBroadcast?.at
+    }, `the released patrol full had no server structural broadcast trace:\n${serverLog}`, 2_000)
+    assert.ok(structuralBroadcast?.at, 'the bounded structural broadcast trace wait resolved without a timestamp')
+    heldTimeline.structuralBroadcastAt = structuralBroadcast.at
+    assert.ok(heldTimeline.sessionFrameAt < heldTimeline.fullReleasedAt && heldTimeline.sessionFrameAt < heldTimeline.structuralBroadcastAt,
+      `the session projection did not overtake full release/completion: ${JSON.stringify(heldTimeline)}`)
+    assert.ok(heldTimeline.structuralBroadcastAt >= heldTimeline.fullReleasedAt
+      && heldTimeline.structuralFrameAt >= heldTimeline.structuralBroadcastAt,
+    `structural server broadcast/frame preceded the controlled producer release: ${JSON.stringify(heldTimeline)}`)
+
+    const fresh = await fetch(`${base}/api/graph`)
+    assert.equal(fresh.status, 200)
+    assert.equal(fresh.headers.get('x-spexcode-graph'), 'fresh', 'post-full API must not serve a stale session row')
+    const freshBoard = await fresh.json() as { nodes?: Array<{ id?: string }>; sessions?: Array<{ id?: string; raw?: { name?: string | null } }> }
+    assert.ok(freshBoard.nodes?.some((node) => node.id === fullNodeId), 'fresh API lost the completed full topology')
+    assert.equal(freshBoard.sessions?.find((session) => session.id === sessionId)?.raw?.name, renamed,
+      'fresh API rolled the completed full session row backward')
 
     await waitFor(() => /PATROL-REPAIR/.test(serverLog),
       `the patrol never reported the repair it had to make:\n${serverLog}`, 60_000)
     assert.match(serverLog, /PATROL-REPAIR .*changed units: \[[^\]]+\]/, 'the repair must name the diverged units')
+    await waitForQuiet(eventNames, 1_000)
+    assert.equal(buildCount(), buildsBeforeHeldPatrol + 1,
+      `the second cold tick amplified the released patrol full into a successor producer:\n${serverLog}`)
     assert.ok(buildCount() > buildsBeforeQuietPatrol, 'the changed patrol revision must run one real producer')
     assert.ok(frames.length > framesBefore, 'the blinded change still reached the subscriber')
     const sessionFrames = frames.slice(framesBeforeSession)
@@ -526,8 +574,12 @@ exec "${realGit}" "$@"
     const sessionsBroadcast = broadcasts.findIndex((tags) => tags.includes('sessions'))
     assert.ok(broadcasts.slice(sessionsBroadcast + 1).some((tags) => tags.includes('patrol')),
       `the session projection consumed patrol accountability before structural convergence: ${JSON.stringify(broadcasts)}`)
+    assert.equal((serverLog.match(/PATROL-REPAIR/g) ?? []).length, 1,
+      `the second cold tick reported a patrol successor instead of validating the completed board:\n${serverLog}`)
+    if (process.env.SPEXCODE_PATROL_HOLD_TRACE === '1')
+      console.log(`patrol-held-full ${JSON.stringify({ ...heldTimeline, activeFullMs: heldTimeline.structuralBroadcastAt - heldTimeline.fullHeldAt })}`)
   } catch (error) {
-    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nframes:\n${JSON.stringify(frames)}\nserver log:\n${serverLog}`)
+    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nheld timeline=${JSON.stringify(heldTimeline)}\nframes:\n${JSON.stringify(frames)}\nserver log:\n${serverLog}`)
   } finally {
     rmSync(hold, { force: true })
     abort.abort()

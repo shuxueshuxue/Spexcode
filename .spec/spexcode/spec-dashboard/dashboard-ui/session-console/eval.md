@@ -25,6 +25,28 @@ scenarios:
       `/stop` is handled as the real board command and never sent as agent text. The console changes to a visible,
       clickable `.si-offline` panel with relaunch available and Command Box unavailable. Relaunch returns the
       session online; the same mounted conversation reappears with the unique pre-stop note and timeline intact.
+  - name: dashboard-session-state-push-latency
+    tags: [frontend-e2e, desktop, backend-api]
+    test: spec-dashboard/test/session-state-push-latency.e2e.mjs
+    code: spec-dashboard/src/SessionContextMenu.jsx
+    related: [spec-dashboard/src/data.js, spec-cli/src/graphStream.ts, spec-cli/src/graphCache.ts, spec-cli/src/graph.ts]
+    description: >-
+      In an isolated real backend and Chromium dashboard, right-click one real persisted session row and rename
+      it three times through the modal. Record A (gesture to record persist), B (persist to sessions signal), C
+      (signal to projection complete), D (projection complete to target browser SSE; queue-to-browser is retained
+      separately), SSE-to-DOM, and E (gesture to
+      rendered row), plus all graph HTTP requests.
+      Pair that browser trace with the graph-cache held-full controls: route-owned and patrol-owned
+      full producers must remain held until the target session frame is observed, then complete structurally
+      without a session rollback.
+    expected: >-
+      Each successful rename is visible through the target graph SSE frame, with no HTTP response containing that
+      target winning the render before the raw target SSE. All three ordinary persist-to-browser-SSE measurements
+      are reported as one distribution and each must meet the unchanged 200ms budget; SSE-to-DOM must meet 100ms;
+      any miss is filed FAIL rather than selected away. A/B/C/D, SSE-to-DOM, and complete browser end-to-end timing
+      are retained with the browser video, terminal screenshot, and structured trace. Under an active full lasting over 15s, the target session frame occurs before full release/completion;
+      the later structural frame preserves that name, and watcher-disabled patrol repair does not turn session
+      rename state into the full builder's queue.
   - name: native-terminal-default-input
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/terminal-input.e2e.mjs

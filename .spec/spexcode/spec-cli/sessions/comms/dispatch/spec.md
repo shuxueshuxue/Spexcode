@@ -48,6 +48,18 @@ dequeued, daemon silent), so a send into that pane state is **refused loudly** w
 `reply-rejected`/`shutting-down`, or exhausted kick-retries all return a **loud `DispatchResult {ok,error}`**
 that propagates: `POST …/input` answers **502**, `spex session send` prints it, `mergeSession` returns it.
 
+Every text delivery has a terminal outcome: **accepted** only after its native channel confirms the turn,
+**rejected** only when the native channel proves it was not accepted, or **commit-unknown** when a request crossed
+the transport boundary but the confirmation was lost. `commit-unknown` remains non-2xx and does not write a
+sent/comms event, but it is not called a rejection: replaying it can duplicate a late native acceptance. A caller
+may carry one opaque delivery marker across a retry; adapters that expose a native idempotency marker use it there.
+Before that marker crosses an adapter boundary, the shared session layer durably reserves its prompt fingerprint
+under the session record lock. A same-marker retry returns its already-recorded terminal outcome without calling an
+adapter; a different prompt using that marker is rejected; and a reservation without a terminal record remains
+commit-unknown rather than replaying. The ledger lives with the session's global artifacts, so a backend restart
+cannot turn a late accepted turn into a duplicate. The route stays harness-agnostic, the Command Box keeps its
+draft for either non-accepted outcome, and only an accepted response clears it.
+
 Hard interrupt is a sibling control operation, not a magic prompt. `spex session interrupt` calls the adapter's
 interrupt capability through the backend; [[claude-headless]] sends native `control_request/interrupt` and
 confirms the matching `control_response`. An adapter without that capability refuses loudly. Interrupt never

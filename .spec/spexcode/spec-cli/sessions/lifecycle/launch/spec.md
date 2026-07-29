@@ -76,9 +76,14 @@ wires the worktree's hooks in the first place, and every lifecycle dispatch ride
 failed materialize means no hook ever fires and the worker would come up ungoverned (no contract, no
 stop-gate) with
 nothing saying so. A materialize failure therefore **fails loud**: the cause + worktree path are logged and
-the failure is stamped on the session record's `note` (the board/watch surface it). The launch still proceeds
-— a visibly degraded worker the human can close and re-dispatch beats a refused launch — and status stays
-agent-authored ([[state]]): the server stamps the note, never an inferred `error` state. Only the launch line
+the failure is stamped on the session record's `note` (the board/watch surface it). Before publishing that
+receipt, creation restores the fresh candidate to its branch baseline, including untracked materialized
+artifacts while preserving its seeded local config, so a half-written managed block cannot make the degraded
+queued row look like user-authored dirty work and block `close`. If
+that restore cannot be proved, creation rolls the candidate back instead of publishing an unclosable row. The
+launch otherwise proceeds — a visibly degraded worker the human can close and re-dispatch beats a refused
+launch — and status stays agent-authored ([[state]]): the server stamps the note, never an inferred `error`
+state. Only the launch line
 itself (rendezvous env + harness command + the human
 prompt + spec pointer) is written to the **launch script file** in the global store, so a long prompt never
 hits the ~2KB tmux send-keys limit. Every path that file and its hooks reference resolves from the CLI

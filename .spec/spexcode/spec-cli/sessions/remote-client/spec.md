@@ -23,7 +23,7 @@ backend is the single broker, and which machine you point at is just a URL.
 ## expanded spec
 
 The read/control commands — `ls`, `watch`, `wait`, `capture`, `send`, `interrupt`, `rename`, `rawkey`, `review`, `merge`,
-`reopen`, `exit`, `close`, `prompt`, and `resources` — call the backend over HTTP, at the endpoint the routing ladder below
+`reopen`, `exit`, `close`, `quarantine`, `prompt`, and `resources` — call the backend over HTTP, at the endpoint the routing ladder below
 resolves. (`session attach` is the ONE deliberate exception — a foreground terminal can't be brokered over
 HTTP, so it stays local and guards that premise loudly against the *resolved* backend; see
 [[session-attach]].) They hold **no** in-process tmux/git path, so the backend is the **single actor** on
@@ -45,7 +45,7 @@ default. A malformed `--api`/`--port` fails loud as usage, never a silent defaul
 
 **Writes are project-bound; reads point anywhere.** A URL carries no project identity, so a misresolved
 endpoint turns a state write into a wrong-repo mutation. Every MUTATING verb — `new`, `merge`, `send`, `interrupt`,
-`close`, `rename`, `rawkey`, `reopen`, `exit` — therefore compares the caller's repo root to the backend's
+`close`, `quarantine`, `rename`, `rawkey`, `reopen`, `exit` — therefore compares the caller's repo root to the backend's
 served root before writing and REFUSES loudly on a provable same-host mismatch, naming both identities and
 the explicit-routing remedy. An explicit `--api`/`--port` skips the guard (the flag IS the proof of intent);
 no local repo, an unreachable backend, or a genuinely remote root fall through to allow. Reads stay unguarded.
@@ -64,6 +64,9 @@ accept it too. The backend matches `/…/:id`
 EXACTLY, so `resolveClientSession` resolves a selector against the live board (the [[session-selectors]]
 matcher over `clientListSessions`) and the verb then calls with the resolved FULL id. A non-match is loud and
 precise — `none` → no such session, `ambiguous` → the candidate ids — never a silent miss against the backend.
+The one necessary integrity exception is `session quarantine <exact-id> --restore`: quarantine deliberately
+removed its row from the live board, so a selector has nothing honest to resolve; restore therefore requires
+the original exact id and calls the same backend rather than falling back to local storage.
 
 The split is load-bearing and is the whole point. State **producers** stay **local**: `done`/`ask`/`park`/
 `idle` and the lifecycle hooks write the agent's OWN per-session record in the GLOBAL store directly (keyed

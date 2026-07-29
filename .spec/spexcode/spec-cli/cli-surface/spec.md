@@ -39,6 +39,12 @@ The resource surface keeps one lifecycle: `spex session resources [--json]` is t
 host report. It may explain reclaim eligibility but never issues mutation authority; stop and close remain the
 only lifecycle verbs that release session resources.
 
+`spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path>
+--branch <absent-branch>` is the separate record-integrity control for an unreadable row. It moves no worktree,
+branch, process, or readable lifecycle record: the backend consumes its exact absence witness before it moves
+opaque bytes out of active projection. Both it and `--restore` require the original exact id rather than a
+selector, because corrupt rows never belong to selector enumeration.
+
 Project session maintenance stays inside the six-noun grammar as one scoped porcelain verb:
 `spex session maintain --allow-stop <SEL> ... --allow-resume <SEL>[:force] ... -- <command...>`; sanitized
 status is `spex session maintain --status`. The wrapper acquires, heartbeats, and releases through the ordinary

@@ -10,6 +10,8 @@ related:
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts
   - docs/audits/source-of-truth-stage2-20260728.md
+  - docs/audits/source-of-truth-incremental-lint-stage3-20260729.md
+  - docs/audits/source-of-truth-raw-identity-v15-20260729.md
 ---
 # source-of-truth
 
@@ -61,9 +63,14 @@ side-branch writes at the project's normal `--no-ff` landing step.
 
 Two principles keep that derivation cheap on a long-running server:
 
-- **Scale with history, not node count.** Ordinary repositories derive three shared event streams: `.spec`
-  numstat for versions, repository-wide numstat for governed drift/acks, and one merge raw+patch stream for
-  rename identity and all-parent authored lines. The persistent ledger appends immutable commit events and
+- **Scale with history, not node count.** Ordinary repositories derive two shared event streams: one
+  repository-wide NUL-framed raw identity stream for `.spec` content versions and governed drift/acks, and
+  one merge raw+patch stream for rename identity and all-parent authored lines. The identity stream fixes
+  `--root -M -l0 --raw -z --no-abbrev --no-ext-diff --no-textconv`: each compact record carries status, one
+  path (or both rename endpoints), and old/new blob ids. Its blob predicate, not attribute-sensitive line
+  counts, decides whether a one-parent `.spec` row is a version. Numeric numstat statistics are read only
+  for the selected history node in one `diff-tree --stdin` batch, never retained in the shared ledger.
+  The persistent ledger appends immutable commit events and
   every verdict projects those events through the current tip's rename and ancestry topology. There is no
   path-scoped alternate representation: Git's path simplification, rename following, path reuse, and parallel
   rename forks cannot preserve the same identity relation, so a size threshold must not silently change the
@@ -81,8 +88,11 @@ Two principles keep that derivation cheap on a long-running server:
   starts a separate node history. A pure rename remains a zero-content move.
   Both indices are read for **several checkouts at once** — the backend's own root plus every session
   worktree (the eval surfaces root their readings at the session's branch) — so the cache shares an
-  in-flight promise for equal checkout heads while its ownership is keyed by the current checkout. When
-  a root advances to a new HEAD, its old index is released immediately unless another live root still
+  in-flight promise for equal checkout heads in one common Git store while its ownership is keyed by the
+  current checkout. Its immutable content key is the checkout HEAD plus the project-namespaced persistent
+  ledger path: that path binds the common repository store and Git interpretation identity, so linked
+  worktrees share but independent same-HEAD clones never do. The root path is an LRU owner only, never a
+  second content dimension. When a root advances to a new HEAD, its old index is released immediately unless another live root still
   references that same HEAD. A small bounded set of current-root slots keeps several worktrees warm without
   retaining one full index for every historical commit, and concurrent readers of one HEAD share a single
   in-flight build.
@@ -115,7 +125,10 @@ Two principles keep that derivation cheap on a long-running server:
   immutable projections to both history and drift builders; a shared `rev-list --parents` or `ls-tree`
   text must never be split into separate equivalent maps per builder.
   Cross-process writers still merge under the project-scoped lock; a corrupt or interpretation-mismatched
-  snapshot rebuilds from Git, and a failed event scan remains loud rather than minting a marker.
+  snapshot rebuilds from Git, and a failed event scan remains loud rather than minting a marker. The raw
+  identity stream is parsed once at the Git adapter boundary through its structural NUL protocol; the ledger
+  stores compact typed records and both projectors receive those records directly, so a
+  pathname containing the human-facing record-separator byte can never reframe history.
 
   The expected peak-memory shape is one encoded ledger payload plus one decoded event state plus the current
   projection, not one copy of those per stream or per optimistic-lock retry. The slow full-history derivation

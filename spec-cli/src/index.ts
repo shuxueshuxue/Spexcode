@@ -16,7 +16,7 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
+import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
 import { superviseTimeline, readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
@@ -668,6 +668,15 @@ app.post('/api/sessions/:id/close', async (c) => {
   // invalidation must happen before the success response rather than leaving the confirming board to patrol.
   if (ok) notifyBoardChanged('sessions')
   return c.json(ok ? { ok: true } : { ok: false, error: `no close transition was committed for session ${sessionId}` }, ok ? 200 : 404)
+})
+app.post('/api/sessions/:id/quarantine', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  const result = await quarantineCorruptRecord(c.req.param('id'), body)
+  return c.json({ ok: true, ...result })
+})
+app.post('/api/sessions/:id/quarantine/restore', async (c) => {
+  const result = await restoreQuarantinedRecord(c.req.param('id'))
+  return c.json({ ok: true, ...result })
 })
 // archive / legacy unarchive signpost ([[archive]]) — archive proves exact cold/offline ownership before filing;
 // `{on:false}` enters the same resume transition and recreates the preserved conversation. {ok:false}=no such session.

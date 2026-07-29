@@ -34,13 +34,15 @@ open above the caret/footer inside the available upper space. At phone width the
 replace [[mobile-ui]]'s existing composer.
 
 Sending uses the session's control socket, never PTY typing, so one authored prompt lands atomically even while
-the terminal is in copy mode. A successful **accepted** send clears the draft and closes the box. A rejected or
-commit-unknown delivery leaves it open, restores the draft, and renders the returned terminal outcome. The box
-keeps one opaque delivery marker with that unchanged draft, so an immediate retry has the same native exactly-once
-identity instead of creating a second turn if a late acceptance arrives; the shared session ledger returns the
-first terminal result without another adapter call. Editing the draft starts a new delivery.
-Enter sends only when it is not committing an IME composition; Shift+Enter adds a line. The box uses the one shared
-[[composer]] shell also used by Issues and Evals.
+the terminal is in copy mode. The box owns one right-pane action-outcome surface: it exposes sending while the
+request is pending, retains the complete draft and returned HTTP/body error for a rejected or commit-unknown
+delivery, and therefore stays ready for retry. The unchanged draft keeps one opaque delivery marker, so that
+retry has the same native exactly-once identity and a late acceptance cannot create a second turn; editing the
+draft starts a new delivery. On an accepted 2xx it visibly acknowledges delivery in that same surface before
+clearing the draft and closing; disappearing is never the only success signal. A close, session switch, or the
+next send owns clearing that outcome; the session list never mirrors it. Enter sends only when it is not
+committing an IME composition; Shift+Enter adds a line. The box uses the one shared [[composer]] shell also used
+by Issues and Evals.
 
 Its grammar is the old control plane, kept in one place: `[[node]]` resolves at send to the node id plus its
 live `spec.md` pointer; `@session` and `@new` use [[mentions]]; `/` lists available board commands first,

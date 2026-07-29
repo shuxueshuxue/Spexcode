@@ -44,12 +44,12 @@ The operation type is a CLOSED discriminated union, never a caller-provided stri
 ```
 create | fallback-create | lifecycle-transition | hook-state | send | raw-key-input |
 terminal-input | interrupt | rename | sort | stop | resume | archive | close |
-merge-dispatch | queue-drain | attach | shared-spawn
+quarantine | merge-dispatch | queue-drain | attach | shared-spawn
 ```
 
 Every Spex-owned entry that can write session state or address a session runtime acquires its operation ticket
 at the lowest shared side-effect boundary: API and fallback creation, lifecycle writes, hook dispatch, prompt
-send, CLI raw keys, browser/xterm input, interrupt, rename/sort, stop/resume/archive/close, merge dispatch,
+send, CLI raw keys, browser/xterm input, interrupt, rename/sort, stop/resume/archive/close/quarantine, merge dispatch,
 queue drain, `spex session attach`, and the internal shared-runtime spawn. Reads, including maintenance status,
 remain open. A new Spex attach holds one `attach` ticket for the whole foreground tmux client lifetime. An
 already-running Spex attach was admitted under the preceding epoch and must drain; a native tmux/Codex client

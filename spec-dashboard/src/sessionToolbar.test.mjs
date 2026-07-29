@@ -55,8 +55,22 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.match(contextMenu, /onError\?\.\(body\?\.error \|\| `session close refused/)
   assert.match(source, /const j = await res\.json\(\)\.catch\(\(\) => null\)/)
   assert.match(source, /!res\.ok \|\| j\?\.ok === false/)
-  assert.equal((source.match(/si-action-error/g) || []).length, 1)
-  assert.doesNotMatch(source, /actErr && !shelvedSel/)
+  assert.match(source, /function ActionOutcome\(\{ outcome \}\)/)
+  assert.match(source, /setActionOutcome\(\{ owner, phase: 'failed'/)
+  assert.match(source, /onError=\{\(message\) => \{[\s\S]{0,300}setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)/)
+  assert.doesNotMatch(source, /si-action-error|setActErr|<aside[^>]*>[\s\S]{0,400}ActionOutcome/)
+})
+
+test('only corrupt rows expose the witnessed quarantine control', () => {
+  assert.match(contextMenu, /menu\.session\.status === 'corrupt'/)
+  assert.match(contextMenu, /<ContextMenuItem icon="archive" onClick=\{startQuarantine\}>\{t\('sessionWindow\.quarantine'\)\}/)
+  assert.match(contextMenu, /apiFetch\(`\/api\/sessions\/\$\{quarantining\.id\}\/quarantine`/)
+  assert.match(contextMenu, /JSON\.stringify\(\{ \.\.\.witness, thread: witness\.thread\.trim\(\) \|\| null \}\)/)
+  for (const key of ['Adapter', 'Thread', 'Tmux', 'Worktree', 'Branch'])
+    assert.match(contextMenu, new RegExp(`sessionWindow\\.quarantine${key}`))
+  assert.match(contextMenu, /onError\?\.\(body\?\.error \|\| `session quarantine refused/)
+  assert.match(en, /quarantine: 'quarantine record'/)
+  assert.match(zh, /quarantine: '隔离记录'/)
 })
 
 test('cold archive rows render without paying for a git ops projection', () => {
@@ -118,7 +132,7 @@ test('command availability, icons, toolbar tools, and typed twins remain one reg
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').anchor, 'right')
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').typed, false)
   assert.match(source, /uiCommandsFor\(selSession\?\.status, runners, selSession\?\.liveness, selSession\?\.archived\)/)
-  assert.match(source, /if \(commandAvailable\) setCommandOpen/)
+  assert.match(source, /if \(commandAvailable\) \{ if \(commandOpen\) closeCommandBox\(\); else setCommandOpen\(true\) \}/)
   assert.match(source, /uiCmds\.filter\(\(c\) => c\.button\)[\s\S]*?\.sort\(\(a, b\) => \(a\.anchor === 'right' \? 1 : 0\) - \(b\.anchor === 'right' \? 1 : 0\)\)[\s\S]*?\.map/)
   assert.match(source, /const pressed = c\.pressed \? commandOpen : undefined/)
   assert.match(source, /<IconButton[\s\S]*icon=\{c\.icon\}[\s\S]*aria-pressed=\{pressed\}/)

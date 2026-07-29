@@ -56,9 +56,10 @@ scenarios:
       and TUI. Force the selected session's relaunch endpoint to return the public readiness refusal, retry it,
       and inspect both desktop and phone list geometry.
     expected: >-
-      The Command Box exposes sending then one visible 502 failure while retaining its complete draft for retry;
-      no left-list action alert appears. A successful retry sends one atomic control prompt, visibly acknowledges
-      delivery in that same surface, then clears the draft, closes the box, and focuses xterm. The public
+      The Command Box exposes sending then one visible 502 failure while retaining its complete draft and
+      delivery marker for retry; no left-list action alert appears. A successful retry reuses that marker,
+      sends one atomic control prompt, visibly acknowledges delivery in that same surface, then clears the
+      draft, closes the box, and focuses xterm. The public
       `launch did not become ready; the session remains stopped and can be retried` refusal appears once in the
       selected right-side relaunch panel, survives until retry, and never changes list geometry on desktop or
       phone. Neither attempt types the prompt character-by-character through the PTY.

@@ -211,9 +211,10 @@ never sends; plain Enter sends, while Shift+Enter adds a line.
 
 Command Box dispatches through the **control socket** (never typed into the pane), so one prompt lands
 atomically even in tmux copy-mode. Its right-pane action-outcome surface shows sending, then either delivery
-or the returned failure. A failed 502 keeps the complete draft and the box open for retry. On a 2xx it visibly
-acknowledges delivery in that same surface before clearing the draft and closing; disappearing is never the
-only success signal. A `/` line
+or the returned failure. A failed 502 keeps the complete draft, its opaque delivery marker, and the box open
+for an exactly-once retry; editing the draft starts a new delivery. On an accepted 2xx it visibly acknowledges
+delivery in that same surface before clearing the draft and closing; disappearing is never the only success
+signal. A `/` line
 may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every toolbar twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable

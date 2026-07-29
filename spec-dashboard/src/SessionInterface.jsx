@@ -188,7 +188,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole
   // launch choice; the fetch + default resolution live in the shared launch path (./launch.js).
   const { launchers, launcher, pickLauncher } = useLaunchers()
-  const [sendErr, setSendErr] = useState(false)
+  const [sendErr, setSendErr] = useState(null)
   const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
   const [commandOpen, setCommandOpen] = useState(false)
   const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
@@ -198,6 +198,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [attachAt, setAttachAt] = useState(null)  // surface the in-flight/last upload targets — drives the spinner + error placement
   const taRef = useRef(null)
   const msgRef = useRef(null)
+  const msgDeliveryRef = useRef(null)
   const panelRef = useRef(null)
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
@@ -512,18 +513,26 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // resolve any `[[<node>]]` to a live spec.md pointer before it reaches the backend (the running-session twin
     // of the New Session launch composition — see [[command-box]]).
     const text = expandMentions(raw)
+    const deliveryId = msgDeliveryRef.current || crypto.randomUUID()
+    msgDeliveryRef.current = deliveryId
     setMsg('')
-    setSendErr(false)
+    setSendErr(null)
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/input`), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'text', text }),
+        body: JSON.stringify({ kind: 'text', text, deliveryId }),
       })
-      if (!res.ok) throw new Error(`input ${res.status}`)
+      const outcome = await res.json().catch(() => null)
+      if (!res.ok || outcome?.outcome !== 'accepted') {
+        setMsg(raw)
+        setSendErr(outcome || { outcome: 'commit-unknown', error: `input ${res.status}` })
+        return
+      }
+      msgDeliveryRef.current = null
       setCommandOpen(false)
-    } catch {
+    } catch (error) {
       setMsg(raw)       // don't lose the message — put the ORIGINAL line back so the human can retry
-      setSendErr(true)
+      setSendErr({ outcome: 'commit-unknown', error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -1020,7 +1029,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         <div className="fv-tawrap">
                           <ComposerTextarea ref={msgRef} className="si-command-input" rows={1} value={msg}
                             data-focus-sink
-                            onChange={(e) => { setMsg(e.target.value); if (sendErr) setSendErr(false); syncMenu(e.target) }}
+                            onChange={(e) => { setMsg(e.target.value); msgDeliveryRef.current = null; if (sendErr) setSendErr(null); syncMenu(e.target) }}
                             onSelect={(e) => syncMenu(e.target)}
                             onPaste={(e) => onPasteFiles(e, 'command')}
                             onBlur={() => setMenu(null)}
@@ -1051,7 +1060,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                             className="si-command-tool" label={t('session.attachTitle')}
                             disabled={uploading} onClick={() => pickFiles('command')} />
                           {uploadErr && attachAt === 'command' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
-                          {sendErr && <span className="si-send-err" role="alert">{t('session.msgError')}</span>}
+                          {sendErr && <span className="si-send-err" role="alert">{sendErr.outcome === 'commit-unknown' ? `delivery unconfirmed: ${sendErr.error || t('session.msgError')}` : sendErr.error || t('session.msgError')}</span>}
                           <IconButton icon="send" size={14} className="si-command-send" label={t('session.commandSend')}
                             disabled={!msg.trim()} onClick={sendMsg} />
                         </div>

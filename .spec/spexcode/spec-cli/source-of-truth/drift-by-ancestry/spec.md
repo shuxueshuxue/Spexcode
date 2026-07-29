@@ -33,9 +33,12 @@ walk, so "scale with history, not node count" remains a correctness shape, not a
 rule feeds every consumer of the signal — the [[spec-lint]] drift warning, board drift counts, and eval engine's
 code/scenario freshness axes ([[eval-core]]) — with no parallel heuristic beside it.
 
-The exact implementation is an event fold followed by a read-time project/filter. The fold reads immutable Git
-commit events, including renames and merge-owned lines; the project step maps historical paths through the current
-tip's rename topology before applying the walk-newest version and ancestry filters. This split is part of the
+The exact implementation is an event fold followed by a read-time project/filter. The ordinary drift fold reads
+one NUL-framed Git raw-identity event per commit: a status and one path, or the two endpoints of a rename, with
+old/new blob ids fixed by `--raw -z --no-abbrev -M -l0 --no-ext-diff --no-textconv`. Drift projects paths only;
+the same immutable OID pairs decide `.spec` content versions, so attributes cannot reinterpret a
+version window. Merge-owned lines remain the separate combined merge stream. The project step maps historical paths
+through the current tip's rename topology before applying the walk-newest version and ancestry filters. This split is part of the
 contract: a path-only fold cannot preserve renamed-node identity, and a fold that permanently erases a hit cannot
 reconstruct it when incomparable version branches are joined. Preserving this semantics admits no design with both
 bounded state and an O(1) read: the rename-chain and parallel-version counterexamples move the required work either

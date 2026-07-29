@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync, readdirSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, readFileSync, renameSync, rmSync, readdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -48,7 +48,7 @@ test('one persistent event transaction stays full-history-equivalent across seed
     const seeded = readFileSync(cachePath)
     const rows = seeded.toString('utf8').trim().split('\n').map((line) => JSON.parse(line))
     assert.deepEqual(rows.filter((row) => row.k.startsWith?.('tip:')).map((row) => row.k).sort(),
-      ['tip:drift-numstat', 'tip:merge', 'tip:numstat'])
+      ['tip:identity-raw', 'tip:merge'])
 
     resetHistoryCachesForTests()
     await sourceIndexes(root)
@@ -62,9 +62,133 @@ test('one persistent event transaction stays full-history-equivalent across seed
     assert.deepEqual(rowsFor(advancedHistory, '.spec/project/a/spec.md'), rowsFor(advancedFullHistory, '.spec/project/a/spec.md'))
     assert.equal(driftFor(advancedDrift, version, 'src/a.ts', 'a'), 1)
     assert.equal(driftFor(advancedDrift, version, 'src/a.ts', 'a'), driftFor(advancedFullDrift, version, 'src/a.ts', 'a'))
+
+    appendFileSync(join(root, 'src/a.ts'), 'export const c = 3\n'); run('add', '.'); run('commit', '-qm', 'content ack\n\nSpec-OK: a')
+    resetHistoryCachesForTests()
+    const [selfAck, [, fullSelfAck]] = await Promise.all([driftIndex(root), sourceIndexesFull(root)])
+    assert.equal(driftFor(selfAck, version, 'src/a.ts', 'a'), 1, 'a content-bearing Spec-OK self-acks only its own event')
+    assert.equal(driftFor(selfAck, version, 'src/a.ts', 'a'), driftFor(fullSelfAck, version, 'src/a.ts', 'a'))
+
+    run('commit', '--allow-empty', '-qm', 'checkpoint\n\nSpec-OK: a')
+    resetHistoryCachesForTests()
+    const [checkpoint, [, fullCheckpoint]] = await Promise.all([driftIndex(root), sourceIndexesFull(root)])
+    assert.equal(driftFor(checkpoint, version, 'src/a.ts', 'a'), 0, 'an advancing empty Spec-OK checkpoint covers the earlier event')
+    assert.equal(driftFor(checkpoint, version, 'src/a.ts', 'a'), driftFor(fullCheckpoint, version, 'src/a.ts', 'a'))
+    resetHistoryCachesForTests()
+    assert.equal(driftFor(await driftIndex(root), version, 'src/a.ts', 'a'), 0, 'a new-process same-tip reopen preserves checkpoint coverage')
   } finally {
     if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
     rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('raw identity drift preserves root, path, rename, and merge identity', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-drift-raw-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const quiet = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  let cachePath = ''
+  try {
+    run('init', '-q', '-b', 'main'); run('config', 'user.email', 'raw@example.com'); run('config', 'user.name', 'Raw')
+    run('config', 'diff.renameLimit', '1')
+    mkdirSync(join(root, '.spec', 'project', 'a'), { recursive: true })
+    mkdirSync(join(root, 'src'), { recursive: true })
+    const rsPath = `src/a${String.fromCharCode(0x1e)}b.ts`
+    writeFileSync(join(root, '.spec', 'project', 'a', 'spec.md'), '---\ntitle: a\ncode: src/**\n---\n# a\n')
+    writeFileSync(join(root, 'src', 'keep.ts'), `${'line\n'.repeat(24)}`)
+    writeFileSync(join(root, 'src', 'deleted.ts'), 'delete me\n')
+    writeFileSync(join(root, 'src', 'noise-old.ts'), `${'noise\n'.repeat(24)}`)
+    writeFileSync(join(root, 'src', 'type.ts'), 'will become a symlink\n')
+    writeFileSync(join(root, 'src', 'merge.ts'), 'base merge line\n')
+    writeFileSync(join(root, rsPath), 'record separator path\n')
+    run('add', '.'); run('commit', '-qm', 'base')
+    const version = run('rev-parse', 'HEAD')
+
+    appendFileSync(join(root, 'src', 'keep.ts'), 'ordinary edit\n')
+    appendFileSync(join(root, rsPath), 'ordinary edit\n')
+    writeFileSync(join(root, 'src', 'added.ts'), 'added\n')
+    run('rm', '-q', 'src/deleted.ts'); run('add', '.'); run('commit', '-qm', 'add modify delete')
+    const ordinary = run('rev-parse', 'HEAD')
+
+    run('rm', '-q', 'src/type.ts'); symlinkSync('added.ts', join(root, 'src', 'type.ts'))
+    run('add', '.'); run('commit', '-qm', 'type change')
+    const typeChange = run('rev-parse', 'HEAD')
+    assert.match(run('show', '-1', '--raw', '--format=', 'HEAD'), /T\s+src\/type\.ts/)
+
+    run('mv', 'src/keep.ts', 'src/moved.ts'); run('commit', '-qm', 'pure rename')
+    const pureRename = run('rev-parse', 'HEAD')
+    assert.match(run('show', '-1', '--raw', '-M', '--format=', 'HEAD'), /R100\s+src\/keep\.ts\s+src\/moved\.ts/)
+
+    run('mv', 'src/moved.ts', 'src/final.ts')
+    appendFileSync(join(root, 'src', 'final.ts'), 'rename edit\n')
+    run('rm', '-q', 'src/noise-old.ts')
+    writeFileSync(join(root, 'src', 'noise-new.ts'), `${'replacement\n'.repeat(24)}`)
+    run('add', '.'); run('commit', '-qm', 'rename plus edit')
+    const renameEdit = run('rev-parse', 'HEAD')
+    assert.doesNotMatch(quiet('show', '-1', '--raw', '-M', '-l1', '--format=', 'HEAD'), /R\d+\s+src\/moved\.ts\s+src\/final\.ts/, 'the fixture must exceed the configured rename limit')
+    assert.match(run('show', '-1', '--raw', '-M', '-l0', '--format=', 'HEAD'), /R(?!100\b)\d+\s+src\/moved\.ts\s+src\/final\.ts/)
+
+    writeFileSync(join(root, 'src', 'keep.ts'), 'reused path\n')
+    run('add', '.'); run('commit', '-qm', 'reuse old path')
+    const reused = run('rev-parse', 'HEAD')
+
+    run('switch', '-qc', 'side')
+    appendFileSync(join(root, 'src', 'added.ts'), 'side edit\n')
+    run('add', '.'); run('commit', '-qm', 'side edit')
+    const side = run('rev-parse', 'HEAD')
+    run('switch', '-q', 'main')
+    writeFileSync(join(root, 'src', 'merge.ts'), 'main merge line\n')
+    run('add', '.'); run('commit', '-qm', 'main edit')
+    run('merge', '--quiet', '--no-ff', '--no-commit', 'side')
+    writeFileSync(join(root, 'src', 'merge.ts'), 'merge-authored line\n')
+    run('add', '.'); run('commit', '-qm', 'merge side with authored line')
+    const merge = run('rev-parse', 'HEAD')
+
+    cachePath = historyEventCachePathForTests(root)
+    const cached = await driftIndex(root)
+    const commits = (path: string, index: DriftIndex) => new Set(pathRangeEvents(index, version, path)?.map((event) => event.commit) ?? [])
+    const final = commits('src/final.ts', cached)
+    assert.ok([...cached.lineageEvents.values()].flat().some((event) => event.commit === version && event.historicalPath === 'src/keep.ts' && event.parents.length === 0), 'root add event retained')
+    assert.ok(final.has(ordinary), 'ordinary modification follows both renames')
+    assert.ok(final.has(pureRename), 'R100 is an identity event')
+    assert.ok(final.has(renameEdit), 'R<100 retains both rename endpoints')
+    assert.equal(final.has(reused), false, 'a vacated path reuse does not enter the prior lineage')
+    assert.ok(commits('src/added.ts', cached).has(ordinary), 'add event retained')
+    assert.ok(commits('src/deleted.ts', cached).has(ordinary), 'delete event retained')
+    assert.ok(commits('src/type.ts', cached).has(typeChange), 'type-change event retained')
+    assert.ok(commits(rsPath, cached).has(ordinary), 'a pathname containing byte 0x1e does not reframe the NUL stream')
+    assert.ok(commits('src/added.ts', cached).has(side), 'side branch event retained')
+    assert.equal(commits('src/added.ts', cached).has(merge), false, 'merge transport is not a duplicate path event')
+    assert.ok(cached.resolutionEvents?.get('src/merge.ts')?.some((event) => event.commit === merge), 'merge-authored line belongs to the independent combined merge stream')
+    assert.equal([...cached.lineageEvents.values()].flat().some((event) => event.commit === merge && event.parents.length <= 1), false, 'raw identity stream does not duplicate merge-owned change')
+  } finally {
+    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+    resetHistoryCachesForTests()
+  }
+})
+
+test('raw identity drift accepts SHA-256 commit ids', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-drift-raw-sha256-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  let cachePath = ''
+  try {
+    run('init', '-q', '--object-format=sha256', '-b', 'main')
+    run('config', 'user.email', 'sha256@example.com'); run('config', 'user.name', 'SHA256')
+    mkdirSync(join(root, '.spec', 'project', 'a'), { recursive: true }); mkdirSync(join(root, 'src'), { recursive: true })
+    writeFileSync(join(root, '.spec', 'project', 'a', 'spec.md'), '---\ntitle: a\ncode: src/a.ts\n---\n# a\n')
+    writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 1\n')
+    run('add', '.'); run('commit', '-qm', 'base')
+    const version = run('rev-parse', 'HEAD')
+    appendFileSync(join(root, 'src', 'a.ts'), 'export const b = 2\n')
+    run('add', '.'); run('commit', '-qm', 'move')
+    cachePath = historyEventCachePathForTests(root)
+    const cached = await driftIndex(root)
+    assert.equal(version.length, 64)
+    assert.equal(driftFor(cached, version, 'src/a.ts'), 1)
+  } finally {
+    if (cachePath) rmSync(dirname(cachePath), { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+    resetHistoryCachesForTests()
   }
 })
 
@@ -529,6 +653,50 @@ test('an explicit pending tip never occupies or evicts the root-owned HEAD index
   assert.deepEqual(historyCacheStats(), before, 'pending tip changed HEAD cache ownership or occupancy')
   assert.equal(await historyIndex(root), headHistory, 'pending history evicted the warm HEAD object')
   assert.equal(await driftIndex(root), headDrift, 'pending drift evicted the warm HEAD object')
+})
+
+test('independent same-HEAD clones never share a source index across repository stores', async () => {
+  const { root, run } = specRepo()
+  const parent = mkdtempSync(join(tmpdir(), 'spex-index-clones-'))
+  const first = join(parent, 'first'), second = join(parent, 'second')
+  const specPath = '.spec/a/spec.md'
+  let cachePaths: string[] = []
+  try {
+    appendFileSync(join(root, specPath), 'revision\n')
+    run('add', specPath); run('commit', '-qm', 'revise a')
+    execFileSync('git', ['clone', '-q', root, first])
+    execFileSync('git', ['clone', '-q', root, second])
+    mkdirSync(join(second, '.git', 'info'), { recursive: true })
+    writeFileSync(join(second, '.git', 'info', 'attributes'), '.spec/** binary\n')
+
+    resetHistoryCachesForTests()
+    const [firstHistory, firstDrift] = await sourceIndexes(first)
+    const [secondHistory, secondDrift] = await sourceIndexes(second)
+    const [fullSecond] = await sourceIndexesFull(second)
+    const firstRows = rowsFor(firstHistory, specPath), secondRows = rowsFor(secondHistory, specPath)
+    assert.equal(firstRows.length, 2, 'the clean clone establishes the version window')
+    assert.equal(rowsFor(fullSecond, specPath).length, 2, 'repository-local binary attributes cannot erase immutable content versions')
+    assert.deepEqual(secondRows, rowsFor(fullSecond, specPath), 'the second clone cannot receive the first clone\'s cached rows')
+    assert.notEqual(secondHistory, firstHistory, 'same HEAD in separate object stores must not share a history promise')
+    assert.notEqual(secondDrift, firstDrift, 'same HEAD in separate object stores must not share a drift promise')
+    assert.deepEqual(historyCacheStats(), {
+      historyHeads: 2,
+      driftHeads: 2,
+      historyRoots: 2,
+      driftRoots: 2,
+    })
+    rmSync(join(second, '.git', 'info', 'attributes'))
+    writeFileSync(join(second, '.gitattributes'), '.spec/** binary\n')
+    resetHistoryCachesForTests()
+    const [dirtyHistory] = await sourceIndexesFull(second)
+    assert.equal(rowsFor(dirtyHistory, specPath).length, 2, 'an uncommitted attributes file cannot erase immutable content versions')
+    cachePaths = [historyEventCachePathForTests(first), historyEventCachePathForTests(second)]
+  } finally {
+    for (const cachePath of cachePaths) rmSync(dirname(cachePath), { recursive: true, force: true })
+    rmSync(parent, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+    resetHistoryCachesForTests()
+  }
 })
 
 test('linked worktrees at one head share the one immutable source-index pair', async () => {

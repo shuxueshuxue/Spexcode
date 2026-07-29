@@ -235,10 +235,10 @@ type GitExec = { stdout: string; stderr: string }
 // deterministic tests use a shell + sleep), so async git runs in their own process group and abort/timeout
 // kills the whole group. The callback still carries the same stdout/stderr/error shape to gitA/gitTry.
 const GIT_MAX_BUFFER = 1 << 24
-function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, maxBuffer = GIT_MAX_BUFFER): Promise<GitExec> {
+function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, maxBuffer = GIT_MAX_BUFFER, input?: string): Promise<GitExec> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(gitAbortError()); return }
-    const child = spawn('git', args, { env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn('git', args, { env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] })
     const stdout: Buffer[] = [], stderr: Buffer[] = []
     let stdoutBytes = 0, stderrBytes = 0, aborted = false, timedOut = false, overflow = false
     let spawnError: Error | null = null
@@ -255,6 +255,7 @@ function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, m
     }
     child.stdout.on('data', (chunk: Buffer) => append(stdout, chunk, 'stdout'))
     child.stderr.on('data', (chunk: Buffer) => append(stderr, chunk, 'stderr'))
+    child.stdin.end(input)
     child.once('error', (error) => { spawnError = error })
     child.once('close', (code, childSignal) => {
       clearTimeout(timer)
@@ -279,12 +280,12 @@ function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, m
   })
 }
 
-async function execGitForCaller(args: string[], env: NodeJS.ProcessEnv, maxBuffer?: number): Promise<GitExec> {
+async function execGitForCaller(args: string[], env: NodeJS.ProcessEnv, maxBuffer?: number, input?: string): Promise<GitExec> {
   const context = inheritedContext()
-  if (!context) return execGit(args, env, undefined, maxBuffer)
+  if (!context) return execGit(args, env, undefined, maxBuffer, input)
   const release = await context.permits.acquire(context.signal)
   try {
-    return await execGit(withBuildLimits(args), env, context.signal, maxBuffer)
+    return await execGit(withBuildLimits(args), env, context.signal, maxBuffer, input)
   } finally {
     release()
   }
@@ -341,12 +342,12 @@ async function execGitStreamForCaller(args: string[], env: NodeJS.ProcessEnv): P
   finally { release() }
 }
 
-export async function gitA(args: string[]): Promise<string> {
+export async function gitA(args: string[], input?: string): Promise<string> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
   const context = inheritedContext()
   try {
-    const { stdout } = await execGitForCaller(args, env)
+    const { stdout } = await execGitForCaller(args, env, undefined, input)
     return stdout
   } catch (e: any) {
     if (context?.signal.aborted || e?.name === 'AbortError') throw e
@@ -354,10 +355,13 @@ export async function gitA(args: string[]): Promise<string> {
   }
 }
 
-type EventRecord = { hash: string; raw: string }
+type TextEventRecord = { hash: string; raw: string }
+type IdentityEventRecord = { hash: string; identity: IdentityRawRecord }
+type EventRecord = TextEventRecord | IdentityEventRecord
 type EventCache = { streams: Map<EventStreamKind, Map<string, EventRecord>>; streamTips: Map<EventStreamKind, string[]> }
-const EVENT_CACHE_SCHEMA = 'history-events-v7'
-const EVENT_STREAM_KINDS = ['numstat', 'merge', 'drift-numstat'] as const
+type EventStreamOutput = string | IdentityRawRecord[]
+const EVENT_CACHE_SCHEMA = 'history-events-v15'
+const EVENT_STREAM_KINDS = ['merge', 'identity-raw'] as const
 type EventStreamKind = typeof EVENT_STREAM_KINDS[number]
 type EventCacheLocation = { path: string; identity: string; objectFormat: GitObjectFormat }
 type EventLedgerSnapshot = {
@@ -476,15 +480,26 @@ function decodeEventPayload(payload: Buffer, location: EventCacheLocation): Even
       continue
     }
     const kind = eventStreamKind(row.k)
-    if (!exactKeys(row, ['h', 'k', 'r']) || !kind
-      || typeof row.h !== 'string' || !isGitObjectIdForFormat(location.objectFormat, row.h)
-      || typeof row.r !== 'string' || !row.r) return null
-    const rawHash = row.r.split(US, 1)[0].split('\n', 1)[0].trim()
-    if (rawHash !== row.h) return null
+    if (!kind || typeof row.h !== 'string' || !isGitObjectIdForFormat(location.objectFormat, row.h)) return null
+    const record: EventRecord | null = kind === 'identity-raw'
+      ? (() => {
+          const payload = exactKeys(row, ['a', 'c', 'd', 'h', 'k', 'r', 's'])
+            ? { a: row.a, c: row.c, d: row.d, r: row.r, s: row.s }
+            : null
+          const identity = payload ? decodeIdentityRawRecord(payload, row.h, location) : null
+          return identity ? { hash: row.h, identity } : null
+        })()
+      : (!exactKeys(row, ['h', 'k', 'r']) || typeof row.r !== 'string' || !row.r
+        ? null
+        : (() => {
+            const rawHash = row.r.split(US, 1)[0].split('\n', 1)[0].trim()
+            return rawHash === row.h ? { hash: row.h, raw: row.r } : null
+          })())
+    if (!record) return null
     let stream = state.streams.get(kind)
     if (!stream) { stream = new Map(); state.streams.set(kind, stream) }
     if (stream.has(row.h)) return null
-    stream.set(row.h, { hash: row.h, raw: row.r })
+    stream.set(row.h, record)
   }
   return state
 }
@@ -618,22 +633,35 @@ function replaceEventLedger(path: string, payload: Buffer, additions: string[]):
     throw error
   }
 }
-function renderEventStream(state: EventCache, request: EventStreamRequest): string {
-  const stream = state.streams.get(request.kind) ?? new Map<string, EventRecord>()
-  return [...stream.values()].filter((record) => request.reachable.has(record.hash)).sort((a, b) => {
-    if (request.kind === 'numstat') {
-      const ad = Date.parse(a.raw.split(US)[1] ?? ''), bd = Date.parse(b.raw.split(US)[1] ?? '')
-      if (Number.isFinite(ad) && Number.isFinite(bd) && ad !== bd) return bd - ad
-    }
-    return (request.order.get(a.hash) ?? Number.MAX_SAFE_INTEGER) - (request.order.get(b.hash) ?? Number.MAX_SAFE_INTEGER)
-  }).map((record) => RS + record.raw).join('')
+function sortedEventRecords(records: Iterable<EventRecord>, request: EventStreamRequest): EventRecord[] {
+  return [...records].filter((record) => request.reachable.has(record.hash))
+    .sort((a, b) => (request.order.get(a.hash) ?? Number.MAX_SAFE_INTEGER) - (request.order.get(b.hash) ?? Number.MAX_SAFE_INTEGER))
+}
+function identityRecords(records: Iterable<EventRecord>, request: EventStreamRequest): IdentityRawRecord[] {
+  return sortedEventRecords(records, request).map((record) => {
+    if (!('identity' in record)) throw new Error('identity-raw ledger contained a text event')
+    return record.identity
+  })
+}
+function renderEventStream(state: EventCache, request: EventStreamRequest): EventStreamOutput {
+  const records = sortedEventRecords(state.streams.get(request.kind)?.values() ?? [], request)
+  if (request.kind === 'identity-raw') return records.map((record) => {
+    if (!('identity' in record)) throw new Error('identity-raw ledger contained a text event')
+    return record.identity
+  })
+  return records.map((record) => {
+    if (!('raw' in record)) throw new Error(`history event stream '${request.kind}' contained a structured event`)
+    return RS + record.raw
+  }).join('')
 }
 function appendEventRecord(state: EventCache, kind: EventStreamKind, record: EventRecord, additions: string[]): void {
   let stream = state.streams.get(kind)
   if (!stream) { stream = new Map(); state.streams.set(kind, stream) }
   if (stream.has(record.hash)) return
   stream.set(record.hash, record)
-  additions.push(JSON.stringify({ k: kind, h: record.hash, r: record.raw }) + '\n')
+  additions.push('identity' in record
+    ? JSON.stringify({ k: kind, h: record.hash, d: record.identity.d, r: record.identity.r, s: record.identity.s, a: record.identity.a, c: record.identity.c.flat() }) + '\n'
+    : JSON.stringify({ k: kind, h: record.hash, r: record.raw }) + '\n')
 }
 function appendEventTip(state: EventCache, kind: EventStreamKind, tip: string, additions: string[]): void {
   const tips = state.streamTips.get(kind) ?? []
@@ -643,6 +671,7 @@ function appendEventTip(state: EventCache, kind: EventStreamKind, tip: string, a
   additions.push(JSON.stringify({ k: `tip:${kind}`, tip }) + '\n')
 }
 function parseEventRecords(out: string, kind: EventStreamKind, location: EventCacheLocation): EventRecord[] {
+  if (kind === 'identity-raw') return parseIdentityRawEventRecords(out, location)
   const records: EventRecord[] = []
   for (const rec of out.split(RS)) {
     const raw = rec.replace(/^\n/, '')
@@ -661,17 +690,11 @@ function indexEventRequests(
   reachable: Set<string>,
 ): Record<EventStreamKind, EventStreamRequest> {
   return {
-    numstat: {
-      kind: 'numstat', order, reachable,
+    'identity-raw': {
+      kind: 'identity-raw', order, reachable,
       argsFor: (base) => ['-C', root, '-c', 'core.quotePath=false',
-        'log', '--full-history', '--date-order', '--no-diff-merges', '-M', '--numstat',
-        `--format=${RS}%H${US}%aI${US}%s${US}%b`, ...(base ? [`^${base}`] : []), tip, '--', '.spec'],
-    },
-    'drift-numstat': {
-      kind: 'drift-numstat', order, reachable,
-      argsFor: (base) => ['-C', root, '-c', 'core.quotePath=false',
-        'log', '--full-history', '--date-order', '--no-diff-merges', '-M', '--numstat',
-        `--format=${RS}%H${US}%P${US}%T${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`,
+        'log', '--root', '--full-history', '--date-order', '--no-diff-merges', '-M', '-l0', '--raw', '-z', '--no-abbrev', '--no-ext-diff', '--no-textconv',
+        `--format=${RS}%H${US}%aI${US}%s${US}%b${US}%(trailers:key=Spec-OK,valueonly,separator=%x2C)`,
         ...(base ? [`^${base}`] : []), tip],
     },
     merge: {
@@ -692,15 +715,23 @@ async function deriveEventStreams(
   requests: EventStreamRequest[],
   persist = true,
   cache = true,
-): Promise<Map<EventStreamKind, string>> {
+): Promise<Map<EventStreamKind, EventStreamOutput>> {
   if (!cache) {
+    const location = eventCacheLocation(root)
     const outputs = await Promise.all(requests.map((request) => strictEventGit(request.argsFor(''))))
-    return new Map(requests.map((request, index) => [request.kind, outputs[index]]))
+    const rendered = new Map<EventStreamKind, EventStreamOutput>()
+    for (let index = 0; index < requests.length; index++) {
+      const request = requests[index]
+      rendered.set(request.kind, request.kind === 'identity-raw'
+        ? identityRecords(parseIdentityRawEventRecords(outputs[index], location), request)
+        : outputs[index])
+    }
+    return rendered
   }
   if (new Set(requests.map((request) => request.kind)).size !== requests.length)
     throw new Error('one event-ledger transaction cannot request the same stream twice')
 
-  const run = async (location: EventCacheLocation): Promise<Map<EventStreamKind, string> | null> => {
+  const run = async (location: EventCacheLocation): Promise<Map<EventStreamKind, EventStreamOutput> | null> => {
     const snapshot = loadEventLedger(location)
     const missing = requests.filter((request) => !(snapshot.state.streamTips.get(request.kind) ?? []).includes(tip))
     const outputs = await Promise.all(missing.map((request) => {
@@ -738,8 +769,20 @@ async function eventStream(
   request: EventStreamRequest,
   persist = true,
   cache = true,
-): Promise<string> {
-  return (await deriveEventStreams(root, tip, [request], persist, cache)).get(request.kind) ?? ''
+): Promise<EventStreamOutput> {
+  const value = (await deriveEventStreams(root, tip, [request], persist, cache)).get(request.kind)
+  if (value === undefined) throw new Error(`history event stream '${request.kind}' was not rendered`)
+  return value
+}
+async function textEventStream(root: string, tip: string, request: EventStreamRequest, persist = true, cache = true): Promise<string> {
+  const value = await eventStream(root, tip, request, persist, cache)
+  if (typeof value !== 'string') throw new Error(`history event stream '${request.kind}' rendered structured data`)
+  return value
+}
+async function identityRawEventStream(root: string, tip: string, request: EventStreamRequest, persist = true, cache = true): Promise<IdentityRawRecord[]> {
+  const value = await eventStream(root, tip, request, persist, cache)
+  if (!Array.isArray(value) || value.some((record) => !('a' in record))) throw new Error(`history event stream '${request.kind}' rendered text`)
+  return value as IdentityRawRecord[]
 }
 export type GitTryFailure = 'exit' | 'spawn' | 'timeout'
 export async function gitTry(args: string[], options: { indexFile?: string } = {}): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
@@ -859,27 +902,69 @@ export type DiffStat = { additions: number; deletions: number; files: number }
 
 export type HistoryIndex = {
   versions: Map<string, Version[]>          // headPath -> rows newest-first (incl. pure-rename rows)
-  stats: Map<string, Map<string, DiffStat>> // headPath -> (commit hash -> this file's diffstat there)
+  contentVersions: Set<string>              // headPath\0hash rows whose immutable blob changed
+  versionPaths: Map<string, string>         // headPath\0hash -> path at that version commit
   mergeVersions?: Set<string>               // path\0hash pairs with an all-parent combined-diff line
 }
 
-// git numstat encodes a rename as `dir/{old => new}/file` (either side may be empty) or `old => new`;
-// recover both endpoints. Spec paths are brace/space-free here, so the textual parse is unambiguous.
-function parseStatPath(token: string): { from: string; to: string } {
-  const b = token.indexOf('{')
-  if (b >= 0) {
-    const arrow = token.indexOf(' => ', b)
-    const close = token.indexOf('}', arrow)
-    if (arrow > b && close > arrow) {
-      const pre = token.slice(0, b), post = token.slice(close + 1)
-      const from = (pre + token.slice(b + 1, arrow) + post).replace(/\/\//g, '/')
-      const to = (pre + token.slice(arrow + 4, close) + post).replace(/\/\//g, '/')
-      return { from, to }
-    }
+type IdentityRawRecord = { h: string; d: string; r: string; s: string | null; a: string; c: [string, string, string, string, string][] }
+
+function isRawObjectId(value: string, format: GitObjectFormat): boolean {
+  const length = format === 'sha256' ? 64 : 40
+  return isGitObjectIdForFormat(format, value) || (value.length === length && /^0+$/.test(value))
+}
+
+function parseIdentityRawEventRecords(out: string, location: EventCacheLocation): EventRecord[] {
+  const parsed: IdentityRawRecord[] = []
+  let current: IdentityRawRecord | null = null
+  const begin = (token: string): IdentityRawRecord => {
+    const header = token.startsWith('\n') ? token.slice(1) : token
+    if (!header.startsWith(RS)) throw new Error(`raw identity stream expected a commit header, got '${header}'`)
+    const [hash, date = '', reason = '', body = '', ack = ''] = header.slice(RS.length).split(US)
+    if (!isGitObjectIdForFormat(location.objectFormat, hash))
+      throw new Error(`history event stream 'identity-raw' returned malformed object id '${hash || 'empty'}'`)
+    if (current) parsed.push(current)
+    const session = body.match(/Session:\s*(\S+)/)
+    return { h: hash, d: date, r: reason, s: session ? session[1] : null, a: ack, c: [] }
   }
-  const i = token.indexOf(' => ')
-  if (i >= 0) return { from: token.slice(0, i), to: token.slice(i + 4) }
-  return { from: token, to: token }
+  const tokens = out.split('\0')
+  for (let index = 0; index < tokens.length;) {
+    const token = tokens[index++]
+    if (!current) {
+      if (!token) continue
+      current = begin(token)
+      continue
+    }
+    const value = token.startsWith('\n') ? token.slice(1) : token
+    if (!value) continue
+    if (value.startsWith(RS)) { current = begin(value); continue }
+    const raw = value.match(/^:([0-7]{6}) ([0-7]{6}) ([0-9a-f]+) ([0-9a-f]+) ([A-Z])(?:\d+)?$/)
+    if (!raw || !isRawObjectId(raw[3], location.objectFormat) || !isRawObjectId(raw[4], location.objectFormat))
+      throw new Error(`raw identity event ${current.h} has malformed raw record '${value}'`)
+    const from = tokens[index++]
+    if (from === undefined) throw new Error(`raw identity event ${current.h} ended before its path`)
+    const to = raw[5] === 'R' ? tokens[index++] : from
+    if (to === undefined) throw new Error(`raw identity event ${current.h} ended before its rename destination`)
+    current.c.push([raw[5], from, to, raw[3], raw[4]])
+  }
+  if (current) parsed.push(current)
+  return parsed.map((identity) => ({ hash: identity.h, identity }))
+}
+
+function decodeIdentityRawRecord(value: unknown, hash: string, location: EventCacheLocation): IdentityRawRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  if (!exactKeys(record, ['a', 'c', 'd', 'r', 's']) || typeof record.a !== 'string' || typeof record.d !== 'string'
+    || typeof record.r !== 'string' || (typeof record.s !== 'string' && record.s !== null) || !Array.isArray(record.c) || record.c.length % 5) return null
+  const changes: [string, string, string, string, string][] = []
+  for (let index = 0; index < record.c.length; index += 5) {
+    if (typeof record.c[index] !== 'string' || typeof record.c[index + 1] !== 'string' || typeof record.c[index + 2] !== 'string'
+      || typeof record.c[index + 3] !== 'string' || typeof record.c[index + 4] !== 'string'
+      || !/^[A-Z](?:\d+)?$/.test(record.c[index] as string) || !isRawObjectId(record.c[index + 3] as string, location.objectFormat)
+      || !isRawObjectId(record.c[index + 4] as string, location.objectFormat)) return null
+    changes.push([record.c[index], record.c[index + 1], record.c[index + 2], record.c[index + 3], record.c[index + 4]] as [string, string, string, string, string])
+  }
+  return { h: hash, d: record.d, r: record.r, s: record.s, a: record.a, c: changes }
 }
 
 // Both bulk indices are pure functions of a checkout's HEAD, and they are read for SEVERAL roots at
@@ -897,12 +982,11 @@ const INDEX_ROOT_SLOTS = Math.max(4, Number(process.env.SPEXCODE_INDEX_CACHE_ROO
 
 function rootKey(root: string): string { return resolve(root) }
 
-function gitInterpretationKey(root: string): string { return eventCacheLocation(root).identity }
-function indexCacheKey(root: string, head: string): string { return `${head}\0${gitInterpretationKey(root)}` }
+function indexCacheKey(root: string, head: string): string { return `${eventCacheLocation(root).path}\0${head}` }
 
-// HEAD plus Git's object-interpretation state identifies the immutable index contents; the root owns which
-// view is still useful. Moving a checkout or changing replace/shallow/graft state drops its old history,
-// while equal views across live roots share one promise. The root bound keeps closed worktrees from leaking.
+// A project-namespaced ledger path plus HEAD identifies immutable index contents. Its path is scoped to the
+// common Git store and interpretation state, so linked worktrees share while independent same-HEAD clones do not.
+// The checkout root owns which live view is useful; the root bound keeps closed worktrees from leaking.
 function touchRoot(roots: Map<string, string>, cache: Map<string, Promise<unknown>>, root: string, cacheKey: string): void {
   const key = rootKey(root)
   const previous = roots.get(key)
@@ -1048,8 +1132,7 @@ type SharedIndexInputs = {
   allPaths: Set<string>
   specPaths: Set<string>
   topology: TopologyProjection
-  historyOut: string
-  driftOut: string
+  identityRecords: IdentityRawRecord[]
   mergeIndex: MergeHistoryEvents
 }
 
@@ -1061,12 +1144,12 @@ type TopologyProjection = {
 
 async function buildIndex(root: string, tip: string, transient: boolean, useCache = true, shared?: SharedIndexInputs): Promise<HistoryIndex> {
   const versions = new Map<string, Version[]>()
-  const stats = new Map<string, Map<string, DiffStat>>()
+  const contentVersions = new Set<string>()
+  const versionPaths = new Map<string, string>()
   const mergeVersions = new Set<string>()
   const commitVersions = new Map<string, Version>()
   const commitOrder = new Map<string, number>()
   const rawVersions = new Map<string, Version[]>()
-  const rawStats = new Map<string, Map<string, DiffStat>>()
   let currentPaths: Set<string>
   let topology: TopologyProjection
   if (shared) {
@@ -1084,36 +1167,23 @@ async function buildIndex(root: string, tip: string, transient: boolean, useCach
   const topologyOrd = topology.order
   const topologyParents = topology.parents
   const topologyReachable = topology.reachable
-  const out = shared?.historyOut ?? await eventStream(root, tip,
-    indexEventRequests(root, tip, topologyOrd, topologyReachable).numstat, !transient, useCache)
-  if (!out) return { versions, stats, mergeVersions }
+  const identityRecords = shared?.identityRecords ?? await identityRawEventStream(root, tip,
+    indexEventRequests(root, tip, topologyOrd, topologyReachable)['identity-raw'], !transient, useCache)
+  if (!identityRecords.length) return { versions, contentVersions, versionPaths, mergeVersions }
   let commitPosition = 0
-  for (const rec of out.split(RS)) {
-    const r = rec.replace(/^\n/, '')
-    if (!r) continue
-    const parts = r.split(US)
-    const hash = parts[0], date = parts[1], reason = parts[2]
-    const rest = parts.slice(3).join(US) // body (had no US) followed by the numstat block
-    const sm = rest.match(/Session:\s*(\S+)/)
-    const version: Version = { hash, date, reason, session: sm ? sm[1] : null }
-    commitVersions.set(hash, version)
-    if (!commitOrder.has(hash)) commitOrder.set(hash, commitPosition++)
-    for (const line of rest.split('\n')) {
-      const m = line.match(/^(-|\d+)\t(-|\d+)\t(.+)$/)
-      if (!m) continue
-      const add = m[1] === '-' ? 0 : +m[1]
-      const del = m[2] === '-' ? 0 : +m[2]
-      const { from, to } = parseStatPath(m[3])
+  const rawContent = new Set<string>()
+  for (const record of identityRecords) {
+    const version: Version = { hash: record.h, date: record.d, reason: record.r, session: record.s }
+    commitVersions.set(record.h, version)
+    if (!commitOrder.has(record.h)) commitOrder.set(record.h, commitPosition++)
+    for (const [, from, to, oldOid, newOid] of record.c) {
+      if (!from.startsWith('.spec/') && !to.startsWith('.spec/')) continue
       if (!rawVersions.has(to)) rawVersions.set(to, [])
       rawVersions.get(to)!.push(version)
-      let hs = rawStats.get(to)
-      if (!hs) { hs = new Map(); rawStats.set(to, hs) }
-      const s = hs.get(hash) ?? { additions: 0, deletions: 0, files: 0 }
-      s.additions += add; s.deletions += del; s.files += 1
-      hs.set(hash, s)
+      if (oldOid !== newOid) rawContent.add(`${to}\0${record.h}`)
       if (from !== to) {
         const renames = renamesByFrom.get(from) ?? []
-        renames.push({ hash, to })
+        renames.push({ hash: record.h, to })
         renamesByFrom.set(from, renames)
       }
     }
@@ -1186,50 +1256,35 @@ async function buildIndex(root: string, tip: string, transient: boolean, useCach
       const rows = versions.get(head) ?? []
       if (!rows.some((existing) => existing.hash === row.hash)) rows.push(row)
       versions.set(head, rows)
-      const hs = stats.get(head) ?? new Map<string, DiffStat>()
-      const value = rawStats.get(path)?.get(row.hash)
-      if (value) {
-        const existing = hs.get(row.hash)
-        hs.set(row.hash, existing ? {
-          additions: existing.additions + value.additions,
-          deletions: existing.deletions + value.deletions,
-          files: existing.files + value.files,
-        } : value)
-      }
-      stats.set(head, hs)
+      const key = `${head}\0${row.hash}`
+      if (rawContent.has(`${path}\0${row.hash}`)) contentVersions.add(key)
+      if (!versionPaths.has(key)) versionPaths.set(key, path)
     }
   }
   for (const [path, mergeEvents] of mergeIndex.resolutions) {
     if (!isSpecMd(path)) continue
     for (const { hash } of mergeEvents) for (const head of canonical(path, hash)) {
       const rows = versions.get(head) ?? []
-      const hs = stats.get(head) ?? new Map<string, DiffStat>()
       const version = commitVersions.get(hash)
       if (!version || rows.some((row) => row.hash === hash)) continue
       rows.push(version)
-      hs.set(hash, { additions: 0, deletions: 0, files: 1 })
-      mergeVersions.add(`${head}\0${hash}`)
+      const key = `${head}\0${hash}`
+      mergeVersions.add(key)
+      if (!versionPaths.has(key)) versionPaths.set(key, path)
       versions.set(head, rows)
-      stats.set(head, hs)
     }
   }
   for (const rows of versions.values()) {
     rows.sort((a, b) => (commitOrder.get(a.hash) ?? Number.MAX_SAFE_INTEGER) - (commitOrder.get(b.hash) ?? Number.MAX_SAFE_INTEGER))
   }
-  return { versions, stats, mergeVersions }
+  return { versions, contentVersions, versionPaths, mergeVersions }
 }
 
-// pure lookups over a prebuilt index (no git). rowsFor drops pure-rename rows (0/0) so a move isn't a version.
+// Pure lookups over a prebuilt index. Blob identity decides whether a one-parent row is a content version;
+// numstat remains display data and must not let attributes erase a version window.
 export function rowsFor(idx: HistoryIndex, relPath: string): Version[] {
   const rows = idx.versions.get(relPath) ?? []
-  const st = idx.stats.get(relPath)
-  return rows.filter((v) => {
-    const s = st?.get(v.hash)
-    return s != null && (s.additions + s.deletions > 0 || idx.mergeVersions?.has(`${relPath}\0${v.hash}`))
-  })
-}
-export function statsFor(idx: HistoryIndex, relPath: string): Map<string, DiffStat> {
-  return idx.stats.get(relPath) ?? new Map()
+  return rows.filter((v) => idx.contentVersions.has(`${relPath}\0${v.hash}`) || idx.mergeVersions?.has(`${relPath}\0${v.hash}`))
 }
 
 // per-commit numstat summed over a SET of paths in one `git log` walk. No `--follow` (it takes a single
@@ -1251,6 +1306,31 @@ export async function pathsStats(root: string, paths: string[]): Promise<Map<str
     }
   }
   return m
+}
+
+// History display stats are intentionally read only for the selected node: their text interpretation may
+// depend on working-tree attributes, so they cannot live in the shared immutable event ledger. One diff-tree
+// batch preserves every selected commit's historical path without turning a history page into N processes.
+export async function historyStats(root: string, idx: HistoryIndex, relPath: string): Promise<Map<string, DiffStat>> {
+  const rows = rowsFor(idx, relPath)
+  if (!rows.length) return new Map()
+  const paths = new Map(rows.map((row) => [row.hash, idx.versionPaths.get(`${relPath}\0${row.hash}`) ?? relPath]))
+  const out = await gitA(['-C', root, '-c', 'core.quotePath=false', 'diff-tree', '--stdin', '--root', '-r', '--numstat', '-M', '-l0', `--format=${RS}%H`], `${rows.map((row) => row.hash).join('\n')}\n`)
+  const stats = new Map<string, DiffStat>()
+  for (const record of out.split(RS)) {
+    const lines = record.replace(/^\n/, '').split('\n')
+    const hash = lines.shift()?.trim() ?? ''
+    const path = paths.get(hash)
+    if (!path) continue
+    const stat = { additions: 0, deletions: 0, files: 0 }
+    for (const line of lines) {
+      const match = line.match(/^(\d+|-)\t(\d+|-)\t(.+)$/)
+      if (!match || parseStatPath(match[3]).to !== path) continue
+      stat.files++; stat.additions += match[1] === '-' ? 0 : Number(match[1]); stat.deletions += match[2] === '-' ? 0 : Number(match[2])
+    }
+    stats.set(hash, stat)
+  }
+  return stats
 }
 
 // the patch a spec.md got in one commit (vs parent); resolve its path AT that commit (reparents move it)
@@ -1402,7 +1482,7 @@ async function mergeHistoryEvents(
 ): Promise<MergeHistoryEvents> {
   if (!useCache) return parseMergeHistoryEvents(await strictEventGit(['-C', root, '-c', 'core.quotePath=false',
     'log', '--merges', '--raw', '--patch', '--cc', '--combined-all-paths', '--unified=0', '--no-color', '--no-ext-diff', '-M', `--format=${RS}%H`, tip]))
-  return parseMergeHistoryEvents(await eventStream(root, tip,
+  return parseMergeHistoryEvents(await textEventStream(root, tip,
     indexEventRequests(root, tip, order, reachable).merge, !transient, useCache))
 }
 
@@ -1411,7 +1491,7 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
   const fileEvents = new Map<string, DriftPathEvent[]>()
   const lineageEvents = new Map<string, DriftPathEvent[]>()
   const acks = new Map<string, Set<string>>(), selfAcks = new Map<string, Set<string>>(), specNodes = new Map<string, Set<string>>()
-  const ackCandidates = new Map<string, Set<string>>(), trees = new Map<string, string>()
+  const ackCandidates = new Map<string, Set<string>>(), ackCheckpoints = new Map<string, boolean>()
   const idx: DriftIndex = { tip, ord, parents, fileEvents, lineageEvents, lineageKeys: (path) => [path], resolutionEvents: new Map(), acks, selfAcks, specNodes, anc: new Map() }
   let currentPaths: Set<string>
   let topology: TopologyProjection
@@ -1429,32 +1509,25 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
   const topologyOrder = topology.order
   const topologyParents = topology.parents
   const topologyReachable = topology.reachable
-  // Numstat is the immutable identity event: unlike a name-only stream it records both sides of a rename,
-  // allowing the same event-scoped projection used by spec history to follow forks and reject path reuse.
-  const out = shared?.driftOut ?? await eventStream(root, tip,
-    indexEventRequests(root, tip, topologyOrder, topologyReachable)['drift-numstat'], !transient, useCache)
-  if (!out) return idx
+  for (const [hash, position] of topologyOrder) {
+    ord.set(hash, position)
+    parents.set(hash, topologyParents.get(hash) ?? [])
+  }
+  // Raw identity records path pairs and immutable object ids once; projection owns forks and reuse.
+  const records = shared?.identityRecords ?? await identityRawEventStream(root, tip,
+    indexEventRequests(root, tip, topologyOrder, topologyReachable)['identity-raw'], !transient, useCache)
+  if (!records.length) return idx
   const rawFileEvents = new Map<string, DriftPathEvent[]>()
   const renamesByFrom = new Map<string, RenameProjectionEvent[]>()
-  let i = 0
-  for (const rec of out.split(RS)) {
-    const r = rec.replace(/^\n/, '')
-    if (!r) continue
-    const lines = r.split('\n')
-    const [hash, parentStr = '', tree = '', ackStr = ''] = lines[0].split(US)
-    if (!hash) continue
-    trees.set(hash, tree)
-    if (!ord.has(hash)) {
-      ord.set(hash, i++)
-      parents.set(hash, parentStr.split(' ').filter(Boolean))
-    }
+  for (const record of records) {
+    const { h: hash, a: ackStr, c: changes } = record
     const ackSet = new Set(ackStr.split(',').map((s) => s.trim()).filter(Boolean))
-    if (ackSet.size) ackCandidates.set(hash, ackSet)
-    const merge = parentStr.split(' ').filter(Boolean).length > 1
-    for (const line of lines.slice(1)) {
-      const stat = line.match(/^(-|\d+)\t(-|\d+)\t(.+)$/)
-      if (!stat) continue
-      const { from, to } = parseStatPath(stat[3])
+    if (ackSet.size) {
+      ackCandidates.set(hash, ackSet)
+      ackCheckpoints.set(hash, changes.length === 0)
+    }
+    const merge = (parents.get(hash) ?? []).length > 1
+    for (const [, from, to] of changes) {
       if (!merge) {
         const events = rawFileEvents.get(to) ?? []
         const event: DriftPathEvent = {
@@ -1505,7 +1578,8 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
   for (const [hash, nodes] of ackCandidates) {
     const parentList = parents.get(hash) ?? []
     const firstParent = parentList[0]
-    const checkpoint = parentList.length === 1 && !!firstParent && trees.get(hash) === trees.get(firstParent)
+    // A non-merge commit with no raw identity entries has the same tree as its sole parent.
+    const checkpoint = parentList.length === 1 && !!firstParent && ackCheckpoints.get(hash) === true
     ;(checkpoint ? acks : selfAcks).set(hash, nodes)
   }
   for (const [path, mergeEvents] of mergeIndex.resolutions) for (const mergeEvent of mergeEvents) {
@@ -1569,6 +1643,14 @@ function topologyProjection(out: string): TopologyProjection {
   return { order, parents, reachable }
 }
 
+function textStream(value: EventStreamOutput | undefined, kind: EventStreamKind): string {
+  if (typeof value !== 'string') throw new Error(`history event stream '${kind}' did not render text`)
+  return value
+}
+function identityRawStream(value: EventStreamOutput | undefined, kind: EventStreamKind): IdentityRawRecord[] {
+  if (!Array.isArray(value) || value.some((record) => !('a' in record))) throw new Error(`history event stream '${kind}' did not render identity records`)
+  return value as IdentityRawRecord[]
+}
 async function buildIndexPair(root: string, tip: string, transient: boolean, useCache = true): Promise<[HistoryIndex, DriftIndex]> {
   const [allPathsOut, topologyOut] = await Promise.all([
     strictEventGit(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', '--name-only', tip]),
@@ -1583,9 +1665,8 @@ async function buildIndexPair(root: string, tip: string, transient: boolean, use
     allPaths,
     specPaths,
     topology,
-    historyOut: streams.get('numstat') ?? '',
-    driftOut: streams.get('drift-numstat') ?? '',
-    mergeIndex: parseMergeHistoryEvents(streams.get('merge') ?? ''),
+    identityRecords: identityRawStream(streams.get('identity-raw'), 'identity-raw'),
+    mergeIndex: parseMergeHistoryEvents(textStream(streams.get('merge'), 'merge')),
   }
   streams.clear()
   return Promise.all([
@@ -1788,6 +1869,15 @@ function parseNameStatus(out: string): { code: string; from: string; to: string 
 
 export type ReviewDiffFile = { path: string; oldPath?: string; status: string; additions: number; deletions: number }
 const DIFF_STATUS: Record<string, string> = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed', C: 'copied', T: 'type-changed' }
+function parseStatPath(token: string): { from: string; to: string } {
+  const b = token.indexOf('{'), arrow = token.indexOf(' => ', b), close = token.indexOf('}', arrow)
+  if (b >= 0 && arrow > b && close > arrow) {
+    const pre = token.slice(0, b), post = token.slice(close + 1)
+    return { from: `${pre}${token.slice(b + 1, arrow)}${post}`.replace(/\/\//g, '/'), to: `${pre}${token.slice(arrow + 4, close)}${post}`.replace(/\/\//g, '/') }
+  }
+  const arrowAt = token.indexOf(' => ')
+  return arrowAt >= 0 ? { from: token.slice(0, arrowAt), to: token.slice(arrowAt + 4) } : { from: token, to: token }
+}
 export async function mergeBaseDiff(wtPath: string, mainRef = 'main'): Promise<ReviewDiffFile[]> {
   const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
   const base = (await run(['merge-base', mainRef, 'HEAD'])).trim()

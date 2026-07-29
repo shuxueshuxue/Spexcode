@@ -270,8 +270,9 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
     // bare/scoped mixing, glob selectors, the code cap) surface as lint integrity errors.
     const codeRel = parseRelation(list(r.fm.code), 'code')
     const relatedRel = parseRelation(list(r.fm.related), 'related')
-    const code = codeRel.entries.map((e) => e.path)
-    const codeScoped = codeRel.entries.filter((e) => e.selectors.length > 0)
+    const codeEntries = codeRel.entries
+    const code = codeEntries.map((e) => e.path)
+    const codeScoped = codeEntries.filter((e) => e.selectors.length > 0)
     const related = relatedRel.entries.map((e) => e.path)
     const relatedScoped = relatedRel.entries.filter((e) => e.selectors.length > 0)
     const relationProblems = [...codeRel.problems, ...relatedRel.problems]
@@ -304,6 +305,7 @@ export async function loadSpecs(root: string = ROOT, options: LoadSpecsOptions =
       hue: Number(str(r.fm.hue, '210')),
       desc: str(r.fm.desc),
       code,
+      codeEntries,
       codeScoped,
       related,
       relatedScoped,

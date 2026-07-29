@@ -197,7 +197,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [attachments, setAttachments] = useState([])
   const taRef = useRef(null)
   const msgRef = useRef(null)
-  const msgDeliveryRef = useRef(null)
   const panelRef = useRef(null)
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
@@ -534,16 +533,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // of the New Session launch composition — see [[command-box]]).
     const text = expandMentions(raw)
     if (actionOutcome?.owner === 'command' && actionOutcome.phase === 'sending') return
-    const deliveryId = msgDeliveryRef.current || crypto.randomUUID()
-    msgDeliveryRef.current = deliveryId
     setActionOutcome({ owner: 'command', phase: 'sending', message: t('session.outcomeSending') })
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/input`), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'text', text, deliveryId }),
+        body: JSON.stringify({ kind: 'text', text }),
       })
       const outcome = await res.json().catch(() => null)
-      if (!res.ok || outcome?.outcome !== 'accepted') {
+      if (!res.ok || !outcome?.ok) {
         setActionOutcome({
           owner: 'command',
           phase: 'failed',
@@ -551,7 +548,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         })
         return
       }
-      msgDeliveryRef.current = null
       setMsg((current) => current === raw ? '' : current)
       setActionOutcome({ owner: 'command', phase: 'delivered', message: t('session.outcomeDelivered') })
       outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
@@ -1243,7 +1239,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         <div className="fv-tawrap">
                           <ComposerTextarea ref={msgRef} className="si-command-input" rows={1} value={msg}
                             data-focus-sink
-                            onChange={(e) => { setMsg(e.target.value); msgDeliveryRef.current = null; syncMenu(e.target) }}
+                            onChange={(e) => { setMsg(e.target.value); syncMenu(e.target) }}
                             onSelect={(e) => syncMenu(e.target)}
                             onPaste={(e) => onPasteFiles(e, 'command')}
                             onBlur={() => setMenu(null)}

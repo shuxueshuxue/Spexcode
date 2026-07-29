@@ -210,17 +210,23 @@ Modified Command/Ctrl/Shift combinations stay with the browser. An **Enter that 
 never sends; plain Enter sends, while Shift+Enter adds a line.
 
 Command Box dispatches through the **control socket** (never typed into the pane), so one prompt lands
-atomically even in tmux copy-mode. Success clears the draft and closes; failure keeps both visible. A `/` line
+atomically even in tmux copy-mode. Its right-pane action-outcome surface shows sending, then either delivery
+or the returned failure. A failed 502 keeps the complete draft and the box open for retry. On a 2xx it visibly
+acknowledges delivery in that same surface before clearing the draft and closing; disappearing is never the
+only success signal. A `/` line
 may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every toolbar twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable
 worktree; `/archive` and `/unarchive` shelve and restore it without stopping anything ([[archive]] — exactly
 one of the pair is offered, keyed on `archived` alone); `/close` removes the worktree; `/merge` merges;
 `/eval` opens the canonical session-scoped Evals page.
-Lifecycle action failures consume both HTTP status and the structured `{ok,error}` body before the board
-reloads, so a refused stop/close remains visible instead of reading as a successful background no-op.
-Each refused action has one diagnostic on the shared action-error surface; duplicate alerts make a single
-failure look like two operations.
+Lifecycle actions consume both HTTP status and the structured `{ok,error}` body before the board reloads, so
+a refused stop/close/relaunch remains visible instead of reading as a successful background no-op. Command Box
+and lifecycle actions use one selected-session, right-pane action-outcome mechanism: Command Box owns its
+outcome while it is open; an existing-session action owns its selected action/relaunch panel. The left session
+list is navigation-only and renders no action alert. Every outcome renders once and clears only as its owning
+surface closes, changes session, or completes its success lifecycle; duplicate alerts make one failure look
+like two operations.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
 tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
 that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` and

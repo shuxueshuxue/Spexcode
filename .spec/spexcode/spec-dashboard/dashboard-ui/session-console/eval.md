@@ -51,12 +51,18 @@ scenarios:
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/command-box.e2e.mjs
     description: >-
-      Author a multi-line prompt in Command Box, force one dispatch failure, then restore the live control
-      channel and send successfully while observing the draft, surface, request count, and TUI.
+      Author a multi-line prompt in Command Box, force a public 502 dispatch failure, retry, then restore the
+      live control channel and send successfully while observing the draft, outcome surface, request count,
+      and TUI. Force the selected session's relaunch endpoint to return the public readiness refusal, retry it,
+      and inspect both desktop and phone list geometry.
     expected: >-
-      The failure leaves Command Box open with the complete draft and visible error. Success sends one atomic
-      control prompt, clears the draft, closes the box, and focuses xterm. Neither attempt types the prompt
-      character-by-character through the PTY.
+      The Command Box exposes sending then one visible 502 failure while retaining its complete draft and
+      delivery marker for retry; no left-list action alert appears. A successful retry reuses that marker,
+      sends one atomic control prompt, visibly acknowledges delivery in that same surface, then clears the
+      draft, closes the box, and focuses xterm. The public
+      `launch did not become ready; the session remains stopped and can be retried` refusal appears once in the
+      selected right-side relaunch panel, survives until retry, and never changes list geometry on desktop or
+      phone. Neither attempt types the prompt character-by-character through the PTY.
   - name: command-box-commands-mentions-and-files
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/command-box.e2e.mjs
@@ -216,6 +222,17 @@ scenarios:
       Selecting one mounts exactly its conversation and performs its bounded reads; switching away stops its
       refresh timer without discarding the rendered history, and returning resumes from that history without a
       duplicate mount storm. Live pane-backed terminals keep their existing warm sockets.
+  - name: corrupt-record-quarantine-context-control
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Open a real corrupt governed row in Chromium, open its right-click action menu, fill the exact
+      adapter/thread/tmux/worktree/branch witness in the quarantine modal, first submit with a live claimed
+      resource and then after the real absence proof is true.
+    expected: >-
+      Only a corrupt row exposes Quarantine. The live/unknown control refusal remains visible through the
+      shared action-error surface and preserves the row. A verified submission removes the row from the active
+      dashboard without inventing a lifecycle, while the matching API resource report has no corrupt owner.
+      Restore returns the same corrupt row rather than a runtime or readable replacement record.
 ---
 
 Measure these scenarios through the running dashboard and real sessions. Dynamic focus, terminal input,

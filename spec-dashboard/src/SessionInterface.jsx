@@ -43,6 +43,12 @@ export function LaunchHero() {
   return <pre className="si-hero" aria-label="SpexCode">{HERO_WORDMARK}</pre>
 }
 
+function ActionOutcome({ outcome }) {
+  if (!outcome) return null
+  const role = outcome.phase === 'failed' ? 'alert' : 'status'
+  return <div className={`si-action-outcome ${outcome.phase}`} role={role}>{outcome.message}</div>
+}
+
 // The toolbar consumes only the canonical graph session projection. Last-known survives input invalidation,
 // tab switches, remounts and transport loss; only a ready projection on a live graph stream is called current.
 export function sessionEvalDisplay(projection, connected = true) {
@@ -188,8 +194,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole
   // launch choice; the fetch + default resolution live in the shared launch path (./launch.js).
   const { launchers, launcher, pickLauncher } = useLaunchers()
-  const [sendErr, setSendErr] = useState(null)
-  const [actErr, setActErr] = useState(null)      // last lifecycle action refused/failed (e.g. the resume guard: relaunching a LIVE agent) — surfaced by the relaunch panel
+  // One selected-session outcome lives only in the right pane. `owner` decides which product surface clears it:
+  // Command Box keeps delivery progress/failure beside its draft; a lifecycle action stays with its panel.
+  const [actionOutcome, setActionOutcome] = useState(null)
   const [commandOpen, setCommandOpen] = useState(false)
   const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
   const [uploading, setUploading] = useState(false)
@@ -203,6 +210,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
   const listRef = useRef(null)
+  const outcomeTimerRef = useRef(null)
+
+  const closeCommandBox = () => {
+    if (outcomeTimerRef.current) window.clearTimeout(outcomeTimerRef.current)
+    outcomeTimerRef.current = null
+    setCommandOpen(false)
+    setActionOutcome((outcome) => outcome?.owner === 'command' ? null : outcome)
+  }
 
   // the working session list is grouped into triage zones (needs-you over self-running, [[session-console]]) AND
   // nested — a session folds under its spawner ([[session-nesting]]). `forest` is that display structure (zone
@@ -296,12 +311,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const showRelaunch = !shelvedSel && noLivePane && selSession?.status !== 'queued'
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
-  const setMsg = (v) => setDrafts((d) => ({ ...d, [active]: v }))
+  const setMsg = (value) => setDrafts((draft) => ({
+    ...draft,
+    [active]: typeof value === 'function' ? value(draft[active] || '') : value,
+  }))
   // Selecting a terminal is an action even when its id does not change. The request counter lets an already-
   // selected row/tab restore native focus without coupling this shell to xterm's hidden textarea.
   const activateTerminal = (id) => {
     if (id === 'new') return
-    setCommandOpen(false)
+    closeCommandBox()
     setMenu(null)
     setOpened((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
     setSel(id)
@@ -320,10 +338,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // expands the body at the launch/send boundary. Shared fetch (./launch.js), no client interpreter.
   const commandPresets = useCommandPresets()
 
-  // Command Box is transient, but its draft is not. Switching tabs or losing liveness closes the surface.
-  useEffect(() => { setCommandOpen(false); setSendErr(false); setMenu(null) }, [active])
-  useEffect(() => { if (!commandAvailable) setCommandOpen(false) }, [commandAvailable])
-  useEffect(() => { setActErr(null) }, [active])   // a stale action error must not bleed onto the next session's panel
+  // Command Box is transient, but its draft is not. Selection changes own the whole selected outcome; an
+  // unavailable command closes only the Command Box-owned one. The sidebar never participates.
+  useEffect(() => {
+    if (outcomeTimerRef.current) window.clearTimeout(outcomeTimerRef.current)
+    outcomeTimerRef.current = null
+    setCommandOpen(false)
+    setActionOutcome(null)
+    setMenu(null)
+  }, [active])
+  useEffect(() => { if (!commandAvailable) closeCommandBox() }, [commandAvailable])
+  useEffect(() => () => { if (outcomeTimerRef.current) window.clearTimeout(outcomeTimerRef.current) }, [])
 
   // Keep every live pane-backed terminal mounted for its warm-pane contract. Headless conversations have no
   // pane to keep warm: mount the selected one on demand, then retain it (including after it goes offline) so
@@ -435,7 +460,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!item || !menu) return
     if (menu.kind === 'slash') {
       // A board command RUNS on pick (the typed twin of its button); presets and harness commands insert text.
-      if (item.ui) { const c = typedUiCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); setCommandOpen(false); c?.run(); return }
+      if (item.ui) { const c = typedUiCmds.find((x) => x.name === item.name); setMsg(''); setMenu(null); c?.run('command'); return }
       const insert = `/${item.name} `
       const before = msg.slice(0, menu.start)
       setMsg(before + insert + msg.slice(menu.end))
@@ -509,14 +534,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // agent (this covers the no-menu submit; accept() handles the menu pick). trim() covers the `/`
     // completion's trailing space and a stray newline.
     const cmd = typedUiCmds.find((c) => raw.trim() === `/${c.name}`)
-    if (cmd) { setMsg(''); setMenu(null); setCommandOpen(false); cmd.run(); return }
+    if (cmd) { setMsg(''); setMenu(null); cmd.run('command'); return }
     // resolve any `[[<node>]]` to a live spec.md pointer before it reaches the backend (the running-session twin
     // of the New Session launch composition — see [[command-box]]).
     const text = expandMentions(raw)
+    if (actionOutcome?.owner === 'command' && actionOutcome.phase === 'sending') return
     const deliveryId = msgDeliveryRef.current || crypto.randomUUID()
     msgDeliveryRef.current = deliveryId
-    setMsg('')
-    setSendErr(null)
+    setActionOutcome({ owner: 'command', phase: 'sending', message: t('session.outcomeSending') })
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/input`), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -524,15 +549,23 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       })
       const outcome = await res.json().catch(() => null)
       if (!res.ok || outcome?.outcome !== 'accepted') {
-        setMsg(raw)
-        setSendErr(outcome || { outcome: 'commit-unknown', error: `input ${res.status}` })
+        setActionOutcome({
+          owner: 'command',
+          phase: 'failed',
+          message: outcome?.error || t('session.deliveryFailed', { status: res.status }),
+        })
         return
       }
       msgDeliveryRef.current = null
-      setCommandOpen(false)
+      setMsg((current) => current === raw ? '' : current)
+      setActionOutcome({ owner: 'command', phase: 'delivered', message: t('session.outcomeDelivered') })
+      outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
     } catch (error) {
-      setMsg(raw)       // don't lose the message — put the ORIGINAL line back so the human can retry
-      setSendErr({ outcome: 'commit-unknown', error: error instanceof Error ? error.message : String(error) })
+      setActionOutcome({
+        owner: 'command',
+        phase: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      })
     }
   }
 
@@ -596,11 +629,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // open the file picker, remembering which surface its result should land in.
   const pickFiles = (target) => { fileTargetRef.current = target; fileRef.current?.click() }
 
-  // lifecycle actions — thin POSTs to the session state machine, then reload the board. A non-2xx carrying an
-  // `error` is surfaced LOUD via actErr (the resume guard refuses a relaunch on a live agent with 409 — the
-  // human must SEE that, never a silent no-op that reads as "it didn't work").
-  const act = async (verb, body) => {
-    setActErr(null)
+  // Lifecycle actions consume both status and structured bodies before reload. Their outcome belongs to the
+  // selected action panel, never to the navigation list, so one refusal cannot masquerade as two operations.
+  const act = async (verb, body, owner = 'panel') => {
+    setActionOutcome({ owner, phase: 'sending', message: t('session.outcomeSending') })
     let ok = true
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/${verb}`), body
@@ -609,13 +641,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       const j = await res.json().catch(() => null)
       if (!res.ok || j?.ok === false) {
         ok = false
-        setActErr(j?.error || `session ${verb} refused (HTTP ${res.status})`)
+        setActionOutcome({ owner, phase: 'failed', message: j?.error || `session ${verb} refused (HTTP ${res.status})` })
       }
     } catch (error) {
       ok = false
-      setActErr(error instanceof Error ? error.message : String(error))
+      setActionOutcome({ owner, phase: 'failed', message: error instanceof Error ? error.message : String(error) })
     }
+    if (ok) setActionOutcome(null)
     await reload?.()
+    if (ok && owner === 'command') closeCommandBox()
     return ok
   }
 
@@ -643,19 +677,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // `runners` binds each board-command name to the closure that DOES it — the SAME closure the toolbar
   // tool and Command Box row call; `uiCmds` narrows the registry to current session state.
   const runners = {
-    command: () => setCommandOpen((value) => !value),
+    command: () => { if (commandOpen) closeCommandBox(); else setCommandOpen(true) },
     // the Eval DOOR ([[session-eval]]): the session's evaluation lives on the Evals route family now —
     // the typed /eval navigates to the session-scoped list through the ONE [[address-routing]] projection
     // (a real page switch, one push), never a console-local pane. The tab-bar door below is the same
     // address as a REAL anchor.
     eval: () => { if (active !== 'new') navigateAddress(sessionEvalAddress(active)) },
-    merge: () => act('merge'),
+    merge: (owner) => act('merge', undefined, owner),
     relaunch: resumeAndReturnToWorking,
-    stop: () => act('stop'),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
+    stop: (owner) => act('stop', undefined, owner),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     // archive is cold storage: the backend stops the exact leaf before filing, then the browser opens the
     // explicit history view so the newly archived row remains reachable without polluting the working list.
-    archive: async () => { if (await act('archive', { on: true })) { await refreshArchive(); setShowShelf(true) } },
-    close: () => act('close'),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
+    archive: async (owner) => { if (await act('archive', { on: true }, owner)) { await refreshArchive(); setShowShelf(true) } },
+    close: (owner) => act('close', undefined, owner),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
   const uiCmds = uiCommandsFor(selSession?.status, runners, selSession?.liveness, selSession?.archived)
   const typedUiCmds = uiCmds.filter((command) => command.typed !== false)
@@ -676,13 +710,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const stateRef = useRef({})
   stateRef.current = {
     order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
-    commandAvailable, setCommandOpen, expanded, foldableIds, toggleFold,
+    commandAvailable, setCommandOpen, closeCommandBox, expanded, foldableIds, toggleFold,
   }
   useEffect(() => {
     const onKey = (e) => {
       const {
         order, active, submit, menu, navMenu, accept, setMenu, open, searchOpen, commandOpen,
-        commandAvailable, setCommandOpen, expanded, foldableIds, toggleFold,
+        commandAvailable, setCommandOpen, closeCommandBox, expanded, foldableIds, toggleFold,
       } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
       // Reserved Alt+I toggles Command Box before xterm. Matched by
@@ -691,7 +725,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       const isI = e.code === 'KeyI' || e.key === 'i' || e.key === 'I'
       if (e.altKey && !e.metaKey && !e.ctrlKey && isI && active !== 'new') {
         e.preventDefault(); e.stopPropagation()
-        if (commandAvailable) setCommandOpen((value) => !value)
+        if (commandAvailable) { if (commandOpen) closeCommandBox(); else setCommandOpen(true) }
         return
       }
       // the app's GLOBAL ⌥ command family — ⌥N (New Session composer), ⌥F (evals), ⌥1..⌥5 (pages) — is
@@ -727,7 +761,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         if (e.key === 'Escape')    { e.preventDefault(); e.stopPropagation(); setMenu(null); return }
       }
       if (commandOpen && e.key === 'Escape') {
-        e.preventDefault(); e.stopPropagation(); setCommandOpen(false); return
+        e.preventDefault(); e.stopPropagation(); closeCommandBox(); return
       }
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         // a text input keeps plain ↑/↓ ENTIRELY — they're its own caret keys and never switch tabs, even at
@@ -804,7 +838,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </button>
           </div>
           )}
-          {actErr && <div className="si-offline-err si-action-error" role="alert">{actErr}</div>}
           {viewingShelf && !shelved.length && <div className="si-empty">{t('session.shelfEmpty')}</div>}
           {forest.map((it) => {
             // Working rows group into triage zones and fold nested sessions; the archive branch above is flat and
@@ -959,7 +992,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         className={`si-tool sc-${c.color} ${c.name}${state}`}
                         data-command={c.name}
                         aria-pressed={pressed}
-                        onClick={c.run}
+                        onClick={() => c.run()}
                       />
                     )
                   })}
@@ -995,12 +1028,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     </div>
                   )
                 })}
+                {actionOutcome?.owner === 'panel' && !showRelaunch && !shelvedSel && (
+                  <div className="si-action-outcome-float"><ActionOutcome outcome={actionOutcome} /></div>
+                )}
                 {showRelaunch && (
                   <div className="si-offline">
                     <div className="si-offline-msg">{t('session.offlineMsg')}</div>
                     <div className="si-offline-sub">{t('session.offlineSubBefore')}<code>{active.slice(0, 8)}…</code>{t('session.offlineSubAfter')}</div>
                     <button className="si-act go big" onClick={resumeAndReturnToWorking}>{t('session.relaunchResume')}</button>
-                    {actErr && <div className="si-offline-err" role="alert">{actErr}</div>}
+                    {actionOutcome?.owner === 'panel' && <ActionOutcome outcome={actionOutcome} />}
                   </div>
                 )}
                 {/* the archive card ([[archive]]) is a flat offline cold-storage panel with resume as its only exit. */}
@@ -1013,15 +1049,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       {/* the same resume runner as the card/context menu, so restore semantics cannot drift. */}
                       <button className="si-act go big" onClick={resumeAndReturnToWorking}>{t('session.shelfRestore')}</button>
                     </div>
-                    {actErr && <div className="si-offline-err" role="alert">{actErr}</div>}
+                    {actionOutcome?.owner === 'panel' && <ActionOutcome outcome={actionOutcome} />}
                   </div>
                 )}
                 {commandOpen && !noLivePane && (
                   <div className="si-command-layer" role="dialog" aria-label={t('session.commandBox')}>
                     <button type="button" className="si-command-dismiss" tabIndex={-1}
-                      aria-label={t('session.commandClose')} onMouseDown={() => setCommandOpen(false)} />
+                      aria-label={t('session.commandClose')} onMouseDown={closeCommandBox} />
                     <ComposerSurface
-                      className={`si-command-box${sendErr ? ' err' : ''}${dragTarget === 'command' ? ' dragover' : ''}`}
+                      className={`si-command-box${dragTarget === 'command' ? ' dragover' : ''}`}
                       onDragOver={(e) => onDragOverFiles(e, 'command')}
                       onDragLeave={() => setDragTarget(null)}
                       onDrop={(e) => onDropFiles(e, 'command')}
@@ -1029,7 +1065,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         <div className="fv-tawrap">
                           <ComposerTextarea ref={msgRef} className="si-command-input" rows={1} value={msg}
                             data-focus-sink
-                            onChange={(e) => { setMsg(e.target.value); msgDeliveryRef.current = null; if (sendErr) setSendErr(null); syncMenu(e.target) }}
+                            onChange={(e) => { setMsg(e.target.value); msgDeliveryRef.current = null; syncMenu(e.target) }}
                             onSelect={(e) => syncMenu(e.target)}
                             onPaste={(e) => onPasteFiles(e, 'command')}
                             onBlur={() => setMenu(null)}
@@ -1060,9 +1096,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                             className="si-command-tool" label={t('session.attachTitle')}
                             disabled={uploading} onClick={() => pickFiles('command')} />
                           {uploadErr && attachAt === 'command' && <span className="si-attach-err" role="alert">{t('session.attachError')}</span>}
-                          {sendErr && <span className="si-send-err" role="alert">{sendErr.outcome === 'commit-unknown' ? `delivery unconfirmed: ${sendErr.error || t('session.msgError')}` : sendErr.error || t('session.msgError')}</span>}
+                          {actionOutcome?.owner === 'command' && <ActionOutcome outcome={actionOutcome} />}
                           <IconButton icon="send" size={14} className="si-command-send" label={t('session.commandSend')}
-                            disabled={!msg.trim()} onClick={sendMsg} />
+                            disabled={!msg.trim() || (actionOutcome?.owner === 'command' && actionOutcome.phase === 'sending')} onClick={sendMsg} />
                         </div>
                       )}
                     />
@@ -1077,7 +1113,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       menu={ctxMenu}
       onClose={() => setCtxMenu(null)}
       onChanged={reload}
-      onError={(message) => setActErr(message)}
+      onError={(message) => {
+        const id = ctxMenu?.session?.id
+        if (id && id !== active) {
+          setSel(id)
+          requestAnimationFrame(() => setActionOutcome({ owner: 'panel', phase: 'failed', message }))
+          return
+        }
+        setActionOutcome({ owner: 'panel', phase: 'failed', message })
+      }}
       onLock={(s) => { onPickSession?.(s, false); onClose() }}
       onMultiSelect={enterSelect}
     />

@@ -82,6 +82,16 @@ structured error when its ownership guard commits no removal, and the console ke
 showing that diagnostic **once** through its shared action-error surface. A refusal never weakens the guard merely to
 make the row disappear.
 
+An unreadable record exposes one additional, deliberately narrow **quarantine** item in this same menu, and
+no healthy row does. Its modal takes the exact adapter/thread/tmux/worktree/branch witness the human recovered
+from the opaque incident and posts it to the shared record-integrity control. It supplies no guessed lifecycle
+or cleanup default: the backend independently proves every claimed residue absent (or archives only its exact
+unowned native thread) before moving the bytes. Success closes the modal and reloads the board so the active
+corrupt row disappears; refusal keeps the row and routes its precise reason through the existing single action
+error surface. The public Restore control returns opaque bytes to the active projection without launching a
+runtime; because a quarantined row no longer belongs to this active list, that recovery is intentionally the
+CLI/API control rather than a phantom menu item on a missing row.
+
 The right-click confirm consumes both the HTTP status and the JSON `{ok,error}` body before it asks the board
 to reload, so a legacy 200 false response cannot regress into a silent success while the endpoint is being
 rolled forward.

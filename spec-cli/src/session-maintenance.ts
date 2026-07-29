@@ -29,6 +29,7 @@ export type Operation =
   | ({ op: 'resume'; sessionId: string; force: boolean } & Partial<{ authorization: Authorization }>)
   | { op: 'archive'; sessionId: string }
   | { op: 'close'; sessionId: string }
+  | { op: 'quarantine'; sessionId: string }
   | { op: 'merge-dispatch'; sessionId: string }
   | { op: 'queue-drain' }
   | { op: 'attach'; sessionId: string }
@@ -105,7 +106,7 @@ type CoordinatorInput = {
 
 const OPERATIONS = new Set<Operation['op']>([
   'create', 'fallback-create', 'lifecycle-transition', 'hook-state', 'send', 'raw-key-input',
-  'terminal-input', 'interrupt', 'rename', 'sort', 'stop', 'resume', 'archive', 'close',
+  'terminal-input', 'interrupt', 'rename', 'sort', 'stop', 'resume', 'archive', 'close', 'quarantine',
   'merge-dispatch', 'queue-drain', 'attach', 'shared-spawn',
 ])
 const MIN_TTL_MS = 5_000

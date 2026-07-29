@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -42,6 +42,16 @@ async function waitHealth(url: string, child: ChildProcess, logs: () => string):
   }
 }
 
+async function waitHttp(url: string, child: ChildProcess, logs: () => string): Promise<void> {
+  const deadline = Date.now() + 30_000
+  for (;;) {
+    try { if ((await fetch(url)).ok) return } catch { /* still booting */ }
+    if (Date.now() >= deadline) throw new Error(`server did not become ready\n${logs()}`)
+    if (child.exitCode !== null) throw new Error(`server exited before ready (${child.exitCode})\n${logs()}`)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
 test('a note carrying quote/backslash/newline/unicode survives every real declaration entry', { timeout: 180_000 }, async () => {
   const port = await freePort()
   const home = mkdtempSync(join(tmpdir(), 'spex-record-integrity-home-'))
@@ -78,16 +88,35 @@ test('a note carrying quote/backslash/newline/unicode survives every real declar
   })
   const backendLogs = capture(backend)
   const base = `http://127.0.0.1:${port}`
+  let dashboard: ChildProcess | null = null
+  let dashboardLogs = () => ''
+  let dashboardBase = ''
   try {
     await waitHealth(base, backend, backendLogs)
+    if (process.env.DASHBOARD_E2E === '1') {
+      const dashboardPort = await freePort()
+      const dashboardRoot = join(dirname(packageRoot), 'spec-dashboard')
+      const vite = join(dashboardRoot, 'node_modules', 'vite', 'bin', 'vite.js')
+      assert.ok(existsSync(vite), `dashboard dependencies are unavailable at ${vite}`)
+      dashboardBase = `http://127.0.0.1:${dashboardPort}`
+      dashboard = spawn(process.execPath, [vite, '--host', '127.0.0.1', '--port', String(dashboardPort)], {
+        cwd: dashboardRoot, env: { ...env, API_URL: base }, stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      dashboardLogs = capture(dashboard)
+      await waitHttp(dashboardBase, dashboard, dashboardLogs)
+    }
     const runnerProcess = spawn(process.execPath, [tsxBin(packageRoot), runner], {
-      cwd: project, env: { ...env, BASE: base, LAUNCHER: 'fake' }, stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: project, env: { ...env, BASE: base, LAUNCHER: 'fake', ...(dashboardBase ? { DASHBOARD_BASE: dashboardBase } : {}) }, stdio: ['ignore', 'pipe', 'pipe'],
     })
     const runnerLogs = capture(runnerProcess)
     await new Promise((resolve) => runnerProcess.once('close', resolve))
     assert.equal(runnerProcess.exitCode, 0, `record-integrity fixture failed\n${runnerLogs()}\nbackend:\n${backendLogs()}`)
     assert.match(runnerLogs(), /PASS: session record integrity/)
   } finally {
+    if (dashboard?.exitCode === null) {
+      dashboard.kill('SIGTERM')
+      await new Promise((resolve) => dashboard!.once('close', resolve))
+    }
     try { execFileSync('tmux', ['-L', tmux, 'kill-server'], { stdio: 'ignore' }) } catch { /* no server to reap */ }
     if (backend.exitCode === null) {
       backend.kill('SIGTERM')

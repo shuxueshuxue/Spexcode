@@ -31,10 +31,6 @@ The mesh divides into the delivery path and the relationships drawn over it:
 - **[[session-edges]]** — the live monitor network (edge A→B iff A runs `spex watch`/`spex wait` on B) and the
   `spex watch` lifecycle event stream.
 
-Every delivery/control write, including raw input, acquires [[maintenance-lease]] admission before it touches
-the adapter or records a comms edge. A maintenance refusal therefore delivers and records nothing; read-only
-watching remains available.
-
 So the graph reads two relationships at a glance — the directed **monitor** arrow (watching) and the
 subtler undirected **comms** line with its message count (talking) — both derived from live sessions only,
 both dropped when an endpoint goes offline.

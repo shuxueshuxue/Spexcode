@@ -989,13 +989,16 @@ function headOrEmpty(root: string): string {
 // has a RENAME commit on one end, and a history holds far fewer renames than file events. Keying the memo on
 // the OTHER end rebuilds a history-wide ancestor set per distinct event commit: 2.3M parent-edge visits and
 // 1,219 retained bitsets served 9k one-bit questions on this repository, and a linear history whose events all
-// sit on one renamed path degenerates to Θ(H²) time and Θ(H²) retained bits. Asking the rename end instead —
-// its descendants when it is the older commit, its ancestors when it is the newer one — bounds the whole
-// projection by the RENAME count K, not the event count: at most two lazily built H-bit closures per consulted
-// rename, so O(K(H+E)) time and O(KH) bits. That is a reparameterization, not a linear-in-history promise. A
-// history where nearly every commit renames (K≈H) stays quadratic — but never worse than twice the event-keyed
-// shape it replaces, since every rename commit is already an event commit there. It is also why a reachability
-// matrix over the rename commits is not worth it: same O(HK) bits, but eagerly and with no such ceiling.
+// sit on one renamed path degenerates to Θ(H²) traversals and Θ(H²) retained bits. Asking the rename end
+// instead — its descendants when it is the older commit, its ancestors when it is the newer one — moves ONLY
+// the closure term onto the rename count K: at most 2K full-size closures, O(K(H+G)) construction over H
+// reachable commits and G parent edges, O(KH) bits. That 2K ceiling bounds closure buffers, count and bytes,
+// against the event-keyed count; it does NOT bound runtime or edge visits, since a rename with many unrelated
+// descendants traverses ground the event-side ancestor walk never touched. The projector's own work is
+// unchanged and is NOT covered by that term: one scan of the N events, plus a lineage walk whose frontier
+// compares each step's applicable renames pairwise — Σ d(candidate)² O(1) queries, worst case Θ(NK²) when one
+// path carries K mutually incomparable renames. No linear-in-history promise; K≈H is quadratic again. It is
+// also why a reachability matrix over the rename commits is not worth it: same O(KH) bits, but eagerly.
 function renameSideReachability(
   renameCommits: Set<string>,
   topology: TopologyProjection,

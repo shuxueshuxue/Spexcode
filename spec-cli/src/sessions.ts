@@ -1060,23 +1060,7 @@ export async function composeSessionPrompt(raw: string, target: SessionPromptTar
     : !opts.from && lastHumanSendVia(target.session) === 'note' ? withTerminalReplyHint(prompt) : prompt
   return { text: optionSafe(text), ...(replyVia ? { replyVia } : {}) }
 }
-// @@@ optionSafe - the ONE invariant that keeps a prompt from being read as machinery: the text SpexCode hands
-// a harness never BEGINS with `-`. Human text legitimately starts that way — a pasted browser-console line, a
-// diff hunk, a quoted flag — and downstream that first character is the difference between a prompt and an
-// argument. Every harness parses its own argv with its own rules (claude's commander honours `--`, opencode's
-// yargs drops a detached value that starts with `-`, pi's parser has no end-of-options branch AT ALL), and the
-// launch scripts additionally discriminate their resume/continue markers by comparing `$1` to a literal flag.
-// Chasing that per-harness would mean an escape per adapter plus a refusal for the harness that has none —
-// six answers to one question, and still no cover for a prompt that IS the literal `--resume`. Guaranteeing
-// the invariant once, here at the single delivery seam every launch and every send already passes through,
-// answers all of it uniformly: no adapter needs to know, and no harness can be handed something it cannot
-// take. The cost is one leading space on the prompts that would otherwise be unsendable, and the human's own
-// words follow it byte-for-byte.
 const optionSafe = (text: string) => text.startsWith('-') ? ` ${text}` : text
-// @@@ identity-token strip - an `@session` actor mention ([[mentions]]) or a bare UUID-shaped token in the
-// prompt is ANOTHER session's identity, never this one's name. A title/slug wearing it misleads every
-// board/git surface — and a worker tasked with cleaning that session can match its OWN worktree and delete
-// it from under itself. Strip both before deriving; whatever prose remains names the session.
 const UUID_TOKEN = /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g
 const stripIdentityTokens = (s: string) => s.replace(/(^|\s)@[\p{L}\p{N}_-]+/gu, '$1').replace(UUID_TOKEN, ' ')
 export function titleFromPrompt(prompt: string): string | null {
@@ -1283,8 +1267,6 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
   const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness (also drives waitForReady below)
   try {
-    // ONE quoted operand for every harness. Nothing here knows how any of them parses argv, because nothing
-    // has to: composeSessionPrompt already guaranteed this text cannot be read as an option (optionSafe).
     const sq = shQuote(launchPrompt)
     await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
   } catch {
@@ -2532,15 +2514,6 @@ async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIde
   }
   const startToken = processStartToken(pid)
   if (!startToken) {
-    // @@@ dead leaf is not an unprovable leaf - a missing start token means one of TWO different things, and
-    // collapsing them is what made a session unclosable. If the process is GONE there is nothing to signal and
-    // nothing a signal could hit by mistake, so the leaf is already in the state stop wants: hand back a
-    // record-only teardown, exactly as for an explicitly stopped record. Only a process that is still ALIVE
-    // while refusing to prove its identity is the dangerous case the guard exists for — that one still refuses,
-    // because signalling it could kill whatever now wears the pid. The distinction is the same `kill(pid, 0)`
-    // the escalation path below already uses to tell `gone` from `changed`; this guard simply asks it too.
-    // The failure it closes: a launcher that dies before readiness leaves a dead pid on the record, and every
-    // later `stop`/`close` refused it, so the row could be neither run nor retired.
     if (rec.stopped || !leafAlive(pid)) return null
     throw new ResourceConflict(`refusing to stop ${id}: session-owned leaf PID ${pid} is alive but will not prove its start identity`)
   }

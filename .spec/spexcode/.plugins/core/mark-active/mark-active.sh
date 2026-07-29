@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# @@@ mark-active - the SINGLE freshness hook, wired to BOTH UserPromptSubmit and PreToolUse. It branches
-# on ONE structured signal read straight from the hook payload (stdin JSON), so the state is HARD — never
-# text-sniffed from the TUI:
+# @@@ mark-active - the SINGLE turn-boundary hook, wired to BOTH UserPromptSubmit and PreToolUse. It does two
+# jobs, both keyed off the session's global record dir: it keeps the declared FRESHNESS state honest, and it
+# delivers the session's unread MAIL.
+# Freshness branches on ONE structured signal read straight from the hook payload (stdin JSON), so the state is
+# HARD — never text-sniffed from the TUI:
 #   the agent is pausing to ask the HUMAN (hp_is_ask) → status: asking, with the question text as the note
 #                                  (the deterministic capture of a question).
 #   any other tool, or a prompt submit → the agent is working → status: active (drop a now-stale proposal/note).
@@ -33,6 +35,44 @@ sdir=$(hp_store_dir "$sid") || exit 0
 rec="$sdir/session.json"
 # board-lifecycle gate: only a GOVERNED (dashboard-launched) session has a board state to maintain.
 grep -q '^[[:space:]]*"governed"[[:space:]]*:[[:space:]]*true,\?$' "$rec" 2>/dev/null || exit 0
+
+# @@@ the mail read - this hook is the ONE reader of the session's inbox ([[session-timeline]]): a message is
+# delivered by being appended to timeline.ndjson, and the agent finds it here, by mechanism, at a turn
+# boundary — never by remembering to run a command. `cursors.json` names how far this session has been shown
+# ([[session-cursors]]); everything past it is unread, the `sent` lines among it are printed as context, and
+# the cursor advances past ALL of it (a session's own status lines are not mail, but they are consumed, so
+# they can never come back as one).
+# Pure bash builtins, no forks: the common case is "no new lines", and the fast path must not cost a spawn.
+# The read is generous where it cannot be exact — an unparseable cursor reads as 0, which re-shows a message
+# rather than skipping one.
+mail() {
+  local tl="$sdir/timeline.ndjson" cur="$sdir/cursors.json" pos=0 i=0 line body unread=""
+  [ -f "$tl" ] || return 0
+  if [ -f "$cur" ]; then
+    while IFS= read -r line; do
+      case "$line" in
+        *'"inbox":'*) line="${line#*\"inbox\":}"; line="${line%%,*}"; line="${line// /}"; line="${line//$'\t'/}"
+                      case "$line" in ''|*[!0-9]*) ;; *) pos=$line ;; esac; break ;;
+      esac
+    done < "$cur"
+  fi
+  while IFS= read -r line; do
+    if [ "$i" -ge "$pos" ]; then
+      case "$line" in
+        *'"kind":"sent"'*) body=$(hp_field "$line" text)
+                           [ -n "$body" ] && unread="$unread$body"$'\n\n' ;;
+      esac
+    fi
+    i=$((i + 1))
+  done < "$tl"
+  # No mail → no cursor write. Unread STATUS lines alone leave the cursor where it is: they print nothing, so
+  # advancing past them would buy nothing and cost a spawn on almost every turn. The next scan re-reads them
+  # and still prints nothing.
+  [ -n "$unread" ] || return 0
+  printf 'Messages addressed to you (delivered to your session log while you were working):\n\n%s' "$unread"
+  ${SPEX:-spex} internal session-cursor inbox --session "$sid" --to "$i" >/dev/null 2>&1
+}
+mail
 
 # does FIELD's line hold exactly VALUE? The record is written one-field-per-line by the single writer
 # (sessions.ts writeRecord), so a whole-line match is exact — and, unlike a value regex, it cannot be fooled

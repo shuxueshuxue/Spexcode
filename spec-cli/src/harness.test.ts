@@ -602,7 +602,7 @@ test('Codex archive never compensates a successful commit on a replacement share
   assert.equal(archived, true, 'commit state remains unknown rather than mutating the replacement generation')
 })
 
-test('Codex archive never compensates a commit-unknown RPC error on a replacement shared generation', async () => {
+test('Codex archive never compensates an unconfirmed RPC error on a replacement shared generation', async () => {
   const { result, archiveCalls, unarchiveCalls, archived } = await runReplacementArchiveCase('error')
   assert.equal(result?.ok, false)
   if (result && !result.ok) assert.match(result.reason, /generation changed/)
@@ -1396,7 +1396,7 @@ test('Codex delivery waits for initialize, accepts a delayed turn response, and 
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
     const result = await codexTurn(socket, 'thread-1', 'delayed prompt', '/worktree', 'delivery-marker-1')
-    assert.deepEqual(result, { ok: true, outcome: 'accepted' })
+    assert.deepEqual(result, { ok: true })
     assert.deepEqual(calls, ['thread/loaded/list', 'thread/read', 'turn/start'])
     assert.equal(marker, 'delivery-marker-1')
   } finally {
@@ -1409,7 +1409,7 @@ test('Codex delivery waits for initialize, accepts a delayed turn response, and 
   }
 })
 
-test('Codex delivery reports a post-write transport silence as commit-unknown and does not replay it', async () => {
+test('Codex delivery reports a post-write transport silence as a failed poke and does not replay it', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-codex-delivery-unknown-'))
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   const previousConfirmMs = process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS
@@ -1428,7 +1428,6 @@ test('Codex delivery reports a post-write transport silence as commit-unknown an
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
     const result = await codexTurn(socket, 'thread-1', 'maybe committed', '/worktree', 'delivery-marker-2')
     assert.equal(result.ok, false)
-    assert.equal(result.outcome, 'commit-unknown')
     assert.match(result.error || '', /did not confirm/)
     assert.equal(starts, 1, 'an unconfirmed request must never be replayed by the adapter')
   } finally {

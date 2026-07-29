@@ -1,12 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { lastHumanSendVia, readTimeline } from './session-timeline.js'
+import { appendSent, lastHumanSendVia, readTimeline, timelineEvents } from './session-timeline.js'
+import { inboxCursor } from './session-cursors.js'
 import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
-import { composeSessionPrompt, markState, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
+import { composeSessionPrompt, markState, sendText, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
 // The reply-channel signal must be SYMMETRIC (the [[session-timeline]] write surface): the phone's
 // explicit note-sends and every headless target carry the note insert, and the first terminal send after
@@ -46,8 +47,9 @@ function seedTimeline(events: object[]): string {
 }
 
 const ID = 'timeline-via-test'
+let midSeq = 0
 const sent = (from: string | null, replyVia?: 'note') =>
-  ({ ts: '2026-07-16T00:00:00.000Z', kind: 'sent', text: 'msg', from, ...(replyVia ? { replyVia } : {}) })
+  ({ ts: '2026-07-16T00:00:00.000Z', kind: 'sent', mid: `mid-${++midSeq}`, text: 'msg', from, ...(replyVia ? { replyVia } : {}) })
 
 function seedSessionRecord(home: string): void {
   withHome(home, () => {
@@ -246,4 +248,77 @@ test('withTerminalReplyHint: keeps the message and explicitly countermands the n
   // the countermand is explicit — it names the --note habit it is switching off
   assert.ok(out.includes('--note'), out)
   assert.ok(out.includes('no longer apply'), out)
+})
+
+// ---- the append IS the delivery ([[dispatch]]) ----
+
+test('appendSent stamps a unique mid and reports the event index its line took', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home)
+  withHome(home, () => {
+    const first = appendSent(ID, 'hello', null)
+    const second = appendSent(ID, 'again', 'sender-1', 'note')
+    assert.equal(first.pos, 0)
+    assert.equal(second.pos, 1)
+    assert.notEqual(first.mid, second.mid)
+    const evs = timelineEvents(ID)
+    assert.deepEqual(evs.map((e) => e.kind === 'sent' ? [e.mid, e.text, e.from, e.replyVia ?? null] : [e.kind]), [
+      [first.mid, 'hello', null, null],
+      [second.mid, 'again', 'sender-1', 'note'],
+    ])
+  })
+})
+
+test('a send whose poke cannot land still succeeds and still leaves the message in the log', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home)
+  await withHomeAsync(home, async () => {
+    // no rendezvous socket, no tmux window: every poke this send can attempt fails. Delivery is the append,
+    // so the caller is told the truth — the bytes ARE in the log — and the turn-boundary reader will show it.
+    const r = await sendText(ID, 'the poke will fail')
+    assert.deepEqual(r, { ok: true })
+    const evs = timelineEvents(ID).filter((e) => e.kind === 'sent')
+    assert.equal(evs.length, 1)
+    assert.equal(evs[0].kind === 'sent' && evs[0].text, 'the poke will fail')
+    // a failed poke showed the agent nothing, so the line stays UNREAD for the turn-boundary reader
+    assert.equal(inboxCursor(ID), 0)
+  })
+})
+
+test('a RETIRED session still receives: a message it cannot act on must still leave a trace', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home)
+  await withHomeAsync(home, async () => {
+    const gone = join(home, 'worktree-that-was-removed')
+    const record = JSON.parse(readFileSync(sessionRecordPath(ID), 'utf8'))
+    writeFileSync(sessionRecordPath(ID), JSON.stringify({ ...record, worktree_path: gone }, null, 2) + '\n')
+    // the lifecycle axis is still refused — it cannot work, be marked active, or be relaunched
+    assert.throws(() => markState('active', { sessionId: ID }), /is retired/)
+    // ...but the log is a record of something that HAPPENED, not a claim the session can act
+    const r = await sendText(ID, 'are you still there?')
+    assert.deepEqual(r, { ok: true })
+    assert.equal(timelineEvents(ID).filter((e) => e.kind === 'sent').length, 1)
+  })
+})
+
+test('an unknown session id is the loud failure, and it records nothing', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  await withHomeAsync(home, async () => {
+    const r = await sendText('no-such-session', 'hello?')
+    assert.equal(r.ok, false)
+    assert.match(r.error || '', /no session record/)
+    assert.deepEqual(timelineEvents('no-such-session'), [])
+  })
+})
+
+test('the read surface does NOT fold repeated status lines — history is append-only and X→X is a read-side call', () => {
+  // duplicates already exist in live logs (stray serve observers re-recorded real moves before the observer
+  // was deleted). The read must hand them over as they are; deciding what counts as a MOVE belongs to the
+  // reader's edge test ([[session-cursors]] unreadSince), not to a lossy read.
+  const home = seedTimeline([
+    { ts: '2026-07-16T00:00:00.000Z', kind: 'status', status: 'awaiting', proposal: 'merge', note: 'ready' },
+    { ts: '2026-07-16T00:00:00.100Z', kind: 'status', status: 'awaiting', proposal: 'merge', note: 'ready' },
+  ])
+  seedSessionRecord(home)
+  withHome(home, () => assert.equal(readTimeline(ID)?.events.length, 2))
 })

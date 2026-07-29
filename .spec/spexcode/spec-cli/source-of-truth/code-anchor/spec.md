@@ -235,8 +235,11 @@ file-revision memoization, dead/ambiguous resolution, hunk∩range — lives out
 includes every input to the pure extractor: object-hash algorithm and blob oid, filename semantics
 (including script kind), extractor/schema identity, host parser identity, and normalized parser configuration;
 same bytes under `.ts` and `.tsx` therefore never share a result by oid alone, and the result is independent
-of call order. Git access stays
-batch/short-lived; no resident process.
+of call order. Within one lint, every live anchored window is one build-local query batch: the engine reads a
+historical `(commit,path)` image, its blob, and an ordinary `(commit,path)` hunk once, then applies each
+node's own selector set and emits findings in declaration order. The batch ends with that lint invocation;
+it does not become a resident cache or a second history truth. Git access stays batch/short-lived; no resident
+process.
 
 Python is one such data row, designated for `.py` and `.pyi`. Its structural vocabulary is ordinary
 `def`, `async def`, and `class` declarations: module functions keep their bare name, while methods and

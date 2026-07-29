@@ -208,20 +208,18 @@ test('all public record APIs share pending projection and malformed fail-closed 
       error: 'no close transition was committed for session 00000000-0000-0000-0000-000000000000',
     })
 
-    const [sessionsResponse, graphResponse, edgesResponse, resourcesResponse, settingsResponse] = await Promise.all([
+    const [sessionsResponse, graphResponse, resourcesResponse, settingsResponse] = await Promise.all([
       fetch(`${base}/api/sessions?all=1`),
       fetch(`${base}/api/graph`),
-      fetch(`${base}/api/sessions/edges`),
       fetch(`${base}/api/resources`),
       fetch(`${base}/api/settings`),
     ])
-    for (const response of [sessionsResponse, graphResponse, edgesResponse, resourcesResponse, settingsResponse]) {
+    for (const response of [sessionsResponse, graphResponse, resourcesResponse, settingsResponse]) {
       if (response.status !== 200) assert.fail(`${response.url} returned ${response.status}: ${await response.text()}`)
     }
 
     const rows = await sessionsResponse.json() as any[]
     const graph = await graphResponse.json() as { sessions: any[] }
-    const edges = await edgesResponse.json() as { nodes: any[] }
     const resources = await resourcesResponse.json() as { owners: any[] }
     const settings = await settingsResponse.json() as { layout: { worktrees: any[] } }
     const assertPending = (row: any, surface: string) => {
@@ -238,7 +236,6 @@ test('all public record APIs share pending projection and malformed fail-closed 
     await t.test('valid stopped pending records stay frozen and offline on every surface', () => {
       assertPending(rows.find((row) => row.id === pendingId), '/api/sessions')
       assertPending(graph.sessions.find((row) => row.id === pendingId), '/api/graph')
-      assertPending(edges.nodes.find((row) => row.id === pendingId), '/api/sessions/edges')
       assertPending(resources.owners.find((row) => row.kind === 'session' && row.id === pendingId), '/api/resources')
       assertPending(settings.layout.worktrees.find((row) => row.session === pendingId), '/api/settings')
     })
@@ -258,7 +255,6 @@ test('all public record APIs share pending projection and malformed fail-closed 
     await t.test('a live candidate cannot change the frozen display or offline liveness', () => {
       assertLivePending(rows.find((row) => row.id === livePendingId), '/api/sessions live candidate')
       assertLivePending(graph.sessions.find((row) => row.id === livePendingId), '/api/graph live candidate')
-      assertLivePending(edges.nodes.find((row) => row.id === livePendingId), '/api/sessions/edges live candidate')
       assertLivePending(resources.owners.find((row) => row.kind === 'session' && row.id === livePendingId), '/api/resources live candidate')
       assertLivePending(settings.layout.worktrees.find((row) => row.session === livePendingId), '/api/settings live candidate')
     })
@@ -278,7 +274,6 @@ test('all public record APIs share pending projection and malformed fail-closed 
       await t.test(`${label} pending records are corrupt and unknown on every surface`, () => {
         assertMalformed(rows.find((row) => row.id === id), `/api/sessions ${label}`)
         assertMalformed(graph.sessions.find((row) => row.id === id), `/api/graph ${label}`)
-        assertMalformed(edges.nodes.find((row) => row.id === id), `/api/sessions/edges ${label}`)
         assertMalformed(resources.owners.find((row) => row.kind === 'session' && row.id === id), `/api/resources ${label}`)
         assertMalformed(settings.layout.worktrees.find((row) => row.session === id), `/api/settings ${label}`)
       })

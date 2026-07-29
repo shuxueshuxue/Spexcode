@@ -245,6 +245,42 @@ test('boardCache scope: sessions-scoped splices (skips node work), full-scoped (
   assert.equal(b5.sessions[0].prompt, 'A newly discovered originating prompt.\n')
 })
 
+test('boardCache DEBUG cache commits report one successful full and sessions publication only', { skip: !gitOk && 'git not available' }, async () => {
+  const priorWarn = console.warn
+  const rows: Array<{ at: number; stage: string; scope: string; buildMs: number }> = []
+  console.warn = (...args: unknown[]) => {
+    const text = args.join(' ')
+    const match = text.match(/^spec-cli: graph cache (\{.*\})$/)
+    if (match) rows.push(JSON.parse(match[1]))
+  }
+  try {
+    cache.invalidateBoard('full')
+    await cache.getBoard()
+    rows.length = 0
+
+    await cache.patrolBoard()
+    assert.equal(rows.length, 0, 'validation-only patrol does not publish a cache-commit row')
+
+    writeSessionRecord({ status: 'active', note: 'cache-commit sessions' })
+    cache.invalidateBoard('sessions')
+    await cache.getBoardForSessionRefresh()
+    assert.equal(rows.length, 1)
+    assert.deepEqual(Object.keys(rows[0]).sort(), ['at', 'buildMs', 'scope', 'stage'])
+    assert.equal(rows[0].stage, 'cache-commit')
+    assert.equal(rows[0].scope, 'sessions')
+    assert.ok(Number.isFinite(rows[0].at) && Number.isFinite(rows[0].buildMs))
+
+    cache.invalidateBoard('full')
+    await cache.getBoard()
+    assert.equal(rows.length, 2)
+    assert.equal(rows[1].stage, 'cache-commit')
+    assert.equal(rows[1].scope, 'full')
+    assert.ok(Number.isFinite(rows[1].at) && Number.isFinite(rows[1].buildMs))
+  } finally {
+    console.warn = priorWarn
+  }
+})
+
 test('a held old-topology splice rebases after full completion and cannot erase nodes or ops', { skip: !gitOk && 'git not available' }, async () => {
   const linked = join(tmpdir(), `boardscope-linked-${process.pid}-${Date.now()}`)
   const gateRoot = mkdtempSync(join(tmpdir(), 'boardscope-tmux-gate-'))

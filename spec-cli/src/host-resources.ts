@@ -230,7 +230,9 @@ const sharedDescriptors = (recs: RawRecord[], retainRegistry = false): Map<strin
     // contribute nothing to the active set while still preserving exact ownership if the invariant is violated.
     if (!rec.governed) continue
     const harness = harnessById(rec.harness || defaultHarness.id)
+    const exactKey = harness.targetDescriptorKey?.({ session: rec.session_id, harnessSessionId: rec.harness_session_id }) ?? null
     for (const descriptor of harness.sharedRuntimes?.(runtimeRoot()) ?? []) {
+      if (exactKey && descriptor.key !== exactKey) continue
       const entry = out.get(descriptor.key) ?? { descriptor, recs: [] }
       entry.recs.push(rec)
       out.set(descriptor.key, entry)
@@ -386,8 +388,15 @@ const sessionStopBlocker = async (
   knownProbes?: Map<string, SharedRuntimeProbe>,
   opts: { coldReceipt?: unknown } = {},
 ): Promise<string | null> => {
-  const allowed = harnessId
-    ? new Set((harnessById(harnessId).sharedRuntimes?.(runtimeRoot()) ?? []).map((descriptor) => descriptor.key))
+  const targetRecord = recs.find((rec) => rec.session_id === id)
+  const targetHarness = harnessId ? harnessById(harnessId) : null
+  const exactKey = targetHarness?.targetDescriptorKey?.({ session: id, harnessSessionId: targetRecord?.harness_session_id }) ?? null
+  const targetDescriptors = targetHarness?.sharedRuntimes?.(runtimeRoot()) ?? []
+  if (targetHarness && targetDescriptors.length === 0) return null
+  if (targetRecord?.harness_session_id && targetHarness?.targetDescriptorKey && targetDescriptors.length && !exactKey)
+    return `${targetHarness.id} target has no exact shared-runtime generation binding`
+  const allowed = targetHarness
+    ? new Set(exactKey ? [exactKey] : targetDescriptors.map((descriptor) => descriptor.key))
     : null
   for (const [key, entry] of sharedDescriptors(recs, true)) {
     if (allowed && !allowed.has(key)) continue

@@ -52,3 +52,26 @@ The material win is advancing-tip CPU and wall time. Cold and same-tip retain a 
 ## Rejected Route
 
 A shared rename-side reachability memo retained byte parity on this corpus but only produced 3-5% directional readings with no RSS win. It was removed rather than retained as an additional layer. The landed route instead removes a measured repeated Git operation with one build-local batch and no resident cache, fallback, or new identity model.
+
+## Ancestry Closure Checkpoint
+
+`f71d203a` keeps that same one-current-projection rule for the loader's own ancestry questions. `loadSpecs`
+already knows each version base it will query; it first primes those ordinary `anc` entries, then discovers the
+named checkpoint acks which are outside each base and primes only that exact cover roster. There is no ledger
+field, matrix, cache key, or alternate lookup: every retained result is the existing `ancestorsOf` dense bitset,
+and an arbitrary later SHA still takes the normal DFS.
+
+The loss function remains exact output equivalence. On the fixed branchy corpus at 4,867 commits and 1,370
+merges, baseline and candidate public `spex spec lint` runs from separate product roots and homes produced the
+same exit status, stdout and stderr for cold, same-tip and one identical-SHA advancing commit. The known
+`anchorHitCommits` debt remained the positive control: both sides emitted one `anchor-drift` finding and exited
+1. The permanent real-Git suite additionally covers persistent reopen/advance, content self-ack versus empty
+checkpoint, merge/RR rename, parallel versions, vacated path reuse and pending-cache isolation.
+
+For the non-noisy stage measurement, one already-built `DriftIndex` supplied the 131 endpoints actually
+requested by `loadSpecs`. Seven in-process repetitions cleared only `anc`, then either invoked independent
+`ancestorsOf` DFS calls or the product `primeAncestorClosures` implementation. Median ancestry work fell from
+82.93ms to 5.01ms; both paths retained 131 closures totaling 79,779 bytes. A structural red control that omits
+child-to-parent propagation disagreed with the independent closures at 508,104 bits; the streamed product shape
+had zero bit mismatches. Whole-process cold/hit/advance wall readings remain host-noisy and are not presented as
+a general user-wall-speed claim.

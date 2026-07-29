@@ -505,15 +505,24 @@ export function windowEvents(idx: DriftIndex, sinceHash: string, path: string, n
 // through the current filename. Several selectors are OR'd and one commit still produces one hit row.
 // An historical image the designated extractor cannot parse is a conservative hit (`unparseable`).
 export type AnchorHit = { commit: string; selectors: string[]; unparseable?: string }
-export async function anchorHitCommits(root: string, win: DriftPathEvent[], symbols: string[], regs: Extractor[]): Promise<AnchorHit[]> {
-  const hits = new Map<string, { selectors: Set<string>; unparseable?: string }>()
+export type AnchorHitQuery = { win: DriftPathEvent[]; symbols: string[] }
+type AnchorRevision = { commit: string; path: string }
+const anchorRevisionKey = ({ commit, path }: AnchorRevision) => `${commit}\0${path}`
+
+// One lint can judge several selectors with overlapping windows. Their Git images and ordinary hunks are
+// immutable facts, so the batch owns them once and each query keeps its own selector verdict.
+export async function anchorHitQueries(root: string, queries: AnchorHitQuery[], regs: Extractor[]): Promise<AnchorHit[][]> {
+  if (!queries.length) return []
   const objectFormat = gitObjectFormat(root)
-  type Revision = { commit: string; path: string }
-  const revisionKey = ({ commit, path }: Revision) => `${commit}\0${path}`
-  const revisions = new Map<string, Revision>()
-  for (const event of win) {
+  const revisions = new Map<string, AnchorRevision>()
+  const ordinaryByPath = new Map<string, Set<string>>()
+  for (const { win } of queries) for (const event of win) {
     const refs = [{ commit: event.commit, path: event.historicalPath }, ...event.parents.map(({ commit, historicalPath }) => ({ commit, path: historicalPath }))]
-    for (const ref of refs) revisions.set(revisionKey(ref), ref)
+    for (const ref of refs) revisions.set(anchorRevisionKey(ref), ref)
+    if (event.parents.length > 1 || event.parents.some((parent) => parent.historicalPath !== event.historicalPath)) continue
+    const commits = ordinaryByPath.get(event.historicalPath) ?? new Set<string>()
+    commits.add(event.commit)
+    ordinaryByPath.set(event.historicalPath, commits)
   }
   const refs = [...revisions.values()]
   const oids = batchRevisionOids(root, refs.map(({ commit, path }) => `${commit}:${path}`))
@@ -524,44 +533,45 @@ export async function anchorHitCommits(root: string, win: DriftPathEvent[], symb
     const x = extractorFor(regs, extOf(ref.path))
     const ready = x?.ready()
     if (!x || ready !== true) {
-      units.set(revisionKey(ref), { unparseable: !x ? `no designated extractor for ${ref.path}` : String(ready) })
+      units.set(anchorRevisionKey(ref), { unparseable: !x ? `no designated extractor for ${ref.path}` : String(ready) })
       continue
     }
-    units.set(revisionKey(ref), await unitsAtFileRevision(ref.commit, ref.path, x, objectFormat, oid, oid ? blobs.get(oid) : undefined))
-  }
-  const byPath = new Map<string, string[]>()
-  for (const event of win) {
-    if (event.parents.length > 1 || event.parents.some((parent) => parent.historicalPath !== event.historicalPath)) continue
-    const commits = byPath.get(event.historicalPath) ?? []
-    commits.push(event.commit)
-    byPath.set(event.historicalPath, commits)
+    units.set(anchorRevisionKey(ref), await unitsAtFileRevision(ref.commit, ref.path, x, objectFormat, oid, oid ? blobs.get(oid) : undefined))
   }
   const ordinaryHunks = new Map<string, Map<string, HunkRanges>>()
-  for (const [path, commits] of byPath) ordinaryHunks.set(path, await hunksAtMany(root, commits, path))
+  for (const [path, commits] of ordinaryByPath) ordinaryHunks.set(path, await hunksAtMany(root, [...commits], path))
   const intersects = (ranges: DiffLineRange[], candidates: Unit[]) =>
     ranges.some(([start, end]) => candidates.some((unit) => start <= unit.end && unit.start <= end))
-  for (const event of win) {
-    const after = units.get(revisionKey({ commit: event.commit, path: event.historicalPath }))!
-    const before = event.parents.map(({ commit, historicalPath }) => units.get(revisionKey({ commit, path: historicalPath }))!)
-    const ranges = ordinaryHunks.get(event.historicalPath)?.get(event.commit)
-      ?? await hunksAt(root, event)
-    if (event.parents.length && ranges.before.length !== before.length)
-      throw new Error(`anchor diff for ${event.commit}:${event.historicalPath} has ${ranges.before.length} parent ranges for ${before.length} parents`)
-    const hit = hits.get(event.commit) ?? { selectors: new Set<string>() }
-    const broken = [after, ...before].find((image) => 'unparseable' in image)
-    if (broken && 'unparseable' in broken) {
-      for (const symbol of symbols) hit.selectors.add(symbol)
-      hit.unparseable = broken.unparseable
-    } else {
-      for (const symbol of symbols) {
-        const afterUnits = 'units' in after ? after.units.filter((unit) => unit.name === symbol) : []
-        const authoredAfter = intersects(ranges.after, afterUnits)
-        const authoredBefore = before.length > 0 && before.every((image, parent) =>
-          'units' in image && intersects(ranges.before[parent], image.units.filter((unit) => unit.name === symbol)))
-        if (authoredAfter || authoredBefore) hit.selectors.add(symbol)
+  const results: AnchorHit[][] = []
+  for (const { win, symbols } of queries) {
+    const hits = new Map<string, { selectors: Set<string>; unparseable?: string }>()
+    for (const event of win) {
+      const after = units.get(anchorRevisionKey({ commit: event.commit, path: event.historicalPath }))!
+      const before = event.parents.map(({ commit, historicalPath }) => units.get(anchorRevisionKey({ commit, path: historicalPath }))!)
+      const ranges = ordinaryHunks.get(event.historicalPath)?.get(event.commit)
+        ?? await hunksAt(root, event)
+      if (event.parents.length && ranges.before.length !== before.length)
+        throw new Error(`anchor diff for ${event.commit}:${event.historicalPath} has ${ranges.before.length} parent ranges for ${before.length} parents`)
+      const hit = hits.get(event.commit) ?? { selectors: new Set<string>() }
+      const broken = [after, ...before].find((image) => 'unparseable' in image)
+      if (broken && 'unparseable' in broken) {
+        for (const symbol of symbols) hit.selectors.add(symbol)
+        hit.unparseable = broken.unparseable
+      } else {
+        for (const symbol of symbols) {
+          const afterUnits = 'units' in after ? after.units.filter((unit) => unit.name === symbol) : []
+          const authoredAfter = intersects(ranges.after, afterUnits)
+          const authoredBefore = before.length > 0 && before.every((image, parent) =>
+            'units' in image && intersects(ranges.before[parent], image.units.filter((unit) => unit.name === symbol)))
+          if (authoredAfter || authoredBefore) hit.selectors.add(symbol)
+        }
       }
+      if (hit.selectors.size) hits.set(event.commit, hit)
     }
-    if (hit.selectors.size) hits.set(event.commit, hit)
+    results.push([...hits].map(([commit, hit]) => ({ commit, selectors: [...hit.selectors], ...(hit.unparseable ? { unparseable: hit.unparseable } : {}) })))
   }
-  return [...hits].map(([commit, hit]) => ({ commit, selectors: [...hit.selectors], ...(hit.unparseable ? { unparseable: hit.unparseable } : {}) }))
+  return results
+}
+export async function anchorHitCommits(root: string, win: DriftPathEvent[], symbols: string[], regs: Extractor[]): Promise<AnchorHit[]> {
+  return (await anchorHitQueries(root, [{ win, symbols }], regs))[0]
 }

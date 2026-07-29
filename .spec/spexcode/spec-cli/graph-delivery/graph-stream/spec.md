@@ -68,7 +68,13 @@ fs event into the stale cache; the issue store dir is deliberately not a watched
 surface). A confirmed close must not wait for a disabled store watcher or the patrol. All
 funnel into one debounced fire; the debounce is **25ms**, sized to the MEASURED fs-event burst width
 (0–5ms for real declares/renames, single-digit ms for ref moves) — the in-flight build's dirty-rerun loop
-is the coalescer for anything wider, so the old flat 150ms was pure added latency.
+is the coalescer for anything wider, so the old flat 150ms was pure added latency. The debounce retains two
+facts, not one max scope: a `full` input owes structural convergence, and a `sessions` input owes a session
+projection. Thus full+sessions in one window starts/retains the one full builder **and** asks the cache for the
+last-good sessions splice first; a later sessions input wakes that same projection lane even if an earlier
+route-owned full rebuild is still held. The delta serializer sends that projection before awaiting full, then
+re-enters its normal full convergence. No max-scope reduction may silently turn a persisted lifecycle write into
+time behind unrelated graph assembly.
 
 **One registry owns filesystem observation, and its cardinality follows the canonical roots.** Every source
 is one reusable `(root, scope)` registry which is the sole owner of every handle taken for it. What this
@@ -142,7 +148,10 @@ single flight as a real rebuild. An unchanged tick returns the anchor and starts
 revision selects the cache's existing session-splice or full-build domain (so an uncommitted worktree edit or
 ref move a leaf missed still lands). A resulting diff when NO leaf watcher signalled logs a loud
 `PATROL-REPAIR` naming the changed units: a repair means some leaf is blind, and the target state is
-repairs/hour = 0. The trigger set is what
+repairs/hour = 0. `SPEXCODE_BOARD_DEBUG=1` also emits structured in-process timestamps for a sessions signal,
+its projection completion, and the queued SSE broadcast; the broadcast record carries its changed unit keys as
+well as its trigger tags, so a product latency reading can allocate route/store, projection, structural content,
+transport, and browser time without treating a wall-clock gap as one opaque number. The trigger set is what
 caused ONE refresh, so the refresh consumes it whether or not content moved — a no-op patrol must not leave its
 tag behind to make the next genuine repair read as leaf-signalled, which is the alarm silencing itself on
 exactly the machines that need it. `SPEXCODE_DISABLE_WATCHERS` (csv: store, refs, worktrees) deliberately blinds

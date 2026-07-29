@@ -7,8 +7,10 @@ import { test } from 'node:test'
 import { createConnection } from 'node:net'
 import {
   bindCodexGeneration,
+  commitCodexGenerationRegistration,
   ensureCodexCurrentGeneration,
   legacyCodexGenerationEndpoint,
+  prepareCodexGenerationRegistration,
   readCodexGenerationLedger,
   reclaimDrainingCodexGeneration,
   resolveCodexGenerationForSession,
@@ -76,6 +78,17 @@ test('detached-v3 switch preserves a populated legacy generation while new traff
 
     bindCodexGeneration(root, 'new-governed', 'thread-new-governed', current.id)
     assert.equal(resolveCodexGenerationForSession(root, 'new-governed', 'thread-new-governed')?.id, current.id)
+    const recoveredRegistration = 'registration-recovered'
+    const recoveredThread = 'thread-registration-recovered'
+    mkdirSync(join(root, 'sessions', recoveredRegistration))
+    writeFileSync(join(root, 'sessions', recoveredRegistration, 'session.json'), `${JSON.stringify({
+      session_id: recoveredRegistration, governed: true, harness: 'codex', harness_session_id: recoveredThread,
+    })}\n`)
+    prepareCodexGenerationRegistration(root, recoveredRegistration, recoveredThread, current.id)
+    assert.equal(resolveCodexGenerationForSession(root, recoveredRegistration, recoveredThread)?.id, current.id,
+      'a crash after session.json but before the binding commit recovers its exact route')
+    commitCodexGenerationRegistration(root, recoveredRegistration, recoveredThread, current.id)
+    assert.equal(readCodexGenerationLedger(root).bindings[recoveredRegistration]?.phase, undefined)
     assert.equal((await ensureCodexCurrentGeneration(root, async () => { starts++ })).id, current.id)
     assert.equal(starts, 1, 'restart/retry reads the published current generation instead of spawning another root')
 
@@ -95,6 +108,10 @@ test('detached-v3 switch preserves a populated legacy generation while new traff
     assert.equal((await ensureCodexCurrentGeneration(root, async () => { starts++ })).id, current.id)
     assert.equal(starts, 1, 'restart recovers a dead coordinator lock and publishes the one proven pending endpoint')
     assert.equal(readCodexGenerationLedger(root).pending, null)
+    mkdirSync(strandedLock)
+    await sleep(550)
+    assert.equal((await ensureCodexCurrentGeneration(root, async () => { starts++ })).id, current.id)
+    assert.equal(starts, 1, 'a crash between mkdir and owner publication is also recoverable')
 
     const protectedResult = await reclaimDrainingCodexGeneration(root, legacy.id, async () => ({
       healthy: true,
@@ -114,9 +131,12 @@ test('detached-v3 switch preserves a populated legacy generation while new traff
     assert.ok(processStartToken(Number(requirePid(current.pidFile))), 'an ambiguous legacy identity never harms current traffic')
 
     writeFileSync(legacy.receiptFile, legacyReceipt)
+    prepareCodexGenerationRegistration(root, 'crashed-before-record', 'thread-crashed-before-record', legacy.id)
+    assert.equal(resolveCodexGenerationForSession(root, 'crashed-before-record', 'thread-crashed-before-record'), null,
+      'a crash before session.json does not manufacture a route from a pending registration')
     for (const id of governed) bindCodexGeneration(root, id, `thread-${id}`, null)
     const reclaimed = await reclaimDrainingCodexGeneration(root, legacy.id, async () => ({ healthy: true, referenceIds: [], peerCount: 0 }))
-    assert.equal(reclaimed.reclaimed, true)
+    assert.equal(reclaimed.reclaimed, true, 'an unrecorded pending registration cannot pin a drained root forever')
   } finally {
     for (const endpoint of Object.values(readCodexGenerationLedger(root).generations).map((generation) => generation.endpoint)) {
       const pid = Number(requirePid(endpoint.pidFile, '0'))

@@ -875,6 +875,25 @@ exec "${realGit}" "$@"
       `the route-owned full never entered the controlled layout hold:\n${serverLog}`, 1_000)
     mark('route-owned full producer is held')
     await waitForQuiet(eventNames, 500)
+
+    const renamed = 'renamed before close'
+    const framesBeforeRename = frames.length
+    const renameResponse = await fetch(`${base}/api/sessions/${sessionId}/rename`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: renamed }),
+    })
+    assert.equal(renameResponse.status, 200)
+    assert.deepEqual(await renameResponse.json(), { ok: true })
+    const carriesRename = (frame: { data: string }) => {
+      const payload = JSON.parse(frame.data) as { set?: Record<string, { label?: string }>; graph?: { sessions?: Array<{ id: string; label?: string }> } }
+      return payload.set?.[`sess:${sessionId}`]?.label === renamed
+        || payload.graph?.sessions?.some((session) => session.id === sessionId && session.label === renamed) === true
+    }
+    await waitFor(() => frames.slice(framesBeforeRename).some(carriesRename),
+      `the first session projection waited for releaseFull:\n${serverLog}`, 2_000)
+    await waitForQuiet(eventNames, 100)
+
     const logBeforeClose = serverLog.length
     const framesBeforeClose = frames.length
 

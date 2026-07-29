@@ -6,7 +6,8 @@ scenarios:
     description: >-
       On the pinned fixed-tree history corpus from the source-of-truth cache audit, run the production
       `spex spec lint` CLI in separate processes and implementation-owned HOME directories for a cold seed,
-      an exact same-tip hit, and monotonically advancing tips. Compare the candidate against the independent
+      an exact same-tip hit, and monotonically advancing tips. In one long-lived process, request the same
+      immutable HEAD through two linked worktree roots and several concurrent consumers. Compare the candidate against the independent
       full-history implementation at every pinned tip, capturing stdout and stderr on every exit status, and
       first run the known anchor-debt positive control. Record wall time, user+system CPU, peak RSS, ledger
       bytes/rows, and temporary ledger read/decode/write diagnostics; keep the current tree and node population
@@ -18,7 +19,9 @@ scenarios:
       performs at most one locked atomic replacement, and never reloads its own write. Same-tip spawns no event
       history walk and retains a material wall/CPU win; advancing-tip event walks are bounded to newly reachable
       history and retain a wall/CPU win. Cold and advancing peak RSS lose the prior material regression, while
-      cold seed cost is reported rather than hidden by page-cache or shared-HOME warmth. Corruption rebuilds
+      cold seed cost is reported rather than hidden by page-cache or shared-HOME warmth. Equal HEAD plus
+      interpretation identity yields one shared history/drift pair while both worktree roots retain LRU ownership;
+      a different HEAD or interpretation never shares it. Corruption rebuilds
       from Git; a failed event walk remains loud and cannot mint a valid tip marker.
   - name: derivation-from-git
     tags: [cli]

@@ -198,3 +198,21 @@ export async function spliceSessions(prev: Awaited<ReturnType<typeof buildBoard>
   }))
   return { ...prev, sessions: sess }
 }
+
+// A full producer may finish after the session lane has already shown a newer row. Reuse that published
+// projection on the full topology without another store read: topology owns the current per-path ops, while
+// the published row owns lifecycle/eval fields. This is deliberately synchronous so a full completion never
+// waits for a quiet session store.
+export function rebasePublishedSessions(
+  topology: Awaited<ReturnType<typeof buildBoard>>,
+  published: Awaited<ReturnType<typeof buildBoard>>,
+): Awaited<ReturnType<typeof buildBoard>> {
+  const opsByPath: Record<string, any[]> = {}
+  for (const session of topology.sessions) opsByPath[session.source] = session.ops
+  const sessions = published.sessions.map((session) => ({
+    ...session,
+    source: session.path,
+    ops: rowOps(session, opsByPath),
+  }))
+  return { ...topology, sessions }
+}

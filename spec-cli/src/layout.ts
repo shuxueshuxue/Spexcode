@@ -1,5 +1,6 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { git, repoRoot, gitA, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { HARNESSES, type HarnessId } from './harness.js'
@@ -30,6 +31,20 @@ export type Config = {
     title?: string                 // override for the browser-tab name (default: the repo-root basename; see tab-title)
     icon?: string                  // project identity icon: a picker preset id; existing emoji/Iconify/URL values remain supported ([[identity-config]])
     showHeadlessLaunchers?: boolean // include headless harness profiles in the dashboard New Session picker (default false; [[launcher-visibility]])
+  }
+  uploads?: {
+    // One resumable attachment policy. Values default from templates/spexcode.json so a project may omit this
+    // section, while spexcode.local.json can tune the whole top-level section for one machine.
+    maxBytes?: number               // maximum bytes in one attachment (default: templates/spexcode.json)
+    chunkBytes?: number             // raw PATCH payload cap and client slice size (default: templates/spexcode.json)
+    concurrency?: number            // simultaneous attachment streams in one dashboard batch (default: templates/spexcode.json)
+    requestTimeoutMs?: number       // browser timeout for one chunk/complete request (default: templates/spexcode.json)
+    retryLimit?: number             // automatic retries after the first failed transient chunk request (default: templates/spexcode.json)
+    retryDelayMs?: number           // wait between automatic transient-request retries (default: templates/spexcode.json)
+    incompleteTtlMs?: number        // idle staging lifetime before an unfinished transfer expires (default: templates/spexcode.json)
+    cleanupIntervalMs?: number      // reaper interval for stale staging bytes (default: templates/spexcode.json)
+    minFreeBytes?: number           // filesystem capacity retained while reserving attachments (default: templates/spexcode.json)
+    evidenceMaxBytes?: number       // retained ceiling for eval-evidence POST bodies (default: templates/spexcode.json)
   }
   sessions?: {
     maxActive?: number             // concurrency cap: max agents AUTONOMOUSLY PROGRESSING at once (default 8; see sessions.ts maxActive)
@@ -67,7 +82,7 @@ export type Config = {
 // `serve`, `harnesses`, `render`, and `preset` are frontend/runtime/policy concerns (read separately via readConfig —
 // preset by init.ts at seed time, harnesses by [[harness-select]]; see api-endpoint / sessions.ts maxActive /
 // gateway.ts), NOT layout fields, so they stay out of the convention rather than forcing a default.
-type Convention = Required<Omit<Config, 'dashboard' | 'sessions' | 'resources' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private' | 'render'>>
+type Convention = Required<Omit<Config, 'dashboard' | 'uploads' | 'sessions' | 'resources' | 'serve' | 'harnesses' | 'preset' | 'issues' | 'forge' | 'private' | 'render'>>
 
 export type Worktree = {
   path: string; branch: string | null; node: string | null
@@ -103,6 +118,53 @@ export function readConfig(root: string): Config {
     out[k] = (b && o && typeof b === 'object' && typeof o === 'object' && !Array.isArray(o)) ? { ...b, ...o } : o
   }
   return out
+}
+
+export type UploadPolicy = Required<NonNullable<Config['uploads']>>
+
+const TEMPLATE_CONFIG = fileURLToPath(new URL('../templates/spexcode.json', import.meta.url))
+const MIN_POSITIVE_INTEGER = 1
+const MIN_NONNEGATIVE_INTEGER = 0
+
+function uploadConfigError(field: keyof UploadPolicy, rule: string): never {
+  const error = new Error(`uploads.${field} must be ${rule}`)
+  error.name = 'ConfigError'
+  throw error
+}
+
+function configuredInteger(value: unknown, field: keyof UploadPolicy, minimum: number): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) {
+    uploadConfigError(field, minimum === MIN_POSITIVE_INTEGER ? 'a positive integer' : 'a non-negative integer')
+  }
+  return value
+}
+
+function resolveUploadPolicy(values: Record<keyof UploadPolicy, unknown>): UploadPolicy {
+  const policy: UploadPolicy = {
+    maxBytes: configuredInteger(values.maxBytes, 'maxBytes', MIN_POSITIVE_INTEGER),
+    chunkBytes: configuredInteger(values.chunkBytes, 'chunkBytes', MIN_POSITIVE_INTEGER),
+    concurrency: configuredInteger(values.concurrency, 'concurrency', MIN_POSITIVE_INTEGER),
+    requestTimeoutMs: configuredInteger(values.requestTimeoutMs, 'requestTimeoutMs', MIN_POSITIVE_INTEGER),
+    retryLimit: configuredInteger(values.retryLimit, 'retryLimit', MIN_NONNEGATIVE_INTEGER),
+    retryDelayMs: configuredInteger(values.retryDelayMs, 'retryDelayMs', MIN_NONNEGATIVE_INTEGER),
+    incompleteTtlMs: configuredInteger(values.incompleteTtlMs, 'incompleteTtlMs', MIN_POSITIVE_INTEGER),
+    cleanupIntervalMs: configuredInteger(values.cleanupIntervalMs, 'cleanupIntervalMs', MIN_POSITIVE_INTEGER),
+    minFreeBytes: configuredInteger(values.minFreeBytes, 'minFreeBytes', MIN_NONNEGATIVE_INTEGER),
+    evidenceMaxBytes: configuredInteger(values.evidenceMaxBytes, 'evidenceMaxBytes', MIN_POSITIVE_INTEGER),
+  }
+  if (policy.chunkBytes > policy.maxBytes) uploadConfigError('chunkBytes', 'no greater than uploads.maxBytes')
+  return policy
+}
+
+export function uploadPolicyDefaults(): UploadPolicy {
+  return resolveUploadPolicy(readJsonConfig(TEMPLATE_CONFIG).uploads as Record<keyof UploadPolicy, unknown>)
+}
+
+// The seed template is the sole default-value source. Existing projects may omit `uploads`; they receive this
+// policy, while a committed/local value overrides it through readConfig's existing one-level merge.
+export function readUploadPolicy(root: string): UploadPolicy {
+  const configured = readConfig(root).uploads
+  return resolveUploadPolicy({ ...uploadPolicyDefaults(), ...configured } as Record<keyof UploadPolicy, unknown>)
 }
 
 // the shared git common dir (env-stripped git() so a hook's exported GIT_DIR can't misdirect it). Memoized:

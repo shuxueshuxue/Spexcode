@@ -609,6 +609,12 @@ export default {
     msgError: '⚠ 未送达 — 重试',
     attachTitle: '附加文件（或粘贴 / 拖入）—— 上传到会话所在机器，并插入其 /tmp 路径',
     attachError: '⚠ 上传失败',
+    attachQueued: '等待上传',
+    attachDone: '已附加',
+    attachCancelled: '已取消',
+    attachRetry: '重试上传',
+    attachCancel: '取消上传',
+    attachDismiss: '隐藏此附件状态',
     // 面板命令 —— Command Box 在本地执行（不发送给智能体）的 `/` 命令。
     // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
     cmd: {

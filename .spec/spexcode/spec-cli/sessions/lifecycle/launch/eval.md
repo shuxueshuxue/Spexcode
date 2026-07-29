@@ -16,6 +16,27 @@ scenarios:
       reaches `active`, and lands a commit whose trailer names ITS OWN record. The failure this locks:
       github#76, where a shared daemon's inherited id reached workers' commits and 48 of them in the SpexCode
       repo name a session that no longer exists.
+  - name: launch-prompt-may-begin-with-a-hyphen
+    tags: [backend-api, cli]
+    code: spec-cli/src/sessions.ts
+    description: >
+      In an isolated `spex init` project through a real backend running this code, create a session through
+      the real `POST /api/sessions` whose prompt's FIRST CHARACTER is `-` — the shape a human actually
+      produces by pasting a browser console line (`-home-…/api/uploads:1  Failed to load resource: … 413 …`),
+      a diff hunk, or a quoted flag. Do it per configured harness family, and read the generated `launch.sh`,
+      the worker pane, the session's status through `/api/sessions`, and whether the agent received the text.
+    expected: |
+      EVERY harness boots and receives the human's words, with no harness left out and no per-adapter escape
+      in the launch path. One invariant does it: the text SpexCode hands an agent never BEGINS with `-`,
+      guaranteed once at the single prompt-delivery seam every launch and send already passes through, so
+      the launch tail is one plain quoted operand that knows nothing about who parses it. No harness may echo
+      the prompt back as `unknown option`, fast-exit into the bounded readiness retry, and settle `offline`
+      with nothing run — the field failure this locks (a dashboard-created claude session died on three
+      identical retries with its own prompt quoted in the parser error) — and none may silently drop it
+      either (opencode's yargs discards a detached value starting with `-`). The same invariant covers a
+      prompt that IS a literal `--resume`/`--continue`, which the launch scripts would otherwise mistake for
+      their own resume marker. The human's words survive byte-for-byte after at most one leading space; a
+      prompt not starting with `-` is untouched entirely.
   - name: cap-counts-only-the-working-set
     tags: [backend-api]
     description: >

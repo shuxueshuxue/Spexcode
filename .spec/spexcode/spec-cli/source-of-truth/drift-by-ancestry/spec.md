@@ -76,3 +76,13 @@ shared only inside one lint call, so a rejected dangling oid cannot evict or con
 
 Correcting the under-report legitimately surfaces previously-hidden drift on existing boards — a
 re-baseline, not a regression.
+
+`eventsSince(idx, sha, path)` is where that rule lives, once: the commits touching `path` that are NOT
+ancestors of `sha`, i.e. the ones in `sha..HEAD` by true DAG reachability. `null` is its honest third answer —
+the anchor commit is unreachable (folded, rebased, cherry-picked away), so ancestry cannot testify at all and
+the caller must say what it does about that. Each layer decorates the same window with what is genuinely its
+own: the spec layer subtracts ack cover (an ack is spec-only and never a reading-freshness rule), and the eval
+layer falls back to comparing content when the window is `null`. What no caller may do is restate the
+reachability rule itself — retyping it is how it came to exist four times (`driftPathWindow` here, plus
+`changedSince`, the code window, and `codeDrift` in the eval layer), each with its own null handling to get
+subtly wrong.

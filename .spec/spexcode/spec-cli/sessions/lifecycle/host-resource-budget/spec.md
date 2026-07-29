@@ -44,6 +44,11 @@ Resource governance composes with the existing lifecycle instead of inventing an
 - [[harness-adapter]] owns which runtime is a per-session leaf and which is shared. Product code consumes that
   ownership as data rather than matching harness command strings.
 
+This node governs product mechanism only. A reading of one host's live fleet — a census, a cleanup queue, a
+per-record retirement ledger — is operator evidence about a particular machine at a particular hour, and it
+carries that host's identities, addresses, paths, and third-party project detail. No code honors it as a
+contract, so it is never a spec node here and its documents never live in this repository.
+
 ### Ownership and identity
 
 Every reported process has a stable instance identity: PID plus the operating system's process-start token.

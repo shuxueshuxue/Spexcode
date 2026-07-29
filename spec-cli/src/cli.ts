@@ -1049,13 +1049,18 @@ if (cmd === 'serve') {
       console.error('usage: spex internal session-cursor inbox --session <id> --to <event-index>')
       process.exit(2)
     }
-    const { advanceInbox } = await import('./session-cursors.js')
+    const { advanceInbox, inboxCursor } = await import('./session-cursors.js')
     const { readAliasedRawRecord } = await import('./layout.js')
     // the hook may address a codex THREAD id; the cursor file is keyed by the record id, so resolve the alias
     // through the one seam that owns that rule.
     const record = readAliasedRawRecord(sess)
     if (!record) console.log('noop (no session record)')
-    else { advanceInbox(record.session_id, to); console.log(`inbox -> ${to}`) }
+    else {
+      advanceInbox(record.session_id, to)
+      // report where the cursor ACTUALLY is: advancing is monotonic, so a lower offer is ignored, and
+      // echoing the request back would confirm a move that did not happen.
+      console.log(`inbox -> ${inboxCursor(record.session_id)}`)
+    }
   } else if (sub === 'session-fail') {
     // StopFailure is one native source for the shared active-only turn-failure CAS. A declaration or explicit
     // stop that landed first is authoritative, just as it is for Codex notifications and headless exits.

@@ -131,7 +131,7 @@ function turnExited(rec: HarnessDeliveryRecord, outcome: Extract<TurnOutcome, { 
   const cas = outcome.casCode === 0 ? '' : `; error CAS reporter also exited with code ${outcome.casCode}`
   return {
     ok: false,
-    error: `opencode-headless turn exited with code ${outcome.code} during startup for session ${rec.session}${cas} - prompt delivery FAILED`,
+    error: `opencode-headless turn exited with code ${outcome.code} during startup for session ${rec.session}${cas} - immediate wake failed`,
   }
 }
 
@@ -173,7 +173,7 @@ export async function spawnOpenCodeHeadlessTurn(
       const outcome = readTurnOutcome(outcomePath)
       if (outcome?.state === 'exit') return turnExited(rec, outcome)
       if (outcome?.state === 'invalid') {
-        return { ok: false, error: `opencode-headless turn for session ${rec.session} wrote an invalid exit outcome - prompt delivery NOT confirmed` }
+        return { ok: false, error: `opencode-headless turn for session ${rec.session} wrote an invalid exit outcome - immediate wake not confirmed` }
       }
       if (Date.now() >= deadline) break
       await sleep(Math.min(OUTCOME_POLL_MS, deadline - Date.now()))
@@ -181,19 +181,19 @@ export async function spawnOpenCodeHeadlessTurn(
 
     const first = readTurnOutcome(outcomePath)
     if (first?.state === 'exit') return turnExited(rec, first)
-    if (!first) return { ok: false, error: `opencode-headless turn for session ${rec.session} never confirmed startup - prompt delivery FAILED` }
-    if (first.state === 'invalid') return { ok: false, error: `opencode-headless turn for session ${rec.session} wrote an invalid exit outcome - prompt delivery NOT confirmed` }
+    if (!first) return { ok: false, error: `opencode-headless turn for session ${rec.session} never confirmed startup - immediate wake failed` }
+    if (first.state === 'invalid') return { ok: false, error: `opencode-headless turn for session ${rec.session} wrote an invalid exit outcome - immediate wake not confirmed` }
     if (first.state === 'reporting') {
-      return { ok: false, error: `opencode-headless turn exited with code ${first.code} but its error CAS reporter did not finish for session ${rec.session} - prompt delivery FAILED` }
+      return { ok: false, error: `opencode-headless turn exited with code ${first.code} but its error CAS reporter did not finish for session ${rec.session} - immediate wake failed` }
     }
     if (!pidAlive(first.pid)) {
-      return { ok: false, error: `opencode-headless turn wrapper died before reporting an outcome for session ${rec.session} - prompt delivery FAILED` }
+      return { ok: false, error: `opencode-headless turn wrapper died before reporting an outcome for session ${rec.session} - immediate wake failed` }
     }
     await sleep(OUTCOME_POLL_MS)
     const settled = readTurnOutcome(outcomePath)
     if (settled?.state === 'exit') return turnExited(rec, settled)
     if (settled?.state !== 'running' || settled.pid !== first.pid || !pidAlive(settled.pid)) {
-      return { ok: false, error: `opencode-headless turn did not remain live through startup for session ${rec.session} - prompt delivery FAILED` }
+      return { ok: false, error: `opencode-headless turn did not remain live through startup for session ${rec.session} - immediate wake failed` }
     }
     return { ok: true }
   } catch (error) {

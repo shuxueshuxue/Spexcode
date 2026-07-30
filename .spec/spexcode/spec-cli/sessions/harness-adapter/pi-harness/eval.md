@@ -44,7 +44,7 @@ scenarios:
       The worker launches with zero trust prompts; session.json advances past launch (SessionStart …
       Stop fire through dispatch.sh with SPEXCODE_HARNESS=pi); the commit carries the `Session:` trailer;
       liveness reads online while the pane lives and offline within seconds of a kill; a delivered prompt
-      appears in the pi TUI as a user turn (repaint-done confirmed); resume brings back the same
+      appears in the pi TUI as a user turn (best-effort poke); resume brings back the same
       conversation, not a fresh session.
   - name: stop-gate-bridge
     tags: [backend-api]
@@ -134,7 +134,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-pi-launch-in-turn
@@ -156,7 +156,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-pi-dashboard-note-in-turn
@@ -167,7 +167,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-pi-cli-send-idle
@@ -178,7 +178,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-pi-cli-send-in-turn
@@ -189,7 +189,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   # harness-delivery-campaign:end

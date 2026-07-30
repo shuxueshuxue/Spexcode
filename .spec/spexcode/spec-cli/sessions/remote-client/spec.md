@@ -43,7 +43,7 @@ backend answers.
   faked and nothing falls back.
 
 The split is not "reads versus writes" but "what would be wrong if two processes did it": exclusion is
-enforced by the per-session record lock, not by the identity of the process holding it ([[layers]]). The
+enforced by the per-session record lock, not by the identity of the process holding it ([[sessions-core]]). The
 backend is therefore the convenient owner of launch and the shared cache — never the holder of the
 invariant. (`session attach` remains its own case: a foreground terminal cannot be brokered over HTTP, so
 it stays local and guards that premise loudly against the resolved backend; see [[session-attach]].)

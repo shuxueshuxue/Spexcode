@@ -3,17 +3,14 @@ scenarios:
   - name: advance-can-duplicate-never-skip
     tags: [cli]
     description: >-
-      Exercise the two writers a cursor actually has, against a real store: the reader's own
-      `advanceInbox` and the sender's post-poke `consumeInboxAt`. Offer a position lower than the stored
-      one; consume the line the cursor is sitting on; then consume a LATER line while an earlier one is
-      still unread (the shape a lost poke leaves behind — message N's kick vanished, message N+1's landed).
-      Read the file back after each.
+      Exercise the turn-boundary reader's `advanceInbox` against a real store. Offer positions lower and
+      higher than the stored one, then send while the adapter poke is accepted but cannot be confirmed and
+      read the target cursor before its next turn boundary.
     expected: >-
-      A lower offer is ignored, so advancing is monotonic. Consuming the line the cursor sits on moves it
-      by exactly one. Consuming a later line while an earlier one is unread does NOTHING: the sender may
-      not jump the cursor over a message the agent was never shown, so the turn-boundary reader delivers
-      both and the cost of a lost poke is a duplicate, never a loss. Every interleaving of the two writers
-      can therefore only leave a position too LOW; no path produces one too high.
+      A lower offer is ignored and a higher offer advances the reader, so advancement is monotonic. A
+      socket write alone never changes the target cursor: the line remains unread until the target's next
+      turn-boundary reader prints it and advances. A lost or replayed poke therefore cannot skip a message;
+      stale reader state can only leave a position too LOW, never too high.
   - name: cursor-expires-by-being-read
     tags: [cli]
     description: >-
@@ -53,14 +50,15 @@ scenarios:
 
 # session-cursors — yatsu
 
-Only `shell-readable-inbox` has a product surface on this branch: the `spex internal session-cursor` verb
-and the hook that reads the file. The follow half — expiry-by-read, the full advance matrix, and the edge
-slice — becomes measurable when `spex session wait` / `watch` land on cursors, and those three are
-deliberately left as declared blind spots until then rather than measured through an import.
+Every scenario here now has a product surface. `shell-readable-inbox` runs through the `spex internal
+session-cursor` verb and the hook that reads the file. The follow half — expiry-by-read, the full advance
+matrix, and the edge slice — was a declared blind spot only while nothing shipped read a follow cursor;
+`spex session wait` / `watch` land on cursors as of [[session-follow]], so those three are measurable
+through that CLI and are open measurement debt rather than an accepted gap. Measure them there, never
+through an import.
 
-Measure the module the way its two real callers do — the sender advancing past a landed poke, and the
-pure-shell hook reading its own position — never by reasoning about the file format. The loss being scored
-is asymmetric and worth naming: a cursor that ends up too low costs a message shown twice, while a cursor
-that ends up too high costs a message that is never delivered at all. Every scenario here is a check that
-the second failure has no path, including under interleaved writers and against history that already
-contains duplicates nobody can remove.
+Measure the module through its one real writer, the pure-shell hook advancing its own position, never by
+reasoning about the file format. The loss being scored is asymmetric and worth naming: a cursor that ends
+up too low costs a message shown twice, while a cursor that ends up too high costs a message that is never
+delivered at all. Every scenario here is a check that the second failure has no path, including against
+history that already contains duplicates nobody can remove.

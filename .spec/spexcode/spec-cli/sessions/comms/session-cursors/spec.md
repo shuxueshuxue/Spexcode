@@ -35,13 +35,12 @@ The file is written whole, atomically (temp + rename), one field per line — th
 record, and for the same reason: the mark-active hook reads its inbox position in **pure shell**, and a
 whole-line match is exact where a value regex is not.
 
-**Advancing is monotonic, and the two writers never need a lock.** A reader advances with `advanceInbox`,
-which writes the maximum of the stored and the offered position. The sender's post-poke advance is narrower:
-`consumeInboxAt(pos)` moves to `pos + 1` **only** when the stored position is exactly `pos`. That is what lets
-[[dispatch]] mark a poked message as already-seen without swallowing an older line whose poke was lost — if
-anything before it is still unread, the advance simply does not happen and the turn-boundary reader delivers
-both. Interleaved writes can therefore only ever leave a position too LOW, whose consequence is a message
-shown twice; a position too high would lose one, and no path can produce it.
+**Only the reader advances, and it is monotonic.** `advanceInbox` writes the maximum of the stored and
+offered position after the turn-boundary hook has emitted unread messages. A poke never advances this
+cursor: reaching a local socket write cannot prove that the target parsed it. A lost or replayed poke thus
+leaves the line for the reader, whose one monotonic cursor is the sole authority for whether it has been
+shown. A stale read can only leave a position too LOW, whose consequence is a message shown twice; no path
+produces a position too high that would lose one.
 
 **A reader consumes EDGES, not lines.** The unread slice a follower acts on drops any status event whose
 `(status, proposal, note)` equals the last status that reader already saw — `X → X` is not a transition. This
@@ -51,7 +50,10 @@ re-recorded each real move (one measured transition landed as six lines inside 1
 history and are never rewritten, so the *read* is where an edge is decided — by comparing VALUES, never
 adjacency, and never against only the slice being read: a duplicate straddling the cursor boundary would
 otherwise read as a fresh move on the very next tick. A dropped duplicate is still **consumed** — the cursor
-advances past everything it read, so the same bytes are never re-examined.
+advances past everything it read, so the same bytes are never re-examined. A reader that STOPS on one event
+instead of draining the slice ([[session-follow]]'s take-one wait) needs the opposite guarantee, so the slice
+also names each event's absolute index: that reader advances to exactly the event it took, and the moves
+behind it in the same slice stay unread rather than being swallowed by the stop.
 
 **Expiry is a read-time consequence, never a timer.** Reading the file drops every followed entry whose target
 store dir no longer exists, and the next write persists that reckoning. A cursor is the whole record of who

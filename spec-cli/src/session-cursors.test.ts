@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { advanceFollow, advanceInbox, consumeInboxAt, followCursor, followedSessions, inboxCursor, readCursors, unreadSince } from './session-cursors.js'
+import { advanceFollow, advanceInbox, followCursor, followedSessions, inboxCursor, readCursors, unreadSince } from './session-cursors.js'
 import { sessionStoreDir } from './layout.js'
 import type { TimelineEvent } from './session-timeline.js'
 
@@ -54,19 +54,6 @@ test('advanceInbox is monotonic — a stale writer can leave a position low, nev
     assert.equal(inboxCursor(ME), 5)
     advanceInbox(ME, 6)
     assert.equal(inboxCursor(ME), 6)
-  })
-})
-
-test('consumeInboxAt marks a poked line seen ONLY when it is genuinely the next unread one', () => {
-  const home = freshHome()
-  withHome(home, () => {
-    // the poke for line 0 landed → the agent has seen it, so skip it at the turn boundary
-    consumeInboxAt(ME, 0)
-    assert.equal(inboxCursor(ME), 1)
-    // line 1's poke was LOST (cursor stays 1); line 2's poke landed. Advancing past 2 would swallow 1, so the
-    // narrow rule declines and the reader delivers BOTH — a duplicate is survivable, a lost message is not.
-    consumeInboxAt(ME, 2)
-    assert.equal(inboxCursor(ME), 1)
   })
 })
 

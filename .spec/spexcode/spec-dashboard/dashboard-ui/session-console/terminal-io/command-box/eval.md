@@ -10,7 +10,7 @@ scenarios:
     expected: >-
       A surface named Command Box opens focused in the lower middle with its bottom edge near 78% of the pane.
       Its footer stays fixed while content grows upward without resizing xterm. The per-session draft survives
-      close/reopen. Completion rows preserve their control-versus-authoring behavior; a successful atomic send
+      close/reopen. Completion rows preserve their control-versus-authoring behavior; a successful append-backed send
       clears and closes, while a failed send remains open with its draft and visible error. Closing returns TUI
       focus. No docked second input or type-mode indicator exists.
 ---

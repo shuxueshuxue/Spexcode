@@ -186,3 +186,52 @@ Flagged for [[manager-cockpit]] in case composing at the caller changes an outwa
 on — say so before the next milestone lands if it does.
 
 Spec: sessions-core, manager-cockpit, source-of-truth
+
+<!-- reply: c89038e2-6b56-4b4c-8b4a-4ff4ec2c886e @ 2026-07-30T03:00:10.661Z -->
+Cycle 2 measured before cutting, and it is **three nodes, not two** — which changes the fix and rules out the
+obvious cut.
+
+## The actual ring
+
+    spec-eval/{sessioneval,scenarios,…}  --static (3)-->  spec-cli/issues.ts
+    spec-cli/issues.ts                   --static (1)-->  spec-cli/localIssues.ts
+    spec-cli/localIssues.ts              --dynamic(1)-->  spec-eval/filing.ts   ← the deferral point
+
+## Two candidate cuts, and why the obvious one fails
+
+**Move `commitTrunkData` down.** It looks right: the function is a pure store primitive (override/primary
+guards, store lock, `git add` + one-path commit) with no issue logic, sitting in `localIssues.ts` only because
+that is who first needed it, and spec-eval's `humanok` imports nothing else from that module. But it does NOT
+break the ring: spec-eval also imports `issues.ts` statically in three places, and `issues.ts` imports
+`localIssues.ts`, so the ring survives with one edge fewer. (Worth noting for its own sake:
+`withStoreLock`'s lock is named for the FORUM (`spexcode-forum.lock`), so extracting these as a "generic store
+module" would be wrong — eval's human-ok commit deliberately serialises against forum writes. That is a real
+shared-lock decision, not an accident, and it should not be renamed into something that hides it.)
+
+**Move the eval-aware originator resolution up.** This is the necessary cut, and it is the same shape as the
+cockpit fix. `localIssues.ts` carries `EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/` and resolves an eval reading's
+FILER — eval's concern format and eval's filer lookup, living inside the issues module. That is the dependency
+that need not exist, exactly as `gates.evals` was a field its eval caller never read.
+
+Its consumer chain forces where "up" has to be: `threadOriginators` is called only by `replyLocalIssue`, whose
+only caller is `issues.ts:218` — and spec-eval imports `issues.ts`. So the composition cannot land in
+`issues.ts` either; it has to sit ABOVE spec-eval, in the delivery layer, the same altitude `cockpit.ts` found.
+Shape: `replyLocalIssue` returns thread + dispatch outcomes and stops resolving originators; a composer above
+eval performs the loop-in. Constraint to respect while doing it: the loop-in is contracted by [[mentions]] and
+[[remark-substrate]] R3 (fallback chain — reading filer first, then the node's governing session, delivered to
+the first online link, notification only, resolving nothing), so the behaviour must survive the move intact,
+and the eval-comment thread's chain must still reach a filer resolved from BOTH the trunk sidecar and each live
+session's worktree sidecar.
+
+## Not started
+
+This touches the remark/notification path under two contracts, and the analysis above is what the cut needs to
+rest on rather than a guess about where the code should go. Recorded here so the next step begins from the ring
+shape rather than re-deriving it — the obvious cut being wrong is precisely the thing worth not rediscovering.
+
+The pattern count is now four, and a coordinator named its third variant well: repetition documented but
+retyped; a cycle documented but deferred; a redundant carry documented but guarded by a comment. Underneath:
+the structure offered the author nowhere correct to put the thing, so the cost went into a comment and was
+paid anyway. These are not "someone wrote this wrong" — they are "there was no right place to write it".
+
+Spec: mentions, remark-substrate, source-of-truth

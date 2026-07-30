@@ -792,7 +792,7 @@ test('a selected demand jumps ahead of unrelated queued summaries without openin
   assert.equal(maxActive, 1, 'demand priority stays inside the bounded queue')
 })
 
-test('a rejected demand frees the slot and lets ordinary summaries continue', async () => {
+test('a rejected demand suppresses its cancelled generation until invalidation', async () => {
   const gates = new Map<string, ReturnType<typeof deferred<any>>>()
   const order: string[] = []
   const cache = new SessionEvalProjectionCache(async (id) => {
@@ -801,11 +801,12 @@ test('a rejected demand frees the slot and lets ordinary summaries continue', as
     gates.set(id, gate)
     return gate.promise
   }, () => {}, 'epoch')
-  cache.snapshot([
+  const sessions = [
     { id: 's1', path: '/wt/s1', liveness: 'online' },
     { id: 's2', path: '/wt/s2', liveness: 'online' },
     { id: 's3', path: '/wt/s3', liveness: 'online' },
-  ])
+  ]
+  cache.snapshot(sessions)
   await Promise.resolve()
   const demand = cache.demand('s3', '/wt/s3', async () => {
     order.push('demand:s3')
@@ -814,9 +815,29 @@ test('a rejected demand frees the slot and lets ordinary summaries continue', as
   gates.get('s1')!.resolve({ kind: 'stable', revision: 'r1', summary: summary(1) })
   await assert.rejects(demand, /selected demand failed/)
   while (!gates.has('s2')) await Promise.resolve()
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
   gates.get('s2')!.resolve({ kind: 'stable', revision: 'r2', summary: summary(1) })
   await cache.idle()
   assert.deepEqual(order, ['s1', 'demand:s3', 's2'])
+
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
+  await cache.idle()
+  assert.deepEqual(order, ['s1', 'demand:s3', 's2'], 'same-generation snapshots retain the demand cancellation')
+  assert.deepEqual(cache.get('s3'), { epoch: 'epoch', generation: 0, phase: 'loading' })
+
+  assert.equal(cache.invalidate({ id: 's3' }), 1)
+  assert.equal(cache.snapshot(sessions).get('s3')?.generation, 1)
+  while (!gates.has('s3')) await Promise.resolve()
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
+  assert.deepEqual(order, ['s1', 'demand:s3', 's2', 's3'], 'the next generation starts exactly one eager build')
+  gates.get('s3')!.resolve({ kind: 'stable', revision: 'r3', summary: summary(1) })
+  await cache.idle()
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
+  await cache.idle()
+  assert.deepEqual(order, ['s1', 'demand:s3', 's2', 's3'], 'settled next-generation snapshots do not duplicate the build')
+  assert.deepEqual(cache.get('s3'), {
+    epoch: 'epoch', generation: 1, phase: 'ready', revision: 'r3', value: summary(1),
+  })
 })
 
 test('a demand enqueued in the batch-finally gap is not lost', async () => {

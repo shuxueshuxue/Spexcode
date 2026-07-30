@@ -1660,6 +1660,7 @@ type ProjectionEntry = {
   current?: { generation: number; revision: string; value: SessionEvalSummary }
   scheduled: number | null
   running: number | null
+  demandCancelledGeneration: number | null
   observerHolds: Set<string>
 }
 
@@ -1726,6 +1727,7 @@ export class SessionEvalProjectionCache {
 
   private authorize(entry: ProjectionEntry): void {
     if (!this.precompute || entry.liveness === 'offline' || entry.observerHolds.size) return
+    if (entry.demandCancelledGeneration === entry.generation) return
     if ((entry.phase === 'loading' || entry.phase === 'updating')
       && entry.running !== entry.generation && entry.scheduled !== entry.generation)
       entry.scheduled = entry.generation
@@ -1745,6 +1747,7 @@ export class SessionEvalProjectionCache {
       phase: 'loading',
       scheduled: null,
       running: null,
+      demandCancelledGeneration: null,
       observerHolds: new Set(),
     }
     this.entries.set(id, entry)
@@ -1767,6 +1770,7 @@ export class SessionEvalProjectionCache {
           phase: 'loading',
           scheduled: null,
           running: null,
+          demandCancelledGeneration: null,
           observerHolds: new Set(),
         }
         this.entries.set(session.id, entry)
@@ -1796,6 +1800,7 @@ export class SessionEvalProjectionCache {
       entry.generation++
       entry.phase = 'updating'
       entry.scheduled = null
+      entry.demandCancelledGeneration = null
       changed++
     }
     return changed
@@ -1810,6 +1815,7 @@ export class SessionEvalProjectionCache {
       entry.generation++
       entry.phase = 'updating'
       entry.scheduled = null
+      entry.demandCancelledGeneration = null
     }
     return true
   }
@@ -1821,6 +1827,7 @@ export class SessionEvalProjectionCache {
       entry.generation++
       entry.phase = 'updating'
       entry.scheduled = null
+      entry.demandCancelledGeneration = null
     }
     for (const check of [...this.observerWaiters]) check()
     return true
@@ -1860,9 +1867,13 @@ export class SessionEvalProjectionCache {
     const existing = this.demands.get(id)
     if (existing) return existing as Promise<T>
     const entry = this.ensureEntry(id, path)
-    // A queued summary for this same generation is superseded by the full demand build. A running
-    // summary is left alone; the priority job waits for it to settle before taking the slot.
-    if (entry.running == null) entry.scheduled = null
+    // A queued summary for this same generation is superseded by the full demand build. If that demand
+    // rejects, snapshots must not recreate the cancelled eager work until a later invalidation advances g.
+    // A running summary is left alone; the priority job waits for it to settle before taking the slot.
+    if (entry.running == null && entry.scheduled === entry.generation) {
+      entry.scheduled = null
+      entry.demandCancelledGeneration = entry.generation
+    }
     let resolve!: (value: T) => void
     let reject!: (error: unknown) => void
     const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej })
@@ -1920,6 +1931,7 @@ export class SessionEvalProjectionCache {
         entry.generation++
         entry.phase = 'updating'
         entry.scheduled = null
+        entry.demandCancelledGeneration = null
         this.authorize(entry)
         changed = true
         continue

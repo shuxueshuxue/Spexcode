@@ -2,7 +2,7 @@ import { loadSpecs, deriveStatus } from './specs.js'
 import { resolveLayout } from './layout.js'
 import { listSessions } from './sessions.js'
 import { repoRoot, driftIndex, historyIndex } from './git.js'
-import { residentForgeState } from '../../spec-forge/src/resident.js'
+import { residentForgeRevision, residentForgeState } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { boardThreads } from './issues.js'
 import { evalContext, evalTimelines } from '../../spec-eval/src/evaltab.js'
@@ -123,7 +123,9 @@ export async function buildBoard() {
   const isOpen = (i: { status: string }) => i.status === 'open'
   // ONE store walk yielding both halves ([[issues]] boardThreads): the ISSUE surfaces get the split
   // population, the freshness carrier gets the whole store.
-  const { issues: merged, stamp: issuesStamp } = boardThreads({ host: resolveForgeHost(), state: residentForgeState() }, nodes.map((n) => n.id))
+  const forgeState = residentForgeState()
+  const forgeRevision = residentForgeRevision()
+  const { issues: merged, stamp: issuesStamp } = boardThreads({ host: resolveForgeHost(), state: forgeState }, nodes.map((n) => n.id))
   // `issuesStamp` above is that ONE board-level freshness stamp, over EVERY thread — noded or nodeless,
   // both stores, BOTH remark hosts. It is folded from the whole store and NOT from the split `merged`: a
   // scenario-hosted remark lands on an eval track the issue read splits out ([[eval-issue-split]]), so a
@@ -158,7 +160,7 @@ export async function buildBoard() {
     return { id: n.id, hue: n.hue, scenarios: tl.scenarios, evals: latest, readings: tl.readings }
   }).filter((node): node is NonNullable<typeof node> => node !== null)
 
-  publishReviewSnapshot({ issues: merged, evalNodes: evalReviewNodes })
+  publishReviewSnapshot({ issues: merged, evalNodes: evalReviewNodes, forgeRevision })
 
   const opsByPath: Record<string, any[]> = {}
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })

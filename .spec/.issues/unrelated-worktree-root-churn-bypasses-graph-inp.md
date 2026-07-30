@@ -1,7 +1,7 @@
 ---
 concern: Unrelated worktree-root churn bypasses graph input revision and rebuilds the full board
 by: 58195f32-61b8-4e69-9b91-b41fc2594501
-status: open
+status: landed
 nodes: graph-cache
 evidence: fabc8fb96cbde5546679981b20d2e3fd85eda87f63640992c6caf5a14b7c501f
 created: 2026-07-27T10:28:08.914Z

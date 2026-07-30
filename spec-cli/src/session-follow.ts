@@ -12,7 +12,7 @@ import { sessionLabel, type DisplayStatus, type Session } from './sessions.js'
 
 // Actionable = a state whose arrival means "a human/supervisor must now act". `offline` is deliberately ABSENT
 // where the old poll had it: liveness is a present-tense probe derivation, never authored, so it can never
-// appear on a log ([[layers]]). A follower learns what a session DECLARED and never that it died.
+// appear on a log ([[state]]). A follower learns what a session DECLARED and never that it died.
 const ACTIONABLE = new Set<DisplayStatus>(['review', 'done', 'close-pending', 'error', 'asking'])
 const NEXT: Record<string, string> = {
   review: 'merge | close',

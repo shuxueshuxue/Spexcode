@@ -42,7 +42,9 @@ only lifecycle verbs that release session resources.
 `spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path>
 --branch <absent-branch>` is the separate record-integrity control for an unreadable row. It moves no worktree,
 branch, process, or readable lifecycle record: the backend consumes its exact absence witness before it moves
-opaque bytes out of active projection. Both it and `--restore` require the original exact id rather than a
+opaque bytes out of active projection. Its optional `--thread` is an adapter-native conversation id, not the
+SpexCode session id; callers omit it when the named adapter has no native thread to archive, including Claude.
+Both it and `--restore` require the original exact id rather than a
 selector, because corrupt rows never belong to selector enumeration.
 
 Project session maintenance stays inside the six-noun grammar as one scoped porcelain verb:

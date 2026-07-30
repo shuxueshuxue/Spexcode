@@ -16,6 +16,7 @@ test('session noun-verb help projects the exact verb from the shared drawer defi
     { verb: 'send', usage: 'Usage: spex session send <SEL> "<msg>"', behavior: /LAST RESORT:[\s\S]*UNSTABLE[\s\S]*SEL = session id[\s\S]*PROJECT-BOUND/ },
     { verb: 'wait', usage: 'Usage: spex session wait <SEL>', behavior: /EDGE-TRIGGERED[\s\S]*non-actionable status into an actionable one[\s\S]*SEL = session id/ },
     { verb: 'new', usage: 'Usage: spex session new "<prompt>"', behavior: /--prompt-file[\s\S]*successful receipt/ },
+    { verb: 'quarantine', usage: 'Usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]', behavior: /--thread is an adapter-native conversation id, never the SpexCode session id; omit it for Claude/ },
   ]
   const outputs = cases.map(({ verb, usage, behavior }) => {
     const result = sessionHelp(verb)

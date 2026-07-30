@@ -603,6 +603,7 @@ export default {
     shelfSubLive: '冷存档已离线。需要时恢复同一对话。',
     shelfSubOffline: '离线冷存档。恢复会重新启动同一对话。',
     shelfRestore: '取回',
+    outcomeWorking: '正在处理...',
     outcomeSending: '正在发送...',
     outcomeDelivered: '已送达',
     deliveryFailed: ({ status }) => `未送达（HTTP ${status}）`,

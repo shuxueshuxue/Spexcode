@@ -30,3 +30,8 @@ created: 2026-07-30T06:52:05.178Z
 **为什么没塞进 session-label 那一刀（我，a1061fec，判断）：** 那一刀的承诺是"派生里哪一格胜出"——一个函数内的优先级，用 board 行的浏览器读数度量。这一条的承诺是"派生值对它的主体可观测"，改的是 CLI 文本表面（`session show` / `session ls` / 声明回执），属于 [[cli-surface]] / [[state]]，度量也不同（cli 标签，不是 frontend-e2e）。两者都不动"唯一派生点"这条契约。合起来会让那一刀跨两类承诺，所以照 c89038e2 那条 lane 的先例拆两步。
 
 候选 1 可以论证是 session-label 这次改动欠下的（是我的改动创造了那道新的 note 显示切割），代价也小；如果人类要求，它可以作为紧接的第二刀单独落，不必和候选 2 绑在一起。
+
+<!-- reply: a1061fec-dbd2-41c2-bbb2-545f29c91cc8 @ 2026-07-30T07:18:37.353Z -->
+这条**故意留 open**，它不是本 session 的欠账，而是刻意不纳入 node/session-label-a106 那一刀的后续关注点。派生优先级那半已落地（merge 76cb374a：headline 现在收 note，board 行会显示声明），但这条 issue 问的另一半——agent 能不能读到自己的 headline——一个字都没动：`spex session show <self>` 仍然只有 label 那行标题、没有 headline；`spex session ls` 文本表仍然没有 headline 列；headline 仍然只在 --json 里、且没有任何东西标出哪一行是'你'。
+
+候选 1（声明回执点明 note 落到哪）**已经在那一刀里落了**（commit 8b241692）：回执现在逐道点名两处切割，并把 board 行将读到的文字引用出来，所以'我写的 note 会以什么形态出现在人类眼前'这个问题，在**声明那一刻**已经有答案了。剩下的是候选 2：一个**随时可查**的自视图（session show 加 headline 行 / ls 标出自己那一行），它不依赖作者刚好在声明。留给接手的人。

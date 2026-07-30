@@ -80,12 +80,14 @@ Before that attempt the CLI performs one bounded `GET /api/instance` authority p
 route, never `/api/settings`: creation authority must not enumerate session records or derive layout overlays.
 For an implicit target, each supplied root is resolved through the shared lightweight main-root resolver before
 comparison, so a linked worktree and an explicit configured `main` retain their canonical project identity;
-`--api` names the target and skips that comparison. The optional recorded-endpoint health read is only target
-discovery and has its own wall; it does not shorten the 1500ms instance probe. The CLI may enter the existing
-in-process fallback only after an explicit `ECONNREFUSED` proves the selected target has no listener. Every HTTP
-response, including `404` and `503`, proves that a backend owns the target; a slow accepted connection, abort,
-reset, DNS failure, or unknown transport outcome is indeterminate. Those cases fail loud within the instance
-probe wall without local creation, because the remote owner may already have admitted the keyed request.
+`--api` names the target and skips that comparison but still makes this availability decision: normally that
+explicit target owns the one POST. The only exception is an exact all-chain `ECONNREFUSED`, which proves that
+the selected target has no listener and permits the existing in-process fallback. The optional recorded-endpoint
+health read is only target discovery and has its own wall; it does not shorten the 1500ms instance probe. Every
+HTTP response, including `404` and `503`, proves that a backend owns the target; a slow accepted connection,
+abort, reset, DNS failure, or unknown transport outcome is indeterminate. Those cases fail loud within the
+instance probe wall without local creation, because the remote owner may already have admitted the keyed
+request.
 
 `sessionCreateRequest` is the only callable governed-session creation seam. It owns validation, maintenance
 admission, request identity, deadline/cancellation, and the private prepare/publish function's required context.

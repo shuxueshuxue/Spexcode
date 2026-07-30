@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import { createHash } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -102,8 +102,21 @@ test('session new uses lightweight instance authority and falls back only for ex
   const projectPath = join(root, 'project'); mkdirSync(projectPath)
   const project = realpathSync(projectPath), home = join(root, 'home'), bin = join(root, 'bin')
   const linked = join(root, 'linked'), configuredMain = join(root, 'configured-main'), foreign = join(root, 'foreign')
+  const tmuxTrace = join(root, 'tmux.trace'), dnsTrace = join(root, 'dns.trace'), dnsFailure = join(root, 'dns-failure.cjs')
   mkdirSync(bin)
-  writeFileSync(join(bin, 'tmux'), '#!/bin/sh\nexit 0\n'); chmodSync(join(bin, 'tmux'), 0o755)
+  writeFileSync(join(bin, 'tmux'), '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$SPEXCODE_TMUX_TRACE"\nexit 0\n'); chmodSync(join(bin, 'tmux'), 0o755)
+  writeFileSync(dnsFailure, `
+const dns = require('node:dns')
+const fs = require('node:fs')
+const lookup = dns.lookup
+dns.lookup = function (hostname, options, callback) {
+  if (hostname !== 'authority-dns.test') return lookup.call(this, hostname, options, callback)
+  const done = typeof options === 'function' ? options : callback
+  fs.appendFileSync(process.env.SPEXCODE_DNS_FAILURE_TRACE, 'lookup\\n')
+  const error = Object.assign(new Error('getaddrinfo ENOTFOUND authority-dns.test'), { code: 'ENOTFOUND', hostname })
+  process.nextTick(() => done(error))
+}
+`)
   writeFileSync(join(project, 'README.md'), 'fixture\n')
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
   execFileSync('git', ['-c', 'user.name=create-dispatch', '-c', 'user.email=create@example.test', 'add', '.'], { cwd: project })
@@ -124,6 +137,7 @@ test('session new uses lightweight instance authority and falls back only for ex
     PATH: `${bin}:${process.env.PATH}`,
     SPEXCODE_HOME: home,
     SPEXCODE_TMUX: `create-dispatch-${process.pid}`,
+    SPEXCODE_TMUX_TRACE: tmuxTrace,
     SPEXCODE_API_URL: '',
   }
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
@@ -131,6 +145,7 @@ test('session new uses lightweight instance authority and falls back only for ex
     assert.equal(execFileSync('git', ['branch', '--list', 'node/*'], { cwd: project, encoding: 'utf8' }).trim(), '')
     assert.equal(execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: project, encoding: 'utf8' }).match(/^worktree /gm)?.length, 3)
     assert.ok(!existsSync(join(runtime, 'sessions')) || readdirSync(join(runtime, 'sessions')).length === 0)
+    assert.equal(existsSync(tmuxTrace) ? readFileSync(tmuxTrace, 'utf8') : '', '', 'the authority probe never creates a tmux artifact')
   }
 
   try {
@@ -208,6 +223,53 @@ test('session new uses lightweight instance authority and falls back only for ex
     assert.equal(slowSettings, 0, 'a slow instance does not fall through to settings')
     assert.equal(slowCreates, 0, 'a slow instance never admits a create request')
     assert.ok(Date.now() - started < 4_000)
+    noArtifacts()
+
+    let resetInstances = 0, resetSettings = 0, resetCreates = 0
+    const reset = createServer((req, res) => {
+      if (req.method === 'GET' && req.url === '/api/instance') {
+        resetInstances++
+        req.socket.destroy()
+        return
+      }
+      if (req.method === 'GET' && req.url === '/api/settings') resetSettings++
+      if (req.method === 'POST' && req.url === '/api/sessions') resetCreates++
+      res.writeHead(500); res.end()
+    })
+    reset.listen(0, '127.0.0.1'); await once(reset, 'listening')
+    const resetAddress = reset.address(); assert.ok(resetAddress && typeof resetAddress === 'object')
+    const resetResult = await runCreate(project, env, `http://127.0.0.1:${resetAddress.port}`)
+    reset.close(); await once(reset, 'close')
+    assert.equal(resetResult.code, 1)
+    assert.match(resetResult.stderr, /backend availability is indeterminate/)
+    assert.doesNotMatch(resetResult.stderr, /launching in-process/)
+    assert.equal(resetInstances, 1, 'a reset is observed at the instance authority seam')
+    assert.equal(resetSettings, 0, 'a reset never retries through settings')
+    assert.equal(resetCreates, 0, 'a reset never sends a create request')
+    noArtifacts()
+
+    let dnsInstances = 0, dnsSettings = 0, dnsCreates = 0
+    const dns = createServer((req, res) => {
+      if (req.method === 'GET' && req.url === '/api/instance') dnsInstances++
+      if (req.method === 'GET' && req.url === '/api/settings') dnsSettings++
+      if (req.method === 'POST' && req.url === '/api/sessions') dnsCreates++
+      res.writeHead(500); res.end()
+    })
+    dns.listen(0, '127.0.0.1'); await once(dns, 'listening')
+    const dnsAddress = dns.address(); assert.ok(dnsAddress && typeof dnsAddress === 'object')
+    const dnsResult = await runCreate(project, {
+      ...env,
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require=${dnsFailure}`,
+      SPEXCODE_DNS_FAILURE_TRACE: dnsTrace,
+    }, `http://authority-dns.test:${dnsAddress.port}`)
+    dns.close(); await once(dns, 'close')
+    assert.equal(dnsResult.code, 1)
+    assert.match(dnsResult.stderr, /backend availability is indeterminate/)
+    assert.doesNotMatch(dnsResult.stderr, /launching in-process/)
+    assert.equal(readFileSync(dnsTrace, 'utf8'), 'lookup\n', 'the child reached the injected DNS failure')
+    assert.equal(dnsInstances, 0, 'a DNS failure reaches no instance listener')
+    assert.equal(dnsSettings, 0, 'a DNS failure never retries through settings')
+    assert.equal(dnsCreates, 0, 'a DNS failure never sends a create request')
     noArtifacts()
 
     let mismatchInstances = 0, mismatchSettings = 0, mismatchCreates = 0

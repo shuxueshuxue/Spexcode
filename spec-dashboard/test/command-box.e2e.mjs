@@ -54,7 +54,15 @@ await page.route('**/api/graph*', async (route) => {
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture) })
 })
 await page.route(`**/api/sessions/${SESSION}/input`, async (route) => {
-  inputs.push(route.request().postDataJSON())
+  const body = route.request().postDataJSON()
+  inputs.push(body)
+  if (body.kind === 'command') {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ok: true,
+      mentions: [{ token: 'new', result: 'spawned', detail: 'child-session' }],
+    }) })
+    return
+  }
   if (failNext) {
     await new Promise((resolve) => setTimeout(resolve, 120))
     await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'upstream 502: append unavailable' }) })
@@ -177,6 +185,16 @@ const sessionMention = page.locator('.si-command-box .mention-item:not(.new)').f
 await sessionMention.waitFor({ state: 'visible' })
 await sessionMention.click()
 assert.match(await input.inputValue(), /^@[a-f0-9-]+ $/)
+
+await input.fill('@new delegate the focused work')
+const newSubmission = page.waitForRequest((request) => request.url().endsWith(`/api/sessions/${SESSION}/input`))
+await page.locator('.si-command-send').click()
+assert.deepEqual((await newSubmission).postDataJSON(), { kind: 'command', text: '@new delegate the focused work' })
+await page.locator('.si-command-box .si-action-outcome.delivered').waitFor({ state: 'visible' })
+await command.waitFor({ state: 'hidden' })
+await page.keyboard.press('Alt+i')
+await page.waitForFunction(() => document.activeElement?.classList?.contains('si-command-input'))
+step('@new submits through the Command Box control path')
 
 await input.fill('')
 const [chooser] = await Promise.all([

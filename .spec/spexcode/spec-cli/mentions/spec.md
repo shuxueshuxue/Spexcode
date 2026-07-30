@@ -35,7 +35,8 @@ grammar is uniform, the logic is tiny.
   contact you hand to a reader; what happens next is a **dispatch**, never a new datastore. **Any spawn's
   parent = its originator**: the `@new` worker records the mentioning author as its `parent`
   ([[session-nesting]]) so it folds under the session that summoned it — but only when that author IS a
-  real board session id; a dashboard `human`, an `unknown` CLI author, or a forge login is no session →
+  real board session id; the desktop [[command-box]] names its selected session as that originator, while a
+  dashboard `human`, an `unknown` CLI author, or a forge login is no session →
   null parent, a top-level worker, never a phantom nest (the same no-sender rule `spex new` from a plain
   shell follows).
 - **The grammar is script-agnostic, and its charset is not defined here.** A reference token speaks

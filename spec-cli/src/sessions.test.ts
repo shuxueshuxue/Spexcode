@@ -15,6 +15,8 @@ import { gitCommonDir, runtimeRoot, sessionRecordPath, sessionArtifactPath, sess
 import { readTimeline } from './session-timeline.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+// This file mutates process-global harness and runtime state, so its fixtures must not overlap.
+const serial = { concurrency: false } as const
 const waitUntil = async (check: () => boolean, label: string, timeoutMs = 5000) => {
   const deadline = Date.now() + timeoutMs
   while (!check()) {
@@ -40,7 +42,7 @@ function assertIsolatedResumeStore(home: string, id: string): void {
   assert.ok(runtimeRoot().startsWith(`${home}/`), `resume fixture ${id} runtime root escaped isolated SPEXCODE_HOME`)
 }
 
-test('command presets compose once at the backend prompt boundary while unknown slash text passes through', () => {
+test('command presets compose once at the backend prompt boundary while unknown slash text passes through', serial, () => {
   const presets = [
     { name: 'tidy', body: 'Tidy these targets:\n\n{{targets}}\n\nSee [[links]] for context.' },
     { name: 'report', body: 'Report clearly.' },
@@ -65,7 +67,7 @@ test('command presets compose once at the backend prompt boundary while unknown 
   assert.equal(composeCommandPrompt('plain prompt', presets, specs), 'plain prompt')
 })
 
-test('the live rename command resolves to the self-rename prompt through the shared resolver', async () => {
+test('the live rename command resolves to the self-rename prompt through the shared resolver', serial, async () => {
   const prompt = await resolveCommandPrompt('/rename')
   assert.match(prompt, /Review the work this session is currently doing/)
   assert.match(prompt, /spex session rename \. "<name>"/)
@@ -73,7 +75,7 @@ test('the live rename command resolves to the self-rename prompt through the sha
   assert.equal(await resolveCommandPrompt('/not-a-preset'), '/not-a-preset')
 })
 
-test('session-create API rejects stale fields before entering the transaction', async () => {
+test('session-create API rejects stale fields before entering the transaction', serial, async () => {
   const stale = await sessionCreateRequest({ prompt: 'probe', launcher: 'claude', mode: 'headless' })
   assert.deepEqual(stale, { status: 400, error: 'unknown session-create field: mode' })
 
@@ -81,7 +83,7 @@ test('session-create API rejects stale fields before entering the transaction', 
   assert.deepEqual(removedNode, { status: 400, error: 'unknown session-create field: node' })
 })
 
-test('session creation exports only the bounded transaction owner', async () => {
+test('session creation exports only the bounded transaction owner', serial, async () => {
   const surface = await import('./sessions.js') as Record<string, unknown>
   assert.equal(surface.newSession, undefined)
   assert.equal(typeof surface.sessionCreateRequest, 'function')
@@ -90,7 +92,7 @@ test('session creation exports only the bounded transaction owner', async () => 
 // @@@ birth registration — EXECUTE a generated launch.sh whose agent command is a stub, and prove the wrapper
 // writes the REAL agent pid to agent.pid before exec (the anchor of the 100ms hot death tier), AND that an
 // argument carrying spaces/quotes/`$` survives the extra `sh -c` nesting un-double-expanded ([[state]]).
-test('launchScript registers the agent pid before exec and preserves tricky quoted args', async () => {
+test('launchScript registers the agent pid before exec and preserves tricky quoted args', serial, async () => {
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-birth-'))
   process.env.SPEXCODE_HOME = home
@@ -161,7 +163,7 @@ exit 0
   chmodSync(tmux, 0o755)
 }
 
-test('maintenance resume holds its parent ticket after delegated spawn until adapter launch readiness', { timeout: 20_000, concurrency: false }, async () => {
+test('maintenance resume holds its parent ticket after delegated spawn until adapter launch readiness', { timeout: 20_000, ...serial }, async () => {
   const liveBefore = liveSessionsCensus()
   const previousHome = process.env.SPEXCODE_HOME
   const previousPath = process.env.PATH
@@ -297,7 +299,7 @@ touch ${JSON.stringify(consumed)}
   }
 })
 
-test('resume missing, failed, or invalidated readiness preserves the stopped offline record', { concurrency: false }, async (t) => {
+test('resume missing, failed, or invalidated readiness preserves the stopped offline record', serial, async (t) => {
   for (const outcome of ['missing', 'timeout', 'thrown', 'invalidated'] as const) await t.test(outcome, async () => {
     const liveBefore = liveSessionsCensus()
     const previousHome = process.env.SPEXCODE_HOME
@@ -358,7 +360,7 @@ test('resume missing, failed, or invalidated readiness preserves the stopped off
   })
 })
 
-test('a stale launch-readiness pending record recovers fail-closed before another launch attempt', { concurrency: false }, async () => {
+test('a stale launch-readiness pending record recovers fail-closed before another launch attempt', serial, async () => {
   const liveBefore = liveSessionsCensus()
   const previousHome = process.env.SPEXCODE_HOME
   const previousPath = process.env.PATH
@@ -421,7 +423,7 @@ test('a stale launch-readiness pending record recovers fail-closed before anothe
   }
 })
 
-test('stop revalidates the exact leaf after every shared guard before TERM and KILL', async () => {
+test('stop revalidates the exact leaf after every shared guard before TERM and KILL', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = claudeHarness.sharedRuntimes
   const originalCleanup = claudeHarness.cleanupRuntime
@@ -510,7 +512,7 @@ test('stop revalidates the exact leaf after every shared guard before TERM and K
   }
 })
 
-test('closing a proven-cold archive ignores unrelated shared refs but rejects target runtime ambiguity without signaling', async () => {
+test('closing a proven-cold archive ignores unrelated shared refs but rejects target runtime ambiguity without signaling', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = codexHarness.sharedRuntimes
   const originalColdPreflight = codexHarness.coldPreflight
@@ -587,7 +589,7 @@ test('closing a proven-cold archive ignores unrelated shared refs but rejects ta
   }
 })
 
-test('archive returns the exact adapter receipt when filing fails after cold runtime committed', async () => {
+test('archive returns the exact adapter receipt when filing fails after cold runtime committed', serial, async () => {
   const liveBefore = liveSessionsCensus()
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = codexHarness.sharedRuntimes
@@ -640,7 +642,7 @@ test('archive returns the exact adapter receipt when filing fails after cold run
   }
 })
 
-test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', async () => {
+test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = codexHarness.sharedRuntimes
   const originalCleanup = codexHarness.cleanupRuntime
@@ -741,7 +743,7 @@ test('public close cancels a clean never-launched queue without entering the unr
   }
 })
 
-test('launch retry log names the fast exit without guessing a daemon race', () => {
+test('launch retry log names the fast exit without guessing a daemon race', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-launch-log-'))
   process.env.SPEXCODE_HOME = home
@@ -766,7 +768,7 @@ test('launch retry log names the fast exit without guessing a daemon race', () =
 // @@@ the retry only covers what retrying can fix. Two launcher stubs, both exiting instantly: one printing
 // the harness's OWN settled failure (a `--resume` id claude has no conversation for), one printing nothing a
 // harness would recognise. Count the attempts each actually produces by having the stub append to a file.
-test('a launch failure the harness itself called settled is attempted exactly once', () => {
+test('a launch failure the harness itself called settled is attempted exactly once', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-launch-class-'))
   process.env.SPEXCODE_HOME = home
@@ -843,7 +845,7 @@ test('a launch failure the harness itself called settled is attempted exactly on
 
 // the transport's own settled failures, answered BEFORE a window is opened: a launch that cannot succeed is
 // refused once with its own code, never attempted and retried on a wall clock.
-test('launchPreflight refuses a launch that cannot succeed, naming which fact settled it', () => {
+test('launchPreflight refuses a launch that cannot succeed, naming which fact settled it', serial, () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-preflight-'))
   const base: SessRec = {
     session: 'preflight-test', governed: true, worktreePath: join(home, 'gone'), branch: null, node: null,
@@ -870,7 +872,7 @@ test('launchPreflight refuses a launch that cannot succeed, naming which fact se
   }
 })
 
-test('one-shot headless launch does not retry a successful fast exit', () => {
+test('one-shot headless launch does not retry a successful fast exit', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-one-shot-launch-'))
   process.env.SPEXCODE_HOME = home
@@ -886,7 +888,7 @@ test('one-shot headless launch does not retry a successful fast exit', () => {
   }
 })
 
-test('a failed creation-time materialize is reported loud and stamped on the record note', () => {
+test('a failed creation-time materialize is reported loud and stamped on the record note', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-materialize-fail-'))
   process.env.SPEXCODE_HOME = home
@@ -918,7 +920,7 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
   }
 })
 
-test('machine turn failures share one active-only error projection', () => {
+test('machine turn failures share one active-only error projection', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-headless-turn-state-'))
   process.env.SPEXCODE_HOME = home
@@ -981,11 +983,11 @@ test('machine turn failures share one active-only error projection', () => {
   }
 })
 
-test('turn failure observer retry is bounded exponential backoff', () => {
+test('turn failure observer retry is bounded exponential backoff', serial, () => {
   assert.deepEqual([1, 2, 3, 4, 5, 6, 20].map(turnFailureRetryDelay), [1000, 2000, 4000, 8000, 16000, 30000, 30000])
 })
 
-test('owned queues are public-authority leased and raw-state fenced from legacy drainers', () => {
+test('owned queues are public-authority leased and raw-state fenced from legacy drainers', serial, () => {
   const publicAuthority = backendLaunchAuthority({
     SPEXCODE_API_URL: 'https://operator:secret@127.0.0.1:8787/api/?token=private#fragment',
     PORT: '44725',
@@ -1015,7 +1017,7 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
   assert.equal(canDrainQueued({ status: 'queued', launchOwner: null }, 'http://127.0.0.1:8956'), true, 'legacy unowned queues remain adoptable')
 })
 
-test('a launch establishes identity: inherited session ids are stripped, this session\'s is set', () => {
+test('a launch establishes identity: inherited session ids are stripped, this session\'s is set', serial, () => {
   const prevHome = process.env.SPEXCODE_HOME
   const home = mkdtempSync(join(tmpdir(), 'spex-identity-'))
   process.env.SPEXCODE_HOME = home
@@ -1032,7 +1034,7 @@ test('a launch establishes identity: inherited session ids are stripped, this se
   }
 })
 
-test('the spawner pointer names the parent worktree and stays quiet without one', () => {
+test('the spawner pointer names the parent worktree and stays quiet without one', serial, () => {
   const parent = fromRaw({
     session_id: 'aaaaaaaa-1111-2222-3333-444444444444', governed: true,
     worktree_path: '/repo/.worktrees/parent-node-aaaa', branch: 'node/parent-node-aaaa',

@@ -1,7 +1,7 @@
 import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
 import { FORGE_DRIVERS, forgeDriverFor, forgeIssueStores, resolveForgeHost } from '../../spec-forge/src/drivers.js'
-import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, issuesEnabled , replyLocalIssue } from './localIssues.js'
+import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, issuesEnabled, replyLocalIssue, parseEvalConcern } from './localIssues.js'
 import { dispatchMentions, parseMentions, type DispatchOutcome, type LoopIn } from './mentions.js'
 import { envSessionId } from './layout.js'
 import { loadSpecsLite } from './specs.js'
@@ -70,14 +70,13 @@ export type RemarkTrack = { threadId: string; node: string; scenario: string; th
 
 // `eval: <node> · <scenario>` — node first (never contains ' · '), then the scenario (may). One thread per
 // pair (EventDetail.jsx evalConcern / localIssues.ts resolveRemarkHost mint it), so the last write wins is fine.
-const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/
 export const trackKey = (node: string, scenario: string): string => `${node} · ${scenario}`
 
 // an eval-remark thread is the eval scoreboard's data, NOT a drain-worthy issue (I1: a scenario-scoped
 // concern is a remark, never an issue). Its `eval: <node> · <scenario>` concern is the tell — the SAME key
 // loadEvalRemarkTracks isolates them by. The two reads are complementary over one store: mergedIssues (the
 // ISSUE surfaces) excludes these; loadEvalRemarkTracks (the EVAL surfaces) keeps only these.
-export const isEvalConcern = (concern: string): boolean => EVAL_CONCERN_RE.test(concern)
+export const isEvalConcern = (concern: string): boolean => !!parseEvalConcern(concern)
 
 // read the whole local store ONCE and split the eval-concern threads out (directive 3): trunk-scoped,
 // read-time, no branch write. A remark whose scenario no longer exists still LOADS here (it just keys a pair
@@ -85,9 +84,9 @@ export const isEvalConcern = (concern: string): boolean => EVAL_CONCERN_RE.test(
 export function loadEvalRemarkTracks(): Map<string, RemarkTrack> {
   const out = new Map<string, RemarkTrack>()
   for (const t of loadLocalIssues()) {
-    const m = EVAL_CONCERN_RE.exec(t.concern)
-    if (!m) continue
-    const node = m[1].trim(), scenario = m[2].trim()
+    const parsed = parseEvalConcern(t.concern)
+    if (!parsed) continue
+    const { node, scenario } = parsed
     out.set(trackKey(node, scenario), { threadId: t.id, node, scenario, thread: t, remarks: t.replies.filter(isRemark) })
   }
   return out
@@ -208,22 +207,22 @@ export async function replyIssue(
   id: string,
   body: string,
   opts: { author?: string; node?: string | null; evidence?: string[] } = {},
-): Promise<{ store: string; replies?: Reply[]; url?: string; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
+): Promise<{ store: string; replies?: Reply[]; url?: string; thread?: Issue; author: string; outcomes: DispatchOutcome[] }> {
   const author = opts.author || envSessionId() || 'unknown'
   const forge = /^([A-Za-z0-9-]+)#(\d+)$/.exec(id)
   if (!forge) {
     // evidence hashes accrue onto the local thread's typed evidence[] (a forge thread has no such field —
     // an annotation's frame rides its comment body's image link there, the driver the only network toucher);
     // replyLocalIssue also loops in the thread's originator ([[mentions]]) after the @-dispatch.
-    const { thread, outcomes, loopIn } = await replyLocalIssue(id, body, author, opts.evidence)
-    return { store: 'local', replies: thread.replies, outcomes, loopIn }
+    const { thread, outcomes } = await replyLocalIssue(id, body, author, opts.evidence)
+    // the thread rides along so [[loop-in]] can resolve this reply's originator chain without a second read.
+    return { store: 'local', replies: thread.replies, thread, author, outcomes }
   }
   const driver = forgeDriverFor(forge[1])
   if (!driver) throw new Error(`unknown forge host '${forge[1]}' — known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')}`)
   const { url } = await driver.createComment({ number: parseInt(forge[2], 10), body })
   const outcomes = await dispatchMentions(body, { threadId: id, node: opts.node ?? null, author })
-  // a forge issue's author is a github login, not a live session → no reachable originator to loop in (silent).
-  return { store: forge[1], url, outcomes, loopIn: null }
+  return { store: forge[1], url, author, outcomes }
 }
 
 export async function closeIssue(id: string): Promise<{ store: string; status: string; url?: string }> {

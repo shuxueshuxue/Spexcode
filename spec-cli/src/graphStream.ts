@@ -278,27 +278,28 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
       // equal inputs return the anchor without invoking a producer.
       const t0 = Date.now()
       try {
-        if (sessionsFirst) {
+        let wake!: () => void
+        const sessionWake = new Promise<void>((resolve) => { wake = resolve })
+        wakeSessionRefresh = wake
+        // A sessions-first turn can still fall back to an active route-owned full. Keep its wait wakeable
+        // too: a later persisted session change must re-enter the cheap projection rather than queue behind it.
+        const boardWait = sessionsFirst
+          ? getBoardForSessionRefresh()
+          : validate ? patrolBoard() : getBoard()
+        const outcome = await Promise.race([
+          boardWait.then((value) => ({ value })),
+          sessionWake.then(() => ({ value: null as unknown })),
+        ])
+        if (wakeSessionRefresh === wake) wakeSessionRefresh = null
+        if (outcome.value === null) {
+          boardWait.catch(() => {})
           board = await getBoardForSessionRefresh()
-          if (validate) { patrolPending = true; dirty = true }
-        }
-        else {
-          let wake!: () => void
-          const sessionWake = new Promise<void>((resolve) => { wake = resolve })
-          wakeSessionRefresh = wake
-          const boardWait = validate ? patrolBoard() : getBoard()
-          const outcome = await Promise.race([
-            boardWait.then((value) => ({ value })),
-            sessionWake.then(() => ({ value: null as unknown })),
-          ])
-          if (wakeSessionRefresh === wake) wakeSessionRefresh = null
-          if (outcome.value === null) {
-            boardWait.catch(() => {})
-            board = await getBoardForSessionRefresh()
-            servedSessionProjection = true
-            if (validate) patrolPending = true
-            dirty = true // the full wait was preempted only for delivery; it remains owed.
-          } else board = outcome.value
+          servedSessionProjection = true
+          if (validate) patrolPending = true
+          dirty = true // the full wait was preempted only for delivery; it remains owed.
+        } else {
+          board = outcome.value
+          if (sessionsFirst && validate) { patrolPending = true; dirty = true }
         }
       }
       catch {

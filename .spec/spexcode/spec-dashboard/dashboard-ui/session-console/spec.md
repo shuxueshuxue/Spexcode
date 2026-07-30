@@ -227,8 +227,9 @@ may instead name a **board command**, intercepted client-side because sending th
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every toolbar twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable
 worktree; `/archive` and `/unarchive` shelve and restore it without stopping anything ([[archive]] — exactly
-one of the pair is offered, keyed on `archived` alone); `/close` removes the worktree; `/merge` merges;
-`/eval` opens the canonical session-scoped Evals page.
+one of the pair is offered, keyed on `archived` alone); `/close` removes the worktree; `/merge` is offered
+only for the live review proposal declared by `done --propose merge`; `/eval` opens the canonical
+session-scoped Evals page.
 Lifecycle actions consume both HTTP status and the structured `{ok,error}` body before the board reloads, so
 a refused stop/close/relaunch remains visible instead of reading as a successful background no-op. Command Box
 and lifecycle actions use one selected-session, right-pane action-outcome mechanism: Command Box owns its
@@ -239,7 +240,8 @@ like two operations.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
 tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
 that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` and
-`@new` reuse [[mentions]]. File paste, drop, and pick reuse [[file-attach]].
+`@new` reuse [[mentions]], with the selected session as the command originator — a spawned `@new` worker records
+that exact id as `parent` and therefore folds below it. File paste, drop, and pick reuse [[file-attach]].
 
 A **right-click on a session row** opens its context menu — **lock on graph**, rename or close
 ([[session-rename]]), select for bulk close ([[session-multi-select]]), and **attach** for a live row
@@ -281,17 +283,19 @@ key handling deliberately **falls through unhandled** so the window-level handle
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
 can actually own.) The **toolbar's command
-group** renders the same board-command registry, narrowed to the current state: **Command Box** whenever live
-and **merge** at review/done. Command Box is the resident tool and always sits at the group's right edge — it
-is the one command present the whole time a session is live, so its position stays fixed while transient action
-buttons (merge, and relaunch when offline) render to its **left** and never push it around; only the toolbar
-render carries this anchoring. Every visible action uses one shared compact icon-toolbutton primitive and a familiar
-[[icon-system]] / Lucide mark (command, git-merge, rotate/relaunch), with its registry identity colour;
-there is no emoji, visible text label, or toolbar-local icon/action mapping. The registry remains the single row
-that decides availability, colour, typed twin, localized tooltip/`aria-label`, pressed state, and execution.
-Command Box exposes `aria-pressed` plus a stable selected treatment; an `offline` liveness (any lifecycle) swaps the
-registry commands for the same primitive's relaunch action, and review is
-**agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is the
+group** renders the same board-command registry. **Command Box** is present whenever live; each selected
+session also keeps the same 24px **merge** tool slot. It is green and dispatchable only for the
+persisted `awaiting` + `proposal:merge` + `review` projection while liveness is `online`; `nothing`/done,
+close-pending, working, asking, and every non-online reading keep the tool muted and disabled, with a
+localized tooltip and accessible reason. Disabled merge never appears as a typed `/merge` command and never
+dispatches. Command Box is the resident tool and always sits at the group's right edge; merge and relaunch
+occupy the fixed tools to its left, so proposal/lifecycle/liveness changes do not move merge. Every visible
+action uses one shared compact icon-toolbutton primitive and a familiar [[icon-system]] / Lucide mark
+(command, git-merge, rotate/relaunch), with its registry identity colour; there is no emoji, visible text
+label, or toolbar-local icon/action mapping. The registry remains the single row that decides availability,
+colour, typed twin, localized tooltip/`aria-label`, pressed state, and execution. Command Box exposes
+`aria-pressed` plus a stable selected treatment; an `offline` liveness (any lifecycle) also exposes the same
+primitive's relaunch action, and review is **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is the
 permanent **Eval door**, always available for any selected session (see [[session-eval]]): the toolbar entry
 or Command Box `/eval`, each navigating to the session-scoped Evals page. The reserved Command Box chord is
 consumed but inert for offline/queued sessions, using the same registry judgment as the button. There is

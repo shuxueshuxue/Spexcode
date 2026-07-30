@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
-import { closeIssue, createIssue, findIssue, isRemark, mergedIssues, promote, replyIssue, type ForgeSlice, type Issue } from './issues.js'
+import { closeIssue, createIssue, findIssue, isRemark, mergedIssues, promote, type ForgeSlice, type Issue } from './issues.js'
 import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from '../../spec-forge/src/drivers.js'
-import { currentSession, issuesEnabled, remarkOnHost, reply, resolveRemark, retractRemark } from './localIssues.js'
+import { currentSession, issuesEnabled, reply, resolveRemark, retractRemark } from './localIssues.js'
 import { summarize } from './mentions.js'
 import { loadSpecsLite } from './specs.js'
 
@@ -184,7 +184,7 @@ export async function runIssueWrite(args: string[]): Promise<number> {
       if (!id || !body) { console.error('usage: spex issue reply <issue-id> --body -|<text> [--evidence <hash>…]'); return 2 }
       // the ONE store-routed reply verb ([[issues]]): a forge id posts a real comment through the driver,
       // a local id commits to the store — the same command either way (dynamic import: no static cycle).
-      const r = await (await import('./issues.js')).replyIssue(id, body, { evidence: repeated(args, 'evidence') })
+      const r = await (await import('./loop-in.js')).replyIssueWithLoopIn(id, body, { evidence: repeated(args, 'evidence') })
       console.log(r.store === 'local'
         ? `replied to '${id}' — ${r.replies?.length} post(s) in thread`
         : `commented on '${id}' — ${r.url}`)
@@ -243,7 +243,7 @@ export async function runRemark(args: string[]): Promise<number> {
     // a node id and an issue id are both bare slugs, so any "looks like" guess would misroute; the flag
     // is the one unambiguous discriminator, and a wrong host fails loud downstream (unknown issue/node).
     const host = scenario ? { node: positional, scenario } : { issue: positional }
-    const r = await remarkOnHost(host, body, { codeSha: fl(args, 'code-sha'), evidence: repeated(args, 'evidence') })
+    const r = await (await import('./loop-in.js')).remarkWithLoopIn(host, body, { codeSha: fl(args, 'code-sha'), evidence: repeated(args, 'evidence') })
     console.log(`remark ${r.ref}  (against ${r.codeSha.slice(0, 7) || 'HEAD'}) — read it with \`spex issue ls --all\``)
     const s = summarize(r.outcomes, r.loopIn)
     if (s) console.log(`  ${s}`)

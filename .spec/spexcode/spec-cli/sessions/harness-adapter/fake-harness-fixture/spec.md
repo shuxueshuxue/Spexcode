@@ -22,8 +22,8 @@ network. This fixture is an external command boundary: a caller starts a backend
 launcher on `PATH`, then the runner uses only the public HTTP/WebSocket session routes plus local tmux observation.
 
 The fake launcher emits a fixed-rate, marker-bearing stream on its real PTY and binds the same per-session
-rendezvous socket path the claude adapter expects. It accepts the existing line-JSON control messages, confirms
-`reply` + `repaint` with `repaint-done`, and answers a small `ping` message for deterministic control probes. The
+rendezvous socket path the claude adapter expects. It accepts a line-JSON `reply` poke and answers a small `ping`
+message for deterministic control probes. The
 runner proves the complete user-shaped chain: `POST /api/sessions` creates the record, the board derives
 `online` from the live rendezvous listener, `/api/sessions/:id/socket` completes HTTP `101`, the PTY bridge carries
 the fake stream and a rendezvous-delivered control marker, and `POST /api/sessions/:id/close` removes the tmux

@@ -2,7 +2,7 @@
 title: layers
 status: active
 hue: 200
-desc: Three layers with distinct identities — the data asset, the agent-army substrate, the reference workspace — separated by ONE line: reading a file is L0, owning a resource is L1.
+desc: Three stacked layers with distinct identities and their own judgement criteria — the data asset, the agent-army substrate, the reference workspace — each worth having without the ones above it.
 ---
 
 # layers
@@ -19,8 +19,10 @@ reference implementation and the productised workspace: the reason this project 
 self-evolve at all, and the surface where an unprecedented scale of agent command becomes something a
 human can actually feel.
 
-The boundary between them is not a stack. It is one line: **reading a file is L0; owning a resource is
-L1.** The lock IS that line.
+They **stack**, and the stack is the point: L1 is built on the asset L0 accumulates, L2 is built on the
+orchestration L1 provides. That is also the adoption ladder — a team may take L0 alone and get the whole
+data asset, add L1 when it wants an agent army, add L2 when it wants the workspace — so each layer must be
+worth having without the ones above it.
 
 ## expanded spec
 
@@ -42,43 +44,41 @@ L1.** The lock IS that line.
   hub. A **consumer** of L1, never its gatekeeper. It is the default implementation and the dogfood
   surface, and its own judgement criterion is interaction density.
 
-### The boundary is the lock
+### L1's exclusion is held by a lock, not by a privileged process
 
-A question that the filesystem alone can answer is **L0**. A question that requires owning a resource — a
-record write, a tmux server, a harness control plane, a probe that perturbs what it measures — is **L1**.
-The per-session record lock (a filesystem lock with a PID liveness check, held across processes) is the
-concrete form of that line: **taking the lock is entering L1; reading without it is staying in L0.**
+L1 owns resources, and owning needs mutual exclusion — but the exclusion lives in the per-session record
+lock (a filesystem lock with a PID liveness check, held across processes), never in the identity of one
+blessed process. A backend is a convenient owner of the launch environment and a shared cache, not the
+holder of the invariant. So an L1 operation may run in whatever process takes the lock, and a read that
+takes no lock needs no permission from anyone. This is not a redefinition of the layering — it is what
+lets L1 be a **brick an external system can drive**, which is the criterion L1 is judged by.
 
-The consequence is that L1's mutual exclusion is a property of the *lock*, not of any process. There is no
-privileged actor. A backend is a convenient owner of the launch environment and a shared cache, not the
-holder of the invariant — which is why an L1 operation may run in any process that takes the lock, and why
-a read that takes no lock needs no permission from anyone.
+### What L1 publishes downward, and what it keeps
 
-### Only authored history crosses the boundary
+L1 writes an append-only log per session ([[session-timeline]]) whose access contract is deliberately
+L0-grade: a plain file any process may read with nothing but filesystem access, perturbing nothing. That
+is how supervision, CI, and any external orchestrator observe a fleet without being granted anything.
 
-L1 publishes an append-only log per session ([[session-timeline]]). That log is **L0 data with an L1
-writer**, exactly like the eval sidecar and the issue store: any process may read it with nothing but
-filesystem access, and reading it perturbs nothing.
+What is published is strictly the **authored** axis — what a session declared, and what was delivered to
+it. Two things stay inside L1:
 
-What crosses is strictly the **authored** axis — what a session declared, and what was delivered to it.
-Two things never cross:
-
-- **Current state** is not the log's job. The log says what happened; `session.json` says what is. A
-  consumer that reconstructs "the current status" from the log's last line is misusing it.
-- **Liveness never enters the log at all** — it is a present-tense derivation, re-probed per read
-  ([[state]]). So a pure L0 reader can never learn that a session died, and therefore can never take an
-  action that requires that knowledge. This costs nothing to enforce: such a reader sees the same
-  epistemic state as a failed probe, `unknown`, and `unknown` already withholds every dangerous entry.
+- **Current state.** The log says what happened; `session.json` says what is. A consumer that reconstructs
+  "the current status" from the log's last line is misusing it.
+- **Liveness**, which never enters the log at all — it is a present-tense derivation, re-probed per read
+  ([[state]]), and the probe perturbs what it measures. So a reader holding only the log can never learn
+  that a session died, and therefore can never take an action that needs that knowledge. This costs
+  nothing to enforce: such a reader sees the same epistemic state as a failed probe, `unknown`, and
+  `unknown` already withholds every dangerous entry.
 
 This split — lifecycle authored, liveness derived — was written for a different purpose and keeps paying:
-it decides what can be published versus only probed, how honestly a backend-less read can answer, and
-where this boundary sits. A distinction that keeps predicting answers to questions it was not designed for
-is a real seam, not a convenient taxonomy.
+it decides what can be published versus only probed, and how honestly a backend-less read can answer. A
+distinction that keeps predicting answers to questions it was not designed for is a real seam.
 
-### The borderland is taken, never designed for
+### The borderland is picked up, never designed for
 
-Because L1's truth is files, capabilities fall out of the boundary for free: a session with no board
-membership still has a readable mailbox; a read still works with no backend running; a subscription may or
-may not be persisted because it carries no truth. **Take them — they cost nothing and they keep the
-layering honest — but never let one justify a design decision.** The layers are judged by the criteria
-above; a borderland convenience is evidence that the seam is in the right place, not a reason to move it.
+Because L1's truth is files, small capabilities fall out at the L0/L1 seam for free: a session with no
+board membership still has a readable mailbox; a read still works with no backend running; a subscription
+may or may not be persisted because it carries no truth. **Pick them up — they cost nothing and the fact
+that they fall out at all is evidence the seam sits where it should — but never let one justify a design
+decision.** How natural or accessible that seam happens to be is secondary; it is a small thing that
+pressures the architecture to stay honest, not a criterion. The layers are judged by the three above.

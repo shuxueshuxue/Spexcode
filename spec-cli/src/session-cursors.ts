@@ -41,21 +41,12 @@ function writeCursors(id: string, cursors: Cursors): void {
 
 export const inboxCursor = (id: string): number => readCursors(id).inbox
 
-// A reader that has shown everything up to `to`. Monotonic: an interleaved write can leave the position too
-// low (a message shown twice), never too high (a message lost).
+// A reader that has shown everything up to `to`. Monotonic: a stale read can leave the position too low
+// (a message shown twice), never too high (a message lost).
 export function advanceInbox(id: string, to: number): void {
   const cursors = readCursors(id)
   if (to <= cursors.inbox) return
   writeCursors(id, { ...cursors, inbox: to })
-}
-
-// The sender's post-poke advance ([[dispatch]]): a landed poke already showed the agent the line at `pos`, so
-// skip it at the next turn boundary — but ONLY when it is genuinely the next unread one. If an earlier line is
-// still unread (its own poke was lost), this does nothing and the reader delivers both rather than one.
-export function consumeInboxAt(id: string, pos: number): void {
-  const cursors = readCursors(id)
-  if (cursors.inbox !== pos) return
-  writeCursors(id, { ...cursors, inbox: pos + 1 })
 }
 
 export const followCursor = (id: string, target: string): number | null => {

@@ -32,7 +32,7 @@ new primitive.
 verb's syntax, output, side effects and blocking behaviour. It does not prescribe an orchestration workflow.
 The full `spex session` / `spex help session` drawer remains intact. Both views
 are rendered from one shared session-help definition, so wait's edge semantics, watch's never-exit warning,
-send's raw-key warning, quarantine's exact-witness/restore-id rule, selector grammar, and project-bound write warning cannot drift between a drawer
+send's append-backed text and raw-key warning, quarantine's exact-witness/restore-id rule, selector grammar, and project-bound write warning cannot drift between a drawer
 manual and copied verb manuals. Existing session verbs and spellings keep their behaviour; this is a help
 projection change only.
 
@@ -44,8 +44,10 @@ prints the bare, parseable session **JSON to STDOUT** exactly as before, then pr
   snapshot;
 - **next lifecycle change** — background `spex session wait <id>` observes a non-actionable to actionable
   edge and exits as the wake-up, while `spex session watch <id>` is the continuous stream and never exits;
-- **response channel** — `spex session send <id> "<msg>"` is the ordinary path, while `send --keys` remains
-  an unstable last resort only after plain text cannot land.
+- **response channel** — `spex session send <id> "<msg>"` is the ordinary path and succeeds once it appends
+  the message to the target timeline; an unavailable adapter may delay the target context but does not undo
+  that send. `send --keys` remains an unstable last resort only after plain text cannot reach the needed TUI
+  control.
 
 The receipt is the same harness-agnostic dependency model for every caller. It does not diagnose
 launcher/provider failures, prescribe a supervisor workflow, require child sessions, change lifecycle

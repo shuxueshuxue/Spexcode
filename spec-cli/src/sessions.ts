@@ -109,8 +109,10 @@ function removeLaunchFile(id: string): void {
 }
 
 // one line, bounded — the shape every free-prose part takes to enter a one-line display string (the launch
-// prompt and a declared note both).
-function oneLinePreview(text: string, n = 60): string {
+// prompt and a declared note both). Exported because it is a display CUT of the author's own prose, and
+// [[state]]'s transparency rule owes the author its exact size (the declaration echo names it).
+export const HEADLINE_PREVIEW_COLUMNS = 60
+function oneLinePreview(text: string, n = HEADLINE_PREVIEW_COLUMNS): string {
   const first = text.split('\n').map((l) => l.trim()).find(Boolean) || ''
   return first.length > n ? first.slice(0, n - 1) + '…' : first
 }

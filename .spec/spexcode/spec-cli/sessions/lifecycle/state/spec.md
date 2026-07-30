@@ -238,12 +238,16 @@ rewritten in the measure-and-score reframe, moves the file but is not state's dr
 the dashboard, after which the next tool call (via mark-active) flips the record back to `active`, so an agent never reads
 that re-flip as a lost proposal. Every note-carrying declaration (`done`/`ask`/`park`/`state`, all of which
 accept `--note` — done included, its note reaches the record like the others') stores the note **in full**;
-display surfaces may cap it (the board table shows only the first `NOTE_BOARD_LIMIT` chars), but a cut must be
-**transparent to the author** — and taught **once per session**: the first time a declared note overflows that
-cap, the confirmation states the note's length, how much the board shows, and where the full text is readable
-(`spex review <id>` / `spex ls --json`), then drops a sentinel beside the record so later overflowing notes in
-the same session repeat none of it (the rule was taught; a verbatim repeat on every park/ask is noise — a
-field-reported irritation). Trimming stays the author's informed choice — never a silent loss — and like every
+display surfaces may cap it, but **every** cut must be **transparent to the author**, and the notice must name
+the cuts that actually bit. There are two, and they bite on different inputs: the board **table**'s NOTE column
+keeps the first `NOTE_BOARD_LIMIT` **display columns**, and the board **row** — the surface a human actually
+reads — is the note's **first non-empty line** alone, to `HEADLINE_PREVIEW_COLUMNS` ([[session-label]]'s
+headline). So the trigger is not a length test: a note *under* the table cap still loses every line after its
+first, and a length test would say nothing at all in exactly that case. The rule is taught **once per session**:
+the first time a declared note is cut by either surface, the confirmation states the note's length, each cut
+that bit and what it leaves, and where the full text is readable (`spex review <id>` / `spex ls --json`), then
+drops a sentinel beside the record so later cut notes in the same session repeat none of it (the rule was
+taught; a verbatim repeat on every park/ask is noise — a field-reported irritation). Trimming stays the author's informed choice — never a silent loss — and like every
 echo addendum the notice is a nudge riding the confirmation, not a gate.
 
 A record that EXISTS but cannot carry state is a different answer from a missing one, and the writer must not

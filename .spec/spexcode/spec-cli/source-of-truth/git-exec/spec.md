@@ -42,3 +42,32 @@ reported as broken.
 Overflow is the one case that legitimately replaces the code, because exceeding the buffer is this seam's own
 verdict rather than the child's, and the kill it performs would otherwise surface as an unrelated signal.
 Timeout marks itself separately for the same reason. Everything else keeps whatever cause it arrived with.
+
+## who reads this classification
+
+Seven call sites branch on it, across two packages and in BOTH polarities, so the cause this seam preserves
+is not a local concern:
+
+    spec-cli/src/sessions.ts   1718 · 2660 · 2692 · 2693 · 2792   `failure !== 'exit'`
+    spec-eval/src/freshness.ts 183                                `failure !== 'exit'`
+    spec-eval/src/sessioneval.ts 410                              `failure === 'exit'`
+
+The reversed-polarity one is where this classification is easiest to misread, including by me. Both of its
+branches raise the same error type and differ only in the sentence, and the `exit` sentence is *"base X is not
+an ancestor of head Y; use the session merge-base as base"* — an instruction the reader will act on. An earlier
+version of this body claimed a mislabelled spawn failure produced it. That was wrong twice over, and measuring
+is what showed it: an unexecutable git never reaches the gate at all, because `impactCommit` resolves both
+revisions first and fails first; and `merge-base --is-ancestor` answers "not an ancestor" precisely BY exiting
+1, so on the exit path that sentence is a correct diagnosis rather than a false one.
+
+What measurement did surface there is a different defect, still unfixed: `--is-ancestor` exits 0 for ancestor,
+1 for not-an-ancestor, and **128 for a hard error** (`fatal: Not a valid commit name`). All three non-zero
+outcomes classify as `exit`, so a 128 is reported to the reader as "your base is not an ancestor; use the
+session merge-base" — a confident, actionable, wrong instruction. Telling 1 from 128 needs the numeric status
+this seam currently discards, which is a widening of its result shape rather than a one-line change, so it is
+filed rather than patched here.
+
+Neither branch has a test. That is worth knowing before the next change to this seam: five of the seven sites
+are reached only on a machine where git is missing, unexecutable, or timing out, so ordinary runs never
+exercise the distinction — the guard is the freshness loud-failure test alone, and it had itself been failing
+on trunk long enough to be filed as a known red.

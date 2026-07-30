@@ -655,6 +655,52 @@ test('archive returns the exact adapter receipt when filing fails after cold run
   }
 })
 
+test('a successful archive clears a prior adapter recovery marker so the cold session can close', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const originalShared = codexHarness.sharedRuntimes
+  const originalColdPreflight = codexHarness.coldPreflight
+  const originalColdRuntime = codexHarness.coldRuntime
+  const originalColdRetirementPreflight = codexHarness.coldRetirementPreflight
+  const originalCleanup = codexHarness.cleanupRuntime
+  const home = mkdtempSync(join(tmpdir(), 'spex-archive-recovery-settle-'))
+  const id = `archive-recovery-settle-${process.pid}`
+  const threadId = `archive-recovery-thread-${process.pid}`
+  const worktree = join(home, 'worktree')
+  process.env.SPEXCODE_HOME = home
+  mkdirSync(worktree, { recursive: true })
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+    session_id: id, governed: true, worktree_path: worktree, branch: '',
+    node: 'archive', title: '', name: '', parent: '', status: 'awaiting', proposal: 'close', merges: 0, note: '',
+    sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: threadId, stopped: true,
+    archived: false, cold_proof: '', adapter_recovery: 'restore-runtime:older archive compensation timed out',
+    launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
+  }, null, 2)}\n`)
+  codexHarness.sharedRuntimes = () => []
+  codexHarness.cleanupRuntime = async () => {}
+  codexHarness.coldPreflight = async () => ({ ok: true, receipt: Object.freeze({ fixture: 'recovered-cold-receipt' }) })
+  codexHarness.coldRuntime = async () => ({ ok: true })
+  codexHarness.coldRetirementPreflight = async () => ({ ok: true, alreadyCold: true })
+  try {
+    assert.equal(await archiveSession(id), true)
+    const archived = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(archived.archived, true)
+    assert.equal(archived.adapter_recovery, '', 'a fresh cold proof settles an older recovery warning')
+    rmSync(worktree, { recursive: true, force: true })
+    assert.equal(await closeSession(id), true)
+    assert.equal(existsSync(sessionStoreDir(id)), false)
+  } finally {
+    codexHarness.sharedRuntimes = originalShared
+    codexHarness.coldPreflight = originalColdPreflight
+    codexHarness.coldRuntime = originalColdRuntime
+    codexHarness.coldRetirementPreflight = originalColdRetirementPreflight
+    codexHarness.cleanupRuntime = originalCleanup
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = codexHarness.sharedRuntimes

@@ -124,8 +124,10 @@ Two principles keep that derivation cheap on a long-running server:
   The pair projector also parses the current-tip topology and tree-path listing once and passes those
   immutable projections to both history and drift builders; a shared `rev-list --parents` or `ls-tree`
   text must never be split into separate equivalent maps per builder.
-  When `loadSpecs` already knows several current version bases and their named checkpoint acks, it primes
-  each finite query roster in one child-to-parent topology pass. It first resolves the bases, then retains
+  When `loadSpecs` already knows several current version bases and their named checkpoint acks, it parses
+  each relation once and primes each finite query roster in one child-to-parent topology pass. The same
+  prepared relation entries decide which bases need ancestry and become the relation published to consumers;
+  the loader does not reconstruct either view. It first resolves the bases, then retains
   only the acks which can actually cover one of them. Each output is the same dense bitset an independent
   `ancestorsOf` lookup would have stored; the compact endpoint frontier is discarded on return, and an arbitrary
   later SHA still uses that normal lookup. This is a batch entrance to one current projection, never a persisted

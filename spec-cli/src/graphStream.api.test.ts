@@ -490,7 +490,7 @@ exec "${realGit}" "$@"
     git(project, 'commit', '-qm', 'blinded round')
 
     await waitFor(() => existsSync(argvLog) && /^HANG /m.test(readFileSync(argvLog, 'utf8'))
-      && /graph patrol revision moved — scope=full/.test(serverLog),
+      && /graph refresh revision moved — signalled=none scope=full/.test(serverLog),
     `the blinded patrol never entered the controlled full hold:\n${serverLog}`, 30_000)
     heldTimeline.fullHeldAt = Date.now()
     const buildsBeforeHeldPatrol = buildCount()

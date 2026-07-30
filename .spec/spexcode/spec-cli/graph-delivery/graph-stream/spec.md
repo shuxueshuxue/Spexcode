@@ -52,7 +52,10 @@ merged tmux call for window/title state plus the rendezvous tri-state), both →
 which attaches one whole-tree observation of each live worktree's root plus one non-recursive gitdir watch,
 and detaches both on removal. Root events cover dirty governed source, renames, draft scenario declarations and reading
 sidecars; the gitdir watch covers `index` changes from stage/reset that do not rewrite the working file. Both
-fire 'full'. Only `.git` transport metadata (covered by its own watchers) and `node_modules` dependency bytes
+fire 'full'. A root watcher cannot tell a governed byte from a generated one, and is not asked to: what it
+fires is a claim about DOMAIN, and [[graph-cache]]'s verification decides whether any board input actually
+moved before a producer runs. Naming a scope is this module's whole job; deciding that a producer is owed is
+never it. Only `.git` transport metadata (covered by its own watchers) and `node_modules` dependency bytes
 are ignored; generated project paths are not guessed away, because an adopter may govern them. A
 pathless/overflow-like event or watcher error is treated as an unknown full change, never ignored. For the eval
 projection specifically, losing either the refs observer or a worktree observer places a keyed hold before the
@@ -144,7 +147,8 @@ authoritative rescan is triggered.
 **The patrol is a self-heal authority, not a crutch — and it is accountable.** The delta-gated ~15s cold
 tick asks [[graph-cache]] for a patrol refresh and tags that refresh `patrol`; it does not mark the board
 full-dirty merely because time passed. The cache compares its compact board-input revision under the same
-single flight as a real rebuild. An unchanged tick returns the anchor and starts zero assembly, while a moved
+single flight as a real rebuild — the same comparison it makes for a leaf-signalled refresh, so the patrol is
+one more caller of a shared verification rather than the only place it happens. An unchanged tick returns the anchor and starts zero assembly, while a moved
 revision selects the cache's existing session-splice or full-build domain (so an uncommitted worktree edit or
 ref move a leaf missed still lands). A resulting diff when NO leaf watcher signalled logs a loud
 `PATROL-REPAIR` naming the changed units: a repair means some leaf is blind, and the target state is

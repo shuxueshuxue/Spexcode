@@ -6,10 +6,12 @@ test('review snapshot publication replaces Issues and Evals as one atomic genera
   const first: ReviewSnapshot = {
     issues: [{ id: 'i-1' }],
     evalNodes: [{ id: 'n-1', scenarios: [{ name: 's-1' }], evals: [], readings: [] }],
+    forgeRevision: 1,
   }
   const second: ReviewSnapshot = {
     issues: [{ id: 'i-2' }, { id: 'i-3' }],
     evalNodes: [{ id: 'n-2', scenarios: [], evals: [{ scenario: 's-2' }], readings: [{ scenario: 's-2' }] }],
+    forgeRevision: 2,
   }
 
   publishReviewSnapshot(first)
@@ -18,4 +20,5 @@ test('review snapshot publication replaces Issues and Evals as one atomic genera
   assert.strictEqual(readReviewSnapshot(), second)
   assert.deepEqual(readReviewSnapshot().issues.map((issue) => issue.id), ['i-2', 'i-3'])
   assert.deepEqual(readReviewSnapshot().evalNodes.map((node) => node.id), ['n-2'])
+  assert.equal(readReviewSnapshot().forgeRevision, 2)
 })

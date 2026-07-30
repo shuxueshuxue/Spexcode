@@ -33,6 +33,10 @@ export function residentForgeState(): { issues: ForgeIssue[]; prs: ForgePR[] } {
   return cache.state()
 }
 
+export function residentForgeRevision(): number {
+  return cache.stateRevision()
+}
+
 export async function refreshForgeNow(): Promise<void> {
   if (inFlight) await inFlight
   lastAttempt = 0

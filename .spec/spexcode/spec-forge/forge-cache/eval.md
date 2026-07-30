@@ -1,5 +1,21 @@
 ---
 scenarios:
+  - name: gitlab-resident-projection
+    tags: [backend-api]
+    code: spec-forge/src/cache.ts
+    related: [spec-forge/src/resident.ts, spec-cli/src/reviews.ts]
+    description: >-
+      In a real GitLab-hosted checkout whose existing credential source can read the adopter-a project, record
+      only the direct GitLab REST and `gitlabDriver.listIssues()` counts. Run an explicit branch-local
+      backend (`PORT=<free> env -u SPEXCODE_API_URL npm run api`), seed its resident read with
+      `GET /api/issues?q=store:gitlab`, then poll that same endpoint without a restart while the resident
+      reconcile completes.
+    expected: >-
+      The HTTP Issue store eventually carries the same non-zero GitLab count and `gitlab#<iid>` identities
+      as the authenticated REST/driver reads. A cold response may carry the last empty resident state, but
+      a later cache-content revision republishes the unified snapshot; it cannot remain at zero after the
+      driver has returned the live rows. Counts and failure layers are recorded without token or credential
+      output.
   - name: resident-delta-freshness
     tags: [backend-api]
     code: spec-forge/src/cache.ts

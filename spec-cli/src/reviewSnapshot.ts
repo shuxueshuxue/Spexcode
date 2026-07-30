@@ -9,6 +9,7 @@ export type ReviewEvalNode = {
 export type ReviewSnapshot = {
   issues: any[]
   evalNodes: ReviewEvalNode[]
+  forgeRevision: number
 }
 
 let current: ReviewSnapshot | null = null

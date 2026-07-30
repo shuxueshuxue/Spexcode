@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto'
 import { listSessions } from './sessions.js'
-import { getBoard } from './graphCache.js'
+import { getBoard, invalidateBoard } from './graphCache.js'
 import { buildSessionEvals, type SessionEvals } from '../../spec-eval/src/sessioneval.js'
 import { evalTimeline } from '../../spec-eval/src/evaltab.js'
 import { issuesEnabled as issuesEnabledForReview } from './localIssues.js'
 import { issueStores as issueStoresForReview } from './issues.js'
 import { hasReviewSnapshot, readReviewSnapshot } from './reviewSnapshot.js'
+import { residentForgeRevision, residentForgeState } from '../../spec-forge/src/resident.js'
 // @ts-expect-error The dashboard module is deliberately plain JS so the browser and server execute the
 // exact same tokenizer/matcher. It is shipped beside the built dashboard by the root package manifest.
 import { EVAL_FILTER_KIND, evalFilterModel, evalReviewState, issueFilterModel, tokenFilterState } from '../../spec-dashboard/src/reviewFilters.js'
@@ -124,7 +125,12 @@ export async function issuesReview(query: string | undefined, requestedPage: unk
   // The first request must wait for the first atomic publication. Once one exists, a graph refresh may be
   // rebuilding unrelated board/session state; the published review source remains a valid answer and its
   // revision/poll path will deliver the next generation without making this page join that flight.
+  residentForgeState()
   if (!hasReviewSnapshot()) await getBoard()
+  else if (readReviewSnapshot().forgeRevision !== residentForgeRevision()) {
+    invalidateBoard('full')
+    await getBoard()
+  }
   const sessions = await listSessions()
   const issues = readReviewSnapshot().issues.slice().sort(issueOrder)
   const text = String(query ?? '').trim() || ISSUE_QUERY_DEFAULT

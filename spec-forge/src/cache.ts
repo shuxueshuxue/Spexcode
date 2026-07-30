@@ -22,9 +22,6 @@ export class ForgeCache {
     this.prs = new Map(prs.map((p) => [p.number, p]))
   }
 
-  // the INCREMENTAL halves reconcile() is made of: merge an updated-since issue window over the map
-  // (an issue never leaves — a closed one just updates in place), and replace the PR set (the open-PR
-  // list is small and self-truncating, so full replacement IS its delta).
   applyIssues(issues: ForgeIssue[]): void {
     for (const i of issues) this.issues.set(i.number, i)
   }
@@ -36,8 +33,6 @@ export class ForgeCache {
     return resolveLinks([...this.issues.values()], [...this.prs.values()], nodeIds)
   }
 
-  // the raw cached set — for the one consumer (the unified Issue port, spec-cli issues.ts) that needs
-  // EVERY cached issue, linked or not. Resolution stays the only derived view (view() above).
   state(): { issues: ForgeIssue[]; prs: ForgePR[] } {
     return { issues: [...this.issues.values()], prs: [...this.prs.values()] }
   }

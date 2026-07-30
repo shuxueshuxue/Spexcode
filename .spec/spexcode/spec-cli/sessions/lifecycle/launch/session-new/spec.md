@@ -86,7 +86,7 @@ request.
 
 `sessionCreateRequest` is the only callable governed-session creation seam. It owns validation, maintenance
 admission, request identity, deadline/cancellation, and the private prepare/publish function's required context.
-The HTTP route, CLI no-listener fallback, and issue/remark `@new` dispatch all call it. Preparation is not
+The HTTP route, CLI no-listener fallback, issue/remark `@new` dispatch, and Command Box `@new` dispatch all call it. Preparation is not
 exported and cannot mint a never-aborted context for itself, so adding another caller cannot bypass the wall or
 transaction owner.
 

@@ -1,5 +1,40 @@
 ---
 scenarios:
+  - name: a-dead-leaf-never-wedges-a-session
+    tags: [backend-api, cli]
+    code: spec-cli/src/sessions.ts
+    description: >
+      Take a governed session whose recorded leaf pid is DEAD — the state a launcher that exits before
+      readiness leaves behind — and drive the real `spex session stop` and `spex session close` against a
+      backend running this code. Then confirm the opposite case still refuses: a leaf that is ALIVE but whose
+      start identity cannot be matched must not be signalled.
+    expected: |
+      A dead recorded pid is not an obstacle to retiring the session: there is nothing to signal and nothing a
+      signal could hit by mistake, so teardown proceeds record-only and `close` removes the row, worktree and
+      branch. The live-but-unprovable leaf still refuses loudly, naming that it is alive and will not prove its
+      start identity — signalling it could kill whatever now wears that pid. The failure this locks: both cases
+      answered with ONE refusal, which left a session that could be neither launched nor closed, with
+      `quarantine` inapplicable because the record parses fine. Refusal text must not say "is not alive or has
+      no start identity", since that sentence is the conflation itself.
+  - name: prompt-invariant-covers-every-delivery
+    tags: [backend-api, cli]
+    code: spec-cli/src/sessions.ts
+    description: >
+      The option-shaped-prompt guarantee is made at composeSessionPrompt, which serves LAUNCH and every
+      SEND — so measure the send half, not only the launch half. In an isolated real project through a real
+      backend running this code, launch a session with an ordinary prompt, wait until it is genuinely idle
+      and listening, then `spex session send` it a message whose FIRST CHARACTER is `-`
+      (`--force-rebuild failed with 413 …`). Do it for an interactive harness (delivery types into the pane)
+      and for a headless one whose controller passes the turn text as a child process ARGV parameter
+      (pi-headless), which is the path with no escape of its own.
+    expected: |
+      The message reaches the agent and the agent acts on it, on both routes. The headless controller may
+      pass turn text straight into argv without any separator or stdin trick of its own, because the text it
+      is handed can no longer be read as an option — that is what makes one invariant able to replace a
+      per-adapter escape. The human's words survive after at most one leading space, visible in the pane
+      exactly as delivered. A send is NOT proven by the CLI printing `sent`: delivery to an agent that is
+      not yet listening (still on a first-run trust gate) reports sent and never reaches the turn, so the
+      reading must show the agent's own response to the message's content.
   - name: slug-own-identity
     tags: [cli]
     description: >

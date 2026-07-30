@@ -4,13 +4,21 @@ export {} // make this a module so top-level await is allowed
 // sigil ([[mentions]]).
 import { stripRefSigil } from './mentions.js'
 
-// @@@ noun-first dispatch ([[cli-surface]]) - `spex <noun> <verb> [object] [flags]`: the verb is always the
-// second token after its noun, a bare noun prints its drawer's help, and a bare verb exists only where the
-// object is invariably THIS PROJECT (graph · init · materialize · doctor · uninstall · serve). There is no
-// verb mirror and no promoted spelling — one verb, one spelling. Every REMOVED spelling lives in the
-// signpost tables below: it REPORTS the new spelling and exits non-zero, never executes (a signpost is not
-// an alias; the tables die in 0.4.0).
 const cmd = process.argv[2]
+
+const DAEMON_DEPENDENCIES = ['hono', '@hono/node-server', '@hono/node-ws', 'node-pty']
+
+async function assertDaemonDependencies(command: 'spex serve' | 'spex dashboard'): Promise<void> {
+  const { createRequire } = await import('node:module')
+  const resolve = createRequire(import.meta.url).resolve
+  const missing = DAEMON_DEPENDENCIES.filter((dependency) => {
+    try { resolve(dependency); return false } catch { return true }
+  })
+  if (!missing.length) return
+  console.error(`${command}: missing optional daemon dependencies: ${missing.join(', ')}`)
+  console.error(`Install them with: npm install ${missing.join(' ')}`)
+  process.exit(1)
+}
 
 // Registered before any await so a fatal top-level error lands here. Errors we OWN — BackendError, the
 // loud malformed-config ConfigError, the --api/--port UsageError, the write-guard GuardError — are
@@ -73,9 +81,6 @@ function rejectUnknownFlags(command: string, from: number, allowed: readonly str
   }
 }
 
-// @@@ signposts (one version only — delete in 0.4.0) - every spelling v0.3.0 removed maps to its new home.
-// A signpost REPORTS and exits 2; it never executes (not an alias): a stale hook or a human's muscle memory
-// gets a readable failure that names the migration, and nothing old keeps silently working.
 const SIGNPOSTS: Record<string, string> = {
   search: 'spex spec search <query>',
   owner: 'spex spec owner <path>',
@@ -107,8 +112,6 @@ const SIGNPOSTS: Record<string, string> = {
   resolve: 'spex remark resolve <ref>',
   retract: 'spex remark retract <ref>',
 }
-// the session drawer's removed sub-spellings: rawkey folded into send; capture/prompt folded into show;
-// exit/reopen respelled stop/resume; the hook-only verbs moved to internal.
 const SESSION_SIGNPOSTS: Record<string, string> = {
   rawkey: 'spex session send <SEL> --keys "<keys>"',
   exit: 'spex session stop <SEL>',
@@ -126,43 +129,60 @@ function signpost(oldSpelling: string, newSpelling: string): never {
 }
 if (cmd !== undefined && SIGNPOSTS[cmd]) signpost(`spex ${cmd}`, SIGNPOSTS[cmd])
 
+// @@@ followKit - the ONE seam where a CLI follow verb ([[session-follow]]) binds to what it follows.
+// Resolution reads the LOCAL store, never a backend: following is reading a file, so it must answer with no
+// `spex serve` running, and asking for the derived board would cost exactly the tmux/rendezvous probes a follow
+// exists to eliminate. No selector = follow every session, re-enumerated each tick so one that launches
+// mid-follow joins the feed; an explicit selector resolves once to a fixed set.
+type FollowRest = Omit<import('./session-follow.js').FollowOpts, 'targets' | 'self' | 'row'>
+async function followKit(selectors: string[], verb: string): Promise<{
+  watcher: string | null
+  follow: (emit: (line: string) => void, opts: FollowRest) => Promise<import('./session-follow.js').FollowOutcome>
+}> {
+  const { followSessions } = await import('./session-follow.js')
+  const { localCachedSessions } = await import('./client.js')
+  const { fromRaw, ownSessionId, selectSessions, toSession } = await import('./sessions.js')
+  const { listSessionIds, readPublicRecordEntry } = await import('./layout.js')
+  const real = selectors.filter((sel) => sel && sel !== '@all')
+  let picked: string[] = []
+  if (real.length) {
+    picked = selectSessions(localCachedSessions(true), real).map((s) => s.id)
+    if (!picked.length) { console.error(`${verb}: no such session: ${real.join(' ')}`); process.exit(2) }
+  }
+  const targets = real.length ? () => picked : () => listSessionIds()
+  // A feed line needs a session's NAME, which is record data; its STATUS comes from the log event, never from
+  // a fresh sample of the mutable record — that resample is what made the old poll lose moves.
+  const row = (id: string, status: import('./sessions.js').DisplayStatus, note: string | null) => {
+    const entry = readPublicRecordEntry(id)
+    if (entry.kind !== 'ok') return null
+    return { ...toSession(fromRaw(entry.raw), status, 'unknown'), note }
+  }
+  const watcher = ownSessionId()
+  return { watcher, follow: (emit, opts) => followSessions(emit, { ...opts, targets, self: watcher, row }) }
+}
+
 const greeted = new Set<string>()
+// Starting a STREAM follow on named live sessions announces itself ([[session-follow]]): one appended line per
+// target per process, so a stream never re-nags and a one-shot `wait` never announces at all. The append is the
+// delivery, taken locally, so the announce needs no backend either.
 async function greetWatchTargets(watcher: string, selectors: string[]): Promise<void> {
   try {
     const real = selectors.filter((sel) => sel && sel !== '@all')
     if (!real.length) return
-    const { resolveClientSession, clientSend } = await import('./client.js')
-    const { sessionHeadline } = await import('./sessions.js')
-    const meR = await resolveClientSession(watcher)
+    const { localCachedSessions } = await import('./client.js')
+    const { selectSessions, sendText, sessionHeadline } = await import('./sessions.js')
+    const board = localCachedSessions(true)
     // name the watcher by its board HEADLINE (same as the reply-channel footer), delimited as a session title.
-    const me = 'ok' in meR ? sessionHeadline(meR.ok) : watcher
+    const mine = board.find((s) => s.id === watcher)
+    const me = mine ? sessionHeadline(mine) : watcher
     const meWho = me && me !== watcher ? `session "${me}" (${watcher})` : `session ${watcher}`
-    for (const sel of real) {
-      const r = await resolveClientSession(sel)
-      if (!('ok' in r)) continue   // none/ambiguous → don't guess a target to interrupt
-      const target = r.ok.id
+    for (const target of selectSessions(board, real).map((s) => s.id)) {
       if (target === watcher || greeted.has(target)) continue
       greeted.add(target)
       const text = `🔭 ${meWho} is now supervising you — they started \`spex session watch\` over this session. To reach them directly, run: spex session send ${watcher} "<your message>". (One-time heads-up; reply only if you need to.)`
-      void clientSend(target, text)   // no sender id → the connection notice is not double-counted as comms
+      void sendText(target, text)   // no sender id → the connection notice is not double-counted as comms
     }
   } catch { /* greeting is best-effort — it must never disturb the watch */ }
-}
-
-async function withWatchEdge<T>(selectors: string[], intervalMs: number, body: () => Promise<T>, greet = false): Promise<T> {
-  const { ownSessionId, reportWatch, reportUnwatch } = await import('./sessions.js')
-  const { randomUUID } = await import('node:crypto')
-  const watcher = ownSessionId()
-  if (!watcher) return body()   // not a launched session (no own id) → nothing to attribute an edge to
-  const token = randomUUID()
-  const ttlMs = intervalMs * 3   // tolerate two missed heartbeats before the edge is dropped
-  void reportWatch(token, watcher, selectors, ttlMs)
-  if (greet) void greetWatchTargets(watcher, selectors)   // one-shot connection handshake to specific targets
-  const hb = setInterval(() => void reportWatch(token, watcher, selectors, ttlMs), intervalMs)
-  const cleanup = () => { clearInterval(hb); void reportUnwatch(token) }
-  process.once('SIGINT', () => { cleanup(); process.exit(0) })
-  process.once('SIGTERM', () => { cleanup(); process.exit(0) })
-  try { return await body() } finally { cleanup() }   // one-shot `wait` clears on return; stream `watch` clears on signal
 }
 
 async function resolveSelectorOrExit(selector: string): Promise<string> {
@@ -203,9 +223,6 @@ const DECLARED = ' — recorded; the human sees it in the dashboard. This declar
 // appended ONLY to a propose-close declaration: a worktree about to be discarded may still own ephemeral things the agent started to test this change; nudge (not gate) it to reclaim them before the worktree goes, keyed on whether the thing should outlive the task — never on who started it (a deliberately long-running service / a production build is started-by-you yet must be left alone). Project-agnostic on purpose.
 const CLOSE_CLEANUP = '\n\nBefore this worktree closes, check whether you left anything running that you started to test this change — a background process, a dev or preview server, a bound port, a scratch session. If nothing depends on it anymore, shut it down, or it keeps running as an orphan. Leave anything meant to keep running: a service you deliberately stood up, a production build, anything other work relies on. What matters is whether it still needs to exist after this task, not whether you started it. If unsure, leave it. This is a reminder to check, not a required step.'
 
-// @@@ session-state kit - the shared machinery behind the agent-authored state writers, used by BOTH the
-// typeable worker declarations (`spex session done|park|ask`) and the hook-only writers under
-// `spex internal session-*` — one diagnosis, one truncation-echo, either drawer.
 async function stateKit() {
   const s = await import('./sessions.js')
   const l = await import('./layout.js')
@@ -280,6 +297,7 @@ if (cmd === 'serve') {
   // two processes, two verbs in one operator drawer.
   const target = positionals(3)[0]
   if (target === 'ui') {
+    await assertDaemonDependencies('spex serve')
     // the natural post-install UI: serve the bundled dashboard on its OWN port (loopback by default;
     // --host widens the bind for LAN/tailnet viewing), proxying /api + the terminal socket to a
     // separately-run `spex serve`. Replaces the dogfood-only `npm run web` (vite).
@@ -290,6 +308,7 @@ if (cmd === 'serve') {
     if (!Number.isInteger(port) || !Number.isInteger(apiPort)) { console.error('spex serve ui: --port and --api-port must be integers'); process.exit(2) }
     serveDashboardLocal({ port, apiPort, host })
   } else if (target === undefined || target === 'api') {
+    await assertDaemonDependencies('spex serve')
     // fail loud, not cryptic ([[platform-support]]): serve IS the entry to the session runtime, which needs a
     // POSIX host (tmux/bash/unix-sockets). On a non-POSIX host (native Windows) point at WSL2 and exit here,
     // before importing the supervisor spawns tsx into a downstream ENOENT.
@@ -311,6 +330,7 @@ if (cmd === 'serve') {
     process.exit(2)
   }
 } else if (cmd === 'dashboard') {
+  await assertDaemonDependencies('spex dashboard')
   // the HOST-level dashboard ([[host-gateway]]): ONE gateway for every project this user serves. The
   // engine is [[gateway-hub]] (routing + [[gateway-auth]] authorization: admin scope implicit from
   // loopback until an admin password is set; per-project gates as configured); the host layer mounts the
@@ -343,10 +363,6 @@ if (cmd === 'serve') {
   }
   console.log(text)
 } else if (cmd === 'graph') {
-  // @@@ graph - the ONE assembled view (tree + worktree overlay + sessions), both faces of it: bare (with
-  // --focus/--depth) renders the human-readable status-coloured tree; --json dumps the full payload —
-  // identical to GET /api/graph, machine food. Colour degrades cleanly: off unless stdout is a tty, and
-  // NO_COLOR always wins.
   if (flag('node') !== undefined) { console.error('spex graph: --node was renamed — use --focus <id>'); process.exit(2) }
   const { buildBoard } = await import('./graph.js')
   const focusRaw = flag('focus')
@@ -373,8 +389,6 @@ if (cmd === 'serve') {
   }
   await flushExit(0)
 } else if (cmd === 'spec') {
-  // @@@ spec drawer - the governance graph's own verbs: search (topic → node), owner (file → node, the
-  // reverse edge), lint (the spec↔code graph check — errors gate commits), ack (the drift stamp).
   const sub = process.argv[3]
   if (sub === undefined) {
     console.log((await import('./help.js')).commandHelp('spec'))
@@ -498,10 +512,6 @@ if (cmd === 'serve') {
   const { uninstall } = await import('./uninstall.js')
   uninstall(positionals(3)[0], { hooks: has('hooks') })
 } else if (cmd === 'eval') {
-  // @@@ eval drawer - the measurement system's verbs: add (file a reading) · ls (read a node's timeline, or
-  // — with an explicit --session, never type-sniffed — a session's aggregate) · lint (the measurement-layer
-  // lint, pure advisory) · retract · clean. Node-scoped verbs live in spec-eval; the session read lives
-  // here (it talks to the backend).
   const sub = process.argv[3]
   if (sub === undefined) {
     console.log((await import('./help.js')).commandHelp('eval'))
@@ -547,9 +557,6 @@ if (cmd === 'serve') {
     process.exit(2)
   }
 } else if (cmd === 'evidence') {
-  // @@@ evidence drawer - the bare content-addressed transport pair ([[evidence-put]], [[evidence-get]]): put bytes
-  // in the shared evidence cache / read them back by hash, decoupled from filing a reading. Thin route — the
-  // cache lives in spec-eval. flushExit matters here: `get` pipes raw blob bytes to stdout.
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('evidence'))
   } else {
@@ -557,24 +564,15 @@ if (cmd === 'serve') {
     await flushExit(await runEvidence(process.argv.slice(3)))
   }
 } else if (cmd === 'issue') {
-  // @@@ issue drawer - the ONE issue surface ([[issues]]): `ls` is THE read — local + forge issues as ONE
-  // store-tagged list, the supervisor's/human's drain view; `show <id>` the single-thread detail (the same
-  // read GET /api/issues/:id serves); open/reply/close are store-routed (the SAME
-  // createIssue/replyIssue/closeIssue the dashboard's API calls); `promote` moves a thread cross-store;
-  // `links` traces forge issues/PRs onto spec nodes (read-only, spec-forge).
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('issue'))
   } else {
-    const { runIssues } = await import('./issues.js')
+    const { runIssues } = await import('./issues-cli.js')
     await flushExit(await runIssues(process.argv.slice(3)))
   }
 } else if (cmd === 'remark') {
-  // @@@ remark drawer - the resolvable interaction primitive ([[remark-substrate]]): `add` pins a concern to
-  // a HOST (a local issue, or a scenario `<node> --scenario <name>`), a second agent `resolve`s it, the
-  // author `retract`s it. CLI-first — the whole loop is these thin store-write wrappers, so the dashboard
-  // adds no capability.
   const sub = process.argv[3]
-  const m = sub === 'add' || sub === 'resolve' || sub === 'retract' ? await import('./localIssues.js') : null
+  const m = sub === 'add' || sub === 'resolve' || sub === 'retract' ? await import('./issues-cli.js') : null
   if (sub === undefined) {
     console.log((await import('./help.js')).commandHelp('remark'))
   } else if (sub === 'add') {
@@ -589,9 +587,6 @@ if (cmd === 'serve') {
     process.exit(2)
   }
 } else if (cmd === 'materialize') {
-  // @@@ materialize - surface nodes → manifest + AGENTS.md/CLAUDE.md block + shims + Codex
-  // trust, for cwd's project. Anchored on git-native events only ([[commit-surgery]]): this verb, init,
-  // session-worktree creation, and the planted pre-commit/post-checkout/post-merge hooks.
   const { materialize } = await import('./materialize.js')
   try {
     console.log(`materialized — content-hash ${materialize().contentHash}`)
@@ -602,11 +597,6 @@ if (cmd === 'serve') {
     process.exit(1)
   }
 } else if (cmd === 'doctor') {
-  // @@@ doctor - the diagnosis surface ([[doctor]], né `self` — renamed: "self" read as the tool itself /
-  // the global install, while the report is about THIS agent's wiring): does the materialized workflow
-  // actually reach this agent? Bare `doctor` reports per-layer coverage (preconditions · git-hook floor ·
-  // contract · hooks+handler-existence · backend) over the same HARNESSES materialize delivers through;
-  // `--contract` prints the surface:system text; `--conflicts` just the double-delivery check. Thin route.
   const { runDoctor } = await import('./doctor.js')
   await flushExit(await runDoctor(process.argv.slice(3)))
 } else if (cmd === 'session') {
@@ -660,72 +650,47 @@ if (cmd === 'serve') {
     if (has('json')) console.log(JSON.stringify(report, null, 2))
     else console.log((await import('./host-resources.js')).formatResourceReport(report))
   } else if (sub === 'watch') {
-    const { watchSessions } = await import('./sessions.js')
-    const { clientListSessions } = await import('./client.js')
     const selectors = positionals(4)
-    const intervalMs = (Number(flag('interval')) || 5) * 1000
-    // Broad watch keeps the default active-only event population, so the archive shelf is not replayed into
-    // ordinary monitoring. Presence is a separate all-record read: hiding a cold row must not turn it into
-    // "gone"/closed. An explicit selector opts into the history population so its archive/offline transition
-    // remains observable.
-    const history = () => clientListSessions(true)
-    const events = selectors.length ? history : () => clientListSessions(false)
-    await withWatchEdge(selectors, intervalMs, () => watchSessions((line) => console.log(line), {
-      source: events,
-      presenceSource: history,
-      selectors,
+    const kit = await followKit(selectors, 'spex session watch')
+    if (kit.watcher) void greetWatchTargets(kit.watcher, selectors)
+    await kit.follow((line) => console.log(line), {
       statuses: flag('status')?.split(','),
       includeIdle: has('idle'),
       as: flag('as'),
-      intervalMs,
-    }), true)   // greet=true: a stream watch greets its specific targets once; `wait` (one-shot) does not
+      intervalMs: (Number(flag('interval')) || 1) * 1000,
+    })
   } else if (sub === 'wait') {
-    const { watchSessions, ownSessionId } = await import('./sessions.js')
-    const { clientListSessions } = await import('./client.js')
-    const [id] = positionals(4)
-    if (!id) { console.error('usage: spex session wait <id> [--timeout SECONDS] [--interval SECONDS] [--idle]'); process.exit(2) }
-    // point-of-use turn-freeze warning ([[session-edges]]): a managed agent that runs this wait in the FOREGROUND
+    const selectors = positionals(4)
+    const kit = await followKit(selectors, 'spex session wait')
+    const named = selectors.join(' ') || 'your inbox'
+    // point-of-use turn-freeze warning ([[session-follow]]): a managed agent that runs this wait in the FOREGROUND
     // freezes its whole turn until the target produces an edge — a warning that used to live only in help
     // prose, now said where it matters. Foreground vs background is invisible from here, so the hint prints
     // for ANY managed-agent shell (harmless in a background transcript), on stderr, and changes nothing else.
-    const own = ownSessionId()
-    if (own) console.error(`spex session wait: heads-up (managed agent ${own.slice(0, 8)}) — this command BLOCKS until it OBSERVES ${id} transition from non-actionable into an actionable status (edge-triggered: an already-actionable current state does NOT return it — to just read the state now, use \`spex session ls\`/\`review\`); run it in the BACKGROUND or it freezes your whole turn (its exit is your wake-up). Proceeding.`)
-    const intervalMs = (Number(flag('interval')) || 2) * 1000
+    if (kit.watcher) console.error(`spex session wait: heads-up (managed agent ${kit.watcher.slice(0, 8)}) — this command BLOCKS until it OBSERVES ${named} transition from non-actionable into an actionable status, or a message arrives for you (edge-triggered: an already-actionable current state does NOT return it — to just read the state now, use \`spex session ls\`/\`review\`); run it in the BACKGROUND or it freezes your whole turn (its exit is your wake-up). Proceeding.`)
     const timeoutSec = Number(flag('timeout')) || 1200
-    // `wait` addresses one explicit record. Read its history row for both events and presence so archive is an
-    // offline transition, not a vanished session; only a missing all-record row is a genuine gone/closed result.
-    const history = () => clientListSessions(true)
-    const r = await withWatchEdge([id], intervalMs, () => watchSessions(() => {}, {
-      source: history,
-      presenceSource: history,
-      selectors: [id],
+    const r = await kit.follow(() => {}, {
       includeIdle: has('idle'),
-      intervalMs,
-      until: {
-        timeoutMs: timeoutSec * 1000,
-        // the arrival state and each observed transition narrate on stderr AS THEY HAPPEN, so a backgrounded
-        // wait's transcript is the state sequence itself; stdout stays the one machine verdict (the observed
-        // path on an edge, or a transport token).
-        onObserved: (st, was) => console.error(was
-          ? `spex session wait: observed ${was} → ${st}`
-          : `spex session wait: current status ${st} — recorded as the path start; returns on the next non-actionable→actionable transition`),
-      },
-    }))
+      intervalMs: (Number(flag('interval')) || 1) * 1000,
+      take: true,
+      timeoutMs: timeoutSec * 1000,
+      // the arrival state and each observed transition narrate on stderr AS THEY HAPPEN, so a backgrounded
+      // wait's transcript is the state sequence itself; stdout stays the one machine verdict.
+      onObserved: (sid, st, was) => console.error(was
+        ? `spex session wait: observed ${sid.slice(0, 8)} ${was} → ${st}`
+        : `spex session wait: ${sid.slice(0, 8)} current status ${st} — recorded as the path start; returns on the next non-actionable→actionable transition`),
+    })
     // the observed status path is the stdout verdict: read the LAST token as the status reached. Printing the
     // whole path (not just the final status) is the point — a manager sees what the wait lived through
     // (e.g. review→working→close-pending across a merge dispatch), not a bare word out of context.
     if ('reached' in r) { console.log(r.path.join('→')); process.exit(0) }
-    if ('gone' in r) { console.error(`spex session wait: no such (living) session ${id}`); process.exit(2) }
-    // a backend failure is a verdict about the TRANSPORT, never the session ([[session-edges]], issue #40): it prints
-    // its own outcome token on stdout — a word OUTSIDE the session-status vocabulary, so a supervisor reading
-    // the one status line can never mistake "I could not reach the board" for "the session is offline" — and
-    // exits 3, distinct from the plain no-edge timeout (1) and the vanished target (2).
-    if ('backendDown' in r) {
-      console.error(`spex session wait: ${r.backendDown}`)
-      console.log(r.kind === 'unreachable' ? 'backend-unreachable' : 'backend-error')
-      process.exit(3)
+    if ('mail' in r) {
+      console.error(`spex session wait: message from ${r.mail.from ?? 'a human'} — ${r.mail.text}`)
+      console.log('message')
+      process.exit(0)
     }
-    console.error(`spex session wait: timeout — observed no non-actionable→actionable transition on ${id} within ${timeoutSec}s (status path: ${r.path.join('→') || 'never sighted'})`)
+    if ('gone' in r) { console.error(`spex session wait: session ${r.gone} is gone — its store dir no longer exists`); process.exit(2) }
+    console.error(`spex session wait: timeout — observed no non-actionable→actionable transition on ${named} within ${timeoutSec}s (status path: ${r.path.join('→') || 'never sighted'})`)
     process.exit(1)
   } else if (sub === 'review') {
     const first = positionals(4)[0]
@@ -859,8 +824,8 @@ if (cmd === 'serve') {
         console.error(`spex session send --keys: nothing delivered to ${full} (offline, unknown session, or no valid key token)`)
         process.exit(1)
       }
-      // prompt dispatch is socket-only + fail-loud (the backend enforces it): a non-accepted prompt prints the
-      // reason AND exits non-zero, so a manager/script never mistakes a dead dispatch for success.
+      // The backend decides send success at the timeline append. A dead adapter poke only delays context
+      // injection, while a refused record write prints the reason and exits non-zero.
       // BIDIRECTIONAL: stamp the SENDER (this send process's OWN session — the only process that knows it, via
       // ownSessionId from CLAUDE_CODE_SESSION_ID) + a one-line reply hint into the delivered
       // message, so the recipient can reply over the SAME send. The sender's row (hence its display label) is
@@ -928,8 +893,6 @@ if (cmd === 'serve') {
     }
   }
 } else if (cmd === 'internal') {
-  // @@@ internal - the machine-plumbing namespace: verbs only generated hooks and launch scripts call,
-  // kept OUT of the porcelain top level so `spex help`'s vocabulary is exactly what a human/agent types.
   const sub = process.argv[3]
   if (sub === 'trunk') {
     // print the resolved source-of-truth branch (layout.ts mainBranch(): config override → the main
@@ -1082,6 +1045,28 @@ if (cmd === 'serve') {
     const st = process.argv[4] as any
     const ok = mark(() => s.markState(st, { proposal: flag('propose') as any, note: flag('note'), sessionId: sess }))
     console.log(ok.ok ? `state -> ${st}${noteEcho(flag('note'))}` : ok.reason ?? noRecord())
+  } else if (sub === 'session-cursor') {
+    // the turn-boundary mail reader advances its own inbox cursor here ([[session-cursors]]) — the same
+    // one-writer discipline as session-state: shell reads the file, it never rewrites it, so a follower's
+    // entries in the same file cannot be clobbered by a partial shell write.
+    const to = Number(flag('to'))
+    const sess = flag('session')
+    if (process.argv[4] !== 'inbox' || !sess || !Number.isFinite(to)) {
+      console.error('usage: spex internal session-cursor inbox --session <id> --to <event-index>')
+      process.exit(2)
+    }
+    const { advanceInbox, inboxCursor } = await import('./session-cursors.js')
+    const { readAliasedRawRecord } = await import('./layout.js')
+    // the hook may address a codex THREAD id; the cursor file is keyed by the record id, so resolve the alias
+    // through the one seam that owns that rule.
+    const record = readAliasedRawRecord(sess)
+    if (!record) console.log('noop (no session record)')
+    else {
+      advanceInbox(record.session_id, to)
+      // report where the cursor ACTUALLY is: advancing is monotonic, so a lower offer is ignored, and
+      // echoing the request back would confirm a move that did not happen.
+      console.log(`inbox -> ${inboxCursor(record.session_id)}`)
+    }
   } else if (sub === 'session-fail') {
     // StopFailure is one native source for the shared active-only turn-failure CAS. A declaration or explicit
     // stop that landed first is authoritative, just as it is for Codex notifications and headless exits.

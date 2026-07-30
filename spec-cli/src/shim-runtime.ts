@@ -116,21 +116,13 @@ const spexShimRuntime = (cfg) => {
     return args
   }
 
-  // the per-session rendezvous control socket: bind a line-JSON server on CLAUDE_BG_RENDEZVOUS_SOCK (handed
-  // by every ownsRendezvous launch; a self-launched bare harness has no env → no server) speaking the
-  // reclaude mini-protocol, so claude's deliverViaRendezvous and socket-listener liveness work UNCHANGED.
-  // MULTI-connection (unlike reclaude's daemon): a session-liveness probe connect can never kick a concurrent
-  // delivery, so the sender's atomic reply+repaint chunk always resolves on its own connection. The data
-  // handler is deliberately SYNCHRONOUS — a chunk's lines parse in one pass and repaint-done (the in-order
-  // parse barrier) flushes before any other event can run: confirmation means PARSED, not processed; the
-  // injection (a whole model turn on some hosts) runs BEHIND the confirm. A known-unable inject answers
-  // reply-rejected BEFORE repaint-done so the sender fails loud instead of confirming a prompt that can
-  // never land; a LATE inject failure best-effort reply-rejects (the sender has usually resolved and gone).
+  // The per-session rendezvous control socket is a best-effort same-turn poke. The timeline remains the
+  // message's durable copy, so this listener only receives reply lines and never confirms or rejects them.
   const serveRendezvous = (inject, opts) => {
     const sock = (process.env.CLAUDE_BG_RENDEZVOUS_SOCK || "").trim()
     if (!sock) return null
     try { __spexUnlink(sock) } catch { /* no stale socket — fine */ }
-    const reject = (c) => { try { c.write(JSON.stringify({ type: "reply-rejected" }) + "\\n") } catch { /* peer gone */ } }
+    const injected = new Set()
     const server = __spexCreateServer((c) => {
       let buf = ""
       c.on("error", () => { /* probes disconnect abruptly — expected */ })
@@ -143,13 +135,14 @@ const spexShimRuntime = (cfg) => {
           let msg
           try { msg = JSON.parse(line) } catch { continue }
           if (msg && msg.type === "reply" && typeof msg.text === "string") {
-            if (opts && opts.canInject && !opts.canInject()) { reject(c); continue }
+            if (opts && opts.canInject && !opts.canInject()) continue
+            const mid = typeof msg.mid === "string" ? msg.mid : ""
+            if (mid && injected.has(mid)) continue
+            if (mid) injected.add(mid)
             try {
               const p = inject(msg.text)
-              if (p && typeof p.catch === "function") p.catch(() => reject(c))
-            } catch { reject(c) }
-          } else if (msg && msg.type === "repaint") {
-            try { c.write(JSON.stringify({ type: "repaint-done" }) + "\\n") } catch { /* peer gone */ }
+              if (p && typeof p.catch === "function") p.catch(() => { if (mid) injected.delete(mid) })
+            } catch { if (mid) injected.delete(mid) }
           }
         }
       })

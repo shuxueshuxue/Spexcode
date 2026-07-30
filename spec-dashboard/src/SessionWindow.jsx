@@ -17,9 +17,7 @@ export function opSummary(ops) {
   return Object.entries(by).map(([op, n]) => `${GLYPH[op]}${n}`).join(' ')
 }
 
-// @@@ RowLead ([[session-nesting]]) — the leading gutter on a nested session row: indentation rails plus a
-// reserved subtree-count slot for parents. FoldPod is rendered over that slot as a SIBLING of the row button,
-// keeping the original face geometry without nesting one button inside another.
+// Reserve FoldPod's sibling slot here; a nested button would invalidate the row button.
 export function RowLead({ guides = [], expandable, kin = 0 }) {
   return (
     <span className="sess-lead">

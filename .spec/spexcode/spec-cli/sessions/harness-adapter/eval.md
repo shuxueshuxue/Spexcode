@@ -176,35 +176,31 @@ scenarios:
       the claude transcript's queue-operation log and count which prompts actually entered claude's input
       pipeline.
     expected: >-
-      Every prompt that `sendText` confirms (`sent`) is present in the transcript (enqueued and eventually
-      submitted); a delivery the daemon never parsed is reported as a loud failure or retried until parsed —
-      never a false success. The failure this locks: claude's rendezvous daemon keeps ONE connection and
-      destroys the previous socket on every new connect, discarding any received-but-unparsed line — so a
-      liveness probe landing in the write→parse window silently killed the prompt while the optimistic
-      write-flush confirmation reported ok (measured: 2/10 real sends lost under a 20ms hammer, 40/40 in the
-      tight-race isolation; the field incident was session 430b487e's two dashboard messages recorded `sent`
-      with no trace in the claude transcript). The fix's proof is the same rig reading 0 lost: the reply and a
-      repaint probe go out in ONE atomic chunk (parsed in one synchronous line-loop, so a kick can only lose
-      both), `repaint-done` on the delivery connection = parsed-proof, a close before it = proven loss →
-      reconnect and resend, wall expiry with the connection still open = optimistic ok (busy ≠ lost).
+      Every `sendText` result is `sent` because the timeline append is delivery. A poke that the daemon drops
+      under probe pressure may delay same-turn arrival, but its line remains in the target log and the
+      turn-boundary reader injects it exactly once. The former write→parse race is now a timing concern, not a
+      loss signal: the transport only writes an idempotent reply poke and never needs a parse barrier.
     code:
       - spec-cli/src/harness.ts#replyViaSocket
       - spec-cli/src/harness.ts#deliverViaRendezvous
-      - spec-cli/src/harness.ts#DELIVER_ATTEMPTS
-  - name: claude-delivery-refuses-sessions-panel
+      - spec-cli/src/harness.ts#POKE_ATTEMPTS
+  - name: claude-delivery-survives-sessions-panel
     tags: [backend-api]
     description: >-
       With a REAL claude session IDLE and its TUI focus moved to the sessions/agents panel (← from the
       composer — the "← for agents" screen), deliver a prompt through the real send surface. Compare against
-      the same send with the TUI on the normal composer.
+      the same send with the TUI on the normal composer. Then return the TUI to the composer and let the
+      session reach a turn boundary.
     expected: >-
-      The panel state is detected from the live pane (the claude adapter's pane predicate) and the send FAILS
-      LOUD with a reason naming the panel and the recovery (press Enter in the terminal to return), so the
-      dashboard/CLI user sees undelivered instead of nothing; the composer-state send still lands. The failure
-      this locks: a reply injected while the panel has focus is parsed and enqueued by the daemon (transcript
-      shows `enqueue`) but NEVER dequeued — no turn, no pane trace, and the daemon emits nothing, so no
-      transport-layer confirmation can catch it; only the pane state can. Silent-swallow here is claude's own
-      bug, but the adapter must not report a false success into it.
+      Both sends SUCCEED and both messages are in the target's log: delivery is the append ([[dispatch]]),
+      and the pane predicate no longer decides it. What the predicate still buys is that the panel-state
+      send does not waste a kick it knows will be swallowed — so the composer-state message arrives in the
+      current turn, while the panel-state one is simply left unread and is delivered by the turn-boundary
+      reader once the TUI is back. The failure this locks is now recoverable rather than merely visible: a
+      reply injected while the panel has focus is parsed and enqueued by the daemon (transcript shows
+      `enqueue`) but NEVER dequeued — no turn, no pane trace, nothing for any transport-layer confirmation
+      to see. Before, the only honest answer was to refuse the send; now the message survives claude's bug
+      instead of depending on a human resending it.
     code:
       - spec-cli/src/harness.ts#claudeHarness
   - name: codex-liveness-reflects-live-tui-not-sock
@@ -380,7 +376,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-claude-launch-in-turn
@@ -402,7 +398,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-claude-dashboard-note-in-turn
@@ -413,7 +409,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-claude-cli-send-idle
@@ -424,7 +420,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-claude-cli-send-in-turn
@@ -435,7 +431,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-codex-launch-idle
@@ -446,7 +442,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-codex-launch-in-turn
@@ -468,7 +464,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-codex-dashboard-note-in-turn
@@ -479,7 +475,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-codex-cli-send-idle
@@ -490,7 +486,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-codex-cli-send-in-turn
@@ -501,7 +497,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: harness-delivery-combination-campaign

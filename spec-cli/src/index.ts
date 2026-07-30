@@ -7,24 +7,26 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, loadReviewConfig } from './specs.js'
-import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
-import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
+import { issuesEnabled, resolveRemark, retractRemark } from './localIssues.js'
+import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote } from './issues.js'
+import { remarkWithLoopIn, replyIssueWithLoopIn } from './loop-in.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
-import { summarize } from './mentions.js'
+import { dispatchMentions, summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, sessionGraph, registerWatch, deregisterWatch, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
-import { superviseTimeline, readTimeline } from './session-timeline.js'
+import { cockpitReview } from './cockpit.js'
+import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
+import { readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
 import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
 import { buildExportModel, renderExportHtml, SessionEvalUnavailableError } from '../../spec-eval/src/sessioneval.js'
-import { saveUpload, MAX_UPLOAD_BYTES } from './uploads.js'
+import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBytes, startUploadReaper, UploadError, uploadStatus } from './uploads.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
@@ -36,6 +38,7 @@ import { collectResourceReport, ResourceConflict } from './host-resources.js'
 installProcessGuards()
 
 const app = new Hono()
+startUploadReaper()
 app.use('/api/*', cors())
 app.onError((error, c) => {
   if (error instanceof SessionEvalUnavailableError) return c.json({ error: error.message }, 503)
@@ -187,7 +190,7 @@ app.get('/api/evidence/:hash', (c) => {
 app.post('/api/evidence', async (c) => {
   const buf = Buffer.from(await c.req.arrayBuffer())
   if (buf.length === 0) return c.json({ error: 'empty evidence' }, 400)
-  if (buf.length > MAX_UPLOAD_BYTES) return c.json({ error: 'evidence too large' }, 413)
+  if (buf.length > evidenceMaxBytes()) return c.json({ error: 'evidence too large' }, 413)
   return c.json({ hash: putBlob(buf) }, 201)
 })
 // the SETTINGS read surface — one route for everything spexcode.json / spexcode.local.json resolves to:
@@ -265,7 +268,7 @@ app.post('/api/issues/:id/reply', async (c) => {
     const node = id.includes('#')
       ? mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id)).find((i) => i.id === id)?.nodes[0] ?? null
       : null
-    const r = await replyIssue(id, text, { author: 'human', node, evidence })
+    const r = await replyIssueWithLoopIn(id, text, { author: 'human', node, evidence })
     if (r.store !== 'local') await refreshForgeNow()
     notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
     return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarize(r.outcomes, r.loopIn) })
@@ -356,7 +359,7 @@ app.post('/api/remarks', async (c) => {
     : { issue: typeof body?.issue === 'string' ? body.issue : undefined }
   const codeSha = typeof body?.codeSha === 'string' ? body.codeSha : undefined
   try {
-    const r = await remarkOnHost(host, text, { codeSha, author: 'human', evidence })
+    const r = await remarkWithLoopIn(host, text, { codeSha, author: 'human', evidence })
     notifyBoardChanged('full')
     return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: summarize(r.outcomes, r.loopIn) }, 201)
   } catch (e) {
@@ -386,17 +389,52 @@ app.get('/api/slash-commands', (c) => {
   return c.json(h.slashCommands())
 })
 
-// write a pasted/dropped/picked file to this (worker) machine's /tmp and return its absolute path for the
-// client to splice into the prompt. Fail-loud: no/empty file → 400, over the size cap → 413, write error → 500.
+function uploadFailure(error: unknown): Response {
+  if (!(error instanceof UploadError)) throw error
+  const body: { error: string; offset?: number } = { error: error.message }
+  if (error.offset != null) body.offset = error.offset
+  return new Response(JSON.stringify(body), { status: error.status, headers: { 'content-type': 'application/json' } })
+}
+
+// One offset protocol for every attachment. Chunks stream through the existing /api proxy and stage only on
+// the worker machine; completion is the one boundary that makes a prompt-visible absolute path exist.
 app.post('/api/uploads', async (c) => {
-  const body = await c.req.parseBody().catch(() => ({} as Record<string, string | File>))
-  const file = body['file']
-  if (!(file instanceof File) || file.size === 0) return c.json({ error: 'no file' }, 400)
-  if (file.size > MAX_UPLOAD_BYTES) return c.json({ error: 'file too large' }, 413)
+  const body = await c.req.json().catch(() => null) as { name?: unknown; size?: unknown } | null
   try {
-    return c.json({ path: await saveUpload(file) }, 201)
-  } catch (e) {
-    return c.json({ error: String((e as Error)?.message || e) }, 500)
+    return c.json(createUpload(body?.name, body?.size), 201)
+  } catch (error) {
+    return uploadFailure(error)
+  }
+})
+app.get('/api/uploads/:id', (c) => {
+  try {
+    return c.json(uploadStatus(c.req.param('id')))
+  } catch (error) {
+    return uploadFailure(error)
+  }
+})
+app.patch('/api/uploads/:id', async (c) => {
+  try {
+    return c.json(await appendUpload(
+      c.req.param('id'), Number(c.req.header('upload-offset')), c.req.raw.body, c.req.header('content-length'),
+    ))
+  } catch (error) {
+    return uploadFailure(error)
+  }
+})
+app.post('/api/uploads/:id/complete', (c) => {
+  try {
+    return c.json({ path: completeUpload(c.req.param('id')) }, 201)
+  } catch (error) {
+    return uploadFailure(error)
+  }
+})
+app.delete('/api/uploads/:id', (c) => {
+  try {
+    cancelUpload(c.req.param('id'))
+    return c.body(null, 204)
+  } catch (error) {
+    return uploadFailure(error)
   }
 })
 
@@ -404,20 +442,6 @@ app.post('/api/uploads', async (c) => {
 // forward keystrokes, and close.
 app.get('/api/sessions', async (c) => c.json(await listSessions(c.req.query('all') === '1' || c.req.query('all') === 'true')))
 app.get('/api/resources', async (c) => c.json(await collectResourceReport()))
-// edges derived live from `spex session watch` monitors (A→B = agent A is watching B), not a stored subscription;
-// watch/unwatch register + heartbeat. A literal `edges` segment so it never collides with the `:id` routes.
-app.get('/api/sessions/edges', async (c) => c.json(await sessionGraph()))
-app.post('/api/sessions/edges/watch', async (c) => {
-  const b = await c.req.json().catch(() => ({}))
-  const selectors = Array.isArray(b?.selectors) ? b.selectors.map(String) : []
-  const ok = registerWatch(String(b?.token || ''), String(b?.watcher || ''), selectors, Number(b?.ttlMs) || undefined)
-  return c.json({ ok }, ok ? 200 : 400)
-})
-app.post('/api/sessions/edges/unwatch', async (c) => {
-  const b = await c.req.json().catch(() => ({}))
-  const ok = deregisterWatch(String(b?.token || ''))
-  return c.json({ ok }, ok ? 200 : 404)
-})
 app.post('/api/sessions', async (c) => {
   const requestKey = c.req.header('idempotency-key') || randomUUID()
   const controller = new AbortController()
@@ -445,7 +469,7 @@ app.post('/api/sessions', async (c) => {
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
 // dashboard and `spex session review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].
 app.get('/api/sessions/:id/review', async (c) => {
-  const r = await reviewPayload(c.req.param('id'))
+  const r = await cockpitReview(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
 // The self-contained HTML is the sole full-model transport exception. Interactive rows, including the CLI,
@@ -578,9 +602,11 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   }
 }))
 // ONE input route, `kind` the discriminator — the transport split is an implementation fact, not API surface.
-// kind:"text" (Command Box, `spex session send`, the server-side merge dispatch) injects a whole prompt
-// through the rendezvous control socket — socket-only + fail-loud: a prompt the agent doesn't confirm
-// accepting returns 502 with the reason (never a silent 200), so a dead dispatch is seen, not a false success.
+// kind:"text" (`spex session send`, the server-side merge dispatch) appends the prompt to the
+// target timeline, then best-effort pokes its adapter. A dead channel delays context injection but does not
+// change the successful append response; 502 means the record rejected the write.
+// kind:"command" is the Command Box control face: after that same durable append it resolves actor mentions
+// with the target session as their originator, so @new records a real session-tree parent.
 // kind:"keys" is the LAST-RESORT raw face (`spex session send --keys`): an ORDERED BATCH of
 // nav-mode key tokens over tmux send-keys, delivered in array order so tap order survives
 // ([[nav-mode-key-ordering]]); unstable by nature — callers try a plain text send first. An unknown kind is a
@@ -589,20 +615,27 @@ app.post('/api/sessions/:id/input', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   if (body?.kind === 'text') {
     // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
-    // edge ([[comms-edge]]); a raw human dispatch omits it and is not logged. `replyVia:"note"` marks a
+    // edge ([[session-timeline]]); a raw human dispatch omits it and is not logged. `replyVia:"note"` marks a
     // terminal-free sender ([[session-timeline]]): the server appends the note-reply insert to the delivery.
     const r = await sendText(c.req.param('id'), typeof body?.text === 'string' ? body.text : '', typeof body?.from === 'string' ? body.from : undefined, {
       ...(body?.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
-      ...(typeof body?.deliveryId === 'string' && body.deliveryId ? { deliveryId: body.deliveryId } : {}),
     })
     return c.json(r, r.ok ? 200 : 502)
+  }
+  if (body?.kind === 'command') {
+    const id = c.req.param('id')
+    const text = typeof body?.text === 'string' ? body.text : ''
+    const r = await sendText(id, text)
+    if (!r.ok) return c.json(r, 502)
+    const mentions = await dispatchMentions(text, { sessionId: id })
+    return c.json({ ...r, mentions, mentionSummary: summarize(mentions) })
   }
   if (body?.kind === 'keys') {
     const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string') : []
     const ok = await rawKey(c.req.param('id'), keys)
     return c.json({ ok }, ok ? 200 : 404)
   }
-  return c.json({ error: 'input needs kind: "text" | "keys"' }, 400)
+  return c.json({ error: 'input needs kind: "text" | "command" | "keys"' }, 400)
 })
 // soft stop: kill the agent's tmux + socket but KEEP the worktree (resumable). Distinct from close, which
 // removes the worktree. {ok:false} = no such session.
@@ -678,7 +711,6 @@ injectWebSocket(server)
 superviseBridges()   // restore visible helpers after failure; their viewer subscriptions survive replacement
 superviseQueue()     // launch queued sessions as slots free (catches agent-authored proposals/crashes the server never sees directly)
 superviseTurnFailures() // reconcile adapter-owned native failure subscriptions across backend replacement
-superviseTimeline()  // record authored-lifecycle transitions to each session's durable timeline ([[session-timeline]])
 console.log(`spec-cli serving .spec (from git) on http://localhost:${port}`)
 
 let graphWatchersClosed = false

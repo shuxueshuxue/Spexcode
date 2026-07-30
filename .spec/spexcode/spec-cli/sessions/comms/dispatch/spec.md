@@ -26,35 +26,31 @@ product launched. Interactive Claude/pi/opencode use the rendezvous protocol, Co
 [[claude-headless]] uses a controller that writes Claude-native stream-json stdin. Multi-line prompts and Enters
 therefore cannot be corrupted the way `tmux send-keys` could.
 
-`sendText` has **no send-keys fallback** and asks the resolved adapter to confirm at the strongest layer its
-native channel exposes. Interactive Claude confirms the prompt was **parsed by the daemon**, not merely written.
-Mere write-success lies there, because claude's rendezvous daemon keeps **ONE connection** and
-destroys the previous socket on every new connect — discarding any received-but-unparsed line with it — and
-our own liveness probes ARE such connects, so a probe landing in the write→parse window silently killed a
-"successfully sent" prompt (the field incident: dashboard messages recorded `sent` with no trace in the
-claude transcript). So delivery writes the `reply` line and a `repaint` probe line as **one atomic chunk**
-(the daemon parses a chunk's lines in one synchronous loop, so a kick can only lose both or neither), then
-reads its own connection: `repaint-done` **proves the reply was parsed** (in-order barrier); the connection
-**closing before it** proves the chunk was never parsed (kicked) → **reconnect and resend**, bounded retries;
-the **wall expiring with the connection still open** means a busy event loop is delaying, not losing → report
-ok optimistically, never a false failure on a live-but-busy agent. Before any write, the pane is consulted:
-claude's **sessions panel** ("← for agents") swallows parsed replies without a trace (enqueued, never
-dequeued, daemon silent), so a send into that pane state is **refused loudly** with the recovery named
-(press Enter in the terminal to return), never absorbed. A missing/socketless session, a connect error, a
-`reply-rejected`/`shutting-down`, or exhausted kick-retries all return a **loud `DispatchResult {ok,error}`**
-that propagates: `POST …/input` answers **502**, `spex session send` prints it, `mergeSession` returns it.
+**Delivery is the append; the channel is a poke.** `sendText` appends one `sent` line to the target's
+durable log under that session's record lock ([[session-timeline]]) and reports success on that append.
+Only then does it poke the resolved adapter with the same text, so a live agent sees the message in its
+current turn instead of at its next turn boundary. The poke is **best-effort and idempotent**: it carries a
+message id the reader already dedupes against, so losing it, retrying it, or having it refused costs
+nothing — the line is still there and the turn-boundary hook injects it. There is no send-keys fallback and
+no PTY prompt typing; a poke that cannot land simply does not land.
 
-Every text delivery has a terminal outcome: **accepted** only after its native channel confirms the turn,
-**rejected** only when the native channel proves it was not accepted, or **commit-unknown** when a request crossed
-the transport boundary but the confirmation was lost. `commit-unknown` remains non-2xx and does not write a
-sent/comms event, but it is not called a rejection: replaying it can duplicate a late native acceptance. A caller
-may carry one opaque delivery marker across a retry; adapters that expose a native idempotency marker use it there.
-Before that marker crosses an adapter boundary, the shared session layer durably reserves its prompt fingerprint
-under the session record lock. A same-marker retry returns its already-recorded terminal outcome without calling an
-adapter; a different prompt using that marker is rejected; and a reservation without a terminal record remains
-commit-unknown rather than replaying. The ledger lives with the session's global artifacts, so a backend restart
-cannot turn a late accepted turn into a duplicate. The route stays harness-agnostic, the Command Box keeps its
-draft for either non-accepted outcome, and only an accepted response clears it.
+Locating the truth in the file is what dissolves the hardest failure this mechanism ever had. Claude's
+rendezvous daemon keeps **ONE connection** and destroys the previous socket on every new connect,
+discarding any received-but-unparsed line with it — and our own liveness probes ARE such connects, so a
+probe landing in the write→parse window silently killed a "successfully sent" prompt (the field incident:
+dashboard messages recorded `sent` with no trace in the claude transcript). That single socket write was
+the message's only copy, which is why proving it had been parsed needed an in-order barrier, and why a
+lost proof needed a resend that might duplicate. With the log as the copy, a kicked poke is not a lost
+message and a resent poke is not a duplicate one, so the barrier, its retry classification, and the whole
+`commit-unknown` outcome — a request that crossed the transport but whose confirmation was lost — are
+gone, along with the separate idempotency ledger that existed to make replay safe. **Every delivery now has
+exactly two outcomes: the bytes are in the log, or they are not.**
+
+What remains loud is what genuinely cannot be recorded: an unknown session id, or a record the writer
+refuses. Those still return a `DispatchResult {ok,error}` that propagates — `POST …/input` answers non-2xx,
+`spex session send` prints it, `mergeSession` returns it. A **retired** session (its worktree gone) is not
+one of them: its log still accepts the line, because a message that cannot be delivered must at least leave
+a trace ([[session-timeline]]).
 
 Hard interrupt is a sibling control operation, not a magic prompt. `spex session interrupt` calls the adapter's
 interrupt capability through the backend; [[claude-headless]] sends native `control_request/interrupt` and
@@ -75,8 +71,8 @@ from the **main checkout** (`-C <main>`, not its node worktree), resolve any con
 work's intent), verify the base HEAD advanced with no merge left in progress, `git merge --abort` if
 anything went half-merged, and propose close once verified — so the guarantee lives in the agent's
 verification, never a server check, and the base is never left half-merged. Async: `POST
-/api/sessions/:id/merge` returns `{dispatched:true}` once the prompt is **confirmed accepted** (409 if
-unreachable). The server no longer bumps `merges` on a click.
+/api/sessions/:id/merge` returns `{dispatched:true}` once the merge prompt is appended (409 only when the
+record cannot accept it). The server no longer bumps `merges` on a click.
 
 **Prompts state the task; the git flow is mechanism, not duplicated prose.** The merge prompt above states
 only the **task** plus its own safety steps. It deliberately does **not** re-state the git flow's mechanics,
@@ -89,12 +85,15 @@ it). No standing `ritual` config node is needed — the flow is the product defa
 **Creating or deleting a spec node is NOT a server op.** It is prompt-driven work the launched agent does
 itself — the composer's board chords merely prefill a plain instruction ("create a new node under
 `[[parent]]`…" / "delete `[[node]]`…"), and the agent authors or refactors-away the node like any other spec
-work. The server never mutates the spec tree; it only launches. This holds [[mentions]]'s line: outside the
-issue store, a reference expands to prompt text, never a programmatic flow — the issue store is the sole
-surface where the system itself dispatches.
+work. The server never mutates the spec tree; it only launches. [[mentions]] is the sole actor-dispatch
+mechanism: an issue/remark reply supplies its thread context, while the desktop [[command-box]] supplies its
+selected session as the actor. Ordinary `text` input remains prompt delivery only; the Command Box's explicit
+`command` input kind is the control-plane caller, so a shell `spex session send` never acquires dashboard
+lineage semantics by accident.
 
-Both faces reach the wire as **one route**, `POST /api/sessions/:id/input`, with `kind` the discriminator:
-`kind:"text"` is the prompt dispatch above; `kind:"keys"` is the **raw-key face** (`rawKey`), which keeps its
+All faces reach the wire as **one route**, `POST /api/sessions/:id/input`, with `kind` the discriminator:
+`kind:"text"` is the prompt dispatch above; `kind:"command"` is Command Box text plus [[mentions]] resolution
+using `:id` as its source session; `kind:"keys"` is the **raw-key face** (`rawKey`), which keeps its
 own `tmux send-keys` transport — the per-keystroke channel for driving the agent's TUI menus, carrying named
 keys, printable chars, and `⌃`/`⌥`/`⌘` modifier combos (as `C-`/`M-`/`S-` tokens) so CLI remote control drives the
 terminal, **not** a prompt fallback. The transport split (socket vs send-keys) is an implementation fact the

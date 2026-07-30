@@ -1,5 +1,27 @@
 ---
 scenarios:
+  - name: turn-boundary-mail-read
+    tags: [cli]
+    description: >-
+      Feed REAL harness payloads through the hook exactly as dispatch.sh does, against a governed session
+      record on an ISOLATED store whose timeline.ndjson holds one of the session's own status lines plus two
+      `sent` lines — one of them prose that is hostile to any shell that composes JSON (an embedded escaped
+      quote, a nested brace, a real newline). Fire the hook, then fire it AGAIN with nothing new, then append
+      a third message and fire once more. Separately, count how many child processes the hook spawns on a
+      turn with no unread mail versus a turn with mail. Finally, fire a SUBAGENT-executed call (the parent's
+      session_id plus the harness's top-level agent_id stamp) at a parent that is holding a `parked`
+      declaration and has mail waiting, then fire the parent's OWN call.
+    expected: >-
+      The first firing prints both message bodies whole — the JSON-hostile one byte-for-byte, decoded, not
+      truncated at its inner quote — and advances the inbox cursor past everything it read. The second
+      firing prints NOTHING: a message is shown exactly once, and the session's own status lines are
+      consumed rather than returned as mail. The third message is picked up on the next firing. The
+      no-mail turn spawns nothing at all (the every-tool-call hot path stays pure bash builtins); a turn
+      with mail spawns exactly one writer, `spex internal session-cursor`, because the hook reads the
+      cursor file in shell but never rewrites it. The subagent's call reads NO mail and moves nothing: the
+      parent's `parked` status and its note survive and its cursor stays absent, because a subagent working
+      is its parent supervising, not the parent acting. The parent's own next call does all of it — prints
+      the mail, advances the cursor, flips to active and clears the stale note.
   - name: in-process-subagent-tools-preserve-parent-declaration
     tags: [cli]
     description: >-

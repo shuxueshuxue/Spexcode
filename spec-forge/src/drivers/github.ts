@@ -17,7 +17,6 @@ export const githubDriver: ForgeDriver = {
   async listIssues(): Promise<ForgeIssue[]> {
     const list = (state: string) =>
       gh<{ number: number; title: string; body: string; url: string; state: string; labels: { name: string }[]; author: { login: string } | null; createdAt: string; comments: { author: { login: string } | null; body: string; createdAt: string }[] }[]>(
-        // comments ride the same list read (no per-issue fetch) — heavier GraphQL points, covered by the resident cache's TTL
         ['issue', 'list', '--state', state, '--limit', '200', '--json', 'number,title,body,url,state,labels,author,createdAt,comments'],
       )
     const [open, closed] = await Promise.all([list('open'), list('closed')])
@@ -26,7 +25,7 @@ export const githubDriver: ForgeDriver = {
       title: r.title,
       body: r.body ?? '',
       url: r.url,
-      state: (r.state || '').toLowerCase(),   // one canonical casing at the adapter (gh GraphQL says OPEN, REST says open)
+      state: (r.state || '').toLowerCase(),
       labels: (r.labels ?? []).map((l) => l.name),
       author: r.author?.login ?? '',
       createdAt: r.createdAt ?? '',
@@ -34,9 +33,6 @@ export const githubDriver: ForgeDriver = {
     }))
   },
 
-  // the INCREMENTAL window: only issues updated since `sinceISO` (GitHub REST honors `since` = updated-at),
-  // paged manually (100/page, stop on a short page — an incremental window is normally one page). PRs ride
-  // the same REST endpoint flagged with `pull_request` and are filtered out — the PR list keeps its own path.
   async listIssuesSince(sinceISO: string): Promise<ForgeIssue[]> {
     type ApiRow = {
       number: number; title: string; body: string | null; html_url: string; state: string
@@ -49,8 +45,6 @@ export const githubDriver: ForgeDriver = {
       out.push(...rows)
       if (rows.length < 100) break
     }
-    // REST's since-window carries only a comment COUNT — fetch each commented issue's thread alongside
-    // (the window is normally a handful of issues, so this stays a handful of calls, not a re-list).
     return Promise.all(out.filter((r) => !r.pull_request).map(async (r) => ({
       number: r.number,
       title: r.title,
@@ -89,8 +83,6 @@ export const githubDriver: ForgeDriver = {
     }))
   },
 
-  // the port's first write verb (promotion — see port.ts). `gh issue create` prints the new issue's URL on
-  // stdout; the number is its last path segment. Fails loud like every other driver call.
   async createIssue({ title, body }: { title: string; body: string }): Promise<{ number: number; url: string }> {
     const { stdout } = await run('gh', ['issue', 'create', '--title', title, '--body', body], { maxBuffer: 1024 * 1024 })
     const url = stdout.trim().split('\n').pop() ?? ''
@@ -99,8 +91,6 @@ export const githubDriver: ForgeDriver = {
     return { number, url }
   },
 
-  // the second write verb (a store-routed reply — see port.ts). `gh issue comment` prints the new
-  // comment's permalink on stdout. Fails loud like every other driver call.
   async createComment({ number, body }: { number: number; body: string }): Promise<{ url: string }> {
     const { stdout } = await run('gh', ['issue', 'comment', String(number), '--body', body], { maxBuffer: 1024 * 1024 })
     const url = stdout.trim().split('\n').pop() ?? ''
@@ -118,7 +108,6 @@ export const githubDriver: ForgeDriver = {
   },
 }
 
-// one commented issue's thread, REST (the incremental window's companion read).
 async function listComments(number: number): Promise<ForgeComment[]> {
   const rows = await gh<{ user: { login: string } | null; body: string | null; created_at: string }[]>(
     ['api', `repos/{owner}/{repo}/issues/${number}/comments?per_page=100`],

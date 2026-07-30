@@ -142,14 +142,13 @@ node shows its body not nothing), `/api/settings` (the resolved
 Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:
 `/api/sessions` list + spawn; per-session `resume`/`interrupt`/`review`/`close`/`quarantine`, plus reads `review` (the merge
 bundle), `capture` (the live pane as text), and `prompt`. `merge` is a **dispatch to the session's own
-agent**, not a server merge — it returns `{dispatched}` and never touches main's tree. The ❯ box
-(`keys`) dispatches a whole prompt over the rendezvous control socket, fail-loud (an unconfirmed prompt is
-502, never a silent 200); `rawkey` keeps tmux send-keys for nav; `socket` streams pane bytes. Session
+agent**, not a server merge — it returns `{dispatched}` and never touches main's tree. Text input appends a
+whole prompt to the target timeline, then best-effort pokes its adapter; only a refused append is 502.
+`rawkey` keeps tmux send-keys for nav; `socket` streams pane bytes. Session
 mutations that commit no transition also answer with a non-2xx JSON error, so a refused stop or close cannot
 paint as a successful request on the dashboard; the lifecycle guard remains the authority on whether the
 destructive action is allowed.
-`/api/sessions/edges` edges are DERIVED from live `spex watch` monitors (`watch`/`unwatch` register +
-heartbeat), not a stored subscription. `/api/uploads` writes a pasted file to this (worker) machine's
+`/api/uploads` writes a pasted file to this (worker) machine's
 /tmp and returns its path. At boot the server runs `superviseQueue()` to launch queued sessions and
 `superviseTurnFailures()` to reconcile adapter-owned native failure subscriptions; the route layer still
 contains no harness protocol branch.

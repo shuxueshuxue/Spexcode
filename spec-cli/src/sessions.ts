@@ -11,61 +11,17 @@ import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite 
 import { adapterLoadedReferenceState, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
-import { recordSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
+import { appendSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
 import { processStartToken } from './process-identity.js'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationClose, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 
-// @@@ sessions - the WORKTREE is the durable unit; tmux is a disposable runtime handle. The per-session
-// SOURCE OF TRUTH is an untracked record (`session.json`) in a per-user GLOBAL store keyed by the harness
-// session_id (NOT a worktree file — the worktree stays pristine), surviving a kill / reboot / moving the
-// folder. We launch claude with `--session-id <id>` (id we choose) so the SAME conversation can be
-// `--resume`d into a fresh tmux. NO in-memory map: listSessions() ENUMERATES that store every time.
-//
-// STATE MACHINE — two ORTHOGONAL axes (see [[state]]): an agent-authored LIFECYCLE and a runtime-derived
-// LIVENESS, neither overriding the other.
-//   lifecycle (authored): active | idle | awaiting | parked | error | asking | queued. `idle` is the ONE
-//              inferred one (the Notification(idle_prompt) hook, guarded active-only so it never clobbers a
-//              declaration; mark-active flips it back to active on real work).
-//   liveness (derived for EVERY session): online | starting | offline | unknown. offline = no tmux for the id,
-//              or the harness online-signal (claude's rendezvous socket LISTENER — a connect, not the socket
-//              FILE) is gone past the boot grace; starting = the boot window; unknown = the tmux probe itself
-//              failed (timed out under load) so death is UNPROVEN — render probe-failed, never offline/vanish.
-//              reconcile composes the two into the compact DisplayStatus for one-glyph surfaces.
-//   awaiting → the agent's PROPOSAL, awaiting a human:
-//                proposal=merge   → shown "review"        ("ready, merge me")
-//                proposal=nothing → shown "done"          ("finished, your call")
-//                proposal=close   → shown "close-pending" ("I suggest discarding this worktree")
-//   asking → the agent is pausing to ask the HUMAN a question. Written DETERMINISTICALLY two ways: the
-//                mark-active PreToolUse hook captures it the moment the agent invokes the AskUserQuestion
-//                tool (question → note), and the agent may also declare it via `spex session ask --note
-//                <question>`. Not inferred. Distinct from `parked` (which waits on a background task/
-//                schedule and self-resumes); an asking agent resumes only when a human sends it a prompt.
-//   queued → a prepared worktree held below the concurrency cap; the drainer launches it as a slot frees.
-//   (closed = the worktree AND the global record are removed; not a stored status)
-// The agent only ever PROPOSES (awaiting); merge/close are human-only. Every proposal is reversible — nothing
-// auto-disappears; to withdraw one you MESSAGE the session (mark-active clears it), and a relaunch (resume)
-// deliberately does NOT touch it. `merges` is METADATA (how many times merged), shown as a badge, not a state.
-//
-// Launch rules: private `tmux -L <label>` socket + the session's pinned named-launcher command. The launcher
-// preserves its harness's normal permission model unless the user explicitly configured an automatic-permission
-// command. SPEXCODE_TMUX overrides the tmux socket for tests; no env var rewrites the launcher.
-
 const pexec = promisify(execFile)
 export const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
-// the legacy/default harness for helpers and old records. New sessions derive their harness from the selected
-// launcher; all harness-specific launch facts still come from the adapter.
 const HARNESS = defaultHarness
 const COLS = 120, ROWS = 32
-// @@@ concurrency cap - the most working agents we let run AT ONCE. Heavy multi-agent load (many claude
-// processes computing simultaneously) was the source of resource-pressure crashes, so a launch beyond the
-// cap is QUEUED, not started: it becomes a durable `queued` worktree that the drainer launches the moment a
-// slot frees (an agent stops working/dies). NOT hardcoded — configured PER PROJECT in `spexcode.json`
-// (`sessions.maxActive`), so a box can be tuned to its capacity without touching the toolchain. Precedence:
-// spexcode.json → `SPEXCODE_MAX_ACTIVE` env → default 8. Read LIVE (cheap file read) so an edit takes effect
-// on the next drain tick, no restart. Floored at 1 so a bad value can't wedge the queue to 0.
 const DEFAULT_MAX_ACTIVE = 8
 function maxActive(): number {
   let v: number | undefined
@@ -104,23 +60,12 @@ const rvEnv = (id: string, harness = HARNESS) => {
     ...harness.launchEnv(id), ...homeVars].join(' ')
 }
 
-// the prompt-dispatch outcome type + its claude/codex delivery implementations live in the [[harness-adapter]]
-// (each harness OWNS its input channel — claude the rendezvous socket, codex app-server JSON-RPC). Re-exported here
-// for the existing importers (client.ts) that read it off the sessions module.
+// Re-exported for existing importers.
 export type { DispatchResult }
 
 export type Lifecycle = SessionLifecycle
 export type Proposal = SessionProposal
-// `corrupt` and `retired` are the two RECORD-INTEGRITY readings — neither a lifecycle the agent authored nor a
-// liveness the runtime probed, but the honest answer when the record itself can no longer carry either: its
-// bytes don't parse, or the worktree it names is gone. They exist so such a row can never silently vanish.
 export type DisplayStatus = 'working' | 'idle' | 'offline' | 'starting' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued' | 'unknown' | 'corrupt' | 'retired'
-// liveness — the orthogonal axis to Lifecycle: whether the agent process is actually up, derived (never
-// authored) for EVERY session regardless of its lifecycle. See [[state]]: lifecycle and liveness never
-// override each other; the UI keys the terminal-mount / relaunch panel on this, the badge on lifecycle.
-// `unknown` = the liveness PROBE ITSELF failed (the tmux snapshot timed out / errored under load), so we
-// CANNOT tell — the row renders probe-failed, NEVER offline/closed and never vanishes (board honesty: a slow
-// box must not masquerade as a graveyard, the failure that drove the mass-restore incident).
 export type Liveness = 'online' | 'starting' | 'offline' | 'unknown'
 const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', nothing: 'done', close: 'close-pending' }
 
@@ -139,15 +84,8 @@ export type Session = {
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
 }
 
-// ensure a session's GLOBAL store dir exists, returning its path. Idempotent (recursive mkdir) — every
-// writer that drops an artifact (record/prompt/launch/launch.sh/comms) calls this first so order never matters.
 function storeDir(id: string): string { const d = sessionStoreDir(id); mkdirSync(d, { recursive: true }); return d }
 
-// @@@ originating prompt - what the session was ASKED to do, captured at launch so a manager (human or
-// agent) can later answer "what was this session for?" WITHOUT transcript archaeology. Prompts are
-// multi-line, so they live as their own artifact (`prompt`) in the session's GLOBAL store dir (keyed by
-// session_id, [[state]]), never in the worktree. Everything here is BEST-EFFORT: a missing artifact (a
-// session launched before this existed) just means no prompt is shown — never an error, never blocks a launch.
 function writePromptFile(id: string, prompt: string): void {
   try { writeFileSync(join(storeDir(id), 'prompt'), prompt) } catch { /* best-effort; must never block the launch */ }
 }
@@ -159,11 +97,7 @@ function readPromptFile(id: string): string | null {
     return s.trim() ? s : null
   } catch { return null }
 }
-// @@@ deferred launch prompt - a QUEUED session is a fully-prepared worktree we have NOT launched claude
-// into yet. The exact prompt to launch it with — the directive-generated finish-the-op prompt, or the plain
-// human prompt — is parked as the `launch` artifact in the store dir so the drainer can launch it later
-// (possibly after a backend restart) WITHOUT re-deriving anything. CONSUMED (removed) the moment the session
-// launches, so it exists only while the session waits in the queue. Distinct from `prompt` (the originating ask).
+// Persist queued launch input across restarts; consume it once the launch begins.
 function writeLaunchFile(id: string, prompt: string): void {
   try { writeFileSync(join(storeDir(id), 'launch'), prompt) } catch { /* best-effort; the drainer treats a missing file as nothing-to-launch */ }
 }
@@ -174,26 +108,16 @@ function removeLaunchFile(id: string): void {
   try { rmSync(sessionArtifactPath(id, 'launch'), { force: true }) } catch { /* best-effort */ }
 }
 
-// a one-line preview of the originating prompt for tables/events: first non-empty line, truncated.
 function promptPreview(prompt: string, n = 60): string {
   const first = prompt.split('\n').map((l) => l.trim()).find(Boolean) || ''
   return first.length > n ? first.slice(0, n - 1) + '…' : first
 }
 
-// @@@ session-label — the ONE place a session's display strings are derived ([[session-label]]). The raw
-// parts (a user rename `name`, the 7-word prompt truncation `title`) never leave this module at the top
-// level: toSession computes `label` (STABLE: name > node > title > branch > id — tables/selectors) and
-// `headline` (LIVE: name > activity > promptPreview > node > title > branch > id — what a human reads,
-// see [[session-activity]]) and the wire carries THOSE; the parts ride only under `raw` for the few
-// explicit consumers (the rename prefill). A surface that wants a session's name reads s.label/s.headline
-// — there is no bare s.title/s.name to reach for, which is the enforcement.
 export const deriveLabel = (r: { name?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
   r.name || r.node || r.title || r.branch || r.id
 export const deriveHeadline = (r: { name?: string | null; activity?: string | null; promptPreview?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
   r.name || r.activity || r.promptPreview || r.node || r.title || r.branch || r.id
 
-// accessors kept for the human-naming call sites (watch/notify/reply-channel): trivially the precomputed
-// wire fields, so every surface — CLI, dashboard, comms — reads the same derivation by construction.
 export const sessionLabel = (s: Session): string => s.label
 export const sessionHeadline = (s: Session): string => s.headline
 
@@ -227,20 +151,10 @@ function mainRoot(): string {
   catch { return repoRoot() }
 }
 
-// @@@ pkgRoot - the CLI package's OWN directory, derived from this module's location, never a hardcoded
-// repoRoot()+'spec-cli'. This file lives at <pkgRoot>/src/sessions.ts, so `..` from it is the package
-// root — making the launch-script paths (hooks/, node_modules/.bin/tsx, src/cli.ts) survive the package
-// being renamed or relocated out of the default <repo>/spec-cli layout.
 function pkgRoot(): string {
   return fileURLToPath(new URL('..', import.meta.url))
 }
 
-// the in-memory session record — the typed view of session.json. `governed` (dashboard-launched=true vs
-// user-self-launched=false), `worktreePath`/`branch`/`createdAt` are the fields the board USED to read off
-// the worktree (its path/birthtime); now they live IN the record, since the record is the enumeration source.
-// `name` is the rename override (distinct from the prompt-derived `title`); `session` is the harness session_id
-// (the store key). The launcher mints the id (`claude --session-id <id>`) so it equals what every hook payload
-// and CLAUDE_CODE_SESSION_ID carry — one id across the record dir, tmux window, rendezvous socket, and commits.
 export type SessRec = {
   session: string; governed: boolean; worktreePath: string; branch: string | null
   node: string | null; title: string | null; name: string | null
@@ -262,10 +176,6 @@ type LaunchReadinessOriginal = Pick<SessRec, 'status' | 'proposal' | 'note' | 's
 type LaunchReadinessPending = { version: 1; startedAt: number; original: LaunchReadinessOriginal }
 export const OWNED_QUEUE_RAW_STATUS = 'launch-queued'
 
-// @@@ stable launch authority - the supervisor injects its PUBLIC proxy URL into every replaceable child.
-// That URL survives child hot reload/restart; PORT inside a supervised child is private and ephemeral, so it
-// is only the fallback for a directly-run server with no injected API URL. Credentials/query/fragment are
-// not authority and may contain secrets, so they are stripped before the value reaches session.json.
 export function backendLaunchAuthority(env: { SPEXCODE_API_URL?: string; PORT?: string } = process.env): string {
   const raw = env.SPEXCODE_API_URL?.trim() || `http://127.0.0.1:${env.PORT?.trim() || '8787'}`
   const url = new URL(raw)
@@ -299,12 +209,6 @@ function readRecord(id: string): SessRec | null {
       `session record is unreadable: ${sessionRecordPath(id)} — ${error instanceof Error ? error.message : String(error)}. The file is kept as-is; nothing will rewrite it.`)
   }
 }
-// @@@ SessionRecordUnusable - the record exists but cannot carry state, for one of two reasons, and BOTH must
-// stop a writer rather than let it invent one. `corrupt`: the bytes don't parse, so writing would DESTROY the
-// evidence of what broke and resurrect the session as a plausible-looking empty shell (the reported failure —
-// a damaged record came back as a valid `idle` record and even had a launch script regenerated for it).
-// `retired`: the work merged and the worktree the record names is gone, so there is nothing left to be active
-// IN. Readers that enumerate (the board) catch this and render the row; writers let it out, loud.
 export class SessionRecordUnusable extends Error {
   constructor(readonly code: 'corrupt' | 'retired', readonly session: string, message: string) {
     super(message)
@@ -313,16 +217,10 @@ export class SessionRecordUnusable extends Error {
 }
 const corruptReason = (e: { path: string; error: string }): string =>
   `session record is unreadable: ${e.path} — ${e.error}. The file is kept as-is; nothing will rewrite it. A close attempt quarantines the bytes and reports the preserved runtime/worktree/branch residue, but cannot signal or delete without an exact owner.`
-// a record whose worktree is gone names work that no longer exists on disk. That is the manual-retirement end
-// state (merged, worktree and branch removed, record left behind), and it is terminal: no lifecycle writer may
-// put such a session back to work, and no launch may be assembled for a directory that isn't there.
 function retirementReason(rec: SessRec): string | null {
   if (!rec.worktreePath || existsSync(rec.worktreePath)) return null
   return `session ${rec.session.slice(0, 8)} is retired: its worktree ${rec.worktreePath} no longer exists, so it cannot work, be marked active/idle, or be relaunched. Close it (\`spex session close <id>\`) to drop the record.`
 }
-// the read every LIFECYCLE writer uses: it additionally refuses a retired record. Metadata verbs (rename,
-// sort, archive) and `close` deliberately keep using readRecord — filing and removal stay available on a row
-// whose work is gone.
 function readLiveRecord(id: string): SessRec | null {
   const rec = readRecord(id)
   if (!rec) return null
@@ -503,27 +401,7 @@ function restoreLaunchReadinessOriginal(rec: SessRec): SessRec {
   const original = rec.launchReadinessPending?.original
   return original ? { ...rec, ...original, launchReadinessPending: null } : rec
 }
-// @@@ the ONE record writer - every field of session.json is produced HERE, by serializing the typed record,
-// and lands by atomic replace (temp file in the same dir, then rename). Nothing else — no hook, no shell, no
-// route — may compose or edit the file's text: a note is arbitrary human/agent prose, so any writer that
-// substitutes it into existing JSON eventually meets a quote, a backslash, or a newline and leaves a record
-// nothing can parse (the reported corruption came from exactly that: a hot-path hook editing the value with
-// sed). The shell hooks READ this file cheaply and delegate every WRITE back through the CLI to this function.
-// The rename is what makes a reader between two writes see one whole record instead of a truncated one.
-//
-// @@@ session.json format - written one-field-per-line (JSON.stringify(_, null, 2)) with EVERY key ALWAYS
-// present (nulls rendered as "" / the empty value, never an absent key). The stable shape is what lets the
-// pure-shell hooks answer "is this record already active, with nothing stale to clear?" with three exact-line
-// greps and no jq — a READ fast path, never an edit. So do NOT switch to conditional keys or a compact dump.
-//
-// @@@ the record self-cleans - the object below is a CLOSED key set rebuilt from the typed record on every
-// write, never a merge over what was read. So a field retired from the code is ALSO retired from disk the
-// next time anything touches that record: no migration verb, no GC pass, no accreting graveyard of dead keys.
-// A new field earns its place by being declared HERE and in `fromRaw` — that pairing is what keeps the file a
-// projection of the current type rather than a log of everything it has ever been, and it is also the reason
-// a field MISSING from this object is silently dropped: `stopped`, `archived`, `cold_proof`, and
-// `adapter_recovery` are distinct lifecycle/resource projection fields, so each must be listed and cleared by
-// its own transition rather than one being inferred from another.
+// Rebuild the full disk projection so retired keys disappear on the next write.
 function writeRecord(rec: SessRec): void {
   let previous: SessRec | null = null
   try { previous = readRecord(rec.session) } catch { /* a new or damaged record has no prior transition */ }
@@ -536,9 +414,6 @@ function writeRecord(rec: SessRec): void {
     title: rec.title ?? '',
     name: rec.name ?? '',
     parent: rec.parent ?? '',
-    // A leased queue uses a raw token older drainers do not recognize as `queued`; current readers map it
-    // back to the unchanged public lifecycle. This version fence is what keeps an orphaned old backend from
-    // stealing the entry before it can even inspect the new launch_owner field.
     status: rawLifecycleStatus(rec),
     proposal: rec.proposal ?? '',
     merges: rec.merges,
@@ -576,11 +451,6 @@ function writeRecord(rec: SessRec): void {
   const tmp = join(dir, `.session.json.${process.pid}.tmp`)
   writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n')
   renameSync(tmp, path)   // atomic within the dir: a concurrent reader sees the old record or the new one
-  // session.json normally is the current public projection. A launch-readiness candidate is the sole internal
-  // exception: its frozen original remains public until validation clears the fence. Persist each PUBLIC moved
-  // lifecycle value before this writer returns, so a later write cannot erase a declaration note between
-  // observer samples. New-record genesis stays with superviseTimeline; metadata-only writes do not manufacture
-  // status events.
   const previousPublic = previous ? publicRecord(previous) : null
   const nextPublic = publicRecord(rec)
   if (rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
@@ -589,42 +459,10 @@ function writeRecord(rec: SessRec): void {
   }
 }
 
-// @@@ reconcile - the shown status. awaiting → the proposal's label (review/done/close-pending),
-// shown regardless of liveness. active/idle → their LIVENESS: offline if no tmux for the recorded id OR
-// claude's rendezvous socket is gone (claude exited), else idle if the idle_prompt hook has fired since
-// the last tool use, else working.
-
-// @@@ liveTmux - which of OUR tmux sessions exist AND each pane's runtime probe, in TWO spawns total (one
-// tmux, one ps) for the WHOLE list. reconcile used to spawn two tmux per session (has-session +
-// display-message), so listing N sessions was 2N spawns — the dominant /api/sessions cost under multi-agent
-// load. `tmux list-sessions` returns every session on our socket at once; a session present here has a live
-// tmux window (session_name = the id we created it with), mapped to a PaneProbe: its pane's ROOT pid
-// (`#{pane_pid}`) plus ONE shared whole-box pid→(ppid, comm) table from a single `ps` spawn. tmux server
-// down / no sessions → empty map → everything reconciles to offline, which is correct. `live.has(id)` = the
-// window presence; `live.get(id)` = the probe, which the CODEX adapter's liveness walks to tell a running TUI
-// (a codex/node process among the pane pid's descendants) from a failed launch that dropped back to the bare
-// shell (see [[harness-adapter]] paneTreeRunsCodex — the pane's FOREGROUND command is `bash`, the launch
-// wrapper, even while the TUI renders, so the foreground name is NOT the signal). CLAUDE ignores the probe —
-// its workers launch through the `reclaude` wrapper, which runs claude as a CHILD, so claude liveness stays
-// its rendezvous socket. The per-session alive() above stays for the single-session ops (capture / rawKey).
-// (the whole-box ps snapshot itself — procSnapshot — lives in harness.ts beside its tree-walk consumers.)
-// @@@ LiveSnap - the ONE liveness snapshot the whole session list shares, built from a SINGLE tmux spawn
-// (`list-panes -a` yields every session's window presence, pane pid, AND pane title at once — every session has
-// ≥1 pane). `windows` = our live tmux windows (id → PaneProbe: pane pid + the hot-tier `pidAlive` verdict + the
-// legacy `procs` table when a pid-less codex session needs it); `titles` = each pane's RAW title (harness-
-// interpreted later in paneActivity — claude: a self-authored task summary; codex: a spinner + the cwd folder
-// name); `sockets` = the ids whose rendezvous socket has a LIVE LISTENER (connect-probed once here, not the
-// file-exists lie — [[harness-adapter]]); `unproven` = the ids whose LISTENER probe could not conclude (timeout
-// under load / EAGAIN off a full-but-alive backlog — see rendezvousListening's tri-state) — death UNPROVEN, so
-// those rows read `unknown`, never `offline`; `probeFailed` = the tmux probe itself FAILED (timed out under
-// load), DISTINCT from "tmux up, no sessions" — the former means death is UNPROVEN so those rows read `unknown`,
-// the latter is authoritative and reads `offline`.
+// Share one liveness snapshot rather than spawning tmux for every displayed session.
 export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; titles: Map<string, string>; sockets: Set<string>; unproven: Set<string> }
 
-// @@@ parseLivePanes - the pure parser for the SINGLE merged `list-panes -a -F
-// '#{session_name}\t#{pane_pid}\t#{pane_title}'` snapshot: id → { panePid, title }. First pane per session wins
-// (our sessions are single-pane by construction). The title is the remainder AFTER the 2nd tab, so a title that
-// itself contains tabs survives intact. Exported so the parse is unit-auditable without a tmux spawn.
+// First pane per session wins; split only twice so titles may contain tabs.
 export function parseLivePanes(out: string): Map<string, { panePid?: number; title?: string }> {
   const m = new Map<string, { panePid?: number; title?: string }>()
   for (const line of out.split('\n')) {
@@ -642,15 +480,7 @@ export function parseLivePanes(out: string): Map<string, { panePid?: number; tit
   return m
 }
 
-// @@@ agent.pid hot registry - the per-session death-latch backing BOTH hotSignature (the 100ms tier) and
-// liveSnapshot's codex `pidAlive` verdict, so ONE latch rule serves both. keyed by session id → the last
-// agent.pid { mtime, pid, deadLatched }. agentAlive statSyncs the pid file: missing → undefined (a
-// pre-registration/old session — the warm tier / legacy tree-walk covers it); mtime changed → a relaunch wrote
-// a fresh pid, so re-read + RESET the latch; then kill-0 the pid — alive (or EPERM) = true, ESRCH = false and
-// LATCH permanently for this (pid, mtime) so a later pid-reuse by an unrelated process can never resurrect a
-// dead session (the portable pid-reuse guard: death is irreversible per registration; only a NEW agent.pid
-// write — a fresh mtime — resets). Sync fs + one kill-0 syscall, NO child process, so it stays honest under a
-// thrashed event loop — exactly when a spawn-based probe would hang.
+// Latch ESRCH per pid-file mtime so a recycled OS PID cannot revive an old session.
 type PidEntry = { mtimeMs: number; pid: number; deadLatched: boolean }
 const pidRegistry = new Map<string, PidEntry>()
 function readAgentPid(p: string): number { try { return Number(readFileSync(p, 'utf8').trim()) } catch { return NaN } }
@@ -670,10 +500,7 @@ function agentAlive(id: string): boolean | undefined {
   }
 }
 
-// @@@ needsCodexProcScan - the legacy ps-scan GATE, factored PURE so it is assertable. The whole-box `ps`
-// (procSnapshot) is paid ONLY when a windowed CODEX session has NO registered agent.pid (a pre-registration
-// launch that still needs the paneTreeRunsCodex tree-walk). A box with no codex, or all pid-registered
-// launches, returns false → zero ps spawn. Self-extinguishes as pre-registration sessions close.
+// Only pre-agent.pid Codex sessions need the legacy whole-process scan.
 export function needsCodexProcScan(windowed: { harness: string; hasPid: boolean }[]): boolean {
   return windowed.some((w) => (w.harness || 'claude') === 'codex' && !w.hasPid)
 }
@@ -722,12 +549,7 @@ async function liveSnapshot(): Promise<LiveSnap> {
   return { probeFailed: false, windows, titles, sockets, unproven }
 }
 
-// @@@ hotSignature - the 100ms zero-spawn death detector ([[state]] hot tier). NO child processes, NO async
-// socket connects — sync fs + one kill-0 syscall per session, so it stays honest under a thrashed event loop
-// (exactly when a spawn-based probe would hang). The id list is refreshed LAZILY (at most once/second) from
-// listSessionIds; per call each id's verdict comes from agentAlive (the shared death-latch registry). A session
-// with NO agent.pid (pre-registration/old) is SKIPPED here — the warm tier covers it. The fingerprint is the
-// sorted `${id}:${alive?1:0}` pairs plus the id set, so it moves the instant a registered agent dies.
+// Avoid process spawns on the hot path; old sessions without agent.pid remain warm-tier only.
 let hotIds: string[] = []
 let hotIdsAt = 0
 export async function hotSignature(): Promise<string> {
@@ -747,10 +569,7 @@ export async function hotSignature(): Promise<string> {
   return pairs.sort().join(',') + '|' + present.sort().join(',')
 }
 
-// @@@ warmSignature - the 1s tier ([[state]] warm tier): the SINGLE merged tmux snapshot (windows + pane pids +
-// titles) plus the rendezvous listener tri-state, fingerprinted so a socket dying (claude exit), the probe
-// flipping to unknown, a listener wedging (unproven), or a headline changing pushes a board-changed the instant
-// it happens — not on window churn alone. Sorted so it only moves on a real change; NO git, NO extra store walk.
+// Include listener and title changes so watchers refresh without another store read.
 export async function warmSignature(): Promise<string> {
   const snap = await liveSnapshot()
   return (snap.probeFailed ? 'PROBEFAIL|' : '') + [...snap.windows.keys()].sort().join(',') + '#' +
@@ -805,18 +624,6 @@ export const BOOT_GRACE_MS = 45000   // > SOCKET_READY_TIMEOUT_MS, and spans lau
 const LAUNCH_FAST_FAIL_S = 12 // launchScript retries the agent command when it exits faster than this: fast
                               // exit before readiness is retryable, but it is not proof of one specific cause
 
-// @@@ liveness - the orthogonal axis ([[state]]): is the agent process up, for ANY session regardless of
-// lifecycle, from a prebuilt runtime snapshot (no per-call spawn — see liveSnapshot) + the adapter's own channel
-// check. Order of honesty: if the PROBE ITSELF failed (tmux timed out under load) death is UNPROVEN → `unknown`
-// (render probe-failed, NEVER a false offline that empties the board and provokes a mass-restore). Else offline
-// iff the tmux window is gone OR the adapter's online-signal is absent past the boot window. claude (via the
-// reclaude wrapper) holds CLAUDE_BG_RENDEZVOUS_SOCK open the whole time it is alive, so a LIVE LISTENER on that
-// socket (`snap.sockets`, connect-probed — NOT the socket FILE, which a crash leaves behind) is the truth —
-// not the pane, whose foreground is the wrapper/shell while claude runs as its child. codex has no such socket,
-// so its truth is the pane's DESCENDANT PROCESS TREE from the SAME snapshot: a live TUI keeps a codex/node
-// process below the pane pid; a failed launch leaves the pane at a bare shell, even while the shared app-server
-// sock lingers. A just-launched agent whose online-signal hasn't appeared yet reads the transient 'starting'
-// for the grace window; only past it (still not online) is it genuinely 'offline'.
 export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
   if (!rec.session || rec.stopped || rec.archived) return 'offline'
   // Ask the resolved ADAPTER ([[harness-adapter]]): claude/pi/opencode prove their rendezvous listener;
@@ -842,12 +649,6 @@ export function liveness(rec: SessRec, snap: LiveSnap): Liveness {
   return 'offline'
 }
 
-// reconcile the compact DisplayStatus — a DERIVED label composing lifecycle + liveness for one-glyph
-// surfaces ([[state]]), never a third source of truth. Lifecycle wins the label except where liveness must
-// show through: awaiting → its proposal label; parked/error/asking/queued → themselves; active/idle → their
-// liveness (offline/starting/unknown), else the active-only idle/working inference (the mark-active hook flips
-// idle → active on the next real work, self-correcting). The orthogonal liveness field is what the UI keys
-// terminal-mount and the relaunch panel on; this label is for badges and `spex session ls`.
 function reconcile(rec: SessRec, snap: LiveSnap): DisplayStatus {
   // record integrity outranks both axes: a session whose worktree is gone has no work to be in any state
   // about. It reads `retired` — a terminal, human-closable row, never a lifecycle a hook can write back over.
@@ -869,10 +670,6 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
   return { path: rec.worktreePath, branch: rec.branch, rec }
 }
 
-// @@@ corruptSession - the row for a record we cannot parse. Every display field the surfaces read is filled
-// from the ONE thing we still know (the id) plus the diagnosis, so the row renders everywhere without any
-// surface having to special-case a half-record. Liveness is `unknown`, not `offline`: we never probed, so we
-// have not proven anything about the agent — the same honesty rule a failed probe follows.
 function corruptSession(id: string, entry: { path: string; error: string }): Session {
   const label = `${id.slice(0, 8)} (unreadable record)`
   return {
@@ -896,12 +693,6 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
 }
 
-// @@@ renameSession - set (or clear) a session's human display NAME: the user-chosen override that wins
-// over the derived label (node/title/branch/id) on every surface. Persisted to the session's global
-// record (`session.json` in the store, like every other field) so the name survives backend restarts
-// and is read back like any other field. A blank name CLEARS the override, reverting the row to its derived label. Works for a session in
-// any state (queued/live/offline) since it edits the on-disk record, not the live tmux. Unknown id → false
-// (the route answers 404). The frontend's right-click rename is the sole caller today.
 export async function renameSession(id: string, name: string): Promise<boolean> {
   return withRecordLock(id, async () => {
     const wt = await findWorktree(id)
@@ -911,10 +702,6 @@ export async function renameSession(id: string, name: string): Promise<boolean> 
   })
 }
 
-// @@@ setSessionSort - set (or clear) a session's drag-reorder pseudo-time ([[session-reorder]]), parallel
-// to renameSession: persisted to the session's global record so the manual order survives restarts and
-// shows on every surface (all sort by `sortKey ?? created`). A null key CLEARS it, dropping the row back to
-// its `created` slot. Works in any state since it edits the on-disk record. Unknown id → false (route 404s).
 export async function setSessionSort(id: string, key: number | null): Promise<boolean> {
   return withRecordLock(id, async () => {
     const wt = await findWorktree(id)
@@ -932,17 +719,9 @@ export async function sessionPrompt(id: string): Promise<string | null> {
   catch (e) { if (e instanceof SessionRecordUnusable) return null; throw e }
 }
 
-// @@@ lastKnownSession - the last successfully-read Session row per session_id. The record's EXISTENCE in
-// the store is definitive; a transient failure reading it (an ENOENT race, or a sibling read failing under a
-// concurrent merge) must NOT drop the row from the board — that absence is exactly what watchSessions used to
-// mis-read as a `closed · removed`. So a degraded read serves this last-known row instead of vanishing. Pruned
-// each poll to only ids still present.
+// Preserve rows through a transient record-read failure; prune after the store entry disappears.
 const lastKnownSession = new Map<string, Session>()
 
-// @@@ listSessions - the board's session list, enumerated from the GLOBAL per-session store (replacing the
-// old `git worktree list` scan). Every GOVERNED record this project owns becomes a row, status reconciled;
-// non-governed (user-self-launched) records are excluded — board state is a managed-session concern ([[state]]).
-// Offline and awaiting ones still appear (their record persists), so a session is never lost from view.
 export async function listSessions(includeArchived = false): Promise<Session[]> {
   // ONE store enumeration + ONE tmux snapshot (windows + pane pids + titles, merged) for the whole list, then
   // every session reconciles by a pure set lookup + one existsSync — no per-session tmux spawn.
@@ -1032,17 +811,12 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
   }, () => {
     // DEGRADED: the record dir still exists but reading session.json failed transiently. NEVER drop a live
     // session — serve its last-known row. (No last-known means a first sighting raced a failure; nothing to
-    // show yet, it reappears next poll — and since it was never in watchSessions' `prev`, no false closed.)
+    // show yet, and it reappears on the next build.)
     return lastKnownSession.get(id) ?? null
   }))
   // prune last-known entries for ids that no longer appear at all (genuinely removed), keeping it bounded.
   const liveIds = new Set(ids)
   for (const k of [...lastKnownSession.keys()]) if (!liveIds.has(k)) lastKnownSession.delete(k)
-  // @@@ creation order - order by birth (oldest first): each session keeps its slot for life and a new one
-  // simply appends — a stable spatial map across every surface (dashboard window, session tabs, `spex session ls`).
-  // `created` is the record's stored createdAt (set once at launch). A manual drag ([[session-reorder]])
-  // overrides one row's slot via a pseudo-time `sortKey`, so sort by `sortKey ?? created`; id breaks ties so
-  // same-instant births (or sort-keys) stay deterministic.
   return rows.filter((s): s is Session => s != null && (includeArchived || !s.archived))
     .sort((a, b) => (a.sortKey ?? a.created) - (b.sortKey ?? b.created) || a.id.localeCompare(b.id))
 }
@@ -1055,118 +829,6 @@ function guardSession(id: string, primary: () => Session | null, degraded: () =>
   catch { return existsSync(sessionStoreDir(id)) ? degraded() : null }
 }
 
-// @@@ session graph = LIVE monitors, not a stored relationship. An edge A→B means "agent A is RIGHT NOW
-// running `spex session watch B` (the Monitor tool) over B" — derived from live watch registrations, never a
-// persisted subscription. When a `spex session watch` process starts it registers here and heartbeats; the edge
-// exists ONLY while that watch runs (deregistered on exit, dropped on a missed heartbeat). Single owner:
-// this in-memory map in the SERVER process — the watch process (a separate `spex session watch`) talks to it over
-// HTTP (POST /api/sessions/edges/watch + …/unwatch). No datastore, no file: a backend restart starts
-// empty and live watches re-register on their next heartbeat. Kept isolated from the board assembler.
-// an edge is either a LIVE monitor arrow (A→B = A watches B, directed) or a recorded comms link (A↔B =
-// they have exchanged `count` direct messages, undirected). The dashboard renders the two kinds apart.
-export type Edge = { from: string; to: string; kind: 'monitor' | 'comms'; count?: number }
-
-// @@@ comms log - direct agent talk ([[comms-edge]]), recorded per-worktree. `spex session send` goes
-// THROUGH the backend (sendText); on a delivered message that carries a sender, the backend appends one
-// {peer, ts} line to the RECIPIENT's comms log — each message counted exactly once, on the side the backend
-// already resolved. Persisted (survives a backend restart, unlike the in-memory monitor registrations) and
-// untracked, in the session's GLOBAL store dir (`comms.ndjson`, keyed by session_id) — it dies with the
-// session record, matching a graph of LIVE sessions. No sender → not logged. Best-effort: a recording failure
-// must NEVER fail the delivered message.
-function commsLog(id: string): string { return sessionArtifactPath(id, 'comms.ndjson') }
-async function recordComms(toId: string, fromId: string): Promise<void> {
-  if (!fromId || fromId === toId) return
-  try {
-    if (!readRecord(toId)) return
-    appendFileSync(join(storeDir(toId), 'comms.ndjson'), JSON.stringify({ peer: fromId, ts: new Date().toISOString() }) + '\n')
-  } catch { /* a recording failure must not fail the delivered send */ }
-}
-// the peers this session has exchanged messages with — one entry per message, newest appended last.
-function readComms(id: string): string[] {
-  try {
-    const path = commsLog(id)
-    if (!existsSync(path)) return []
-    return readFileSync(path, 'utf8').split('\n').filter(Boolean)
-      .map((l) => { try { return String(JSON.parse(l).peer || '') } catch { return '' } }).filter(Boolean)
-  } catch { return [] }
-}
-// keyed by an opaque per-watch token (one per `spex session watch` process), so a single agent may run several
-// monitors without them clobbering each other. `selectors` is what the watch targets (resolved LIVE at
-// read time, not frozen here); empty / @all = a GLOBAL watcher. `expires` is the heartbeat backstop.
-type WatchReg = { watcher: string; selectors: string[]; expires: number }
-const watches = new Map<string, WatchReg>()
-const DEFAULT_WATCH_TTL_MS = 15000
-// register OR heartbeat a live monitor. watcher = the watching agent's OWN session id; ttlMs = how long
-// this stays live without another beat. Returns false on a bad pair (the route answers 400).
-export function registerWatch(token: string, watcher: string, selectors: string[], ttlMs = DEFAULT_WATCH_TTL_MS): boolean {
-  if (!token || !watcher) return false
-  watches.set(token, { watcher, selectors: selectors.filter(Boolean), expires: Date.now() + Math.max(1000, ttlMs) })
-  return true
-}
-// deregister a watch (its `spex session watch` exited); false if the token wasn't registered.
-export function deregisterWatch(token: string): boolean { return watches.delete(token) }
-// the still-live registrations, pruning any whose heartbeat lapsed — the backstop for a watch that died
-// without a clean unwatch (SIGKILL, a dropped connection, a backend that was down at exit time).
-function liveWatches(): WatchReg[] {
-  const now = Date.now()
-  const out: WatchReg[] = []
-  for (const [token, reg] of watches) {
-    if (reg.expires <= now) watches.delete(token)
-    else out.push(reg)
-  }
-  return out
-}
-// the graph: live sessions as nodes; edges DERIVED from live monitor registrations. Edge A→B = watcher A
-// is currently watching B. Selectors are resolved LIVE here via selectSessions (the same matcher `spex
-// ls/watch` use), so a global (@all/empty) watcher links to every CURRENT session — incl. ones launched
-// after the watch started — and a node/branch selector picks up future matches too. Self-edges and edges
-// touching a non-live session are dropped; duplicate A→B (two watches over the same pair) collapse to one.
-export async function sessionGraph(): Promise<{ nodes: Session[]; edges: Edge[] }> {
-  const nodes = await listSessions()
-  const live = new Set(nodes.map((s) => s.id))
-  const edges: Edge[] = []
-  const seen = new Set<string>()
-  for (const reg of liveWatches()) {
-    if (!live.has(reg.watcher)) continue   // the watching agent itself is gone
-    for (const t of selectSessions(nodes, reg.selectors)) {
-      if (t.id === reg.watcher) continue
-      const key = `${reg.watcher} ${t.id}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      edges.push({ from: reg.watcher, to: t.id, kind: 'monitor' })
-    }
-  }
-  // comms edges: undirected direct-talk, one per pair, carrying the message count — read from each live
-  // session's per-worktree log and aggregated by sorted pair so A→B and B→A fold into one A↔B count. An
-  // edge to a non-live session is dropped, like the monitor edges.
-  const commsCount = new Map<string, number>()
-  for (const n of nodes) {
-    for (const peer of readComms(n.id)) {
-      if (peer === n.id || !live.has(peer)) continue
-      const key = n.id < peer ? `${n.id}\t${peer}` : `${peer}\t${n.id}`
-      commsCount.set(key, (commsCount.get(key) ?? 0) + 1)
-    }
-  }
-  for (const [key, count] of commsCount) {
-    const [from, to] = key.split('\t')
-    edges.push({ from, to, kind: 'comms', count })
-  }
-  return { nodes, edges }
-}
-
-// @@@ apiBase resolution - WHICH backend a client verb talks to, resolved ONCE per process with the
-// source kept as a discriminant ([[remote-client]]). The core thesis: a FLAG is the only signal that is
-// provably deliberate — an env var cannot tell "I exported this on the command" from "I inherited this
-// from the backend that launched my shell", and that ambiguity is exactly the misroute bug (a shell
-// carrying project A's SPEXCODE_API_URL silently drives every bare `spex` in project B at A's backend).
-// The ladder:
-//   1. explicit `--api <url>` (`--port <n>` = localhost sugar)      — always wins, any verb
-//   2a. WORKER (SPEXCODE_SESSION_ID present): env SPEXCODE_API_URL  — the backend-injected lifeline; a
-//       worker's state writes must NEVER gamble on cwd discovery, so the env is not demotable by (2b)
-//   2b. HUMAN (no session id): the cwd project's RECORDED live backend (`spex serve` writes it, we
-//       /health-probe before trusting — a dead record is ignored, never followed)
-//   3. the other side as fallback (human with no live record → env; worker with no env → record)
-//   4. default http://127.0.0.1:$PORT||8787
 export type ApiBaseSource = 'flag' | 'worker-env' | 'record' | 'env-fallback' | 'default'
 export type ApiBaseInfo = { url: string; source: ApiBaseSource }
 const usageError = (msg: string): Error => { const e = new Error(msg); e.name = 'UsageError'; return e }
@@ -1224,107 +886,27 @@ let apiBaseMemo: Promise<ApiBaseInfo> | null = null
 export const apiBaseInfo = (): Promise<ApiBaseInfo> => (apiBaseMemo ??= resolveApiBase())
 export const apiBase = async (): Promise<string> => (await apiBaseInfo()).url
 
-// @@@ watch registration (CLIENT side) - a `spex session watch` process is separate from the server, so it
-// REPORTS itself to the backend's registration store over HTTP: register+heartbeat while it runs,
-// deregister on exit (see cli.ts `watch`). All best-effort — if the backend is down the watch still
-// streams its events; the graph edge just won't appear until a heartbeat lands. Never throws.
-// the agent's OWN session id from the HARNESS env var — the public name used across cli.ts/sessions.ts.
-// Single adapter-routed impl lives in layout.ts (`envSessionId`, iterating each adapter's sessionEnvVar);
-// re-exported here so callers keep one name. Used by `spex session watch` + the agent-typed `spex session …`
-// declarations; the hooks instead pass `--session <id>` from the payload, so they never depend on this.
 export const ownSessionId = envSessionId
 
-// @@@ withSenderHint - bidirectional agent messaging. `spex session send` delivers a prompt to the
-// recipient; this stamps WHO sent it and HOW to reply as a one-line insert appended to the delivered
-// message, so the recipient agent CAN reply (or ignore) and the reply rides the SAME send back into the
-// sender's prompt — a reply channel, no workflow enforcement, just a prompt insert. The sender is the
-// SENDING agent's OWN session (id from [[dispatch]]'s send-command process via ownSessionId, `label` its
-// board HEADLINE — sessionHeadline, the same title the recipient reads on the board); its FULL id is stamped
-// so the reply addresses exactly one session, never a prefix. A human running `send` from a plain shell has
-// no session id (sender=null) → the bare message, no hint, no loop.
-// @@@ delimited as a SESSION TITLE - the headline is wrapped `session "<headline>" (<id>)` so the recipient
-// reads it AS a session title, not as prose bleeding into the message (an un-delimited prompt-derived title
-// was unrecognisable as a name). A bare-id label (no better name in the chain) needs no quotes.
 export type MsgSender = { id: string; label: string | null }
 export function withSenderHint(text: string, sender: MsgSender | null): string {
   if (!sender) return text
   const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
   return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
 }
-// @@@ withNoteReplyHint - the HEADLESS TARGET's insert, withSenderHint's sibling: a session with no readable
-// terminal can return text to its human only through its declaration NOTE ([[session-timeline]]). This
-// insert tells the agent exactly that, so its next stop carries the complete answer in `--note` instead of
-// prose that dies in an unseen output stream. The declaration is TRANSPORT, not task work: a raw prompt's
-// "no tools" / "only print" constraint does not cancel it. composeSessionPrompt is the only production caller
-// deciding whether it applies; a surface may explicitly request note, but the target adapter owns the
-// default. The notice declares itself
-// PER-MESSAGE, and withTerminalReplyHint (below) is its counter-signal: without both, an agent that
-// note-replied a few times keeps note-replying from context inertia long after the human is back at a
-// terminal — the sticky-note failure this pair exists to prevent.
 export const withNoteReplyHint = (text: string): string =>
   `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For a simple answer awaiting the next message, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.`
-// @@@ withTerminalReplyHint - the BACK-AT-A-TERMINAL counter-insert, appended exactly once at the
-// note→terminal transition (a human send with no note flag whose previous human send carried one —
-// [[session-timeline]] lastHumanSendVia). It explicitly countermands the note-reply instruction: telling
-// the agent once beats hoping it scopes the earlier per-message notice correctly (it demonstrably doesn't —
-// codex especially). Not repeated on later terminal sends: once the transition send is recorded, the last
-// human channel is no longer note, so ordinary conversation stays insert-free.
 export const withTerminalReplyHint = (text: string): string =>
   `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).`
-async function postJSON(path: string, body: unknown): Promise<void> {
-  try {
-    await fetch(`${await apiBase()}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-  } catch { /* best-effort: backend may be down; the next heartbeat / TTL reconciles */ }
-}
-export const reportWatch = (token: string, watcher: string, selectors: string[], ttlMs: number): Promise<void> =>
-  postJSON('/api/sessions/edges/watch', { token, watcher, selectors, ttlMs })
-export const reportUnwatch = (token: string): Promise<void> => postJSON('/api/sessions/edges/unwatch', { token })
-
-// @@@ isBackendDown - a `client.ts` BackendError surfacing in the watch poll loop (whose session
-// `source` is the HTTP backend client). Matched by NAME, not `instanceof`, so sessions.ts never imports
-// client.ts at runtime (client.ts imports apiBase from here — a runtime import back would be a cycle). A
-// backend-down poll must NOT be swallowed as a transient git/tmux hiccup: watch warns ONCE and keeps
-// streaming rather than emitting false `closed` events for every session.
-export const isBackendDown = (e: unknown): boolean => e instanceof Error && e.name === 'BackendError'
-// @@@ isBackendUnreachable - the TRANSIENT subset of isBackendDown: the fetch itself failed (nothing
-// listening — ECONNREFUSED / "fetch failed"), which client.ts throws as a BackendError with NO HTTP
-// `status`. An HTTP BackendError (the backend answered non-2xx) DOES carry a status and is a real error, not
-// a momentary blip. The distinction matters to `spex session wait`: a supervisor's backgrounded wait must survive
-// the ~1s window where the supervisor reboots its hot-reloaded child behind the stable port, retrying until
-// the backend answers again or the deadline hits — never dying on the in-flight fetch that a sibling merge's
-// restart happens to interrupt. Read via a structural cast (no client.ts import — that would be a cycle).
-export const isBackendUnreachable = (e: unknown): boolean =>
-  isBackendDown(e) && (e as { status?: number }).status === undefined
-
-// @@@ slugify - the branch/worktree-safe slug. Keeps ANY unicode letter/number (git refs and the filesystem
-// take unicode), so a CJK prompt survives as the readable name its author typed instead of being stripped to
-// nothing — transliteration would buy ASCII at the cost of a dependency and a name nobody wrote. NFC pins one
-// canonical byte form across IME/OS variants. Non-empty is guaranteed by the 'session' fallback; uniqueness
-// is the caller's job (the create transaction suffixes the session short-id).
 export const slugify = (s: string | null) =>
   (s || 'session').normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'session'
 
-// @@@ node + title from the prompt - the spec node a session works on is the FIRST `[[<id>]]` topic
-// reference in the raw prompt ([[mentions]]: `[[node]]` is a topic, `@` is an actor/session). The node the
-// user actually left in the prompt is the truth: there is no focused-node/API/function argument that can
-// grant a binding outside the task text. Changing or deleting the mention changes or removes the binding.
-// When there is none, the session is node-agnostic and we label it by the first few words of the prompt.
-// The OPTIONAL leading dot is load-bearing: a node id is its dir basename, so a dot-prefixed config root
-// (`.plugins`) keeps the dot — without `\.?` here `[[.plugins]]` captures nothing and never resolves to a node.
-// Token chars are ANY unicode letter/number (slugify's already-made choice): a CJK dir name is a legal node
-// id, so `[[中文节点]]` must bind the session exactly like an ASCII id — ASCII-only here silently launched
-// node-agnostic.
 const MENTION = /\[\[(\.?[\p{L}\p{N}_-]+)\]\]/u
 export const nodeFromPrompt = (prompt: string): string | null => prompt.match(MENTION)?.[1] ?? null
 
 type CommandPreset = Pick<ConfigPreset, 'name' | 'body'>
 type CommandSpec = Pick<SpecLite, 'id' | 'path'>
 
-// @@@ command invocation - turn the raw `/<preset> [[node]]… free text` into the ONE agent prompt.
-// This is deliberately server-side: dashboard, phone, CLI, direct API, and the in-process fallback all call
-// the launch/send boundary, so no client gets its own command interpreter. Launch keeps the RAW prompt for
-// session identity/history; only the agent payload uses this expansion, preventing a plugin body's own
-// [[links]] from becoming the session node. With no mention, a preset remains targetless.
 export function composeCommandPrompt(raw: string, presets: CommandPreset[], specs: CommandSpec[]): string {
   const match = raw.match(/^\/(\S+)\s*([\s\S]*)$/)
   if (!match) return raw
@@ -1378,12 +960,9 @@ export async function composeSessionPrompt(raw: string, target: SessionPromptTar
   const replyVia = opts.replyVia ?? (h.headless ? 'note' : undefined)
   const text = replyVia === 'note' ? withNoteReplyHint(prompt)
     : !opts.from && lastHumanSendVia(target.session) === 'note' ? withTerminalReplyHint(prompt) : prompt
-  return { text, ...(replyVia ? { replyVia } : {}) }
+  return { text: optionSafe(text), ...(replyVia ? { replyVia } : {}) }
 }
-// @@@ identity-token strip - an `@session` actor mention ([[mentions]]) or a bare UUID-shaped token in the
-// prompt is ANOTHER session's identity, never this one's name. A title/slug wearing it misleads every
-// board/git surface — and a worker tasked with cleaning that session can match its OWN worktree and delete
-// it from under itself. Strip both before deriving; whatever prose remains names the session.
+const optionSafe = (text: string) => text.startsWith('-') ? ` ${text}` : text
 const UUID_TOKEN = /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/g
 const stripIdentityTokens = (s: string) => s.replace(/(^|\s)@[\p{L}\p{N}_-]+/gu, '$1').replace(UUID_TOKEN, ' ')
 export function titleFromPrompt(prompt: string): string | null {
@@ -1447,7 +1026,6 @@ export function launchPreflight(rec: SessRec): LaunchBlock | null {
 
 // @@@ launch quoting - single-quote a string for a POSIX shell, `'` → `'\''`. Used to nest the whole agent
 // invocation inside the birth-registration `sh -c '…'` wrapper without any segment double-expanding.
-const shq1 = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
 export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
   const file = join(storeDir(id), 'launch.sh')
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
@@ -1461,11 +1039,11 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   // agent.pid, then `exec env` REPLACES that sh in place — so the pid persists down the whole command chain
   // (claude: env→(reclaude→)claude; codex: env→bash -lc <script> whose last line is `exec codex … resume`), and
   // `$$` therefore IS the launched agent's pid. `env` carries the leading `VAR=val` assignments (an env prefix
-  // can't lead an `exec`), and the whole payload is single-quoted for the outer shell (shq1) so the
+  // can't lead an `exec`), and the whole payload is single-quoted for the outer shell (shQuote) so the
   // invocation's own single-quoted segments — the codex `$@`/`$tid` script, the prompt — reach sh verbatim,
   // parsed exactly ONCE, never double-expanded. Each retry attempt rewrites agent.pid with a fresh `$$`.
   const pidPath = join(storeDir(id), 'agent.pid')
-  const born = `sh -c ${shq1(`printf %s "$$" > ${shq1(pidPath)}; exec env ${invocation}`)}`
+  const born = `sh -c ${shQuote(`printf %s "$$" > ${shQuote(pidPath)}; exec env ${invocation}`)}`
   // Bounded relaunch on a FAST exit: the agent launcher can exit within seconds before the rendezvous socket
   // ever appears. That is enough evidence to retry, but not enough evidence to name the cause. Once the agent
   // has run past LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal
@@ -1508,7 +1086,7 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
       // -t "$TMUX_PANE" names THIS pane explicitly (tmux still resolves the server from $TMUX), so the capture
       // can never land on a neighbouring pane; run outside tmux the call fails, nothing matches, and the plain
       // bounded retry stands.
-      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shq1(fatal)}; then`,
+      `  if tmux capture-pane -p -S -400 -t "\${TMUX_PANE:-}" 2>/dev/null | sed -n "/$__spex_mark/,\\$p" | grep -Eq ${shQuote(fatal)}; then`,
       `    printf '[spex launch] attempt %s exited in %ss (rc=%s) - the launcher reported a failure retrying cannot fix (see above); not retrying\\n' "$__spex_try" "$(( SECONDS - __spex_t0 ))" "$__spex_rc" >&2`,
       `    exit $__spex_rc`,
       `  fi`,
@@ -1534,15 +1112,6 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
 }
 
 
-// @@@ concurrency cap + queue - keep at most maxActive() agents AUTONOMOUSLY PROGRESSING at once. A slot is
-// COMPUTE pressure, so only an agent actually consuming it holds one: genuinely live (tmux window + rendezvous
-// socket present) AND either churning (`working`) or paused-to-self-resume (`parked`). Every state that is
-// WAITING ON THE HUMAN frees its slot — `idle` (stopped at its prompt), `asking` (asked a question), and the
-// proposal states (review/done/close-pending) — exactly as `offline`/`queued` do. Those agents burn no
-// compute, so they must NEVER block a fresh launch: the old rule counted them, so a pile of "waiting on you"
-// sessions wedged the queue while the box sat near-idle (the reported blockage). Liveness is still checked
-// directly (the socket truth reconcile uses), so an authored `parked` whose claude has since died does NOT
-// pin a slot. The cap throttles concurrent COMPUTE; everything waiting-on-you waits cheap as a live pane.
 const OCCUPIES_SLOT = new Set<DisplayStatus>(['working', 'parked', 'starting'])  // starting's boot window is also held via `launching`
 function isOccupying(s: Session, snap: LiveSnap): boolean {
   if (!OCCUPIES_SLOT.has(s.status)) return false                          // waiting-on-human / proposed / queued / dead → free
@@ -1600,7 +1169,7 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
   const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness (also drives waitForReady below)
   try {
-    const sq = `'${launchPrompt.replace(/'/g, `'\\''`)}'`
+    const sq = shQuote(launchPrompt)
     await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
   } catch {
     launching.delete(id)
@@ -1615,11 +1184,6 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
 }
 const startQueued = (id: string): Promise<boolean> => withSessionTransition(id, () => withRecordLock(id, () => startQueuedUnlocked(id)))
 
-// @@@ drainQueue - start as many `queued` sessions as there are free slots, oldest first. Idempotent and
-// re-entrancy-guarded; safe to call on every slot-freeing event (session creation / close / propose) AND on a
-// periodic tick (superviseQueue) — the periodic tick is what catches the AGENT-authored transitions
-// (done/parked written by a hook SUBPROCESS, which can't reach this server's queue). Re-lists each iteration
-// so a freshly launched session (held in `launching`) counts immediately and we never exceed the cap.
 async function drainQueueUnlocked(): Promise<void> {
   if (draining) return
   draining = true
@@ -1652,11 +1216,6 @@ const requestQueueDrain = (): void => {
   })
 }
 
-// @@@ superviseQueue - the periodic drainer. Started once at serve(). The explicit drainQueue() calls on
-// session creation/close/propose cover the slot-freeing events the SERVER handles, but an agent proposing done or
-// going parked writes its global session.json record from a hook subprocess the server never sees, and a crash just makes a
-// socket vanish — so a timer is what turns those into freed slots. Cheap: one worktree+tmux snapshot per tick,
-// and a no-op when nothing is queued. Idempotent (guarded), so a second call is harmless.
 let supervisingQueue = false
 export function superviseQueue(intervalMs = 3000): void {
   if (supervisingQueue) return
@@ -1768,17 +1327,6 @@ export function superviseTurnFailures(intervalMs = 1000): void {
   tick()
 }
 
-// @@@ assertProjectMatch - a WRITE is PROJECT-BOUND, but routing is by URL. A mutating verb's intent is
-// "act on the project my cwd is in", yet the resolved base is a pure URL carrying no project identity —
-// the backend it answers acts on ITS OWN mainRoot, so a stale inherited SPEXCODE_API_URL (pointing at
-// another repo's backend) silently lands the write in the WRONG repo. Read/control-READS deliberately
-// point anywhere (viewer-points-anywhere, see remote-client); every MUTATING verb (new/merge/send/close/
-// rename/input/resume/stop) is bound to the caller's project. So before writing, compare the caller's
-// repo root to the backend's served root and FAIL LOUD on a provable, same-host mismatch — never a silent
-// misroute. An explicit `--api`/`--port` flag SKIPS the guard: the flag is the one provably-deliberate
-// cross-project signal (that's the whole flag-beats-env thesis). The guard fires only on a positive
-// mismatch: no local repo, an unreachable backend, or a backend root that isn't a resolvable local path
-// (a genuinely remote backend) all fall through to allow, so legit remote drive stays untouched.
 type BackendSettings = { layout?: { main?: string } }
 function assertProjectSettingsMatch(verb: string, target: ApiBaseInfo, settings: BackendSettings | null): void {
   const { url, source } = target
@@ -1918,16 +1466,6 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   }
 }
 
-// @@@ createSession (dispatch via backend) - `spex session new` must launch the worker in the
-// BACKEND's process, not the caller's, because the backend is the single owner of the concurrency cap and the
-// launch QUEUE (drainQueue). An in-process launch by an agent that runs `spex session new` (e.g. a supervisor) would
-// bypass that queue and the maxActive gate. (The launch COMMAND is not a process-env concern anymore — it
-// comes from the session's pinned launcher, resolved from project config [[launcher-select]], identical in
-// either process.) So the CLI POSTs to the running backend whenever one answers. Only an explicit
-// ECONNREFUSED proves there is no owner on the target and permits the legacy in-process fallback. A timeout,
-// reset, DNS failure, or other ambiguous transport result may hide an admitted request, so it fails loud and
-// never starts a second writer. The backend POST, mention dispatch, and fallback all enter through
-// sessionCreateRequest; the private preparation half cannot be called without its bounded context.
 function isExplicitConnectionRefused(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   if ((error as NodeJS.ErrnoException).code === 'ECONNREFUSED') return true
@@ -1957,10 +1495,6 @@ async function probeSessionCreateAuthority(target: ApiBaseInfo): Promise<boolean
   } finally { clearTimeout(timer) }
 }
 export async function createSession(prompt: string, launcher?: string): Promise<Session> {
-  // @@@ parent = the CALLER's own session ([[session-nesting]]). Resolve it HERE, in the caller's process,
-  // via the SAME ownSessionId env read [[agent-reply-channel]] uses for its sender hint — NOT inside the
-  // backend, whose process env carries no acting session id. An agent that runs `spex session new` stamps its own id;
-  // a human in a plain shell has none → null → the new session is top-level (no phantom nesting).
   const parent = ownSessionId()
   const requestKey = randomUUID()
   const target = await apiBaseInfo()
@@ -2001,14 +1535,6 @@ export async function createSession(prompt: string, launcher?: string): Promise<
   return await res.json() as Session
 }
 
-// @@@ spawnerClause - where the SPAWNER works, told to the child ([[spawner-pointer]]). A child's worktree is
-// branched off the BASE branch, never off its spawner, so everything that session has in flight — a spec node
-// it just created, an edit it hasn't landed — is absent from the child's tree AND from the spec index the
-// pointer above resolves against (that index reads the backend's own checkout). Teaching the fork or the
-// landing about nesting would cost a second base per session and would carry the spawner's unreviewed commits
-// into whatever the child merges into; naming the spawner's worktree costs one line and lets the agent decide.
-// A POINTER, never a body — same family rule as [[spec-pointer]] — and fail-quiet by absence: no parent, or a
-// parent record without a worktree, appends nothing.
 export function spawnerClause(p: SessRec | null): string {
   if (!p?.worktreePath) return ''
   const who = p.name || p.title
@@ -2237,14 +1763,6 @@ async function proveSessionCandidate(path: string, branch: string, signal: Abort
   return null
 }
 
-// @@@ prepareSession - private required-context half of the bounded create owner. It prepares one durable
-// worktree (branch node/<slug> off main) + global session.json record. The agent does NOT
-// launch inline any more: the worktree is prepared and parked as `queued`, then drainQueue() launches it
-// immediately if we're under the concurrency cap, else it waits its turn. Backs both the dashboard POST and
-// `spex session new`. Creating or deleting a spec node is NOT a server op — it is prompt-driven work the
-// launched agent does itself (the composer's nn/dd chords just prefill a plain instruction). So the server
-// only ever launches a session; it never mutates the spec tree ([[mentions]]: the issue store is the sole
-// programmatic surface, every other surface is prompt only).
 async function prepareSession(prompt: string, parent: string | null, launcher: string | undefined, context: SessionCreateContext): Promise<Session> {
   const { id, requestDigest, payloadHash, signal } = context
   let phase: SessionCreatePhase = 'creation-lock'
@@ -2430,14 +1948,6 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
   }
 }
 
-// @@@ bootstrapMaterialize - the creation-time materialize is BOOTSTRAP, not best-effort: it is what writes
-// the worktree's .claude/.codex shims (the settings.json hook wiring) in the first place, and every
-// lifecycle dispatch RIDES ON those hooks — so when this materialize fails, no hook ever fires,
-// and the worker comes up ungoverned (no contract block, no stop-gate) with nothing saying so. Fail loud
-// instead: log the cause + worktree, and stamp the failure on the record's `note` so the board/watch surface
-// it. The launch still proceeds — a visibly degraded worker the human can close + re-dispatch beats a refused
-// launch, and status stays agent-authored ([[state]]): we stamp the note, never an inferred `error` state.
-// `doMaterialize` is injectable only so tests can simulate the failure.
 export function bootstrapMaterialize(rec: SessRec, doMaterialize: (proj: string) => unknown = materialize): void {
   try {
     doMaterialize(rec.worktreePath)
@@ -2446,15 +1956,6 @@ export function bootstrapMaterialize(rec: SessRec, doMaterialize: (proj: string)
   }
 }
 
-// @@@ waitForReady - after a launch/relaunch, the agent needs SEVERAL SECONDS to come up; launch() only TYPES
-// the start line via send-keys and returns immediately, so the agent's online-signal does not exist yet on
-// return. Poll the ADAPTER's liveness ([[harness-adapter]]) at a small interval up to a bounded timeout so the
-// agent counts as "ready" only once it is genuinely online — claude: its rendezvous socket up; codex: its
-// project app-server socket up AND native thread id captured — then a follow-on dispatch (merge / send) lands
-// in a LIVE agent instead of racing the boot and failing loud on a session that is actually recovering.
-// BOUNDED + fail-loud preserved: a
-// genuinely dead/unrecoverable agent never goes online, so after the timeout we return and the caller's own
-// deliver() fails loud exactly as before — this only closes the startup race, it adds no fallback.
 const SOCKET_READY_TIMEOUT_MS = 30000   // spans launchScript's bounded fast-fail relaunch window, so
                                         // waitForReady (slot-hold + resume) waits through a daemon-race retry
                                         // instead of returning before a recovering socket
@@ -2486,28 +1987,6 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
   }
 }
 
-// @@@ resumeSession - bring the agent back up and settle its RESTING lifecycle. THREE rules:
-//   • RESUME GUARD ([[state]]): a relaunch KILLS the running agent (`kill-session` + fresh window), so it is a
-//     data-loss operation the moment the agent is actually ALIVE — the incident's kill-shot was restore-on-alive
-//     (the board LIED offline, the human relaunched, live workers died mid-work). So resume re-derives the
-//     agent's liveness FRESH and, when the caller is guarding (the human relaunch panel / `spex session resume`,
-//     `guard` default true), REFUSES LOUD rather than relaunch a live agent — you steer a live agent by
-//     MESSAGING it, not by restoring it. Death must be PROVEN: an `unknown` probe (tmux timed out under load —
-//     the exact condition that started the incident) also refuses, since a live worker can't be ruled out. A
-//     `force` escape exists for a genuinely-wedged-but-alive process. The merge dispatch passes `guard:false`:
-//     it only needs a LIVE agent to send the merge prompt to, so an already-online agent is a satisfied no-op
-//     (never a refusal), and only a CONFIRMED-offline one is relaunched.
-//   • liveness/relaunch: relaunch only when the agent is CONFIRMED `offline` (or `force`) — never on `online`
-//     (alive), `starting` (booting), or `unknown` (unproven). We drop any stale pane and launch a fresh window
-//     through the adapter's resumeArg — claude `--resume <id>` (the SAME conversation), codex `resume
-//     <thread-id>` once captured, else a fresh TUI — then WAIT (waitForReady) so a caller that dispatches
-//     immediately after (mergeSession's merge) addresses a LIVE agent, not a racing boot.
-//   • lifecycle: the SAME active-only guard markIdle uses — a resumed agent that was WORKING (`active`) is now
-//     just sitting at its prompt → `idle`; EVERY deliberate declaration survives untouched (`awaiting` + its
-//     proposal, `asking`, `parked`, `error`, `queued`). resume does NOT touch the `proposal` — resuming a
-//     session that is proposing a merge must NOT silently withdraw it. Only applied when we actually relaunch;
-//     a refusal leaves the record wholly untouched.
-// Fail-loud is unchanged: if the agent never comes online, the later deliver() fails loud.
 type ResumeOptions = { force?: boolean; guard?: boolean }
 
 async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Promise<{ ok: boolean; error?: string; refused?: boolean; info?: string }> {
@@ -2624,11 +2103,6 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
 export const resumeSession = (id: string, opts: ResumeOptions = {}) =>
   withSessionTransition(id, () => withRecordLock(id, () => resumeSessionUnlocked(id, opts)))
 
-// @@@ agent-authored state - the agent (forced by gates at boundaries) writes its OWN state; it is the
-// authority on what a stop MEANS (awaiting human vs parked on a background task). External hooks only know
-// SOMETHING changed, not the transition, so they force a write, never infer. The session it writes is resolved
-// by id: `sessionId` (the hooks pass `--session <id>` from the payload) wins, else ownSessionId() (the env var
-// the agent's own `spex session …` carries). Unknown id / no record → false (the route/CLI reports it).
 export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?: string; sessionId?: string } = {}): boolean {
   const id = opts.sessionId || ownSessionId()
   if (!id) return false
@@ -2645,9 +2119,6 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
 }
 export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId })
 export const markError = (sessionId?: string) => markState('error', { sessionId })
-// @@@ harness turn failure - native adapter failures are external runtime facts that must become visible on
-// the durable board. Compare-and-set only an undeclared active record, so a declaration that landed before a
-// late process close or app-server completion remains authoritative.
 export function markTurnFailure(sessionId: string | undefined, note: string): boolean {
   if (!sessionId) return false
   return withRecordLockSync(sessionId, () => {
@@ -2703,11 +2174,6 @@ export function markHarnessSessionId(sessionId: string | undefined, harnessSessi
     return true
   })
 }
-// @@@ markIdle - the ONE INFERRED state, so (unlike the agent-authored writers above) it carries a strict
-// active-only guard: the Notification(idle_prompt) hook fires it when claude is waiting at its prompt, and it
-// may ONLY overwrite `active` → `idle`. A deliberate declaration (awaiting / asking / parked / error) must
-// survive — idle only fills the gap where the agent stopped WITHOUT declaring (e.g. an API error killed the
-// turn before the Stop gate). The mark-active hook flips idle → active on resume. Same id resolution as markState.
 export function markIdle(sessionId?: string): boolean {
   const id = sessionId || ownSessionId()
   if (!id) return false
@@ -2718,27 +2184,6 @@ export function markIdle(sessionId?: string): boolean {
     return true
   })
 }
-// @@@ asking has TWO writers, both deterministic (neither guarded active-only): (1) the mark-active
-// PreToolUse hook captures it the instant the agent invokes the AskUserQuestion tool (status=asking,
-// the question as the note) — a HARD signal that the agent is asking the human; (2) the agent declares it
-// itself via markState('asking', { note }) — `spex session ask`, e.g. at the Stop gate. Either
-// way the mark-active path clears it back to active on the next tool / prompt, same as any non-active state.
-
-// @@@ mergeReadiness - the deterministic commit gate the Stop hook enforces before a session may declare
-// done. The dogfood ritual lands every change as a COMMIT on the node branch first, so an uncommitted
-// working tree blocks EITHER proposal: the declaration claims the work is committed, and a dirty tree makes
-// that false. The second condition — 0 commits ahead of main — is checked ONLY for `merge`, because it is
-// the only one the claim contradicts: `--propose merge` asserts there is committed work to land, while
-// `--propose nothing` asserts the opposite ("committed, but I am NOT proposing a merge; paused for the human
-// to look"), which a lane whose work ALREADY landed states truthfully. Gating `nothing` on ahead-of-main
-// left such a lane one way through: an empty commit — a lie in git history to satisfy a check about honesty. Since the global-store refactor, SpexCode writes NO per-session files into
-// the worktree (the runtime lives in ~/.spexcode), and the only in-tree SpexCode artifacts are exclude-
-// hidden materialized artifacts or filter-covered contract blocks ([[residence]]), so
-// neither shows as an uncommitted change — the worktree is pristine and EVERY dirty path is genuine spec/code
-// work, no runtime-file filtering needed.
-// Runs from cwd = the session worktree; ALL git goes through git() so the hook's exported GIT_DIR/GIT_INDEX_FILE
-// can't misdirect repo discovery to the cwd (the same trap git.ts documents). `main` resolves via the shared
-// refs, so `main..HEAD` works from any linked worktree regardless of where main is checked out.
 export function mergeReadiness(proposal: 'merge' | 'nothing' = 'merge'): { ready: boolean; reason?: string } {
   let dirty: string[] = []
   try {
@@ -2765,27 +2210,14 @@ function porcelainPath(line: string): string {
   return p
 }
 
-// @@@ MANAGER COCKPIT - the review payload (the cockpit's first verb; see the manager-cockpit spec node).
-// One server-side bundle that lets a manager (human or agent) decide whether to merge a session WITHOUT
-// hand-running git: how far ahead it is, its REAL changes (merge-base diff, never a phantom main..HEAD one),
-// whether uncommitted non-runtime work remains, the merge/lint gates, and the agent's standing proposal.
-// ahead/dirty/diff/conflicts are computed against the SESSION's worktree (per id); lint reflects the CLI
-// package's OWN location (where this runs) — the spec-cli that's actually live. There is deliberately NO
-// build/typecheck/test gate: whether a change is SOUND is proven by the node's eval scenarios (measured through the
-// real product), not by a language-specific automated checker — so the gates stay language-agnostic (git +
-// the spec↔code graph, which every governed project has, TS or Python or otherwise). null when no session
-// has that id.
-// The measured-loss READOUT beside the git/graph gates. It grades nothing: no threshold, no pass/fail, no
-// block — the manager reads the four mutually exclusive scenario categories [[session-eval]] already folded
-// and decides. Its phase is part of the fact: a projection that has not been computed yet is NOT a clean
-// gate, so an absent/loading/updating/failed projection reports that phase and carries no numbers at all
-// rather than four honest-looking zeros.
 export type ReviewEvalFacts = { freshPass: number; freshFail: number; needReview: number; blind: number }
 export type ReviewEvalGate = ({ phase: 'ready' } & ReviewEvalFacts) | { phase: 'unavailable' | 'loading' | 'updating' | 'error' }
+// the session-side gates only. The measured-loss readout is composed ABOVE this layer ([[manager-cockpit]]'s
+// cockpit.ts): the eval package imports this module, so reading it from here could only ever be a deferred
+// import working around a cycle. The eval side never consumed this field — it reads lint/conflict/ahead/dirty.
 export type ReviewGates = {
   conflictsWithMain: boolean                       // a dry-run merge into main would conflict (in-memory, safe)
   lint: { errorCount: number; warningCount: number } // the spec↔code graph lint
-  evals: ReviewEvalGate                            // [[session-eval]]'s already-computed scenario categories
 }
 export type ReviewPayload = {
   id: string; node: string | null; branch: string | null
@@ -2835,22 +2267,6 @@ async function lintGate(): Promise<ReviewGates['lint']> {
   return p
 }
 
-// @@@ evalGate - the cockpit's measured-loss readout, taken from [[session-eval]]'s EXISTING projection.
-// This is a cache READ and must stay one: buildSessionEvals() itself calls reviewPayload(), so building the
-// model from here would recurse. The import is dynamic for the same reason the lint gate's is — the eval
-// package imports this module, and the cockpit only needs it at call time.
-async function evalGate(id: string): Promise<ReviewEvalGate> {
-  const { sessionEvalProjection } = await import('../../spec-eval/src/sessioneval.js')
-  const projection = sessionEvalProjection(id)
-  if (!projection) return { phase: 'unavailable' }
-  // only a `ready` projection carries a CURRENT value; last-known is deliberately not reported as current.
-  if (projection.phase !== 'ready' || !projection.value) {
-    return { phase: projection.phase === 'ready' ? 'unavailable' : projection.phase }
-  }
-  const summary = projection.value
-  return { phase: 'ready', freshPass: summary.pass, freshFail: summary.fail, needReview: summary.review, blind: summary.blind }
-}
-
 // @@@ reviewPayload - assemble the cockpit review for one session. The four session-specific reads
 // (ahead / dirty / diff / conflict gate) plus the one location gate (lint) are all independent, so they run
 // in parallel. The lint gate goes through lintGate(), which memoizes it on the checkout's tree fingerprint —
@@ -2860,13 +2276,12 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   const wt = await findWorktree(id)
   if (!wt) return null
   const base = mainBranch()
-  const [aheadOut, statusOut, diff, conflictsWithMain, lint, evals] = await Promise.all([
+  const [aheadOut, statusOut, diff, conflictsWithMain, lint] = await Promise.all([
     gitA(['-C', wt.path, 'rev-list', '--count', `${base}..HEAD`]),
     gitA(['-C', wt.path, 'status', '--porcelain', '--untracked-files=all']),
     mergeBaseDiff(wt.path, base),
     mergeConflicts(wt.path, base),
     lintGate(),   // lint — memoized on the checkout fingerprint, not re-run per session/open
-    evalGate(id), // measured loss — a READ of the existing projection, never a build
   ])
   // the worktree carries no SpexCode runtime files any more (the store lives in ~/.spexcode), so every dirty
   // path is genuine work — this is just the total uncommitted count.
@@ -2876,22 +2291,11 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
     label: deriveLabel({ id, name: wt.rec.name, node: wt.rec.node, title: wt.rec.title, branch: wt.branch }),
     ahead: Number(aheadOut.trim()) || 0,
     dirtyNonRuntime, diff,
-    gates: { conflictsWithMain, lint, evals },
+    gates: { conflictsWithMain, lint },
     proposal: { kind: wt.rec.proposal, note: wt.rec.note },
   }
 }
 
-// @@@ mergePrompt - the human's merge INTENT, handed to the session's OWN agent. Merge is a DISPATCH, not a
-// server git script: the agent knows the work, so IT runs the merge, resolves any conflicts, and VERIFIES the
-// outcome — the guarantee lives in that verification, never a server-side gate. This is also the ONE place the
-// merge STYLE is stated (no other mechanism carries it): a --no-ff merge commit `merge <branch>: <reason>`
-// into main. The agent runs git from the MAIN checkout (`-C <mainPath>`; its own cwd is the node worktree) —
-// and that checkout is the fleet's ONE landing door, so the prompt orders the landing to be TRIVIAL by the
-// time it gets there: sync + resolve in the agent's own worktree, land only when `merge-base --is-ancestor`
-// says the branch already contains the base, wait (never abort) on someone else's in-progress merge. The
-// always-on half of that contract is the `atomic-landing` system plugin; this prompt is the per-merge half.
-// After a clean merge the branch is 0 ahead of main, so the agent proposes CLOSE — not merge (the commit gate
-// would block a merge proposal; propose-close is exempt) — and the human confirms the close.
 function mergePrompt(mainPath: string, branch: string, reason: string): string {
   const base = mainBranch()
   return `Merge your branch \`${branch}\` into \`${base}\`, then propose close. You know this work, so resolve any conflicts yourself — in YOUR OWN worktree, never in the shared ${base} checkout.\n\n` +
@@ -2902,15 +2306,6 @@ function mergePrompt(mainPath: string, branch: string, reason: string): string {
     `5. Once you've verified \`${base}\` advanced cleanly, propose close for the human — do NOT close it yourself.`
 }
 
-// @@@ mergeSession - the cockpit's ACT verb, the sequel to review — but a DISPATCH, not a server script: the
-// SESSION'S OWN agent lands the merge, never the server (it carries no `git merge` logic and never touches
-// main's tree). It resumes the session (clears the proposal, `--resume`s via resumeSession if tmux died —
-// which waits for the rendezvous socket, closing the just-relaunched-no-socket race) and dispatches mergePrompt
-// — that delivered prompt flips the lifecycle to active regardless of resume's resting state
-// through sendText. The reason = the node branch's latest commit subject minus a leading `spec: ` (visible from
-// the main checkout, no worktree path needed). Async + fail-loud: returns {dispatched:true} once the prompt is
-// CONFIRMED accepted, else {dispatched:false, reason} (the loud DispatchResult error). The server no longer
-// re-checks gates, runs git, bumps `merges`, or closes the session — review shows the gates; the agent verifies.
 async function mergeSessionUnlocked(id: string): Promise<{ dispatched: boolean; reason?: string }> {
   const wt = await findWorktree(id)
   if (!wt || !wt.branch) return { dispatched: false, reason: 'no such session' }
@@ -2946,9 +2341,7 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, l
     throw new ResourceConflict(`refusing to stop ${id}: session leaf identity changed before signal`)
   if (!Number.isFinite(pid) || pid <= 0) return
   const startToken = leaf.startToken
-  const alive = (): boolean => {
-    try { process.kill(pid, 0); return true } catch (e) { return (e as NodeJS.ErrnoException).code === 'EPERM' }
-  }
+  const alive = (): boolean => leafAlive(pid)
   const identityState = (): 'same' | 'gone' | 'changed' => {
     if (readAgentPid(sessionArtifactPath(id, 'agent.pid')) !== leaf.pid) return 'changed'
     const current = processStartToken(pid)
@@ -2988,6 +2381,14 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, l
 // the resolved adapter to sweep its ephemeral runtime transport — in that order, because the adapter only
 // removes a transport whose listener is PROVEN dead.
 // Deliberately does NOT drainQueue — the caller drains once, after it has settled the worktree.
+// @@@ leafAlive - does this pid name a live process? EPERM counts as alive (a process we may not signal is
+// still a process); only ESRCH is absence. Kept local: git.ts carries its own copy for lock reclamation, and
+// collapsing the two is part of the spec/eval unification lane, not of this fix.
+const leafAlive = (pid: number): boolean => {
+  try { process.kill(pid, 0); return true }
+  catch (error) { return (error as NodeJS.ErrnoException)?.code !== 'ESRCH' }
+}
+
 async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIdentity | null> {
   const harness = harnessById(rec.harness || defaultHarness.id)
   if (harness.runtimeOwnership === 'adapter') return null
@@ -3000,8 +2401,8 @@ async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIde
   }
   const startToken = processStartToken(pid)
   if (!startToken) {
-    if (rec.stopped) return null
-    throw new ResourceConflict(`refusing to stop ${id}: session-owned leaf PID ${pid} is not alive or has no start identity`)
+    if (rec.stopped || !leafAlive(pid)) return null
+    throw new ResourceConflict(`refusing to stop ${id}: session-owned leaf PID ${pid} is alive but will not prove its start identity`)
   }
   const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
   const ownerNeedle = harness.leafOwnerNeedle?.(rec)
@@ -3034,11 +2435,6 @@ async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = f
   }
 }
 
-// @@@ stopSession - the SOFT stop (vs closeSession's removal): stops the agent process but LEAVES the durable
-// worktree + branch + transcript intact. The retained record's explicit-stop marker makes liveness `offline`
-// whatever its lifecycle or adapter probe, so the relaunch panel offers to --resume the SAME conversation. This is
-// "step away, come back later"; closeSession is "discard this work". An offline session occupies no slot, so
-// the freed capacity drains a queued session next (drainQueue).
 async function stopSessionUnlocked(id: string): Promise<boolean> {
   let wt: { path: string; branch: string | null; rec: SessRec } | null
   try { wt = await findWorktree(id) }
@@ -3057,9 +2453,6 @@ async function stopSessionUnlocked(id: string): Promise<boolean> {
 export const stopSession = (id: string): Promise<boolean> =>
   withSessionTransition(id, () => withRecordLock(id, () => stopSessionUnlocked(id)))
 
-// @@@ archiveSession - cold storage ([[archive]]): prove and stop the exact session-owned runtime first, then
-// write archived:true + stopped:true. The shared adapter root is never torn down. A guard/ownership failure
-// leaves the record unarchived and visible; no second cleanup primitive or fail-open record write exists.
 async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
   let wt: { path: string; branch: string | null; rec: SessRec } | null
   try { wt = await findWorktree(id) }
@@ -3257,13 +2650,6 @@ async function assertQueuedRetirementSafe(id: string, rec: SessRec, path: string
   }
 }
 
-// @@@ closeSession - the REMOVAL (human-confirmed): a live row uses stop's exact kill, while a proven-cold
-// archive or never-launched queue uses its target-only read proof above. All then remove the worktree + branch and the session's whole
-// global-store record dir — the work is gone, not just stopped. The git/store teardown remains one path.
-// The tree's materialize slot ([[runtime]] trees/<enc>) retires with the worktree — its key needs the live tree,
-// so it is resolved BEFORE the removal; both sweeps are best-effort (residue is swept at uninstall anyway).
-// A corrupt record proves no adapter, leaf, worktree, or branch owner. Close may copy those bytes to the
-// control-plane quarantine, but then fails before this teardown seam and names every residue it preserved.
 async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch: string | null; rec: SessRec }): Promise<boolean> {
   const root = mainRoot()
   const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(wt.rec, root)
@@ -3438,9 +2824,6 @@ async function proveQuarantineAdapter(id: string, witness: CorruptRecordQuaranti
   return { adapter: harness.id, thread: null, action: 'absent', compensate: async () => ({ ok: true }) }
 }
 
-// @@@ quarantineCorruptRecord - the record-only escape hatch for an incident that has already lost parseability.
-// It never guesses from those bytes: the caller names the former residues, this function proves their absence,
-// and only then moves the opaque file into an auditable bundle. Close remains the destructive owner-based verb.
 export async function quarantineCorruptRecord(id: string, rawWitness: unknown): Promise<CorruptRecordQuarantineResult> {
   return withSessionTransition(id, () => withRecordLock(id, async () => {
     const entry = readRecordEntry(id)
@@ -3519,10 +2902,6 @@ export async function restoreQuarantinedRecord(id: string): Promise<CorruptRecor
   }))
 }
 
-// @@@ quarantine - closing sweeps the session's whole store dir, so an UNREADABLE record would take the only
-// evidence of what corrupted it with it. Copy those bytes to the per-project `corrupt/` shelf first, named by
-// session id and close time. Only unreadable records are shelved (a healthy one's contents are already known
-// and reproducible); the shelf is never read by the product, it is there for the human who asks "what broke?".
 function quarantineRecord(id: string): string | null {
   let entry
   try { entry = readRecordEntry(id) } catch { return null }   // unreadable for another reason (permissions) — leave it
@@ -3693,236 +3072,50 @@ export function formatTable(sessions: Session[], color = true): string {
   return [c('1', `SpexCode sessions (${sessions.length})`), header, ...rows, statusLegend(color)].join('\n')
 }
 
-const WATCH_ACTIONABLE = new Set<DisplayStatus>(['review', 'done', 'close-pending', 'offline', 'error', 'asking'])
-const NEXT: Record<string, string> = {
-  review: 'merge | close',
-  done: 'merge | close',
-  'close-pending': 'close',
-  offline: 'resume (relaunch the same conversation)',
-  error: 'resume (relaunch & retry) | show --capture | close',
-  asking: 'send "<msg>" | show --capture',
-  idle: 'send "<msg>" | show --capture',
-  queued: 'waiting for a free slot — starts automatically | close',
-}
-export function sessionEvent(s: Session): string {
-  const note = s.note ? ` — note: ${s.note}` : ''
-  const asked = s.promptPreview ? ` · asked: ${s.promptPreview}` : ''
-  return `[spex] ${s.status} · ${sessionLabel(s)} — act: ${NEXT[s.status] || '—'}${note}${asked}  [id ${s.id}]`
-}
-// @@@ launchEvent - a session's FIRST sighting. A launch goes straight to 'working' (not actionable), so
-// without this the watch feed would be blind to new sessions starting. Emitted ONCE per id, regardless of
-// status, so `spex session watch` is a complete lifecycle feed: launched → [actionable transitions] → closed.
-export function launchEvent(s: Session): string {
-  const note = s.note ? ` — note: ${s.note}` : ''
-  const asked = s.promptPreview ? ` · asked: ${s.promptPreview}` : ''
-  return `[spex] launched · ${sessionLabel(s)} — act: capture | send "<msg>"${note}${asked}  [id ${s.id}]`
-}
-// @@@ source/presenceSource - event population and existence truth are deliberately separate projections. The
-// broad CLI watch passes the default active-only source so it never enumerates the archive shelf, plus an
-// all-record `presenceSource` so a hidden archive is not mistaken for a removed worktree. An explicit selector
-// passes the all-record source for BOTH, allowing that one target's offline archive/resume transitions through.
-// Both are backend clients (client.ts), so `spex session watch` monitors the machine named by
-// SPEXCODE_API_URL; a forgotten source must be a compile error, never a silent local-board fallback.
-export type WatchOpts = { source: () => Promise<Session[]>; presenceSource?: () => Promise<Session[]>; selectors?: string[]; statuses?: string[]; includeIdle?: boolean; intervalMs?: number; as?: string; until?: { timeoutMs: number; onObserved?: (status: DisplayStatus, previous: DisplayStatus | null) => void } }
-// @@@ watch outcome - only the BOUNDED `until` mode resolves (that mode is what `spex session wait` runs on); a
-// plain watch (no `until`) streams forever and never resolves. The bound is what makes `wait` a one-shot
-// "block for a worker's NEXT transition, then exit" that is GUARANTEED to return. Bounded mode is
-// EDGE-TRIGGERED ([[session-edges]]): it resolves only upon OBSERVING a watched target transition from a
-// non-actionable status INTO an actionable one — an already-actionable first sighting is recorded and
-// narrated (`onObserved`, arrival first) but never resolves, so "wait for the dispatched merge to actually
-// land" has a real signal instead of an instant false return on the standing `review` level. Every observed
-// status per target accumulates into a `path` (arrival first); the resolving target's path rides the outcome
-// so the caller can print the whole observed sequence. The deadline is checked EVERY poll, before
-// EVERY sleep (and even when a poll throws), so a target that never produces an edge — stuck in ANY
-// non-actionable state (`working`/`parked`/`idle`/`queued`/`starting`), or sitting forever on an
-// already-actionable level — can never hang the caller: it exits at the deadline, path carried for the report.
-// `reached` = an observed edge into an actionable status; the rest are the loud exits. `backendDown` is a verdict
-// about the TRANSPORT, never the session — `kind` keeps its two shapes distinct for the caller's outcome
-// surface: 'unreachable' (nothing listening, the whole timeout was spent retrying) vs 'http' (reachable but
-// broken, failed loud at once). The caller must surface these OUTSIDE the session-status vocabulary — a
-// supervisor must never be able to read a transport failure as a session state (issue #40).
-export type WatchOutcome = { reached: DisplayStatus; path: DisplayStatus[] } | { timedOut: true; path: DisplayStatus[] } | { gone: true; path: DisplayStatus[] } | { backendDown: string; kind: 'unreachable' | 'http' }
-export async function watchSessions(emit: (line: string) => void, opts: WatchOpts): Promise<WatchOutcome> {
-  const { source, presenceSource = source, selectors = [], statuses, includeIdle = false, intervalMs = 5000, as, until } = opts
-  const tag = as ? `[${as}] ` : ''
-  const prev = new Map<string, DisplayStatus>()
-  const paths = new Map<string, DisplayStatus[]>()   // bounded mode: every status observed per target, arrival first
-  const anyPath = () => (paths.size ? [...paths.values()][0] : [])
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-  // the no-hang wall: a fixed deadline computed ONCE, checked unconditionally every iteration below.
-  const deadline = until ? Date.now() + Math.max(1000, until.timeoutMs) : 0
-  const isActionable = (st: DisplayStatus) => WATCH_ACTIONABLE.has(st) || (includeIdle && st === 'idle')
-  let warnedDown = false
-  let downMsg: string | null = null   // set while the backend is unreachable, cleared on a good poll; the deadline reports it
-  for (;;) {
-    try {
-      // EVENTS come from the caller's chosen population (broad watch uses active-only; an explicit selector
-      // uses history). EXISTENCE always comes from the all-record presence source, so a cold archive can never
-      // look removed merely because the default event population hides it. The `statuses` filter governs only
-      // which transitions we emit, never whether a session is present.
-      const eventRows = await source()
-      // Explicit selector wait passes the same history function for both roles. Reuse that one snapshot so a
-      // single poll cannot combine two HTTP instants (or pay for the same request twice); broad watch supplies
-      // distinct function references because it genuinely needs active events plus all-record presence.
-      const presenceRows = presenceSource === source ? eventRows : await presenceSource()
-      const all = selectSessions(eventRows, selectors)
-      const presence = selectSessions(presenceRows, selectors)
-      warnedDown = false; downMsg = null   // a successful poll re-arms the down-warning (and clears the deadline's down-report)
-      const ids = new Set(presence.map((s) => s.id))
-      const passesStatus = (st: DisplayStatus) => !statuses?.length || statuses.includes(st)
-      let edge: { status: DisplayStatus; path: DisplayStatus[] } | null = null
-      for (const s of all) {
-        const was = prev.has(s.id) ? prev.get(s.id)! : null
-        if (was === null) emit(tag + launchEvent(s)) // FIRST sighting → launched, any status (incl. 'working'), once
-        if (s.status === was) continue // only on transition, not every tick
-        prev.set(s.id, s.status)
-        if (until) {
-          const p = paths.get(s.id) ?? []
-          p.push(s.status)
-          paths.set(s.id, p)
-          until.onObserved?.(s.status, was)
-          // THE edge: a previously-observed NON-actionable status transitioning INTO an actionable one. An
-          // actionable ARRIVAL (was === null) is deliberately not an edge — that standing level is what the
-          // old wait false-returned on; and an actionable→actionable hop (review→done) isn't one either. The
-          // rise out of non-actionable is the one signal that means "the target needs you AGAIN".
-          if (was !== null && !isActionable(was) && isActionable(s.status)) edge = { status: s.status, path: p }
-        }
-        if (passesStatus(s.status) && (WATCH_ACTIONABLE.has(s.status) || (includeIdle && s.status === 'idle'))) emit(tag + sessionEvent(s))
-      }
-      // @@@ closed = the worktree is GONE. Because listSessions lists every EXISTING worktree (a flaky detail
-      // read degrades, never drops), an id absent from the board means its worktree directory was actually
-      // removed: a DEFINITIVE fact, not a flaky absence. So removal needs no 2-poll debounce / existsSync
-      // re-check; emit `closed` exactly once the moment the id leaves the list.
-      for (const id of [...prev.keys()]) {
-        if (ids.has(id)) continue
-        prev.delete(id)
-        emit(`${tag}[spex] closed \u00b7 removed  [id ${id}]`)
-      }
-      // BOUNDED mode (`until`, what `spex session wait` runs): return on an OBSERVED non-actionable→actionable
-      // edge; an empty selected set means the target is gone (absent from the board), which it can never come
-      // back from. Both sit inside the try, after the emit pass, so the caller still saw every transition
-      // before we hand control back.
-      if (until) {
-        if (edge) return { reached: edge.status, path: edge.path }
-        if (!presence.length) return { gone: true, path: anyPath() }
-      }
-    } catch (e) {
-      // a backend error in the poll must NOT be swallowed AND must NOT emit a false `closed` for every session:
-      // we skip the tick (prev is untouched → no phantom removals). Two shapes of BackendError diverge here:
-      //  • REACHABLE but erroring (an HTTP status) — the backend answered and is broken: a real terminal
-      //    condition, so a bounded `wait` fails loud IMMEDIATELY rather than spinning out its whole timeout.
-      //  • UNREACHABLE (no status — ECONNREFUSED / fetch failed) — nothing is listening, e.g. the supervisor
-      //    is rebooting its hot-reloaded child behind the stable port on a sibling merge. This is TRANSIENT:
-      //    record it, warn ONCE, and keep polling — the deadline (below) is the only hard wall, so a
-      //    backgrounded `spex session wait` survives the ~1s restart instead of dying on the interrupted fetch.
-      if (until && isBackendDown(e) && !isBackendUnreachable(e)) return { backendDown: (e as Error).message, kind: 'http' }
-      if (isBackendDown(e)) {
-        downMsg = (e as Error).message
-        if (!warnedDown) { warnedDown = true; console.error(`${tag}[spex] watch: ${downMsg}; retrying every ${intervalMs / 1000}s…`) }
-      }
-    }
-    // the HARD wall — checked every iteration, in EVERY state, even after a thrown poll, BEFORE the sleep: this
-    // guarantees `spex session wait` can never hang on a worker that never produces an edge — nor spin forever on a
-    // backend that never comes back. Hitting the deadline while still unreachable reports THAT (`backendDown`),
-    // not a false "no edge" timeout, so the manager sees the honest cause.
-    if (until && Date.now() >= deadline) return downMsg ? { backendDown: downMsg, kind: 'unreachable' } : { timedOut: true, path: anyPath() }
-    await sleep(intervalMs)
-  }
-}
-
-// @@@ sendText - PROMPT control for a session, delivered through the session's HARNESS ADAPTER
-// ([[harness-adapter]]) — claude the rendezvous control socket (atomic reply+repaint chunk: repaint-done proves
-// the daemon parsed it, a kicked connection resends, wall expiry on a live connection is busy-not-lost → ok),
-// codex app-server JSON-RPC into the visible TUI's thread. Either way there is NO silent
-// fallback: a prompt that can't be delivered — no socket / dead agent (claude), no app-server/thread (codex) — FAILS LOUD, returning
-// ok:false with a reason that propagates to the caller (API non-2xx, `spex session send`, the merge dispatch),
-// instead of reporting a false success. The harness is resolved from the record; an unknown id fails before any
-// harness transport is addressed. (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
-async function sendTextUnlocked(id: string, text: string, from?: string, opts: { replyVia?: 'note'; deliveryId?: string } = {}): Promise<DispatchResult> {
+// @@@ sendText - THE APPEND IS THE DELIVERY ([[dispatch]]). The message lands in the target's durable log
+// under its record lock, and success is decided there; only then is the harness adapter poked with the same
+// text, so a live agent sees it in its current turn instead of at its next turn boundary. The poke is
+// best-effort — losing it, having it refused, or replaying it costs nothing, because the line is already the
+// message's copy and the turn-boundary reader picks up whatever the poke did not show. What stays LOUD is only
+// what genuinely cannot be recorded: an unknown session id, or a log that refuses the write.
+// A RETIRED session (worktree gone) still receives: the record gate governs the lifecycle axis, and a message
+// that cannot reach an agent must at least leave a trace ([[session-timeline]]).
+// (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
+export async function sendText(id: string, text: string, from?: string, opts: { replyVia?: 'note' } = {}): Promise<DispatchResult> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
   const rec = readRecord(id)
   if (!rec) return { ok: false, error: `no session record for ${id} — prompt NOT delivered` }
-  const h = harnessById(rec.harness || defaultHarness.id)
-  // the pane guard ([[harness-adapter]] deliveryBlockedBy): the ONE pane state where the harness swallows a
-  // prompt its channel confirms (claude's sessions panel), checkable only from the pane — refuse loudly with
-  // the recovery named instead of reporting a false success. A missing pane (window gone, probe failure) skips
-  // the guard: the delivery channel itself is the authority on whether the agent is reachable.
-  if (h.deliveryBlockedBy) {
-    try {
-      const blocked = h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', id], TMUX_PROBE_TIMEOUT_MS))
-      if (blocked) return { ok: false, error: blocked }
-    } catch { /* no pane to consult — let the delivery channel decide */ }
-  }
   const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
-  const r = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), ...(opts.deliveryId ? { deliveryId: opts.deliveryId } : {}) }, prompt.text)
-  // record the delivered agent-to-agent message ([[comms-edge]]): only when it carries a sender (an agent
-  // send, not a raw human dispatch) and actually landed. Fire-and-forget — never gates the send result.
-  if (r.ok && from) void recordComms(id, from)
-  // the durable interaction history ([[session-timeline]]): every confirmed delivery is a `sent` event.
-  if (r.ok) recordSent(id, text, from ?? null, prompt.replyVia)
-  return r
+  let sent: { mid: string }
+  try {
+    // The lock covers the append alone. Codex's native turn can synchronously run hooks that write this same
+    // record, so holding it across the adapter poke below would deadlock the app-server's confirmation.
+    sent = await withRecordLock(id, async () => appendSent(id, text, from ?? null, prompt.replyVia))
+  } catch (error) {
+    return { ok: false, error: `could not append the message to session ${id}'s log: ${error instanceof Error ? error.message : String(error)} — prompt NOT delivered` }
+  }
+  const h = harnessById(rec.harness || defaultHarness.id)
+  // Awaited, not fire-and-forget: `spex session send` is a short-lived process that would exit before an
+  // unawaited poke ever reached the socket, costing every CLI send its same-turn arrival. Its result never
+  // advances the inbox: a write cannot prove the target parsed it, so only the target's reader consumes the
+  // durable line.
+  await pokeAdapter(h, rec, prompt.text, sent.mid)
+  return { ok: true }
 }
 
-// A native request can commit after its client loses the response. Reserve a caller's opaque marker BEFORE
-// crossing that boundary, under the session lock, so a retry has one safe answer after a backend restart: the
-// stored terminal result, or commit-unknown for a reservation whose result could not be durably recorded.
-// This is session-generic idempotency; adapters only decide whether they can also carry the marker natively.
-type DeliveryLedgerEntry = { deliveryId: string; fingerprint: string; result?: DispatchResult }
-const deliveryLedgerPath = (id: string) => sessionArtifactPath(id, 'deliveries.ndjson')
-const deliveryFingerprint = (text: string, from?: string, replyVia?: 'note') =>
-  createHash('sha256').update(JSON.stringify([text, from ?? null, replyVia ?? null])).digest('hex')
-function readDeliveryLedger(id: string, deliveryId: string): DeliveryLedgerEntry | null {
-  try {
-    const lines = readFileSync(deliveryLedgerPath(id), 'utf8').split('\n')
-    for (let index = lines.length - 1; index >= 0; index--) {
-      try {
-        const entry = JSON.parse(lines[index]) as DeliveryLedgerEntry
-        if (entry?.deliveryId === deliveryId && typeof entry.fingerprint === 'string') return entry
-      } catch { /* one corrupt append must not invent a delivery result */ }
-    }
-  } catch { /* no delivery ledger yet */ }
-  return null
-}
-function appendDeliveryLedger(id: string, entry: DeliveryLedgerEntry): void {
-  appendFileSync(join(storeDir(id), 'deliveries.ndjson'), JSON.stringify(entry) + '\n')
-}
-function terminalDispatch(result: DispatchResult): DispatchResult {
-  return { ...result, outcome: result.outcome ?? (result.ok ? 'accepted' : 'rejected') }
-}
-export async function sendText(id: string, text: string, from?: string, opts: { replyVia?: 'note'; deliveryId?: string } = {}): Promise<DispatchResult> {
-  // The lock owns only the durable reservation and result. Codex's native turn can synchronously run hooks
-  // that write this same record, so holding it across an adapter RPC deadlocks the app-server's confirmation.
-  const deliveryId = opts.deliveryId?.trim()
-  if (!deliveryId) return terminalDispatch(await sendTextUnlocked(id, text, from, opts))
-  const fingerprint = deliveryFingerprint(text, from, opts.replyVia)
-  const prior = await withRecordLock(id, async () => {
-    const existing = readDeliveryLedger(id, deliveryId)
-    if (existing) return existing
+// The courtesy kick. Carries `mid` as the adapter's native message marker, so an adapter that replays or
+// duplicates it stays harmless. Never throws and never reports: a poke has no outcome the caller can act on.
+async function pokeAdapter(h: Harness, rec: SessRec, text: string, mid: string): Promise<void> {
+  // the pane guard ([[harness-adapter]] deliveryBlockedBy): the ONE pane state where the harness swallows a
+  // prompt its channel confirms (claude's sessions panel), checkable only from the pane. It no longer refuses
+  // the send — the message is already delivered — it only skips a kick known to be swallowed.
+  if (h.deliveryBlockedBy) {
     try {
-      appendDeliveryLedger(id, { deliveryId, fingerprint })
-      return null
-    } catch (error) {
-      return { deliveryId, fingerprint, result: { ok: false, outcome: 'rejected', error: `could not reserve delivery marker: ${error instanceof Error ? error.message : String(error)} — prompt NOT delivered` } satisfies DispatchResult }
-    }
-  })
-  if (prior) {
-    if (prior.fingerprint !== fingerprint)
-      return { ok: false, outcome: 'rejected', error: 'delivery marker belongs to a different prompt — prompt NOT delivered' }
-    return prior.result
-      ? terminalDispatch(prior.result)
-      : { ok: false, outcome: 'commit-unknown', error: 'delivery marker is already reserved without a terminal outcome — prompt NOT replayed' }
+      if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
+    } catch { /* no pane to consult — let the poke itself decide */ }
   }
-  const result = terminalDispatch(await sendTextUnlocked(id, text, from, { ...opts, deliveryId }))
-  try {
-    return await withRecordLock(id, async () => {
-      if (!readRecord(id))
-        return { ok: false, outcome: 'commit-unknown', error: 'session closed before delivery outcome could be recorded — prompt NOT replayed' }
-      appendDeliveryLedger(id, { deliveryId, fingerprint, result })
-      return result
-    })
-  } catch (error) {
-    return { ok: false, outcome: 'commit-unknown', error: `delivery outcome could not be recorded: ${error instanceof Error ? error.message : String(error)} — prompt NOT replayed` }
-  }
+  try { await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid }, text) }
+  catch { /* the unread timeline line remains the delivery */ }
 }
 
 // Hard interrupt is adapter-native control, distinct from stop's process teardown. A harness without a

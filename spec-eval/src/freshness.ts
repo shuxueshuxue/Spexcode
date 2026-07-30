@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent } from '../../spec-cli/src/git.js'
-import { anchorHitCommits, extOf, extractorFor, extractors, resolveAnchor, type Extractor, type RelationEntry } from '../../spec-cli/src/anchors.js'
+import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent, eventsSince } from '../../spec-cli/src/git.js'
+import { anchorHitQueries, extOf, extractorFor, extractors, resolveAnchor, type AnchorHitQuery, type Extractor, type RelationEntry } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
-import { scenarioCodeAxis, scenarioHash, type Scenario } from './scenarios.js'
+import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
 
 // the CODE axis is touch-based (DriftIndex), so a code-file rename is out of scope — the same blind spot lint's code-drift has
@@ -259,23 +259,18 @@ export type AnchorProbe = {
   // did any commit in sinceSha..HEAD touch one of THESE anchored units?
   // null = cannot testify (unprimed, off-history, no usable extractor) — callers stay conservatively stale.
   hit(sinceSha: string, path: string, selectors: readonly string[]): boolean | null
-  prime?(sinceSha: string, entries: readonly RelationEntry[]): Promise<void>
+  // The demand set is PLURAL because the engine underneath is: every window's Git images and ordinary hunks
+  // are immutable, so one call owns them once for the whole read. A caller that primes one reading at a time
+  // re-forks that batch per reading, which on this corpus was ~2.5k children for ~800 verdicts.
+  prime?(demands: readonly AnchorDemand[]): Promise<void>
 }
+export type AnchorDemand = { sinceSha: string; entries: readonly RelationEntry[] }
 
 // a verdict answers ONE selector set, so the set is part of its identity: several scenarios anchoring
 // DIFFERENT units of one shared file is the whole point of narrowing, and keying only by (sha, path) would
 // hand the first one's answer to all the others — silently, and in the fresh direction.
 const anchorKey = (sinceSha: string, path: string, selectors: readonly string[]) =>
   `${sinceSha}\x1f${path}\x1f${[...selectors].sort().join('\x1e')}`
-
-// the eval code window: commits touching `path` in sinceSha..HEAD by the same true ancestry `changedSince`
-// uses, from the same index source — so the anchor check can only narrow the very set the file question just
-// answered `true` for. null = ancestry cannot testify (off-history anchor) → the caller stays conservative.
-function evalWindowCommits(idx: DriftIndex, sinceSha: string, path: string): DriftPathEvent[] | null {
-  const anc = ancestorsOf(idx, sinceSha)
-  if (!anc) return null
-  return pathEvents(idx, path).filter((event) => !inAncestors(idx, anc, event.commit))
-}
 
 // every selector of one entry resolves to exactly one unit in the CURRENT tree, or the entry cannot testify.
 // This gate is what stops a DEAD selector from reading fresh: the hit engine answers "no commit touched a
@@ -302,18 +297,25 @@ export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
   const regs = extractors(root)
   const verdicts = new Map<string, boolean>()
   return {
-    async prime(sinceSha, entries) {
-      for (const e of entries) {
+    async prime(demands) {
+      const keys: string[] = []
+      const queries: AnchorHitQuery[] = []
+      const queued = new Set<string>()
+      for (const { sinceSha, entries } of demands) for (const e of entries) {
         if (!e.selectors.length) continue
         const key = anchorKey(sinceSha, e.path, e.selectors)
-        if (verdicts.has(key)) continue
+        if (verdicts.has(key) || queued.has(key)) continue
         if (entryUnverifiable(root, regs, e)) continue  // no verdict → conservative stale (lint says why)
-        const win = evalWindowCommits(idx, sinceSha, e.path)
+        const win = eventsSince(idx, sinceSha, e.path)
         if (win === null) continue
         if (!win.length) { verdicts.set(key, false); continue }
-        const hits = await anchorHitCommits(root, win, [...e.selectors], regs)
-        verdicts.set(key, hits.length > 0)
+        queued.add(key)
+        keys.push(key)
+        queries.push({ win, symbols: [...e.selectors] })
       }
+      if (!queries.length) return
+      const results = await anchorHitQueries(root, queries, regs)
+      results.forEach((hits, index) => verdicts.set(keys[index], hits.length > 0))
     },
     hit(sinceSha, path, selectors) {
       return verdicts.get(anchorKey(sinceSha, path, selectors)) ?? null
@@ -355,8 +357,10 @@ export function remarkStale(reading: { ts: string }, remarks: RemarkSignal[]): b
 // ContentProbe above); without a probe — or when the anchor object is gone — freshness can't be proven
 // from HEAD's history, so it reads stale rather than silently pass.
 export function changedSince(idx: DriftIndex, sinceSha: string, path: string, probe?: ContentProbe): boolean {
-  const anc = ancestorsOf(idx, sinceSha)
-  if (anc) return pathEvents(idx, path).some((event) => !inAncestors(idx, anc, event.commit))
+  const events = eventsSince(idx, sinceSha, path)
+  // null = ancestry cannot testify for this anchor; only then does content get a say ([[root-lru]]'s sibling
+  // rule: one meaning of changed-since, each layer's own fallback on top).
+  if (events) return events.length > 0
   return probe?.changed(sinceSha, path) ?? true
 }
 
@@ -366,16 +370,16 @@ export function changedSince(idx: DriftIndex, sinceSha: string, path: string, pr
 // an off-history sinceSha reports through the same content fallback (only files whose content differs, counted
 // by rev-list); with no probe or a gone anchor it counts every touch (conservative, matching changedSince).
 // Reporting only — it never decides freshness (staleAxes does); it explains a decision already made.
-export function codeDrift(idx: DriftIndex, sinceSha: string, codeAxis: string[], probe?: ContentProbe): { file: string; behind: number }[] {
+export function codeDrift(idx: DriftIndex, sinceSha: string, codeAxis: ScenarioCodeAxisSource, probe?: ContentProbe): { file: string; behind: number }[] {
   // an entry may be anchored (`path#symbol`); drift is reported per BASE FILE — a raw selector string names
   // no real path, so counting commits against it would silently report nothing.
-  const codeFiles = scenarioCodeAxis(codeAxis).paths
-  const anc = ancestorsOf(idx, sinceSha)
+  const codeFiles = scenarioCodeAxis(undefined, codeAxis).paths
   const out: { file: string; behind: number }[] = []
   for (const f of codeFiles) {
+    const since = eventsSince(idx, sinceSha, f)
     const events = pathEvents(idx, f)
-    const differs = anc ? undefined : probe?.changed(sinceSha, f)
-    const behind = anc ? new Set(events.filter((event) => !inAncestors(idx, anc, event.commit)).map((event) => event.commit)).size
+    const differs = since ? undefined : probe?.changed(sinceSha, f)
+    const behind = since ? new Set(since.map((event) => event.commit)).size
       : differs === true ? probe!.behind(sinceSha, f)
       : differs === false ? 0
       : new Set(events.map((event) => event.commit)).size
@@ -428,7 +432,7 @@ function entryMoved(idx: DriftIndex, sinceSha: string, entry: RelationEntry, pro
 
 export function staleAxes(
   reading: Reading,
-  codeAxis: string[],
+  codeAxis: ScenarioCodeAxisSource,
   evalPath: string,
   didx: DriftIndex,
   scIdx: ScenarioIndex,
@@ -445,7 +449,7 @@ export function staleAxes(
     axes.push('anchor')
     if (byHash) axes.push('scenario')
   } else {
-    if (scenarioCodeAxis(codeAxis).entries.some((e) => entryMoved(didx, reading.codeSha, e, probe, anchors))) axes.push('code')
+    if (scenarioCodeAxis(undefined, codeAxis).entries.some((e) => entryMoved(didx, reading.codeSha, e, probe, anchors))) axes.push('code')
     if (byHash ?? scenarioMoved(scIdx, didx, reading.codeSha, evalPath, reading.scenario, probe)) axes.push('scenario')
   }
   if (remarkStale(reading, remarks)) axes.push('remark')
@@ -454,7 +458,7 @@ export function staleAxes(
 
 export function isStale(
   reading: Reading,
-  codeAxis: string[],
+  codeAxis: ScenarioCodeAxisSource,
   evalPath: string,
   didx: DriftIndex,
   scIdx: ScenarioIndex,

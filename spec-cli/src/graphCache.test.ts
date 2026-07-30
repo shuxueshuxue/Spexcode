@@ -184,6 +184,32 @@ test('one graph build bounds git spawn fanout and abort removes queued work', { 
   assert.ok((await git.gitA(['-C', project, 'rev-parse', 'HEAD'])).trim(), 'ordinary git remained blocked by the graph pool')
 })
 
+test('revision fence consumes a fresh publication after a held stale flight', { concurrency: false }, async () => {
+  let publishedRevision = 0
+  let invalidations = 0
+  let releaseHeld!: () => void
+  const heldStaleFlight = new Promise<void>((resolve) => { releaseHeld = resolve })
+  let waits = 0
+
+  const pending = cache.waitForPublishedRevision(1, {
+    revision: () => publishedRevision,
+    invalidate: () => { invalidations++ },
+    wait: async () => {
+      waits++
+      if (waits === 1) await heldStaleFlight
+      else publishedRevision = 1
+    },
+  })
+
+  await Promise.resolve()
+  assert.equal(invalidations, 1, 'the requested revision invalidates the held old flight')
+  assert.equal(waits, 1, 'the fence is waiting on the already in-flight old publication')
+  releaseHeld()
+  await pending
+  assert.equal(invalidations, 2, 'the old publication cannot satisfy the requested revision')
+  assert.equal(waits, 2, 'the fence waits for the next publication instead of returning old rows')
+})
+
 test.after(() => {
   clearInterval(backendLifetime)
   rmSync(project, { recursive: true, force: true })

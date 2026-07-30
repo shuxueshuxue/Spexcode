@@ -1820,7 +1820,9 @@ test('rendezvousListening: tri-state — live listener, proven-dead stale file/a
 test('a rendezvous path is a launch-time FACT: stamped per runtime, legacy for whatever launched before it', () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-rv-stamp-'))
   const prev = process.env.SPEXCODE_HOME
+  const prevTmp = process.env.TMPDIR
   process.env.SPEXCODE_HOME = home
+  process.env.TMPDIR = join(home, 'macos-platform-temp-' + 'x'.repeat(160))
   try {
     const id = `unit-stamp-${process.pid}-${Date.now()}`
     // nothing stamped → the UNSCOPED path a pre-stamp launch really bound. A running agent must never be
@@ -1833,9 +1835,13 @@ test('a rendezvous path is a launch-time FACT: stamped per runtime, legacy for w
     // the same id in ANOTHER runtime is a DIFFERENT socket: two worlds (a fixture, a copied record) hold one
     // id all the time — they must never share one transport, which is what let a foreign teardown reach in.
     assert.notEqual(scopedRvSock(id, '/runtime/a'), scopedRvSock(id, '/runtime/b'))
+    // A macOS-style deep TMPDIR must not participate in a new socket path: it makes connect() fail EINVAL
+    // despite the filesystem inode existing. The literal /tmp spelling stays below Darwin's 104-byte sun_path.
+    assert.ok(stamped.startsWith(`/tmp/spexcode-rv-${process.getuid?.() ?? 0}/`), stamped)
     assert.ok(stamped.length < 104, `sun_path-safe on macOS too (${stamped.length})`)
   } finally {
     if (prev === undefined) delete process.env.SPEXCODE_HOME; else process.env.SPEXCODE_HOME = prev
+    if (prevTmp === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = prevTmp
     rmSync(home, { recursive: true, force: true })
   }
 })

@@ -383,8 +383,20 @@ export type HarnessArtifacts = { skills: readonly string[]; agents: readonly str
 // `legacyRvSock` is the answer for a session launched BEFORE the stamp existed — its agent really did bind
 // the unscoped path — so those keep working untouched, and the fallback retires as they turn over.
 export const legacyRvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
+
+// @@@ rendezvousSocketBase - macOS's TMPDIR commonly expands to /var/folders/<long-user-path>, leaving a
+// UUID-scoped socket beyond its 104-byte sun_path limit. It can be created and observed by pathname but every
+// connect fails EINVAL, which looks exactly like an unresponsive worker. Use a literal short /tmp spelling
+// (not tmpdir(), whose resolved form is long on macOS) with the same private per-uid directory pattern as the
+// Codex runtime socket. Existing launches retain their stamped old path through rvSock(); only new launches use
+// this base.
+const rendezvousSocketBase = () => {
+  const base = join('/tmp', `spexcode-rv-${process.getuid?.() ?? 0}`)
+  mkdirSync(base, { recursive: true, mode: 0o700 })
+  return base
+}
 export const scopedRvSock = (id: string, dir = runtimeRoot()) =>
-  join(tmpdir(), `spexcode-rv-${createHash('sha1').update(dir).digest('hex').slice(0, 12)}-${id}.sock`)
+  join(rendezvousSocketBase(), `spexcode-rv-${createHash('sha1').update(dir).digest('hex').slice(0, 12)}-${id}.sock`)
 const rvStamp = (id: string) => sessionArtifactPath(id, 'rv.path')
 export const rvSock = (id: string): string => {
   try { return readFileSync(rvStamp(id), 'utf8').trim() || legacyRvSock(id) } catch { return legacyRvSock(id) }

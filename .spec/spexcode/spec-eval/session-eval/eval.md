@@ -232,6 +232,47 @@ scenarios:
       concurrency-1 queue; no second flight or duplicate generation starts. The selected HTTP response does not
       wait for the queue tail, active git/node descendants stay within the queue bound, and a rejected demand
       rejects only its own waiter while the ordinary queue resumes and settles.
+  - name: open-cost-is-proportional
+    tags: [backend-api]
+    code:
+      - spec-eval/src/sessioneval.ts#projectSessionImpact
+      - spec-eval/src/sessioneval.ts#buildSessionEvals
+      - spec-eval/src/sessioneval.ts#impactForEntry
+      - spec-cli/src/reviews.ts#evalsReview
+    description: >-
+      Open ONE scoped eval deep-link against an explicit backend — `GET /api/evals?q=is:eval scope:<id>` — with
+      every `git` invocation logged by argv and timed, so child count and per-child cost are exact rather than
+      sampled. Measure three sessions on one repository: a session with an empty range and no filed readings, a
+      session whose scope is driven only by filed readings, and the same loaded session opened repeatedly with
+      no input movement between opens. Record for each open: total child processes, how many distinct questions
+      those children asked, wall latency, and the per-kind split. Then repeat the loaded open on a worktree
+      carrying a structurally invalid or dead `code:` selector while the changed-path set is empty.
+    expected: >-
+      One open's child count tracks the SELECTED session's scope and nothing else. There is no per-node or
+      per-reading spawn multiplier: the readings and history the scope needs are read in per-build batches, so
+      a scope spanning many nodes does not spawn one `git log` per node nor one `cat-file` per node's timeline.
+      Repeated reads are counted against the build only where they answer the SAME question for the same
+      consumer. The build's two deliberate fences are exempt and must never be memoised away: the content
+      revision is read once BEFORE and once AFTER the fold so a moving input can be detected and the result
+      discarded, and every base/head selector is resolved once up front and re-verified once before
+      publication. Those two mechanisms make several queries (`rev-parse main`, `rev-parse HEAD`,
+      `merge-base <base> HEAD`, `status --porcelain`, `diff HEAD --binary`, a `^{commit}` verify) appear twice
+      per build by design, and on a session where base equals head the re-verify is argv-identical to the
+      initial resolve while still being a different question. Collapsing either fence to one read would trade
+      a certified-current answer for a cheap stale one, which this scenario forbids outright. What the
+      scenario does require is that no consumer re-asks a fact ANOTHER consumer in the same build already
+      established outside those fences. A session with an empty range and no readings therefore pays a small
+      constant that carries no whole-repository component, and the loaded session's cost above that constant
+      is attributable to its own scope.
+      Opening the same unchanged session again serves the published projection: the second and third opens do
+      not re-spawn the first open's children, because a stable build at an unmoved generation and content
+      revision is exactly what the projection cache exists to publish. Repeat opens that re-pay full price are
+      a failure of this scenario even when each individual response is correct.
+      Proportionality never buys itself with a weaker guarantee. A structurally invalid, dead, ambiguous,
+      unavailable, or unextractable selector still makes the projection explicitly unavailable, naming the
+      selector and its repair, EVEN WHEN the changed-path set is empty — a cheap open that silently certifies
+      zero impact over a selector it declined to resolve fails this scenario harder than a slow one, and no
+      changed-path gate may turn a dead selector into a vacuous no-hit answer.
 ---
 # session-eval loss
 

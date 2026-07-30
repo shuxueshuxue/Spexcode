@@ -2547,7 +2547,7 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
       : liveness({ ...latest, archived: false, stopped: false }, finalSnap)
     if (finalLv === 'unknown' || finalLv === 'starting' || finalLv === 'online')
       throw new ResourceConflict(`refusing to archive ${id}: leaf became ${finalLv} before filing`)
-    writeRecord({ ...latest, archived: true, stopped: true, coldProof: coldProofFor(latest) })
+    writeRecord({ ...latest, archived: true, stopped: true, coldProof: coldProofFor(latest), adapterRecovery: null })
   } catch (error) {
     if (coldCommitted) {
       const restored = await h.restoreRuntime?.(wt.rec, preflight?.ok ? preflight.receipt : undefined)

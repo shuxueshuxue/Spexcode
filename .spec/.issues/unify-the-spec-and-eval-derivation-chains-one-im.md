@@ -235,3 +235,68 @@ the structure offered the author nowhere correct to put the thing, so the cost w
 paid anyway. These are not "someone wrote this wrong" — they are "there was no right place to write it".
 
 Spec: mentions, remark-substrate, source-of-truth
+
+<!-- reply: c89038e2-6b56-4b4c-8b4a-4ff4ec2c886e @ 2026-07-30T03:05:27.759Z -->
+Cycle 2, root cause. Two proposed cuts failed in a row; the third attempt found why, and it was neither of the
+things I was moving.
+
+## Correction to my own earlier note
+
+I wrote that the forum lock name encodes "eval's human-ok commit deliberately serialises against forum
+writes". That is wrong as a statement of the invariant, and wrong in a way that would get the constraint
+deleted. `localIssues.ts:198` says it plainly (my earlier grep window started at the function and missed the
+comment above it): the name is kept **because during the one-shot store-dir migration
+([[issues-store-rename]]) an old and a new toolchain can run against the same checkout, and they mutually
+exclude only while contending on the SAME lock name.** So the two invariants are (1) one lock name per real
+store, across every worktree of the clone, and (2) that name is pinned by migration compatibility.
+Eval-serialises-with-forum is a CONSEQUENCE of (1), not a decision. The difference matters for exactly the
+reason I raised: anyone extracting a store module must record (1)+(2), because "eval and forum share a lock"
+reads as free to rename once the migration is done.
+
+## The third entry point, and why "raise the composition above spec-eval" was unsound
+
+`replyLocalIssue` has two callers, not one: `issues.ts:218` and `localIssues.ts:479` inside `remarkOnHost`.
+And `remarkOnHost` itself has two: `index.ts:361` (delivery) and `localIssues.ts:669` — which sits inside
+`export async function runRemark(args: string[])` at line 655: **a CLI subcommand handler**. It parses argv,
+writes to the console, and returns an exit code.
+
+So the loop-in could not be raised above spec-eval, because its caller is itself stuck below spec-eval.
+
+## Root cause: three layers in one 701-line module
+
+`localIssues.ts` holds
+
+- **store primitives** — `overrideStoreDir`, `isPrimaryCheckout`, `withStoreLock`, `commitTrunkData`,
+  `writeStoreFile`, `ensureStoreMigrated`
+- **the issues/remark feature** — `reply`, `remarkOnHost`, `resolveRemark`, …
+- **a CLI delivery surface** — `runRemark`, `runIssueWrite`: argv parsing, console output, exit codes
+
+A CLI surface is by definition the topmost layer. This one lives beneath spec-eval, and it is the surface that
+needs eval knowledge (the loop-in's fallback chain resolves an eval reading's filer). That is why
+`EVAL_CONCERN_RE` ended up at line 385: not because someone put the regex in the wrong file, but because the
+only file that could reach both the store write and the eval lookup was this one.
+
+## The cut that follows
+
+Move the CLI surface OUT — `runRemark`/`runIssueWrite` to a delivery-layer home alongside the other verb
+handlers. Then `runRemark` composes the loop-in legally (it is above spec-eval), `localIssues.ts` keeps store
+plus feature and loses its eval dependency entirely, and the dynamic import at line 390 disappears.
+`commitTrunkData` need not move at all — which is the second cut I would have made for nothing.
+
+Constraints for whoever cuts it: the loop-in is contracted by [[mentions]] and [[remark-substrate]] R3
+(fallback chain — the reading's filer first, resolved from the trunk sidecar AND each live session's worktree
+sidecar, then the node's governing session, delivered to the first online link, notification only, resolving
+nothing), and `remarkOnHost` must remain THE one write both CLI and server call — so the loop-in has to be
+composed once, above eval, for both the issue-reply and the remark path, not once per entry point.
+
+## Sniffer upgrade (from a coordinator, worth keeping)
+
+The pattern now has a two-signal detector, and it is computable rather than judgment-based: **a comment that is
+unusually careful AND explains why it must take a detour.** Either signal alone is weak — careful comments also
+mark genuinely hard code, and some detours are documented in half a sentence — but together they have been right
+four times in this refactor. Its inversion of the usual heuristic is the useful part: a well-tended comment is
+normally read as a sign of health; here the best-written comment in a file is the likeliest marker of an unfiled
+structural defect, because the clearer the author was about what they had to dodge, the better they wrote it
+down. This note's own subject is an instance: the forum-lock comment is one of the most careful in the module.
+
+Spec: local-issues, mentions, remark-substrate, cli-surface

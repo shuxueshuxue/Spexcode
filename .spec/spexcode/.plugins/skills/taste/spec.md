@@ -101,6 +101,19 @@ The principles, in the maintainer's own framing:
     slow, obviously-correct full recompute in the repo as the specification, and hold every faster path to
     byte-equality against it.
 
+20. **What falls out at a seam is picked up, never designed for.** The maintainer's framing, invoking
+    Liang Wenfeng's spirit: on the road to AGI, the things you can get along the way you simply take. The
+    three layers ([[spexcode]]) are the main body and are judged by their own criteria; how natural or
+    accessible the L0/L1 seam happens to be — the "borderland" — is **secondary**. Small capabilities fall
+    out of it for free (a session with no board membership still has a readable mailbox; a read still works
+    with no backend running; a subscription may or may not be persisted because it carries no truth). Take
+    them: they cost nothing, and the fact that they fall out at all is evidence the seam sits where it
+    should. But a borderland convenience is never a criterion and never a reason to move the seam — its
+    real value is the quiet pressure it puts on the architecture to stay honest. The failure this guards
+    against is promoting the byproduct to the definition: restating the layering as a horizontal
+    read-versus-own cut classifies *operations* and silently destroys the *adoption ladder*, which is the
+    thing that makes each layer worth having on its own.
+
 ## expanded spec
 
 This node is the seed. The de-drift campaign distills these into a sharper checklist (the "20 tastes" + the

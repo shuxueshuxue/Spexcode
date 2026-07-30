@@ -64,6 +64,12 @@ failure reaches one record-locked compare-and-set that changes only a live, unde
 A declaration that landed first is authoritative, so a late process close, delayed native completion, or
 restart reconciliation cannot overwrite it.
 
+**Exclusion lives in the lock, never in a privileged process.** The per-session record lock is a filesystem
+lock with a PID liveness check, held across processes, so a session operation may run in whatever process
+takes it — a backend is the convenient owner of the launch environment and a shared cache, not the holder
+of the invariant, and a read that takes no lock needs no permission from anyone. That is what lets this
+layer be a brick an external system can drive rather than a service it must be granted access to.
+
 A text send takes the session record lock only for the durable timeline append; the adapter poke runs after
 releasing it. A native turn can synchronously invoke lifecycle hooks that re-enter the same record writer, so the
 lock never spans the courtesy poke. The appended `mid` and inbox cursor make replay harmless, while normal

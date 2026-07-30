@@ -36,3 +36,32 @@ is measured and byte-equal on its own terms.
 
 <!-- reply: 6ececa65-d4df-41f0-9022-7ea241c3e925 @ 2026-07-30T06:08:43.302Z -->
 已按 reproduce-before-fix 新增 cold-board-does-not-stall-health 并在 commit 069abfd4 记录 FAIL（transcript 514736c44ff...）。三次 isolated /home/jeffry/spexcode cold build 中，40 个 idle /health 后，idle p99 为 3.553/3.804/2.088ms；build 中 28/34/33 probes 的 p50 为 9.452/1.408/1.834ms，p95 2.780/2.703/2.926s，p99/max 3.645/3.827/3.372s。全部 HTTP 200，但场景 normalized bound max(500ms, 5x idle p99)=500ms，故 FAIL。当前 cold build cache-commit 为 14.801/16.696/16.171s，故这是占用而非 route build-timeout。Node CPU profile（16.040s cold build）对 anchors.ts x.extract() 调用栈采样 6.151s，约占 non-idle CPU 47.37%，其中 TypeScript leaf 6.080s；这是 extraction 的 on-CPU 归因，不等同于把 6.151s 直接分配给任一 /health tail。提案仍是让 extraction 让出/离开 event loop；不得通过加大 BOARD_TIMEOUT_MS 或 patrol 间隔掩盖。完整证据在附件。
+
+<!-- reply: da103a36-07c4-4e77-9d85-006462ae68b8 @ 2026-07-30T17:22:09.176Z -->
+**重测：最坏停顿 3.6–4.3s → 1.5s，但这条仍然开着，因为它仍然穿透两个探测超时。**
+
+## 新数（真产品面，自起 throwaway backend 钉死端口，冷构建期间每 250ms 探一次 /health）
+
+    冷 /api/graph   9238ms   HTTP 200
+    /health         n=60   p50 16ms   p90 261ms   max 1497ms
+
+对比：批量化后、存在性短路前是 p99 3.66 / 4.02 / 4.33s（读数 `a9a3c297`）。
+
+## 为什么降了，以及为什么这不算修好
+
+降的原因是**解析量少了**，不是解析让出了事件循环。两刀累计把喂进 TypeScript 解析器的字节从 52.6 MB 砍到约 26 MB（历史版本存在性短路，`8d6261de`），又把当前树那 40.4 MB / 922 次重复解析压成按内容一次（`b0d76a83`）。`x.extract` **仍然是同步的**，所以剩下的仍是一段不可中断的 stretch，只是短了。
+
+**而 1.5 秒仍然大于两个真实判据：**
+
+    spec-cli/src/sessions.ts:858     CLI 的 backend 探测   600ms 超时
+    spec-cli/src/supervise.ts:84     supervisor 的就绪门   1000ms 超时（答不上来就 keep old）
+
+也就是说：**一个活着的 backend 在冷构建期间仍然会被 CLI 判成"不存在"、被 supervisor 判成"没起来"。** 这条 issue 的严重性从来不在秒数上，在于**可用性信号在那几秒里说谎**——而说谎的窗口只是变窄了。
+
+## 剩下的真修法只有一个
+
+让解析在事件循环上让步（分片 / 让出 / worker）。它与成本无关：**再砍一半字节，也只是把 1.5 秒变成 0.75 秒，仍然穿透 600ms。** 只有让出才能让"忙"和"死"重新可分辨。
+
+## 顺带一条现在才成立的事实
+
+暖构建（同进程内的第二次全量重建）现在是 **~1.0 秒**（改前 4.4 秒）。所以在长寿 backend 里，一次普通的全量重建只会造成约 1 秒级的 stretch，9 秒那种只发生在**进程刚起**时。这不改变本条的判据（1 秒仍然压着 supervisor 的 1 秒门），但它把"何时会被踩到"说清楚了。

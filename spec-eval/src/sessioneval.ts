@@ -1660,8 +1660,17 @@ type ProjectionEntry = {
   current?: { generation: number; revision: string; value: SessionEvalSummary }
   scheduled: number | null
   running: number | null
+  demandCancelledGeneration: number | null
   observerHolds: Set<string>
 }
+
+type StagedProjection = {
+  entry: ProjectionEntry
+  generation: number
+  result: SummaryBuildResult
+}
+
+type ProjectionCohortRow = Pick<StagedProjection, 'entry' | 'generation'>
 
 type ProjectionTarget = 'all' | { id?: string; path?: string }
 
@@ -1718,6 +1727,7 @@ export class SessionEvalProjectionCache {
 
   private authorize(entry: ProjectionEntry): void {
     if (!this.precompute || entry.liveness === 'offline' || entry.observerHolds.size) return
+    if (entry.demandCancelledGeneration === entry.generation) return
     if ((entry.phase === 'loading' || entry.phase === 'updating')
       && entry.running !== entry.generation && entry.scheduled !== entry.generation)
       entry.scheduled = entry.generation
@@ -1737,6 +1747,7 @@ export class SessionEvalProjectionCache {
       phase: 'loading',
       scheduled: null,
       running: null,
+      demandCancelledGeneration: null,
       observerHolds: new Set(),
     }
     this.entries.set(id, entry)
@@ -1759,6 +1770,7 @@ export class SessionEvalProjectionCache {
           phase: 'loading',
           scheduled: null,
           running: null,
+          demandCancelledGeneration: null,
           observerHolds: new Set(),
         }
         this.entries.set(session.id, entry)
@@ -1788,6 +1800,7 @@ export class SessionEvalProjectionCache {
       entry.generation++
       entry.phase = 'updating'
       entry.scheduled = null
+      entry.demandCancelledGeneration = null
       changed++
     }
     return changed
@@ -1802,6 +1815,7 @@ export class SessionEvalProjectionCache {
       entry.generation++
       entry.phase = 'updating'
       entry.scheduled = null
+      entry.demandCancelledGeneration = null
     }
     return true
   }
@@ -1813,6 +1827,7 @@ export class SessionEvalProjectionCache {
       entry.generation++
       entry.phase = 'updating'
       entry.scheduled = null
+      entry.demandCancelledGeneration = null
     }
     for (const check of [...this.observerWaiters]) check()
     return true
@@ -1852,9 +1867,13 @@ export class SessionEvalProjectionCache {
     const existing = this.demands.get(id)
     if (existing) return existing as Promise<T>
     const entry = this.ensureEntry(id, path)
-    // A queued summary for this same generation is superseded by the full demand build. A running
-    // summary is left alone; the priority job waits for it to settle before taking the slot.
-    if (entry.running == null) entry.scheduled = null
+    // A queued summary for this same generation is superseded by the full demand build. If that demand
+    // rejects, snapshots must not recreate the cancelled eager work until a later invalidation advances g.
+    // A running summary is left alone; the priority job waits for it to settle before taking the slot.
+    if (entry.running == null && entry.scheduled === entry.generation) {
+      entry.scheduled = null
+      entry.demandCancelledGeneration = entry.generation
+    }
     let resolve!: (value: T) => void
     let reject!: (error: unknown) => void
     const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej })
@@ -1899,35 +1918,69 @@ export class SessionEvalProjectionCache {
     return target === 'all' || target.id === entry.id || target.path === entry.path
   }
 
+  private hasPending(): boolean {
+    return this.demandQueue.length > 0
+      || [...this.entries.values()].some((entry) => entry.scheduled != null && entry.running == null)
+  }
+
+  private publishCohort(staged: StagedProjection[]): boolean {
+    let changed = false
+    for (const { entry, generation, result } of staged) {
+      if (this.entries.get(entry.id) !== entry || entry.generation !== generation || entry.observerHolds.size) continue
+      if (result.kind === 'unstable') {
+        entry.generation++
+        entry.phase = 'updating'
+        entry.scheduled = null
+        entry.demandCancelledGeneration = null
+        this.authorize(entry)
+        changed = true
+        continue
+      }
+      if (result.kind === 'missing') {
+        changed = changed || entry.phase !== 'error'
+        entry.phase = 'error'
+        entry.scheduled = null
+        continue
+      }
+      changed = changed || entry.phase !== 'ready' || entry.current?.revision !== result.revision
+      entry.current = { generation, revision: result.revision, value: result.summary }
+      entry.phase = 'ready'
+      entry.scheduled = null
+    }
+    return changed
+  }
+
   private startBatch(): void {
     if (this.batch) return
-    const hasPending = () => this.demandQueue.length > 0
-      || [...this.entries.values()].some((entry) => entry.scheduled != null && entry.running == null)
-    if (!hasPending()) return
+    if (!this.hasPending()) return
     this.batch = (async () => {
-      let publish = false
-      while (hasPending()) {
-        const demand = this.demandQueue.shift()
-        if (demand) {
-          try { demand.resolve(await demand.run()) }
-          catch (error) { demand.reject(error) }
-          continue
-        }
-        const jobs = [...this.entries.values()]
-          .filter((entry) => entry.scheduled != null && entry.running == null)
-          .slice(0, PROJECTION_CONCURRENCY)
-        const changed = await Promise.all(jobs.map((entry) => this.runEntry(entry)))
-        publish = publish || changed.some(Boolean)
+      const demand = this.demandQueue.shift()
+      if (demand) {
+        try { demand.resolve(await demand.run()) }
+        catch (error) { demand.reject(error) }
+        return
       }
-      if (publish) this.notify()
+      // Freeze this finite cohort. Inputs that arrive later remain scheduled for the next batch, so a
+      // busy stream cannot keep a completed cohort unpublished forever.
+      const cohort = [...this.entries.values()]
+        .filter((entry) => entry.scheduled != null && entry.running == null)
+        .map((entry) => ({ entry, generation: entry.scheduled! }))
+      const staged: StagedProjection[] = []
+      for (let offset = 0; offset < cohort.length && !this.demandQueue.length; offset += PROJECTION_CONCURRENCY) {
+        const chunk = cohort.slice(offset, offset + PROJECTION_CONCURRENCY)
+        const results = await Promise.all(chunk.map((row) => this.runEntry(row)))
+        for (const result of results) if (result) staged.push(result)
+      }
+      if (this.publishCohort(staged)) this.notify()
     })().finally(() => {
       this.batch = null
-      if (hasPending()) this.startBatch()
+      if (this.hasPending()) this.startBatch()
     })
   }
 
-  private async runEntry(entry: ProjectionEntry): Promise<boolean> {
-    const generation = entry.scheduled!
+  private async runEntry({ entry, generation }: ProjectionCohortRow): Promise<StagedProjection | null> {
+    if (this.entries.get(entry.id) !== entry || entry.generation !== generation
+      || entry.scheduled !== generation || entry.running != null) return null
     entry.scheduled = null
     entry.running = generation
     let result: SummaryBuildResult
@@ -1937,21 +1990,8 @@ export class SessionEvalProjectionCache {
       result = { kind: 'missing' }
     }
     entry.running = null
-    if (this.entries.get(entry.id) !== entry || entry.generation !== generation) return false
-    if (result.kind === 'unstable') {
-      entry.generation++
-      entry.phase = 'updating'
-      entry.scheduled = null
-      this.notify()
-      return false
-    }
-    if (result.kind === 'missing') {
-      entry.phase = 'error'
-      return true
-    }
-    entry.current = { generation, revision: result.revision, value: result.summary }
-    entry.phase = 'ready'
-    return true
+    if (this.entries.get(entry.id) !== entry || entry.generation !== generation || entry.scheduled !== null) return null
+    return { entry, generation, result }
   }
 }
 

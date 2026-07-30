@@ -645,6 +645,41 @@ test('projection cache batches initial misses into one publication', async () =>
   assert.equal(publishes, 1, 'the batch completion emits one canonical graph nudge, not N pushes')
 })
 
+test('projection batch keeps its cohort invisible until one atomic publication', async () => {
+  const gates = new Map<string, ReturnType<typeof deferred<any>>>()
+  let publishes = 0
+  const cache = new SessionEvalProjectionCache(async (id) => {
+    const gate = deferred<any>()
+    gates.set(id, gate)
+    return gate.promise
+  }, () => { publishes++ }, 'epoch')
+  const initial = ['a', 'b', 'c'].map((id) => ({ id, path: `/wt/${id}` }))
+
+  assert.deepEqual([...cache.snapshot(initial).values()].map((row) => row.phase), ['loading', 'loading', 'loading'])
+  while (!gates.has('a')) await Promise.resolve()
+  gates.get('a')!.resolve({ kind: 'stable', revision: 'r-a', summary: summary(1) })
+  while (!gates.has('b')) await Promise.resolve()
+
+  const middle = cache.snapshot([...initial, { id: 'd', path: '/wt/d' }])
+  assert.deepEqual([...middle.values()].map((row) => row.phase), ['loading', 'loading', 'loading', 'loading'],
+    'a completed worker must not leak a partial ready cohort')
+  assert.equal(publishes, 0, 'partial cohort completion has no graph publication')
+
+  gates.get('b')!.resolve({ kind: 'stable', revision: 'r-b', summary: summary(1) })
+  while (!gates.has('c')) await Promise.resolve()
+  gates.get('c')!.resolve({ kind: 'stable', revision: 'r-c', summary: summary(1) })
+  for (let attempt = 0; cache.get('a')?.phase !== 'ready' && attempt < 100; attempt++) await Promise.resolve()
+  assert.deepEqual(initial.map(({ id }) => cache.get(id)?.phase), ['ready', 'ready', 'ready'])
+  assert.equal(cache.get('d')?.phase, 'loading', 'a later miss belongs to the next cohort')
+  assert.equal(publishes, 1, 'the frozen cohort publishes exactly once before later work')
+
+  while (!gates.has('d')) await Promise.resolve()
+  gates.get('d')!.resolve({ kind: 'stable', revision: 'r-d', summary: summary(1) })
+  await cache.idle()
+  assert.equal(cache.get('d')?.phase, 'ready')
+  assert.equal(publishes, 2, 'the later cohort publishes after, rather than starving, the first')
+})
+
 test('offline history projections stay demand-only', async () => {
   let builds = 0
   const cache = new SessionEvalProjectionCache(async () => {
@@ -757,7 +792,7 @@ test('a selected demand jumps ahead of unrelated queued summaries without openin
   assert.equal(maxActive, 1, 'demand priority stays inside the bounded queue')
 })
 
-test('a rejected demand frees the slot and lets ordinary summaries continue', async () => {
+test('a rejected demand suppresses its cancelled generation until invalidation', async () => {
   const gates = new Map<string, ReturnType<typeof deferred<any>>>()
   const order: string[] = []
   const cache = new SessionEvalProjectionCache(async (id) => {
@@ -766,11 +801,12 @@ test('a rejected demand frees the slot and lets ordinary summaries continue', as
     gates.set(id, gate)
     return gate.promise
   }, () => {}, 'epoch')
-  cache.snapshot([
+  const sessions = [
     { id: 's1', path: '/wt/s1', liveness: 'online' },
     { id: 's2', path: '/wt/s2', liveness: 'online' },
     { id: 's3', path: '/wt/s3', liveness: 'online' },
-  ])
+  ]
+  cache.snapshot(sessions)
   await Promise.resolve()
   const demand = cache.demand('s3', '/wt/s3', async () => {
     order.push('demand:s3')
@@ -779,9 +815,29 @@ test('a rejected demand frees the slot and lets ordinary summaries continue', as
   gates.get('s1')!.resolve({ kind: 'stable', revision: 'r1', summary: summary(1) })
   await assert.rejects(demand, /selected demand failed/)
   while (!gates.has('s2')) await Promise.resolve()
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
   gates.get('s2')!.resolve({ kind: 'stable', revision: 'r2', summary: summary(1) })
   await cache.idle()
   assert.deepEqual(order, ['s1', 'demand:s3', 's2'])
+
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
+  await cache.idle()
+  assert.deepEqual(order, ['s1', 'demand:s3', 's2'], 'same-generation snapshots retain the demand cancellation')
+  assert.deepEqual(cache.get('s3'), { epoch: 'epoch', generation: 0, phase: 'loading' })
+
+  assert.equal(cache.invalidate({ id: 's3' }), 1)
+  assert.equal(cache.snapshot(sessions).get('s3')?.generation, 1)
+  while (!gates.has('s3')) await Promise.resolve()
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
+  assert.deepEqual(order, ['s1', 'demand:s3', 's2', 's3'], 'the next generation starts exactly one eager build')
+  gates.get('s3')!.resolve({ kind: 'stable', revision: 'r3', summary: summary(1) })
+  await cache.idle()
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
+  await cache.idle()
+  assert.deepEqual(order, ['s1', 'demand:s3', 's2', 's3'], 'settled next-generation snapshots do not duplicate the build')
+  assert.deepEqual(cache.get('s3'), {
+    epoch: 'epoch', generation: 1, phase: 'ready', revision: 'r3', value: summary(1),
+  })
 })
 
 test('a demand enqueued in the batch-finally gap is not lost', async () => {
@@ -847,4 +903,58 @@ test('content revision covers dirty source, index, rename, sidecar, remark, and 
     rmSync(root, { recursive: true, force: true })
     rmSync(remarks, { recursive: true, force: true })
   }
+})
+
+// [[git-exec]]'s classification, locked where it is actually OBSERVABLE. The first version of this test aimed
+// at the ancestry gate, because that gate is the one place whose message is ACTIONABLE — it tells the reader
+// their base is wrong and to use the session merge-base, which someone will act on. Measuring it showed the
+// aim was wrong: an unexecutable git never reaches that gate, because revision resolution runs first and fails
+// first. The test passed on BOTH sides of the fix, which is the "instrument not plugged in" failure — an
+// assertion satisfied because the code never arrives at the branch it names.
+//
+// The difference the fix really makes is one line earlier, in the resolution error's own words: the same
+// unexecutable git reports `exit failure` before and `spawn failure` after. That is the two-sided difference,
+// so that is where the lock belongs. The genuine non-ancestor case stays because the actionable sentence is
+// TRUE there and must keep being produced.
+test('git-exec classification survives into session impact: a git that never ran says spawn, not exit', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-ancestry-gate-'))
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+  git('init', '-q')
+  git('config', 'user.email', 't@t'); git('config', 'user.name', 't')
+  mkdirSync(join(root, '.spec/project'), { recursive: true })
+  writeFileSync(join(root, '.spec/project/spec.md'), '---\ntitle: project\n---\n# project\n')
+  writeFileSync(join(root, 'a.txt'), 'one\n')
+  git('add', '-A'); git('commit', '-q', '-m', 'root')
+  const rootCommit = git('rev-parse', 'HEAD')
+  writeFileSync(join(root, 'a.txt'), 'two\n'); git('add', '-A'); git('commit', '-q', '-m', 'left')
+  const left = git('rev-parse', 'HEAD')
+  git('checkout', '-q', '-b', 'right', rootCommit)
+  writeFileSync(join(root, 'b.txt'), 'three\n'); git('add', '-A'); git('commit', '-q', '-m', 'right')
+  const right = git('rev-parse', 'HEAD')
+
+  // a genuine non-ancestor: the actionable sentence is correct here and must keep being produced
+  await assert.rejects(
+    projectSessionImpact(root, { base: left, head: right }),
+    (error: any) => error instanceof SessionImpactUnavailableError && /is not an ancestor of head/.test(error.message),
+    'a real non-ancestor keeps the actionable diagnosis',
+  )
+
+  // a git that cannot be executed: the failure must be named for what it was, never as an exit status
+  const shimDir = mkdtempSync(join(tmpdir(), 'spex-ancestry-shim-'))
+  writeFileSync(join(shimDir, 'git'), '#!/bin/sh\nexec /usr/bin/git "$@"\n')
+  chmodSync(join(shimDir, 'git'), 0o644)
+  const realPath = process.env.PATH
+  process.env.PATH = shimDir
+  try {
+    await assert.rejects(
+      projectSessionImpact(root, { base: rootCommit, head: left }),
+      (error: any) => error instanceof SessionImpactUnavailableError
+        && /spawn failure/.test(error.message) && !/exit failure/.test(error.message),
+      'an unexecutable git is a spawn failure, not an exit status',
+    )
+  } finally {
+    process.env.PATH = realPath
+    rmSync(shimDir, { recursive: true, force: true })
+  }
+  rmSync(root, { recursive: true, force: true })
 })

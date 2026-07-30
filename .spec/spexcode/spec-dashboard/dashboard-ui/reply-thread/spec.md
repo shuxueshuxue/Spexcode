@@ -46,5 +46,4 @@ one governing home, and the two pages reference it instead of re-describing it.
   ([[review-chrome]]), skinned — never a parallel span/anchor variant.
 - **Delivery stays the caller's.** `onSend(text, evidence)` is the whole write contract: the thread does not
   know whether it is replying to a local file, a forge comment, or creating a thread lazily — the home routes
-  it by the issue's own store ([[issues]]), and an `@`-mention dispatches from wherever it was typed because
-  every send lands on the same store-routed write path.
+  it by the issue's own store ([[issues]]). An `@` reference remains in that authored text and never dispatches.

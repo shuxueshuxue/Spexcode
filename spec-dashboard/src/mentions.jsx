@@ -1,13 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 
-// The dashboard's ONE mention-autocomplete ([[mentions]]): the `[[node]]` (topic) and `@session` (actor)
+// The dashboard's ONE mention-autocomplete ([[mentions]]): the `[[node]]` (topic) and `@session` (session)
 // triggers, their ranking, and the dropdown — shared by every input box that takes the grammar (the session
 // console's New prompt + ❯ inbox in SessionInterface.jsx, the Issues page's reply/new-thread composers in
 // IssuesPage.jsx, the eval remark composer in EventDetail.jsx). One implementation, never a per-surface
-// fork: the CLI resolver is the semantics, this is
-// its thin autocomplete.
+// fork. References only edit the current draft; actions stay with their explicit commands.
 
 // a `[[<id>]]` (Obsidian double-bracket) node-mention token. Optional leading dot so `[[.plugins]]` resolves
 // (a node id is its dir basename — see [[spec-pointer]]). Group 1 = the id. Used for both the New Session
@@ -40,8 +39,7 @@ export function matchSpecs(specs, query, focusId) {
   return scored.slice(0, 8).map((x) => x.s)
 }
 
-// the actor twin of matchSpecs: rank ONLINE board sessions for a partial `@query`, plus the synthetic
-// `@new` (spawn a fresh worker), which is ALWAYS present near the top (after any exact matches). A row
+// The session twin of matchSpecs: rank retained board sessions for a partial `@query`. A row
 // reads as the SAME headline every other surface shows ([[session-label]] — sessionHeadline, never a bare
 // title/name, which no longer ride the wire); `sub` is a hint (its node or status). Exact/prefix on
 // id-or-handle leads, then most-recent (`created` desc) within a band. Returns up to 8 `{id, label, sub}`.
@@ -50,7 +48,6 @@ export function matchSessions(sessions, query) {
   const handle = (s) => sessionHeadline(s) || (s.id || '').slice(0, 8)
   const scored = []
   for (const s of sessions || []) {
-    if (s.liveness !== 'online') continue
     const id = (s.id || '').toLowerCase()
     const h = handle(s).toLowerCase()
     let score
@@ -62,27 +59,7 @@ export function matchSessions(sessions, query) {
     scored.push({ s, score })
   }
   scored.sort((a, b) => a.score - b.score || (b.s.created || 0) - (a.s.created || 0))
-  const items = scored.map((x) => ({ id: x.s.id, label: handle(x.s), sub: x.s.node || x.s.status }))
-  const exactCount = scored.filter((x) => x.score === 0).length
-  items.splice(exactCount, 0, { id: 'new', label: 'new', sub: 'choose a launcher' })
-  return items.slice(0, 8)
-}
-
-// The second stage behind the synthetic @new row: configured launcher names, prefix-ranked like the other
-// mention sets. The cmd is read-only context in the row; accepting one writes @new:<name> into the prose,
-// which the CLI resolver carries to the ordinary newSession launcher argument ([[launcher-select]]).
-export function matchLaunchers(launchers, query) {
-  const q = query.toLowerCase()
-  return (launchers || [])
-    .map((l) => {
-      const name = (l.name || '').toLowerCase()
-      const score = !q ? 1 : name.startsWith(q) ? 0 : name.includes(q) ? 1 : -1
-      return { l, score }
-    })
-    .filter((x) => x.score >= 0)
-    .sort((a, b) => a.score - b.score || a.l.name.localeCompare(b.l.name))
-    .slice(0, 8)
-    .map(({ l }) => ({ id: l.name, label: l.name, sub: l.cmd || l.harness || '' }))
+  return scored.slice(0, 8).map((x) => ({ id: x.s.id, label: handle(x.s), sub: x.s.node || x.s.status }))
 }
 
 // bold the first case-insensitive hit of the query inside a label (the part the user has typed so far).
@@ -182,42 +159,32 @@ export function nodeMentionAt(value, caret, specs, focusId) {
   return null
 }
 
-// the actor-mention trigger — the `@` twin of nodeMentionAt. Positional like `[[`: scan back from the caret
+// the session-reference trigger — the `@` twin of nodeMentionAt. Positional like `[[`: scan back from the caret
 // over handle-chars; if that run is preceded by an `@` at a WORD BOUNDARY (start of line or after
-// whitespace), the caret sits inside an `@query` actor token. `[[`=topic, `@`=actor — the two triggers never
+// whitespace), the caret sits inside an `@query` session token. `[[`=topic, `@`=session — the two triggers never
 // collide (a bare `@` mid-word, e.g. an email, is not a boundary and stays inert).
-export function actorMentionAt(value, caret, sessions, launchers = []) {
+export function sessionMentionAt(value, caret, sessions) {
   let i = caret - 1
   while (i >= 0 && /[\p{L}\p{N}_.:\-]/u.test(value[i])) i--
-  // i now points at the char just left of the handle run — the `@` sigil for an actor token.
+    // i now points at the char just left of the handle run — the `@` sigil for a session token.
   if (i >= 0 && value[i] === '@' && (i === 0 || /\s/.test(value[i - 1]))) {
     const query = value.slice(i + 1, caret)
-    if (query.startsWith('new:')) {
-      const launcherQuery = query.slice('new:'.length)
-      const items = matchLaunchers(launchers, launcherQuery)
-      if (!items.length) return null
-      return { kind: 'launcher', items, index: 0, start: i, end: caret, query: launcherQuery }
-    }
     const items = matchSessions(sessions, query)
     if (!items.length) return null
-    return { kind: 'actor', items, index: 0, start: i, end: caret, query }
+    return { kind: 'session', items, index: 0, start: i, end: caret, query }
   }
   return null
 }
 
-// ONE render for the `[[`-node and `@`-actor dropdowns, on any surface — downward under a centered box, or
+// ONE render for the `[[`-node and `@`-session dropdowns, on any surface — downward under a centered box, or
 // `up` above a docked one. `menu` is the descriptor a trigger scanner built; onPick/onHover are the accept
-// and index-follow callbacks. Rows: node = status dot + id + breadcrumb; actor = @handle + hint (the
-// synthetic `@new` row wears a subtle distinct style). No emoji.
+// and index-follow callbacks. Rows: node = status dot + id + breadcrumb; session = @handle + hint.
 export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
   const t = useT()
-  const launcher = menu.kind === 'launcher'
-  const actor = menu.kind === 'actor' || launcher
-  const head = launcher
-    ? `@new:${menu.query}`
-    : menu.query
-      ? (actor ? `@${menu.query}` : `[[${menu.query}]]`)
-    : t(actor ? 'session.menuSessions' : 'session.menuSpecNodes')
+  const session = menu.kind === 'session'
+  const head = menu.query
+      ? (session ? `@${menu.query}` : `[[${menu.query}]]`)
+    : t(session ? 'session.menuSessions' : 'session.menuSpecNodes')
   return (
     <ul className={`${up ? 'mention-menu up' : 'mention-menu'}${fixedStyle ? ' fixed' : ''}`} style={fixedStyle || undefined} role="listbox">
       <li className="mention-head">// {head} — {t('session.menuHint')}</li>
@@ -226,13 +193,13 @@ export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
           key={it.id}
           role="option"
           aria-selected={i === menu.index}
-          className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${launcher || (actor && it.id === 'new') ? ' new' : ''}`}
+          className={i === menu.index ? 'mention-item on' : 'mention-item'}
           onMouseDown={(e) => { e.preventDefault(); onPick(it) }}
           onMouseEnter={() => onHover(i)}
         >
-          {!actor && <span className="mention-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.offline }} />}
-          <span className="mention-id">{launcher ? <>@new:{highlight(it.label, menu.query)}</> : actor ? <>@{highlight(it.label, menu.query)}</> : highlight(it.id, menu.query)}</span>
-          <span className="mention-path">{actor ? it.sub : specPath(it.path)}</span>
+          {!session && <span className="mention-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.offline }} />}
+          <span className="mention-id">{session ? <>@{highlight(it.label, menu.query)}</> : highlight(it.id, menu.query)}</span>
+          <span className="mention-path">{session ? it.sub : specPath(it.path)}</span>
         </li>
       ))}
     </ul>
@@ -244,7 +211,7 @@ export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
 // and drops the caret after it, and claims ↑/↓/Enter/Tab/Esc WHILE the menu is open (onKeyDown returns true
 // when it consumed the key — Esc closes the menu only, never the page). The console keeps its own window-
 // level state machine (it also multiplexes `/` menus) but builds from the SAME scanners and MentionMenu.
-export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], sessions = [], launchers = [], focusId = null, up = false, fixedAbove = null }) {
+export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], sessions = [], focusId = null, up = false, fixedAbove = null }) {
   const [menu, setMenu] = useState(null)
   const [fixedStyle, setFixedStyle] = useState(null)
   // React synthesizes onSelect after Escape keyup even when the native selection did not move. Without a
@@ -258,7 +225,7 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
     if (dismissed.current === key) { setMenu(null); setFixedStyle(null); return }
     dismissed.current = null
     const caret = el.selectionStart
-    const next = nodeMentionAt(el.value, caret, specs, focusId) || actorMentionAt(el.value, caret, sessions, launchers)
+    const next = nodeMentionAt(el.value, caret, specs, focusId) || sessionMentionAt(el.value, caret, sessions)
     setMenu(next)
     if (!next || !fixedAbove) { setFixedStyle(null); return }
     const input = el.getBoundingClientRect()
@@ -271,31 +238,12 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
       bottom: `${Math.max(8, window.innerHeight - above + 8)}px`,
     })
   }
-  // @new may be accepted before the first settings request finishes. Its draft is already `@new:`; when
-  // the profiles arrive, re-run the ordinary scanner at that unchanged focused caret so the chooser opens
-  // instead of silently degrading to the default. An Esc dismissal survives because sync checks its key.
-  useEffect(() => {
-    const el = inputRef.current
-    if (launchers.length && el && document.activeElement === el) sync(el)
-  }, [launchers])
   const navBy = (dir) => setMenu((m) => (m ? { ...m, index: (m.index + dir + m.items.length) % m.items.length } : m))
   const accept = (item) => {
     if (!item || !menu) return
     dismissed.current = null
     const before = value.slice(0, menu.start)
-    // @new is a doorway, not a silent default: accepting it always writes @new:. If settings are ready the
-    // launcher menu stays open now; otherwise the effect above opens it when the one shared read resolves.
-    if (menu.kind === 'actor' && item.id === 'new') {
-      const insert = '@new:'
-      const nextValue = before + insert + value.slice(menu.end)
-      const caret = before.length + insert.length
-      setValue(nextValue)
-      setMenu(actorMentionAt(nextValue, caret, sessions, launchers))
-      requestAnimationFrame(() => { const el = inputRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
-      return
-    }
-    const insert = menu.kind === 'actor' ? `@${item.id} `
-      : menu.kind === 'launcher' ? `@new:${item.id} `
+    const insert = menu.kind === 'session' ? `@${item.id} `
       : `[[${item.id}]] `
     setValue(before + insert + value.slice(menu.end))
     setMenu(null)

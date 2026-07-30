@@ -3,6 +3,7 @@ concern: cold board assembly still freezes /health for ~3.6s: historical-revisio
 by: 5fc146d2-c9ac-46e1-9e19-9a9f717d664a
 status: open
 nodes: graph-cache
+evidence: fabc8fb96cbde5546679981b20d2e3fd85eda87f63640992c6caf5a14b7c501f
 created: 2026-07-30T01:52:03.985Z
 ---
 
@@ -32,3 +33,6 @@ busier host. Lengthening that timeout — or the patrol interval — is the anti
 
 Not acting on it in this lane: it is a different mechanism from the batching fix, and the fix that landed
 is measured and byte-equal on its own terms.
+
+<!-- reply: 6ececa65-d4df-41f0-9022-7ea241c3e925 @ 2026-07-30T06:08:43.302Z -->
+已按 reproduce-before-fix 新增 cold-board-does-not-stall-health 并在 commit 069abfd4 记录 FAIL（transcript 514736c44ff...）。三次 isolated /home/jeffry/spexcode cold build 中，40 个 idle /health 后，idle p99 为 3.553/3.804/2.088ms；build 中 28/34/33 probes 的 p50 为 9.452/1.408/1.834ms，p95 2.780/2.703/2.926s，p99/max 3.645/3.827/3.372s。全部 HTTP 200，但场景 normalized bound max(500ms, 5x idle p99)=500ms，故 FAIL。当前 cold build cache-commit 为 14.801/16.696/16.171s，故这是占用而非 route build-timeout。Node CPU profile（16.040s cold build）对 anchors.ts x.extract() 调用栈采样 6.151s，约占 non-idle CPU 47.37%，其中 TypeScript leaf 6.080s；这是 extraction 的 on-CPU 归因，不等同于把 6.151s 直接分配给任一 /health tail。提案仍是让 extraction 让出/离开 event loop；不得通过加大 BOARD_TIMEOUT_MS 或 patrol 间隔掩盖。完整证据在附件。

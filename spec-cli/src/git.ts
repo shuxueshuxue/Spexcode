@@ -1921,8 +1921,13 @@ export function inAncestors(idx: DriftIndex, bits: Uint8Array, sha: string): boo
   return o !== undefined && (bits[o >> 3] & (1 << (o & 7))) !== 0
 }
 
+// @@@ reachability is membership, not a closure - `ancestorsOf` returns undefined for EXACTLY the shas
+// absent from `idx.ord` (both writers of `idx.anc` gate on ord: the single-sha path after its ord lookup
+// succeeds, the batch after an explicit `ord.has` filter), so asking it here answered a hash-table
+// question by walking the whole parent DAG and allocating an ord.size-wide bitset per distinct sha —
+// per eval reading, on every board build.
 export function commitReachable(idx: DriftIndex, sha: string): boolean {
-  return ancestorsOf(idx, sha) !== undefined
+  return idx.ord.has(sha)
 }
 
 // the valid Spec-OK coverage for a node's version commit: `sinceHash` is the node's OWN latest version,

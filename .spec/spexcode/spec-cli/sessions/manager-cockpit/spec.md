@@ -48,7 +48,9 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   whatever its own scope is — so the gate may not RE-COST the whole REPOSITORY every time the tree moves while
   the reviewed scope stays small. When the fingerprint moves — a trunk commit, one dirty edit — the verdict is
   recomputed, and a second verdict IN THE SAME PROCESS costs what MOVED, because the anchor engine reuses the
-  immutable per-commit facts it already read ([[code-anchor]]) instead of re-probing every anchored window.
+  hunks whose IMAGE IDENTITY it has already read under a pinned diff interpretation ([[code-anchor]] owns that
+  identity — ordered result/parent images, not a commit id, which `refs/replace`, a graft or an unshallow can
+  reinterpret) instead of re-probing every anchored window.
 
   Measured here, and this is the whole claim, no wider: an empty-scope review and a ten-file-scope review each
   pay the same 48 git children on a COLD process — 22 of them one `log --patch` per anchored path — and that
@@ -60,8 +62,9 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
 
   The reuse is per PROCESS, and the residual is stated rather than hidden: a fresh backend pays the first touch
   again, and a trunk commit that touches the backend's own source makes the supervisor replace the child, so
-  that verdict is a first touch too. Crossing THAT needs durable per-commit hunk facts in the existing
-  on-disk event ledger — [[source-of-truth]]'s to own, and deliberately NOT implemented. Proportionality is
+  that verdict is a first touch too. Crossing THAT needs hunk facts durable across processes, stored under the
+  same image identity, in the existing on-disk event ledger — [[source-of-truth]]'s to own, and deliberately
+  NOT implemented. Proportionality is
   bought the one way described and no other: the gate keeps NO second cache of its verdict and narrows
   nothing — the counts are exactly what `spex spec lint` reports for that tree with its dirty files included, a
   moved fingerprint always recomputes instead of serving last-known, and a rejected run is never cached.

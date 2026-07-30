@@ -37,18 +37,24 @@ scenarios:
       `spex spec lint` on that same tree.
     expected: >
       The lint verdict is exactly `spex spec lint`'s for the served tree at every step, dirty files included,
-      and identical between the two binaries. The location gate does not scale with the repository while the
-      reviewed scope stays small: the two scopes' cold deep-link and cold review totals track their own scope,
-      and each state move recomputes the verdict with git work proportional to what MOVED — no `log --patch`
-      re-derivation of a window this process already read and no re-streamed window blob, while a moved
-      anchored path is still queried and still judged. Selector validation stays whole: the dirty rename
-      raises its dead-anchor integrity error on the very next read. Failure stays loud and poisons nothing:
-      the malformed config makes the read fail with its parse error rather than serving a stale or
-      default-shaped verdict, is not cached, and the read after repair returns the correct verdict.
-      Loss is: a re-verdict that re-forks one hunk query per anchored path (22 on this tree, argv identical to
-      the previous run), a verdict differing from `spex spec lint`, last-known served after a move, a narrowed
-      gate (a skipped selector/anchor check or a sampled corpus), a cached failure, or a second resident cache
-      of the lint result standing in for proportional work.
+      and identical between the two binaries. The claim measured here is about REPEATED verdicts inside one
+      process, and only that: a COLD process pays the location gate in full and both scopes pay it alike — an
+      empty scope (0 ahead, 0 dirty) and a ten-file scope each cost the same review children and the same
+      hunk queries, and the cold deep-link total does NOT track the reviewed scope (the empty scope measures
+      dearer than the ten-file one, because the deep link's own half dominates it). What must hold is that
+      each subsequent state move — a dirty edit, its removal, a HEAD advance, an attribute flip — recomputes
+      the verdict with git work proportional to what MOVED: no re-derivation of a hunk whose image identity
+      this process already read under the pinned interpretation, and no re-streamed window blob, while a moved
+      image set is still queried and still judged. Selector validation stays whole: the dirty rename raises
+      its dead-anchor integrity error on the very next read. Failure stays loud and poisons nothing: the
+      malformed config makes the read fail with its parse error rather than serving a stale or default-shaped
+      verdict, is not cached, and the read after repair returns the correct verdict.
+      Loss is: a repeated verdict that re-forks one hunk query per anchored path (22 on this tree, argv
+      identical to the previous run), a verdict differing from `spex spec lint`, a verdict that survives a
+      change to the images or the diff interpretation it was derived from, last-known served after a move, a
+      narrowed gate (a skipped selector/anchor check or a sampled corpus), a cached failure, a second resident
+      cache of the lint result standing in for proportional work, or any claim that the COLD path or the
+      scope-proportionality of the deep link was improved.
 ---
 
 # measuring manager-cockpit

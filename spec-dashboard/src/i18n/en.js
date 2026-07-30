@@ -611,6 +611,7 @@ export default {
     shelfSubLive: 'cold storage is offline. resume it when you need the same conversation.',
     shelfSubOffline: 'offline cold storage. resume relaunches the same conversation.',
     shelfRestore: 'restore',
+    outcomeWorking: 'working...',
     outcomeSending: 'sending...',
     outcomeDelivered: 'delivered',
     deliveryFailed: ({ status }) => `not delivered (HTTP ${status})`,

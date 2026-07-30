@@ -118,3 +118,71 @@ neither would have found any of the duplication M1 and M2 removed, because it wa
 different shapes. Percentages from text similarity are not evidence here.
 
 Spec: source-of-truth, eval-core
+
+<!-- reply: c89038e2-6b56-4b4c-8b4a-4ff4ec2c886e @ 2026-07-30T02:39:01.922Z -->
+M4 measured. **The package cycle is not a tangle and does not need a new package.** Recording this before
+cutting, because it overturns the premise the milestone was authorized on.
+
+## Counting convention (state it or "how much did it drop" is unfalsifiable)
+
+Count **import statements**, non-test `.ts` only, and separate **static** from **dynamic** — static edges bind
+the module graph, dynamic edges exist to defer binding:
+
+    spec-cli -> spec-eval   static 12 / 5 files   index 5 · graph 3 · reviews 2 · graphStream 1 · graphCache 1
+                            dynamic  7            cli 3 · sessions 1 · localIssues 1 · …
+
+An earlier figure of 36/12 counted imported SYMBOLS; a coordinator's 17/8 counted statements without the
+static/dynamic split. Same tree, three numbers.
+
+## The static module graph is already acyclic
+
+Every spec-cli module that spec-eval imports has **zero** static imports of spec-eval:
+`git specs layout anchors issues source-files mentions` → 0; `sessions localIssues lint harness` → 0 static
+(sessions and localIssues carry 1 dynamic each).
+
+And the five spec-cli files that DO import spec-eval are exactly the delivery layer — `index`, `graph`,
+`graphStream`, `graphCache`, `reviews` — and all 12 symbols they take are eval PRODUCT (export rendering,
+timelines, projections, filing, human-ok, the evidence blob cache). Not one is a derivation.
+
+So the real structure is already a clean three-layer DAG:
+
+    substrate (git · anchors · layout · specs · source-files · mentions — 0 eval deps)
+        ↑
+    spec-eval (eval features)
+        ↑
+    delivery (index · graph · graphStream · graphCache · reviews)
+
+The package-level "cycle" is an artifact of **packaging granularity**: substrate and delivery share one
+package, so the package graph shows a cycle the module graph does not have.
+
+## The true cycle is two symbols
+
+    spec-cli/sessions.ts    --dynamic--> sessioneval    because spec-eval/sessioneval --static--> sessions.reviewPayload
+    spec-cli/localIssues.ts --dynamic--> filing         because spec-eval/humanok     --static--> localIssues.commitTrunkData
+
+`cli.ts -> spec-eval/cli -> lint.loadConfig` is NOT a cycle: lint.ts never points back.
+
+`sessions.ts`'s own comment admits the workaround: *"The import is dynamic for the same reason the lint
+gate's is — the eval package imports this module."* Third instance of this pattern in this refactor — an
+author documenting a structural problem in the act of working around it, because the structure offered
+nowhere else to go.
+
+## Consequence: the cut is a relocation, not a repackaging
+
+The cycle exists because two eval-CONSUMING functions live in lower modules: `sessions.ts`'s `evalGate()` and
+`localIssues.ts`'s filer-chain resolution. Move them UP into the delivery layer — `reviews.ts` already imports
+spec-eval statically — and the dynamic edges become ordinary static ones. No new package, no boundary
+redraw, and the counter goes to zero as a CONSEQUENCE rather than as the goal.
+
+## The one contract decision, and the default taken
+
+The knot: spec-eval needs `reviewPayload`, and `reviewPayload` internally wants the eval gate — mutual need at
+the FEATURE level, which is what no amount of repackaging fixes. Two answers: (a) `reviewPayload` keeps
+carrying the gate, and the cycle stays, deferred by a dynamic import forever; (b) the delivery layer COMPOSES
+payload + gate, and `reviewPayload` returns only session-side data.
+
+Taking (b): it is the layering-correct answer and it returns `reviewPayload` to knowing only its own layer.
+Flagged for [[manager-cockpit]] in case composing at the caller changes an outward contract someone depends
+on — say so before the next milestone lands if it does.
+
+Spec: sessions-core, manager-cockpit, source-of-truth

@@ -1026,6 +1026,8 @@ export async function codexLoadedReferenceIds(sock: string): Promise<{ ok: true;
   return result.ok ? { ok: true, referenceIds: result.ids } : result
 }
 
+const CODEX_TARGET_TURN_CENSUS_MS = 15_000
+
 function codexTargetTurnPresence(sock: string, threadId: string): Promise<{ ok: true; turnPresence: 'idle' | 'active' | 'unknown' } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
@@ -1035,23 +1037,25 @@ function codexTargetTurnPresence(sock: string, threadId: string): Promise<{ ok: 
       if (settled) return
       settled = true; clearTimeout(timer); try { conn.destroy() } catch {}; resolve(result)
     }
-    const timer = setTimeout(() => done({ ok: false, error: `Codex target thread ${threadId} read timed out after 5000ms` }), 5000)
-    conn.on('error', (error) => done({ ok: false, error: `Codex target thread ${threadId} read failed: ${rpcError(error)}` }))
-    conn.on('close', () => { if (!settled) done({ ok: false, error: `Codex app-server closed during target thread ${threadId} read` }) })
+    const timer = setTimeout(() => done({ ok: false, error: `Codex target thread ${threadId} turn census timed out after ${CODEX_TARGET_TURN_CENSUS_MS}ms` }), CODEX_TARGET_TURN_CENSUS_MS)
+    conn.on('error', (error) => done({ ok: false, error: `Codex target thread ${threadId} turn census failed: ${rpcError(error)}` }))
+    conn.on('close', () => { if (!settled) done({ ok: false, error: `Codex app-server closed during target thread ${threadId} turn census` }) })
     const send = (message: JsonRpc) => conn.write(wsText(JSON.stringify(message)))
     conn.on('connect', () => conn.write(WS_UPGRADE(randomBytes(16).toString('base64'))))
     const handle = (json: string) => {
       let message: JsonRpc
       try { message = JSON.parse(json) } catch { return }
-      if (message.error) return done({ ok: false, error: `Codex target thread ${threadId} read failed: ${message.error.message || JSON.stringify(message.error)}` })
+      if (message.error) return done({ ok: false, error: `Codex target thread ${threadId} turn census failed: ${message.error.message || JSON.stringify(message.error)}` })
       if (message.id === 1 && message.result) {
         send({ method: 'initialized', params: {} })
-        return send({ id: 2, method: 'thread/read', params: { threadId, includeTurns: true } })
+        // The guard needs only the current turn. `thread/read {includeTurns:true}` materializes the
+        // entire persisted history, so an old but otherwise healthy thread can time out before close.
+        return send({ id: 2, method: 'thread/turns/list', params: { threadId, limit: 1, sortDirection: 'desc', itemsView: 'notLoaded' } })
       }
       if (message.id !== 2 || !message.result) return
-      const turns = (message.result as { thread?: { turns?: unknown } }).thread?.turns
+      const turns = (message.result as { data?: unknown }).data
       if (!Array.isArray(turns)) return done({ ok: true, turnPresence: 'unknown' })
-      return done({ ok: true, turnPresence: activeTurnIdFromThread(message.result) ? 'active' : 'idle' })
+      return done({ ok: true, turnPresence: turns.some((turn) => turn && typeof turn === 'object' && (turn as { status?: unknown }).status === 'inProgress') ? 'active' : 'idle' })
     }
     conn.on('data', (chunk: Buffer) => {
       fs.buf = Buffer.concat([fs.buf, chunk])
@@ -1059,10 +1063,10 @@ function codexTargetTurnPresence(sock: string, threadId: string): Promise<{ ok: 
         const i = fs.buf.indexOf('\r\n\r\n')
         if (i < 0) return
         const head = fs.buf.slice(0, i).toString('utf8')
-        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `Codex app-server refused target thread ${threadId} read: ${head.split('\r\n')[0]}` })
+        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `Codex app-server refused target thread ${threadId} turn census: ${head.split('\r\n')[0]}` })
         upgraded = true; fs.buf = fs.buf.slice(i + 4); send(wsInitialize)
       }
-      if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: `Codex app-server closed during target thread ${threadId} read` })
+      if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: `Codex app-server closed during target thread ${threadId} turn census` })
     })
   })
 }

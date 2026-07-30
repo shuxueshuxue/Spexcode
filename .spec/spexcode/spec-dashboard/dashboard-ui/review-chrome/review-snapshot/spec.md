@@ -20,8 +20,10 @@ one selected scenario, to process memory, replacing the previous snapshot as a u
 or trunk `/api/evals` request waits for that first successful publication; once a snapshot exists, a request
 reads its atomic generation without joining an unrelated graph/session refresh, then joins current session
 presence separately. A newer resident-forge content revision is a relevant source change, not an unrelated
-refresh: the next Issue read invalidates and republishes before answering, so a background reconcile cannot
-leave the row snapshot permanently behind. A later page revision/poll observes the replacement generation. Trunk detail projects
+refresh: the next Issue read asks graph-cache for a publication carrying at least that revision before
+answering. An already-running graph flight that captured older resident state may settle, but cannot satisfy
+that request; graph-cache retains its full rebuild obligation. Thus a background reconcile cannot leave the
+row snapshot permanently behind, without product-level polling. A later page revision/poll observes the replacement generation. Trunk detail projects
 one selected history plus its bounded lightweight neighbors from the same generation; a sessions-only graph
 splice leaves the snapshot valid because session presence is joined separately at request time.
 

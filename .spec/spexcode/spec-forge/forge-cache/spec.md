@@ -39,8 +39,9 @@ answer.
 The state also carries a monotonic **content revision**. It advances only when an upsert, removal, or
 reconcile changes the cached objects; duplicate deltas and an equal reconcile leave it unchanged. A
 consumer that publishes a snapshot alongside this state carries that revision, so a reconcile finishing
-after a background read cannot leave its published projection permanently behind the resident cache. The
-revision is a freshness carrier, never a second resolution path. The deterministic product proof holds the
+after a background read cannot leave its published projection permanently behind the resident cache: it is a
+lower bound on the next publication, not permission to poll old rows. The revision is a freshness carrier,
+never a second resolution path. The deterministic product proof holds the
 first driver response until that snapshot is published, then releases seven GitLab-shaped rows and reads the
 same API again; this proves the late-publication race without standing in for a credentialed live-host probe.
 

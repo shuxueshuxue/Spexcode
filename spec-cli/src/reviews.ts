@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { listSessions } from './sessions.js'
-import { getBoard, invalidateBoard } from './graphCache.js'
+import { getBoard, getBoardForForgeRevision } from './graphCache.js'
 import { buildSessionEvals, type SessionEvals } from '../../spec-eval/src/sessioneval.js'
 import { evalTimeline } from '../../spec-eval/src/evaltab.js'
 import { issuesEnabled as issuesEnabledForReview } from './localIssues.js'
@@ -127,9 +127,8 @@ export async function issuesReview(query: string | undefined, requestedPage: unk
   // revision/poll path will deliver the next generation without making this page join that flight.
   residentForgeState()
   if (!hasReviewSnapshot()) await getBoard()
-  else if (readReviewSnapshot().forgeRevision !== residentForgeRevision()) {
-    invalidateBoard('full')
-    await getBoard()
+  else if (readReviewSnapshot().forgeRevision < residentForgeRevision()) {
+    await getBoardForForgeRevision(residentForgeRevision())
   }
   const sessions = await listSessions()
   const issues = readReviewSnapshot().issues.slice().sort(issueOrder)

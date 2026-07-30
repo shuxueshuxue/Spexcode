@@ -125,14 +125,9 @@ exec '${realGit}' "$@"
   assert.equal(before.total, 0)
 
   releaseFirstIssues()
-  let after: { total: number; items: { id: string }[] } | null = null
-  for (let tries = 0; tries < 200; tries++) {
-    const response = await fetch(endpoint)
-    assert.equal(response.status, 200)
-    const page = await response.json() as { total: number; items: { id: string }[] }
-    if (page.total === 7) { after = page; break }
-    await delay(25)
-  }
-  assert.ok(after, 'the second product read did not republish the resident GitLab slice')
+  const response = await fetch(endpoint)
+  assert.equal(response.status, 200)
+  const after = await response.json() as { total: number; items: { id: string }[] }
+  assert.equal(after.total, 7, 'the second product read did not republish the resident GitLab slice')
   assert.deepEqual(after.items.map((issue) => issue.id), Array.from({ length: 7 }, (_, index) => `gitlab#${index + 1}`))
 })

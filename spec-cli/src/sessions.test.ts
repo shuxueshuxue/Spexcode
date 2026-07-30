@@ -6,12 +6,12 @@ import { once } from 'node:events'
 import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
-import { runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
+import { gitCommonDir, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 import { readTimeline } from './session-timeline.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -645,8 +645,7 @@ test('public close cancels a clean never-launched queue without entering the unr
   const originalShared = codexHarness.sharedRuntimes
   const originalCleanup = codexHarness.cleanupRuntime
   const home = mkdtempSync(join(tmpdir(), 'spex-queued-close-'))
-  const main = execFileSync('git', ['worktree', 'list', '--porcelain'], { encoding: 'utf8' }).split('\n')
-    .find((line) => line.startsWith('worktree '))!.slice('worktree '.length)
+  const main = dirname(gitCommonDir())
   const branches: string[] = []
   const paths: string[] = []
   process.env.SPEXCODE_HOME = home

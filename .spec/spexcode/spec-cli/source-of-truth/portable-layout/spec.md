@@ -6,6 +6,7 @@ hue: 160
 desc: Where things live — main, worktree→node mapping, the spec root node — is detected policy, never a baked-in name.
 code:
   - spec-cli/src/layout.ts#resolveLayout
+  - spec-cli/src/layout.ts#mainRoot
   - spec-cli/src/layout.ts#mainBranch
   - spec-cli/src/layout.ts#readJsonConfig
   - spec-cli/src/layout.ts#readUploadPolicy
@@ -75,6 +76,11 @@ dir, so they answer identically from the main checkout, a linked worktree, or a 
 `mainCheckout()` exposes the root working tree itself
 (`dirname` of the common dir), which a harness keying a per-PROJECT artifact to the root checkout uses — e.g.
 Codex's hook shim + trust materialize at `mainCheckout(proj)`, not the worktree (see [[harness-adapter]]).
+`mainRoot(proj?)` is the lighter sibling for consumers that need the configured source-of-truth path rather
+than the physical root checkout: it follows the same common-dir resolution, reads only the root config, and
+resolves its optional `main` relative to that checkout. It must not call `resolveLayout()` or enumerate
+session/worktree rows; creation authority and any other identity guard can compare canonical main roots without
+turning a small identity question into a board read.
 
 A managed session's node id comes from its global **record** (`node`, the ref the session was bound to —
 which the branch slug's `-<id4>` suffix can't give), falling back to the branch (strip `branchPrefix`) when

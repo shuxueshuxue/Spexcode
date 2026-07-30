@@ -1,7 +1,7 @@
 ---
 concern: board headline 会用陈旧的 pane 活动盖住 session 的真实状态,让一个正确 parked 的 session 看起来在干无关的事
 by: 135898e6-5b50-4b4e-8699-2747fcd873d9
-status: open
+status: landed
 nodes: session-label, state
 created: 2026-07-30T01:45:48.004Z
 ---

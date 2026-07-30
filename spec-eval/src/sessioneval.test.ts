@@ -645,6 +645,41 @@ test('projection cache batches initial misses into one publication', async () =>
   assert.equal(publishes, 1, 'the batch completion emits one canonical graph nudge, not N pushes')
 })
 
+test('projection batch keeps its cohort invisible until one atomic publication', async () => {
+  const gates = new Map<string, ReturnType<typeof deferred<any>>>()
+  let publishes = 0
+  const cache = new SessionEvalProjectionCache(async (id) => {
+    const gate = deferred<any>()
+    gates.set(id, gate)
+    return gate.promise
+  }, () => { publishes++ }, 'epoch')
+  const initial = ['a', 'b', 'c'].map((id) => ({ id, path: `/wt/${id}` }))
+
+  assert.deepEqual([...cache.snapshot(initial).values()].map((row) => row.phase), ['loading', 'loading', 'loading'])
+  while (!gates.has('a')) await Promise.resolve()
+  gates.get('a')!.resolve({ kind: 'stable', revision: 'r-a', summary: summary(1) })
+  while (!gates.has('b')) await Promise.resolve()
+
+  const middle = cache.snapshot([...initial, { id: 'd', path: '/wt/d' }])
+  assert.deepEqual([...middle.values()].map((row) => row.phase), ['loading', 'loading', 'loading', 'loading'],
+    'a completed worker must not leak a partial ready cohort')
+  assert.equal(publishes, 0, 'partial cohort completion has no graph publication')
+
+  gates.get('b')!.resolve({ kind: 'stable', revision: 'r-b', summary: summary(1) })
+  while (!gates.has('c')) await Promise.resolve()
+  gates.get('c')!.resolve({ kind: 'stable', revision: 'r-c', summary: summary(1) })
+  for (let attempt = 0; cache.get('a')?.phase !== 'ready' && attempt < 100; attempt++) await Promise.resolve()
+  assert.deepEqual(initial.map(({ id }) => cache.get(id)?.phase), ['ready', 'ready', 'ready'])
+  assert.equal(cache.get('d')?.phase, 'loading', 'a later miss belongs to the next cohort')
+  assert.equal(publishes, 1, 'the frozen cohort publishes exactly once before later work')
+
+  while (!gates.has('d')) await Promise.resolve()
+  gates.get('d')!.resolve({ kind: 'stable', revision: 'r-d', summary: summary(1) })
+  await cache.idle()
+  assert.equal(cache.get('d')?.phase, 'ready')
+  assert.equal(publishes, 2, 'the later cohort publishes after, rather than starving, the first')
+})
+
 test('offline history projections stay demand-only', async () => {
   let builds = 0
   const cache = new SessionEvalProjectionCache(async () => {
@@ -757,7 +792,7 @@ test('a selected demand jumps ahead of unrelated queued summaries without openin
   assert.equal(maxActive, 1, 'demand priority stays inside the bounded queue')
 })
 
-test('a rejected demand frees the slot and lets ordinary summaries continue', async () => {
+test('a rejected demand suppresses its cancelled generation until invalidation', async () => {
   const gates = new Map<string, ReturnType<typeof deferred<any>>>()
   const order: string[] = []
   const cache = new SessionEvalProjectionCache(async (id) => {
@@ -766,11 +801,12 @@ test('a rejected demand frees the slot and lets ordinary summaries continue', as
     gates.set(id, gate)
     return gate.promise
   }, () => {}, 'epoch')
-  cache.snapshot([
+  const sessions = [
     { id: 's1', path: '/wt/s1', liveness: 'online' },
     { id: 's2', path: '/wt/s2', liveness: 'online' },
     { id: 's3', path: '/wt/s3', liveness: 'online' },
-  ])
+  ]
+  cache.snapshot(sessions)
   await Promise.resolve()
   const demand = cache.demand('s3', '/wt/s3', async () => {
     order.push('demand:s3')
@@ -779,9 +815,29 @@ test('a rejected demand frees the slot and lets ordinary summaries continue', as
   gates.get('s1')!.resolve({ kind: 'stable', revision: 'r1', summary: summary(1) })
   await assert.rejects(demand, /selected demand failed/)
   while (!gates.has('s2')) await Promise.resolve()
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
   gates.get('s2')!.resolve({ kind: 'stable', revision: 'r2', summary: summary(1) })
   await cache.idle()
   assert.deepEqual(order, ['s1', 'demand:s3', 's2'])
+
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
+  await cache.idle()
+  assert.deepEqual(order, ['s1', 'demand:s3', 's2'], 'same-generation snapshots retain the demand cancellation')
+  assert.deepEqual(cache.get('s3'), { epoch: 'epoch', generation: 0, phase: 'loading' })
+
+  assert.equal(cache.invalidate({ id: 's3' }), 1)
+  assert.equal(cache.snapshot(sessions).get('s3')?.generation, 1)
+  while (!gates.has('s3')) await Promise.resolve()
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
+  assert.deepEqual(order, ['s1', 'demand:s3', 's2', 's3'], 'the next generation starts exactly one eager build')
+  gates.get('s3')!.resolve({ kind: 'stable', revision: 'r3', summary: summary(1) })
+  await cache.idle()
+  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
+  await cache.idle()
+  assert.deepEqual(order, ['s1', 'demand:s3', 's2', 's3'], 'settled next-generation snapshots do not duplicate the build')
+  assert.deepEqual(cache.get('s3'), {
+    epoch: 'epoch', generation: 1, phase: 'ready', revision: 'r3', value: summary(1),
+  })
 })
 
 test('a demand enqueued in the batch-finally gap is not lost', async () => {

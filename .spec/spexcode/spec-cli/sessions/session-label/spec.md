@@ -2,7 +2,7 @@
 title: session-label
 status: active
 hue: 290
-desc: A session's display name is derived ONCE, server-side — the wire carries label (stable) + headline (live) and hides the bare name/title parts, so no surface can grow its own naming chain.
+desc: A session's display name is derived ONCE, server-side — the wire carries label (the stable handle, facts that cannot go stale) + headline (the live line, where a standing declaration outranks every byproduct) and hides the bare name/title parts, so no surface can grow its own naming chain.
 code:
   - spec-cli/src/sessionLabel.test.ts
 related:
@@ -27,9 +27,49 @@ the raw name and can only consume the derived one.
 
 **One computation site.** `toSession` is the single place display strings are derived: `label` — the
 STABLE handle (name > node > title > branch > id; tables, selectors, tooltips, search) — and `headline` —
-the LIVE line a human reads (name > activity > promptPreview > node > title > branch > id, activity gated
-on liveness; see [[session-activity]]). Both ride every session on the wire; every surface — CLI tables,
+the LIVE line a human reads (name > note > activity > promptPreview > node > title > branch > id, activity
+gated on liveness; see [[session-activity]]). Both ride every session on the wire; every surface — CLI tables,
 watch/notify lines, the reply-channel footer, board rows, the @-mention dropdown, search — reads them.
+
+**A standing declaration outranks every byproduct.** The headline chain is not "the first non-empty part"; it
+is ordered by whether a part is something *said about* this session or merely something the session *left
+behind*. Only the top two are statements: `name`, the human's rename, and `note`, the word the session itself
+declared. Everything under them is a **byproduct** — a pane title tmux happens to be holding, a truncation of
+the launch ask, the topology git happened to name. A byproduct goes on occupying the slot long after the
+session stopped producing new ones, and that is the entire defect. An agent that has stopped working stops
+updating its pane title, so that title freezes on its last task and outranks the note the agent wrote as it
+stopped — the board then shows a correctly-parked agent as one still chasing something it finished hours ago.
+And when the launch ask was a pasted URL, `promptPreview`, `title` and `branch` are three copies of that URL,
+so every cell below `activity` carries nothing while a detailed note sits unread beside them. Those are one
+defect, not two, and one precedence answers both: the session's current word outranks its residue. Neither
+half yields to a smaller move — appending `note` to the END of the chain changes nothing, because
+`promptPreview` always hits first; and the `liveness === 'online'` gate on `activity` cannot help either, since
+it withholds a DEAD session's title while the failure is a LIVE session's title that stopped moving.
+
+`note` may sit that high because it is **never stale**: every lifecycle write replaces it (`markState` stores
+`note: opts.note ?? null`), so a stored note always belongs to the state the record currently declares —
+mark-active's hot path even reads a leftover note as "stale to clear" ([[state]]). That invariant, not a
+per-status whitelist, is what keeps this ONE precedence rather than a branch per lifecycle: there is no state in
+which a note is present but obsolete, so nothing needs to ask which state we are in. Draining a queued session
+into `active` therefore clears the launch-blocker note it may have stamped — that message was the queued
+state's word, not the working session's, and leaving it behind would be the only way to falsify the invariant
+the precedence rests on. A note enters as the same one-line preview a prompt gets (first non-empty line,
+`HEADLINE_PREVIEW_COLUMNS`): the headline is one line, and the author's full note stays readable where it
+already was. That preview is a display **cut of the author's own prose**, so it is owed the same transparency
+the table's NOTE column already owed — the declaration echo names it, and names it by the size this constant
+actually is ([[state]]). Giving the note a second display surface without saying so would have left a promise
+the author was already trusting quietly incomplete.
+
+**Two chains, deliberately — merging them would cost something.** They differ in kind, not merely in content.
+Every cell of `label` is a fact that cannot go stale: a rename only a human unwrites, and node/title/branch/id
+are fixed at creation. That is exactly what its consumers need — search MATCHING (a handle that renarrated on
+every declaration would stop finding a session under the name its human remembers), the avatar/hover tooltip,
+mobile's handle-line, `spex review`'s identity line, and `spex ls`'s NODE column, a table that already carries
+PROMPT and NOTE in columns of their own. `headline` is the opposite kind of value — what this session has to
+say right now — so it is the only chain where a staleness ordering means anything, and the only one a note
+enters. A URL-shaped label is thus not the same defect as a URL-shaped headline: for a session launched from a
+pasted URL, that truncation IS the identity its human typed and will type again to find it. The repair belongs
+to the live line alone; the stable chain has no staleness to repair.
 
 The narrower payloads that are NOT a full session on the wire carry the derived identity too, from the
 same seam: the review/merge `ReviewPayload` includes a precomputed `label` (`deriveLabel` over the record's

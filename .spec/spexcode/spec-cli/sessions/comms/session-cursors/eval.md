@@ -50,10 +50,12 @@ scenarios:
 
 # session-cursors — yatsu
 
-Only `shell-readable-inbox` has a product surface on this branch: the `spex internal session-cursor` verb
-and the hook that reads the file. The follow half — expiry-by-read, the full advance matrix, and the edge
-slice — becomes measurable when `spex session wait` / `watch` land on cursors, and those three are
-deliberately left as declared blind spots until then rather than measured through an import.
+Every scenario here now has a product surface. `shell-readable-inbox` runs through the `spex internal
+session-cursor` verb and the hook that reads the file. The follow half — expiry-by-read, the full advance
+matrix, and the edge slice — was a declared blind spot only while nothing shipped read a follow cursor;
+`spex session wait` / `watch` land on cursors as of [[session-follow]], so those three are measurable
+through that CLI and are open measurement debt rather than an accepted gap. Measure them there, never
+through an import.
 
 Measure the module through its one real writer, the pure-shell hook advancing its own position, never by
 reasoning about the file format. The loss being scored is asymmetric and worth naming: a cursor that ends

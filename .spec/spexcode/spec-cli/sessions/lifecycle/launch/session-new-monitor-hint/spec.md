@@ -34,7 +34,10 @@ The full `spex session` / `spex help session` drawer remains intact. Both views
 are rendered from one shared session-help definition, so wait's edge semantics, watch's never-exit warning,
 send's append-backed text and raw-key warning, quarantine's exact-witness/restore-id rule, selector grammar, and project-bound write warning cannot drift between a drawer
 manual and copied verb manuals. Existing session verbs and spellings keep their behaviour; this is a help
-projection change only.
+projection change only. The declaration entries project [[state]]'s current vocabulary rather than inventing
+another lifecycle: `done --propose merge` means review and the sole clickable merge proposal, `nothing` means
+done without merge, `close` means close-pending, while ask/park name asking/parked and their distinct wake-up
+owners.
 
 **The successful-create receipt.** After [[launch]] returns the new session record, `spex session new`
 prints the bare, parseable session **JSON to STDOUT** exactly as before, then prints a concise receipt to

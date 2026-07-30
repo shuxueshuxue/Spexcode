@@ -4,7 +4,7 @@ import TimelineChat from './TimelineChat.jsx'
 import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
 import { sessionAncestorIds, sessionForest, splitArchived } from './session.js'
-import { MENTION_RE, nodeMentionAt, actorMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
+import { MENTION_RE, nodeMentionAt, sessionMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
 import { SessionRow, SessionZone, RowLead, FoldPod, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
@@ -420,13 +420,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     createSession(raw, launcher).then(() => reload?.())
   }
 
-  // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@`-actor (sessions)
+  // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@` session references
   // — the shared scanners from ./mentions.jsx — work on BOTH; the New prompt adds the config-preset (`/`)
   // palette, a session's Command Box adds the slash menu.
   const buildMenu = (value, caret) => {
     const mm = nodeMentionAt(value, caret, specs, focusId)
     if (mm) return mm
-    const am = actorMentionAt(value, caret, sessions)
+    const am = sessionMentionAt(value, caret, allSessions)
     if (am) return am
     if (active === 'new') {
       const cm = slashTokenAt(value, caret, commandPresets)
@@ -463,9 +463,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       requestAnimationFrame(() => { const el = msgRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
       return
     }
-    // command preset → the New prompt (composed at launch); a `[[`-mention/`@`-actor → whichever box is
+    // command preset → the New prompt (composed at launch); a `[[`-mention/`@`-session reference → whichever box is
     // active: the New prompt (resolved at launch) or a running session's Command Box (resolved at send). An
-    // actor inserts `@<id> ` (the id, so the server/CLI resolver matches) — text expansion only, no dispatch.
+    // A session reference inserts `@<id> ` (the id, so the server/CLI resolver matches) — text expansion only, no dispatch.
     if (menu.kind === 'config') {
       // A preset governs the whole launch, so a token picked anywhere in an existing draft becomes its
       // leading command. This is still an authoring edit only: Enter sends the normalized raw grammar through
@@ -477,9 +477,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(next.length, next.length) } })
       return
     }
-    const insert = menu.kind === 'actor' ? `@${item.id} `
+    const insert = menu.kind === 'session' ? `@${item.id} `
       : `[[${item.id}]] `
-    const onMsg = (menu.kind === 'mention' || menu.kind === 'actor') && active !== 'new'
+    const onMsg = (menu.kind === 'mention' || menu.kind === 'session') && active !== 'new'
     const ref = onMsg ? msgRef : taRef
     const cur = onMsg ? msg : prompt
     const setCur = onMsg ? setMsg : setPrompt
@@ -497,7 +497,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       onHover={(i) => setMenu((m) => (m ? { ...m, index: i } : m))} />
   )
 
-  // the node-mention/`@`-actor dropdown, on either surface — downward under the centered New box, or `up`
+  // the node-mention/`@`-session dropdown, on either surface — downward under the centered New box, or `up`
   // above Command Box. The rows are the shared MentionMenu ([[mentions]]); only the open direction
   // and the pick/hover wiring into THIS surface's menu state are ours.
   const mentionMenuEl = (up) => (
@@ -549,9 +549,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         return
       }
       setMsg((current) => current === raw ? '' : current)
-      setActionOutcome({ owner: 'command', phase: 'delivered', message: outcome?.mentionSummary
-        ? `${t('session.outcomeDelivered')} - ${outcome.mentionSummary}`
-        : t('session.outcomeDelivered') })
+      setActionOutcome({ owner: 'command', phase: 'delivered', message: t('session.outcomeDelivered') })
       outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
     } catch (error) {
       setActionOutcome({
@@ -1092,7 +1090,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   onClick={() => pickFiles('new')}
                   disabled={uploadingAt('new')}
                 >{uploadingAt('new') ? <BusyGlyph /> : <AttachGlyph />}</button>
-                {menu && (menu.kind === 'mention' || menu.kind === 'actor') && mentionMenuEl(false)}
+                {menu && (menu.kind === 'mention' || menu.kind === 'session') && mentionMenuEl(false)}
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
@@ -1254,7 +1252,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                             }}
                             placeholder={t('session.commandPlaceholder')} spellCheck={false} />
                           {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
-                          {menu && (menu.kind === 'mention' || menu.kind === 'actor') && mentionMenuEl(true)}
+                          {menu && (menu.kind === 'mention' || menu.kind === 'session') && mentionMenuEl(true)}
                         </div>
                         {attachmentQueue('command')}
                         </>

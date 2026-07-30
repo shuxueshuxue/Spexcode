@@ -207,6 +207,11 @@ refuses (an unreadable record, a retired session — [[sessions-core]]) says so 
 global session dir (created on demand even for a session with no `session.json`). So board state is a managed-
 session concern; spec-awareness is universal.
 
+For the two known pre-structured `mark-active` source blobs still tracked by existing projects, the dispatcher
+executes the package-owned structured implementation without rewriting the tracked hook; that bounded compatibility
+is specified by [[dispatcher-runtime]]. Thus a package upgrade protects frozen worktrees immediately, while a
+project's eventual source migration remains an explicit reviewed change rather than a hidden materialize effect.
+
 - **`UserPromptSubmit` + `PreToolUse` → one `mark-active` hook**: it writes **`asking`** on an
   **AskUserQuestion** (the question → the note), else **`active`** — the freshness signal that also flips
   a stale `idle`/`asking` back the moment work resumes.
@@ -246,17 +251,14 @@ rewritten in the measure-and-score reframe, moves the file but is not state's dr
 the dashboard, after which the next tool call (via mark-active) flips the record back to `active`, so an agent never reads
 that re-flip as a lost proposal. Every note-carrying declaration (`done`/`ask`/`park`/`state`, all of which
 accept `--note` — done included, its note reaches the record like the others') stores the note **in full**;
-display surfaces may cap it, but **every** cut must be **transparent to the author**, and the notice must name
-the cuts that actually bit. There are two, and they bite on different inputs: the board **table**'s NOTE column
-keeps the first `NOTE_BOARD_LIMIT` **display columns**, and the board **row** — the surface a human actually
-reads — is the note's **first non-empty line** alone, to `HEADLINE_PREVIEW_COLUMNS` ([[session-label]]'s
-headline). So the trigger is not a length test: a note *under* the table cap still loses every line after its
-first, and a length test would say nothing at all in exactly that case. The rule is taught **once per session**:
-the first time a declared note is cut by either surface, the confirmation states the note's length, each cut
-that bit and what it leaves, and where the full text is readable (`spex review <id>` / `spex ls --json`), then
-drops a sentinel beside the record so later cut notes in the same session repeat none of it (the rule was
-taught; a verbatim repeat on every park/ask is noise — a field-reported irritation). Trimming stays the author's informed choice — never a silent loss — and like every
-echo addendum the notice is a nudge riding the confirmation, not a gate.
+the CLI table may cap it, but that cut must be **transparent to the author**. The table's explicit NOTE column
+keeps the first `NOTE_BOARD_LIMIT` **display columns**; dashboard titles do not display notes at all
+([[session-label]]). The rule is taught **once per session**: the first time a declared note is cut by the table,
+the confirmation states the note's length, what the table leaves, and where the full text is readable (`spex
+review <id>` / `spex ls --json`), then drops a sentinel beside the record so later cut notes in the same session
+repeat none of it (the rule was taught; a verbatim repeat on every park/ask is noise — a field-reported
+irritation). Trimming stays the author's informed choice — never a silent loss — and like every echo addendum
+the notice is a nudge riding the confirmation, not a gate.
 
 A record that EXISTS but cannot carry state is a different answer from a missing one, and the writer must not
 blur them: an unreadable `session.json` or a retired session (worktree gone) is refused with that reason and

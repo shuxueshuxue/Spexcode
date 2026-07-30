@@ -36,7 +36,7 @@ import {
   type RelationEntry,
   type Unit,
 } from '../../spec-cli/src/anchors.js'
-import { evalTimeline, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline, type ScenarioInfo } from './evaltab.js'
+import { evalTimelines, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline, type ScenarioInfo } from './evaltab.js'
 import { isUiPath } from './cli.js'
 import { readReadings } from './sidecar.js'
 import { parseScenarios, scenarioCodeAxis, scenarioHash, type Scenario } from './scenarios.js'
@@ -1455,6 +1455,14 @@ async function sessionScopeNodes(
   const specById = new Map(ctx.specs.map((spec) => [spec.id, spec]))
   const nodes: SessionEvalNode[] = []
 
+  // @@@one prime pass for the whole scope - evalTimelines unions the off-history content probes and the
+  // anchor probes across every id it is given, so asking it once per scope issues one child per probe kind
+  // instead of one per node. Reading the timelines inside the loop instead cost 74% of a warm open.
+  const timelineIds = impact.nodes
+    .filter((projected) => specById.has(projected.id) && evalById.has(projected.id))
+    .map((projected) => projected.id)
+  const timelineById = new Map((await evalTimelines(timelineIds, ctx)).map((timeline, i) => [timelineIds[i], timeline]))
+
   for (const projected of impact.nodes) {
     const spec = specById.get(projected.id)
     if (!spec) continue // removed nodes remain fully explained by impact.nodes; they have no live eval rows.
@@ -1479,7 +1487,7 @@ async function sessionScopeNodes(
       continue
     }
 
-    const timeline = await evalTimeline(spec.id, ctx)
+    const timeline = timelineById.get(spec.id)!
     // A reading is this session's own when the session filed it OR its anchor is a branch commit. This is
     // the same marker the UI and CLI render; measurement impact consumes that marker instead of inventing
     // another attribution rule.
@@ -2006,20 +2014,37 @@ async function buildSummaryAttempt(id: string, _path: string): Promise<SummaryBu
   if (cached) {
     const after = await sessionEvalContentRevision(ctxPath)
     return before === after
-      ? { kind: 'stable', revision: after, summary: cached }
+      ? { kind: 'stable', revision: after, summary: cached.summary }
       : { kind: 'unstable' }
   }
   const model = await buildSessionEvalModel(id, payload, wtPath, true)
   const after = await sessionEvalContentRevision(ctxPath)
   if (before !== after) return { kind: 'unstable' }
   const summary = sessionEvalSummary(model.nodes)
-  // Keep one content-addressed stable value per session. Revisions, not elapsed time, decide reuse.
-  for (const key of summaryByContent.keys()) if (key.startsWith(`${id}\0`)) summaryByContent.delete(key)
-  summaryByContent.set(cacheKey, summary)
+  // Keep one content-addressed stable value per session. Revisions, not elapsed time, decide reuse. This
+  // fold is latestOnly, so it deposits no model — it only carries any model an earlier demand left here.
+  depositStableCut(id, after, { summary })
   return { kind: 'stable', revision: after, summary }
 }
 
-const summaryByContent = new Map<string, SessionEvalSummary>()
+// ONE content-addressed cut per session, keyed by id + content revision. It carries the summary the graph
+// reads and — only when the demand path built it — the derived full model a repeat open replays.
+// @@@the two builders do not produce the same model - buildSummaryAttempt folds latestOnly=true (latest
+// reading per scenario, enough for counts) while the demand path needs the complete A/B history. Only the
+// demand path may deposit `model`, and only a demand read may consume it; serving the summary path's fold
+// to a demand would silently truncate every scenario's history.
+type StableCut = { summary: SessionEvalSummary; model?: SessionEvalModel }
+const summaryByContent = new Map<string, StableCut>()
+
+// Content addressing IS the invalidation: a moved input yields a different key. Keeping only the newest key
+// per session bounds the map at one cut per session and drops summary and model together, so the two can
+// never disagree about which revision they describe.
+function depositStableCut(id: string, revision: string, cut: StableCut): void {
+  const key = `${id}\0${revision}`
+  const existing = summaryByContent.get(key)
+  for (const other of [...summaryByContent.keys()]) if (other.startsWith(`${id}\0`)) summaryByContent.delete(other)
+  summaryByContent.set(key, { summary: cut.summary, model: cut.model ?? existing?.model })
+}
 const projectionCache = new SessionEvalProjectionCache(buildSummaryAttempt, () => {}, randomUUID(), false)
 const OBSERVER_RECOVERY_TIMEOUT_MS = 10_000
 
@@ -2066,6 +2091,23 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
       const generation = known?.generation ?? 0
       await awaitObservableInputs(id, ctxPath)
       const before = await sessionEvalContentRevision(ctxPath)
+      // A repeat open at an unmoved revision replays the cut this same owner already published, instead of
+      // re-deriving it from Git. The stability, observer and generation fences below still decide whether the
+      // answer may be published, so a replay is certified exactly like a fresh fold.
+      // @@@a replay cannot hide a dead selector - the validation that raises 503 reads the declarations and
+      // trees the content revision already covers, so an identical revision has an identical verdict; and a
+      // failing fold deposits nothing, so an unavailable projection always re-derives and re-raises.
+      const replay = summaryByContent.get(`${id}\0${before}`)
+      if (replay?.model) {
+        const settled = await sessionEvalContentRevision(ctxPath)
+        const live = projectionCache.get(id)
+        if (before === settled && !projectionCache.isObserverHeld(id, ctxPath)
+          && !(live && live.generation !== generation)) {
+          return { kind: 'ready' as const, model: replay.model, summary: replay.summary, generation, revision: settled }
+        }
+        if (before !== settled) projectionCache.invalidate({ id })
+        return { kind: 'retry' as const }
+      }
       const model = await buildSessionEvalModel(id, payload, wtPath, false)
       const after = await sessionEvalContentRevision(ctxPath)
       const current = projectionCache.get(id)
@@ -2075,9 +2117,9 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
         return { kind: 'retry' as const }
       }
       const summary = sessionEvalSummary(model.nodes)
-      const cacheKey = `${id}\0${after}`
-      for (const key of summaryByContent.keys()) if (key.startsWith(`${id}\0`)) summaryByContent.delete(key)
-      summaryByContent.set(cacheKey, summary)
+      // Only a settled fold deposits, and only here does a model enter the cut — a thrown build reaches
+      // neither line, so a failure can never poison the entry.
+      depositStableCut(id, after, { summary, model })
       if (current) projectionCache.accept(id, generation, after, summary)
       return { kind: 'ready' as const, model, summary, generation, revision: after }
     })

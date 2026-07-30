@@ -39,6 +39,22 @@ scenarios:
       tens-of-seconds a per-request rebuild causes. The baseline (route calling buildBoard() inline, no
       cache) fails this: warm /api/graph rebuilds every time (~5s) and worst /health under the storm blows
       past 50s as the git-free liveness probe starves behind N concurrent full builds.
+  - name: cold-board-does-not-stall-health
+    tags: [backend-api]
+    code: [spec-cli/src/graph.ts, spec-cli/src/anchors.ts]
+    description: >-
+      On an isolated, pinned-port backend serving a corpus with historical anchored readings, first measure
+      at least 40 sequential idle `/health` requests. Then start one cold `/api/graph` request and probe
+      `/health` every 250ms until that request settles, retaining every probe's start/end time, status and
+      the graph DEBUG log. Run with `env -u SPEXCODE_API_URL` and an isolated runtime; the cold producer is
+      started once, not multiplied into a poll storm. Record the machine load and the count of local
+      `spex serve` observers with the evidence.
+    expected: >-
+      Every health request returns 200, and its p99 during the cold producer remains at or below the larger
+      of 500ms and five times the same backend's idle p99. A multi-second contiguous delay while the graph
+      is building is a liveness stall even when the deferred probe eventually returns 200; the probe is
+      git-free and the graph build must yield the event loop. Loss is a non-200 probe, a latency above that
+      normalized bound, or evidence that the probe could not run until the cold build settled.
   - name: stale-readers-ride-last-good-during-rebuild
     tags: [backend-api]
     description: >-

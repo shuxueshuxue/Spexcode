@@ -85,12 +85,15 @@ it). No standing `ritual` config node is needed — the flow is the product defa
 **Creating or deleting a spec node is NOT a server op.** It is prompt-driven work the launched agent does
 itself — the composer's board chords merely prefill a plain instruction ("create a new node under
 `[[parent]]`…" / "delete `[[node]]`…"), and the agent authors or refactors-away the node like any other spec
-work. The server never mutates the spec tree; it only launches. This holds [[mentions]]'s line: outside the
-issue store, a reference expands to prompt text, never a programmatic flow — the issue store is the sole
-surface where the system itself dispatches.
+work. The server never mutates the spec tree; it only launches. [[mentions]] is the sole actor-dispatch
+mechanism: an issue/remark reply supplies its thread context, while the desktop [[command-box]] supplies its
+selected session as the actor. Ordinary `text` input remains prompt delivery only; the Command Box's explicit
+`command` input kind is the control-plane caller, so a shell `spex session send` never acquires dashboard
+lineage semantics by accident.
 
-Both faces reach the wire as **one route**, `POST /api/sessions/:id/input`, with `kind` the discriminator:
-`kind:"text"` is the prompt dispatch above; `kind:"keys"` is the **raw-key face** (`rawKey`), which keeps its
+All faces reach the wire as **one route**, `POST /api/sessions/:id/input`, with `kind` the discriminator:
+`kind:"text"` is the prompt dispatch above; `kind:"command"` is Command Box text plus [[mentions]] resolution
+using `:id` as its source session; `kind:"keys"` is the **raw-key face** (`rawKey`), which keeps its
 own `tmux send-keys` transport — the per-keystroke channel for driving the agent's TUI menus, carrying named
 keys, printable chars, and `⌃`/`⌥`/`⌘` modifier combos (as `C-`/`M-`/`S-` tokens) so CLI remote control drives the
 terminal, **not** a prompt fallback. The transport split (socket vs send-keys) is an implementation fact the

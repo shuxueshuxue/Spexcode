@@ -29,3 +29,21 @@ the one-version legacy shape; afterwards absence is inert until a git-native mat
 
 A missing manifest is a no-op because there is no handler work to run. All matching handlers preserve the
 existing deterministic order, stdout concatenation, blocking declaration, and Codex stderr reason translation.
+
+### Known-corrupt mark-active compatibility
+
+The original shipped `core/mark-active` script treated its note as text safe to substitute into JSON. Its own
+comment asserted that a note never contains a double quote, but neither the declaration nor the harness payload
+enforced that assertion; a quote therefore closed the JSON string and made a live record unreadable. Existing
+projects track their seeded `.plugins` source, and `spex materialize` deliberately renders that source rather
+than overwriting it. Updating the global package alone would otherwise leave a frozen worktree executing the
+bad script.
+
+The dispatcher has one narrow, package-owned compatibility route: when the manifest names the standard
+`.spec/project/.plugins/core/mark-active/mark-active.sh` path **and that file byte-compares equal to the
+identified vulnerable shipped revision**, it executes the package's current structured `mark-active` implementation
+instead. It does not edit the project file, its manifest, or any session record before that implementation runs.
+Any byte difference, including a project customization, executes the project script exactly as the manifest
+requested. This is an emergency execution override, not a plugin updater: a project moves its tracked source to
+the current template only in its own reviewed maintenance change. The compatibility entry remains only for the
+identified broken revision; a new project hook never enters this route.

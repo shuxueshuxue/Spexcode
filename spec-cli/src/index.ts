@@ -12,7 +12,7 @@ import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote 
 import { remarkWithLoopIn, replyIssueWithLoopIn } from './loop-in.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
-import { dispatchMentions, summarize } from './mentions.js'
+import { summarizeLoopIn } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
@@ -249,9 +249,8 @@ app.get('/api/issues/:id', (c) => {
 })
 // the WRITE surface ([[local-issues]] / [[issues-view]]) — the human reply path, STORE-ROUTED through the one
 // reply verb ([[issues]] replyIssue): a local id git-commits to the trunk store, a forge id ('github#N')
-// posts a REAL comment through the driver; either way the text's @-mentions dispatch (a human summons an
-// agent from the issues page). `outcomes` is the one-line @-dispatch summary the dashboard echoes. The
-// server owns its freshness: a forge write forces the resident slice's read-back before answering, so the
+// posts a REAL comment through the driver. @session remains prose in either store; it never sends or spawns.
+// The server owns its freshness: a forge write forces the resident slice's read-back before answering, so the
 // reload that follows shows the comment. Honor the on/off switch: 403 when the feature is OFF; an unknown
 // local thread → 404; a failed forge write → 502 with the driver's own message (fail loud, never queued).
 app.post('/api/issues/:id/reply', async (c) => {
@@ -271,7 +270,7 @@ app.post('/api/issues/:id/reply', async (c) => {
     const r = await replyIssueWithLoopIn(id, text, { author: 'human', node, evidence })
     if (r.store !== 'local') await refreshForgeNow()
     notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
-    return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarize(r.outcomes, r.loopIn) })
+    return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarizeLoopIn(r.loopIn) })
   } catch (e) {
     const msg = String((e as Error).message || e)
     return c.json({ error: msg }, id.includes('#') ? 502 : 404)
@@ -306,7 +305,7 @@ app.post('/api/issues', async (c) => {
     const r = await createIssue(concern, { store, nodes, body: postBody, evidence, author: 'human' })
     if (r.store !== 'local') await refreshForgeNow()
     notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
-    return c.json({ ok: true, id: r.id, store: r.store, url: r.url, outcomes: summarize(r.outcomes) }, 201)
+    return c.json({ ok: true, id: r.id, store: r.store, url: r.url }, 201)
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, store === 'local' ? 500 : 502)
   }
@@ -361,7 +360,7 @@ app.post('/api/remarks', async (c) => {
   try {
     const r = await remarkWithLoopIn(host, text, { codeSha, author: 'human', evidence })
     notifyBoardChanged('full')
-    return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: summarize(r.outcomes, r.loopIn) }, 201)
+    return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: summarizeLoopIn(r.loopIn) }, 201)
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, 400)
   }
@@ -605,15 +604,13 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
 // kind:"text" (`spex session send`, the server-side merge dispatch) appends the prompt to the
 // target timeline, then best-effort pokes its adapter. A dead channel delays context injection but does not
 // change the successful append response; 502 means the record rejected the write.
-// kind:"command" is the Command Box control face: after that same durable append it resolves actor mentions
-// with the target session as their originator, so @new records a real session-tree parent.
 // kind:"keys" is the LAST-RESORT raw face (`spex session send --keys`): an ORDERED BATCH of
 // nav-mode key tokens over tmux send-keys, delivered in array order so tap order survives
 // ([[nav-mode-key-ordering]]); unstable by nature — callers try a plain text send first. An unknown kind is a
 // loud 400, never a guessed channel.
 app.post('/api/sessions/:id/input', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  if (body?.kind === 'text') {
+  if (body?.kind === 'text' || body?.kind === 'command') {
     // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
     // edge ([[session-timeline]]); a raw human dispatch omits it and is not logged. `replyVia:"note"` marks a
     // terminal-free sender ([[session-timeline]]): the server appends the note-reply insert to the delivery.
@@ -621,14 +618,6 @@ app.post('/api/sessions/:id/input', async (c) => {
       ...(body?.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
     })
     return c.json(r, r.ok ? 200 : 502)
-  }
-  if (body?.kind === 'command') {
-    const id = c.req.param('id')
-    const text = typeof body?.text === 'string' ? body.text : ''
-    const r = await sendText(id, text)
-    if (!r.ok) return c.json(r, 502)
-    const mentions = await dispatchMentions(text, { sessionId: id })
-    return c.json({ ...r, mentions, mentionSummary: summarize(mentions) })
   }
   if (body?.kind === 'keys') {
     const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string') : []

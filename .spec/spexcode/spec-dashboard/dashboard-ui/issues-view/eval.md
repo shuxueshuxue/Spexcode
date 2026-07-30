@@ -34,17 +34,15 @@ scenarios:
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/mentions.jsx]
     description: >-
       On the running issues page, select a LOCAL issue and type into its reply composer, then open the
-      New compose page and type into its description. In each: type `@`, read the dropdown, pick the `@new` row
-      with ↓/Enter, read the launcher rows that replace it, pick a non-default launcher, and read the
-      inserted text; clear, type `[[` (and a partial id), pick, read the insertion;
+      New compose page and type into its description. In each: type `@`, read the dropdown, pick an offline
+      session reference, and read the inserted full id; clear, type `[[` (and a partial id), pick, read the insertion;
       press Esc with a menu open and read the hash; type plain prose and look for any menu. Then visit
       the session console's authored composer and re-check its `@`/`[[` menus still open (the shared-module
       regression).
     expected: >-
       Both composers carry the console's OWN mention dropdowns ([[mentions]] — one shared menu, not a
-      fork): `@` lists the live sessions plus `@new`; accepting `@new` opens one row per configured
-      launcher, and accepting a launcher inserts `@new:<launcher> ` (trailing space), while a live-session
-      pick still inserts `@<id> `. `[[`
+      fork): `@` lists retained sessions including offline rows, and a pick inserts `@<id> ` (trailing
+      space). `[[`
       lists the spec nodes (a partial query filters) and a pick inserts `[[<id>]] `. The reply
       composer's menu opens UPWARD (visible above the docked textarea); the compose PAGE's menu opens
       DOWNWARD under the caret line — no pop-out boundary to clear — fully on screen and clipped by nothing.
@@ -64,7 +62,7 @@ scenarios:
       Each button inserts its EXACT trigger at the caret — `@` between the prose halves, `[[` replacing the
       selected span — preserving the rest of the draft; the textarea is focused with the caret right after
       the inserted trigger, and the ONE shared autocomplete opens naturally over it (the SAME `.mention-menu`
-      typing the trigger opens: sessions + `@new` for `@`, spec nodes for `[[`) — no second menu
+      typing the trigger opens: retained sessions for `@`, spec nodes for `[[`) — no second menu
       implementation, no dispatch, no post. Both buttons are compact symbol-only toolbar buttons wearing a
       localized aria-label and the shared `data-tip` tooltip. At desktop and ~780px the row's controls
       (triggers, lifecycle actions, Send) all render without overlap or spill. No page errors.

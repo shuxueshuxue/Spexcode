@@ -339,25 +339,11 @@ const upward = await v.evaluate(() => {
   return { above: menu.bottom <= ta.top + 2, rows }
 })
 check('the DOCKED reply composer opens its menu UPWARD', upward.above, upward.rows.slice(0, 3).join(' | '))
-check('the actor menu offers @new beside any live session', upward.rows.some((r) => /new/.test(r)))
-// walk the roving cursor onto the SYNTHETIC @new row (live sessions share the list, so its index is data)
-const newRowIndex = await v.evaluate(() => [...document.querySelectorAll('.fv-compose .mention-item')].findIndex((el) => el.classList.contains('new')))
-const cursorIndex = await v.evaluate(() => [...document.querySelectorAll('.fv-compose .mention-item')].findIndex((el) => el.classList.contains('on')))
-for (let step = 0; step < (newRowIndex - cursorIndex + 100) % 100; step++) await v.keyboard.press('ArrowDown')
-const onNew = await v.evaluate(() => document.querySelector('.fv-compose .mention-item.on')?.classList.contains('new'))
-check('↓ roves onto the @new row', onNew === true, `cursor ${cursorIndex} → new row ${newRowIndex}`)
+check('the session menu contains only retained session references', !upward.rows.some((r) => /@new/.test(r)), upward.rows.join(' | '))
 await v.keyboard.press('Enter')
 await settle(v, 500)
-const launchers = await v.evaluate(() => ({
-  value: document.querySelector('.fv-compose .fv-textarea').value,
-  rows: [...document.querySelectorAll('.fv-compose .mention-item')].map((el) => el.textContent),
-}))
-check('accepting @new opens one row per configured launcher', launchers.value.includes('@new:') && launchers.rows.length >= 2, `"${launchers.value}" ${launchers.rows.length} rows`)
-await v.keyboard.press('ArrowDown')
-await v.keyboard.press('Enter')
-await settle(v, 400)
 const picked = await v.inputValue('.fv-compose .fv-textarea')
-check('picking a launcher writes @new:<launcher> into the prose', /@new:[a-z0-9-]+ $/.test(picked), `"${picked}"`)
+check('picking a session writes its passive @<id> reference into the prose', /^@[a-f0-9-]+ $/.test(picked), `"${picked}"`)
 await v.fill('.fv-compose .fv-textarea', '')
 await v.click('.fv-compose .fv-textarea')
 await v.keyboard.type('[[issues-vi')

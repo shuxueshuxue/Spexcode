@@ -2,7 +2,7 @@ import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
 import { FORGE_DRIVERS, forgeDriverFor, forgeIssueStores, resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, issuesEnabled, replyLocalIssue, parseEvalConcern } from './localIssues.js'
-import { dispatchMentions, parseMentions, type DispatchOutcome, type LoopIn } from './mentions.js'
+import { parseMentions, type LoopIn } from './mentions.js'
 import { envSessionId } from './layout.js'
 import { loadSpecsLite } from './specs.js'
 
@@ -159,17 +159,17 @@ export function threadStamp(threads: Issue[]): string {
 export async function createIssue(
   concern: string,
   opts: { store?: string; nodes?: string[]; body?: string; evidence?: string[]; author?: string } = {},
-): Promise<{ store: string; id: string; nodes: string[]; url?: string; outcomes: DispatchOutcome[] }> {
+): Promise<{ store: string; id: string; nodes: string[]; url?: string }> {
   const store = opts.store || 'local'
   const author = opts.author || envSessionId() || 'unknown'
   if (store === 'local') {
-    const { thread, outcomes } = await postLocalIssue(concern, {
+    const { thread } = await postLocalIssue(concern, {
       nodes: opts.nodes,
       body: opts.body,
       evidence: opts.evidence,
       author,
     })
-    return { store: 'local', id: thread.id, nodes: thread.nodes, outcomes }
+    return { store: 'local', id: thread.id, nodes: thread.nodes }
   }
 
   const driver = forgeDriverFor(store)
@@ -179,9 +179,7 @@ export async function createIssue(
     title: concern,
     body: forgeIssueBody(concern, opts.body, nodes, opts.evidence),
   })
-  const id = `${driver.host}#${number}`
-  const outcomes = await dispatchMentions(opts.body || concern, { threadId: id, node: nodes[0] || null, author, status: 'open' })
-  return { store: driver.host, id, nodes, url, outcomes }
+  return { store: driver.host, id: `${driver.host}#${number}`, nodes, url }
 }
 
 export async function promote(id: string, opts: { author?: string } = {}): Promise<{ url: string; number: number; host: string }> {
@@ -207,22 +205,20 @@ export async function replyIssue(
   id: string,
   body: string,
   opts: { author?: string; node?: string | null; evidence?: string[] } = {},
-): Promise<{ store: string; replies?: Reply[]; url?: string; thread?: Issue; author: string; outcomes: DispatchOutcome[] }> {
+): Promise<{ store: string; replies?: Reply[]; url?: string; thread?: Issue; author: string }> {
   const author = opts.author || envSessionId() || 'unknown'
   const forge = /^([A-Za-z0-9-]+)#(\d+)$/.exec(id)
   if (!forge) {
     // evidence hashes accrue onto the local thread's typed evidence[] (a forge thread has no such field —
     // an annotation's frame rides its comment body's image link there, the driver the only network toucher);
-    // replyLocalIssue also loops in the thread's originator ([[mentions]]) after the @-dispatch.
-    const { thread, outcomes } = await replyLocalIssue(id, body, author, opts.evidence)
+    const { thread } = await replyLocalIssue(id, body, author, opts.evidence)
     // the thread rides along so [[loop-in]] can resolve this reply's originator chain without a second read.
-    return { store: 'local', replies: thread.replies, thread, author, outcomes }
+    return { store: 'local', replies: thread.replies, thread, author }
   }
   const driver = forgeDriverFor(forge[1])
   if (!driver) throw new Error(`unknown forge host '${forge[1]}' — known: ${FORGE_DRIVERS.map((d) => d.host).join(', ')}`)
   const { url } = await driver.createComment({ number: parseInt(forge[2], 10), body })
-  const outcomes = await dispatchMentions(body, { threadId: id, node: opts.node ?? null, author })
-  return { store: forge[1], url, author, outcomes }
+  return { store: forge[1], url, author }
 }
 
 export async function closeIssue(id: string): Promise<{ store: string; status: string; url?: string }> {

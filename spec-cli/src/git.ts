@@ -134,6 +134,19 @@ function gitBuffer(args: string[], input?: string): Buffer {
   } catch (e: any) { warnIfTimedOut(e, args); throw e }
 }
 
+// @@@ HUNK_INTERPRETATION - the anchor seam's hunk ranges must be a function of the COMMIT, nothing else.
+// Git decides whether to emit a textual patch from state outside the commit: a `.gitattributes` `-diff` (read
+// from the WORKING TREE even for historical diffs) makes a path "binary" and prints `Binary files … differ`
+// with no `@@` at all, and a textconv/external-diff driver replaces the text being compared. Measured: the
+// same (commit,path) yields one hunk bare, ZERO under `src/x.py -diff`, so an anchored contract's drift went
+// silently unblockable by an attribute edit, and any memo over (commit,path) could serve the other answer.
+// Pinning `--text` (treat as text regardless of the attribute or content sniffing) plus `--no-textconv` and
+// `--no-ext-diff` makes the answer invariant — verified identical under `-diff`, `diff`, and no attribute —
+// so this seam reads the ordinary text diff of the file it will parse with its OWN extractor, and the
+// immutability its memo assumes is TRUE rather than merely hoped for. Every reader of anchor hunk ranges
+// passes these, or two readers disagree about one commit.
+export const HUNK_INTERPRETATION = ['--text', '--no-textconv', '--no-ext-diff'] as const
+
 export type GitObjectFormat = 'sha1' | 'sha256'
 const gitObjectFormatMemo = new Map<string, GitObjectFormat>()
 export function gitObjectFormat(root: string): GitObjectFormat {
@@ -741,7 +754,7 @@ function indexEventRequests(
     merge: {
       kind: 'merge', order, reachable,
       argsFor: (base) => ['-C', root, '-c', 'core.quotePath=false',
-        'log', '--merges', '--raw', '--patch', '--cc', '--combined-all-paths', '--unified=0', '--no-color', '--no-ext-diff', '-M',
+        'log', '--merges', '--raw', '--patch', '--cc', '--combined-all-paths', '--unified=0', '--no-color', ...HUNK_INTERPRETATION, '-M',
         `--format=${RS}%H`, ...(base ? [`^${base}`] : []), tip],
     },
   }
@@ -1579,7 +1592,7 @@ async function mergeHistoryEvents(
   useCache = true,
 ): Promise<MergeHistoryEvents> {
   if (!useCache) return parseMergeHistoryEvents(await strictEventGit(['-C', root, '-c', 'core.quotePath=false',
-    'log', '--merges', '--raw', '--patch', '--cc', '--combined-all-paths', '--unified=0', '--no-color', '--no-ext-diff', '-M', `--format=${RS}%H`, tip]))
+    'log', '--merges', '--raw', '--patch', '--cc', '--combined-all-paths', '--unified=0', '--no-color', ...HUNK_INTERPRETATION, '-M', `--format=${RS}%H`, tip]))
   return parseMergeHistoryEvents(await textEventStream(root, tip,
     indexEventRequests(root, tip, order, reachable).merge, !transient, useCache))
 }

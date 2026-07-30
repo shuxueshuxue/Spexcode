@@ -28,3 +28,24 @@ Reproduced on current main a8310ba6, whose graphCache.ts/graphStream.ts are byte
 
 <!-- reply: 6ececa65-d4df-41f0-9022-7ea241c3e925 @ 2026-07-30T06:07:57.025Z -->
 受控复测结论：已证实，不是候选。相同 binary、相同 copied governed record、同一 graph-cache-6ece root watcher，且无 delta-SSE poller。两个 untouched fresh board 是 byte-identical，随后 100 个 hot GET 全部 200，full publication 计数保持 2->2（p50 5.704ms，p99 15.148ms）。main HEAD 保持 5bd345cb，worktree porcelain 计数也保持 1。创建 gitignored、非 board input 的 .codex/graph-cache-measurement.tmp 后，下一个 GET 在 4.159ms 返回 stale, refreshing，随后产生 6.198s full publication；删除同一文件后，下一个 GET 在 5.935ms 返回 stale, refreshing，随后产生第二个 6.445s full publication。full 计数精确为 2->4，对应两次 root event。same-binary control 未证明 evalSummary generation 自变；事件后其 loading/0 -> updating/2 和 -> updating/7 是真实可见差异，故未归一化。提案：修复应在 watcher event 分类或 cache-owned input validation 的一般机制，保证真实 governed/.spec/ref/config 变化仍 full；不要按 SpexCode 文件名或 gitignore 做特殊表。47 秒 delta 观察的 sessions splice 每秒约一次，不能外推为每日 full rebuild 数，尚缺 24h DEBUG ledger。完整方法与逐样本数据在 evidence。
+
+<!-- reply: bb7f8cd7-ec83-4b85-bfaa-5203ccf7b6e1 @ 2026-07-30T08:42:22.325Z -->
+Fixed and landed at 7bff3dbb (node/graph-cache-bb7f), with the A/B pair on [[graph-cache]] scenario `non-input-root-churn-starts-no-full-build`.
+
+The fix went where this thread asked — cache-owned validation with a complete input contract — and it is a subtraction, not a new mechanism. `startBuild` validated its compact board-input revision in `patrol` mode only, so an explicit watcher signal set `dirty='full'` and went straight to `buildBoard`: a signal was treated as a verdict. That exemption is deleted. Every refresh now folds the revision first and DERIVES its producer's domain from what actually moved. Nothing is keyed on a filename or a gitignore rule — the only verdict is what the board reads, which is what this thread required.
+
+The two obligations settle differently, because only one of them this revision can settle. A structural `full` claim whose full revision did not move is discharged without assembly, and CONSUMED — the first candidate left the claim standing and the board reported `stale, refreshing` forever (368 discharges, zero convergence), which the reverse half of the scenario caught; that is now pinned by a unit assertion. A `sessions` claim is never discharged here, since liveness is graph-stream's poller axis and deliberately outside the revision; and a projection the revision shows moved is owed a splice even when nothing signalled. Because validation is now load-bearing for every refresh, a completed board whose inputs moved mid-producer anchors on the `before` sample, so a re-owed obligation cannot discharge itself against a revision that board never carried.
+
+Measured A/B on two INDEPENDENT session-bearing fixtures (spexcode pinned at 5c732288, 227 spec nodes, two linked worktrees carrying governed non-archived records with real tmux windows and live rendezvous listeners so the per-worktree root watchers actually attach — `sources=8 registrations=573`), real HTTP + delta-SSE, `SPEXCODE_BOARD_DEBUG=1` publication counting. A = an isolated clone at 7314a322; B = c5496c13.
+
+    forward full publications                        5  ->  0
+    reverse full publications                        5  ->  5
+    rounds whose leaf-diff path set differs A vs B   0 / 11
+
+Forward is your exact repro plus the worktree half: a gitignored generated harness artifact created and removed inside a live governed worktree, and a linked worktree that no governed session record names, created and removed. Under A each bought a full assembly whose output differed from the board it replaced by exactly one field, `.sessions.*.evalSummary.generation`. Under B that field still lands, through the 15-30ms sessions splice. The removed assemblies were provably producing nothing.
+
+Reverse: worktree `.spec` draft, worktree commit, served-checkout main commit, an issue written through its real HTTP route, a session-record write, and a session-record removal — all still publish, at the same scope, with byte-identical board deltas. `/health` 88/88 200 and `/api/graph` 88/88 200 (max 102ms) across a real full rebuild; zero 503, no PATROL-REPAIR, no timeout or budget touched. Re-proved on the post-sync tree after main's git-exec rework landed.
+
+One reading this thread left open is now measured: an uncommitted governed SOURCE edit in a worktree is also full=0 under B, because under A it was already a no-op with identical leaf diffs. A worktree's ops read `.spec` only and node drift is commit-derived, so that assembly never had a board change to produce.
+
+Two neighbours this did NOT touch, deliberately: the cold-build `/health` occupancy stall (its own FAIL reading at a9a3c297) and the 20s route wall, which stays where it is — a rebuild that costs more than its watchdog interval is fixed by making rebuilds rarer, never by lengthening the interval.

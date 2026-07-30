@@ -5,16 +5,24 @@
 > surfaces that were actually rerun. It makes no synthetic scale, memory, or
 > general performance claim.
 
-## Measured Anchor
+## Measured Anchors
 
-The measured product tree is
+The backend and projection product tree measured by the five-surface run is
 `47852c531790a29bf508bf0117e4f7a4bd394288`
 (`958209e2b8f4e046b537bdfad836a662905a9bec`). It contains main
 `5bd345cb9a7bb910d262ce7e7f1d3e3cf0229acf` and product commit
 `b4a8cc728814d6cbd457b3409cb42d640fb036eb`. The worktree was clean and main
-was an ancestor before every final manifest was repinned. All five readings
-below use `47852c53` as `codeSha`; the later evidence-sidecar commit does not
-pretend to be the measured tree.
+was an ancestor before every final manifest was repinned. Four readings below
+use `47852c53` as `codeSha`.
+
+Main then advanced through dashboard session-toolbar work, including
+`SessionInterface.jsx`. The clean combined tree
+`e9ba80fe0694d397f632a411dffb8db917cf2e7e`
+(`267f45ed8d0da762a7b6f46944a20da8f9000320`) contains main
+`faad7355c24bc6f88e36a2f3b44f02df100e77d3`. That change did not stale the
+four backend readings, but it did stale browser coherence, so coherence was
+rerun and its replacement reading uses `e9ba80fe` as `codeSha`. Later sidecar
+commits do not pretend to be either measured tree.
 
 ## Product Correction
 
@@ -48,16 +56,17 @@ three distinctions explicit.
   watchdog/patrol control selected 1/1; recovery retained its trigger causes
   without `PATROL-REPAIR`. TAP:
   `ee06a5d00b23eac66013e6ccf835e24046ec49620d87738ecca5cf8e43661072`.
-- `session-eval/session-summary-coherence`: PASS. A real candidate backend,
+- `session-eval/session-summary-coherence`: PASS on the post-main-sync tree.
+  A real candidate backend,
   Vite, and Chromium proved cold cohort publication, A->B->A with zero eval
   reads, updating with exact last-known value before ready, deadman disconnect
   and new-epoch reconnect, scoped Evals parity, and warm Back. Product passed,
   instrument was valid, and both backend generations, sessions, worktrees,
   tmux sockets, ports, browser, and fixture cleaned up. Result:
-  `ac5c96a99b578e466cd19006c06b22331a91115e868698a828d84d0e1c462759`;
-  raw timeline `4f1cf425d2c692699c8322e04f078fabb5686e9d0008a143c5598ebeef4839f3`;
-  image `bb5919d427dde3deb8131a617c8a496ba94db2fe92a95da8d7ef0e24513dce54`;
-  video `f05e97e53b0039c488844b22fef598788db663a6b8930fc799dbb559523c0970`.
+  `6c10b53192abe0231acb0c4be52a66ef8a9c90fe2df9b26b95e00e1af08948a5`;
+  raw timeline `f034dbed6e62cbf9965a11435ab85990f972d998dd047c53fb00803262d81c5a`;
+  image `f78986b6e7cec4261fd7c93d740a3073e297d2c79adced900afe5d460c3809e1`;
+  video `04aec2a44e325e62dda565e4be5725cc49f581d7d83e4d7fa395debf9b9ccfb0`.
 - `session-eval/demand-priority-under-delta-backlog`: PASS. With 30 real
   online `pi-headless` rows and concurrency one, the ledger was current job,
   exactly one selected status-76 rejection / HTTP 503, then the unrelated
@@ -73,12 +82,13 @@ three distinctions explicit.
 
 ## Validation Gates
 
-At the final combined head, the rejected-demand focused regression, the
+At the post-main-sync combined head, the rejected-demand focused regression, the
 `spec-eval` typecheck, both exact `graphStream.api.test.ts` controls, and
 `spex spec lint` passed. The two API controls were also rerun as the product
-readings above. Eval lint remains advisory: only the five scenarios measured
-here are closed; unrelated shared-axis stale scenarios remain disclosed and
-were not mechanically relabelled.
+readings above. Coherence then passed its complete Chromium run on that same
+combined tree. Eval lint remains advisory: only the five scenarios measured
+here are closed; 22 unrelated shared-axis stale scenarios remain disclosed
+and were not mechanically relabelled.
 
 ## Execution Incidents
 

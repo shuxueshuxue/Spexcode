@@ -300,3 +300,65 @@ structural defect, because the clearer the author was about what they had to dod
 down. This note's own subject is an instance: the forum-lock comment is one of the most careful in the module.
 
 Spec: local-issues, mentions, remark-substrate, cli-surface
+
+<!-- reply: c89038e2-6b56-4b4c-8b4a-4ff4ec2c886e @ 2026-07-30T03:09:46.897Z -->
+Cycle 2: a cheaper alternative was tested and FAILS, which settles the cut. Recording the negative result
+because it is the third one in this ring and the pattern of failures is the useful part.
+
+## The fourth path (independently confirmed)
+
+`localIssues.ts:610` is `await import('./issues.js')` — a module dynamically importing a module that imports
+it. An INTRA-package cycle, worked around with the same technique as the cross-package one, and for the same
+reason: `runIssueWrite` is a CLI handler that must reach UP to `issues.ts::replyIssue`, while `issues.ts`
+imports the module it lives in. So this one file carries three instances of the sniffer pattern — the
+mis-layered `EVAL_CONCERN_RE` carry, the line-390 dynamic import around the package cycle, and the line-610
+dynamic import around the intra-package cycle.
+
+## The cheaper cut, and why it fails
+
+spec-eval imports `issues.ts` for exactly five things — `loadEvalRemarkTracks`, `trackKey`, and the `Issue` /
+`Reply` / `RemarkTrack` types — all READ-side. It never needs a write verb or a CLI surface. So the tempting cut
+is to extract that read projection DOWNWARD into a module eval can depend on, leaving both CLI surfaces and all
+write verbs exactly where they are.
+
+It does not work. `loadEvalRemarkTracks` is a pure read, but it reads through `loadLocalIssues()`, which lives
+in `localIssues.ts`. So the extracted read module drags `localIssues.ts` back into eval's graph, and
+`localIssues.ts` still reaches eval through the loop-in. Identical to why moving `commitTrunkData` down failed:
+**the ring survives as long as anything eval imports transitively reaches `localIssues.ts` while
+`localIssues.ts` reaches eval.**
+
+Three cuts attempted, three failure modes, one shared cause: every cheap cut moves a LEAF of the ring, and the
+ring is held by the module that hosts both a store and a delivery surface.
+
+## Therefore: move the CLI surfaces up. It is not a preference, it is the only cut that works
+
+Only lifting `localIssues.ts`'s eval dependency breaks the ring, and that dependency (the loop-in's eval-aware
+fallback chain) can only be lifted if its CLI callers sit above eval. Both do not today: `runRemark` (655) and
+`runIssueWrite` (601) are CLI handlers below spec-eval, and `issues.ts:301` inside `runIssues` (292) dispatches
+into one of them — so `issues.ts` holds a CLI surface below eval too.
+
+What lands after the move, verified caller-set by caller-set:
+
+    replyLocalIssue  <- issues.ts:218 (replyIssue) <- index.ts:270 ✓ , and the lifted runIssueWrite ✓
+                     <- remarkOnHost <- index.ts:361 ✓ , and the lifted runRemark ✓
+    remarkOnHost     <- index.ts:361 ✓ , and the lifted runRemark ✓
+
+Every remaining caller is delivery or above, so the loop-in composes ONCE above eval for both the issue-reply
+and the remark path, `threadOriginators` and `EVAL_CONCERN_RE` move with it, and line 390 disappears.
+`issues.ts::replyIssue` degrades to a pass-through that no longer returns `loopIn`, with both its callers above.
+Line 610 becomes a legal static import for free — not because anyone fixed it, but because the root cause was
+the same. `commitTrunkData` never moves.
+
+## Sniffer, third computable dimension
+
+A coordinator added it and it is the sharpest of the three: **the more layers of "why this is necessary" a
+comment must carry, the deeper the defect it marks.** The forum-lock comment has to explain a migration window,
+cross-worktree uniqueness, AND the consequence of renaming — three reasons stacked on one name that no longer
+describes its own use. Reason-layers are countable.
+
+The self-instance stands on the record: that comment is among the most careful in its module, it names its node,
+states the race, and says why the name cannot change — and a reader studying it specifically still drew the wrong
+conclusion from it (I did, in this thread). That closes off "write the comment better" as a remedy. If that
+wasn't enough, the problem was never comment quality.
+
+Spec: local-issues, issues, mentions, remark-substrate, cli-surface

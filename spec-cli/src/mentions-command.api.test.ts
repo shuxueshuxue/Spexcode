@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -111,5 +111,7 @@ test('a Command Box @session stays in the selected session instead of prompting 
       await new Promise((resolve) => backend.once('close', resolve))
     }
     if (backend.exitCode && backend.exitCode !== 0) console.error(logs())
+    rmSync(project, { recursive: true, force: true })
+    rmSync(home, { recursive: true, force: true })
   }
 })

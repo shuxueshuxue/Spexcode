@@ -28,12 +28,14 @@ event="${1:?usage: dispatch.sh <harness> <Event>}"
 export SPEXCODE_HARNESS="$harness"
 # the harness.sh path (the adapter's shell mirror) — sibling of this script; hook handlers source it, and we
 # source it here too for hp_runtime_dir (the per-project store dir).
-export SPEXCODE_HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/harness.sh"
+hook_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+tool_root="$(cd "$hook_root/.." && pwd)"
+export SPEXCODE_HARNESS_LIB="$hook_root/harness.sh"
 . "$SPEXCODE_HARNESS_LIB"
 if [ -n "${SPEX:-}" ]; then
   read -r -a spex_cmd <<< "$SPEX"
 else
-  spex_cmd=("$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/spex.mjs")
+  spex_cmd=("$tool_root/bin/spex.mjs")
 fi
 proj="${CLAUDE_PROJECT_DIR:-$PWD}"
 # the manifest lives in THIS tree's materialize slot of the GLOBAL per-project store (mirrors layout.treeSlotDir),
@@ -75,7 +77,15 @@ rc=0
 # manifest line: event<TAB>order<TAB>block<TAB>script  (pre-sorted by event,order,script)
 while IFS=$'\t' read -r ev order block script; do
   [ "$ev" = "$event" ] || continue
-  out="$(printf '%s' "$input" | bash "$proj/$script" 2>"$err")"; code=$?
+  handler="$proj/$script"
+  # A seeded core hook is tracked project source, so package replacement cannot safely overwrite it. These
+  # byte-exact default revision composes an ask note into JSON with sed; route only it to the package
+  # implementation. `cmp` makes a user-modified hook ineligible without a platform-specific hash utility.
+  if [ "$script" = '.spec/project/.plugins/core/mark-active/mark-active.sh' ] &&
+    cmp -s "$handler" "$hook_root/compat/mark-active-sed-v0.fixture"; then
+    handler="$tool_root/templates/spec/project/.plugins/core/mark-active/mark-active.sh"
+  fi
+  out="$(printf '%s' "$input" | bash "$handler" 2>"$err")"; code=$?
   [ -n "$out" ] && printf '%s' "$out"
   if [ "$block" = "true" ] && { [ "$code" = "2" ] || printf '%s' "$out" | grep -q '"decision"[[:space:]]*:[[:space:]]*"block"'; }; then
     cat "$err" >&2

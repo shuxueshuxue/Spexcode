@@ -19,6 +19,36 @@ scenarios:
       session-eval summary's fresh pass / fresh fail / needs-review / blind, with no verdict, threshold,
       ok flag, block, measured/total aggregate, or unknown-coverage riding along. The CLI prints the same
       four facts when ready and says the projection is not measured yet, with its phase, when it is not.
+  - name: review-gate-costs-the-movement-not-the-corpus
+    tags: [backend-api]
+    code: [spec-cli/src/sessions.ts]
+    related: [spec-cli/src/anchors.ts, spec-cli/src/lint.ts, spec-eval/src/sessioneval.ts]
+    description: >
+      Hold the CORPUS fixed and vary only the binary. In one checkout, A/B the parent and candidate
+      `spec-cli/src/anchors.ts` by launching a branch-local backend on a free port per measurement — its own
+      runtime state, no inherited `SPEXCODE_API_URL`, never a deployed backend — with a PATH `git` shim that
+      logs every invocation's argv. Wait for each cold process's startup git work to settle, take an idle
+      control window, then drive the real HTTP surface: the session-scoped Evals deep link
+      (`/api/evals?q=is:eval scope:<id>`) and `GET /api/sessions/:id/review`, each from a cold process, for a
+      session whose scope is EMPTY (0 commits ahead, 0 dirty) and for one carrying a ten-file commit. Then,
+      inside one live backend, move the served checkout's state and re-read the review after each move: an
+      untracked file created, the same file removed, a real HEAD advance committed while the backend runs, a
+      dirty rename of an anchored unit, and a malformed `spexcode.json`. Compare every `gates.lint` with
+      `spex spec lint` on that same tree.
+    expected: >
+      The lint verdict is exactly `spex spec lint`'s for the served tree at every step, dirty files included,
+      and identical between the two binaries. The location gate does not scale with the repository while the
+      reviewed scope stays small: the two scopes' cold deep-link and cold review totals track their own scope,
+      and each state move recomputes the verdict with git work proportional to what MOVED — no `log --patch`
+      re-derivation of a window this process already read and no re-streamed window blob, while a moved
+      anchored path is still queried and still judged. Selector validation stays whole: the dirty rename
+      raises its dead-anchor integrity error on the very next read. Failure stays loud and poisons nothing:
+      the malformed config makes the read fail with its parse error rather than serving a stale or
+      default-shaped verdict, is not cached, and the read after repair returns the correct verdict.
+      Loss is: a re-verdict that re-forks one hunk query per anchored path (22 on this tree, argv identical to
+      the previous run), a verdict differing from `spex spec lint`, last-known served after a move, a narrowed
+      gate (a skipped selector/anchor check or a sampled corpus), a cached failure, or a second resident cache
+      of the lint result standing in for proportional work.
 ---
 
 # measuring manager-cockpit

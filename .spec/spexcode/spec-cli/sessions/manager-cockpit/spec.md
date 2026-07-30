@@ -42,7 +42,20 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   --write-tree` — no checkout, nothing to abort, the SAFE form of "would this conflict"); `lint` (the
   [[spec-lint]] module's error / warning counts); and `evals`, the measured-loss READOUT. conflict/ahead/dirty are session-specific; the lint gate
   reflects the CLI package's own tree, where the command runs, so it is memoized on that tree's fingerprint
-  (an unchanged tree skips the re-lint on repeated reviews / [[session-eval]] opens). There is deliberately
+  (an unchanged tree skips the re-lint on repeated reviews / [[session-eval]] opens).
+
+  That memo only covers the case where nothing moved, and a session-scoped page pays this LOCATION gate
+  whatever its own scope is — so the gate may not cost the whole REPOSITORY while the reviewed scope stays
+  small. When the fingerprint moves — a trunk commit, one dirty edit — the verdict is recomputed, and the git
+  work that recomputation costs is proportional to what MOVED, because the anchor engine reuses the immutable
+  per-commit facts it already read ([[code-anchor]]) instead of re-probing every anchored window. The shape
+  this rules out was measured here: an empty-scope review and a ten-file-scope review each paid the same 48
+  git children — 22 of them one `log --patch` per anchored path, byte-identical argv — and paid them AGAIN
+  after every fingerprint move, so the location gate multiplied a cold [[session-eval]] deep-link by about ten
+  times that page's own all-selector validation. Proportionality is bought that way and no other: the gate
+  keeps NO second cache of its verdict and narrows nothing — the counts are exactly what `spex spec lint`
+  reports for that tree with its dirty files included, a moved fingerprint always recomputes instead of
+  serving last-known, and a rejected run is never cached. There is deliberately
   NO build/typecheck/test gate here: whether a change is SOUND is proven by the node's eval scenarios, measured
   through the real product ([[session-eval]] shows that evidence) — not by a language-specific automated
   checker baked into the cockpit. So the gates stay language-agnostic (git + the spec↔code graph), correct

@@ -1814,6 +1814,8 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 .si-tool:hover { background: color-mix(in srgb, var(--sc) 16%, transparent); border-color: var(--sc); }
 .si-tool:focus-visible { outline: 2px solid var(--sc); outline-offset: 1px; }
+.si-tool:disabled { cursor: not-allowed; opacity: .68; }
+.si-tool:disabled:hover { background: color-mix(in srgb, var(--sc) 8%, transparent); border-color: color-mix(in srgb, var(--sc) 72%, var(--line)); }
 .si-tool.command.on { background: var(--sc); color: var(--paper); border-color: var(--sc); }
 
 /* offline / lifecycle placeholder body */

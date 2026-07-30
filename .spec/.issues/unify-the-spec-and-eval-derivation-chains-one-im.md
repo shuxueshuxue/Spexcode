@@ -469,3 +469,52 @@ line-610 dynamic import, and the duplicated regex. Fix one place, several unrela
 better signal than any argument about whether the diagnosis sounds correct.
 
 Spec: local-issues, issues, mentions, remark-substrate
+
+<!-- reply: c89038e2-6b56-4b4c-8b4a-4ff4ec2c886e @ 2026-07-30T03:21:28.906Z -->
+The written judgment 135898e6 asked for: **this is TWO milestones, and the split is at the seam between two
+KINDS of commitment — not at the halfway line of 170 lines.**
+
+The fact that decides it: `cli.ts` is already governed by [[cli-surface]] (its `code:` names it), spec-eval
+imports it ZERO times statically, and it already dispatches the issues/remark CLI verbs. So the CLI surfaces
+have a home that is above eval, already owned, and correct by name.
+
+    M4b-A   runIssues + issueVerbs + runIssueWrite + runRemark + ISSUE_WRITE_SUBS  ->  cli.ts     151 lines
+            kills: the INTRA-package cycle (line 610)      new node: NO — cli-surface already owns cli.ts
+            behaviour: unchanged (the loop-in still resolves in localIssues, in place)
+
+    M4b-B   lift threadOriginators + nodeGoverningSession above eval; drop loopIn from 3 signatures   19 lines
+            kills: the PACKAGE cycle (line 390)            new node: YES — the module-ownership question lives here
+
+A is not preparation. Line 610's dynamic import sits INSIDE `runIssueWrite`; once that function lives in
+`cli.ts`, `cli.ts` may import `issues.ts` statically, so **A kills the intra-package cycle on its own**. The
+package cycle survives A — stated plainly, not glossed.
+
+What the split buys: the second kind of commitment (choose a node, say in its body why the module exists, own its
+drift from then on) is isolated into B, decided in 19 lines of context instead of 170. And the bulk mechanical
+relocation no longer shares a rollback with the one contract change. taste #9.
+
+## Why "report the number before cutting" is stronger than caution
+
+The sharper form, from 135898e6: a 4x estimate error discovered MID-CUT is worse than 4x the work, because by
+then the cheap half is spent and the expensive half is under pressure to be FINISHED rather than reconsidered.
+Reporting before starting preserves the option to rethink the SHAPE; reporting halfway preserves only the
+explanation.
+
+This thread is its own evidence. I reported the number, and the shape then actually changed — from one 170-line
+cut to two steps, the first needing no new node at all. Had I found `issueVerbs`'s 75 lines mid-cut, I would very
+likely have finished it rather than turning around and noticing `cli.ts` had been the right home all along.
+
+## Correction to my own framing of the defect
+
+Not "the loop-in sits at the wrong layer". Precisely: **the loop-in's MECHANISM was always at the right height —
+`notifyOriginator`, `summarize` and `LoopIn` live in `mentions.ts`, which is genuine substrate. Only one of its
+INPUTS stands in the wrong place**: the candidate resolution that needs eval knowledge, resolved near its use in
+a module that cannot reach eval.
+
+And the half worth keeping: **a correct mechanism with one mis-layered input is harder to see than a wholly
+misplaced mechanism, because everything you read is where it belongs.** That is why this survived so long, and
+it explains the sniffer's aim: not one hit in `mentions.ts`, three in `localIssues.ts`. The sniffer does not
+measure where the defect IS — it measures **where someone was forced to pay for it**. Those two locations can
+differ, and here they differ by one layer.
+
+Spec: cli-surface, local-issues, issues, mentions

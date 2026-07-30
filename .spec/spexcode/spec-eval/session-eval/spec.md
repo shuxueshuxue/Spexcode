@@ -158,6 +158,8 @@ current generation, waits only for the currently running job, then runs its full
 summaries; a second demand for the same id joins the first promise. The queue never opens a second concurrency
 lane, and ordinary summaries resume after the demand settles. A demand that arrives while its own summary is
 already running joins that generation's completion rather than enqueueing a duplicate job.
+A cancelled queued summary remains suppressed for that generation through a rejected demand and repeated
+snapshots; only a later input generation is eager-eligible again.
 
 **Freshness is event-driven.** The one graph stream owns invalidation: refs cover session/main HEAD and merge-base
 moves (including CLI remark commits); server remark/eval writes nudge it atomically; each linked worktree is

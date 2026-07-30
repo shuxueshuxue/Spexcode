@@ -3,7 +3,7 @@ title: session-timeline
 status: active
 session: 29e0d645-6173-4e13-bbaf-f008e25af769
 hue: 280
-desc: The persisted per-session interaction history — every authored status transition (with its full note) and every delivered prompt, timestamped in the append-only timeline.ndjson; what a terminal-free surface renders as the conversation.
+desc: The session's append-only log — every authored transition and every message — is the DELIVERY itself, and the one thing about a session any process may observe without owning anything.
 code:
   - spec-cli/src/session-timeline.ts
 related:
@@ -16,47 +16,71 @@ related:
 
 # session-timeline
 
-A session's record ([[state]]) holds only its CURRENT status; history lived nowhere. But a surface with no
-terminal — the phone face ([[mobile-ui]]), or any future no-pane client — has exactly one thing to show a
-human: *what happened, when, and what the agent said at each stop*. So the lifecycle gets a durable history:
-`timeline.ndjson` in the session's global store dir, one JSON line per event, two kinds —
+## raw source
+
+A session's record ([[state]]) holds only its CURRENT status. Everything else a session *is* to the outside
+world — what it declared, what was said to it — is a sequence of events, and a sequence belongs in a log.
+`timeline.ndjson`, in the session's global store dir, is that log, and it carries two loads that used to be
+solved separately and worse: it is the **conversation** a terminal-free surface renders, and it is the
+**delivery** itself. A message is delivered when its bytes are in this file; the transport that pokes the
+agent afterwards is a courtesy, not the fact. And because the file is only a file, it is the one thing
+about a session that any process may observe without owning anything — which is how a supervisor, a CI, or
+any external orchestrator watches a fleet without being granted access to it.
+
+## expanded spec
+
+One JSON line per event, two kinds:
 
 - **status** `{ts, status, proposal, note}` — an authored-lifecycle transition, carrying the declaration
   note **in full** (the note IS the agent's reply to a reader who can't see the pane; [[state]] already
   guarantees notes are stored whole).
-- **sent** `{ts, text, from, replyVia?}` — a confirmed prompt delivery (every one flows through sendText:
-  human input, `spex session send`, the merge dispatch). `from` = the sending session, null = a human.
-  The recorded text is the message BEFORE mechanism inserts — hints are transport, not conversation.
+- **sent** `{ts, mid, text, from, replyVia?}` — a message addressed to this session. `from` = the sending
+  session, null = a human. `mid` is a unique per-message id: it is what a reader's cursor names, so the
+  same message can never be injected twice and never needs a separate idempotency ledger. The recorded
+  text is the message BEFORE mechanism inserts — hints are transport, not conversation.
 
-**Append authored state at its write boundary; observe the writer outside TypeScript.** A declaration note
-is conversation content, so it cannot depend on a later sample of the mutable current-state record. Every
-TypeScript lifecycle write compares the prior `(status, proposal, note)` and synchronously appends a moved
-value after the new `session.json` lands. A later status may replace the current snapshot, but it can never
-replace or erase the already-appended declaration event.
+**The append IS the delivery.** `sendText` appends the `sent` line under the session's record lock and
+returns success on that append ([[dispatch]]); only then does it attempt the adapter kick. A kick that
+lands puts the text in the agent's current turn; a kick that fails, is refused, or is lost leaves the line
+simply **unread**, and the reader below picks it up. There is no "delivered but unconfirmed" state to model
+because nothing about the transport decides whether delivery happened.
+
+**The reader is the turn-boundary hook.** On a turn boundary the [[hook-dispatch]] mark-active hook reads
+the lines past this session's own cursor, emits them as injected context, and advances the cursor. So an
+agent finds its unread mail by mechanism, never by remembering to run a command — the same
+materialize→auto-discovery path every other contract reaches it through, and therefore identical for a
+dashboard-launched and a self-launched agent.
+
+**Append authored state at its write boundary.** A declaration note is conversation content, so it cannot
+depend on a later sample of the mutable current-state record. Every lifecycle write compares the prior
+`(status, proposal, note)` and synchronously appends a moved value after the new `session.json` lands, in
+whichever process owns that write. A later status may replace the current snapshot, but it can never
+replace or erase the already-appended declaration event. **There is exactly one writer path** — every hook
+shells to `spex internal session-*`, which is the same TypeScript writer the CLI declarations use, so no
+lifecycle move reaches `session.json` without reaching this log. The log is therefore complete on its own:
+no observer process, no repair tick, and no read-time deduplication of a move recorded twice.
 
 Internal launch-readiness-pending state is not an authored lifecycle transition. While resume validates a
-launched runtime, both the direct writer and the external-write observer compare the pending record through its
-frozen pre-resume public projection. Failure or stale recovery therefore appends nothing; success clears pending
-and appends the one real resting transition at the same write that first publishes the session online.
+launched runtime, the writer compares the pending record through its frozen pre-resume public projection.
+Failure or stale recovery therefore appends nothing; success clears pending and appends the one real
+resting transition at the same write that first publishes the session online.
 
-The lifecycle also has a writer the TypeScript layer never sees: the mark-active hook value-replaces those
-three fields with pure-shell sed. The serve-process `superviseTimeline` therefore remains as the coverage and
-repair observer for external writes — an fs.watch on the sessions root, debounced, backstopped by a slow
-reconcile tick. A direct append and an observation may both record one move; the read's adjacent-duplicate
-fold makes that harmless. On restart each id re-seeds from its persisted last status line, so an unchanged
-session appends nothing and a moved one appends once, with an honest observed-now timestamp. The mutable
-record is the present-state projection; `timeline.ndjson` is the append-only conversation history.
+**A retired session still receives.** The record gate that refuses writes for a session whose worktree is
+gone ([[sessions-core]]) governs the **lifecycle** axis only — it asserts the session cannot work, be
+marked active, or be relaunched. Appending to this log is a record of something that happened, not a claim
+that the session can act, so it is exempt. Sending to a retired session must leave a trace rather than
+vanishing without one.
 
 Only the AUTHORED axis is history. Liveness (offline/starting/unknown) is a present-tense probe derivation
 ([[state]]) — re-derived, never authored — so it stays off the durable log; surfaces show current liveness
-from the board row. The timeline dies with the session record (close sweeps the store dir), like comms.
+from the board row. This is the axis split [[state]] owns, read from outside: a reader that has
+only this file can learn everything a session declared and nothing about whether it is alive, and therefore
+can never take an action that needs to know. The timeline dies with the session record (close sweeps the
+store dir).
 
 Read surface: `GET /api/sessions/:id/timeline` — the tail (default 500), oldest first, each status event
 carrying its composed display word (awaiting→its proposal's label, active→working: the same vocabulary
-every other surface speaks). The read FOLDS adjacent status lines with identical (status, proposal, note)
-into their first: the direct writer and observer, or two serve processes observing one store (a throwaway
-worktree/eval serve beside the live one), can append a single record move twice — the log stays append-only
-and duplicates die at read time, the same read-aggregation stance as the board.
+every other surface speaks).
 
 **Reply-channel readability belongs to the target session, not the sending surface.** One server-side prompt
 composition seam receives the raw prompt, the target session, and an optional explicit `replyVia`; it alone

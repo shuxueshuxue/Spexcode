@@ -38,7 +38,7 @@ the board — a concise "what they're doing", not a slice of their raw launch pr
 **delimited** as `session "<headline>"` so it reads AS a session title, not as prose bleeding into the
 message. A sender with no richer name than its id is stamped `session <id>` (no empty quotes/parens); with
 **no sender at all** the message passes through **unchanged** — no hint, no half-built reply loop. The watch
-handshake greeting ([[comms-edge]]) names the watcher by the same `sessionHeadline`, delimited the same way.
+handshake greeting ([[session-follow]]) names the watcher by the same `sessionHeadline`, delimited the same way.
 
 **The sender is resolved in the send command's OWN process, because only it knows who's sending.** The
 injection itself happens in the backend (the rendezvous socket — [[dispatch]]), a *different* process that

@@ -2,7 +2,7 @@
 title: sessions-core
 status: active
 hue: 280
-desc: The shared session module every session feature builds on — the global per-session record I/O, worktree/branch/node resolution, and the launch/state/dispatch/poll plumbing the lifecycle and comms nodes each specialize.
+desc: The shared session module every session feature builds on — the global per-session record I/O, worktree/branch/node resolution, and the launch/state/dispatch plumbing the lifecycle and comms nodes each specialize.
 code:
   - spec-cli/src/sessions.ts
 related:
@@ -28,8 +28,10 @@ sessions-core owns `sessions.ts` — the common session layer: the global per-se
 assembly (the rendezvous env + the harness's own command + the spec-pointer/prompt tail — carrying NO
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
 auto-discovery, see [[harness-delivery]]), the shared resolution of a raw `surface: command` invocation into
-the prompt that [[launch]] or [[dispatch]] delivers, and the poll loop the watch/wait subscriptions
-share. A launch record carries the selected launcher name, its resolved harness, and the exact pinned
+the prompt that [[launch]] or [[dispatch]] delivers, and the launch queue's drain loop. Supervision keeps no
+loop here: `wait`/`watch` read a followed session's own log past a durable cursor ([[session-follow]]), so the
+only thing they take from this module is a display string.
+A launch record carries the selected launcher name, its resolved harness, and the exact pinned
 `launch_cmd`; session lifecycle and comms call that one interactive adapter directly rather than routing on a
 second product dimension. The session's node is derived only from the raw prompt's first `[[id]]` topic
 mention ([[mentions]]) — no caller-supplied node argument exists at the CLI, HTTP, or function boundary.
@@ -50,7 +52,7 @@ session objects it assembles carry their display strings pre-derived (`label`/`h
 bare name parts under `raw` — that naming seam's contract (chains, wire shape, enforcement) is
 [[session-label]]'s. Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature
-node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[comms-edge]], [[session-edges]],
+node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[session-follow]],
 [[session-selectors]], [[agent-reply-channel]], [[spec-pointer]]) specializes a slice of it and lists it
 under `related:`, so a change here attributes its drift and eval staleness to this one owner instead of all of them
 (see [[governed-related]]). That several features hold no code of their own is the honest signal that
@@ -64,11 +66,16 @@ failure reaches one record-locked compare-and-set that changes only a live, unde
 A declaration that landed first is authoritative, so a late process close, delayed native completion, or
 restart reconciliation cannot overwrite it.
 
-A text send takes the session record lock only for its durable delivery-marker reservation and terminal receipt;
-the adapter RPC itself runs after releasing it. A native turn can synchronously invoke lifecycle hooks that re-enter
-the same record writer, so holding that lock across the confirmation would deadlock a truthful adapter response.
-The reserved marker blocks replay while the RPC is in flight, and normal adapter/runtime guards remain the authority
-for any concurrent lifecycle operation.
+**Exclusion lives in the lock, never in a privileged process.** The per-session record lock is a filesystem
+lock with a PID liveness check, held across processes, so a session operation may run in whatever process
+takes it — a backend is the convenient owner of the launch environment and a shared cache, not the holder
+of the invariant, and a read that takes no lock needs no permission from anyone. That is what lets this
+layer be a brick an external system can drive rather than a service it must be granted access to.
+
+A text send takes the session record lock only for the durable timeline append; the adapter poke runs after
+releasing it. A native turn can synchronously invoke lifecycle hooks that re-enter the same record writer, so the
+lock never spans the courtesy poke. The appended `mid` and inbox cursor make replay harmless, while normal
+adapter/runtime guards remain the authority for concurrent lifecycle operations.
 
 Archive may carry an opaque adapter cold-preflight receipt across its exact leaf/tmux stop, into the same adapter's
 cold commit, and through the final record/offline publication boundary. This shared layer forwards that one in-memory
@@ -119,6 +126,30 @@ second process terminator. Any other read failure still throws:
 a transient fault must read as neither. **Retired** is the third integrity reading, derived not stored: the
 recorded worktree is gone, so there is nothing left to be active *in*. It is terminal — no lifecycle writer may
 put it back to `active`/`idle`, no launch is assembled for it, only `close` remains.
+
+The leaf-ownership guard that gates every stop distinguishes **a dead leaf from an unprovable one**. Both look
+alike from the recorded pid — neither yields a start identity — but they call for opposite answers. A pid that
+names no live process has nothing to signal and nothing a signal could hit by mistake, so the leaf is already
+in the state stop wants and teardown proceeds record-only, exactly as for an explicitly stopped record. A pid
+that IS alive while refusing to prove its identity is the case the guard exists for, and it still refuses
+loudly, because signalling it could kill whatever now wears that number. Collapsing the two into one refusal is
+what made a session impossible to retire: a launcher that dies before readiness leaves a dead pid on the
+record, and `stop` and `close` then both refused it forever — the row could be neither run nor closed, and
+`quarantine` does not apply because the record is perfectly readable. Liveness is asked with the same probe the
+escalation path already uses to tell a vanished leaf from a replaced one, so one question has one answer here.
+
+The prompt seam carries ONE invariant for every harness: **the text handed to an agent never begins with `-`**.
+Human prompts legitimately do — a pasted browser-console line, a diff hunk, a quoted flag — and downstream that
+first character decides whether the text is read as a prompt or as machinery. Each harness parses its own argv
+by its own rules (one honours an end-of-options `--`, one silently drops a detached value starting with `-`,
+one has no end-of-options branch at all), and the launch scripts additionally recognize their resume/continue
+markers by comparing the tail to a literal flag. Answering that per harness would mean an escape per adapter
+plus a refusal for whichever harness has none — several answers to one question, and still nothing covering a
+prompt that IS the literal marker. So the guarantee is made once, here, where every launch and every send
+already passes through, and everything downstream hands over one plain quoted operand knowing nothing about
+who parses it. The cost is a single leading space on the prompts that would otherwise be undeliverable, with
+the human's own words following byte-for-byte; the alternative was refusing to carry them at all. This is why
+no `if (harness)` and no per-adapter prompt escape exists in the launch path ([[harness-adapter]]).
 
 A launch is likewise refused **before** a window opens when the transport can already settle it: no worktree,
 no branch, no resolvable launcher command. Those are facts about this machine that no number of attempts can

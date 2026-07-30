@@ -133,11 +133,18 @@ cache exists beside the batch one — it mints no entry, schedules no build, and
 consumer that must NOT build can report the existing projection with its phase. [[manager-cockpit]]'s review
 payload is exactly that consumer: this engine calls that payload, so the dependency runs one way only, and
 the cockpit reports `loading`/`updating`/`error`/absent as itself rather than as a computed result. Initial cache misses for live sessions may
-start one batch, and completion nudges the existing graph mechanism once. Dormant offline history is intentionally
-demand-only: the graph emits its loading/last-known projection without scheduling a summary build for every
-retained session, while opening that session's scoped Evals route builds only the requested worktree model. This
-keeps the toolbar projection useful for active work without turning historical session count into a cold-start
-fan-out.
+start one batch. A batch snapshots an authorized set and runs it in bounded chunks; every worker stages its
+stable/error outcome privately, so every launched row remains at the one pre-batch `loading` or
+`updating(lastKnown)` cut while its batch is in progress. Without priority work, all completed chunks form one
+finite cohort. A priority demand closes at the current launched-chunk boundary: the completed chunks form the
+finite cohort that is atomically published, while unlaunched authorized rows remain scheduled as the owed
+remainder for a later cohort. At publication, entry identity and generation are compared again; only
+still-current staged outcomes become visible together, followed by exactly one graph nudge. A newer generation,
+observer hold, or priority demand does not wait for global quiet or let an old staged outcome overwrite it.
+Dormant offline history is intentionally demand-only: the graph emits its
+loading/last-known projection without scheduling a summary build for every retained session, while opening that
+session's scoped Evals route builds only the requested worktree model. This keeps the toolbar projection useful
+for active work without turning historical session count into a cold-start fan-out.
 
 The eager batch is enabled only while a delta graph subscriber owns the current stream era; plain HTTP/CLI
 reads therefore expose `loading` or last-known summaries without starting work for retained records. Within an
@@ -151,6 +158,8 @@ current generation, waits only for the currently running job, then runs its full
 summaries; a second demand for the same id joins the first promise. The queue never opens a second concurrency
 lane, and ordinary summaries resume after the demand settles. A demand that arrives while its own summary is
 already running joins that generation's completion rather than enqueueing a duplicate job.
+A cancelled queued summary remains suppressed for that generation through a rejected demand and repeated
+snapshots; only a later input generation is eager-eligible again.
 
 **Freshness is event-driven.** The one graph stream owns invalidation: refs cover session/main HEAD and merge-base
 moves (including CLI remark commits); server remark/eval writes nudge it atomically; each linked worktree is
@@ -235,3 +244,15 @@ without the dashboard. `proof` is no longer a user-facing word at all: the expor
 its `--export` flag, and the old `spex review proof` spelling is gone — a signpost names the canonical
 form and exits non-zero, never running ([[cli-surface]]). The read/write split stays intact: `spex eval
 ls --session` READS a session's evaluation; filing a reading remains `spex eval add`.
+
+The impact snapshot carries PARSED relation entries, not a pair of projections to be reassembled. A node's
+relation is one list of `{path, selectors}`; `code`/`related` (bare paths) and `codeScoped`/`relatedScoped`
+(the selector-bearing subset) are views derived from it for consumers that want exactly those, and the
+snapshot ships the entries themselves alongside. It used to ship only the two views, so the exact-revision
+projection minted `path#selector` STRINGS back out of them and handed those to the relation parser to
+recover the entries the loader had all along — a serialize/reparse round-trip through a form nobody ever
+stored, at five call sites. Nothing validated by that reparse was load-bearing: a snapshot's relation
+problems are already carried on the snapshot and already throw before any of it runs, and a reparse of rows
+minted from parsed entries cannot surface a problem the original parse did not. One parse, one shape, and
+the ordinary loader's and the fixed-revision snapshot's history/window semantics stay distinct — sharing the
+relation projection is not licence to collapse those.

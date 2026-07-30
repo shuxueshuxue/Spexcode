@@ -1,52 +1,51 @@
-import { watch, existsSync, readFileSync, appendFileSync, mkdirSync, type FSWatcher } from 'node:fs'
-import { sessionsRoot, sessionStoreDir, sessionArtifactPath, listSessionIds, readAliasedRawRecord, readPublicRecordEntry } from './layout.js'
+import { randomUUID } from 'node:crypto'
+import { existsSync, readFileSync, appendFileSync, mkdirSync, statSync } from 'node:fs'
+import { sessionStoreDir, sessionArtifactPath, readAliasedRawRecord } from './layout.js'
 import type { Lifecycle, Proposal } from './sessions.js'
 
-// @@@ session-timeline - the PERSISTED interaction history of a session: every authored-lifecycle
-// transition (status + proposal + the FULL note text) and every delivered prompt, timestamped, appended to
-// `timeline.ndjson` in the session's global store dir. This is what a TERMINAL-FREE surface (the phone face,
-// [[mobile-ui]]) renders instead of a live pane: without the terminal, the declaration notes ARE the agent's
-// replies, and the timeline is the whole conversation.
+// @@@ session-timeline - the session's append-only log in its global store dir: every authored-lifecycle
+// transition (status + proposal + the FULL note text) and every message addressed to it. It is what a
+// terminal-free surface renders as the conversation, and it is the DELIVERY itself — a message is delivered
+// when its bytes are in this file.
 //
-// A declaration note is conversation content, so TS lifecycle writes append moved state at the same write
-// boundary instead of asking a later sample of mutable session.json to reconstruct it. The observer remains
-// because the lifecycle also has a writer the TS layer never sees: the mark-active hook value-replaces
-// status/proposal/note with pure-shell sed ([[state]]). One fs.watch on the sessions root (debounced) plus a
-// slow reconcile tick repairs those external writes. Direct append + observation may duplicate one move;
-// readTimeline folds adjacent duplicates without making history mutable.
-//
-// The observer runs ONLY in the serve process (superviseTimeline is called from index.ts); lifecycle writers
-// and confirmed senders append from whichever process owns that write. Direct events use the write time;
-// observed shell events use an observation time honest to within the debounce. Only the AUTHORED axis is
-// recorded — liveness (offline/starting/unknown) is a present-tense derivation ([[state]]), re-derived per
-// probe and never history, so it stays off the durable log; a surface shows the CURRENT liveness from the
-// board row. The timeline lives and dies with the session record (close sweeps the store dir), like
-// comms.ndjson. `sent` events are appended by sendText on a CONFIRMED post-launch delivery (dashboard/phone
-// input, `spex session send`, merge and issue dispatch); the initial launch prompt passes through the same
-// composition seam but has no adapter confirmation to record here. `from` is the sending session's id,
-// null = a human surface.
+// There is exactly ONE writer path for the authored axis: every lifecycle hook shells to `spex internal
+// session-*`, the same TypeScript writer the CLI declarations use, so no move reaches session.json without
+// reaching this log. That is why there is no observer process, no repair tick, and no read-time folding of a
+// move recorded twice — nothing writes state behind this module's back.
 
 export type TimelineEvent =
   | { ts: string; kind: 'status'; status: Lifecycle; proposal: Proposal | null; note: string | null; display?: string }
-  | { ts: string; kind: 'sent'; text: string; from: string | null; replyVia?: 'note' }
+  | { ts: string; kind: 'sent'; mid: string; text: string; from: string | null; replyVia?: 'note' }
 
 const timelinePath = (id: string): string => sessionArtifactPath(id, 'timeline.ndjson')
 
 function append(id: string, ev: TimelineEvent): void {
-  try {
-    mkdirSync(sessionStoreDir(id), { recursive: true })
-    appendFileSync(timelinePath(id), JSON.stringify(ev) + '\n')
-  } catch { /* best-effort: a failed history append must never break the state machine or a delivery */ }
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  appendFileSync(timelinePath(id), JSON.stringify(ev) + '\n')
 }
 
 // Record a lifecycle value that has already landed in session.json. TypeScript state writers call this
 // synchronously before returning, so a later write cannot erase an intermediate declaration note from the
-// conversation. The serve observer calls the same sink for shell-authored state.
+// conversation. Best-effort: history is an accessory to the state machine, and failing to write it must never
+// break the transition that already happened.
 export function recordStatus(id: string, status: Lifecycle, proposal: Proposal | null, note: string | null): void {
-  append(id, { ts: new Date().toISOString(), kind: 'status', status, proposal, note })
+  try { append(id, { ts: new Date().toISOString(), kind: 'status', status, proposal, note }) }
+  catch { /* the record already moved; the history line is the only loss */ }
 }
 
-function readEvents(id: string): TimelineEvent[] {
+// The DELIVERY ([[dispatch]]): appending this line IS the send, so unlike a status line it must fail LOUD —
+// the caller reports the throw rather than a false success. `text` is the message BEFORE any mechanism insert
+// (hints are transport, not conversation); `replyVia` is the effective channel the prompt seam chose. Returns
+// the new line's `mid`, which a best-effort poke carries.
+export function appendSent(id: string, text: string, from: string | null, replyVia?: 'note'): { mid: string } {
+  const mid = randomUUID()
+  append(id, { ts: new Date().toISOString(), kind: 'sent', mid, text, from, ...(replyVia ? { replyVia } : {}) })
+  return { mid }
+}
+
+// The unowned read: any process may take it with nothing but filesystem access, and taking it perturbs
+// nothing. Index = event position, which is what a cursor names ([[session-cursors]]).
+export function timelineEvents(id: string): TimelineEvent[] {
   try {
     const p = timelinePath(id)
     if (!existsSync(p)) return []
@@ -56,82 +55,30 @@ function readEvents(id: string): TimelineEvent[] {
   } catch { return [] }
 }
 
-// the display word for an authored state — the SAME composition reconcile uses for the authored axis
-// (awaiting → its proposal's label, active → working), duplicated here as a tiny read-time map rather than
-// importing the state machine (sessions.ts imports THIS module for recordSent; a value import back would
-// be a cycle — the Lifecycle/Proposal imports above are type-only, erased at runtime).
-const PROPOSAL_DISPLAY: Record<string, string> = { merge: 'review', nothing: 'done', close: 'close-pending' }
-const displayOf = (e: { status: Lifecycle; proposal: Proposal | null }): string =>
+// the same L0 read taken as CHEAPLY as it can be: a follower ([[session-follow]]) ticks over many logs, so it
+// stats first and parses only what grew. null = no log yet (a session that has authored nothing).
+export function timelineStamp(id: string): string | null {
+  try { const s = statSync(timelinePath(id)); return `${s.size}:${s.mtimeMs}` }
+  catch { return null }
+}
+
+// the display word for an authored state — the SAME vocabulary every other surface speaks (awaiting → its
+// proposal's label, active → working), duplicated here as a tiny read-time map rather than importing the state
+// machine (sessions.ts imports THIS module for appendSent; a value import back would be a cycle — the
+// Lifecycle/Proposal imports above are type-only, erased at runtime).
+const PROPOSAL_DISPLAY: Record<string, DisplayWord> = { merge: 'review', nothing: 'done', close: 'close-pending' }
+type DisplayWord = 'working' | 'idle' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued'
+export const timelineDisplay = (e: { status: Lifecycle; proposal: Proposal | null }): DisplayWord =>
   e.status === 'awaiting' ? (PROPOSAL_DISPLAY[e.proposal ?? 'nothing'] ?? 'done')
   : e.status === 'active' ? 'working' : e.status
 
-// ---- the recorder (serve-process only) ----
-
-// id → fingerprint of the last recorded (status, proposal, note); seeded per id from the persisted last
-// status line so a server restart appends nothing for a session that didn't move while the server was down —
-// and DOES append (with an honest observed-now timestamp) when it did.
-const lastSeen = new Map<string, string>()
-const fpOf = (status: string, proposal: string | null, note: string | null): string => JSON.stringify([status, proposal, note])
-
-function lastStatusEvent(id: string): { status: string; proposal: string | null; note: string | null } | null {
-  const evs = readEvents(id)
-  for (let i = evs.length - 1; i >= 0; i--) { const e = evs[i]; if (e.kind === 'status') return e }
-  return null
-}
-
-function scan(): void {
-  let ids: string[] = []
-  try { ids = listSessionIds() } catch { return }
-  for (const id of ids) {
-    try {
-      const entry = readPublicRecordEntry(id)
-      if (entry.kind !== 'ok' || !entry.raw.governed) continue
-      const status = (entry.raw.status || 'active') as Lifecycle
-      const proposal = (entry.raw.proposal || null) as Proposal | null
-      const note = entry.raw.note || null
-      const fp = fpOf(status, proposal, note)
-      if (lastSeen.get(id) === fp) continue
-      if (!lastSeen.has(id)) {
-        const last = lastStatusEvent(id)
-        if (last && fpOf(last.status, last.proposal ?? null, last.note ?? null) === fp) { lastSeen.set(id, fp); continue }
-      }
-      lastSeen.set(id, fp)
-      recordStatus(id, status, proposal, note)
-    } catch { /* one bad record must not stall the sweep */ }
-  }
-  const live = new Set(ids)
-  for (const k of [...lastSeen.keys()]) if (!live.has(k)) lastSeen.delete(k)
-}
-
-let watcher: FSWatcher | null = null
-let debounce: ReturnType<typeof setTimeout> | null = null
-let reconcile: ReturnType<typeof setInterval> | null = null
-
-// start the recorder: one debounced fs.watch on the store (a lifecycle write lands as a session.json write)
-// backstopped by a slow reconcile tick, plus an immediate first sweep. Idempotent; never throws — the
-// timeline is an accessory record, and its failure must never take the server down.
-export function superviseTimeline(): void {
-  if (!reconcile) reconcile = setInterval(scan, 60000)
-  if (!watcher) {
-    const root = sessionsRoot()
-    try { mkdirSync(root, { recursive: true }) } catch { /* best-effort */ }
-    try {
-      watcher = watch(root, { recursive: true }, () => {
-        if (debounce) return
-        debounce = setTimeout(() => { debounce = null; scan() }, 100)
-      })
-    } catch { watcher = null /* the reconcile tick still covers */ }
-  }
-  scan()
-}
-
 // the channel of the LAST HUMAN send (from == null): 'note' when the note-reply hint rode along, else null.
-// This is what makes the reply-channel hints SYMMETRIC ([[sessions-core]] sendText): a human send with no
-// note flag arriving after a note-send is the "back at a terminal" transition, and the delivery gets the
-// counter-insert. Derived from the durable log — no new state, and it survives a server restart. Agent
-// senders (`from` set) say nothing about where the HUMAN is reading, so they neither set nor clear it.
+// This is what makes the reply-channel hints SYMMETRIC ([[session-timeline]]): a human send with no note flag
+// arriving after a note-send is the "back at a terminal" transition, and the delivery gets the counter-insert.
+// Derived from the durable log — no new state, and it survives a server restart. Agent senders (`from` set)
+// say nothing about where the HUMAN is reading, so they neither set nor clear it.
 export function lastHumanSendVia(id: string): 'note' | null {
-  const evs = readEvents(id)
+  const evs = timelineEvents(id)
   for (let i = evs.length - 1; i >= 0; i--) {
     const e = evs[i]
     if (e.kind === 'sent' && e.from == null) return e.replyVia === 'note' ? 'note' : null
@@ -139,32 +86,13 @@ export function lastHumanSendVia(id: string): 'note' | null {
   return null
 }
 
-// record a CONFIRMED prompt delivery (called by sendText after the harness accepted it). `text` is the
-// caller's message BEFORE any mechanism insert (the note-reply hint is transport, not conversation);
-// `replyVia` is the effective channel chosen by the shared prompt seam, whether explicit or derived from the
-// target adapter, so the durable history records where the reply was actually readable.
-export function recordSent(id: string, text: string, from: string | null, replyVia?: 'note'): void {
-  try { if (!readAliasedRawRecord(id)?.governed) return } catch { return }
-  append(id, { ts: new Date().toISOString(), kind: 'sent', text, from, ...(replyVia ? { replyVia } : {}) })
-}
-
-// the read surface behind GET /api/sessions/:id/timeline: the last `limit` events, oldest first, each
-// status event carrying its composed display word. null = no such session (the route 404s).
-// Adjacent status lines with identical (status, proposal, note) fold into their first: a direct writer and
-// observer, or TWO serve processes observing one store (a throwaway worktree/eval serve beside the live
-// one), can append a single record move twice. Cross-process write locking isn't worth buying, so the log
-// stays best-effort append-only and the read is where duplicates die, same stance as the board.
+// the read surface behind GET /api/sessions/:id/timeline: the last `limit` events, oldest first, each status
+// event carrying its composed display word. null = no such session (the route 404s).
 export function readTimeline(id: string, limit = 500): { events: TimelineEvent[] } | null {
   let raw: ReturnType<typeof readAliasedRawRecord>
   try { raw = readAliasedRawRecord(id) } catch { return null }
   if (!raw || !raw.governed) return null
-  const folded: TimelineEvent[] = []
-  for (const e of readEvents(id)) {
-    const prev = folded[folded.length - 1]
-    if (e.kind === 'status' && prev?.kind === 'status' && prev.status === e.status
-      && (prev.proposal ?? null) === (e.proposal ?? null) && (prev.note ?? null) === (e.note ?? null)) continue
-    folded.push(e)
-  }
-  const tail = folded.slice(Math.max(0, folded.length - Math.max(1, limit)))
-  return { events: tail.map((e) => (e.kind === 'status' ? { ...e, display: displayOf(e) } : e)) }
+  const evs = timelineEvents(id)
+  const tail = evs.slice(Math.max(0, evs.length - Math.max(1, limit)))
+  return { events: tail.map((e) => (e.kind === 'status' ? { ...e, display: timelineDisplay(e) } : e)) }
 }

@@ -7,7 +7,7 @@ import { trackedSourceFiles } from '../../spec-cli/src/source-files.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
 import { evalNodes, evalNodesAt, validateScenarios, resolveEvalNode, scenarioCodeAxis, scenarioHash, scenarioProjection, writeScenarioMeasurementMetadata, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
-import { staleAxes, contentProbeFor, anchorProbeFor, anchorProblems } from './freshness.js'
+import { staleAxes, contentProbeFor, anchorProbeFor, anchorProblems, type AnchorDemand } from './freshness.js'
 import { parseRelation, relationClaimsPath } from '../../spec-cli/src/anchors.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
@@ -138,6 +138,27 @@ async function scan(args: string[] = []): Promise<number> {
   const yByDir = new Map(evalNodes(root).map((n) => [relative(root, n.dir), n]))
   const nodeDirs = specs.map((s) => dirname(s.path))
   let flaggedNodes = 0, malformed = 0, staleScores = 0, missingScores = 0, uncovered = 0, danglingTracks = 0
+  // One anchor prime for the whole scan. Every window's Git images and hunks are immutable facts the engine
+  // owns per CALL, so priming per reading re-forks that batch for every row scanned. The demand set mirrors
+  // the loop's own `driftSelected` rule exactly, so `--changed` still asks about nothing it would not judge;
+  // the in-loop primes stay as the correctness backstop and become cache hits.
+  const latestByDir = new Map<string, ReturnType<typeof latestPerScenario>>()
+  const anchorDemands: AnchorDemand[] = []
+  for (const s of specs) {
+    const dirRel = dirname(s.path)
+    const y = yByDir.get(dirRel)
+    if (!y) continue
+    const latest = latestPerScenario(readReadings(y.sidecarPath))
+    latestByDir.set(dirRel, latest)
+    for (const sc of y.scenarios) {
+      const r = latest.get(sc.name)
+      if (!r) continue
+      const axis = scenarioCodeAxis(sc.code, s.codeEntries)
+      if (changed && !nodeChanged(dirRel, axis.paths, changed, nodeDirs)) continue
+      anchorDemands.push({ sinceSha: r.codeSha, entries: axis.entries })
+    }
+  }
+  await anchors.prime?.(anchorDemands)
   for (const s of specs) {
     const dirRel = dirname(s.path)
     const nodeSelected = !changed || nodeChanged(dirRel, s.code, changed, nodeDirs)
@@ -152,7 +173,7 @@ async function scan(args: string[] = []): Promise<number> {
           findings.push(`  • eval-schema: '${s.id}' ${e} — fix ${y.evalPath}`)
         }
       }
-      const latest = latestPerScenario(readReadings(y.sidecarPath))
+      const latest = latestByDir.get(dirRel) ?? latestPerScenario(readReadings(y.sidecarPath))
       for (const sc of y.scenarios) {
         // a scenario's own `code` narrows its freshness CODE axis to a subset; a path that does not exist
         // would make that axis silently immortal (changedSince finds no commits for it), so flag it LOUD as a
@@ -160,7 +181,7 @@ async function scan(args: string[] = []): Promise<number> {
         // ONE resolution of the axis: base paths for every path consumer (existence, changed-scan selection,
         // drift display), folded selectors for the narrowing. A raw `path#symbol` matches no real file, so
         // reading it as a path would report a ghost and drop the scenario out of --changed selection.
-        const axis = scenarioCodeAxis(sc.code, s.code)
+        const axis = scenarioCodeAxis(sc.code, s.codeEntries)
         if (nodeSelected) {
           for (const [field, paths] of [['code', axis.paths], ['related', parseRelation(sc.related ?? [], 'related').entries.map((e) => e.path)]] as const) {
             const ghosts = paths.filter((p) => !existsSync(join(root, p)))
@@ -193,8 +214,8 @@ async function scan(args: string[] = []): Promise<number> {
         if (!driftSelected) continue
         const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
         if (!commitReachable(idx, r.codeSha)) await probe.prime?.(r.codeSha, codeFiles, y.evalPath)
-        await anchors.prime?.(r.codeSha, axis.entries)
-        const axes = staleAxes(r, sc.code?.length ? sc.code : s.code, y.evalPath, idx, scidx, remSignals, probe, sc, anchors)
+        await anchors.prime?.([{ sinceSha: r.codeSha, entries: axis.entries }])
+        const axes = staleAxes(r, axis.entries, y.evalPath, idx, scidx, remSignals, probe, sc, anchors)
         if (axes.length) {
           staleScores++
           // a remark-stale scenario is unlocked by a second-party resolve, then a fresh reading; the git axes

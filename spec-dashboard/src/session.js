@@ -38,8 +38,7 @@ export const sessionZone = (s) => {
   return NEED_STATUS.has(s?.status) ? 'need' : 'run'
 }
 export const ZONE_ORDER = ['need', 'run', 'offline']
-// @@@ archive is a separate flat cold collection, never a fourth working zone ([[archive]]). Every list surface
-// splits the default working population from true archived/offline rows before applying any status/nesting fold.
+
 export const isArchived = (s) => !!s?.archived
 export const splitArchived = (sessions = []) => ({
   live: sessions.filter((s) => !isArchived(s)),
@@ -91,11 +90,6 @@ export const sessionHandle = (s) =>
 export const sessionHeadline = (s) =>
   s?.headline || s?.name || s?.activity || s?.promptPreview || s?.node || s?.title || s?.branch || s?.id
 
-// @@@ session nesting ([[session-nesting]]) — a session launched by `spex new` from INSIDE another carries
-// that spawner's id as `parent`. Fold it into a forest, DERIVED here at read time (never stored on the child):
-// a child nests under its parent ONLY IF that parent is present in this list, so a closed parent's children
-// auto-promote to top-level on the next board read. Returns the top-level `roots` (a real parent or an orphan
-// whose parent is gone) and `childrenOf` (parentId → its direct children), both recursive to any depth.
 export function nestSessions(sessions) {
   const present = new Set(sessions.map((s) => s?.id))
   const childrenOf = new Map()
@@ -125,11 +119,6 @@ export function sessionAncestorIds(sessions, id) {
   return ids
 }
 
-// @@@ subtree rollup ([[session-nesting]]) — the count-badge COLOUR: a PURELY informational summary of the
-// hidden subtree that must NOT touch the parent's own status/glyph/zone/sort. Dark-yellow if ANY descendant
-// needs attention (the needs-you zone, error folded in — the widest signal wins); else green if any descendant
-// is actively running (a STATUS_COLOR-green status: working/parked); else neutral (all idle/offline). Reuses
-// the STATUS_COLOR hues so the badge speaks the same four-hue language as every other status mark.
 export function subtreeRollup(id, childrenOf) {
   let need = false, run = false, count = 0
   const walk = (pid, seen) => {
@@ -146,22 +135,6 @@ export function subtreeRollup(id, childrenOf) {
   return { color: need ? STATUS_COLOR.asking : run ? STATUS_COLOR.working : STATUS_COLOR.idle, count }
 }
 
-// @@@ the ordered render list ([[session-nesting]]) all desktop/mobile session-list surfaces share. Roots are zone-sorted by
-// their OWN status (no aggregation), each carrying a zone header when the zone changes; a parent's children
-// follow it (zone-sorted among themselves) ONLY when `isExpanded(id)` — collapsed by default, so a fleet reads
-// as one row. Emits {type:'zone',zone} and {type:'row', s, depth, expandable, expanded, rollup, guides}; the
-// visible row order is also what ↑/↓ nav and drag-reorder walk, so a collapsed child is never a hidden nav
-// target. `guides` is the file-tree rail vector, one bool per connector column (length === depth): the LAST
-// entry marks whether THIS row has a following sibling (branch tee vs end elbow), each earlier entry whether
-// the ancestor in that column continues (draw a pass-through vertical line vs blank).
-//
-// @@@ offline-history fold ([[session-console]]) — the OFFLINE zone rests folded behind its header, the one
-// disclosure for retained session history: `zoneFolded(zone)` names the folded zones (per-surface state; the
-// product folds only 'offline', collapsed by default), and a folded zone emits its header — enriched with the
-// hidden `count` and `folded: true` so the surface renders it as the disclosure — but none of its rows,
-// EXCEPT any row `keepVisible(s)` claims (the current selection / graph lock): a session reached by URL,
-// search, or a menu stays a visible row even while its zone is folded. Presentation only — no record is
-// touched — and never applicable to the needs-you / running zones, whose rows this fold cannot hide.
 export function sessionForest(sessions, isExpanded, { zoneFolded = () => false, keepVisible = () => false } = {}) {
   const { roots, childrenOf } = nestSessions(sessions)
   const items = []

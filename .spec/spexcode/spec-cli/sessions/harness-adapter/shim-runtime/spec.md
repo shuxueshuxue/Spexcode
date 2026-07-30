@@ -32,12 +32,11 @@ The runtime owns five shared contracts:
   (several handlers' stdout concatenates without separators), then stderr (a bare exit-2 handler), then the
   caller's fallback — always the parsed human-readable reason, never the escaped wire JSON. codex's stderr
   bridge is codex's own native protocol and stays in dispatch.sh, untouched here.
-- **the rendezvous server** — binds the launch-injected rendezvous socket and speaks the reclaude
-  mini-protocol, so claude's deliver and socket-listener liveness are reused verbatim. MULTI-connection
-  (unlike reclaude's daemon): a board probe connect can never kick a concurrent delivery. Confirmation means
-  PARSED, synchronously — repaint-done flushes before any injection (a whole model turn on some hosts) runs;
-  a known-unable inject answers reply-rejected before that barrier so the sender fails loud instead of
-  confirming an undeliverable prompt.
+- **the rendezvous server** — binds the launch-injected rendezvous socket and accepts reply pokes, so the
+  shared Claude-family adapter and socket-listener liveness are reused verbatim. MULTI-connection means a
+  board probe cannot displace a concurrent poke. A repeated `mid` is injected once for this live shim; an
+  injection error releases that marker, while an unable host leaves its line for the turn-boundary reader.
+  It never confirms or rejects an injection: the timeline is the delivery.
 - **the stop-gate loop closure** (`dispatchStop`) — a blocked Stop's continuation is a LOOP, and the loop
   needs a termination bit: claude's native Stop payload carries `stop_hook_active=true` inside a
   hook-forced continuation, and the stop-gate's escape paths (auto-declare / downgrade-to-ask) key on

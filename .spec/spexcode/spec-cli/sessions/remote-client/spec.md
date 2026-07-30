@@ -2,10 +2,11 @@
 title: remote-client
 status: active
 hue: 280
-desc: The CLI's read/control commands are thin BACKEND CLIENTS, so one install monitors any machine's sessions.
+desc: Every session verb asks what the backend IS for it — owner, cache, or remote transport — and that answer alone decides whether a missing backend is fatal.
 code:
   - spec-cli/src/client.ts
 related:
+  - spec-cli/src/remote-client-cache.test.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/supervise.ts
 ---
@@ -14,23 +15,42 @@ related:
 
 ## raw source
 
-A session's live state lives where its tmux and worktrees are — on the backend's machine. So the `spex` CLI
-must not read or drive sessions in its own process: a manager on one machine should monitor and drive an
-agent on another, and there must be exactly **one** actor on a given tmux socket. The CLI's **read and
-control** verbs are therefore thin clients of the running backend, the same way the dashboard is — the
-backend is the single broker, and which machine you point at is just a URL.
+"Does this command need the backend?" was answered twice, from two different questions, and the two answers
+disagree: `session new` — the verb that launches a process — falls back to running in-process when it can
+*prove* nothing is listening, while `session ls` — a read that changes nothing — fails outright. The
+inversion is the tell that the line was never drawn once. Draw it once, by asking of each verb what the
+backend actually **is** for it. There are only three answers, and each dictates its own behaviour when no
+backend answers.
 
 ## expanded spec
 
-The read/control commands — `ls`, `watch`, `wait`, `capture`, `send`, `interrupt`, `rename`, `rawkey`, `review`, `merge`,
-`reopen`, `exit`, `close`, `quarantine`, `prompt`, and `resources` — call the backend over HTTP, at the endpoint the routing ladder below
-resolves. (`session attach` is the ONE deliberate exception — a foreground terminal can't be brokered over
-HTTP, so it stays local and guards that premise loudly against the *resolved* backend; see
-[[session-attach]].) They hold **no** in-process tmux/git path, so the backend is the **single actor** on
-the tmux socket and the single source of derived state, and pointing `--api` (or `SPEXCODE_API_URL`) at
-another machine's backend monitors and drives THAT machine's sessions with no code change — the dashboard's
-viewer-points-anywhere model, extended to the CLI. `watch`/`wait` take the board **source** as a required
-argument (the backend client), so a poll can never silently read a local board by default.
+**Three roles, one question per verb.**
+
+- **Owner** — doing it twice is destructive, and it needs a resource only an owner may hold: `new`, `resume`,
+  `stop`, `close`, `archive`, `quarantine`, `interrupt`, `merge`, and the poke half of `send`. These prefer
+  the running backend, which holds the launch environment and the concurrency cap. They may act in-process
+  **only after proving there is no owner** — an explicit `ECONNREFUSED`; any HTTP answer, including `404`
+  and `503`, proves a backend owns the target, and an indeterminate outcome fails loud rather than risking
+  two actors ([[session-new]] states this rule for launch; it is the general one).
+- **Cache** — the answer is a pure function of durable state and the backend merely has it warm and shared:
+  `ls`, `show`, `review`, `resources`, and the log-following of [[session-follow]]. With no backend
+  resolvable these read locally and **name their source**, because a read holds nothing and races nothing.
+  What degrades is only the derived half: liveness needs a probe an unowned reader must not run, so it
+  reports `unknown` — the same honest value a failed probe yields, and one that already withholds every
+  action that would need death to be proven ([[state]]).
+- **Remote transport** — the state is physically on another machine. An explicit `--api`/`--port` naming a
+  remote endpoint has no local answer, so an unreachable backend is a genuine, loud failure. Nothing is
+  faked and nothing falls back.
+
+The split is not "reads versus writes" but "what would be wrong if two processes did it": exclusion is
+enforced by the per-session record lock, not by the identity of the process holding it ([[sessions-core]]). The
+backend is therefore the convenient owner of launch and the shared cache — never the holder of the
+invariant. (`session attach` remains its own case: a foreground terminal cannot be brokered over HTTP, so
+it stays local and guards that premise loudly against the resolved backend; see [[session-attach]].)
+
+Pointing `--api` (or `SPEXCODE_API_URL`) at another machine's backend still monitors and drives THAT
+machine's sessions with no code change — the dashboard's viewer-points-anywhere model, extended to the CLI.
+A local fallback never silently impersonates it: the source is stated on every read that took one.
 
 **Which backend — the ladder, flag-first.** One host runs many projects' backends, and a shell inherits the
 launching backend's `SPEXCODE_API_URL` — an env var cannot prove intent (exported-on-this-command and
@@ -61,18 +81,16 @@ The one necessary integrity exception is `session quarantine <exact-id> --restor
 removed its row from the live board, so a selector has nothing honest to resolve; restore therefore requires
 the original exact id and calls the same backend rather than falling back to local storage.
 
-The split is load-bearing and is the whole point. State **producers** stay **local**: `done`/`ask`/`park`/
-`idle` and the lifecycle hooks write the agent's OWN per-session record in the GLOBAL store directly (keyed
-by session_id — see [[state]]), so an agent must be able to declare its own state even with no backend up. The
-backend learns that state by ENUMERATING the store, not by a write of its own. **Launch**
-(`spex session new`) keeps its own already-justified path (it needs the backend's auth env — see [[launch]]). Only
-the verbs that observe or drive live tmux route here.
+State **producers** were always local and stay that way: `done`/`ask`/`park`/`idle` and the lifecycle hooks
+write the agent's OWN per-session record in the GLOBAL store directly (keyed by session_id — see
+[[state]]), so an agent declares its own state with no backend up. The backend learns that state by
+ENUMERATING the store, never by a write of its own — which is the same fact the Cache role above
+generalises to every read.
 
-**One availability rule, FAIL LOUD.** Unlike a best-effort telemetry POST, an unreachable backend throws a
-clear `no backend reachable at <url>` and a non-zero exit — never a silent fall back to a local in-process
-path, because that fallback is exactly what would re-create two actors on one tmux socket. `watch` warns once
-and keeps streaming (a backend blip must not read as "all sessions fine"); `wait` fails loud rather than
-reporting a false timeout.
+**Degradation is never silent, and never invented.** An Owner verb that cannot prove the absence of an owner
+throws a clear `no backend reachable at <url>` with a non-zero exit. A Cache verb that fell back says which
+source it read, on stderr, every time. A Remote-transport verb fails loud. What no verb ever does is answer
+from a different source while claiming the one it was asked for.
 
 **Failure stays distinct from emptiness.** A monitoring read must let a manager tell "I couldn't read" from
 "the screen is blank": `show --capture` returns a genuinely empty pane as success, but maps unknown-session,

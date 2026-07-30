@@ -602,7 +602,7 @@ test('Codex archive never compensates a successful commit on a replacement share
   assert.equal(archived, true, 'commit state remains unknown rather than mutating the replacement generation')
 })
 
-test('Codex archive never compensates a commit-unknown RPC error on a replacement shared generation', async () => {
+test('Codex archive never compensates an unconfirmed RPC error on a replacement shared generation', async () => {
   const { result, archiveCalls, unarchiveCalls, archived } = await runReplacementArchiveCase('error')
   assert.equal(result?.ok, false)
   if (result && !result.ok) assert.match(result.reason, /generation changed/)
@@ -1396,7 +1396,7 @@ test('Codex delivery waits for initialize, accepts a delayed turn response, and 
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
     const result = await codexTurn(socket, 'thread-1', 'delayed prompt', '/worktree', 'delivery-marker-1')
-    assert.deepEqual(result, { ok: true, outcome: 'accepted' })
+    assert.deepEqual(result, { ok: true })
     assert.deepEqual(calls, ['thread/loaded/list', 'thread/read', 'turn/start'])
     assert.equal(marker, 'delivery-marker-1')
   } finally {
@@ -1409,7 +1409,7 @@ test('Codex delivery waits for initialize, accepts a delayed turn response, and 
   }
 })
 
-test('Codex delivery reports a post-write transport silence as commit-unknown and does not replay it', async () => {
+test('Codex delivery reports a post-write transport silence as a failed poke and does not replay it', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-codex-delivery-unknown-'))
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   const previousConfirmMs = process.env.SPEXCODE_CODEX_TURN_CONFIRM_MS
@@ -1428,7 +1428,6 @@ test('Codex delivery reports a post-write transport silence as commit-unknown an
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
     const result = await codexTurn(socket, 'thread-1', 'maybe committed', '/worktree', 'delivery-marker-2')
     assert.equal(result.ok, false)
-    assert.equal(result.outcome, 'commit-unknown')
     assert.match(result.error || '', /did not confirm/)
     assert.equal(starts, 1, 'an unconfirmed request must never be replayed by the adapter')
   } finally {
@@ -1921,12 +1920,9 @@ test('writeCodexTrust strips ALL prior trust for the project (bare + old-format)
   }
 })
 
-// A fake rendezvous daemon replicating the REAL one's load-bearing semantics (extracted from the claude
-// binary): ONE connection at a time — a new connect destroys the previous socket, discarding its unparsed
-// buffer — and a synchronous line loop that answers `repaint` with `repaint-done` (the in-order parse barrier
-// deliver leans on). `kickFirst` simulates a liveness probe landing in the write→parse window: the first
-// delivery connection is destroyed with its chunk unread.
-function fakeRvDaemon(id: string, opts: { kickFirst?: boolean; silent?: boolean; reject?: boolean } = {}) {
+// A fake rendezvous daemon with Claude's one-connection behavior. `kickFirst` drops one poke before its
+// write completes; retrying the same timeline mid must be harmless.
+function fakeRvDaemon(id: string, opts: { kickFirst?: boolean; silent?: boolean } = {}) {
   const replies: string[] = []
   let conns = 0
   let prev: import('node:net').Socket | undefined
@@ -1935,7 +1931,7 @@ function fakeRvDaemon(id: string, opts: { kickFirst?: boolean; silent?: boolean;
     prev?.destroy()
     prev = c
     c.on('error', () => {})
-    if (opts.kickFirst && conns === 1) { setTimeout(() => c.destroy(), 20); return }
+    if (opts.kickFirst && conns === 1) { c.destroy(); return }
     if (opts.silent) return
     let buf = ''
     c.on('data', (d) => {
@@ -1945,9 +1941,7 @@ function fakeRvDaemon(id: string, opts: { kickFirst?: boolean; silent?: boolean;
         const line = buf.slice(0, nl)
         buf = buf.slice(nl + 1)
         const m = JSON.parse(line) as { type?: string; text?: string }
-        if (opts.reject) { c.write('{"type":"reply-rejected"}\n'); continue }
         if (m.type === 'reply') replies.push(m.text ?? '')
-        if (m.type === 'repaint') c.write('{"type":"repaint-done"}\n')
       }
     })
   })
@@ -1961,59 +1955,47 @@ function fakeRvDaemon(id: string, opts: { kickFirst?: boolean; silent?: boolean;
   }
 }
 
-test('deliverViaRendezvous: repaint-done confirms the parse — ok, one reply, one connection', async () => {
+test('deliverViaRendezvous: writes one idempotent poke without a receipt barrier', async () => {
   const id = `unit-rvd-ok-${process.pid}-${Date.now()}`
   const d = fakeRvDaemon(id)
   await d.listen()
   try {
-    const r = await deliverViaRendezvous(id, 'hello 多行\nsecond line')
+    const r = await deliverViaRendezvous(id, 'hello 多行\nsecond line', 'mid-ok')
     assert.equal(r.ok, true)
+    await new Promise((resolve) => setTimeout(resolve, 10))
     assert.deepEqual(d.replies, ['hello 多行\nsecond line'])
     assert.equal(d.connCount(), 1)
   } finally { await d.close() }
 })
 
-test('deliverViaRendezvous: a kicked connection (probe race) is a PROVEN whole-chunk loss — resends, lands exactly once', async () => {
+test('deliverViaRendezvous: retries a failed poke with the same message id', async () => {
   const id = `unit-rvd-kick-${process.pid}-${Date.now()}`
   const d = fakeRvDaemon(id, { kickFirst: true })
   await d.listen()
   try {
-    const r = await deliverViaRendezvous(id, 'survives the kick')
+    const r = await deliverViaRendezvous(id, 'survives the kick', 'mid-retry')
     assert.equal(r.ok, true, JSON.stringify(r))
-    // the whole point: the prompt lands EXACTLY once — the retry cannot duplicate because the kick proved
-    // the atomic chunk was never parsed (the old optimistic write returned ok:true here and the prompt vanished)
+    await new Promise((resolve) => setTimeout(resolve, 10))
     assert.deepEqual(d.replies, ['survives the kick'])
-    assert.ok(d.connCount() >= 2, `expected a resend, got ${d.connCount()} connection(s)`)
+    assert.equal(d.connCount(), 2)
   } finally { await d.close() }
 })
 
-test('deliverViaRendezvous: a silent-but-open daemon is BUSY, not lost — wall expiry reports optimistic ok, no retry storm', async () => {
+test('deliverViaRendezvous: a listener need not answer for a poke write to succeed', async () => {
   const id = `unit-rvd-wall-${process.pid}-${Date.now()}`
   const d = fakeRvDaemon(id, { silent: true })
   await d.listen()
   try {
-    const r = await deliverViaRendezvous(id, 'busy claude', 250)
+    const r = await deliverViaRendezvous(id, 'busy claude')
     assert.equal(r.ok, true)
     assert.equal(d.connCount(), 1, 'wall expiry is ok, never a kick retry')
   } finally { await d.close() }
 })
 
-test('deliverViaRendezvous: reply-rejected fails LOUD and is not retried', async () => {
-  const id = `unit-rvd-rej-${process.pid}-${Date.now()}`
-  const d = fakeRvDaemon(id, { reject: true })
-  await d.listen()
-  try {
-    const r = await deliverViaRendezvous(id, 'gated')
-    assert.equal(r.ok, false)
-    assert.match(r.error ?? '', /rejected/)
-    assert.equal(d.connCount(), 1)
-  } finally { await d.close() }
-})
-
-test('deliverViaRendezvous: no socket at all fails loud before any connect', async () => {
+test('deliverViaRendezvous: no socket returns a failed poke after its finite retries', async () => {
   const r = await deliverViaRendezvous(`unit-rvd-none-${process.pid}-${Date.now()}`, 'nobody home')
   assert.equal(r.ok, false)
-  assert.match(r.error ?? '', /no rendezvous control socket/)
+  assert.match(r.error ?? '', /rendezvous poke failed after 2 attempts/)
 })
 
 test('claude deliveryBlockedBy: the sessions panel refuses with the recovery named; a composer pane passes', () => {

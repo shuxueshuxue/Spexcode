@@ -24,10 +24,6 @@ export type Scenario = {
   related?: string[]
 }
 
-// The scenario index is a declaration projection, not a reading view. Keep its three identity layers
-// explicit: scenarioHash is the measurement-contract hash, semanticIndexHash is the canonical declaration
-// index, and fullIndexHash adds only the measuring-hand test mapping. Git provenance is supplied by the CLI
-// outside both hashes, so a mode/type change cannot masquerade as a scenario-content change.
 export const SCENARIO_PROJECTION = 'spex.eval.scenario-index'
 export const SCENARIO_SCHEMA_VERSION = 1
 export type ScenarioSemanticRow = {
@@ -56,13 +52,11 @@ export type ScenarioProjection = {
 }
 
 export type EvalNode = {
-  id: string            // the node's CANONICAL spec id (leaf name, '_'-disambiguated on a leaf collision)
-  dir: string           // absolute node directory
-  evalPath: string     // repo-relative path to eval.md — the SCENARIO freshness axis
-  sidecarPath: string   // absolute path to evals.ndjson
+  id: string
+  dir: string
+  evalPath: string
+  sidecarPath: string
   scenarios: Scenario[]
-  // The exact declaration bytes used to build this node, present for real filesystem and fixed-tree walks.
-  // Synthetic EvalNode values in narrow unit tests may omit it.
   evalSource?: string
 }
 
@@ -81,8 +75,6 @@ type RawTestObject = {
 
 type RawFieldLocation = { startLine: number; endLine: number; indent: string }
 
-// a raw scenario item straight off the frontmatter walk: the known fields it set, plus any UNKNOWN keys it
-// carried — kept (not dropped) so the validator can name a typo'd field instead of silently swallowing it.
 type RawItem = {
   fields: Partial<Record<ScenarioKey, string>>
   testObject?: RawTestObject
@@ -95,7 +87,7 @@ type RawItem = {
 
 const leadingIndent = (line: string): string => line.match(/^[ \t]*/)?.[0] ?? ''
 
-// tiny indentation parser for eval.md's frontmatter `scenarios:` block (no YAML dep), shared by parseScenarios and validateScenarios so they can't disagree; reports hasFrontmatter/hasKey so the validator can tell "none declared" from "malformed"
+// Keep parsing and validation on the same structural walk.
 function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean; items: RawItem[]; malformed: string[] } {
   const normalized = src.replace(/\r\n?/g, '\n')
   const m = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)
@@ -120,7 +112,6 @@ function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean;
     const trimmed = line.trim()
     const dash = trimmed.startsWith('- ') || trimmed === '-'
     if (dash && (itemIndent < 0 || indent <= itemIndent)) {
-      // a new scenario item. start fresh; the `- ` may carry the first field inline.
       cur = {
         fields: {}, unknownKeys: [], duplicateKeys: [], malformed: [], locations: {},
         ...(trimmed.slice(1).trim() ? { fieldIndent: `${prefix}  ` } : {}),
@@ -146,11 +137,6 @@ function walkScenarios(src: string): { hasFrontmatter: boolean; hasKey: boolean;
   return { hasFrontmatter: true, hasKey: true, items, malformed }
 }
 
-// assign a `key: value` field to the current item. When the value is a block-scalar indicator (`|`
-// literal / `>` folded), consume the following more-indented lines as the value and return the index of
-// the LAST consumed line (the for-loop's ++ then moves past it); otherwise return `idx` unchanged. A key
-// outside the schema is recorded under unknownKeys (still consuming its block, so the body isn't misread as
-// new items) rather than dropped — validateScenarios needs to see it to reject the typo.
 function assignField(cur: RawItem, kv: string, lines: string[], idx: number, keyIndent: number, inline = false): number {
   const f = kv.match(/^([A-Za-z_][\w-]*):\s*(.*)$/)
   if (!f) {
@@ -200,7 +186,6 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
       return finish(idx)
     }
   }
-  // a list field (`code:`/`related:`) may be a YAML block sequence (`- item` lines); the scalar reader can't see those, so collect them here into the comma form parseCodeList expects
   if ((LIST_KEYS as readonly string[]).includes(key) && f[2].trim() === '') {
     const items: string[] = []
     let lastItem = idx
@@ -234,8 +219,7 @@ function assignField(cur: RawItem, kv: string, lines: string[], idx: number, key
       const tabInIndent = tabBeforeContent && spaces.length < requiredIndent
       if (tabInIndent) cur.malformed.push(`tab indentation is not valid in block scalar \`${key}\``)
       if (!l.trim() && !tabBeforeContent) { body.push(''); continue }
-      // YAML indentation is spaces-only. Once the line is deeper than its key, a leading TAB belongs to the
-      // scalar content and must survive parsing; before the block's required depth it is illegal indentation.
+      // A tab after the required indent is scalar content, not indentation.
       const ind = tabInIndent ? leadingIndent(l).length : spaces.length
       if (ind <= keyIndent) break   // dedented to a sibling field / next item → the block is done
       if (base < 0) base = ind
@@ -275,8 +259,7 @@ function assignTestField(obj: RawTestObject, entry: string): void {
   obj.fields[key as TestKey] = testValue(f[2], key === 'name')
 }
 
-// A flow mapping is accepted beside the more readable block form. Split only on commas outside quotes so
-// an opaque case name such as "allows admin, user" survives byte-for-byte after YAML quote removal.
+// Test names may contain commas inside quotes.
 function parseFlowTestObject(raw: string): RawTestObject {
   const obj = emptyTestObject()
   if (!raw.startsWith('{') || !raw.endsWith('}')) {
@@ -317,36 +300,23 @@ function normalizedTest(it: RawItem): ScenarioTestReference | undefined {
   return path ? { path } : undefined
 }
 
-// @@@scenario contract hash - the deterministic content hash of a scenario's SEMANTIC text, stamped on each
-// reading at filing time ([[eval-core]]'s scenario freshness axis). Hashes ONLY the measurement contract —
-// description (what to measure) + expected (what zero loss looks like) — never name/tags/test/code/related.
-// Normalization (spec'd, don't drift): each field independently collapses every whitespace run (space, tab,
-// CR, LF) to a single space and trims its ends, so a prose re-wrap, an indent shift, CRLF churn or trailing
-// whitespace never changes the hash; the two normalized fields join with a single '\n' (neither can contain
-// one after normalization, so the join is unambiguous) and sha256-hex the UTF-8 bytes. The hash is pure text
-// over the parsed declaration — no git, no file position — so it is identical wherever and however the same
-// contract text is read.
 const normSemantic = (s: string) => s.replace(/\s+/g, ' ').trim()
 export function scenarioHash(s: Pick<Scenario, 'description' | 'expected'>): string {
   return createHash('sha256').update(`${normSemantic(s.description)}\n${normSemantic(s.expected)}`, 'utf8').digest('hex')
 }
 
-// @@@scenario code axis - the ONE resolution of a scenario's code freshness axis, so a declaration can never
-// mean two things to two consumers. A scenario's own `code:` narrows the node's list; absent, it inherits it
-// whole ([[eval-core]]). Each entry may carry [[code-anchor]]'s `path#symbol` selectors, folded per base file
-// by the SAME structural parser spec relations use (several selectors on one file OR together; duplicates,
-// bare+scoped mixing and a selector on a glob come back as `problems` for lint to report).
-// `paths` is what every PATH consumer must read — changed-scan selection, session impact, drift display,
-// the ghost-path check — because a raw `path#symbol` string matches no real file and would silently drop the
-// scenario out of those sets instead of narrowing it. `entries` is what the freshness code axis narrows with.
 export type ScenarioCodeAxis = { entries: RelationEntry[]; paths: string[]; problems: string[] }
-export function scenarioCodeAxis(scenarioCode: readonly string[] | undefined, nodeCode: readonly string[] = []): ScenarioCodeAxis {
-  const { entries, problems } = parseRelation([...(scenarioCode?.length ? scenarioCode : nodeCode)], 'code')
+export type ScenarioCodeAxisSource = readonly string[] | readonly RelationEntry[]
+export function scenarioCodeAxis(scenarioCode: readonly string[] | undefined, nodeCode: ScenarioCodeAxisSource = []): ScenarioCodeAxis {
+  const parsed = scenarioCode?.length
+    ? parseRelation([...scenarioCode], 'code')
+    : nodeCode.length && typeof nodeCode[0] !== 'string'
+      ? { entries: (nodeCode as readonly RelationEntry[]).map((e) => ({ path: e.path, selectors: [...e.selectors] })), problems: [] }
+      : parseRelation([...(nodeCode as readonly string[])], 'code')
+  const { entries, problems } = parsed
   return { entries, paths: entries.map((e) => e.path), problems }
 }
 
-// a scenario's optional list field (`code:`/`related:`) is a comma-separated path list (a YAML flow list
-// `[a, b]` or bare `a, b`, or a single path) — the tiny parser stays scalar-only, so it is split here.
 function parseCodeList(raw: string): string[] {
   return raw.replace(/^\[|\]$/g, '').split(',').map((s) => unquote(s.trim())).filter(Boolean)
 }
@@ -368,7 +338,7 @@ export function parseScenarios(src: string): Scenario[] {
         ...(related.length ? { related } : {}),
       }
     })
-    .filter((s) => s.name)   // a scenario with no name is malformed — drop it (validateScenarios reports it)
+    .filter((s) => s.name)
 }
 
 const compareStable = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0
@@ -380,8 +350,6 @@ const hashProjection = (value: unknown): string =>
 
 const semanticOnly = (row: ScenarioProjectionRow): ScenarioSemanticRow => row.semantic
 
-// Build one canonical declaration index from the already-parsed scenarios. No eval sidecar is touched here;
-// callers can safely use this projection to compare fixed trees without importing the reading/freshness path.
 export function scenarioProjection(
   nodes: readonly Pick<EvalNode, 'id' | 'scenarios' | 'evalSource'>[],
   provenance: Partial<ScenarioProjectionProvenance> = {},
@@ -426,10 +394,6 @@ export function scenarioProjection(
   }
 }
 
-// `tagLibrary` is the closed vocabulary a scenario's `tags:` must draw from (config's `lint.scenarioTags`).
-// Every scenario needs ≥1 tag; each tag must be IN the library — an out-of-library tag is rejected LOUD with
-// the repair the user owns: pick an existing tag, or extend the library. An empty library (none configured)
-// disables only the membership check, never the ≥1-tag requirement.
 export function validateScenarios(src: string, tagLibrary: string[] = [], pathRoot?: string): string[] {
   const { hasFrontmatter, hasKey, items, malformed } = walkScenarios(src)
   if (!hasFrontmatter) return ['no frontmatter block — an eval.md must declare a `scenarios:` list']
@@ -528,9 +492,6 @@ function malformedDeclaration(errors: string[]): Error {
   return new Error(`malformed eval.md:\n${errors.map((error) => `  - ${error}`).join('\n')}`)
 }
 
-// Canonical write half of the declaration identity. The caller supplies authoritative bytes and one closed
-// semantic mutation; source locations come only from the same structural walk parseScenarios/validation use.
-// Untouched lines are never serialized, which is what makes insert -> delete a byte-exact inverse.
 export function writeScenarioMeasurementMetadata(source: string, request: unknown): string {
   const mutation = parseMetadataMutation(request)
   const beforeErrors = validateScenarios(source)
@@ -582,12 +543,6 @@ export function writeScenarioMeasurementMetadata(source: string, request: unknow
   return proposed
 }
 
-// walk `.spec` for every dir holding an eval.md; the node id is its CANONICAL spec id ([[id-url-safe]]) —
-// minted by the SAME rule as specs.ts's loader (mintIds: the leaf dir name, or on a leaf collision the
-// shortest globally-unique '_'-joined trailing suffix) over the SAME universe (every dir holding a spec.md,
-// not just the eval subset — a leaf that collides among spec nodes is disambiguated even when only one of
-// them measures). So the id eval verbs answer to is exactly the id board/scan/search already print — never a
-// second, diverging bare-leaf scheme. An eval.md beside no spec.md keeps its leaf name (no spec id to align with).
 function assembleNodes(root: string, specDirs: string[], hits: { dir: string; src: string }[]): EvalNode[] {
   const specBase = join(root, '.spec')
   const ids = mintIds(specDirs.map((d) => relative(specBase, d).split(/[/\\]/)))
@@ -620,8 +575,6 @@ export function evalNodes(root: string): EvalNode[] {
   return assembleNodes(root, specDirs, hits)
 }
 
-// Exact fixed-tree twin for the canonical JSON seam. It reads only eval.md/spec.md bytes from `tip`, then
-// reuses assembleNodes/parseScenarios; no working-tree declaration can be paired with that tree's provenance.
 export function evalNodesAt(root: string, tip: string): EvalNode[] {
   const files = treeTextFiles(root, tip, '.spec')
   const paths = [...files.keys()]
@@ -659,10 +612,6 @@ export async function evalNodesAsync(root: string): Promise<EvalNode[]> {
 
 export type EvalResolution<T> = { ok: true; node: T } | { ok: false; ambiguous: boolean; error: string }
 
-// resolve a user-supplied node ref against the measurable set: an EXACT canonical id always wins; a bare leaf
-// name stays the convenience it always was while it names exactly ONE measurable node; a leaf several nodes
-// share fails LOUD listing the candidate canonical ids — never an arbitrary first hit, so a reading can
-// only land on the node the caller actually named.
 export function resolveEvalNode<T extends Pick<EvalNode, 'id' | 'dir'>>(nodes: T[], ref: string): EvalResolution<T> {
   const exact = nodes.find((n) => n.id === ref)
   if (exact) return { ok: true, node: exact }

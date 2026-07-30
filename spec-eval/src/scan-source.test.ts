@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -8,7 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, '..', '..', 'spec-cli', 'src', 'cli.ts')
-const TSX = join(SRC, '..', 'node_modules', '.bin', 'tsx')
+const TSX = 'tsx'
 
 function gitAvailable(): boolean {
   try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true } catch { return false }
@@ -66,6 +66,78 @@ test('real eval lint shares tracked-text algebra and compiled extension compatib
   assert.match(rustOnly.out, /eval-coverage: 'rust' governs source code/)
   for (const id of ['python', 'backend', 'frontend', 'docs', 'config'])
     assert.ok(!rustOnly.out.includes(`eval-coverage: '${id}'`), rustOnly.out)
+})
+
+test('real eval fallback inherits node anchors while explicit bare scenario code stays file-wide', { skip }, () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-eval-inherited-anchor-'))
+  const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const write = (path: string, content: string) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), content)
+  }
+  const run = (...args: string[]) => {
+    const result = spawnSync(TSX, [CLI, ...args], { cwd: root, encoding: 'utf8' })
+    return { code: result.status ?? -1, out: `${result.stdout}${result.stderr}` }
+  }
+  const source = (rate: number, helper: number) => `def apply_rate():\n    return ${rate}\n\ndef helper():\n    return ${helper}\n`
+
+  try {
+    git('init', '-q', '-b', 'main')
+    git('config', 'user.email', 'test@example.com')
+    git('config', 'user.name', 'Test')
+    write('.spec/project/spec.md', '---\ntitle: project\n---\n# project\n')
+    write('.spec/project/calc/spec.md', '---\ntitle: calc\ncode: src/calc.py#apply_rate\n---\n# calc\n')
+    write('.spec/project/calc/eval.md', [
+      '---',
+      'scenarios:',
+      '  - name: inherited',
+      '    tags: [cli]',
+      '    description: inherited selector stays narrow',
+      '    expected: only apply_rate stales this reading',
+      '  - name: whole-file',
+      '    tags: [cli]',
+      '    code: src/calc.py',
+      '    description: explicit bare code stays file-wide',
+      '    expected: any calc.py change stales this reading',
+      '---',
+      '',
+    ].join('\n'))
+    write('src/calc.py', source(1, 2))
+    git('add', '-A')
+    git('commit', '-qm', 'base')
+    const base = git('rev-parse', 'HEAD')
+    write('.spec/project/calc/evals.ndjson', [
+      JSON.stringify({ scenario: 'inherited', codeSha: base, ts: '2026-07-29T00:00:00.000Z' }),
+      JSON.stringify({ scenario: 'whole-file', codeSha: base, ts: '2026-07-29T00:00:00.000Z' }),
+      '',
+    ].join('\n'))
+    git('add', '.spec/project/calc/evals.ndjson')
+    git('commit', '-qm', 'file base readings')
+
+    write('src/calc.py', source(1, 20))
+    git('add', 'src/calc.py')
+    git('commit', '-qm', 'change helper only')
+    const helperSpec = run('spec', 'lint')
+    assert.equal(helperSpec.code, 0, helperSpec.out)
+    assert.doesNotMatch(helperSpec.out, /anchor-drift/, helperSpec.out)
+    const helperEval = run('eval', 'lint')
+    assert.equal(helperEval.code, 0, helperEval.out)
+    assert.doesNotMatch(helperEval.out, /scenario 'inherited'.*stale/, helperEval.out)
+    assert.match(helperEval.out, /scenario 'whole-file'.*stale/, helperEval.out)
+
+    write('src/calc.py', source(10, 20))
+    git('add', 'src/calc.py')
+    git('commit', '-qm', 'change anchored function')
+    const anchoredSpec = run('spec', 'lint')
+    assert.equal(anchoredSpec.code, 1, anchoredSpec.out)
+    assert.match(anchoredSpec.out, /anchor-drift.*src\/calc\.py#apply_rate/, anchoredSpec.out)
+    const anchoredEval = run('eval', 'lint')
+    assert.equal(anchoredEval.code, 0, anchoredEval.out)
+    assert.match(anchoredEval.out, /scenario 'inherited'.*stale/, anchoredEval.out)
+    assert.match(anchoredEval.out, /scenario 'whole-file'.*stale/, anchoredEval.out)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('real changed eval lint proves its scope and fails loud when the base is unavailable', { skip }, () => {

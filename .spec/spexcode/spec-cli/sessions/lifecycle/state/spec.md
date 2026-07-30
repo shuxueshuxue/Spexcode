@@ -9,7 +9,7 @@ related:
   - spec-cli/src/commit-gate.test.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
-  - spec-cli/src/watch-cli.api.test.ts
+  - spec-cli/src/follow-cli.api.test.ts
 ---
 
 # state
@@ -226,12 +226,20 @@ session concern; spec-awareness is universal.
   act on, so the agent picks the TRUE one. **`parked` is policed hardest** — claim it only when a real
   background task will wake you; with nothing running to resume you the stop is `asking`, never a false
   `parked` the board misreads as self-resuming while you actually need the human.
+  The teaching names the complete declared face: `done --propose merge` is **review** — the sole proposal
+  that offers a human-clickable merge; `done --propose nothing` is **done** without proposing a merge;
+  `done --propose close` is **close-pending**; `ask` is **asking** for a human reply; and `park` is
+  **parked**, waiting only for a real background wake-up. The dashboard keeps the merge tool's fixed slot
+  for every selected session, but enables and paints it green only for the persisted
+  `awaiting`/`merge`/`review` proposal while liveness is `online`; every other proposal, lifecycle, or
+  liveness reading is muted, disabled, and names its reason. This is an affordance over the existing
+  record projection, never a new merge, commit-gate, or lifecycle transition.
 - **`StopFailure` → `error`**; **headless turn non-zero exit → `error`**, but only as an `active` compare-and-set
   so a declaration written before child teardown wins; **`Notification(idle_prompt)` → `idle`**. All Stop-gate
   git goes through the shared `git()` helper, so a stray exported git dir can't misdirect repo discovery.
 
 `asking` resumes only on a human prompt (unlike self-resuming `parked`); `idle` is its inferred opposite,
-a stop with no declaration. Surfacing an `asking` is the manager's job (see [[session-edges]]). The lifecycle
+a stop with no declaration. Surfacing an `asking` is the manager's job (see [[session-follow]]). The lifecycle
 writers live in `sessions.ts`; state's only stake in the shared `cli.ts` hub is the `spex session`
 declaration commands and the `spex ls` table — a sibling verb's churn there, like the `eval` usage line
 rewritten in the measure-and-score reframe, moves the file but is not state's drift. A declaration echoes a one-line confirmation — recorded for

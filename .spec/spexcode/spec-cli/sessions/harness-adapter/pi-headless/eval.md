@@ -60,7 +60,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-pi-headless-launch-in-turn
@@ -82,7 +82,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-pi-headless-dashboard-note-in-turn
@@ -93,7 +93,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-pi-headless-cli-send-idle
@@ -104,7 +104,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-pi-headless-cli-send-in-turn
@@ -115,7 +115,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   # harness-delivery-campaign:end

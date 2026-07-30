@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -264,16 +264,13 @@ touch ${JSON.stringify(consumed)}
     assert.equal(internalPending.stopped, false, 'the internal candidate crosses its durable pending boundary')
     assert.equal(internalPending.status, 'idle')
     assert.equal(internalPending.launch_readiness_pending?.original?.status, 'active')
-    const [apiRows, graph] = await Promise.all([listSessions(true), sessionGraph()])
+    const apiRows = await listSessions(true)
     const apiRow = apiRows.find((row) => row.id === id)
-    const graphRow = graph.nodes.find((row) => row.id === id)
-    for (const [surface, row] of [['sessions API source', apiRow], ['session graph', graphRow]] as const) {
-      assert.ok(row, `${surface} retains the governed row during validation`)
-      assert.equal(row.lifecycle, 'active', `${surface} projects the exact pre-resume lifecycle`)
-      assert.equal(row.status, 'offline', `${surface} never projects the pending candidate online`)
-      assert.equal(row.liveness, 'offline', `${surface} remains stopped while validation is pending`)
-      assert.equal(row.note, 'preserve-before-readiness')
-    }
+    assert.ok(apiRow, 'sessions API source retains the governed row during validation')
+    assert.equal(apiRow.lifecycle, 'active', 'sessions API source projects the exact pre-resume lifecycle')
+    assert.equal(apiRow.status, 'offline', 'sessions API source never projects the pending candidate online')
+    assert.equal(apiRow.liveness, 'offline', 'sessions API source remains stopped while validation is pending')
+    assert.equal(apiRow.note, 'preserve-before-readiness')
     assert.deepEqual(readTimeline(id)?.events ?? [], [], 'pending publication emits no lifecycle event')
     releaseValidation()
     assert.deepEqual(await pending, { ok: true })

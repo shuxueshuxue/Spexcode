@@ -72,7 +72,7 @@ function requirePrimaryStore(action: string): void {
 // .plugins system which nests under the named root node), OR the disposable override. Every read and write goes here.
 const localStoreDir = (): string => overrideStoreDir() ?? join(mainCheckout(), LOCAL_STORE_REL)
 // the author's signature: the effective governed session id (envSessionId handles the claude/codex split).
-const currentSession = (): string => envSessionId() || 'unknown'
+export const currentSession = (): string => envSessionId() || 'unknown'
 // a synchronous sleep for the commit-retry backoff (Date/timers-free, safe in any runtime).
 const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 
@@ -361,51 +361,16 @@ export function reply(id: string, body: string, author?: string, evidence?: stri
 // plus the @-dispatch outcomes so a caller can echo who was notified.
 // The two reply deliveries are orthogonal: `evidence?` (f15b) carries a video annotation's frame blobs onto
 // the thread; the originator loop-in ([[mentions]]) notifies who raised the thread. Both apply on every reply.
-export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
+export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
   const thread = reply(id, body, author, evidence, remark)
   const node = thread.nodes[0] || null
   const outcomes = await dispatchMentions(body, { threadId: id, node, author, status: thread.status })
-  // implicit originator loop-in ([[mentions]] / [[remark-substrate]] R3): a courtesy copy down the fallback
-  // chain — the reading's filer, then the node's governing session — delivered to the first online link.
-  const loopIn = await notifyOriginator(await threadOriginators(thread), author, body,
-    { threadId: id, node, alreadyDelivered: deliveredIds(outcomes) })
-  return { thread, outcomes, loopIn }
+  // the originator loop-in is composed ABOVE this layer ([[loop-in]]): its candidate resolution has to ask the
+  // eval package who filed a reading, and the eval package imports this module.
+  return { thread, outcomes }
 }
 
-// The FALLBACK CHAIN of candidates a reply loops in ([[mentions]] loop-in / [[remark-substrate]] R3's dispatch
-// clause), tried in order until one is online. A plain thread's only candidate is its author (`by`). An
-// EVAL-COMMENT thread (concern `eval: <node> · <scenario>`, the eval-remark track) chains: the agent who FILED
-// the reading the remark judges FIRST — resolved from the TRUNK sidecar, then from each LIVE session's
-// WORKTREE (an in-flight reading, filed on an unmerged branch, is invisible to the trunk — exactly the
-// review-time case, when the filer sits online awaiting review and the remark must reach them) — then, when
-// every filer is offline/absent, the NODE's governing session, so an unresolved remark still REACHES an agent
-// who can act on it. A broken/absent worktree sidecar falls through silently — one bad worktree never fails
-// the remark write. This is notification only; it resolves nothing (R3: resolve is a deliberate
-// `spex remark resolve`). Non-eval threads pay nothing (no eval/specs/sessions import).
-const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/   // node first (never contains ' · '), then the scenario (may)
-async function threadOriginators(thread: Issue): Promise<(string | null)[]> {
-  const m = EVAL_CONCERN_RE.exec(thread.concern)
-  if (!m) return [thread.by]
-  const node = m[1].trim(), scenario = m[2].trim()
-  const { evalReadingFiler } = await import('../../spec-eval/src/filing.js')
-  const chain: (string | null)[] = [evalReadingFiler(node, scenario)]
-  try {
-    const { listSessions } = await import('./sessions.js')
-    for (const s of await listSessions()) {
-      try { if (s.path) chain.push(evalReadingFiler(node, scenario, s.path)) } catch { /* one unreadable worktree → next link */ }
-    }
-  } catch { /* sessions unavailable (bare store, no tmux) → trunk-only chain, as before */ }
-  chain.push(await nodeGoverningSession(node))
-  return chain
-}
 
-// A node's governing session — the `session` its spec resolves to (the Session: trailer of its latest version,
-// else the frontmatter `session:` fallback; specs.ts owns that derivation). The fallback link when a reading's
-// filer is unreachable. null when the node is unknown or has no governing session.
-async function nodeGoverningSession(nodeId: string): Promise<string | null> {
-  const { loadSpecs } = await import('./specs.js')
-  return (await loadSpecs()).find((s) => s.id === nodeId)?.session ?? null
-}
 
 export async function postLocalIssue(
   concern: string,
@@ -430,7 +395,16 @@ export function closeLocalIssue(id: string): { status: 'landed'; already: boolea
 // (node, scenario). The scenario track is NOT a new store — it is the annotator's lazy eval thread, keyed by
 // its `eval: <node> · <scenario>` concern; a remark reuses it, creating it on first remark as a stub
 // container (every remark is a reply, never the thread body, so the resolved bit always lives in one place).
+// @@@ the eval-concern format, once - composer and parser side by side. The parser existed in two copies while
+// a CLI surface down here had to recognise the format without being able to import the module that composes it;
+// [[issues-cli]] removed that constraint, so the format is one pair now. `node` is matched non-greedily because
+// it can never contain ' · ' while a scenario name may.
 const evalConcernKey = (node: string, scenario: string): string => `eval: ${node} · ${scenario}`
+const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/
+export const parseEvalConcern = (concern: string): { node: string; scenario: string } | null => {
+  const m = EVAL_CONCERN_RE.exec(concern)
+  return m ? { node: m[1].trim(), scenario: m[2].trim() } : null
+}
 
 // find-or-create the ONE scenario thread for (node, scenario), keyed by its eval concern, ATOMICALLY under
 // the store lock. R4 says a scenario's remark track lives ONCE — but a concurrent first-remark burst is a
@@ -472,13 +446,13 @@ export async function remarkOnHost(
   host: { issue?: string; node?: string; scenario?: string },
   body: string,
   opts: { codeSha?: string; author?: string; evidence?: string[] } = {},
-): Promise<{ ref: string; rid: string; codeSha: string; thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
+): Promise<{ ref: string; rid: string; codeSha: string; thread: Issue; author: string; outcomes: DispatchOutcome[] }> {
   const author = opts.author || currentSession()
   const codeSha = opts.codeSha || headSha(repoRoot())
   const id = resolveRemarkHost(host, author)
-  const { thread, outcomes, loopIn } = await replyLocalIssue(id, body, author, opts.evidence, { targetCodeSha: codeSha })
+  const { thread, outcomes } = await replyLocalIssue(id, body, author, opts.evidence, { targetCodeSha: codeSha })
   const rid = thread.replies[thread.replies.length - 1].rid!
-  return { ref: `${id}#${rid}`, rid, codeSha, thread, outcomes, loopIn }
+  return { ref: `${id}#${rid}`, rid, codeSha, thread, author, outcomes }
 }
 
 // a remark ref is `<thread-id>#<rid>`; the thread id (a store slug) never contains '#', so split on the last.
@@ -563,139 +537,10 @@ export function nudge(node: string): string {
 export function closeoutNudge(sessionId: string | null | undefined): string {
   if (!sessionId || sessionId === 'unknown' || !issuesEnabled()) return ''
   const mine = loadLocalIssues().filter((t) =>
-    t.status === 'open' && !EVAL_CONCERN_RE.test(t.concern) &&
+    t.status === 'open' && !parseEvalConcern(t.concern) &&
     (t.by === sessionId || t.replies.some((r) => r.by === sessionId)))
   if (!mine.length) return ''
   return `\n\nIssue closeout — ${mine.length} still-open local issue(s) you touched (opened or replied): ${mine.map((t) => t.id).join(', ')}. For each, close it now if its work is finished (\`spex issue close <id>\`), or reply why it should stay open past this session (\`spex issue reply <id> --body "<why>"\`). Some issues rightly outlive their session — this is a reminder to sweep, not a gate.`
 }
 
 // ───────────────────────── CLI ─────────────────────────
-const fl = (args: string[], name: string): string | undefined => {
-  const i = args.indexOf(`--${name}`)
-  return i >= 0 ? args[i + 1] : undefined
-}
-const VALUE_FLAGS = new Set(['--node', '--body', '--evidence', '--scenario', '--code-sha', '--store'])
-// bare positionals, skipping flags + their values.
-function bare(args: string[]): string[] {
-  const out: string[] = []
-  for (let i = 0; i < args.length; i++) {
-    const t = args[i]
-    if (t.startsWith('--')) { if (VALUE_FLAGS.has(t)) i++; continue }
-    out.push(t)
-  }
-  return out
-}
-// `--body -` reads stdin; `--body "text"` is literal; absent → undefined.
-function readBody(args: string[]): string | undefined {
-  const v = fl(args, 'body')
-  if (v === undefined) return undefined
-  return v === '-' ? readFileSync(0, 'utf8') : v
-}
-// a repeatable value flag: every `--<name> <value>` pair, in order.
-const repeated = (args: string[], name: string): string[] =>
-  args.flatMap((a, i) => (a === `--${name}` ? [args[i + 1]] : [])).filter(Boolean) as string[]
-
-// the local-issue WRITE verbs of the issue drawer (`spex issue <verb>`): open "<concern>" [--store local|<host>] [--node id…]
-// [--evidence hash…] [--body -|text], and the id-based reply. Store is a property of the issue,
-// never a second command — open and reply route by it (issues.ts createIssue/replyIssue).
-export async function runIssueWrite(args: string[]): Promise<number> {
-  const sub = args[0]
-  try {
-    if (sub === 'reply') {
-      const id = bare(args.slice(1))[0]
-      const body = readBody(args)
-      if (!id || !body) { console.error('usage: spex issue reply <issue-id> --body -|<text> [--evidence <hash>…]'); return 2 }
-      // the ONE store-routed reply verb ([[issues]]): a forge id posts a real comment through the driver,
-      // a local id commits to the store — the same command either way (dynamic import: no static cycle).
-      const r = await (await import('./issues.js')).replyIssue(id, body, { evidence: repeated(args, 'evidence') })
-      console.log(r.store === 'local'
-        ? `replied to '${id}' — ${r.replies?.length} post(s) in thread`
-        : `commented on '${id}' — ${r.url}`)
-      const s = summarize(r.outcomes, r.loopIn)
-      if (s) console.log(`  ${s}`)
-      return 0
-    }
-    // `open`: start a new issue — STORE-ROUTED through the one creation port ([[issues]] createIssue, the
-    // same routine POST /api/issues runs): default local commits to the trunk store; `--store <host>`
-    // creates the real forge issue through that store's driver (no promote round-trip when the concern is
-    // born forge-visible). The concern is the bare positional(s) after the sub.
-    const concern = sub === 'open' ? bare(args.slice(1)).join(' ').trim() : ''
-    if (!concern) {
-      console.error('usage: spex issue open "<concern>" [--store local|<host>] [--node <id>…] [--evidence <hash>…] [--body -|<text>]\n       spex issue reply|close|promote <issue-id> …')
-      return 2
-    }
-    const r = await (await import('./issues.js')).createIssue(concern, {
-      store: fl(args, 'store'),
-      nodes: repeated(args, 'node'),
-      body: readBody(args),
-      evidence: repeated(args, 'evidence'),
-    })
-    const re = r.nodes.length ? ` (re: ${r.nodes.join(', ')})` : ''
-    console.log(r.store === 'local'
-      ? `opened '${r.id}'${re} — committed to the local issue store; read it with \`spex issue ls\``
-      : `opened '${r.id}' on ${r.store}${re} — ${r.url}`)
-    const s = summarize(r.outcomes)
-    if (s) console.log(`  ${s}`)
-    return 0
-  } catch (e) {
-    console.error(`spex issue: ${e instanceof Error ? e.message : e}`)
-    return 1
-  }
-}
-
-// the first positionals runIssueWrite handles — the issue drawer routes these to it. Exported so the
-// router and the runner can never drift. (`nudge` is not here: it is machine plumbing, called only by the
-// post-merge hook as `spex internal nudge`; the on|off|status toggle verbs died in v0.3.0 — the switch is
-// the `issues.enabled` settings key.)
-export const ISSUE_WRITE_SUBS = new Set(['open', 'reply'])
-
-// ── remark CLI ([[remark-substrate]]) — CLI-first: the whole author→resolve→retract loop, no server needed ──
-// `spex remark add <issue-id | <node> --scenario <name>> --body -|<text> [--code-sha <sha>] [--evidence <hash>…]`
-// host = a local issue id, OR a <node> with --scenario <name>. Records targetCodeSha (default: worktree HEAD).
-export async function runRemark(args: string[]): Promise<number> {
-  try {
-    const scenario = fl(args, 'scenario')
-    const positional = bare(args)[0]
-    const body = readBody(args)
-    if (!positional || !body) {
-      console.error('usage: spex remark add <issue-id | node --scenario name> --body -|<text> [--code-sha <sha>] [--evidence <hash>…]')
-      return 2
-    }
-    // THE FLAG DECIDES THE PARSE ([[cli-surface]] §1): `--scenario` present ⇒ the positional is a NODE id
-    // (the remark pins to that node's scenario track); absent ⇒ it is an ISSUE id. Never type-sniffed —
-    // a node id and an issue id are both bare slugs, so any "looks like" guess would misroute; the flag
-    // is the one unambiguous discriminator, and a wrong host fails loud downstream (unknown issue/node).
-    const host = scenario ? { node: positional, scenario } : { issue: positional }
-    const r = await remarkOnHost(host, body, { codeSha: fl(args, 'code-sha'), evidence: repeated(args, 'evidence') })
-    console.log(`remark ${r.ref}  (against ${r.codeSha.slice(0, 7) || 'HEAD'}) — read it with \`spex issue ls --all\``)
-    const s = summarize(r.outcomes, r.loopIn)
-    if (s) console.log(`  ${s}`)
-    return 0
-  } catch (e) {
-    console.error(`spex remark add: ${e instanceof Error ? e.message : e}`)
-    return 1
-  }
-}
-
-// `spex remark resolve <remark-ref>` — flip resolved=true (agent-only, never the author, monotonic — see resolveRemark).
-export async function runResolve(args: string[]): Promise<number> {
-  const ref = bare(args)[0]
-  if (!ref) { console.error('usage: spex remark resolve <remark-ref>   (the <thread-id>#<rid> `spex remark add` printed)'); return 2 }
-  try {
-    const by = currentSession()
-    resolveRemark(ref, by)
-    console.log(`resolved remark ${ref} — by ${by}`)
-    return 0
-  } catch (e) { console.error(`spex remark resolve: ${e instanceof Error ? e.message : e}`); return 1 }
-}
-
-// `spex remark retract <remark-ref>` — the author withdraws their OWN remark, removing it (author-only — see retractRemark).
-export async function runRetract(args: string[]): Promise<number> {
-  const ref = bare(args)[0]
-  if (!ref) { console.error('usage: spex remark retract <remark-ref>'); return 2 }
-  try {
-    retractRemark(ref, currentSession())
-    console.log(`retracted remark ${ref}`)
-    return 0
-  } catch (e) { console.error(`spex remark retract: ${e instanceof Error ? e.message : e}`); return 1 }
-}

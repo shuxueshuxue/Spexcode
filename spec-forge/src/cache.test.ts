@@ -7,8 +7,6 @@ const issue = (number: number, over: Partial<ForgeIssue> = {}): ForgeIssue =>
   ({ number, title: `i${number}`, body: '', url: `u${number}`, state: 'open', labels: [], author: 'a', createdAt: 't', comments: [], ...over })
 const pr = (number: number): ForgePR => ({ number, title: `p${number}`, url: `u${number}`, state: 'open', headRefName: `node/x-${number}`, closesIssues: [] })
 
-// the freshness invariant, incremental halves: a delta window merged over the map leaves the cache
-// identical to a reconcile of that final state — an issue never leaves, a closed one updates in place.
 test('cache: applyIssues merges an updated-since window (upsert, close-in-place, never removes)', () => {
   const c = new ForgeCache()
   c.applyIssues([issue(1), issue(2)])

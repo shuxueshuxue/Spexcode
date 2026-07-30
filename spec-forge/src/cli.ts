@@ -4,7 +4,6 @@ import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from './drivers.js'
 import { resolveLinks, type NodeLinks } from './links.js'
 import { resolveEvalPending, type NodeEvalPending } from './needs-eval.js'
 
-// tiny flag reader over this command's own arg slice (everything after `forge`), so cli.ts stays routing-only.
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`)
   return i >= 0 ? args[i + 1] : undefined
@@ -14,8 +13,6 @@ const has = (args: string[], name: string) => args.includes(`--${name}`)
 async function readForge(
   args: string[],
 ): Promise<{ driver: ForgeDriver; nodeIds: string[]; issues: ForgeIssue[]; prs: ForgePR[] } | null> {
-  // the forge is a VALUE, never a command ([[cli-surface]]): `--store <host>` names it, mirroring the
-  // store axis every other issue verb uses.
   const host = flag(args, 'store') ?? resolveForgeHost()
   const driver = forgeDriverFor(host)
   if (!driver) {
@@ -97,9 +94,6 @@ async function evalPending(args: string[]): Promise<number> {
   return 0
 }
 
-// `spex issue links [--pending]` ([[cli-surface]]): the read-only forge→spec trace, folded into the issue
-// drawer (the forge drawer is dissolved — a forge is a value, `--store`). Bare = every linked node's open
-// issues/PRs; --pending narrows to the threads still awaiting an eval reading (the old eval-pending view).
 export async function runIssueLinks(args: string[]): Promise<number> {
   return has(args, 'pending') ? evalPending(args) : links(args)
 }

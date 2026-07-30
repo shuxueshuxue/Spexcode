@@ -34,8 +34,8 @@ The subsystem divides into governed concerns:
 - **[[lifecycle]]** — a session's existence: [[launch]] (bring a worker up), [[state]] (the agent-authored
   status machine + liveness), [[runtime]] (the per-session global store under `~/.spexcode`).
 - **[[comms]]** — the inter-agent mesh over one adapter-owned control path: [[dispatch]] (deliver a prompt; merge as
-  a dispatched prompt), [[agent-reply-channel]] (reply hint), [[comms-edge]] (recorded talk + graph edge),
-  [[session-edges]] (the live watch network).
+  a dispatched prompt), [[agent-reply-channel]] (reply hint),
+  [[session-follow]] (supervision by following a log).
 - **[[injected-context]]** — what a launched session is fed to start spec-aware: [[spec-pointer]] (the live
   spec path, never the body) and [[inject-spec-first]] (the read-before-write nudge).
 - **[[session-selectors]]** — one selector grammar (id · prefix · node · branch) so every command names the

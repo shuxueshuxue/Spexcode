@@ -14,27 +14,6 @@ import {
   setSessionEvalProjectionWarmup,
 } from '../../spec-eval/src/sessioneval.js'
 
-// @@@ board-stream — the board's freshness is PUSHED, not polled. A dashboard subscribes here ONCE; in
-// plain mode it gets a bare `graph-changed` and refetches /api/graph (the legacy protocol, kept verbatim
-// for old clients); in DELTA mode (`?mode=delta`) the server itself rebuilds on change and streams the
-// hash-chained patch ([[graph-delta]]): a `graph-full {to, graph}` on connect, then `graph-delta
-// {from, to, set, del}` per change — a few KB against the ~600KB snapshot, with a full-snapshot send
-// whenever the patch wouldn't win (bigger than the board, or the unit decomposition's id-uniqueness
-// precondition failed), so a delta subscriber is NEVER worse off than a full refetch.
-//
-// Every source carries the DOMAIN of the change it saw — 'sessions' (only the session rows moved) or 'full'
-// (anything could have) — and fireChanged funnels them into ONE debounced pipeline, escalating to the max
-// scope seen in the window so the cache can splice sessions instead of rebuilding whole ([[graph-cache]]).
-// Sources: (1) fs.watch on the per-user session store — every lifecycle transition lands as a
-// sessions/<id>/session.json write → 'sessions'; (2) fs.watch on the shared git dir's refs (+
-// packed-refs/HEAD) — a commit/merge moves a ref, reshaping the tree → 'full'; (3) fs.watch on the git
-// worktree REGISTRY (+ each live worktree root and gitdir index) — dirty source/spec/sidecar/rename/stage → 'full';
-// (4) two subscriber-gated pollers of the tmux-derived signatures ([[sessions]]) that never touch a file —
-// a 100ms HOT syscall poll and a 1s WARM tmux poll, both → 'sessions'; (5) a delta-gated ~15s cold-tick
-// PATROL that asks graph-cache to validate its owned input revision — unchanged inputs reuse the anchor,
-// while moved inputs select sessions/full there and missed leaf signals stay loud through repair accounting.
-// Plain mode without delta subscribers keeps its zero-build behavior: sources just fan out `graph-changed`.
-
 type Scope = 'sessions' | 'full'
 type EvalTarget = 'all' | { id?: string; path?: string }
 type Notify = () => void
@@ -299,27 +278,28 @@ async function rebuildAndBroadcast(patrol = false, sessions = false, full = fals
       // equal inputs return the anchor without invoking a producer.
       const t0 = Date.now()
       try {
-        if (sessionsFirst) {
+        let wake!: () => void
+        const sessionWake = new Promise<void>((resolve) => { wake = resolve })
+        wakeSessionRefresh = wake
+        // A sessions-first turn can still fall back to an active route-owned full. Keep its wait wakeable
+        // too: a later persisted session change must re-enter the cheap projection rather than queue behind it.
+        const boardWait = sessionsFirst
+          ? getBoardForSessionRefresh()
+          : validate ? patrolBoard() : getBoard()
+        const outcome = await Promise.race([
+          boardWait.then((value) => ({ value })),
+          sessionWake.then(() => ({ value: null as unknown })),
+        ])
+        if (wakeSessionRefresh === wake) wakeSessionRefresh = null
+        if (outcome.value === null) {
+          boardWait.catch(() => {})
           board = await getBoardForSessionRefresh()
-          if (validate) { patrolPending = true; dirty = true }
-        }
-        else {
-          let wake!: () => void
-          const sessionWake = new Promise<void>((resolve) => { wake = resolve })
-          wakeSessionRefresh = wake
-          const boardWait = validate ? patrolBoard() : getBoard()
-          const outcome = await Promise.race([
-            boardWait.then((value) => ({ value })),
-            sessionWake.then(() => ({ value: null as unknown })),
-          ])
-          if (wakeSessionRefresh === wake) wakeSessionRefresh = null
-          if (outcome.value === null) {
-            boardWait.catch(() => {})
-            board = await getBoardForSessionRefresh()
-            servedSessionProjection = true
-            if (validate) patrolPending = true
-            dirty = true // the full wait was preempted only for delivery; it remains owed.
-          } else board = outcome.value
+          servedSessionProjection = true
+          if (validate) patrolPending = true
+          dirty = true // the full wait was preempted only for delivery; it remains owed.
+        } else {
+          board = outcome.value
+          if (sessionsFirst && validate) { patrolPending = true; dirty = true }
         }
       }
       catch {

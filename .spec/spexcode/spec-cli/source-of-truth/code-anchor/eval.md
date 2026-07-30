@@ -29,7 +29,7 @@ scenarios:
       reported as zero coverage rather than described as an anchor test.
   - name: anchor-hit-blocks
     tags: [cli]
-    code: [spec-cli/src/git.ts#canonicalPathProjector, spec-cli/src/anchors.ts#anchorHitCommits]
+    code: [spec-cli/src/git.ts#canonicalPathProjector, spec-cli/src/anchors.ts#anchorHitCommits, spec-cli/src/anchors.ts#anchorHitQueries]
     description: >
       In disposable fixture repos, a node's code: entry anchors applyRate. Exercise a direct edit, an edit
       under the file's historical name followed by a rename, a delete followed by a self-acked restore, and
@@ -51,6 +51,7 @@ scenarios:
     code:
       - spec-cli/src/git.ts#canonicalPathProjector
       - spec-cli/src/anchors.ts#anchorHitCommits
+      - spec-cli/src/anchors.ts#anchorHitQueries
       - spec-eval/src/freshness.ts#codeDrift
       - spec-eval/src/sessioneval.ts#projectSessionImpact
     description: >

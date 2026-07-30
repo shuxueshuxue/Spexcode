@@ -29,11 +29,10 @@ scenarios:
     tags: [frontend-e2e]
     code: [spec-dashboard/src/EvalsPage.jsx]
     description: >
-      In a real browser on #/evals, send an eval remark whose body contains `@new`, wait for the write
-      response, and read the page notice above the eval list.
+      In a real browser on #/evals, send an eval remark whose body contains `@session`, wait for the write
+      response, then read the persisted reply and the referenced session's unchanged timeline.
     expected: >
-      The Evals page briefly echoes the returned mention outcome, such as `@ new→<session>`, after the
-      remark write succeeds, matching the Issues page's reply flash behavior.
+      The remark persists verbatim, and no mention outcome appears because the reference caused no action.
 ---
 # event-detail-fixes loss
 

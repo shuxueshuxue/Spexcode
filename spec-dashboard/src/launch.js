@@ -25,10 +25,9 @@ export async function createSession(prompt, launcher) {
   }
 }
 
-// One settings read shared by every launcher consumer. Issue/eval composers mount dynamically; making each
-// start from [] and fetch independently left a real race where an immediately accepted @new became a bare
-// default spawn before its launcher rows arrived. A module snapshot lets a later composer inherit the same
-// already-loaded profiles synchronously, while the one in-flight promise removes duplicate settings reads.
+// One settings read shared by every launcher consumer. The New Session composer and its picker can mount at
+// different times; a module snapshot lets a later consumer inherit loaded profiles synchronously, while the
+// one in-flight promise removes duplicate settings reads.
 let launcherSettings = null
 let launcherSettingsRequest = null
 const loadLauncherSettings = () => {

@@ -68,6 +68,7 @@ const toolbarProbe = (page) => page.evaluate(() => {
         text: button.textContent.trim(),
         label: button.getAttribute('aria-label'),
         tip: button.getAttribute('data-tip'),
+        disabled: button.disabled,
         pressed: button.getAttribute('aria-pressed'),
         icon: button.querySelector('svg')?.outerHTML || null,
         color: buttonStyle.color,
@@ -125,12 +126,14 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
     const session = graph.sessions.find((candidate) => candidate.id === SESSION)
     session.status = 'review'
     session.lifecycle = 'awaiting'
+    session.proposal = 'merge'
     session.liveness = 'online'
     session.evalSummary = evalProjection('refresh', 10, { measured: 9, total: 10, pass: 1, fail: 0, review: 8, blind: 1, unknown: 0 })
     const other = graph.sessions.find((candidate) => candidate.id === SWITCH_SESSION)
     if (other) {
       other.status = 'review'
       other.lifecycle = 'awaiting'
+      other.proposal = 'merge'
       other.liveness = 'online'
       other.evalSummary = evalProjection('refresh', 20, { measured: 4, total: 5, pass: 1, fail: 0, review: 3, blind: 1, unknown: 0 })
     }
@@ -270,8 +273,9 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   await video.saveAs(join(OUT, 'B-toolbar.webm'))
 }
 
-async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme = 'minimal', status = 'working', liveness = 'online', evalMode = 'mixed' }) {
+async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme = 'minimal', status = 'working', liveness = 'online', proposal, lifecycle, archived = false, evalMode = 'mixed' }) {
   let evalReads = 0
+  let mergeDispatches = 0
   const context = await browser.newContext({ viewport: { width, height: 760 } })
   await context.addInitScript(({ listWidth, lang, theme }) => {
     localStorage.setItem('spex.siListWidth', String(listWidth))
@@ -303,11 +307,17 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
     const graph = structuredClone(board)
     const session = graph.sessions.find((candidate) => candidate.id === SESSION)
     session.status = status
-    session.lifecycle = status === 'review' || status === 'done' ? 'awaiting' : 'active'
+    session.lifecycle = lifecycle ?? (status === 'review' || status === 'done' || status === 'close-pending' ? 'awaiting' : 'active')
+    session.proposal = proposal ?? (status === 'review' ? 'merge' : status === 'done' ? 'nothing' : status === 'close-pending' ? 'close' : null)
     session.liveness = liveness
+    session.archived = archived
     session.headline = 'An intentionally enormous <section data-test="headline-noise"> shared session headline for validating English and 中文 without moving commands or navigation'
     session.evalSummary = evalProjection(evalMode)
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) })
+  })
+  await page.route('**/api/sessions/*/merge', async (route) => {
+    mergeDispatches++
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ dispatched: true }) })
   })
   page.on('request', (request) => {
     const url = new URL(request.url())
@@ -316,7 +326,7 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
   await page.goto(`${BASE}/#/sessions/${SESSION}`, { waitUntil: 'domcontentloaded' })
   await waitToolbar(page)
   await page.waitForTimeout(100)
-  return { context, page, evalReads: () => evalReads }
+  return { context, page, evalReads: () => evalReads, mergeDispatches: () => mergeDispatches }
 }
 
 // Exact 390px terminal pane: 922 viewport - 52 rail - 480 persisted list.
@@ -359,23 +369,53 @@ for (const lang of ['en', 'zh']) {
   }
 }
 
+let stableMergeX = null
 for (const state of [
-  { status: 'working', liveness: 'online', actions: ['command'] },
-  { status: 'review', liveness: 'online', actions: ['merge', 'command'] },
-  { status: 'done', liveness: 'online', actions: ['merge', 'command'] },
-  { status: 'asking', liveness: 'offline', actions: ['relaunch'] },
-  { status: 'review', liveness: 'offline', actions: ['relaunch'] },
-  { status: 'queued', liveness: 'offline', actions: [] },
+  { status: 'review', liveness: 'online', proposal: 'merge', actions: ['merge', 'command'], mergeEnabled: true },
+  { status: 'done', liveness: 'online', proposal: 'nothing', actions: ['merge', 'command'], mergeEnabled: false, reason: 'done --propose nothing' },
+  { status: 'working', liveness: 'online', proposal: null, actions: ['merge', 'command'], mergeEnabled: false, reason: 'has not proposed a merge' },
+  { status: 'asking', liveness: 'online', proposal: null, actions: ['merge', 'command'], mergeEnabled: false, reason: 'has not proposed a merge' },
+  { status: 'review', liveness: 'offline', proposal: 'merge', actions: ['merge', 'relaunch'], mergeEnabled: false, reason: 'not online' },
+  { status: 'queued', liveness: 'offline', proposal: null, actions: ['merge'], mergeEnabled: false, reason: 'has not proposed a merge' },
+  { status: 'review', liveness: 'online', proposal: 'merge', archived: true, actions: ['merge'], mergeEnabled: false, reason: 'archived' },
 ]) {
-  const { context, page } = await fixturePage(state)
+  const { context, page, mergeDispatches } = await fixturePage(state)
   const probe = await toolbarProbe(page)
-  if (state.liveness === 'offline' || state.status === 'queued') await page.keyboard.press('Alt+i')
-  else await page.keyboard.press('Alt+i')
+  await page.keyboard.press('Alt+i')
   const shortcutCommand = await page.locator('.si-command-box').count() > 0
-  const row = { ...state, actual: probe.roles.actions, tools: probe.actionDetails, overflow: probe.overflow, shortcutCommand }
+  if (shortcutCommand) await page.keyboard.press('Alt+i')
+  const merge = probe.actionDetails.find((tool) => tool.name === 'merge')
+  const colors = await page.evaluate(() => {
+    const token = (name) => {
+      const element = document.createElement('span')
+      element.style.color = `var(--${name})`
+      document.body.appendChild(element)
+      const color = getComputedStyle(element).color
+      element.remove()
+      return color
+    }
+    return { green: token('green'), muted: token('muted') }
+  })
+  const beforeDispatch = mergeDispatches()
+  const mergeButton = page.locator('.si-tool.merge')
+  if (state.mergeEnabled) await mergeButton.click()
+  else {
+    const box = await mergeButton.boundingBox()
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  }
+  await page.waitForTimeout(25)
+  const dispatches = mergeDispatches() - beforeDispatch
+  const row = { ...state, actual: probe.roles.actions, tools: probe.actionDetails, merge, dispatches, overflow: probe.overflow, shortcutCommand }
   result.states.push(row)
   const toolShape = row.tools.every((tool) => !tool.text && tool.icon && tool.label === tool.tip && tool.box.width === 24 && tool.box.height === 24)
-  check(`${state.status}/${state.liveness} commands`, JSON.stringify(row.actual) === JSON.stringify(state.actions) && row.overflow.length === 0 && toolShape && shortcutCommand === (state.liveness === 'online'), row)
+  const mergeSlotStable = row.actual.length === 2
+    ? (stableMergeX == null ? (stableMergeX = Math.round(merge.box.x), true) : Math.round(merge.box.x) === stableMergeX)
+    : true
+  check(`${state.status}/${state.liveness} merge affordance`, JSON.stringify(row.actual) === JSON.stringify(state.actions)
+    && row.overflow.length === 0 && toolShape && shortcutCommand === (state.liveness === 'online' && !state.archived)
+    && merge.disabled === !state.mergeEnabled && dispatches === (state.mergeEnabled ? 1 : 0)
+    && merge.color === colors[state.mergeEnabled ? 'green' : 'muted']
+    && (state.mergeEnabled || merge.label.includes(state.reason)) && mergeSlotStable, row)
   await context.close()
 }
 

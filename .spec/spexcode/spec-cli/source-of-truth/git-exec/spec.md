@@ -1,0 +1,73 @@
+---
+title: git-exec
+status: active
+hue: 200
+desc: The seam that turns a git invocation into a truthful result — and, when it fails, into a failure that still says WHICH kind it was, so no caller can mistake "git could not run" for "git ran and said no".
+code:
+  - spec-cli/src/git.ts#execGit
+related:
+  - spec-cli/src/git.ts
+  - spec-cli/src/git.test.ts
+  - spec-eval/src/freshness.ts
+  - spec-cli/src/sessions.ts
+---
+
+# git-exec
+
+## raw source
+
+Everything in this repository reads truth through git. So the one thing this seam may never do is hand back a
+failure whose CAUSE has been overwritten: callers routinely branch on whether git answered "no" or never ran
+at all, and those two mean opposite things. A missing branch is a fact about the repository; a git that cannot
+be executed is a fact about the machine, and answering the first when the second happened is a silent lie in
+the layer every other answer is built on.
+
+## expanded spec
+
+git-exec runs one git child and resolves its output, or rejects with an error that carries three things: the
+stream contents, the signal if one arrived, and — load-bearing — the failure's OWN cause. A child that never
+started still emits `close`, and the code it reports there is the negated errno (`EACCES` arrives as `-13`).
+That number is not an exit status and must never be written over the spawn error's `'EACCES'`/`'ENOENT'`,
+because the classification above this seam is exactly `typeof code === 'number' ? 'exit' : 'spawn'`: overwrite
+it and a failure to RUN git is delivered as a git that ran and exited.
+
+The consequence was not theoretical. Callers separating the two read the mislabelled failure as a real git
+answer — the freshness content batch concluded "the anchor commit object is unreadable" and marked the anchor
+gone, and session creation concluded "the candidate branch does not exist" — so on a machine with a missing or
+unexecutable git, SpexCode would quietly report that the thing being asked about was absent. A test asserting
+that a spawn failure must be loud had been failing on trunk long enough to be filed as a known red, which is
+the shape this project treats as most expensive: the guard that would have caught it was itself the thing
+reported as broken.
+
+Overflow is the one case that legitimately replaces the code, because exceeding the buffer is this seam's own
+verdict rather than the child's, and the kill it performs would otherwise surface as an unrelated signal.
+Timeout marks itself separately for the same reason. Everything else keeps whatever cause it arrived with.
+
+## who reads this classification
+
+Seven call sites branch on it, across two packages and in BOTH polarities, so the cause this seam preserves
+is not a local concern:
+
+    spec-cli/src/sessions.ts   1718 · 2660 · 2692 · 2693 · 2792   `failure !== 'exit'`
+    spec-eval/src/freshness.ts 183                                `failure !== 'exit'`
+    spec-eval/src/sessioneval.ts 410                              `failure === 'exit'`
+
+The reversed-polarity one is where this classification is easiest to misread, including by me. Both of its
+branches raise the same error type and differ only in the sentence, and the `exit` sentence is *"base X is not
+an ancestor of head Y; use the session merge-base as base"* — an instruction the reader will act on. An earlier
+version of this body claimed a mislabelled spawn failure produced it. That was wrong twice over, and measuring
+is what showed it: an unexecutable git never reaches the gate at all, because `impactCommit` resolves both
+revisions first and fails first; and `merge-base --is-ancestor` answers "not an ancestor" precisely BY exiting
+1, so on the exit path that sentence is a correct diagnosis rather than a false one.
+
+What measurement did surface there is a different defect, still unfixed: `--is-ancestor` exits 0 for ancestor,
+1 for not-an-ancestor, and **128 for a hard error** (`fatal: Not a valid commit name`). All three non-zero
+outcomes classify as `exit`, so a 128 is reported to the reader as "your base is not an ancestor; use the
+session merge-base" — a confident, actionable, wrong instruction. Telling 1 from 128 needs the numeric status
+this seam currently discards, which is a widening of its result shape rather than a one-line change, so it is
+filed rather than patched here.
+
+Neither branch has a test. That is worth knowing before the next change to this seam: five of the seven sites
+are reached only on a machine where git is missing, unexecutable, or timing out, so ordinary runs never
+exercise the distinction — the guard is the freshness loud-failure test alone, and it had itself been failing
+on trunk long enough to be filed as a known red.

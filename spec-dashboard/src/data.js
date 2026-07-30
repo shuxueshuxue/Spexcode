@@ -258,8 +258,8 @@ export async function loadIssue(id) {
 }
 
 // human writes — store-routed through the unified issue port ([[issues-view]] / [[issues]]) — local commits
-// to the trunk store, forge choices call the configured driver. An @-mention in the text dispatches a
-// worker. Returns parsed json ({ ok, …, outcomes }); `outcomes` is the one-line @-dispatch summary to echo.
+// to the trunk store, forge choices call the configured driver. @session stays in the authored text as a
+// passive reference. Returns parsed json ({ ok, …, outcomes }); outcomes can only report a courtesy loop-in.
 export async function postIssueReply(id, body, evidence) {
   const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/reply`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

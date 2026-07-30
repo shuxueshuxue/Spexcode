@@ -38,8 +38,8 @@ scenarios:
     expected: >-
       A REAL comment lands on the GitHub issue (visible via `gh issue view`), and the next merged read
       carries it in that issue's replies[] in the SAME Reply shape a local thread has (by = the forge
-      commenter, at, body) — the read-back, never a local echo. An @new/@session in the reply text
-      dispatches exactly as a local reply's would (the mention fires on the words, not the store). An
+      commenter, at, body) — the read-back, never a local echo. An @session in the reply text remains the
+      same passive reference as a local reply's. An
       unreachable forge fails loud with nothing queued; the local store is untouched throughout.
   - name: cli-store-parity
     tags: [cli]

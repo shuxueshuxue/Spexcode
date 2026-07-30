@@ -150,19 +150,15 @@ scenarios:
       done --propose nothing --note <n>`, `ask --note <n>`, `park --note <n>` — with THREE shapes of note:
       one long single-line note over the table's display cap, one SHORT MULTI-LINE note under that cap, and
       one short single-line note that nothing cuts. Read (1) the record's stored note, (2) the declaration's
-      echo, (3) the `spex ls` NOTE column, and (4) the derived headline the board row shows.
+      echo, (3) the `spex ls` NOTE column, and (4) the derived dashboard headline.
     expected: >-
       The note reaches the record IN FULL for all three verbs (done included — it must not silently drop its
-      --note). Both display surfaces still cut, but EVERY cut that bit is TRANSPARENT to the author, named
-      with what it leaves and in the units it actually uses — taught ONCE per session: the first cut note's
-      echo states the note's length, the table's first NOTE_BOARD_LIMIT display columns, the board row's
-      first-line-only HEADLINE_PREVIEW_COLUMNS preview (quoting what the row will read), and where the full
-      text is readable (the session record / `spex ls --json` / `spex review`); SUBSEQUENT cut declarations in
-      the same session carry NO repeat of that notice (the rule was taught; repeating it verbatim on every
-      park/ask is noise). The SHORT MULTI-LINE note is the case a length test misses: it is under the table
-      cap, yet the board row keeps only its first line, so it MUST still be taught. Only a note nothing cuts
-      gets no line ever. The echo is a nudge riding the confirmation — the declaration lands regardless,
-      nothing gates.
+      --note). The explicit table NOTE column cuts only when its display limit bites, and that cut is
+      TRANSPARENT to the author: taught ONCE per session, its echo states the note's length, the table's first
+      NOTE_BOARD_LIMIT display columns, and where the full text is readable (the session record / `spex ls
+      --json` / `spex review`); SUBSEQUENT cut declarations carry no repeat. The dashboard headline remains the
+      session title/activity chain for every note shape; it never displays note text. The echo is a nudge riding
+      the confirmation — the declaration lands regardless, nothing gates.
   - name: no-record-diagnosis-self-explains
     tags: [backend-api]
     description: >-

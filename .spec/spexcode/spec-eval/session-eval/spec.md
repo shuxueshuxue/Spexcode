@@ -126,6 +126,19 @@ freshness. A build reads the revision before and after the fold; a mismatch is d
 summary and a demand projection bearing the same revision are the same evaluation cut, not two coincidentally similar
 reads.
 
+That same content-addressed cut carries the **derived full model**, not only the summary. A demand build
+deposits its model beside the summary under the one `session + content revision` key, so a repeat open at an
+unmoved revision replays it instead of re-deriving it from Git — the observable difference between opening a
+session's evaluation once and opening it again is a read, not a rebuild. It is the same cache owner, key and
+invalidation: a moved input yields a different key, only the newest key per session is retained, and summary
+and model are dropped together so they can never describe different revisions. The two builders do not share
+a model — the summary fold keeps only the latest reading per scenario while a demand needs the complete
+history — so only a demand deposits a model and only a demand consumes one. A replay still passes the
+stability, observer and generation fences, and it never weakens the validity contract: an unavailable
+projection deposits nothing, so a dead or unextractable selector re-derives and raises again rather than
+being masked by an earlier successful model. No TTL, patrol, second generation, extra gate, or client-side
+copy participates.
+
 The backend retains a content-addressed, per-session projection cache. Each entry has a process epoch and a
 monotonic input generation `g`, a single in-flight build, and the last stable projection. A cache miss is
 `loading`; a relevant canonical input event increments `g` synchronously and becomes `updating` while preserving

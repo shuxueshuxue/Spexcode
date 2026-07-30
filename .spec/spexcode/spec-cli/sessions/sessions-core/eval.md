@@ -5,20 +5,22 @@ scenarios:
     code: spec-cli/src/sessions.ts
     description: >
       In an isolated Git project, run the real `spex session new --api` command against controllable HTTP
-      targets. Make `/api/instance` fast while `/api/settings` never answers, then make instance itself slow;
-      use linked and configured-main roots for implicit match and mismatch, and repeat the mismatch via explicit
-      `--api`. Return HTTP errors from instance, point at a just-closed listener, and start with a large fake
-      session store. Count health, instance, settings, and creation endpoint calls and inspect the local store,
-      branch, and worktree.
+      targets. Make `/api/instance` fast while `/api/settings` never answers, then make instance itself slow,
+      reset its accepted connection, and inject a DNS failure; use linked and configured-main roots for implicit
+      match and mismatch, and repeat the mismatch via explicit `--api`. Return HTTP errors from instance, point
+      at a just-closed listener, and start with a large fake session store. Count health, instance, settings,
+      and creation endpoint calls and inspect the local store, branch, worktree, and tmux trace.
     expected: |
       A fast instance response routes exactly one keyed create POST to that backend even while settings would
-      never answer; settings receives zero authority traffic and no local record, branch, or worktree is
-      created. A slow instance is indeterminate with no POST or fallback. Implicit routing accepts linked and
-      configured-main equivalence, refuses a mismatched canonical main before POST, and explicit `--api` skips
-      that project comparison while still using instance authority. Any HTTP instance response owns the target
-      and receives the one POST; only the exact closed-listener ECONNREFUSED path enters the legacy fallback.
-      A 550ms endpoint-record health read followed by a 1200ms instance response succeeds, proving their walls
-      are independent. A large fake record store does not cause settings or layout work on the authority path.
+      never answer; settings receives zero authority traffic and no local record, branch, worktree, or tmux
+      artifact is created. A slow instance, reset, or DNS failure is indeterminate with no POST or fallback and
+      the same zero-artifact result. Implicit routing accepts linked and configured-main equivalence, refuses a
+      mismatched canonical main before POST, and explicit `--api` skips that project comparison while still
+      using instance authority. An explicit target normally owns its POST; only the exact closed-listener
+      ECONNREFUSED path is the legacy fallback exception. Any HTTP instance response owns the target and
+      receives the one POST. A 550ms endpoint-record health read followed by a 1200ms instance response
+      succeeds, proving their walls are independent. A large fake record store does not cause settings or
+      layout work on the authority path.
     test: spec-cli/src/session-create-cli.test.ts
   - name: a-dead-leaf-never-wedges-a-session
     tags: [backend-api, cli]

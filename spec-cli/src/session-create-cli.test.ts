@@ -53,7 +53,7 @@ test('session new retires the out-of-band --node binding before launch', () => {
 test('session new keeps exact JSON stdout and emits the dependency receipt on stderr', async () => {
   let posted: unknown = null
   const server = createServer((req, res) => {
-    if (req.method === 'GET' && req.url === '/api/settings') {
+    if (req.method === 'GET' && (req.url === '/api/instance' || req.url === '/api/settings')) {
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end('{}')
       return
@@ -97,16 +97,25 @@ test('session new keeps exact JSON stdout and emits the dependency receipt on st
   assert.doesNotMatch(stdout, /current result|next lifecycle change|response channel/)
 })
 
-test('session new falls back only for explicit connection refusal', { timeout: 15_000 }, async () => {
+test('session new uses lightweight instance authority and falls back only for explicit connection refusal', { timeout: 20_000 }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-create-dispatch-'))
   const projectPath = join(root, 'project'); mkdirSync(projectPath)
   const project = realpathSync(projectPath), home = join(root, 'home'), bin = join(root, 'bin')
+  const linked = join(root, 'linked'), configuredMain = join(root, 'configured-main'), foreign = join(root, 'foreign')
   mkdirSync(bin)
   writeFileSync(join(bin, 'tmux'), '#!/bin/sh\nexit 0\n'); chmodSync(join(bin, 'tmux'), 0o755)
   writeFileSync(join(project, 'README.md'), 'fixture\n')
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
   execFileSync('git', ['-c', 'user.name=create-dispatch', '-c', 'user.email=create@example.test', 'add', '.'], { cwd: project })
   execFileSync('git', ['-c', 'user.name=create-dispatch', '-c', 'user.email=create@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
+  execFileSync('git', ['worktree', 'add', '-q', '-b', 'linked', linked, 'main'], { cwd: project })
+  execFileSync('git', ['worktree', 'add', '-q', '-b', 'configured-main', configuredMain, 'main'], { cwd: project })
+  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ main: configuredMain }))
+  mkdirSync(foreign)
+  writeFileSync(join(foreign, 'README.md'), 'foreign\n')
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: foreign })
+  execFileSync('git', ['-c', 'user.name=create-dispatch', '-c', 'user.email=create@example.test', 'add', '.'], { cwd: foreign })
+  execFileSync('git', ['-c', 'user.name=create-dispatch', '-c', 'user.email=create@example.test', 'commit', '-qm', 'foreign fixture'], { cwd: foreign })
 
   const runtime = join(home, 'projects', project.replace(/[/.]/g, '-'))
   mkdirSync(runtime, { recursive: true })
@@ -120,48 +129,167 @@ test('session new falls back only for explicit connection refusal', { timeout: 1
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
   const noArtifacts = () => {
     assert.equal(execFileSync('git', ['branch', '--list', 'node/*'], { cwd: project, encoding: 'utf8' }).trim(), '')
-    assert.equal(execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: project, encoding: 'utf8' }).match(/^worktree /gm)?.length, 1)
+    assert.equal(execFileSync('git', ['worktree', 'list', '--porcelain'], { cwd: project, encoding: 'utf8' }).match(/^worktree /gm)?.length, 3)
     assert.ok(!existsSync(join(runtime, 'sessions')) || readdirSync(join(runtime, 'sessions')).length === 0)
   }
 
   try {
+    let linkedInstances = 0, linkedSettings = 0, linkedCreates = 0
+    const linkedBackend = createServer((req, res) => {
+      if (req.method === 'GET' && req.url === '/api/instance') {
+        linkedInstances++
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ root: linked }))
+        return
+      }
+      if (req.method === 'POST' && req.url === '/api/sessions') {
+        linkedCreates++
+        res.writeHead(201, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ id: 'linked-instance-1' }))
+        return
+      }
+      if (req.method === 'GET' && req.url === '/api/settings') { linkedSettings++; return }
+      res.writeHead(404); res.end()
+    })
+    linkedBackend.listen(0, '127.0.0.1'); await once(linkedBackend, 'listening')
+    const linkedAddress = linkedBackend.address(); assert.ok(linkedAddress && typeof linkedAddress === 'object')
+    const linkedResult = await runCreate(project, { ...env, SPEXCODE_API_URL: `http://127.0.0.1:${linkedAddress.port}` })
+    linkedBackend.close(); await once(linkedBackend, 'close')
+    assert.equal(linkedResult.code, 0, linkedResult.stderr)
+    assert.match(linkedResult.stdout, /"id": "linked-instance-1"/)
+    assert.equal(linkedInstances, 1, 'the linked backend receives one instance authority probe')
+    assert.equal(linkedSettings, 0, 'settings never participates in creation authority')
+    assert.equal(linkedCreates, 1, 'the matching backend receives one keyed create without a local duplicate')
+    noArtifacts()
+
     for (const status of [404, 503]) {
-      const server = createServer((_req, res) => { res.writeHead(status); res.end('owned failure') })
+      let instanceRequests = 0
+      let settingsRequests = 0
+      let createRequests = 0
+      const server = createServer((req, res) => {
+        if (req.method === 'GET' && req.url === '/api/instance') instanceRequests++
+        if (req.method === 'GET' && req.url === '/api/settings') settingsRequests++
+        if (req.method === 'POST' && req.url === '/api/sessions') createRequests++
+        res.writeHead(status); res.end('owned failure')
+      })
       server.listen(0, '127.0.0.1'); await once(server, 'listening')
       const address = server.address(); assert.ok(address && typeof address === 'object')
-      const result = await runCreate(project, env, `http://127.0.0.1:${address.port}`)
+      const result = await runCreate(project, { ...env, SPEXCODE_API_URL: `http://127.0.0.1:${address.port}` })
       server.close(); await once(server, 'close')
       assert.equal(result.code, 1)
       assert.match(result.stderr, new RegExp(`backend rejected session \\(${status}\\)`))
       assert.doesNotMatch(result.stderr, /launching in-process/)
+      assert.equal(instanceRequests, 1, 'the HTTP target receives one instance authority probe')
+      assert.equal(settingsRequests, 0, 'HTTP ownership does not consult settings')
+      assert.equal(createRequests, 1, 'the HTTP target owns the one create attempt')
       noArtifacts()
     }
 
-    const slow = createServer(() => { /* accepted connection deliberately never answers */ })
+    let slowInstances = 0, slowSettings = 0, slowCreates = 0
+    const slow = createServer((req, res) => {
+      if (req.method === 'GET' && req.url === '/api/instance') {
+        slowInstances++
+        setTimeout(() => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ root: linked })) }, 1_700)
+        return
+      }
+      if (req.method === 'GET' && req.url === '/api/settings') { slowSettings++; res.writeHead(200); res.end('{}'); return }
+      if (req.method === 'POST' && req.url === '/api/sessions') { slowCreates++; res.writeHead(201); res.end(JSON.stringify({ id: 'wrong' })); return }
+      res.writeHead(404); res.end()
+    })
     slow.listen(0, '127.0.0.1'); await once(slow, 'listening')
     const slowAddress = slow.address(); assert.ok(slowAddress && typeof slowAddress === 'object')
     const started = Date.now()
     const indeterminate = await runCreate(project, env, `http://127.0.0.1:${slowAddress.port}`)
-    slow.closeAllConnections(); slow.close(); await once(slow, 'close')
+    slow.close(); await once(slow, 'close')
     assert.equal(indeterminate.code, 1)
     assert.match(indeterminate.stderr, /backend availability is indeterminate/)
     assert.doesNotMatch(indeterminate.stderr, /launching in-process/)
+    assert.equal(slowInstances, 1, 'the slow instance route is the sole authority probe')
+    assert.equal(slowSettings, 0, 'a slow instance does not fall through to settings')
+    assert.equal(slowCreates, 0, 'a slow instance never admits a create request')
     assert.ok(Date.now() - started < 4_000)
     noArtifacts()
 
-    let implicitRequests = 0
-    const implicitSlow = createServer(() => { implicitRequests++ })
-    implicitSlow.listen(0, '127.0.0.1'); await once(implicitSlow, 'listening')
-    const implicitAddress = implicitSlow.address(); assert.ok(implicitAddress && typeof implicitAddress === 'object')
-    const implicitStarted = Date.now()
-    const implicit = await runCreate(project, { ...env, SPEXCODE_API_URL: `http://127.0.0.1:${implicitAddress.port}` })
-    implicitSlow.closeAllConnections(); implicitSlow.close(); await once(implicitSlow, 'close')
-    assert.equal(implicit.code, 1)
-    assert.equal(implicit.killed, false, 'the product probe, not the test wall, settles an implicit slow target')
-    assert.match(implicit.stderr, /backend availability is indeterminate/)
-    assert.equal(implicitRequests, 1, 'authority and project match share one bounded settings request')
-    assert.ok(Date.now() - implicitStarted < 4_000)
+    let mismatchInstances = 0, mismatchSettings = 0, mismatchCreates = 0
+    const mismatch = createServer((req, res) => {
+      if (req.method === 'GET' && req.url === '/api/instance') {
+        mismatchInstances++; res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ root: foreign })); return
+      }
+      if (req.method === 'GET' && req.url === '/api/settings') { mismatchSettings++; return }
+      if (req.method === 'POST' && req.url === '/api/sessions') { mismatchCreates++; res.writeHead(201); res.end(JSON.stringify({ id: 'explicit-foreign-1' })); return }
+      res.writeHead(404); res.end()
+    })
+    mismatch.listen(0, '127.0.0.1'); await once(mismatch, 'listening')
+    const mismatchAddress = mismatch.address(); assert.ok(mismatchAddress && typeof mismatchAddress === 'object')
+    const mismatchUrl = `http://127.0.0.1:${mismatchAddress.port}`
+    const mismatchResult = await runCreate(project, { ...env, SPEXCODE_API_URL: mismatchUrl })
+    assert.equal(mismatchResult.code, 1)
+    assert.match(mismatchResult.stderr, /refusing WRITE .* backend at .* serves/)
+    assert.equal(mismatchInstances, 1, 'implicit routing compares the instance identity')
+    assert.equal(mismatchSettings, 0, 'implicit mismatch does not rebuild settings')
+    assert.equal(mismatchCreates, 0, 'mismatched implicit target is refused before create')
+    const explicitResult = await runCreate(project, env, mismatchUrl)
+    mismatch.close(); await once(mismatch, 'close')
+    assert.equal(explicitResult.code, 0, explicitResult.stderr)
+    assert.match(explicitResult.stdout, /"id": "explicit-foreign-1"/)
+    assert.equal(mismatchInstances, 2, 'explicit routing still proves the selected backend is live')
+    assert.equal(mismatchCreates, 1, 'explicit routing skips only the project comparison')
     noArtifacts()
+
+    let healthRequests = 0, timedInstances = 0, timedSettings = 0, timedCreates = 0
+    const recorded = createServer((req, res) => {
+      if (req.method === 'GET' && req.url === '/health') {
+        healthRequests++
+        setTimeout(() => { res.writeHead(200); res.end('ok') }, 550)
+        return
+      }
+      if (req.method === 'GET' && req.url === '/api/instance') {
+        timedInstances++
+        setTimeout(() => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ root: linked })) }, 1_200)
+        return
+      }
+      if (req.method === 'GET' && req.url === '/api/settings') { timedSettings++; return }
+      if (req.method === 'POST' && req.url === '/api/sessions') { timedCreates++; res.writeHead(201); res.end(JSON.stringify({ id: 'recorded-1' })); return }
+      res.writeHead(404); res.end()
+    })
+    recorded.listen(0, '127.0.0.1'); await once(recorded, 'listening')
+    const recordedAddress = recorded.address(); assert.ok(recordedAddress && typeof recordedAddress === 'object')
+    writeFileSync(join(runtime, 'backend.json'), JSON.stringify({ url: `http://127.0.0.1:${recordedAddress.port}` }))
+    const recordedStarted = Date.now()
+    const recordedResult = await runCreate(project, env)
+    rmSync(join(runtime, 'backend.json'), { force: true })
+    recorded.close(); await once(recorded, 'close')
+    assert.equal(recordedResult.code, 0, recordedResult.stderr)
+    assert.match(recordedResult.stdout, /"id": "recorded-1"/)
+    assert.equal(healthRequests, 1, 'the recorded endpoint health read remains discovery only')
+    assert.equal(timedInstances, 1, 'the instance probe receives its own full wall after health')
+    assert.equal(timedSettings, 0, 'record discovery never layers settings onto authority')
+    assert.equal(timedCreates, 1)
+    assert.ok(Date.now() - recordedStarted >= 1_600, '550ms health plus 1200ms instance use independent walls')
+    noArtifacts()
+
+    const largeHome = join(root, 'large-home')
+    const largeRuntime = join(largeHome, 'projects', project.replace(/[/.]/g, '-'), 'sessions')
+    for (let i = 0; i < 256; i++) {
+      const dir = join(largeRuntime, `fake-${String(i).padStart(4, '0')}`)
+      mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, 'session.json'), '{}')
+    }
+    let largeInstances = 0, largeSettings = 0, largeCreates = 0
+    const large = createServer((req, res) => {
+      if (req.method === 'GET' && req.url === '/api/instance') { largeInstances++; res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ root: linked })); return }
+      if (req.method === 'GET' && req.url === '/api/settings') { largeSettings++; return }
+      if (req.method === 'POST' && req.url === '/api/sessions') { largeCreates++; res.writeHead(201); res.end(JSON.stringify({ id: 'large-store-1' })); return }
+      res.writeHead(404); res.end()
+    })
+    large.listen(0, '127.0.0.1'); await once(large, 'listening')
+    const largeAddress = large.address(); assert.ok(largeAddress && typeof largeAddress === 'object')
+    const largeResult = await runCreate(project, { ...env, SPEXCODE_HOME: largeHome, SPEXCODE_API_URL: `http://127.0.0.1:${largeAddress.port}` })
+    large.close(); await once(large, 'close')
+    assert.equal(largeResult.code, 0, largeResult.stderr)
+    assert.equal(largeInstances, 1)
+    assert.equal(largeSettings, 0, 'a large session store never enters the authority probe')
+    assert.equal(largeCreates, 1)
+    assert.equal(readdirSync(largeRuntime).length, 256, 'remote creation adds no local session to the fake store')
 
     const absent = createServer()
     absent.listen(0, '127.0.0.1'); await once(absent, 'listening')

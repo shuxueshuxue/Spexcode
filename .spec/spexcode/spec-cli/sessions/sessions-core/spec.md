@@ -7,6 +7,7 @@ code:
   - spec-cli/src/sessions.ts
 related:
   - spec-cli/src/sessionSlug.test.ts
+  - spec-cli/src/session-create-cli.test.ts
   - spec-cli/src/layout.ts
   - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/src/session-record-integrity.test.ts
@@ -65,6 +66,20 @@ product protocol: subscription and failure mapping remain adapter work ([[harnes
 failure reaches one record-locked compare-and-set that changes only a live, undeclared `active` record to `error`.
 A declaration that landed first is authoritative, so a late process close, delayed native completion, or
 restart reconciliation cannot overwrite it.
+
+**Public session creation has one lightweight backend-authority decision before it can use the legacy local
+path.** The CLI asks only `GET /api/instance`, never the board-shaped settings projection: this identity route
+does not enumerate governed records or derive worktree overlays. A selected explicit target, or a target that
+has answered that instance read, owns the one keyed `POST /api/sessions`; it is never also created in-process.
+The raw instance root is not compared directly: both the caller and served roots pass through the shared
+main-root resolver, which follows linked worktrees to their common checkout and applies configured `main`.
+That preserves project identity without rebuilding layout. An HTTP response of any status proves ownership;
+the project-match check runs only when a usable instance identity is available and still refuses a proven
+mismatch. Only an exact connection failure whose entire transport cause chain is `ECONNREFUSED` proves the
+target has no listener and may enter the legacy in-process fallback. Timeout, reset, DNS, and every other
+transport result fail without local creation; an already received HTTP response is never relabelled
+`backend_availability_indeterminate`. The instance authority wall remains its independent 1500ms budget:
+the optional recorded-endpoint health read is discovery only and never consumes that budget.
 
 **Exclusion lives in the lock, never in a privileged process.** The per-session record lock is a filesystem
 lock with a PID liveness check, held across processes, so a session operation may run in whatever process

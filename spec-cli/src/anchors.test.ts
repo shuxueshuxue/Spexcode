@@ -311,38 +311,62 @@ test('a replaced commit object and a regrafted parent are different hunk facts, 
   }
 })
 
-// Repo config decides hunk boundaries too — `diff.algorithm`, `diff.indentHeuristic` and
-// `diff.interHunkContext` are all settable per repository and all move ranges on some inputs. Pinned, a
-// same-process config flip must leave the verdict alone. (On these fixtures every algorithm agreed, so this
-// asserts INVARIANCE; it is not a red-to-green pair, and is not presented as one.)
-test('an anchor verdict is invariant under a same-process diff-config flip', { skip: !gitAvailable() && 'git not available' }, async () => {
-  const root = mkdtempSync(join(tmpdir(), 'spex-anchor-config-'))
-  const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
-  try {
-    g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
-    mkdirSync(join(root, 'src'))
-    writeFileSync(join(root, 'src/c.py'), 'def f():\n    return 1\n\ndef tail():\n    return 9\n')
-    g('add', '-A'); g('commit', '-qm', 'v1'); const v1 = g('rev-parse', 'HEAD')
-    writeFileSync(join(root, 'src/c.py'), 'def f():\n    return 1\n\ndef f():\n    return 1\n\ndef tail():\n    return 9\n')
-    g('add', '-A'); g('commit', '-qm', 'duplicate the block'); const dup = g('rev-parse', 'HEAD')
-    const mod = await import('./anchors.js')
-    const win = [{ commit: dup, historicalPath: 'src/c.py', parents: [{ commit: v1, historicalPath: 'src/c.py' }] }]
-    const ask = async () => (await mod.anchorHitQueries(root, [{ win, symbols: ['f'] }], mod.extractors(root)))[0].map((r) => r.selectors)
+// Repo config decides hunk boundaries too, and these two flips are DISCRIMINATING: each makes the parent's
+// verdict differ from the pinned one on the same commit, so a memo over image identity alone would freeze the
+// ambient reading. The unit is a fixed line 3 (a pure extractor, so the fixture is about ranges only).
+//
+//   `c a c a` -> `c c a a a`:  myers authors new 4-5 and deletes old 2   -> line 3 MISSED
+//                              histogram authors new 2-3 and deletes old 3 -> line 3 HIT
+//   `color.ui=always`:         Git prefixes every `@@` with an ANSI escape, so a `/^@@/` parse sees ZERO
+//                              hunks and the whole corpus reads as "nothing changed".
+const line3Extractor = {
+  id: 'line3-test',
+  claims: (ext: string) => ext === 'txt',
+  ready: () => true as const,
+  extract: () => [{ name: 'f', kind: 'function', start: 3, end: 3 }],
+  memoKey: (filename: string) => `line3-test\0${filename}`,
+}
 
-    const verdicts: string[][][] = []
-    for (const [algorithm, heuristic, inter] of [['myers', 'false', '0'], ['histogram', 'true', '3'], ['patience', 'false', '1'], ['minimal', 'true', '0']]) {
-      g('config', 'diff.algorithm', algorithm)
-      g('config', 'diff.indentHeuristic', heuristic)
-      g('config', 'diff.interHunkContext', inter)
-      verdicts.push(await ask())
-    }
-    const fresh = (await (await import(`./anchors.js?config-oracle=${dup}`)).anchorHitQueries(
-      root, [{ win, symbols: ['f'] }], mod.extractors(root)))[0].map((r: any) => r.selectors)
-    for (const v of verdicts) assert.deepEqual(v, verdicts[0], 'repo diff config must not move an anchor verdict')
-    assert.deepEqual(verdicts[0], fresh, 'and the memoized verdict must equal a fresh module\'s under the flipped config')
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
+async function discriminatingFixture(configure: (g: (...a: string[]) => string) => void) {
+  const root = mkdtempSync(join(tmpdir(), 'spex-anchor-cfg-'))
+  const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+  writeFileSync(join(root, 'src.txt'), 'c\na\nc\na\n')
+  g('add', '-A'); g('commit', '-qm', 'v1'); const v1 = g('rev-parse', 'HEAD')
+  writeFileSync(join(root, 'src.txt'), 'c\nc\na\na\na\n')
+  g('add', '-A'); g('commit', '-qm', 'realign'); const moved = g('rev-parse', 'HEAD')
+  configure(g)
+  return { root, g, win: [{ commit: moved, historicalPath: 'src.txt', parents: [{ commit: v1, historicalPath: 'src.txt' }] }], moved }
+}
+
+test('a same-process diff.algorithm flip cannot change or freeze an anchor verdict', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const { root, g, win, moved } = await discriminatingFixture((git) => git('config', 'diff.algorithm', 'myers'))
+  try {
+    const mod = await import('./anchors.js')
+    const ask = async (m: typeof mod) => (await m.anchorHitQueries(root, [{ win, symbols: ['f'] }], [line3Extractor as any]))[0].map((r) => r.selectors)
+    const underMyers = await ask(mod)
+    g('config', 'diff.algorithm', 'histogram')
+    const underHistogram = await ask(mod)
+    const fresh = await ask(await import(`./anchors.js?algo-oracle=${moved}`))
+    assert.deepEqual(underHistogram, underMyers, 'repo diff.algorithm must not move the verdict')
+    assert.deepEqual(underHistogram, fresh, 'and the memoized verdict must equal a fresh module\'s after the flip')
+    assert.deepEqual(fresh, [['f']], 'the pinned reading attributes the realignment to the anchored line — a myers reading misses it')
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('an ambient color.ui cannot blank the hunk parse into a silent zero-drift verdict', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const { root, g, win, moved } = await discriminatingFixture((git) => git('config', 'color.ui', 'always'))
+  try {
+    const mod = await import('./anchors.js')
+    const ask = async (m: typeof mod) => (await m.anchorHitQueries(root, [{ win, symbols: ['f'] }], [line3Extractor as any]))[0].map((r) => r.selectors)
+    const colored = await ask(mod)
+    g('config', '--unset', 'color.ui')
+    const plain = await ask(mod)
+    const fresh = await ask(await import(`./anchors.js?color-oracle=${moved}`))
+    assert.deepEqual(colored, [['f']], 'an ANSI-coloured patch must still be parsed — zero hunks here would be a silent clean gate')
+    assert.deepEqual(plain, colored, 'and color.ui must not move the verdict')
+    assert.deepEqual(fresh, colored, 'nor may the memo hold a colour-blanked answer')
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
 test('historical extractor memo stays stable across order and same-process repetition', { skip: !gitAvailable() && 'git not available' }, async () => {

@@ -10,6 +10,7 @@ code:
 related:
   - spec-forge/src/port.ts
   - spec-forge/src/drivers.ts
+  - spec-forge/src/gitlab.test.ts
 ---
 # gitlab
 

@@ -35,6 +35,12 @@ answer.
   linked or not, to map onto the one Issue type; resolution stays the only *derived* view, so there is
   still no second answer to disagree with the full one.
 
+The state also carries a monotonic **content revision**. It advances only when an upsert, removal, or
+reconcile changes the cached objects; duplicate deltas and an equal reconcile leave it unchanged. A
+consumer that publishes a snapshot alongside this state carries that revision, so a reconcile finishing
+after a background read cannot leave its published projection permanently behind the resident cache. The
+revision is a freshness carrier, never a second resolution path.
+
 **Reconcile is the source of truth; sources are only hints.** A live source (an ETag-conditional poll, or
 a forge webhook) may drop, duplicate, or re-order deltas, so it is never trusted as a clean stream.
 Correctness is restored by **reconcile** — a full read through the [[port]] that overwrites the cached set

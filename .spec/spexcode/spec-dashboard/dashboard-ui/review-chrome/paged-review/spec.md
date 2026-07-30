@@ -51,7 +51,9 @@ assembly, then omitted from graph serialization; review requests reuse that snap
 or crawling it. Node timeline mode loads only its addressed node before filtering/slicing.
 
 Forge resident refresh may use native host pagination and incremental windows at the adapter boundary; a
-browser review request reads that resident snapshot and never starts a host-wide or per-row N+1 crawl.
+browser review request reads that resident snapshot and never starts a host-wide or per-row N+1 crawl. When
+that resident state advances after a snapshot publication, the next Issue read recognizes its content
+revision and republishes the source before paging; equal resident state stays on the cached snapshot path.
 
 The same protocol family owns Eval detail without reopening a full-list channel. One bounded detail request
 names `(scope?, node, scenario)` and returns the selected current row, that scenario's complete newest-first

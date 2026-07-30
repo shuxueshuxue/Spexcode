@@ -21,6 +21,7 @@ related:
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
   - spec-dashboard/test/session-sidebar-scroll.e2e.mjs
   - spec-dashboard/test/command-box.e2e.mjs
+  - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
 ---
 
@@ -236,7 +237,9 @@ and lifecycle actions use one selected-session, right-pane action-outcome mechan
 outcome while it is open; an existing-session action owns its selected action/relaunch panel. The left session
 list is navigation-only and renders no action alert. Every outcome renders once and clears only as its owning
 surface closes, changes session, or completes its success lifecycle; duplicate alerts make one failure look
-like two operations.
+like two operations. **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
+reports `sending...`, while the latter reports the neutral `working...`; reusing delivery copy for relaunch,
+stop, archive, close, or merge would falsely claim the dashboard sent the agent a prompt.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
 tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
 that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` is a

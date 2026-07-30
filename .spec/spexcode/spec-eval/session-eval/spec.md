@@ -105,7 +105,12 @@ a rename with edits intersects the old and new units on their respective sides.
 This is the **one product predicate**. Scoped `/api/evals`, its list/detail model, summaries, and export consume
 the same projection; none retain a path-only scenario candidate fallback. Each projection reads the base/head
 changed-path set once, batch-reads each distinct exact `.spec` tree once for both spec and eval declarations,
-and shares selector source/window/hunk results inside that build. It adds no second resident cache, generation,
+and shares selector source/window/hunk results inside that build. The scope's **reading timelines obey the same
+rule**: the whole affected node set is read through ONE batched timeline pass, so the off-history content probes
+and the anchor probes union across every node in scope and issue one child per probe kind. Reading a timeline
+per node inside the scope loop is the same defect one level down — it multiplies a build's Git children by the
+node count, and a single open's cost must grow with the selected session's node closure, never with a
+per-node or per-reading spawn. It adds no second resident cache, generation,
 or gate: the result enters the existing content-revision/projection cache like every other session model.
 
 **The toolbar summary is a coherent projection, not a small fetch.** `sessionEvalSummary` lives beside the

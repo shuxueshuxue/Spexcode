@@ -36,7 +36,7 @@ import {
   type RelationEntry,
   type Unit,
 } from '../../spec-cli/src/anchors.js'
-import { evalTimeline, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline, type ScenarioInfo } from './evaltab.js'
+import { evalTimelines, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline, type ScenarioInfo } from './evaltab.js'
 import { isUiPath } from './cli.js'
 import { readReadings } from './sidecar.js'
 import { parseScenarios, scenarioCodeAxis, scenarioHash, type Scenario } from './scenarios.js'
@@ -1455,6 +1455,14 @@ async function sessionScopeNodes(
   const specById = new Map(ctx.specs.map((spec) => [spec.id, spec]))
   const nodes: SessionEvalNode[] = []
 
+  // @@@one prime pass for the whole scope - evalTimelines unions the off-history content probes and the
+  // anchor probes across every id it is given, so asking it once per scope issues one child per probe kind
+  // instead of one per node. Reading the timelines inside the loop instead cost 74% of a warm open.
+  const timelineIds = impact.nodes
+    .filter((projected) => specById.has(projected.id) && evalById.has(projected.id))
+    .map((projected) => projected.id)
+  const timelineById = new Map((await evalTimelines(timelineIds, ctx)).map((timeline, i) => [timelineIds[i], timeline]))
+
   for (const projected of impact.nodes) {
     const spec = specById.get(projected.id)
     if (!spec) continue // removed nodes remain fully explained by impact.nodes; they have no live eval rows.
@@ -1479,7 +1487,7 @@ async function sessionScopeNodes(
       continue
     }
 
-    const timeline = await evalTimeline(spec.id, ctx)
+    const timeline = timelineById.get(spec.id)!
     // A reading is this session's own when the session filed it OR its anchor is a branch commit. This is
     // the same marker the UI and CLI render; measurement impact consumes that marker instead of inventing
     // another attribution rule.

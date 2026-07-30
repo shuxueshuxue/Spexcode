@@ -100,12 +100,23 @@ export function newWorkerPrompt(threadId: string, node: string | null, author: s
     `Read the thread (\`spex issue ls --all\`, find ${threadId}) and act on it${node ? `; the relevant node is ${node}` : ''}.`
 }
 
-// Parse a committed issue post's text for `@` actors and deliver to each. Best-effort and LOUD: the thread is
-// already committed, so a failed dispatch never fails the post — it is reported. sessions.ts is imported
-// lazily; with no actor mentions this returns [] without loading it or hitting the backend.
+export function commandWorkerPrompt(sessionId: string, text: string): string {
+  return `Session "${sessionId}" opened a child worker from its Command Box:\n\n${text.trim()}`
+}
+
+export function commandMentionPrompt(sessionId: string, text: string): string {
+  return `Session "${sessionId}" @-mentioned you from its Command Box:\n\n${text.trim()}`
+}
+
+export type MentionDispatchContext =
+  | { threadId: string; node: string | null; author: string; status?: string | null }
+  | { sessionId: string }
+
+// Parse a submitted mention-capable surface for `@` actors and deliver to each. The calling surface owns
+// whether a failed mention can refuse its write; sessions.ts stays lazy, so actor-free text loads nothing.
 export async function dispatchMentions(
   text: string,
-  ctx: { threadId: string; node: string | null; author: string; status?: string | null },
+  ctx: MentionDispatchContext,
 ): Promise<DispatchOutcome[]> {
   const { actors } = parseMentions(text)
   if (!actors.length) return []
@@ -118,11 +129,15 @@ export async function dispatchMentions(
     if (r.kind === 'new') {
       // the drain guard ([[mentions]]): @new on a settled thread still spawns (the summons may be a
       // deliberate audit/re-measure), but the worker prompt carries the status and the outcome line warns.
-      const settled = ctx.status && ctx.status !== 'open' ? ctx.status : undefined
+      const command = 'sessionId' in ctx
+      const settled = !command && ctx.status && ctx.status !== 'open' ? ctx.status : undefined
+      const author = command ? ctx.sessionId : ctx.author
       try {
         const created = await sessionCreateRequest({
-          prompt: newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status),
-          parent: spawnParent(ctx.author, sessions),
+          prompt: command
+            ? commandWorkerPrompt(ctx.sessionId, text)
+            : newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status),
+          parent: spawnParent(author, sessions),
           launcher: r.launcher,
         })
         if (created.status !== 201) throw new Error(`${created.code || 'session_create_failed'}: ${created.error}`)
@@ -130,7 +145,9 @@ export async function dispatchMentions(
       } catch (e) { out.push({ token: r.token, result: 'failed', detail: e instanceof Error ? e.message : String(e) }) }
       continue
     }
-    const res = await sendText(r.session.id, mentionPrompt(ctx.threadId, ctx.node, ctx.author, text), 'issues')
+    const res = 'sessionId' in ctx
+      ? await sendText(r.session.id, commandMentionPrompt(ctx.sessionId, text), ctx.sessionId)
+      : await sendText(r.session.id, mentionPrompt(ctx.threadId, ctx.node, ctx.author, text), 'issues')
     out.push(res.ok ? { token: r.token, result: 'sent', detail: r.session.id }
                     : { token: r.token, result: 'offline', detail: res.error })
   }

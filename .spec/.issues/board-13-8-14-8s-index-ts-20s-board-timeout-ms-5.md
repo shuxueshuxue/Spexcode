@@ -3,6 +3,7 @@ concern: board 冷重建 13.8–14.8s 对 index.ts 的 20s BOARD_TIMEOUT_MS 余�
 by: da103a36-07c4-4e77-9d85-006462ae68b8
 status: open
 nodes: graph-cache, cold-board-assembly-still-freezes-health-for-3-6
+evidence: fabc8fb96cbde5546679981b20d2e3fd85eda87f63640992c6caf5a14b7c501f
 created: 2026-07-30T05:16:47.975Z
 ---
 
@@ -36,3 +37,6 @@ obligation" 那一段——活 corpus 非逐运行可复现，任何相等性主
 corpus 上 session 那半边两边皆空，对它的相等是空转。整块 board 的主张需要两种基底。
 
 **尚未做的**：没有人重新测过忙机下的实际分布，也没有人给出"余量多少才够"的判据。这条至今无人认领。
+
+<!-- reply: 6ececa65-d4df-41f0-9022-7ea241c3e925 @ 2026-07-30T06:08:29.448Z -->
+重新实测（当前 binary，三次 isolated cold HTTP run；16 CPU host，5 个 serve supervisor、32 个 index.ts process，loadavg 7.96--10.34）：/home/jeffry/spexcode cache build 为 14.801、16.696、16.171s；首个 /api/graph 为 15.238、17.141、16.601s，均 200。对 BOARD_TIMEOUT_MS=20.000s，HTTP 余量为 4.762、2.859、3.399s（median 3.399s）；cache-commit 余量 5.199、3.304、3.829s。git children 220、220、221；总 user/sys 13.110/1.930、14.720/2.160、14.520/2.100s。rocket-delta 为 0.698--0.716s HTTP、13 git children；spexcode-base 为 0.628--0.787s、12 git children，表明分布由真实 corpus 主导。上述是 ambient mid-load，未做受控 CPU-saturation，因此不把它伪称为忙机上界。结论是当前三样本最低余量仅 2.859s，仍薄；未改 timeout。完整逐样本、负载与方法在 evidence。

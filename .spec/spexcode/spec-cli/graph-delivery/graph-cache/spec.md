@@ -129,6 +129,41 @@ verdict is a memory lookup — never one `merge-base --is-ancestor` process per 
 batch is not cached, a retry can recover, and advancing a root to a new HEAD evicts its old set through the
 same current-root cache ownership. Path-specific history remains lazy and bounded.
 
+**The same rule binds reading freshness, which is the larger half of a cold build's child work.** A window's
+Git images and ordinary hunks are permanent properties of their commits, so the build asks for them ONCE.
+Assembly therefore plans every node's rows first — a pure sidecar-read and axis projection that forks
+nothing — then primes the content and anchor probes with the WHOLE demand set, and only then decorates rows
+from settled verdicts. A corpus of N anchored readings costs one batch, not N. This is a cost boundary only:
+the batch computes the same verdicts from the same immutable inputs, and the served board is byte-identical
+to the reading-at-a-time path at every tip, which is the standing obligation whenever the batch is retuned.
+The waste it removed is the shape to recognize again: priming per reading forked ~2,700 children to answer
+~800 verdicts, of which ~2,500 were the same two `cat-file --batch` calls re-spawned per row — the exact
+inverse of what a batch flag is for.
+
+**How that equality may be measured is part of the obligation, because the board is NOT byte-reproducible
+run to run on a live corpus.** Two runs of the SAME binary against a checkout that carries worktrees and
+session records already differ: `evalSummary.epoch` is minted once per process, and a row's lifecycle, note
+and status are live state that moves between two builds minutes apart. So a raw before/after diff there
+reports the world's churn as a code difference. An equality claim on a live corpus therefore owes a
+same-binary control run establishing which fields vary on their own; only fields that control proves are
+per-process or live may be normalized, and every other field stays exactly as measured — normalization is
+how a real difference is kept visible, never how it is absorbed. The complementary trap is the quiet one: a
+corpus of fresh clones has no worktrees and no sessions, so the board's session half is empty on BOTH sides
+and equality over it is vacuous — a green result that never touched the half a session-side change would
+break. A claim about the whole board needs both substrates: pinned corpora for the node/eval/issue half,
+and a session-bearing one for the rest. This binds every reader of this cache, not only the batching above:
+[[graph-stream]]'s invalidation and push half is measured against the same board and inherits the same rule.
+
+Because those object reads are build-wide rather than per-reading, they ride the same abort-aware async
+transport as every other build child. A synchronous child is outside the permit pool and cannot see the
+watchdog's signal, so it can be neither bounded nor killed; and one build-wide synchronous object read would
+be precisely the uninterruptible stretch the async fs walks removed. Batch width therefore lengthens a queue
+instead of widening a process tree or an argument vector: object reads are chunked to stay inside the
+transport's output bound and a per-commit hunk query is chunked to stay inside the kernel's exec argument
+limit, with overflow a loud error rather than a truncated parse. Collapsing the fan-out lowers the builder's
+own peak footprint as well as its child count, so the platform obligation above is met by construction
+rather than by a larger budget.
+
 The budget covers how much memory a build's children may hold, not only how many may run. Git sizes its
 mmap window, its mmap ceiling and its delta-base cache for a process that owns the machine, so a build's
 heaviest history walks each mapped well over a hundred megabytes of pack to produce kilobytes of output —

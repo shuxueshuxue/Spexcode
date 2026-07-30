@@ -40,10 +40,10 @@ than overwriting it. Updating the global package alone would otherwise leave a f
 bad script.
 
 The dispatcher has one narrow, package-owned compatibility route: when the manifest names the standard
-`.spec/project/.plugins/core/mark-active/mark-active.sh` path **and that file byte-compares equal to the
-identified vulnerable shipped revision**, it executes the package's current structured `mark-active` implementation
+`.spec/project/.plugins/core/mark-active/mark-active.sh` path **and that file byte-compares equal to either
+identified vulnerable shipped blob**, it executes the package's current structured `mark-active` implementation
 instead. It does not edit the project file, its manifest, or any session record before that implementation runs.
 Any byte difference, including a project customization, executes the project script exactly as the manifest
 requested. This is an emergency execution override, not a plugin updater: a project moves its tracked source to
-the current template only in its own reviewed maintenance change. The compatibility entry remains only for the
-identified broken revision; a new project hook never enters this route.
+the current template only in its own reviewed maintenance change. The compatibility entries remain only for the
+identified broken blobs; a package version label alone never enters this route.

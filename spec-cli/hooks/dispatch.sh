@@ -79,10 +79,11 @@ while IFS=$'\t' read -r ev order block script; do
   [ "$ev" = "$event" ] || continue
   handler="$proj/$script"
   # A seeded core hook is tracked project source, so package replacement cannot safely overwrite it. These
-  # byte-exact default revision composes an ask note into JSON with sed; route only it to the package
+  # byte-exact default revisions compose an ask note into JSON with sed; route only them to the package
   # implementation. `cmp` makes a user-modified hook ineligible without a platform-specific hash utility.
   if [ "$script" = '.spec/project/.plugins/core/mark-active/mark-active.sh' ] &&
-    cmp -s "$handler" "$hook_root/compat/mark-active-sed-v0.fixture"; then
+    { cmp -s "$handler" "$hook_root/compat/mark-active-sed-v0.fixture" ||
+      cmp -s "$handler" "$hook_root/compat/mark-active-0.5.2-eef1.fixture"; }; then
     handler="$tool_root/templates/spec/project/.plugins/core/mark-active/mark-active.sh"
   fi
   out="$(printf '%s' "$input" | bash "$handler" 2>"$err")"; code=$?

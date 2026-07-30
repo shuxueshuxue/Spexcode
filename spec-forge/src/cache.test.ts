@@ -25,3 +25,24 @@ test('cache: setPRs replaces the open-PR set whole (full replacement IS its delt
   c.setPRs([pr(2), pr(3)])   // 1 merged/closed → gone from the open list
   assert.deepEqual(c.state().prs.map((p) => p.number).sort(), [2, 3])
 })
+
+test('cache: state revision changes only when the cached objects do', async () => {
+  const c = new ForgeCache()
+  c.applyIssues([issue(1)])
+  const seeded = c.stateRevision()
+  c.applyIssues([issue(1)])
+  assert.equal(c.stateRevision(), seeded)
+  c.applyIssues([issue(1, { title: 'changed' })])
+  assert.equal(c.stateRevision(), seeded + 1)
+
+  const driver = {
+    host: 'fixture',
+    listIssues: async () => [issue(1, { title: 'changed' })],
+    listPRs: async () => [],
+    createIssue: async () => ({ number: 1, url: 'u1' }),
+    createComment: async () => ({ url: 'u1' }),
+    closeIssue: async () => ({ url: 'u1' }),
+  }
+  await c.reconcile(driver)
+  assert.equal(c.stateRevision(), seeded + 1)
+})

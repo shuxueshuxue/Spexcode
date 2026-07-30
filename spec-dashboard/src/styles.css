@@ -1710,7 +1710,7 @@ a.scenario-count:hover { background: var(--panel2); }
   border-radius: 4px; background: var(--panel2); color: var(--muted); font-size: var(--type-meta);
   line-height: var(--leading-relaxed); overflow-wrap: anywhere;
 }
-.si-action-outcome.sending { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
+.si-action-outcome.pending, .si-action-outcome.sending { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); }
 .si-action-outcome.delivered { color: var(--green); border-color: color-mix(in srgb, var(--green) 55%, var(--line)); }
 .si-action-outcome.failed { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, var(--line)); }
 .si-command-tools .si-action-outcome { margin-left: auto; }

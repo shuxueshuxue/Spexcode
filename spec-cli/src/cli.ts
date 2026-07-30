@@ -259,14 +259,21 @@ async function stateKit() {
       throw e
     }
   }
-  // truncation transparency ([[state]]): the session table shows only the first NOTE_BOARD_LIMIT chars of a
-  // note. When a declared note overflows that cap, the confirmation says so — length, what the board shows,
-  // where the full text is readable — so the cut is visible to the author instead of silently eaten.
-  // Taught ONCE per session: the first overflowing note prints the full notice and drops a sentinel beside
-  // the record; later overflows stay silent (the rule was taught — a verbatim repeat on every park/ask is
-  // noise, field-reported). A nudge riding the echo, never a gate: the declaration has already landed.
+  // truncation transparency ([[state]]): a declared note is cut by TWO display surfaces — the session
+  // table's NOTE column (NOTE_BOARD_LIMIT display columns) and the board row's one-line headline (the
+  // note's first non-empty line, HEADLINE_PREVIEW_COLUMNS — [[session-label]]). The notice fires when
+  // EITHER cut bites and names both, so the author is never told about one cut while the other quietly
+  // eats their text. The headline cut is what makes the trigger a comparison rather than a length test:
+  // a note UNDER the table cap can still lose every line after its first on the surface a human reads.
+  // Taught ONCE per session: the first cut note prints the full notice and drops a sentinel beside the
+  // record; later cuts stay silent (the rule was taught — a verbatim repeat on every park/ask is noise,
+  // field-reported). A nudge riding the echo, never a gate: the declaration has already landed.
   const noteEcho = (note?: string): string => {
-    if (!note || note.length <= s.NOTE_BOARD_LIMIT) return ''
+    if (!note) return ''
+    const headline = s.deriveHeadline({ id: '', note })
+    const tableCut = s.displayWidth(note) > s.NOTE_BOARD_LIMIT
+    const headlineCut = headline !== note.trim()
+    if (!tableCut && !headlineCut) return ''
     const wid = sess || s.ownSessionId()
     const rid = wid ? (l.readAliasedRawRecord(wid)?.session_id ?? wid) : null   // sentinel lives in the RECORD's dir, so an aliased codex id lands on the same file
     if (rid) {
@@ -276,7 +283,11 @@ async function stateKit() {
         writeFileSync(sentinel, `${new Date().toISOString()}\n`)   // only reached on a successful declaration (the echo rides the success branch)
       } catch { /* unreadable/unwritable store dir → fall through and teach again; never block the echo */ }
     }
-    return `\nyour note is ${note.length} chars; the session table shows only the first ${s.NOTE_BOARD_LIMIT} — the full text IS recorded, and readable via spex session review ${(wid || '<your-session>').slice(0, 8)} / spex session ls --json. (said once — later long notes won't repeat this.)`
+    const cuts = [
+      tableCut ? `the session table's NOTE column shows only the first ${s.NOTE_BOARD_LIMIT} display columns` : null,
+      headlineCut ? `the board row shows your note's FIRST LINE only, up to ${s.HEADLINE_PREVIEW_COLUMNS} columns ("${headline}")` : null,
+    ].filter(Boolean).join('; ')
+    return `\nyour note is ${note.length} chars — ${cuts}. the full text IS recorded, and readable via spex session review ${(wid || '<your-session>').slice(0, 8)} / spex session ls --json. (said once — later cut notes won't repeat this.)`
   }
   return { s, l, sess, noRecord, mark, noteEcho }
 }

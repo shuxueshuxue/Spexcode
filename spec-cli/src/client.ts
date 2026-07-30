@@ -3,7 +3,8 @@ import { platform } from 'node:os'
 import { repoRoot } from './git.js'
 import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { listSessionIds, readPublicRecordEntry } from './layout.js'
-import { apiBase, apiBaseInfo, assertProjectMatch, fromRaw, resolveSession, reviewPayload, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { cockpitReview, type CockpitReview } from './cockpit.js'
+import { apiBase, apiBaseInfo, assertProjectMatch, fromRaw, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -157,13 +158,13 @@ export async function clientSend(id: string, text: string, from?: string): Promi
 }
 
 // GET /api/sessions/:id/review — the manager cockpit review bundle (null on 404).
-export async function clientReview(id: string): Promise<ReviewPayload | null> {
+export async function clientReview(id: string): Promise<CockpitReview | null> {
   return cachedRead(async () => {
     const r = await apiFetch(`/api/sessions/${seg(id)}/review`)
     if (r.status === 404) return null
     if (!r.ok) throw new BackendError(`backend error ${r.status} reviewing ${id}`, r.status)
-    return await r.json() as ReviewPayload
-  }, () => reviewPayload(id))
+    return await r.json() as CockpitReview
+  }, () => cockpitReview(id))
 }
 
 // GET /api/sessions/:id/evals?format=html — the rendered EXPORT artifact ([[session-eval]]): the

@@ -105,12 +105,13 @@ scenarios:
       wedge but issue no second invalidation and make no fresh graph request: wait for the existing cold
       patrol to recover the cache, then inspect the SSE frame, final graph and debug attribution.
     expected: >-
-      The failed producer restores its consumed full scope, the session event that arrived during the flight
-      remains owed, and the next patrol completes one fresh graph containing both changes without any manual
-      invalidation. Its trigger ledger retains the full and sessions watcher causes alongside patrol. It must
-      NOT emit PATROL-REPAIR: the patrol recovered work already attributed to healthy leaf signals, so calling
-      that a blind-watcher repair is false. The stream must not swallow the rebuild or any trigger that arrived
-      while the failed flight was occupied.
+      The failed producer restores its consumed full scope, and the next patrol completes one fresh graph
+      containing both changes without any manual invalidation. When the session-only projection successfully
+      publishes before the watchdog fails the structural producer, its earlier trigger ledger is `{full,
+      sessions}` and it consumes that sessions cause; the later structural recovery is ordered after it and
+      carries `{full, patrol}`. It must NOT emit PATROL-REPAIR: the patrol recovered work already attributed
+      to healthy leaf signals, so calling that a blind-watcher repair is false. The stream must not swallow the
+      rebuild or any trigger that remains owed while the failed flight was occupied.
   - name: adopter-scale-watch-budget
     tags: [backend-api]
     code: spec-cli/src/graphStream.ts

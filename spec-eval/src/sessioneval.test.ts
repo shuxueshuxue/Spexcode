@@ -905,14 +905,18 @@ test('content revision covers dirty source, index, rename, sidecar, remark, and 
   }
 })
 
-// The ancestry gate raises the SAME error type either way and differs only in its sentence, so the sentence is
-// the whole contract ([[git-exec]]). One of the two is ACTIONABLE — it tells the reader their base is wrong and
-// to use the session merge-base — so handing it to someone whose git merely failed to run sends them to change
-// an input that was already correct. That is worse than an unknown error: an unknown sends you to the
-// environment, a false diagnosis sends you to edit the thing that was right. Five of the seven call sites that
-// read this classification are reachable only where git is missing or unexecutable, so these two branches are
-// where a test is worth the most, not where the call sites are densest.
-test('ancestry gate: a real non-ancestor says so; a git that could not RUN never claims the base is wrong', async () => {
+// [[git-exec]]'s classification, locked where it is actually OBSERVABLE. The first version of this test aimed
+// at the ancestry gate, because that gate is the one place whose message is ACTIONABLE — it tells the reader
+// their base is wrong and to use the session merge-base, which someone will act on. Measuring it showed the
+// aim was wrong: an unexecutable git never reaches that gate, because revision resolution runs first and fails
+// first. The test passed on BOTH sides of the fix, which is the "instrument not plugged in" failure — an
+// assertion satisfied because the code never arrives at the branch it names.
+//
+// The difference the fix really makes is one line earlier, in the resolution error's own words: the same
+// unexecutable git reports `exit failure` before and `spawn failure` after. That is the two-sided difference,
+// so that is where the lock belongs. The genuine non-ancestor case stays because the actionable sentence is
+// TRUE there and must keep being produced.
+test('git-exec classification survives into session impact: a git that never ran says spawn, not exit', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-ancestry-gate-'))
   const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
   git('init', '-q')
@@ -928,14 +932,14 @@ test('ancestry gate: a real non-ancestor says so; a git that could not RUN never
   writeFileSync(join(root, 'b.txt'), 'three\n'); git('add', '-A'); git('commit', '-q', '-m', 'right')
   const right = git('rev-parse', 'HEAD')
 
-  // (1) a genuine non-ancestor — the actionable sentence is CORRECT here, and must still be produced
+  // a genuine non-ancestor: the actionable sentence is correct here and must keep being produced
   await assert.rejects(
     projectSessionImpact(root, { base: left, head: right }),
     (error: any) => error instanceof SessionImpactUnavailableError && /is not an ancestor of head/.test(error.message),
     'a real non-ancestor keeps the actionable diagnosis',
   )
 
-  // (2) git cannot be executed — classified 'spawn', so the gate must NOT claim the base is wrong
+  // a git that cannot be executed: the failure must be named for what it was, never as an exit status
   const shimDir = mkdtempSync(join(tmpdir(), 'spex-ancestry-shim-'))
   writeFileSync(join(shimDir, 'git'), '#!/bin/sh\nexec /usr/bin/git "$@"\n')
   chmodSync(join(shimDir, 'git'), 0o644)
@@ -945,8 +949,8 @@ test('ancestry gate: a real non-ancestor says so; a git that could not RUN never
     await assert.rejects(
       projectSessionImpact(root, { base: rootCommit, head: left }),
       (error: any) => error instanceof SessionImpactUnavailableError
-        && !/is not an ancestor of head/.test(error.message),
-      'a git that never ran must not be reported as a wrong base',
+        && /spawn failure/.test(error.message) && !/exit failure/.test(error.message),
+      'an unexecutable git is a spawn failure, not an exit status',
     )
   } finally {
     process.env.PATH = realPath
@@ -954,4 +958,3 @@ test('ancestry gate: a real non-ancestor says so; a git that could not RUN never
   }
   rmSync(root, { recursive: true, force: true })
 })
-

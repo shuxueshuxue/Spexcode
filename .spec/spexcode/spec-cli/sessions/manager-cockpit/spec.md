@@ -42,7 +42,33 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   --write-tree` — no checkout, nothing to abort, the SAFE form of "would this conflict"); `lint` (the
   [[spec-lint]] module's error / warning counts); and `evals`, the measured-loss READOUT. conflict/ahead/dirty are session-specific; the lint gate
   reflects the CLI package's own tree, where the command runs, so it is memoized on that tree's fingerprint
-  (an unchanged tree skips the re-lint on repeated reviews / [[session-eval]] opens). There is deliberately
+  (an unchanged tree skips the re-lint on repeated reviews / [[session-eval]] opens).
+
+  That memo only covers the case where nothing moved, and a session-scoped page pays this LOCATION gate
+  whatever its own scope is — so the gate may not RE-COST the whole REPOSITORY every time the tree moves while
+  the reviewed scope stays small. When the fingerprint moves — a trunk commit, one dirty edit — the verdict is
+  recomputed, and a second verdict IN THE SAME PROCESS costs what MOVED, because the anchor engine reuses the
+  hunks whose IMAGE IDENTITY it has already read under a pinned diff interpretation ([[code-anchor]] owns that
+  identity — ordered result/parent images, not a commit id, which `refs/replace`, a graft or an unshallow can
+  reinterpret) instead of re-probing every anchored window.
+
+  Measured here, and this is the whole claim, no wider: an empty-scope review and a ten-file-scope review each
+  pay the same 48 git children on a COLD process — 22 of them one `log --patch` per anchored path — and that
+  first touch is UNCHANGED. What the reuse removes is paying it AGAIN on every later fingerprint move: 38
+  children with 22 such queries, argv byte-identical to the previous run, down to 15 with none; a commit that
+  moves ONE anchored path, 42 with 22 down to 21 with one. So a warm backend's re-verdicts no longer cost the
+  corpus, while a cold [[session-eval]] deep-link still pays this gate once — calling the cold path solved
+  would be false, and the gate's share of it is still about ten times that page's own all-selector validation.
+
+  The reuse is per PROCESS, and the residual is stated rather than hidden: a fresh backend pays the first touch
+  again, and a trunk commit that touches the backend's own source makes the supervisor replace the child, so
+  that verdict is a first touch too. Crossing THAT needs hunk facts durable across processes, stored under the
+  same image identity, in the existing on-disk event ledger — [[source-of-truth]]'s to own, and deliberately
+  NOT implemented. Proportionality is
+  bought the one way described and no other: the gate keeps NO second cache of its verdict and narrows
+  nothing — the counts are exactly what `spex spec lint` reports for that tree with its dirty files included, a
+  moved fingerprint always recomputes instead of serving last-known, and a rejected run is never cached.
+  There is deliberately
   NO build/typecheck/test gate here: whether a change is SOUND is proven by the node's eval scenarios, measured
   through the real product ([[session-eval]] shows that evidence) — not by a language-specific automated
   checker baked into the cockpit. So the gates stay language-agnostic (git + the spec↔code graph), correct

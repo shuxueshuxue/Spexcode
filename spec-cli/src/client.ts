@@ -8,7 +8,7 @@ import { apiBase, apiBaseInfo, assertProjectMatch, fromRaw, resolveSession, revi
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number) {
     super(message)
-    this.name = 'BackendError'   // sessions.ts's isBackendDown matches on this name (no runtime import cycle)
+    this.name = 'BackendError'   // cli.ts's top-level handler matches on the NAME, so it needs no import of this class
   }
 }
 

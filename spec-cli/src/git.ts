@@ -153,9 +153,32 @@ export function isGitObjectId(root: string, value: string): boolean {
 // Batch immutable object lookups used by the shared anchor/index path. Git accepts revision:path queries on
 // batch-check, so dozens of rev-parse + cat-file children collapse into two bounded processes without
 // changing the returned bytes or object ids.
-export function batchRevisionOids(root: string, revisions: string[]): (string | null)[] {
+//
+// These are async for two reasons a synchronous execFileSync cannot serve once the caller batches its WHOLE
+// invocation rather than one reading at a time. A sync child is invisible to the build's permit pool and its
+// abort signal, so a watchdog abort could not kill it; and one build-wide `cat-file --batch` reading tens of
+// megabytes would be a single uninterruptible stretch — exactly the /health-blocking shape [[graph-cache]]
+// closed for the fs walks.
+//
+// Chunking is a real output bound, not ceremony: the async transport caps a child's stdout at GIT_MAX_BUFFER
+// and overflow is a loud error. Revision rows are 41 bytes each, so only the blob read (payload-sized) needs
+// a chunk; the cap is on COUNT because sizes are unknown until git answers, and it is set so an ordinary
+// source corpus never approaches the byte ceiling.
+const BATCH_BLOB_CHUNK = 256
+const BATCH_BLOB_MAX_BUFFER = 1 << 26
+async function batchBuffer(args: string[], input: string, maxBuffer?: number): Promise<Buffer> {
+  const env = { ...process.env }
+  delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  try { return (await execGitForCaller(args, env, maxBuffer, input)).stdout }
+  catch (error: any) {
+    if (error?.name === 'AbortError') throw error
+    warnIfTimedOut(error, args)
+    throw new Error(`git ${args.slice(2, 5).join(' ')} failed: ${String(error?.stderr || error?.message || 'unknown git error').trim()}`)
+  }
+}
+export async function batchRevisionOids(root: string, revisions: string[]): Promise<(string | null)[]> {
   if (!revisions.length) return []
-  const out = gitBuffer(['-C', root, 'cat-file', '--batch-check=%(objectname)'], revisions.join('\n') + '\n').toString('utf8')
+  const out = (await batchBuffer(['-C', root, 'cat-file', '--batch-check=%(objectname)'], revisions.join('\n') + '\n')).toString('utf8')
   const lines = out.split('\n')
   if (lines.length - 1 !== revisions.length) throw new Error(`git cat-file --batch-check returned ${lines.length - 1} rows for ${revisions.length} revisions`)
   return revisions.map((revision, index) => {
@@ -165,25 +188,28 @@ export function batchRevisionOids(root: string, revisions: string[]): (string | 
     throw new Error(`git cat-file --batch-check returned '${value}' for ${revision}`)
   })
 }
-export function batchBlobTexts(root: string, oids: string[]): Map<string, string> {
+export async function batchBlobTexts(root: string, oids: string[]): Promise<Map<string, string>> {
   const unique = [...new Set(oids.filter(Boolean))]
   const files = new Map<string, string>()
   if (!unique.length) return files
   for (const oid of unique) if (!isGitObjectId(root, oid)) throw new Error(`invalid object id '${oid}'`)
-  const out = gitBuffer(['-C', root, 'cat-file', '--batch'], unique.join('\n') + '\n')
-  let offset = 0
-  for (const oid of unique) {
-    const newline = out.indexOf(10, offset)
-    if (newline < 0) throw new Error(`git cat-file --batch ended before ${oid}`)
-    const header = out.subarray(offset, newline).toString('utf8')
-    const size = Number(header.match(/ blob (\d+)$/)?.[1])
-    if (!header.startsWith(`${oid} blob `) || !Number.isFinite(size)) throw new Error(`git cat-file --batch returned '${header}' for ${oid}`) // dead-words-ok: Git object protocol type
-    const start = newline + 1, end = start + size
-    if (end >= out.length || out[end] !== 0x0a) throw new Error(`git cat-file --batch truncated object ${oid}`)
-    files.set(oid, out.subarray(start, end).toString('utf8'))
-    offset = end + 1
+  for (let cursor = 0; cursor < unique.length; cursor += BATCH_BLOB_CHUNK) {
+    const chunk = unique.slice(cursor, cursor + BATCH_BLOB_CHUNK)
+    const out = await batchBuffer(['-C', root, 'cat-file', '--batch'], chunk.join('\n') + '\n', BATCH_BLOB_MAX_BUFFER)
+    let offset = 0
+    for (const oid of chunk) {
+      const newline = out.indexOf(10, offset)
+      if (newline < 0) throw new Error(`git cat-file --batch ended before ${oid}`)
+      const header = out.subarray(offset, newline).toString('utf8')
+      const size = Number(header.match(/ blob (\d+)$/)?.[1])
+      if (!header.startsWith(`${oid} blob `) || !Number.isFinite(size)) throw new Error(`git cat-file --batch returned '${header}' for ${oid}`) // dead-words-ok: Git object protocol type
+      const start = newline + 1, end = start + size
+      if (end >= out.length || out[end] !== 0x0a) throw new Error(`git cat-file --batch truncated object ${oid}`)
+      files.set(oid, out.subarray(start, end).toString('utf8'))
+      offset = end + 1
+    }
+    if (offset !== out.length) throw new Error(`git cat-file --batch returned ${out.length - offset} unexpected trailing bytes`)
   }
-  if (offset !== out.length) throw new Error(`git cat-file --batch returned ${out.length - offset} unexpected trailing bytes`)
   return files
 }
 
@@ -230,7 +256,9 @@ export function treeFileText(root: string, tip: string, path: string): string | 
   catch { return null }
 }
 
-type GitExec = { stdout: string; stderr: string }
+// stdout stays a Buffer to the transport's edge: `cat-file --batch` frames each payload by BYTE length, so
+// a decode before framing mis-slices every object after the first multi-byte character. Text callers decode.
+type GitExec = { stdout: Buffer; stderr: string }
 
 // execFile's AbortSignal kills only its direct child. A wedged adapter may have descendants (the
 // deterministic tests use a shell + sleep), so async git runs in their own process group and abort/timeout
@@ -266,14 +294,14 @@ function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, m
     child.once('close', (code, childSignal) => {
       clearTimeout(timer)
       signal?.removeEventListener('abort', onAbort)
-      const result = { stdout: Buffer.concat(stdout).toString('utf8'), stderr: Buffer.concat(stderr).toString('utf8') }
+      const result = { stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr).toString('utf8') }
       if (code === 0 && !aborted && !timedOut && !overflow && !spawnError) { resolve(result); return }
       const error: any = spawnError ?? new Error(overflow
         ? `git output exceeded ${maxBuffer} bytes`
         : `git exited with ${code ?? childSignal ?? 'unknown status'}`)
       error.code = overflow ? 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' : code
       error.signal = childSignal
-      error.stdout = result.stdout
+      error.stdout = result.stdout.toString('utf8')
       error.stderr = result.stderr
       if (aborted) error.name = 'AbortError'
       if (timedOut) error.spexcodeGitTimeout = true
@@ -327,12 +355,12 @@ function execGitStream(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSig
     child.on('close', (code, childSignal) => {
       if (settled) return
       settled = true; clearTimeout(timer); signal?.removeEventListener('abort', onAbort)
-      const result = { stdout: Buffer.concat(stdout).toString('utf8'), stderr: Buffer.concat(stderr).toString('utf8') }
+      const result = { stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr).toString('utf8') }
       if (code === 0 && !aborted && !timedOut) { resolve(result); return }
       const error: any = new Error(`git exited with ${code ?? childSignal ?? 'unknown status'}`)
       error.code = code
       error.signal = childSignal
-      error.stdout = result.stdout
+      error.stdout = result.stdout.toString('utf8')
       error.stderr = result.stderr
       if (aborted) error.name = 'AbortError'
       if (timedOut) error.spexcodeGitTimeout = true
@@ -354,7 +382,7 @@ export async function gitA(args: string[], input?: string): Promise<string> {
   const context = inheritedContext()
   try {
     const { stdout } = await execGitForCaller(args, env, undefined, input)
-    return stdout
+    return stdout.toString('utf8')
   } catch (e: any) {
     if (context?.signal.aborted || e?.name === 'AbortError') throw e
     warnIfTimedOut(e, args); return ''
@@ -798,7 +826,7 @@ export async function gitTry(args: string[], options: { indexFile?: string } = {
   const context = inheritedContext()
   try {
     const { stdout, stderr } = await execGitForCaller(args, env)
-    return { ok: true, stdout, stderr }
+    return { ok: true, stdout: stdout.toString('utf8'), stderr }
   } catch (e: any) {
     if (context?.signal.aborted || e?.name === 'AbortError') throw e
     warnIfTimedOut(e, args)
@@ -810,7 +838,7 @@ export async function gitTry(args: string[], options: { indexFile?: string } = {
 export async function gitRequiredA(args: string[], purpose: string): Promise<string> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
-  try { return (await execGitStreamForCaller(args, env)).stdout }
+  try { return (await execGitStreamForCaller(args, env)).stdout.toString('utf8') }
   catch (error: any) {
     if (error?.name === 'AbortError') throw error
     warnIfTimedOut(error, args)

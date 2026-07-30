@@ -277,20 +277,20 @@ function selectorEntriesForSnapshot(
   return [...unique.values()]
 }
 
-function primeSelectorSources(
+async function primeSelectorSources(
   context: ImpactReadContext,
   revision: string,
   paths: readonly string[],
   sourceView: 'base' | 'head',
-): void {
+): Promise<void> {
   const exactPaths = [...new Set(paths)].filter((path) => (
     !context.sources.has(`${revision}\0${path}`)
     && !(sourceView === 'head' && context.overlay && Object.hasOwn(context.overlay.files, path))
   )).sort()
   if (!exactPaths.length) return
   try {
-    const oids = batchRevisionOids(context.root, exactPaths.map((path) => `${revision}:${path}`))
-    const blobs = batchBlobTexts(context.root, oids.filter((oid): oid is string => !!oid))
+    const oids = await batchRevisionOids(context.root, exactPaths.map((path) => `${revision}:${path}`))
+    const blobs = await batchBlobTexts(context.root, oids.filter((oid): oid is string => !!oid))
     for (let index = 0; index < exactPaths.length; index++) {
       const path = exactPaths[index]
       const oid = oids[index]
@@ -497,8 +497,8 @@ export async function projectSessionImpact(root: string, options: SessionImpactO
   const headScenariosById = new Map(headSpecs.map((spec) => [spec.id, scenariosAt('head', spec)]))
   const baseSelectorEntries = selectorEntriesForSnapshot(baseSpecs, baseScenariosById)
   const headSelectorEntries = selectorEntriesForSnapshot(headSpecs, headScenariosById)
-  primeSelectorSources(context, base, baseSelectorEntries.map((entry) => entry.path), 'base')
-  primeSelectorSources(context, head, headSelectorEntries.map((entry) => entry.path), 'head')
+  await primeSelectorSources(context, base, baseSelectorEntries.map((entry) => entry.path), 'base')
+  await primeSelectorSources(context, head, headSelectorEntries.map((entry) => entry.path), 'head')
   await Promise.all([
     ...baseSelectorEntries.map((entry) => validateSelectorEntry(context, base, entry, 'base')),
     ...headSelectorEntries.map((entry) => validateSelectorEntry(context, head, entry, 'head')),

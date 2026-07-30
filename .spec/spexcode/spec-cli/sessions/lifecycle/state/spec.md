@@ -213,6 +213,11 @@ board lifecycle. During draining/active maintenance every manifest handler is wi
 `maintenance_active` and zero handler side effect. Only non-hook reads remain open. Once admitted, one dispatcher
 ticket spans the complete ordered handler run and is released on every exit.
 
+For the known pre-structured `mark-active` source bytes still tracked by existing projects, the dispatcher
+executes the package-owned structured implementation without rewriting the tracked hook; that bounded compatibility
+is specified by [[dispatcher-runtime]]. Thus a package upgrade protects frozen worktrees immediately, while a
+project's eventual source migration remains an explicit reviewed change rather than a hidden materialize effect.
+
 - **`UserPromptSubmit` + `PreToolUse` → one `mark-active` hook**: it writes **`asking`** on an
   **AskUserQuestion** (the question → the note), else **`active`** — the freshness signal that also flips
   a stale `idle`/`asking` back the moment work resumes.

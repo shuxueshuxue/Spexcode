@@ -16,6 +16,20 @@ scenarios:
       surface, and the raw parts reachable only where editing them is the point.
     code: [spec-cli/src/sessionLabel.test.ts]
     related: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionContextMenu.jsx, spec-dashboard/src/session.js]
+  - name: declaration-outranks-byproduct
+    tags: [frontend-e2e, desktop]
+    description: >
+      Launch a session whose prompt is a bare URL — so its `promptPreview`, `title` and `branch` all
+      degrade to that same URL — let its agent narrate itself once (the tmux pane title behind
+      `activity`), then let it STOP and DECLARE (`awaiting`/`asking`/`parked`) with a note. Read that
+      session's board row in a real browser, and its derived `headline` on the wire.
+    expected: >
+      The row reads the session's DECLARED note — never the now-frozen pane title, never the URL. A
+      standing declaration is the session's current word about itself and outranks every byproduct of
+      what it was doing or was asked to do; a human rename still outranks the note. Zero loss = the
+      board never makes a correctly-declared agent look like a stalled one.
+    code: [spec-cli/src/sessionLabel.test.ts]
+    related: [spec-cli/src/sessions.ts, spec-dashboard/src/SessionWindow.jsx]
   - name: cli-identity-consistency
     tags: [cli]
     description: >

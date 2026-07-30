@@ -147,17 +147,21 @@ scenarios:
     tags: [backend-api]
     description: >-
       With an isolated SPEXCODE_HOME and a governed record, declare each note-carrying state — `spex session
-      done --propose nothing --note <long>`, `ask --note <long>`, `park --note <long>` — where <long> exceeds
-      the board table's note display cap. Read (1) the record's stored note, (2) the declaration's echo, and
-      (3) the `spex ls` NOTE column. Repeat with a short note under the cap.
+      done --propose nothing --note <n>`, `ask --note <n>`, `park --note <n>` — with THREE shapes of note:
+      one long single-line note over the table's display cap, one SHORT MULTI-LINE note under that cap, and
+      one short single-line note that nothing cuts. Read (1) the record's stored note, (2) the declaration's
+      echo, (3) the `spex ls` NOTE column, and (4) the derived headline the board row shows.
     expected: >-
       The note reaches the record IN FULL for all three verbs (done included — it must not silently drop its
-      --note). The board table still truncates for display, but the truncation is TRANSPARENT to the author
-      — taught ONCE per session: the FIRST overflowing note's declaration echo states the note's length, how
-      many chars the board table shows, and where the full text is readable (the session record / `spex ls
-      --json` / `spex review`); SUBSEQUENT overflowing declarations in the same session carry NO repeat of
-      that notice (the rule was taught; repeating it verbatim on every park/ask is noise). A short note gets
-      no such line ever. The echo is a nudge riding the confirmation — the declaration lands regardless,
+      --note). Both display surfaces still cut, but EVERY cut that bit is TRANSPARENT to the author, named
+      with what it leaves and in the units it actually uses — taught ONCE per session: the first cut note's
+      echo states the note's length, the table's first NOTE_BOARD_LIMIT display columns, the board row's
+      first-line-only HEADLINE_PREVIEW_COLUMNS preview (quoting what the row will read), and where the full
+      text is readable (the session record / `spex ls --json` / `spex review`); SUBSEQUENT cut declarations in
+      the same session carry NO repeat of that notice (the rule was taught; repeating it verbatim on every
+      park/ask is noise). The SHORT MULTI-LINE note is the case a length test misses: it is under the table
+      cap, yet the board row keeps only its first line, so it MUST still be taught. Only a note nothing cuts
+      gets no line ever. The echo is a nudge riding the confirmation — the declaration lands regardless,
       nothing gates.
   - name: no-record-diagnosis-self-explains
     tags: [backend-api]

@@ -218,6 +218,99 @@ test('a repeated read costs the MOVEMENT, and a commit git was never asked about
   }
 })
 
+// A `.gitattributes` `diff` attribute is read from the WORKING TREE even for historical diffs, so it can flip
+// whether Git emits `@@` for a commit at all. That made the anchor verdict a function of mutable state outside
+// the commit — silently unblockable by an attribute edit, and unmemoizable by (commit,path). The seam pins its
+// interpretation instead, so this asserts the property the memo needs: one commit, one answer, whatever the
+// attribute says, and a cached answer identical to a fresh module's.
+test('an anchor verdict is invariant under a dirty .gitattributes diff-attribute flip', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-anchor-attr-'))
+  const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  try {
+    g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'src/x.py'), 'def f():\n    return 1\n\ndef g():\n    return 2\n')
+    g('add', '-A'); g('commit', '-qm', 'v1')
+    writeFileSync(join(root, 'src/x.py'), 'def f():\n    return 11\n\ndef g():\n    return 2\n')
+    g('add', '-A'); g('commit', '-qm', 'f moves'); const moved = g('rev-parse', 'HEAD')
+    const win = [{ commit: moved, historicalPath: 'src/x.py', parents: [{ commit: g('rev-parse', 'HEAD~1'), historicalPath: 'src/x.py' }] }]
+    const ask = async (mod: typeof import('./anchors.js')) =>
+      (await mod.anchorHitQueries(root, [{ win, symbols: ['f'] }], mod.extractors(root)))[0].map((row) => row.selectors)
+
+    // `-diff` marks the path binary for diff purposes: Git prints "Binary files … differ", no `@@`.
+    writeFileSync(join(root, '.gitattributes'), 'src/x.py -diff\n')
+    const suppressed = await ask(await import('./anchors.js'))
+    // flip the same dirty attribute to its opposite and ask the SAME process again
+    writeFileSync(join(root, '.gitattributes'), 'src/x.py diff\n')
+    const flipped = await ask(await import('./anchors.js'))
+    // a module with empty memos is the oracle: whatever it says, the memoized answer must equal it
+    const fresh = await ask(await import(`./anchors.js?attr-oracle=${moved}`))
+
+    assert.deepEqual(flipped, suppressed, 'one commit must have ONE anchor verdict, whatever .gitattributes says')
+    assert.deepEqual(flipped, fresh, 'a memoized verdict must equal a fresh module\'s on the same commit and path')
+    assert.deepEqual(fresh, [['f']], 'the anchored unit did move, so the verdict is a hit — an attribute may not hide it')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+// A commit id is not immutable interpretation: `refs/replace` swaps the object it names, and a graft or an
+// unshallow changes its parents. The reusable hunk fact is therefore keyed on the ORDERED IMAGES that decide
+// it, so these two controls must each move the answer rather than serve the previous one.
+test('a replaced commit object and a regrafted parent are different hunk facts, not one cached fact', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-anchor-identity-'))
+  const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const unit = (name: string, body: string) => `export function ${name}() {\n  return ${body}\n}\n`
+  try {
+    g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'src/i.ts'), unit('f', '1') + unit('g', '2'))
+    g('add', '-A'); g('commit', '-qm', 'v1'); const v1 = g('rev-parse', 'HEAD')
+    writeFileSync(join(root, 'src/i.ts'), unit('f', '11') + unit('g', '2'))
+    g('add', '-A'); g('commit', '-qm', 'f moves'); const movesF = g('rev-parse', 'HEAD')
+    writeFileSync(join(root, 'src/i.ts'), unit('f', '11') + unit('g', '22'))
+    g('add', '-A'); g('commit', '-qm', 'g moves'); const movesG = g('rev-parse', 'HEAD')
+    const mod = await import('./anchors.js')
+    const x = tsAstExtractor(ROOT)
+    const ask = async (event: any) => (await mod.anchorHitQueries(root, [{ win: [event], symbols: ['f'] }], [x]))[0].map((r) => r.selectors)
+
+    // (1) ordered PARENT identity, via a REAL graft. Git answers "what did this commit change" from its own
+    //     parents, so the control has to move Git's parents — `replace --graft` does, and the event the index
+    //     derives moves with it. Before: movesG against movesF changed only g. After the graft its parent is
+    //     v1, where f moved too. A (commit,path) key would have served the first answer for the second.
+    const askG = (parent: string) => ask({ commit: movesG, historicalPath: 'src/i.ts', parents: [{ commit: parent, historicalPath: 'src/i.ts' }] })
+    const beforeGraft = await askG(movesF)
+    g('replace', '--graft', movesG, v1)
+    const afterGraft = await askG(v1)
+    const freshGraft = (await (await import(`./anchors.js?graft-oracle=${movesG}`)).anchorHitQueries(
+      root, [{ win: [{ commit: movesG, historicalPath: 'src/i.ts', parents: [{ commit: v1, historicalPath: 'src/i.ts' }] }], symbols: ['f'] }], [x]))[0].map((r: any) => r.selectors)
+    assert.deepEqual(beforeGraft, [], 'against its real parent only g moved, so the f anchor is not hit')
+    assert.deepEqual(afterGraft, freshGraft, 'after a real graft the memoized answer must equal a fresh module\'s')
+    assert.deepEqual(afterGraft, [['f']], 'the grafted parent predates f moving, so f IS hit — a cached (commit,path) fact hid this')
+    g('replace', '-d', movesG)
+
+    // (2) IMAGE identity: `refs/replace` makes commit:path resolve to different bytes, and `cat-file
+    //     --batch-check` follows it — so the resolved image oid, not the commit id, is the honest key. The
+    //     stand-in is a SIBLING of v1 (never a descendant: replacing a commit by its own child is a cycle,
+    //     and the oracle would be degenerate rather than a control).
+    g('checkout', '-q', '-b', 'side', v1)
+    writeFileSync(join(root, 'src/i.ts'), unit('f', '1') + unit('g', '22'))
+    g('add', '-A'); g('commit', '-qm', 'sibling moves only g'); const sibling = g('rev-parse', 'HEAD')
+    g('checkout', '-q', 'main')
+    const askF = () => ask({ commit: movesF, historicalPath: 'src/i.ts', parents: [{ commit: v1, historicalPath: 'src/i.ts' }] })
+    const before = await askF()
+    g('replace', movesF, sibling)
+    const after = await askF()
+    const fresh = (await (await import(`./anchors.js?identity-oracle=${movesF}`)).anchorHitQueries(
+      root, [{ win: [{ commit: movesF, historicalPath: 'src/i.ts', parents: [{ commit: v1, historicalPath: 'src/i.ts' }] }], symbols: ['f'] }], [x]))[0].map((r: any) => r.selectors)
+    assert.deepEqual(before, [['f']], 'the original object moved f')
+    assert.deepEqual(after, fresh, 'after refs/replace the memoized answer must equal a fresh module\'s')
+    assert.deepEqual(after, [], 'the replacement object leaves f alone, so f is no longer hit — a commit-id key would have kept the old hit')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('historical extractor memo stays stable across order and same-process repetition', { skip: !gitAvailable() && 'git not available' }, async () => {
   const source = 'export const f = <T>(x: T) => x\n'
   for (const order of [['src/same.tsx', 'src/same.ts'], ['src/same.ts', 'src/same.tsx']]) {

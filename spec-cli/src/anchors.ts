@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, type DiffLineRange, type DriftIndex, type DriftPathEvent } from './git.js'
+import { git, gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, HUNK_INTERPRETATION, type DiffLineRange, type DriftIndex, type DriftPathEvent } from './git.js'
 
 const RS = '\x1e'
 
@@ -437,19 +437,25 @@ async function unitsAtFileRevision(commit: string, path: string, x: Extractor, o
 // adjacent inherited line merely because Git placed both in one `@@@` hunk.
 type HunkRanges = { after: DiffLineRange[]; before: DiffLineRange[][] }
 const hunkMemo = new Map<string, HunkRanges>()
-const hunkMemoKey = (commit: string, paths: string[]) => `${commit}\0${paths.join('\x1e')}`
+// @@@ the reusable fact is a diff of ORDERED IMAGES, not of a commit id - a commit id is not immutable
+// interpretation: `refs/replace` can swap the object, and a graft or an unshallow can change its parents, so
+// one (commit,path) can name two different diffs inside one process. The inputs that actually decide the
+// hunks are the result image and each parent image, in order, each identified by its resolved blob oid and
+// historical path. Keying on those makes the key move exactly when an input does, and the oids are already
+// resolved by this read's one `cat-file --batch-check`, so completeness costs no extra child and no new state.
+const ABSENT_IMAGE = '-'
+const hunkMemoKey = (images: string[]) => images.join('\0')
 function rememberHunks(key: string, ranges: HunkRanges): HunkRanges {
   if (hunkMemo.size >= MEMO_MAX) hunkMemo.clear()
   hunkMemo.set(key, ranges)
   return ranges
 }
-async function hunksAt(root: string, event: DriftPathEvent): Promise<HunkRanges> {
+async function hunksAt(root: string, event: DriftPathEvent, key: string): Promise<HunkRanges> {
   const paths = [...new Set([event.historicalPath, ...event.parents.map((parent) => parent.historicalPath)])]
-  const key = hunkMemoKey(event.commit, paths)
   const hit = hunkMemo.get(key)
   if (hit) return hit
   const merge = event.parents.length > 1
-  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--combined-all-paths', '--unified=0', '-M', '--format=', event.commit,
+  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--combined-all-paths', '--unified=0', ...HUNK_INTERPRETATION, '-M', '--format=', event.commit,
     ...(merge ? [] : ['--', ...paths])],
     `cannot derive anchor hunks for ${event.commit}:${event.historicalPath}`)
   let ranges: HunkRanges = { after: [], before: [[]] }
@@ -472,26 +478,28 @@ async function hunksAt(root: string, event: DriftPathEvent): Promise<HunkRanges>
 // image paths, so they stay on hunksAt's exact event-shaped query. Commits ride argv here, so a build-wide
 // batch is split to stay clear of the kernel's exec argument limit; the records are order-independent.
 //
-// @@@ the demand set is the MISSES - a `(commit,path)` hunk is a permanent property of that commit, the same
-// class of fact as its blob image, so it rides the same immutable memo. Asking git for the whole window again
-// is what made a repeated read cost the CORPUS instead of the movement: a re-lint after one trunk commit or
-// one dirty edit re-forked one `log --patch` per anchored path (22 here) to re-derive byte-identical answers.
+// @@@ the demand set is the MISSES - a hunk is reusable by the identity of the IMAGES it diffed, never by the
+// commit id (see hunkMemoKey): under that identity, plus this seam's pinned interpretation, the fact cannot be
+// reinterpreted inside one process, so the batch may ask git only for what it has not read. Asking for the
+// whole window again is what made a repeated read cost the CORPUS instead of the movement: a re-lint after one
+// trunk commit or one dirty edit re-forked one `log --patch` per anchored path (22 here) to re-derive
+// byte-identical answers.
 const HUNK_COMMIT_CHUNK = 400
-async function hunksAtMany(root: string, commits: string[], path: string): Promise<Map<string, HunkRanges>> {
+async function hunksAtMany(root: string, path: string, entries: Map<string, string>): Promise<Map<string, HunkRanges>> {
   const result = new Map<string, HunkRanges>()
   const ordinary: string[] = []
-  for (const commit of new Set(commits)) {
-    const hit = hunkMemo.get(hunkMemoKey(commit, [path]))
+  for (const [commit, key] of entries) {
+    const hit = hunkMemo.get(key)
     if (hit) result.set(commit, hit)
     else ordinary.push(commit)
   }
   if (!ordinary.length) return result
   for (let cursor = 0; cursor < ordinary.length; cursor += HUNK_COMMIT_CHUNK)
-    await hunkRecordsInto(root, ordinary.slice(cursor, cursor + HUNK_COMMIT_CHUNK), path, result)
+    await hunkRecordsInto(root, ordinary.slice(cursor, cursor + HUNK_COMMIT_CHUNK), path, entries, result)
   return result
 }
-async function hunkRecordsInto(root: string, ordinary: string[], path: string, result: Map<string, HunkRanges>): Promise<void> {
-  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0', '-M',
+async function hunkRecordsInto(root: string, ordinary: string[], path: string, keys: Map<string, string>, result: Map<string, HunkRanges>): Promise<void> {
+  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0', ...HUNK_INTERPRETATION, '-M',
     `--format=${RS}%H`, ...ordinary, '--', path], `cannot derive anchor hunks for ${path}`)
   for (const rec of out.split(RS)) {
     const normalized = rec.replace(/^\n/, '')
@@ -507,7 +515,8 @@ async function hunkRecordsInto(root: string, ordinary: string[], path: string, r
       if (oldCount > 0) ranges.before[0].push([oldStart, oldStart + oldCount - 1])
       if (newCount > 0) ranges.after.push([newStart, newStart + newCount - 1])
     }
-    result.set(hash, rememberHunks(hunkMemoKey(hash, [path]), ranges))
+    const key = keys.get(hash)
+    result.set(hash, key === undefined ? ranges : rememberHunks(key, ranges))
   }
 }
 
@@ -531,22 +540,36 @@ type AnchorRevision = { commit: string; path: string }
 const anchorRevisionKey = ({ commit, path }: AnchorRevision) => `${commit}\0${path}`
 
 // One lint can judge several selectors with overlapping windows. Their Git images and ordinary hunks are
-// immutable facts, so the batch owns them once and each query keeps its own selector verdict.
+// reusable under the identity of those images, so the batch owns them once and each query keeps its own
+// selector verdict.
 export async function anchorHitQueries(root: string, queries: AnchorHitQuery[], regs: Extractor[]): Promise<AnchorHit[][]> {
   if (!queries.length) return []
   const objectFormat = gitObjectFormat(root)
   const revisions = new Map<string, AnchorRevision>()
-  const ordinaryByPath = new Map<string, Set<string>>()
+  const ordinaryEvents: { path: string; commit: string; event: DriftPathEvent }[] = []
   for (const { win } of queries) for (const event of win) {
     const refs = [{ commit: event.commit, path: event.historicalPath }, ...event.parents.map(({ commit, historicalPath }) => ({ commit, path: historicalPath }))]
     for (const ref of refs) revisions.set(anchorRevisionKey(ref), ref)
     if (event.parents.length > 1 || event.parents.some((parent) => parent.historicalPath !== event.historicalPath)) continue
-    const commits = ordinaryByPath.get(event.historicalPath) ?? new Set<string>()
-    commits.add(event.commit)
-    ordinaryByPath.set(event.historicalPath, commits)
+    ordinaryEvents.push({ path: event.historicalPath, commit: event.commit, event })
   }
   const refs = [...revisions.values()]
   const oids = await batchRevisionOids(root, refs.map(({ commit, path }) => `${commit}:${path}`))
+  // Every image this read will diff is now resolved, so the reusable hunk fact can be named by the identity
+  // that actually decides it: the result image and each parent image, in order, oid + historical path.
+  const oidByRef = new Map<string, string | null>()
+  for (let index = 0; index < refs.length; index++) oidByRef.set(anchorRevisionKey(refs[index]), oids[index])
+  const imageOf = (commit: string, path: string) => `${oidByRef.get(anchorRevisionKey({ commit, path })) ?? ABSENT_IMAGE}:${path}`
+  const imageIdentity = (event: DriftPathEvent) => hunkMemoKey([
+    imageOf(event.commit, event.historicalPath),
+    ...event.parents.map(({ commit, historicalPath }) => imageOf(commit, historicalPath)),
+  ])
+  const ordinaryByPath = new Map<string, Map<string, string>>()
+  for (const { path, commit, event } of ordinaryEvents) {
+    const entries = ordinaryByPath.get(path) ?? new Map<string, string>()
+    entries.set(commit, imageIdentity(event))
+    ordinaryByPath.set(path, entries)
+  }
   // The image's own memo answers before any bytes move, so the read asks git only for the revisions this
   // process has not parsed yet — the retention half of the same rule the hunk demand set follows.
   const units = new Map<string, FileRevisionUnits>()
@@ -569,7 +592,7 @@ export async function anchorHitQueries(root: string, queries: AnchorHitQuery[], 
   for (const { ref, oid, x } of pending)
     units.set(anchorRevisionKey(ref), await unitsAtFileRevision(ref.commit, ref.path, x, objectFormat, oid, blobs.get(oid)))
   const ordinaryHunks = new Map<string, Map<string, HunkRanges>>()
-  for (const [path, commits] of ordinaryByPath) ordinaryHunks.set(path, await hunksAtMany(root, [...commits], path))
+  for (const [path, entries] of ordinaryByPath) ordinaryHunks.set(path, await hunksAtMany(root, path, entries))
   const intersects = (ranges: DiffLineRange[], candidates: Unit[]) =>
     ranges.some(([start, end]) => candidates.some((unit) => start <= unit.end && unit.start <= end))
   const results: AnchorHit[][] = []
@@ -579,7 +602,7 @@ export async function anchorHitQueries(root: string, queries: AnchorHitQuery[], 
       const after = units.get(anchorRevisionKey({ commit: event.commit, path: event.historicalPath }))!
       const before = event.parents.map(({ commit, historicalPath }) => units.get(anchorRevisionKey({ commit, path: historicalPath }))!)
       const ranges = ordinaryHunks.get(event.historicalPath)?.get(event.commit)
-        ?? await hunksAt(root, event)
+        ?? await hunksAt(root, event, imageIdentity(event))
       if (event.parents.length && ranges.before.length !== before.length)
         throw new Error(`anchor diff for ${event.commit}:${event.historicalPath} has ${ranges.before.length} parent ranges for ${before.length} parents`)
       const hit = hits.get(event.commit) ?? { selectors: new Set<string>() }

@@ -4,8 +4,16 @@ status: active
 hue: 15
 desc: A code: entry may pin named units (`path#symbol` selectors, any number, one base file, OR'd); drift touching any pinned unit is the BLOCKING tier (one anchor-drift error naming hit selectors), replacing the retired count-based driftErrorThreshold gate. related: selectors warn on hit, stay silent on miss. Anchors are optional — an unanchored node never blocks.
 code:
+  - spec-cli/src/anchors.ts#anchorHitQueries
   - spec-cli/src/anchors.ts#anchorHitCommits
   - spec-cli/src/anchors.ts#resolveAnchor
+  - spec-cli/src/anchors.ts#unitsAtFileRevision
+  - spec-cli/src/anchors.ts#fileRevisionMemoKey
+  - spec-cli/src/anchors.ts#hunksAt
+  - spec-cli/src/anchors.ts#hunksAtMany
+  - spec-cli/src/anchors.ts#hunkRecordsInto
+  - spec-cli/src/anchors.ts#hunkMemoKey
+  - spec-cli/src/anchors.ts#rememberHunks
 related:
   - scripts/anchor-drift-golden-proof.mjs
   - scripts/anchor-drift-fold-proof.mjs
@@ -241,16 +249,30 @@ query batch: the engine reads a
 historical `(commit,path)` image, its blob, and an ordinary `(commit,path)` hunk once, then applies each
 node's own selector set and emits findings in declaration order.
 
-All three are permanent properties of that commit, so all three answer from that one bounded memo, and the
-demand set a batch actually sends Git is its MISSES. A second READ in the same process therefore asks Git only
-about facts it has not read — work proportional to what MOVED since, not to the corpus. The waste that rule
-removes is the ordinary hunk having been the one immutable fact re-derived every time: a re-lint after a
-single trunk commit or one dirty edit re-forked one `log --patch` per anchored path (22 on this tree, argv
-byte-identical to the previous run) and re-streamed every window blob, so a consumer that re-verdicts per tree
-state — [[manager-cockpit]]'s review gate — paid the whole corpus per movement. The batch ends with that
-invocation; the memo it fills is per-object and holds no window, verdict or reachability, so it is neither a
-resident cache of results nor a second history truth, and a `(commit,path)` Git was never asked about is
-always asked. Git access stays batch/short-lived; no resident
+**A commit id is not an identity for any of them, and this is a correctness rule before it is a cost rule.**
+What decides a hunk is the pair of images Git actually diffed and how Git was asked to present that diff, and
+BOTH are mutable behind a fixed commit id: `refs/replace` swaps the object a commit id names, a graft or an
+unshallow changes its parents, and a `.gitattributes` `diff` attribute — read from the WORKING TREE even for
+historical diffs — decides whether Git emits `@@` at all or calls the path binary. Measured: one commit and
+path yield one hunk bare and ZERO under `-diff`, so an anchored contract's drift was silently unblockable by
+an attribute edit, and any store keyed on `(commit,path)` could serve either answer.
+
+So this engine fixes both halves. Presentation is PINNED for the seam — every reader of anchor hunk ranges
+asks Git to treat the content as text with no textconv and no external diff — which makes the answer
+independent of attributes and of content sniffing, and is why the seam reads the ordinary text diff of the
+file it will parse with its own extractor. Identity is the ORDERED IMAGES — the result image and each parent
+image, in order, each named by its resolved blob oid and historical path — so replace, graft and unshallow all
+move the identity and are re-read, while an unchanged image set is reused. Those oids are already resolved by
+the read's one `cat-file --batch-check`, so completeness adds no child, no state and no second store.
+
+Under that identity the demand set a batch sends Git is its MISSES, and a second READ in the same process asks
+only about images it has not read — work proportional to what MOVED, not to the corpus. The waste that removes:
+a re-lint after a single trunk commit or one dirty edit re-forked one `log --patch` per anchored path (22 on
+this tree, argv byte-identical to the previous run) and re-streamed every window blob, so a consumer that
+re-verdicts per tree state — [[manager-cockpit]]'s review gate — paid the whole corpus per movement. The batch
+ends with that invocation; the memo it fills is per-image and holds no window, verdict or reachability, so it
+is neither a resident cache of results nor a second history truth, and an image set Git was never asked about
+is always asked. Git access stays batch/short-lived; no resident
 process. The READ is the unit deliberately: a consumer that batches something narrower — one node, one
 reading — re-forks the whole batch per unit and inverts the flag's purpose, so both the spec-drift and the
 eval-freshness consumers hand the engine their entire demand set at once. Batch width lengthens a queue

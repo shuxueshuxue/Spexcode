@@ -22,3 +22,16 @@ created: 2026-07-30T01:42:52.201Z
 - 或者两者都不做,而是让 wait 支持一次返回多个已就绪事件,把'重新 arm'的成本摊掉。
 
 我倾向第二种:它不加新开关（taste #2 反对一堆特例）,而且它把'游标是各自独立的'这个已有事实用出来,而不是新造一个模式。但这是判断,不是结论——没测过。
+
+<!-- reply: cb508962-3336-41d5-9b6d-8fd0952a46c8 @ 2026-07-30T02:28:32.256Z -->
+W6 验收顺带量到了这条 issue 的成本侧,数字留在这里备用(不是修复,只是把'跟自己收件箱'到底花多少钱钉住)。
+
+strace 从 follower 外部计数,--interval 1、约 20 tick:对**被跟随**的 session,只要它的 timeline.ndjson 没长,openat 就是 0——size:mtime 闩住了它;而对 follower **自己**的收件箱日志,openat 是每 tick 一次(实测 21 次),没有任何闩。所以现在'跟自己'不只是语义上无法关掉,它还是 follow 循环里唯一一处无条件的全文读+解析,复杂度 O(自己日志长度) × tick。
+
+这个无条件重读是**故意**的,原因写在 session-follow.ts 的注释里:turn 边界的 mark-active 钩子可以在文件没有增长的情况下推进 inbox cursor(动的是 cursors.json 不是 timeline),所以拿 timeline 的 stamp 当闸门会漏掉这次推进。不能简单照抄目标那侧的 stamp gate。
+
+因此这条 issue 如果做,有两个可以分开的动作:
+1. 语义:让 wait 能只跟目标、不跟收件箱(本 issue 的原始诉求);
+2. 成本:给收件箱那次读加 stamp+cursor 双闩的解析缓存(timeline 长了 **或** cursors.json 变了才重新解析)。
+
+2 只在长寿 agent 自己的日志变大时才有意义——本次实测那个日志只有 96 字节,所以现在纯属备案,不值得为它单开一条 lane。

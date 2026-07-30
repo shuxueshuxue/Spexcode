@@ -3,7 +3,7 @@ title: session-timeline
 status: active
 session: 29e0d645-6173-4e13-bbaf-f008e25af769
 hue: 280
-desc: The session's append-only log — every authored transition and every message — is the DELIVERY itself and the one publicly observable fact about a session; L0 data with an L1 writer.
+desc: The session's append-only log — every authored transition and every message — is the DELIVERY itself, and the one thing about a session any process may observe without owning anything.
 code:
   - spec-cli/src/session-timeline.ts
 related:
@@ -24,8 +24,8 @@ world — what it declared, what was said to it — is a sequence of events, and
 solved separately and worse: it is the **conversation** a terminal-free surface renders, and it is the
 **delivery** itself. A message is delivered when its bytes are in this file; the transport that pokes the
 agent afterwards is a courtesy, not the fact. And because the file is only a file, it is the one thing
-about a session that any process may observe without owning anything — the [[layers]] boundary made
-concrete.
+about a session that any process may observe without owning anything — which is how [[layers]]' L1 lets a
+supervisor, a CI, or any external orchestrator watch a fleet without being granted anything.
 
 ## expanded spec
 
@@ -73,7 +73,7 @@ vanishing without one.
 
 Only the AUTHORED axis is history. Liveness (offline/starting/unknown) is a present-tense probe derivation
 ([[state]]) — re-derived, never authored — so it stays off the durable log; surfaces show current liveness
-from the board row. This is the cross-boundary rule of [[layers]] in its concrete form: a reader that has
+from the board row. This is what [[layers]] keeps inside L1: a reader that has
 only this file can learn everything a session declared and nothing about whether it is alive, and therefore
 can never take an action that needs to know. The timeline dies with the session record (close sweeps the
 store dir).

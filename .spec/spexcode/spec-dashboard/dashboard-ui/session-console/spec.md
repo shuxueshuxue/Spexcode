@@ -239,9 +239,9 @@ surface closes, changes session, or completes its success lifecycle; duplicate a
 like two operations.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
 tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
-that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` and
-`@new` reuse [[mentions]], with the selected session as the command originator — a spawned `@new` worker records
-that exact id as `parent` and therefore folds below it. File paste, drop, and pick reuse [[file-attach]].
+that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` is a
+passive [[mentions]] reference retained in the selected session's prompt. File paste, drop, and pick reuse
+[[file-attach]].
 
 A **right-click on a session row** opens its context menu — **lock on graph**, rename or close
 ([[session-rename]]), select for bulk close ([[session-multi-select]]), and **attach** for a live row

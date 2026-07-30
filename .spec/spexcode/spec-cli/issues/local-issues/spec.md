@@ -150,15 +150,12 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
 - **A human writes too — the local issue store is the programmatic surface.** The same write verbs carry an optional
   `author` (default the effective session id, else a caller-passed `'human'`), so a person can post from
   outside the CLI. `replyLocalIssue(id, body, author)` and `postLocalIssue(concern, {nodes, body, author})` are
-  the programmatic entrypoints: each does the git-committed write AND then dispatches any `@`-mention in the
-  text ([[mentions]]). `replyLocalIssue` additionally loops in the thread's **originator** — its author, or, for an
-  eval-comment thread (concern `eval: <node> · <scenario>`), the reading's filer — as a courtesy if online
-  (the implicit loop-in, [[mentions]]); `postLocalIssue` opens a *new* thread whose originator is the poster, so it
-  loops in no one. Each returns `{ thread, outcomes, loopIn }`. Because the local issue store is the programmatic surface, a
-  human's `@`-mention in a reply **does** summon the agent — that is the point. The dashboard's write path
-  ([[issues-view]]) is a thin caller: `POST /api/issues/:id/reply` and `POST /api/issues` (author `'human'`),
-  plus `POST /api/issues/:id/promote` for the one local-to-forge move. All gated by the same on/off switch
-  (403 when OFF).
+  the programmatic entrypoints and commit their text verbatim: an `@session` remains a passive reference
+  ([[mentions]]). `replyLocalIssue` is composed above this module with the thread originator's online courtesy
+  loop-in; `postLocalIssue` opens a new thread whose originator is the poster, so it loops in no one. The
+  dashboard's write path ([[issues-view]]) is a thin caller: `POST /api/issues/:id/reply` and `POST /api/issues`
+  (author `'human'`), plus `POST /api/issues/:id/promote` for the local-to-forge move. All are gated by the
+  same on/off switch (403 when OFF).
 - **Opt-outable, default ON.** The issues workflow is a feature you can switch off: the single source of
   truth is `spexcode.json`'s `issues.enabled` (the shared settings file every other toggle lives in),
   effective immediately with no commit (config is read from the working tree). There is deliberately **no

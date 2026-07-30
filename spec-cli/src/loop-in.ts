@@ -1,9 +1,9 @@
-import { deliveredIds, notifyOriginator, type LoopIn } from './mentions.js'
+import { notifyOriginator, type LoopIn } from './mentions.js'
 import { replyIssue, type Issue } from './issues.js'
 import { parseEvalConcern, remarkOnHost } from './localIssues.js'
 
 // @@@ loop-in - the originator loop-in's eval-aware half, at the one altitude that can hold it
-// ([[mentions]] / [[remark-substrate]] R3). The MECHANISM never moved: `notifyOriginator`, `summarize` and
+// ([[mentions]] / [[remark-substrate]] R3). The MECHANISM never moved: `notifyOriginator`, `summarizeLoopIn` and
 // `LoopIn` live in `mentions.ts`, genuine substrate, and they stay there. What lived at the wrong height was a
 // single INPUT — resolving WHICH candidates to try, which for an eval-remark thread means asking the eval
 // package who filed the reading under judgement. That resolution sat in `localIssues.ts`, a module the eval
@@ -26,7 +26,7 @@ async function nodeGoverningSession(nodeId: string): Promise<string | null> {
   return (await loadSpecs()).find((s) => s.id === nodeId)?.session ?? null
 }
 
-// The FALLBACK CHAIN of candidates a reply loops in (R3's dispatch clause), tried in order until one is online.
+// The FALLBACK CHAIN of candidates a reply loops in, tried in order until one is online.
 // A plain thread's only candidate is its author. An EVAL-COMMENT thread (concern `eval: <node> · <scenario>`)
 // chains: the agent who FILED the reading the remark judges FIRST — resolved from the TRUNK sidecar, then from
 // each LIVE session's worktree sidecar (the review-time case, when the filer sits online awaiting review) —
@@ -51,9 +51,8 @@ async function threadOriginators(thread: Issue): Promise<(string | null)[]> {
 
 // the implicit courtesy copy every reply carries: a copy down the fallback chain, delivered to the first online
 // link, notification only — it resolves nothing (R3 keeps resolve a deliberate second-party act).
-const loopInFor = async (thread: Issue, author: string, body: string, threadId: string, outcomes: Parameters<typeof deliveredIds>[0]) =>
-  notifyOriginator(await threadOriginators(thread), author, body,
-    { threadId, node: thread.nodes[0] || null, alreadyDelivered: deliveredIds(outcomes) })
+const loopInFor = async (thread: Issue, author: string, body: string, threadId: string) =>
+  notifyOriginator(await threadOriginators(thread), author, body, { threadId, node: thread.nodes[0] || null })
 
 /** `issue reply` for every store, with the originator loop-in composed on top. */
 export async function replyIssueWithLoopIn(
@@ -64,7 +63,7 @@ export async function replyIssueWithLoopIn(
   const r = await replyIssue(id, body, opts)
   // a forge thread's author is a host login, not a live session, so there is no reachable originator and no
   // local thread to read one from — silent by design, exactly as before.
-  const loopIn = r.thread ? await loopInFor(r.thread, r.author, body, id, r.outcomes) : null
+  const loopIn = r.thread ? await loopInFor(r.thread, r.author, body, id) : null
   return { ...r, loopIn }
 }
 
@@ -75,5 +74,5 @@ export async function remarkWithLoopIn(
   opts: { codeSha?: string; author?: string; evidence?: string[] } = {},
 ): Promise<Awaited<ReturnType<typeof remarkOnHost>> & { loopIn: LoopIn | null }> {
   const r = await remarkOnHost(host, body, opts)
-  return { ...r, loopIn: await loopInFor(r.thread, r.author, body, r.thread.id, r.outcomes) }
+  return { ...r, loopIn: await loopInFor(r.thread, r.author, body, r.thread.id) }
 }

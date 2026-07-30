@@ -84,30 +84,28 @@ scenarios:
     description: >-
       Through the real create surfaces that can omit a launcher, measure a project whose config exposes
       launcher profiles but omits `sessions.defaultLauncher`. Run `spex new "probe"` with no `--launcher`,
-      POST `/api/sessions` with no `launcher`, and trigger the `@new` dispatch path, which naturally calls
-      create without a launcher. Then repeat with a configured `sessions.defaultLauncher`, and with an
+      POST `/api/sessions` with no `launcher`. Then repeat with a configured `sessions.defaultLauncher`, and with an
       explicit `--launcher <name>`.
     expected: >-
       With no configured default, every no-choice create fails with an actionable error telling the human to
       write `sessions.defaultLauncher` in `spexcode.json` or `spexcode.local.json`, creates no session/worktree,
       and does not silently fall back to any launcher the human never named (there is no built-in `claude` to
       fall back to — `claude` is just another configured name). With a configured default, `spex new` without
-      `--launcher` and `@new` use that configured profile. With an explicit `--launcher <name>`, create succeeds
+      `--launcher` uses that configured profile. With an explicit `--launcher <name>`, create succeeds
       by that visible named choice regardless of the configured default.
     code: spec-cli/src/sessions.ts
     related: spec-cli/src/index.ts, spec-cli/src/harness.ts, spec-cli/src/mentions.ts
   - name: qualified-new-launcher
     tags: [backend-api, cli]
     description: >-
-      In an isolated runtime whose config defines two inert launcher profiles and a different default,
-      post a real local issue through the CLI with `@new:<non-default>` in its body. Read the spawned
-      session record and the CLI dispatch outcome; repeat with an unknown launcher name.
+      In an isolated runtime whose config defines two inert launcher profiles and a different default, create
+      a session through the CLI with `--launcher <non-default>`. Read the spawned session record; repeat
+      with an unknown launcher name.
     expected: >-
-      The explicit qualifier reaches the ordinary newSession launcher argument: the spawned record carries
+      The explicit flag reaches the ordinary newSession launcher argument: the spawned record carries
       the requested non-default launcher, its matching harness, and that profile's resolved command pin.
-      The dispatch summary names the qualified actor. An unknown qualifier creates no session/worktree and
-      is reported loudly as the mention's failed dispatch, while the issue post itself remains stored.
-    code: spec-cli/src/mentions.ts
+      An unknown launcher creates no session/worktree and fails loudly before any launch.
+    code: spec-cli/src/sessions.ts
     related: spec-cli/src/sessions.ts
   - name: launcher-persisted-not-badged-on-board
     tags: [frontend-e2e, desktop]
@@ -157,5 +155,5 @@ browser only for the dashboard behaviours the dashboard actually owns: the launc
 the old harness radios, honors remembered/default/first visible selection order, and keeps launcher data off
 the board rows. Backend scenarios drive the CLI/API/session-create paths directly. The missing-default
 fail-loud scenario is backend-only: it covers `spex new` without `--launcher`, `POST /api/sessions` without
-`launcher`, and `@new`, because those are the surfaces that can omit a launcher. Dashboard missing-default is
+`launcher`, because those are the surfaces that can omit a launcher. Dashboard missing-default is
 not a fail-loud scenario; the dropdown has a visible selected launcher and submits that explicit pick.

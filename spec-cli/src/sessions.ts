@@ -10,7 +10,7 @@ import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, withGitAbor
 import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from './specs.js'
 import { adapterLoadedReferenceState, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
-import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
+import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
 import { appendSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
@@ -142,16 +142,6 @@ function probeTimedOut(e: unknown): boolean {
 }
 async function tmuxOk(args: string[]): Promise<boolean> { try { await tmux(args); return true } catch { return false } }
 export async function alive(id: string): Promise<boolean> { return tmuxOk(['has-session', '-t', id]) }
-
-// worktrees + branches are created off MAIN even when the server runs inside a worktree.
-function mainRoot(): string {
-  try {
-    const checkout = dirname(gitCommonDir())
-    const configured = readConfig(checkout).main?.trim()
-    return configured ? resolve(checkout, configured) : checkout
-  }
-  catch { return repoRoot() }
-}
 
 function pkgRoot(): string {
   return fileURLToPath(new URL('..', import.meta.url))
@@ -1334,15 +1324,15 @@ export function superviseTurnFailures(intervalMs = 1000): void {
 }
 
 type BackendSettings = { layout?: { main?: string } }
-function assertProjectSettingsMatch(verb: string, target: ApiBaseInfo, settings: BackendSettings | null): void {
+type BackendInstance = { root?: unknown }
+function assertProjectRootMatch(verb: string, target: ApiBaseInfo, servedRoot: string | null): void {
   const { url, source } = target
   if (source === 'flag') return                                   // explicitly routed — the caller named the target
   let localMain: string
   try { localMain = realpathSync(mainRoot()) } catch { return }   // caller not in a repo → can't prove a mismatch
-  const served = settings?.layout?.main ?? null
-  if (!served || !isAbsolute(served)) return                      // unknown / config-aliased root → don't risk a false refusal
+  if (!servedRoot || !isAbsolute(servedRoot)) return              // unknown / config-aliased root → don't risk a false refusal
   let backendMain: string
-  try { backendMain = realpathSync(served) } catch { return }     // backend root not a local path → a remote backend, allow
+  try { backendMain = realpathSync(servedRoot) } catch { return } // backend root not a local path → a remote backend, allow
   if (backendMain !== localMain) {
     const e = new Error(
       `${verb}: refusing WRITE — cwd is in ${localMain} but the backend at ${url} serves ${backendMain}.\n` +
@@ -1351,6 +1341,16 @@ function assertProjectSettingsMatch(verb: string, target: ApiBaseInfo, settings:
     e.name = 'GuardError'
     throw e
   }
+}
+function assertProjectSettingsMatch(verb: string, target: ApiBaseInfo, settings: BackendSettings | null): void {
+  assertProjectRootMatch(verb, target, settings?.layout?.main ?? null)
+}
+function assertProjectInstanceMatch(verb: string, target: ApiBaseInfo, instance: BackendInstance | null): void {
+  const root = instance?.root
+  if (typeof root !== 'string' || !isAbsolute(root)) return
+  let servedMain: string
+  try { servedMain = mainRoot(root) } catch { return }
+  assertProjectRootMatch(verb, target, servedMain)
 }
 export async function assertProjectMatch(verb: string): Promise<void> {
   const target = await apiBaseInfo()
@@ -1483,21 +1483,25 @@ async function probeSessionCreateAuthority(target: ApiBaseInfo): Promise<boolean
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 1500)
   timer.unref?.()
+  let response: Response
   try {
-    const response = await fetch(`${target.url}/api/settings`, { signal: controller.signal })
-    let settings: BackendSettings | null = null
-    if (response.ok) {
-      try { settings = await response.json() as BackendSettings }
-      catch (error) { if (controller.signal.aborted) throw error }
-    }
-    assertProjectSettingsMatch('spex session new', target, settings)
-    return false
+    response = await fetch(`${target.url}/api/instance`, { signal: controller.signal })
   } catch (error) {
+    clearTimeout(timer)
     if (isExplicitConnectionRefused(error)) return true
     const failed = new Error(`backend availability is indeterminate at ${target.url}; refusing in-process session creation (${error instanceof Error ? error.message : error})`)
     failed.name = 'BackendError'
     Object.assign(failed, { code: 'backend_availability_indeterminate', cause: error })
     throw failed
+  }
+  try {
+    let instance: BackendInstance | null = null
+    if (response.ok) {
+      try { instance = await response.json() as BackendInstance }
+      catch { /* an HTTP response already established backend authority */ }
+    }
+    assertProjectInstanceMatch('spex session new', target, instance)
+    return false
   } finally { clearTimeout(timer) }
 }
 export async function createSession(prompt: string, launcher?: string): Promise<Session> {

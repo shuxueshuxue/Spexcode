@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { git, repoRoot, gitA, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
@@ -190,6 +190,20 @@ export function mainCheckout(proj?: string): string {
     ? git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
     : gitCommonDir()
   return dirname(gcd)
+}
+
+// @@@ main root - identity checks need creation's configured-main answer without the record/overlay work in resolveLayout.
+export function mainRoot(proj?: string): string {
+  if (proj) {
+    const checkout = mainCheckout(proj)
+    const configured = readConfig(checkout).main?.trim()
+    return configured ? resolve(checkout, configured) : checkout
+  }
+  try {
+    const checkout = mainCheckout()
+    const configured = readConfig(checkout).main?.trim()
+    return configured ? resolve(checkout, configured) : checkout
+  } catch { return repoRoot() }
 }
 
 // @@@ global per-session store - Fork A: NO SpexCode files live in the worktree any more, so the worktree's

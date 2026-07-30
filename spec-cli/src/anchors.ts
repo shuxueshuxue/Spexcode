@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, HUNK_INTERPRETATION, type DiffLineRange, type DriftIndex, type DriftPathEvent } from './git.js'
+import { git, gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, type DiffLineRange, type DriftIndex, type DriftPathEvent } from './git.js'
 
 const RS = '\x1e'
 
@@ -436,6 +436,19 @@ async function unitsAtFileRevision(commit: string, path: string, x: Extractor, o
 // retain one before-image per parent and only all-parent authored rows; an owned line never widens to an
 // adjacent inherited line merely because Git placed both in one `@@@` hunk.
 type HunkRanges = { after: DiffLineRange[]; before: DiffLineRange[][] }
+// @@@ RANGE_SEMANTICS - hunk ranges must not depend on ambient Git state, because a range that moves with
+// config or attributes is neither a sound anchor verdict nor a reusable fact. Outside the commit, three
+// classes decide them: presentation (`.gitattributes` `-diff` prints `Binary files … differ` with no `@@` at
+// all — measured: one hunk bare, ZERO under `src/x.py -diff`, so an attribute edit silently disabled an
+// anchored contract's drift; a textconv or external driver replaces the text compared), the ALGORITHM and
+// its heuristics (`diff.algorithm`, `diff.indentHeuristic` — both repo config), and hunk COALESCING
+// (`diff.interHunkContext`). All are pinned here, on the two readers this node owns. Honest limit: on the
+// fixtures tried, all four algorithms and both heuristic settings agreed, so the algorithm pin is
+// determinism by construction rather than a divergence this session reproduced.
+const RANGE_SEMANTICS = [
+  '--text', '--no-textconv', '--no-ext-diff',
+  '--diff-algorithm=myers', '--no-indent-heuristic', '--inter-hunk-context=0',
+] as const
 const hunkMemo = new Map<string, HunkRanges>()
 // @@@ the reusable fact is a diff of ORDERED IMAGES, not of a commit id - a commit id is not immutable
 // interpretation: `refs/replace` can swap the object, and a graft or an unshallow can change its parents, so
@@ -455,7 +468,7 @@ async function hunksAt(root: string, event: DriftPathEvent, key: string): Promis
   const hit = hunkMemo.get(key)
   if (hit) return hit
   const merge = event.parents.length > 1
-  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--combined-all-paths', '--unified=0', ...HUNK_INTERPRETATION, '-M', '--format=', event.commit,
+  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--combined-all-paths', '--unified=0', ...RANGE_SEMANTICS, '-M', '--format=', event.commit,
     ...(merge ? [] : ['--', ...paths])],
     `cannot derive anchor hunks for ${event.commit}:${event.historicalPath}`)
   let ranges: HunkRanges = { after: [], before: [[]] }
@@ -499,7 +512,7 @@ async function hunksAtMany(root: string, path: string, entries: Map<string, stri
   return result
 }
 async function hunkRecordsInto(root: string, ordinary: string[], path: string, keys: Map<string, string>, result: Map<string, HunkRanges>): Promise<void> {
-  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0', ...HUNK_INTERPRETATION, '-M',
+  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0', ...RANGE_SEMANTICS, '-M',
     `--format=${RS}%H`, ...ordinary, '--', path], `cannot derive anchor hunks for ${path}`)
   for (const rec of out.split(RS)) {
     const normalized = rec.replace(/^\n/, '')

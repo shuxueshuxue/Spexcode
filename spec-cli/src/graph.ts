@@ -5,7 +5,7 @@ import { repoRoot, driftIndex, historyIndex } from './git.js'
 import { residentForgeState } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { boardThreads } from './issues.js'
-import { evalContext, evalTimeline } from '../../spec-eval/src/evaltab.js'
+import { evalContext, evalTimelines } from '../../spec-eval/src/evaltab.js'
 import { evalNodesAsync } from '../../spec-eval/src/scenarios.js'
 import { resolveProjectIdentity } from './project-identity.js'
 import { sessionEvalProjections } from '../../spec-eval/src/sessioneval.js'
@@ -149,13 +149,14 @@ export async function buildBoard() {
   // eval-file walk rides fs/promises ([[graph-cache]]) so it yields the event loop instead of stalling /health.
   const ynodes = await evalNodesAsync(root)
   const ectx = await evalContext(root, specs, idx, hidx, undefined, ynodes)
-  const evalReviewNodes = (await Promise.all(nodes.map(async (n) => {
-    const tl = await evalTimeline(n.id, ectx)
+  const timelines = await evalTimelines(nodes.map((n) => n.id), ectx)
+  const evalReviewNodes = timelines.map((tl, index) => {
+    const n = nodes[index]
     if (!tl.hasEvalFile) return null
     const latest = latestPerScenario(tl.readings)
     n.reviewSummary = { ...(n.reviewSummary || {}), evals: nodeEvalSummary(tl.scenarios, latest) }
     return { id: n.id, hue: n.hue, scenarios: tl.scenarios, evals: latest, readings: tl.readings }
-  }))).filter((node): node is NonNullable<typeof node> => node !== null)
+  }).filter((node): node is NonNullable<typeof node> => node !== null)
 
   publishReviewSnapshot({ issues: merged, evalNodes: evalReviewNodes })
 

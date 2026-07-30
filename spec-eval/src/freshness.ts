@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent, eventsSince } from '../../spec-cli/src/git.js'
-import { anchorHitCommits, extOf, extractorFor, extractors, resolveAnchor, type Extractor, type RelationEntry } from '../../spec-cli/src/anchors.js'
+import { anchorHitQueries, extOf, extractorFor, extractors, resolveAnchor, type AnchorHitQuery, type Extractor, type RelationEntry } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
 import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
@@ -259,8 +259,12 @@ export type AnchorProbe = {
   // did any commit in sinceSha..HEAD touch one of THESE anchored units?
   // null = cannot testify (unprimed, off-history, no usable extractor) — callers stay conservatively stale.
   hit(sinceSha: string, path: string, selectors: readonly string[]): boolean | null
-  prime?(sinceSha: string, entries: readonly RelationEntry[]): Promise<void>
+  // The demand set is PLURAL because the engine underneath is: every window's Git images and ordinary hunks
+  // are immutable, so one call owns them once for the whole read. A caller that primes one reading at a time
+  // re-forks that batch per reading, which on this corpus was ~2.5k children for ~800 verdicts.
+  prime?(demands: readonly AnchorDemand[]): Promise<void>
 }
+export type AnchorDemand = { sinceSha: string; entries: readonly RelationEntry[] }
 
 // a verdict answers ONE selector set, so the set is part of its identity: several scenarios anchoring
 // DIFFERENT units of one shared file is the whole point of narrowing, and keying only by (sha, path) would
@@ -293,18 +297,25 @@ export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
   const regs = extractors(root)
   const verdicts = new Map<string, boolean>()
   return {
-    async prime(sinceSha, entries) {
-      for (const e of entries) {
+    async prime(demands) {
+      const keys: string[] = []
+      const queries: AnchorHitQuery[] = []
+      const queued = new Set<string>()
+      for (const { sinceSha, entries } of demands) for (const e of entries) {
         if (!e.selectors.length) continue
         const key = anchorKey(sinceSha, e.path, e.selectors)
-        if (verdicts.has(key)) continue
+        if (verdicts.has(key) || queued.has(key)) continue
         if (entryUnverifiable(root, regs, e)) continue  // no verdict → conservative stale (lint says why)
         const win = eventsSince(idx, sinceSha, e.path)
         if (win === null) continue
         if (!win.length) { verdicts.set(key, false); continue }
-        const hits = await anchorHitCommits(root, win, [...e.selectors], regs)
-        verdicts.set(key, hits.length > 0)
+        queued.add(key)
+        keys.push(key)
+        queries.push({ win, symbols: [...e.selectors] })
       }
+      if (!queries.length) return
+      const results = await anchorHitQueries(root, queries, regs)
+      results.forEach((hits, index) => verdicts.set(keys[index], hits.length > 0))
     },
     hit(sinceSha, path, selectors) {
       return verdicts.get(anchorKey(sinceSha, path, selectors)) ?? null

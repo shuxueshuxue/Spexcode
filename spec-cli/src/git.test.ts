@@ -209,7 +209,7 @@ test('raw identity drift accepts SHA-256 commit ids', async () => {
   }
 })
 
-test('batch revision/blob reads preserve exact bytes, including large newline blobs and missing entries', () => {
+test('batch revision/blob reads preserve exact bytes, including large newline blobs and missing entries', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-batch-'))
   const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
   try {
@@ -218,9 +218,9 @@ test('batch revision/blob reads preserve exact bytes, including large newline bl
     const text = `${'line\n'.repeat(20000)}tail-without-newline`
     writeFileSync(join(root, 'src/blob.txt'), text); run('add', '.'); run('commit', '-qm', 'blob')
     const head = run('rev-parse', 'HEAD')
-    const [oid, missing] = batchRevisionOids(root, [`${head}:src/blob.txt`, `${head}:src/missing.txt`])
+    const [oid, missing] = await batchRevisionOids(root, [`${head}:src/blob.txt`, `${head}:src/missing.txt`])
     assert.ok(oid && !missing)
-    assert.equal(batchBlobTexts(root, [oid!]).get(oid!), text)
+    assert.equal((await batchBlobTexts(root, [oid!])).get(oid!), text)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 

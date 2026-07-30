@@ -236,11 +236,17 @@ file-revision memoization, dead/ambiguous resolution, hunk∩range — lives out
 includes every input to the pure extractor: object-hash algorithm and blob oid, filename semantics
 (including script kind), extractor/schema identity, host parser identity, and normalized parser configuration;
 same bytes under `.ts` and `.tsx` therefore never share a result by oid alone, and the result is independent
-of call order. Within one lint, every live anchored window is one build-local query batch: the engine reads a
+of call order. Within one READ — a lint run, a board build, a CLI scan — every live anchored window is one
+query batch: the engine reads a
 historical `(commit,path)` image, its blob, and an ordinary `(commit,path)` hunk once, then applies each
-node's own selector set and emits findings in declaration order. The batch ends with that lint invocation;
+node's own selector set and emits findings in declaration order. The batch ends with that invocation;
 it does not become a resident cache or a second history truth. Git access stays batch/short-lived; no resident
-process.
+process. The READ is the unit deliberately: a consumer that batches something narrower — one node, one
+reading — re-forks the whole batch per unit and inverts the flag's purpose, so both the spec-drift and the
+eval-freshness consumers hand the engine their entire demand set at once. Batch width lengthens a queue
+rather than widening one process's argument vector or output: object reads and per-commit hunk queries are
+split into bounded requests whose results are order-independent, so a wider corpus costs more requests and
+never a truncated or rejected one.
 
 Python is one such data row, designated for `.py` and `.pyi`. Its structural vocabulary is ordinary
 `def`, `async def`, and `class` declarations: module functions keep their bare name, while methods and

@@ -74,13 +74,16 @@ const sameStatus = (a: TimelineEvent, b: TimelineEvent): boolean =>
 // re-recorded each real move, so ONE transition landed as up to 6 lines within ~200ms). Those bytes are
 // history and stay. Any consumer that decides "did it move?" must therefore compare VALUES, never adjacency,
 // and must compare against the last status the reader ALREADY saw — otherwise a duplicate straddling the
-// cursor boundary reads as a fresh move on the very next tick. `next` is where the cursor goes after
-// consuming: the full length, because a dropped duplicate is still consumed.
-export function unreadSince(events: TimelineEvent[], from: number): { events: TimelineEvent[]; next: number } {
+// cursor boundary reads as a fresh move on the very next tick. `next` is where the cursor goes after consuming
+// the WHOLE slice: the full length, because a dropped duplicate is still consumed. `at[i]` is the absolute
+// index of `events[i]`, which is what lets a reader that STOPS on one event ([[session-follow]]'s take-one
+// wait) advance to exactly `at[i] + 1` and leave the lines behind it unread for the next reader.
+export function unreadSince(events: TimelineEvent[], from: number): { events: TimelineEvent[]; at: number[]; next: number } {
   const start = Math.min(Math.max(0, Math.floor(from)), events.length)
   let prev: TimelineEvent | null = null
   for (let i = start - 1; i >= 0; i--) if (events[i].kind === 'status') { prev = events[i]; break }
   const out: TimelineEvent[] = []
+  const at: number[] = []
   for (let i = start; i < events.length; i++) {
     const e = events[i]
     if (e.kind === 'status') {
@@ -88,6 +91,7 @@ export function unreadSince(events: TimelineEvent[], from: number): { events: Ti
       prev = e
     }
     out.push(e)
+    at.push(i)
   }
-  return { events: out, next: events.length }
+  return { events: out, at, next: events.length }
 }

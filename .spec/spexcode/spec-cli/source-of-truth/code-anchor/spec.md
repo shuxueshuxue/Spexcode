@@ -6,7 +6,9 @@ desc: A code: entry may pin named units (`path#symbol` selectors, any number, on
 code:
   - spec-cli/src/anchors.ts#RANGE_SEMANTICS
   - spec-cli/src/anchors.ts#ABSENT_IMAGE
+  - spec-cli/src/anchors.ts#runAnchorQueries
   - spec-cli/src/anchors.ts#anchorHitQueries
+  - spec-cli/src/anchors.ts#anchorHitExists
   - spec-cli/src/anchors.ts#anchorHitCommits
   - spec-cli/src/anchors.ts#resolveAnchor
   - spec-cli/src/anchors.ts#unitsAtFileRevision
@@ -246,10 +248,25 @@ file-revision memoization, dead/ambiguous resolution, hunk∩range — lives out
 includes every input to the pure extractor: object-hash algorithm and blob oid, filename semantics
 (including script kind), extractor/schema identity, host parser identity, and normalized parser configuration;
 same bytes under `.ts` and `.tsx` therefore never share a result by oid alone, and the result is independent
-of call order. Within one READ — a lint run, a board build, a CLI scan — every live anchored window is one
-query batch: the engine reads a
+of call order. Within one READ — a lint run, a board build, a CLI scan — every live anchored window is
+handed to the engine at once: it reads a
 historical `(commit,path)` image, its blob, and an ordinary `(commit,path)` hunk once, then applies each
 node's own selector set and emits findings in declaration order.
+
+**Two consumers ask two different questions of this engine, and they enter through different doors rather
+than through one call carrying a mode flag.** ENUMERATION — spec drift and exact impact — IS the per-commit,
+per-selector list, so it must scan its whole window; that list is what names the debt an author must answer.
+EXISTENCE — an eval reading's anchor axis, whose entire verdict is one bit ([[eval-core]]) — is discharged by
+the FIRST hit, and scanning past it computes rows nobody reads. Existence is order-independent (a window
+either holds a hit or it does not), so stopping early cannot change a verdict; what it must never do is
+report "not found yet" as "no hit", so a window is settled only by a hit or by having been scanned to its
+end. Because which event hits is unknown until its images are parsed, the existence demand set is DISCOVERED
+rather than declared: the scan advances in rounds that still ask the whole unsettled corpus at once, doubling
+their width so the round count is bounded by hit DEPTH and never by how many readings were asked. A round
+narrowed to one node or one reading would re-fork the batch per unit — the same inversion the READ-is-the-unit
+rule below forbids. Enumeration takes its remaining window in a single slice and so keeps the one-round shape
+it has always had. Measured on the reference corpus, the two questions differ by 1,158 parsed file revisions
+(52.6 MB) versus 307 (21.9 MB) for the same 858 booleans.
 
 **A commit id is not an identity for any of them, and this is a correctness rule before it is a cost rule.**
 What decides a hunk is the pair of images Git actually diffed and how Git was asked to present that diff, and

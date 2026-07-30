@@ -566,7 +566,7 @@ const anchorRevisionKey = ({ commit, path }: AnchorRevision) => `${commit}\0${pa
 // One lint can judge several selectors with overlapping windows. Their Git images and ordinary hunks are
 // reusable under the identity of those images, so the batch owns them once and each query keeps its own
 // selector verdict.
-export async function anchorHitQueries(root: string, queries: AnchorHitQuery[], regs: Extractor[]): Promise<AnchorHit[][]> {
+async function runAnchorQueries(root: string, queries: AnchorHitQuery[], regs: Extractor[], stopAtFirstHit: boolean): Promise<AnchorHit[][]> {
   if (!queries.length) return []
   const objectFormat = gitObjectFormat(root)
   const revisions = new Map<string, AnchorRevision>()
@@ -594,60 +594,96 @@ export async function anchorHitQueries(root: string, queries: AnchorHitQuery[], 
     entries.set(commit, imageIdentity(event))
     ordinaryByPath.set(path, entries)
   }
+  const ordinaryHunks = new Map<string, Map<string, HunkRanges>>()
+  for (const [path, entries] of ordinaryByPath) ordinaryHunks.set(path, await hunksAtMany(root, path, entries))
   // The image's own memo answers before any bytes move, so the read asks git only for the revisions this
   // process has not parsed yet — the retention half of the same rule the hunk demand set follows.
   const units = new Map<string, FileRevisionUnits>()
-  const pending: { ref: AnchorRevision; oid: string; x: Extractor }[] = []
-  const wanted = new Set<string>()
-  for (let index = 0; index < refs.length; index++) {
-    const ref = refs[index], oid = oids[index]
-    const x = extractorFor(regs, extOf(ref.path))
-    const ready = x?.ready()
-    if (!x || ready !== true) {
-      units.set(anchorRevisionKey(ref), { unparseable: !x ? `no designated extractor for ${ref.path}` : String(ready) })
-      continue
+  const primeUnits = async (keys: Set<string>): Promise<void> => {
+    const pending: { key: string; ref: AnchorRevision; oid: string; x: Extractor }[] = []
+    const wanted = new Set<string>()
+    for (const key of keys) {
+      if (units.has(key)) continue
+      const ref = revisions.get(key)!, oid = oidByRef.get(key) ?? null
+      const x = extractorFor(regs, extOf(ref.path))
+      const ready = x?.ready()
+      if (!x || ready !== true) {
+        units.set(key, { unparseable: !x ? `no designated extractor for ${ref.path}` : String(ready) })
+        continue
+      }
+      if (!oid) { units.set(key, { absent: true }); continue }
+      const hit = fileRevisionUnitMemo.get(fileRevisionMemoKey(objectFormat, oid, x, ref.path))
+      if (hit) { units.set(key, hit); continue }
+      pending.push({ key, ref, oid, x }); wanted.add(oid)
     }
-    if (!oid) { units.set(anchorRevisionKey(ref), { absent: true }); continue }
-    const hit = fileRevisionUnitMemo.get(fileRevisionMemoKey(objectFormat, oid, x, ref.path))
-    if (hit) { units.set(anchorRevisionKey(ref), hit); continue }
-    pending.push({ ref, oid, x }); wanted.add(oid)
+    if (!pending.length) return
+    const blobs = await batchBlobTexts(root, [...wanted])
+    for (const { key, ref, oid, x } of pending)
+      units.set(key, await unitsAtFileRevision(ref.commit, ref.path, x, objectFormat, oid, blobs.get(oid)))
   }
-  const blobs = await batchBlobTexts(root, [...wanted])
-  for (const { ref, oid, x } of pending)
-    units.set(anchorRevisionKey(ref), await unitsAtFileRevision(ref.commit, ref.path, x, objectFormat, oid, blobs.get(oid)))
-  const ordinaryHunks = new Map<string, Map<string, HunkRanges>>()
-  for (const [path, entries] of ordinaryByPath) ordinaryHunks.set(path, await hunksAtMany(root, path, entries))
   const intersects = (ranges: DiffLineRange[], candidates: Unit[]) =>
     ranges.some(([start, end]) => candidates.some((unit) => start <= unit.end && unit.start <= end))
-  const results: AnchorHit[][] = []
-  for (const { win, symbols } of queries) {
-    const hits = new Map<string, { selectors: Set<string>; unparseable?: string }>()
-    for (const event of win) {
-      const after = units.get(anchorRevisionKey({ commit: event.commit, path: event.historicalPath }))!
-      const before = event.parents.map(({ commit, historicalPath }) => units.get(anchorRevisionKey({ commit, path: historicalPath }))!)
-      const ranges = ordinaryHunks.get(event.historicalPath)?.get(event.commit)
-        ?? await hunksAt(root, event, imageIdentity(event))
-      if (event.parents.length && ranges.before.length !== before.length)
-        throw new Error(`anchor diff for ${event.commit}:${event.historicalPath} has ${ranges.before.length} parent ranges for ${before.length} parents`)
-      const hit = hits.get(event.commit) ?? { selectors: new Set<string>() }
-      const broken = [after, ...before].find((image) => 'unparseable' in image)
-      if (broken && 'unparseable' in broken) {
-        for (const symbol of symbols) hit.selectors.add(symbol)
-        hit.unparseable = broken.unparseable
-      } else {
-        for (const symbol of symbols) {
-          const afterUnits = 'units' in after ? after.units.filter((unit) => unit.name === symbol) : []
-          const authoredAfter = intersects(ranges.after, afterUnits)
-          const authoredBefore = before.length > 0 && before.every((image, parent) =>
-            'units' in image && intersects(ranges.before[parent], image.units.filter((unit) => unit.name === symbol)))
-          if (authoredAfter || authoredBefore) hit.selectors.add(symbol)
-        }
-      }
-      if (hit.selectors.size) hits.set(event.commit, hit)
+  // @@@ the scan advances in DOUBLING corpus-wide rounds - an existence read may stop at its window's first
+  // hit, but which event that is cannot be known before the images are parsed, so the demand set has to be
+  // discovered rather than declared. Each round still asks the WHOLE unsettled corpus at once (never one
+  // reading at a time, which is what would re-fork the batch per unit), and doubling bounds the rounds by hit
+  // DEPTH, not by how many readings are asked. An enumeration read takes its whole remaining window in one
+  // slice, so it keeps the single-round shape it has always had.
+  const runs = queries.map(() => ({ hits: new Map<string, { selectors: Set<string>; unparseable?: string }>(), cursor: 0, settled: false }))
+  for (let chunk = 1; ; chunk *= 2) {
+    const slices: { run: typeof runs[number]; symbols: string[]; events: DriftPathEvent[] }[] = []
+    for (let index = 0; index < queries.length; index++) {
+      const run = runs[index], { win, symbols } = queries[index]
+      if (run.settled || run.cursor >= win.length) continue
+      slices.push({ run, symbols, events: win.slice(run.cursor, run.cursor + (stopAtFirstHit ? chunk : win.length - run.cursor)) })
     }
-    results.push([...hits].map(([commit, hit]) => ({ commit, selectors: [...hit.selectors], ...(hit.unparseable ? { unparseable: hit.unparseable } : {}) })))
+    if (!slices.length) break
+    const keys = new Set<string>()
+    for (const { events } of slices) for (const event of events) {
+      keys.add(anchorRevisionKey({ commit: event.commit, path: event.historicalPath }))
+      for (const parent of event.parents) keys.add(anchorRevisionKey({ commit: parent.commit, path: parent.historicalPath }))
+    }
+    await primeUnits(keys)
+    for (const { run, symbols, events } of slices) {
+      for (const event of events) {
+        run.cursor++
+        const after = units.get(anchorRevisionKey({ commit: event.commit, path: event.historicalPath }))!
+        const before = event.parents.map(({ commit, historicalPath }) => units.get(anchorRevisionKey({ commit, path: historicalPath }))!)
+        const ranges = ordinaryHunks.get(event.historicalPath)?.get(event.commit)
+          ?? await hunksAt(root, event, imageIdentity(event))
+        if (event.parents.length && ranges.before.length !== before.length)
+          throw new Error(`anchor diff for ${event.commit}:${event.historicalPath} has ${ranges.before.length} parent ranges for ${before.length} parents`)
+        const hit = run.hits.get(event.commit) ?? { selectors: new Set<string>() }
+        const broken = [after, ...before].find((image) => 'unparseable' in image)
+        if (broken && 'unparseable' in broken) {
+          for (const symbol of symbols) hit.selectors.add(symbol)
+          hit.unparseable = broken.unparseable
+        } else {
+          for (const symbol of symbols) {
+            const afterUnits = 'units' in after ? after.units.filter((unit) => unit.name === symbol) : []
+            const authoredAfter = intersects(ranges.after, afterUnits)
+            const authoredBefore = before.length > 0 && before.every((image, parent) =>
+              'units' in image && intersects(ranges.before[parent], image.units.filter((unit) => unit.name === symbol)))
+            if (authoredAfter || authoredBefore) hit.selectors.add(symbol)
+          }
+        }
+        if (hit.selectors.size) run.hits.set(event.commit, hit)
+        if (stopAtFirstHit && run.hits.size) { run.settled = true; break }
+      }
+    }
   }
-  return results
+  return runs.map((run) => [...run.hits].map(([commit, hit]) => ({ commit, selectors: [...hit.selectors], ...(hit.unparseable ? { unparseable: hit.unparseable } : {}) })))
+}
+
+// The two consumers ask DIFFERENT questions of this engine, so they enter through different doors rather
+// than through one call with a mode flag. Enumeration must scan every window event because its answer IS the
+// per-commit, per-selector list; existence is discharged by the first hit, and scanning past it computes rows
+// nobody reads.
+export async function anchorHitQueries(root: string, queries: AnchorHitQuery[], regs: Extractor[]): Promise<AnchorHit[][]> {
+  return runAnchorQueries(root, queries, regs, false)
+}
+export async function anchorHitExists(root: string, queries: AnchorHitQuery[], regs: Extractor[]): Promise<boolean[]> {
+  return (await runAnchorQueries(root, queries, regs, true)).map((hits) => hits.length > 0)
 }
 export async function anchorHitCommits(root: string, win: DriftPathEvent[], symbols: string[], regs: Extractor[]): Promise<AnchorHit[]> {
   return (await anchorHitQueries(root, [{ win, symbols }], regs))[0]

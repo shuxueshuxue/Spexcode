@@ -421,3 +421,51 @@ research-site archive that pairs its six successes with the two errors a green l
 alone read as advertising.
 
 Spec: local-issues, issues, source-of-truth
+
+<!-- reply: c89038e2-6b56-4b4c-8b4a-4ff4ec2c886e @ 2026-07-30T03:18:30.999Z -->
+Scope measured before starting, and it is FOUR TIMES what I implied — reporting the corrected estimate is the
+point of this note.
+
+I said `runIssues` was 8 lines and the cut was "fully tractable". Those 8 lines are only the entry; the real CLI
+surface is `issueVerbs` behind it, 75 lines. Measured:
+
+    issues.ts       runIssues + issueVerbs                        83
+    localIssues.ts  runIssueWrite                                 44
+    localIssues.ts  runRemark                                     24
+    localIssues.ts  threadOriginators + nodeGoverningSession       19
+    ───────────────────────────────────────────────────────────── 170 lines across 2 source files
+
+plus 3 signature changes (`replyLocalIssue` / `remarkOnHost` / `replyIssue` each drop `loopIn`), 4 rewire sites
+(cli.ts:570, cli.ts:579, index.ts:270, index.ts:361), and a governing node for the new module.
+
+One piece is SMALLER than expected, and it is the only one: `notifyOriginator`, `summarize` and `LoopIn` already
+live in `mentions.ts`, which is substrate (spec-eval takes only `stripRefSigil` from it). So the loop-in's
+DELIVERY mechanism does not move at all — only the eval-aware candidate RESOLUTION (`threadOriginators`) has to
+rise. That is worth knowing before the cut, because it means the contract surface being disturbed is narrower
+than "the loop-in moves": R3's fallback chain keeps its implementation and changes only where its candidates are
+computed.
+
+Not started on this pass, and the corrected number is exactly why: acting on an estimate that was wrong by 4x is
+not the same act as declining on the right one. The tree carries no uncommitted work, so the next pass begins
+clean and derives nothing — three alternatives are disproven with their distinct causes recorded, the root cause
+is named, the surviving cut's caller sets are verified leaf by leaf with no stub left behind, two reusable rules
+are written down, and the fifth instance is recorded together with the correct reason NOT to fix it today (a
+zero-dependency leaf module would work, but its only reason to exist is a cycle already scheduled to disappear —
+spending a module to buy deduplication and then having to withdraw it is taste #3 inverted).
+
+## One more corollary, at symbol granularity
+
+The sniffer's newest form, and the cheapest to run: **when a constant has two copies and only one carries a
+comment, the commented copy is usually the misplaced one.** `EVAL_CONCERN_RE` is the instance — the copy beside
+its matching composer `trackKey` needs no explanation because its ownership is self-evident, while the
+mis-layered copy carries `// node first (never contains ' · ')`, because that is where the author had to stop and
+justify it. Grep-able: find duplicated literals, compare comment density. It narrows "the clearer the author was
+about the detour, the better the comment" from file granularity to symbol granularity.
+
+## The cheapest evidence that a root cause is right
+
+Three separate debts dissolve with this one cut and none of them is being fixed: the line-390 dynamic import, the
+line-610 dynamic import, and the duplicated regex. Fix one place, several unrelated debts disappear — that is a
+better signal than any argument about whether the diagnosis sounds correct.
+
+Spec: local-issues, issues, mentions, remark-substrate

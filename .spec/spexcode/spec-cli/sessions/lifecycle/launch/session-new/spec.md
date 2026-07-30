@@ -86,9 +86,8 @@ request.
 
 `sessionCreateRequest` is the only callable governed-session creation seam. It owns validation, maintenance
 admission, request identity, deadline/cancellation, and the private prepare/publish function's required context.
-The HTTP route, CLI no-listener fallback, issue/remark `@new` dispatch, and Command Box `@new` dispatch all call it. Preparation is not
-exported and cannot mint a never-aborted context for itself, so adding another caller cannot bypass the wall or
-transaction owner.
+The HTTP route, CLI no-listener fallback, and New Session composer call it. Preparation is not exported and
+cannot mint a never-aborted context for itself, so adding another caller cannot bypass the wall or transaction owner.
 
 The record publication is the irreversible boundary. The transaction checks cancellation immediately before
 the synchronous atomic record replace and re-proves that the candidate path is the exact Git top-level, is

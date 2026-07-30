@@ -108,9 +108,7 @@ function removeLaunchFile(id: string): void {
   try { rmSync(sessionArtifactPath(id, 'launch'), { force: true }) } catch { /* best-effort */ }
 }
 
-// one line, bounded — the shape every free-prose part takes to enter a one-line display string (the launch
-// prompt and a declared note both). Exported because it is a display CUT of the author's own prose, and
-// [[state]]'s transparency rule owes the author its exact size (the declaration echo names it).
+// One line, bounded — the launch prompt's shape when it enters a compact headline.
 export const HEADLINE_PREVIEW_COLUMNS = 60
 function oneLinePreview(text: string, n = HEADLINE_PREVIEW_COLUMNS): string {
   const first = text.split('\n').map((l) => l.trim()).find(Boolean) || ''
@@ -119,15 +117,8 @@ function oneLinePreview(text: string, n = HEADLINE_PREVIEW_COLUMNS): string {
 
 export const deriveLabel = (r: { name?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
   r.name || r.node || r.title || r.branch || r.id
-// @@@ deriveHeadline - ordered by STATEMENT-then-BYPRODUCT, not by "first non-empty" ([[session-label]]).
-// `name` and `note` are the only parts anyone SAID about this session; the rest is residue it left behind,
-// and residue keeps occupying the slot after the session stopped producing it — a stopped agent's pane title
-// freezes on its last task, and a URL-shaped launch ask makes promptPreview/title/branch three copies of one
-// uninformative string. `note` outranks both because it cannot go stale: every lifecycle write replaces it
-// (markState), so a stored note always belongs to the state the record currently declares — which is why this
-// is one precedence and not a whitelist of lifecycles.
-export const deriveHeadline = (r: { name?: string | null; note?: string | null; activity?: string | null; promptPreview?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
-  r.name || (r.note ? oneLinePreview(r.note) : '') || r.activity || r.promptPreview || r.node || r.title || r.branch || r.id
+export const deriveHeadline = (r: { name?: string | null; activity?: string | null; promptPreview?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
+  r.name || r.activity || r.promptPreview || r.node || r.title || r.branch || r.id
 
 export const sessionLabel = (s: Session): string => s.label
 export const sessionHeadline = (s: Session): string => s.headline
@@ -699,7 +690,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const showActivity = lv === 'online'
   const act = showActivity ? activity : null
   const pp = prompt ? oneLinePreview(prompt) : null
-  const parts = { id: rec.session, name: rec.name, note: rec.note, node: rec.node, title: rec.title, branch: rec.branch, activity: act, promptPreview: pp }
+  const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
   return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
 }

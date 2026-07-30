@@ -21,6 +21,7 @@ related:
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
   - spec-dashboard/test/session-sidebar-scroll.e2e.mjs
   - spec-dashboard/test/command-box.e2e.mjs
+  - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
 ---
 

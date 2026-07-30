@@ -59,7 +59,7 @@ await page.route(`**/api/sessions/${SESSION}/input`, async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 120))
     await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'upstream 502: append unavailable' }) })
   }
-  else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, outcome: 'accepted' }) })
+  else await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ outcome: 'accepted' }) })
 })
 await page.route(`**/api/sessions/${SESSION}/resume`, async (route) => {
   if (resumeFails) {

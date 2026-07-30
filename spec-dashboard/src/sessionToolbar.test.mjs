@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { inboxCommands, uiCommandsFor, UI_COMMANDS } from './sessionCommands.js'
+import { inboxCommands, mergeAvailability, uiCommandsFor, UI_COMMANDS } from './sessionCommands.js'
 
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
@@ -104,38 +104,51 @@ test('session eval glance reuses the graph summary projection and review-state v
 
 test('command availability, icons, toolbar tools, and typed twins remain one registry result', () => {
   const runners = Object.fromEntries(['command', 'eval', 'merge', 'relaunch', 'stop', 'archive', 'close'].map((name) => [name, () => name]))
-  const names = (status, liveness, archived) => uiCommandsFor(status, runners, liveness, archived).map((command) => command.name)
-  const typed = (status, liveness, archived) => uiCommandsFor(status, runners, liveness, archived).filter((command) => command.typed !== false).map((command) => command.name)
-  const tools = (status, liveness) => uiCommandsFor(status, runners, liveness).filter((command) => command.button).map(({ name, icon }) => [name, icon])
+  const session = (status, liveness = 'online', proposal = null, archived = false, lifecycle = status === 'review' || status === 'done' || status === 'close-pending' ? 'awaiting' : 'active') => ({ status, liveness, proposal, archived, lifecycle })
+  const names = (...args) => uiCommandsFor(session(...args), runners).map((command) => command.name)
+  const typed = (...args) => uiCommandsFor(session(...args), runners).filter((command) => command.typed !== false && command.enabled).map((command) => command.name)
+  const tools = (...args) => uiCommandsFor(session(...args), runners).filter((command) => command.button).map(({ name, icon, enabled }) => [name, icon, enabled])
 
-  assert.deepEqual(names('working', 'online'), ['command', 'eval', 'stop', 'archive', 'close'])
-  assert.deepEqual(names('review', 'online'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
-  assert.deepEqual(names('done', 'online'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
-  assert.deepEqual(names('queued', 'offline'), ['eval', 'close'])
-  assert.deepEqual(names('asking', 'offline'), ['eval', 'relaunch', 'archive', 'close'])
-  assert.deepEqual(names('review', 'offline'), ['eval', 'relaunch', 'archive', 'close'])
+  assert.deepEqual(names('working'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
+  assert.deepEqual(names('review', 'online', 'merge'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
+  assert.deepEqual(names('done', 'online', 'nothing'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
+  assert.deepEqual(names('queued', 'offline'), ['eval', 'merge', 'close'])
+  assert.deepEqual(names('asking', 'offline'), ['eval', 'merge', 'relaunch', 'archive', 'close'])
+  assert.deepEqual(names('review', 'offline', 'merge'), ['eval', 'merge', 'relaunch', 'archive', 'close'])
   assert.deepEqual(typed('asking', 'offline'), ['eval', 'archive', 'close'])
-  assert.deepEqual(tools('review', 'online'), [['command', 'command'], ['merge', 'git-merge']])
-  assert.deepEqual(tools('asking', 'offline'), [['relaunch', 'rotate-ccw']])
-  // A cold archive is always offline and exposes no running-session actions, even if a stale/illegal payload
-  // claims working/online. Recovery is the only archived command.
-  assert.deepEqual(names('working', 'online', true), [])
-  assert.deepEqual(names('asking', 'offline', true), [])
+  assert.deepEqual(typed('review', 'online', 'merge'), ['eval', 'merge', 'stop', 'archive', 'close'])
+  assert.deepEqual(tools('review', 'online', 'merge'), [['command', 'command', true], ['merge', 'git-merge', true]])
+  assert.deepEqual(tools('done', 'online', 'nothing'), [['command', 'command', true], ['merge', 'git-merge', false]])
+  assert.deepEqual(tools('asking', 'offline'), [['merge', 'git-merge', false], ['relaunch', 'rotate-ccw', true]])
+  assert.equal(mergeAvailability(session('review', 'online', 'merge')).enabled, true)
+  assert.equal(mergeAvailability(session('done', 'online', 'nothing')).disabledTitleKey, 'session.cmd.mergeUnavailableNothing')
+  assert.equal(mergeAvailability(session('close-pending', 'online', 'close')).disabledTitleKey, 'session.cmd.mergeUnavailableClose')
+  assert.equal(mergeAvailability(session('working')).disabledTitleKey, 'session.cmd.mergeUnavailableNoProposal')
+  assert.equal(mergeAvailability(session('review', 'offline', 'merge')).disabledTitleKey, 'session.cmd.mergeUnavailableLiveness')
+  // A cold archive is always offline and exposes no running-session actions. Its one disabled merge witness
+  // keeps the selected-session toolbar slot stable; recovery remains the only actionable archive control.
+  assert.deepEqual(names('working', 'online', null, true), ['merge'])
+  assert.deepEqual(names('asking', 'offline', null, true), ['merge'])
+  assert.equal(mergeAvailability(session('review', 'online', 'merge', true)).disabledTitleKey, 'session.cmd.mergeUnavailableArchived')
   for (const [st, lv] of [['working', 'online'], ['asking', 'offline'], ['queued', 'offline'], ['retired', 'offline'], ['corrupt', 'unknown'], ['review', 'online']]) {
     for (const archived of [false, true]) {
-      const offered = names(st, lv, archived).filter((n) => n === 'archive' || n === 'unarchive')
-    assert.deepEqual(offered, archived ? [] : (['queued', 'retired', 'corrupt'].includes(st) ? [] : ['archive']), `${st}/${lv}/archived=${archived}`)
+      const offered = names(st, lv, st === 'review' ? 'merge' : null, archived).filter((n) => n === 'archive' || n === 'unarchive')
+      assert.deepEqual(offered, archived ? [] : (['queued', 'retired', 'corrupt'].includes(st) ? [] : ['archive']), `${st}/${lv}/archived=${archived}`)
     }
   }
   // neither shelving verb gets a toolbar twin — filing is deliberate, never one pixel from the terminal
   assert.deepEqual(UI_COMMANDS.filter((c) => c.name === 'archive').map((c) => c.button), [false])
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').anchor, 'right')
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').typed, false)
-  assert.match(source, /uiCommandsFor\(selSession\?\.status, runners, selSession\?\.liveness, selSession\?\.archived\)/)
+  assert.match(source, /uiCommandsFor\(selSession, runners\)/)
   assert.match(source, /if \(commandAvailable\) \{ if \(commandOpen\) closeCommandBox\(\); else setCommandOpen\(true\) \}/)
   assert.match(source, /uiCmds\.filter\(\(c\) => c\.button\)[\s\S]*?\.sort\(\(a, b\) => \(a\.anchor === 'right' \? 1 : 0\) - \(b\.anchor === 'right' \? 1 : 0\)\)[\s\S]*?\.map/)
   assert.match(source, /const pressed = c\.pressed \? commandOpen : undefined/)
-  assert.match(source, /<IconButton[\s\S]*icon=\{c\.icon\}[\s\S]*aria-pressed=\{pressed\}/)
+  assert.match(source, /<IconButton[\s\S]*icon=\{c\.icon\}[\s\S]*aria-pressed=\{pressed\}[\s\S]*disabled=\{!c\.enabled\}/)
+  assert.match(source, /onClick=\{\(\) => \{ if \(c\.enabled\) c\.run\(\) \}\}/)
+  assert.match(css, /\.si-tool:disabled\s*\{[^}]*cursor:\s*not-allowed;/)
+  assert.match(en, /mergeUnavailableNothing:.*done --propose nothing/)
+  assert.match(zh, /mergeUnavailableNoProposal:.*done --propose merge/)
   assert.match(icons, /command:\s*\{[\s\S]*keyboard:\s*\{[\s\S]*'git-merge':\s*\{[\s\S]*'rotate-ccw':\s*\{/)
 })
 

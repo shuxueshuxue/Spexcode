@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { SpecBody } from './NodeView.jsx'
 import { BlobMedia } from './Evidence.jsx'
 import { useMentionAutocomplete, matchSlash, SlashMenu, TriggerButton, typeTrigger } from './mentions.jsx'
-import { useLaunchers } from './launch.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { postRemarkAction } from './data.js'
 import { STATUS_COLOR, liveSession } from './session.js'
@@ -15,7 +14,7 @@ import { Icon, IconButton } from './icons.jsx'
 // replies[], [[issues]]) and the eval detail ([[event-detail]]). The composer is delivery-agnostic: the home
 // passes `onSend(text, evidence)` (reply to an existing thread — the server routes it by the issue's store,
 // local-store commit or real forge comment — or lazily create one), so the thread's binding stays the caller's
-// concern while the writing surface stays one component — an @-mention dispatches wherever it is typed,
+// concern while the writing surface stays one component — an @-reference stays in the authored prose,
 // because every send lands on the same store-routed write path.
 //
 // A reply is TIME-ANCHORED by a prose convention (same philosophy as `Spec:`/`[[node]]`): a body whose
@@ -183,8 +182,8 @@ function slashAt(value, caret, commands) {
 // and carries only real acts: the contextual ⏱ anchor stamp (where a clip supplies one), any
 // host-supplied lifecycle action (Close issue / Promote via `actionsEnd`), and the icon-only Send pinned
 // at the right edge; a failed send surfaces its error in the same row, never out of view.
-// Posts through the caller's `onSend(text, evidence)` as 'human'. An @-mention in the text summons a worker; the returned outcomes
-// string surfaces via onDone. The textarea carries the SAME `[[node]]`/`@session` autocomplete as the
+// Posts through the caller's `onSend(text, evidence)` as 'human'. @session is a passive reference; the
+// textarea carries the SAME `[[node]]`/`@session` autocomplete as the
 // console ([[mentions]], one shared menu, never a fork); the composer is docked at the detail's bottom,
 // so its menu opens UPWARD, as an overlay above the container. The thread's own node leads the `[[` list. Over a clip the home passes
 // `anchorNow()` (async → { tMs, step, frame }) → a ⏱ button stamps the current moment's `▶m:ss · step`
@@ -197,8 +196,7 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')       // a failed send (a forge can be unreachable) surfaces, never swallows
   const taRef = useRef(null)
-  const { launchers } = useLaunchers()
-  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers, focusId, up: true })
+  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, focusId, up: true })
   // the review-track `/` menu ([[review-commands]]) — armed only when the home passes `commands` (the eval
   // detail; the issue composers pass none and keep their exact old surface). Two command kinds, one menu:
   // a BUILT-IN verb (`run`) fires its one host-bound runner after the typed token is removed; a PRESET

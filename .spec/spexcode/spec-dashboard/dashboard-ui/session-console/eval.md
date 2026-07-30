@@ -103,12 +103,14 @@ scenarios:
       Box board rows. Trigger Command Box, merge, relaunch, stop, archive/unarchive, close, and eval through
       each available surface.
     expected: >-
-      One registry decides availability, icon, color, accessible label, and action. Command Box is the stable
-      resident right-edge tool while live; merge/relaunch sit to its left as applicable. Stop, close, and the
-      archive pair remain Command Box-only typed verbs with no toolbar twin; of `/archive` and `/unarchive`
-      exactly ONE is ever offered, keyed on `archived` alone and never on lifecycle or liveness ([[archive]]).
-      Eval is a permanent anchor plus `/eval`. Offline and queued sessions cannot open Command Box, and no
-      `/type` or type tool exists.
+      One registry decides availability, icon, color, accessible label, and action. Every selected session
+      keeps the merge slot: only an online `awaiting` review with `proposal:merge` is green, clickable,
+      and offered as `/merge`; done/`nothing`, working, asking, close-pending, and offline states are muted,
+      disabled, name their reason, and dispatch nothing. Command Box is the stable resident right-edge tool
+      while live; merge/relaunch sit to its left without moving merge. Stop, close, and the archive pair remain
+      Command Box-only typed verbs with no toolbar twin; of `/archive` and `/unarchive` exactly ONE is ever
+      offered, keyed on `archived` alone and never on lifecycle or liveness ([[archive]]). Eval is a permanent
+      anchor plus `/eval`. Offline and queued sessions cannot open Command Box, and no `/type` or type tool exists.
   - name: modifier-arrows-switch-sessions
     tags: [frontend-e2e, desktop]
     description: >-
@@ -173,7 +175,9 @@ scenarios:
       its main console is the shared TimelineChat (timeline + declaration notes + fixed `replyVia:"note"`
       composer). Eval is a real canonical anchor outside the tablist and no inline eval pane mounts. The compact
       toolbar stays one line, visually separate from either console, with honest eval summary states and all
-      available icon tools visible. The warm terminal survives navigation and browser Back.
+      available icon tools visible. Its fixed merge slot turns green only for the live `done --propose merge`
+      review proposal; all other proposal/lifecycle/liveness cases stay muted and disabled without shifting the
+      toolbar. The warm terminal survives navigation and browser Back.
   - name: create-stays-on-new-and-close-falls-back
     tags: [frontend-e2e, desktop]
     description: >-

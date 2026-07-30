@@ -108,8 +108,10 @@ function removeLaunchFile(id: string): void {
   try { rmSync(sessionArtifactPath(id, 'launch'), { force: true }) } catch { /* best-effort */ }
 }
 
-function promptPreview(prompt: string, n = 60): string {
-  const first = prompt.split('\n').map((l) => l.trim()).find(Boolean) || ''
+// One line, bounded — the launch prompt's shape when it enters a compact headline.
+export const HEADLINE_PREVIEW_COLUMNS = 60
+function oneLinePreview(text: string, n = HEADLINE_PREVIEW_COLUMNS): string {
+  const first = text.split('\n').map((l) => l.trim()).find(Boolean) || ''
   return first.length > n ? first.slice(0, n - 1) + '…' : first
 }
 
@@ -687,7 +689,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   // dead/booting session would show a stale or absent title, so it's suppressed unless liveness is online.
   const showActivity = lv === 'online'
   const act = showActivity ? activity : null
-  const pp = prompt ? promptPreview(prompt) : null
+  const pp = prompt ? oneLinePreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
   return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
@@ -1175,7 +1177,11 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
     launching.delete(id)
     return false   // launch failed → stays `queued`, retried on the next drain tick
   }
-  writeRecord({ ...wt.rec, status: 'active', proposal: null, launchOwner: null })
+  // the note this record may carry is the QUEUED state's word (a launch-blocker message stamped above); the
+  // launch just succeeded, so it is spent. Clearing it with the transition is what keeps "a stored note
+  // belongs to the state currently declared" true for every writer — the invariant [[session-label]]'s
+  // headline precedence stands on.
+  writeRecord({ ...wt.rec, status: 'active', proposal: null, note: null, launchOwner: null })
   removeLaunchFile(id)   // consumed
   // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
   // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.

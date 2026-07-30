@@ -3,6 +3,8 @@ title: manager-cockpit
 status: active
 hue: 200
 desc: The cockpit API — server-computed verbs that let a manager review/act on sessions without hand-running git.
+code:
+  - spec-cli/src/cockpit.ts
 related:
   - spec-cli/src/index.ts
   - spec-cli/src/sessions.ts
@@ -79,3 +81,26 @@ location, never a hardcoded layout, so the cockpit works wherever the package li
 READS or DISPATCHES — none mutates main directly. The cockpit's stake in the shared `cli.ts`/`index.ts` hubs is just the thin
 `review`/`merge`/`capture`/`prompt` routes; the eval reframe's churn there — its rewritten verb line and
 its eval-blob comment — is that feature's, not the cockpit's drift.
+
+## where the answer is assembled
+
+The cockpit's review is composed in `cockpit.ts`, a module that sits ABOVE both the session layer and the eval
+layer and may import either. That is the point: a value made of both halves has no honest home inside either
+one. `sessions.ts` cannot hold it, because the eval package imports `sessions.ts` — reaching back from there is
+a cycle, and it used to be paid for with a deferred dynamic import whose own comment explained why it had to be
+wrong. `reviews.ts` cannot hold it either: that file is [[paged-review]]'s Issues/Evals paging server, and
+parking a session-cockpit concern beneath a node about paging would make that node's body false. It imports the
+eval package for its own reasons — the same direction, a different reason, and "already imports it" is not a
+claim to ownership.
+
+The eval readout therefore has **exactly one producer**, and every entry point calls it. The cockpit review is
+reachable two ways: the HTTP route, and the client's local answer when no backend resolves and none was named.
+If each composed its own gates, the same verb would return different SHAPES depending on whether a backend
+happened to be running — reintroducing precisely the asymmetry the remote-client role split removed — and a
+later drift between the two readouts would be caught by no gate that exists. One composition is what makes
+that failure unavailable rather than merely unlikely.
+
+The session-side payload consequently returns the session gates only. It never needed to carry the eval
+readout: the eval package's own consumer reads lint, conflict, ahead and dirty, and never that field. Removing
+it makes the recursion the old comment guarded against structurally impossible — the eval model builder calls
+the session payload, and there is no longer an eval-shaped field for that call to re-enter through.

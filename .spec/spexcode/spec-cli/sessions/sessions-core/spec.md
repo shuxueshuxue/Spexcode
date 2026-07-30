@@ -64,11 +64,10 @@ failure reaches one record-locked compare-and-set that changes only a live, unde
 A declaration that landed first is authoritative, so a late process close, delayed native completion, or
 restart reconciliation cannot overwrite it.
 
-A text send takes the session record lock only for its durable delivery-marker reservation and terminal receipt;
-the adapter RPC itself runs after releasing it. A native turn can synchronously invoke lifecycle hooks that re-enter
-the same record writer, so holding that lock across the confirmation would deadlock a truthful adapter response.
-The reserved marker blocks replay while the RPC is in flight, and normal adapter/runtime guards remain the authority
-for any concurrent lifecycle operation.
+A text send takes the session record lock only for the durable timeline append; the adapter poke runs after
+releasing it. A native turn can synchronously invoke lifecycle hooks that re-enter the same record writer, so the
+lock never spans the courtesy poke. The appended `mid` and inbox cursor make replay harmless, while normal
+adapter/runtime guards remain the authority for concurrent lifecycle operations.
 
 Archive may carry an opaque adapter cold-preflight receipt across its exact leaf/tmux stop, into the same adapter's
 cold commit, and through the final record/offline publication boundary. This shared layer forwards that one in-memory

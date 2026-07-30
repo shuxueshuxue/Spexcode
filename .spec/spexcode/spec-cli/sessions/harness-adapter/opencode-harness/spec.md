@@ -45,15 +45,11 @@ own half plays two roles:
   opencode session are stamped `agent_id` so the subagent
   discriminator keeps a parent's declared state safe, same as claude.
 - **rendezvous daemon** — the runtime's server binds SpexCode's per-session rendezvous socket (the path
-  the launch env hands every rendezvous-owning harness) and answers the reply/repaint mini-protocol; the
-  plugin supplies the inject (`client.session.prompt` into the root session) and the reject gate (no
-  adopted session → reply-rejected before the repaint barrier, so a sender fails loud instead of
-  confirming an undeliverable prompt). That makes `ownsRendezvous: true` LITERALLY true — the claude
-  adapter's `deliver` (parse-confirmed atomic write) and socket-listener liveness are reused unchanged;
-  there is no opencode-specific transport code. Confirmation means PARSED, not processed — `repaint-done`
-  is written in the same synchronous parse pass, with the prompt injection (a whole model turn, on the
-  SDK) running behind the confirm — and the server is multi-connection, so a concurrent probe connect
-  (the board fires one per snapshot) can never kick a delivery at all.
+  the launch env hands every rendezvous-owning harness) and accepts best-effort reply pokes. The plugin
+  supplies the inject (`client.session.prompt` into the root session); an unadopted or failed injection
+  leaves the timeline line unread for the turn-boundary reader. That makes `ownsRendezvous: true` LITERALLY
+  true — the shared Claude-family poke and socket-listener liveness are reused with no opencode-specific
+  transport. The server is multi-connection, so a board probe cannot displace another poke.
 
 The remaining divergences are ordinary adapter facts: launch is a tail-branching script (a prompt tail
 launches `--prompt`, a `--resume <id>` marker re-attaches `--session <id>` — the codex marker pattern);

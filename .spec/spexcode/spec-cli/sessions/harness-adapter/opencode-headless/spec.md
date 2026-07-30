@@ -53,11 +53,11 @@ The pane wrapper observes the real `opencode run` exit code. A non-zero exit is 
 rather than hiding it behind the sleeping pane.
 
 Delivery first probes the session's rendezvous socket. During a live turn, the generated plugin owns that
-socket, so delivery reuses the existing parse-confirmed `deliverViaRendezvous`; the plugin injects the prompt
+socket, so delivery reuses the shared best-effort `deliverViaRendezvous` poke; the plugin injects the prompt
 through `client.session.prompt` into the active native session. When no listener exists, delivery respawns the
 pane with `opencode run --session <harnessSessionId> <prompt>`. If the first event never captured a native id,
 the wake uses `--continue`, exactly the interactive adapter's resume fallback. A successful tmux respawn is not
-yet a successful delivery: the adapter waits through a bounded early-turn confirmation window. A private,
+yet a successful immediate wake: the adapter waits through a bounded early-turn confirmation window. A private,
 atomic outcome marker distinguishes a live wrapper pid from a zero/non-zero exit; no marker or a dead wrapper
 is failure, never inferred survival. A turn that finishes with zero in that window is accepted, a turn that
 exits non-zero is returned as a loud failed delivery after the shared turn-outcome CAS reporter acknowledges

@@ -92,11 +92,8 @@ export const SpexcodePlugin = async (ctx) => {
     })()
   }
 
-  // the rendezvous daemon, from the shared runtime: {type:"reply"} injects into the root session (a plugin
-  // that adopted no session yet reply-rejects synchronously, BEFORE repaint-done, so the sender fails loud
-  // instead of confirming a prompt that can never inject); {type:"repaint"} answers repaint-done in the same
-  // synchronous parse pass — confirmation means PARSED, not processed. The injection itself (a whole model
-  // turn: the SDK prompt call resolves only when the TURN ends) runs BEHIND the confirm.
+  // The shared rendezvous server receives best-effort reply pokes. An unadopted plugin simply leaves the
+  // timeline line for its next turn boundary; the SDK injection remains host-owned.
   rt.serveRendezvous(injectPrompt, { canInject: () => !!(client && rootSession) })
 
   const toolPayload = (input, output) => {

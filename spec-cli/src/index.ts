@@ -7,11 +7,12 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, loadReviewConfig } from './specs.js'
-import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
-import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
+import { issuesEnabled, resolveRemark, retractRemark } from './localIssues.js'
+import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote } from './issues.js'
+import { remarkWithLoopIn, replyIssueWithLoopIn } from './loop-in.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
-import { summarize } from './mentions.js'
+import { dispatchMentions, summarize } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
@@ -267,7 +268,7 @@ app.post('/api/issues/:id/reply', async (c) => {
     const node = id.includes('#')
       ? mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id)).find((i) => i.id === id)?.nodes[0] ?? null
       : null
-    const r = await replyIssue(id, text, { author: 'human', node, evidence })
+    const r = await replyIssueWithLoopIn(id, text, { author: 'human', node, evidence })
     if (r.store !== 'local') await refreshForgeNow()
     notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
     return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarize(r.outcomes, r.loopIn) })
@@ -358,7 +359,7 @@ app.post('/api/remarks', async (c) => {
     : { issue: typeof body?.issue === 'string' ? body.issue : undefined }
   const codeSha = typeof body?.codeSha === 'string' ? body.codeSha : undefined
   try {
-    const r = await remarkOnHost(host, text, { codeSha, author: 'human', evidence })
+    const r = await remarkWithLoopIn(host, text, { codeSha, author: 'human', evidence })
     notifyBoardChanged('full')
     return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: summarize(r.outcomes, r.loopIn) }, 201)
   } catch (e) {
@@ -601,9 +602,11 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   }
 }))
 // ONE input route, `kind` the discriminator — the transport split is an implementation fact, not API surface.
-// kind:"text" (Command Box, `spex session send`, the server-side merge dispatch) appends the prompt to the
+// kind:"text" (`spex session send`, the server-side merge dispatch) appends the prompt to the
 // target timeline, then best-effort pokes its adapter. A dead channel delays context injection but does not
 // change the successful append response; 502 means the record rejected the write.
+// kind:"command" is the Command Box control face: after that same durable append it resolves actor mentions
+// with the target session as their originator, so @new records a real session-tree parent.
 // kind:"keys" is the LAST-RESORT raw face (`spex session send --keys`): an ORDERED BATCH of
 // nav-mode key tokens over tmux send-keys, delivered in array order so tap order survives
 // ([[nav-mode-key-ordering]]); unstable by nature — callers try a plain text send first. An unknown kind is a
@@ -619,12 +622,20 @@ app.post('/api/sessions/:id/input', async (c) => {
     })
     return c.json(r, r.ok ? 200 : 502)
   }
+  if (body?.kind === 'command') {
+    const id = c.req.param('id')
+    const text = typeof body?.text === 'string' ? body.text : ''
+    const r = await sendText(id, text)
+    if (!r.ok) return c.json(r, 502)
+    const mentions = await dispatchMentions(text, { sessionId: id })
+    return c.json({ ...r, mentions, mentionSummary: summarize(mentions) })
+  }
   if (body?.kind === 'keys') {
     const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string') : []
     const ok = await rawKey(c.req.param('id'), keys)
     return c.json({ ok }, ok ? 200 : 404)
   }
-  return c.json({ error: 'input needs kind: "text" | "keys"' }, 400)
+  return c.json({ error: 'input needs kind: "text" | "command" | "keys"' }, 400)
 })
 // soft stop: kill the agent's tmux + socket but KEEP the worktree (resumable). Distinct from close, which
 // removes the worktree. {ok:false} = no such session.

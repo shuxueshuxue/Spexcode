@@ -295,7 +295,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const terminalFree = isHeadlessSession(selSession)
   const surfaceTabId = terminalFree ? 'si-conversation-tab' : 'si-terminal-tab'
   const surfacePanelId = terminalFree ? 'si-conversation-panel' : 'si-terminal-panel'
-  const commandAvailable = uiCommandsFor(selSession?.status, {}, selSession?.liveness, selSession?.archived).some((command) => command.name === 'command')
+  const commandAvailable = uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
   const evalSummary = sessionEvalDisplay(active !== 'new' ? selSession?.evalSummary : null, boardLive)
   // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
   // (it self-starts as a slot frees, so it gets no relaunch button).
@@ -537,7 +537,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/input`), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'text', text }),
+        body: JSON.stringify({ kind: 'command', text }),
       })
       const outcome = await res.json().catch(() => null)
       if (!res.ok) {
@@ -549,7 +549,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         return
       }
       setMsg((current) => current === raw ? '' : current)
-      setActionOutcome({ owner: 'command', phase: 'delivered', message: t('session.outcomeDelivered') })
+      setActionOutcome({ owner: 'command', phase: 'delivered', message: outcome?.mentionSummary
+        ? `${t('session.outcomeDelivered')} - ${outcome.mentionSummary}`
+        : t('session.outcomeDelivered') })
       outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
     } catch (error) {
       setActionOutcome({
@@ -864,8 +866,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     archive: async (owner) => { if (await act('archive', { on: true }, owner)) { await refreshArchive(); setShowShelf(true) } },
     close: (owner) => act('close', undefined, owner),   // removal: kill + remove the worktree + branch (the row right-click Close's twin)
   }
-  const uiCmds = uiCommandsFor(selSession?.status, runners, selSession?.liveness, selSession?.archived)
-  const typedUiCmds = uiCmds.filter((command) => command.typed !== false)
+  const uiCmds = uiCommandsFor(selSession, runners)
+  const typedUiCmds = uiCmds.filter((command) => command.typed !== false && command.enabled)
   const evalKnownTitle = Number.isInteger(evalSummary.total) ? t('session.evalDoorSummary', evalSummary) : ''
   const evalDoorTitle = evalSummary.phase === 'ready'
     ? evalKnownTitle
@@ -1156,16 +1158,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     .map((c) => {
                     const pressed = c.pressed ? commandOpen : undefined
                     const state = pressed ? ' on' : ''
+                    const label = t(c.enabled ? c.titleKey : c.disabledTitleKey)
                     return (
                       <IconButton
                         key={c.name}
                         icon={c.icon}
                         size={14}
-                        label={t(c.titleKey)}
-                        className={`si-tool sc-${c.color} ${c.name}${state}`}
+                        label={label}
+                        className={`si-tool sc-${c.enabled ? c.color : 'muted'} ${c.name}${state}`}
                         data-command={c.name}
                         aria-pressed={pressed}
-                        onClick={() => c.run()}
+                        disabled={!c.enabled}
+                        onClick={() => { if (c.enabled) c.run() }}
                       />
                     )
                   })}

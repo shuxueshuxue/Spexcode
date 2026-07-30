@@ -627,8 +627,14 @@ export default {
     // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
     cmd: {
       evalDesc: "open this session's Evals page — eval evidence, diff, merge gates",
-      mergeTitle: 'merge this session to main',
-      mergeDesc: 'merge this session to main',
+      mergeTitle: 'merge this review proposal to main',
+      mergeDesc: 'merge this review proposal to main',
+      mergeUnavailableArchived: 'merge unavailable — this session is archived',
+      mergeUnavailableNoProposal: 'merge unavailable — this session has not proposed a merge; only done --propose merge makes it available',
+      mergeUnavailableNothing: 'merge unavailable — done --propose nothing is done without proposing a merge',
+      mergeUnavailableClose: 'merge unavailable — done --propose close is awaiting close, not merge',
+      mergeUnavailableLifecycle: 'merge unavailable — the merge proposal is no longer awaiting review',
+      mergeUnavailableLiveness: 'merge unavailable — the session is not online',
       stopTitle: 'stop this session (kill the agent, keep the worktree — resumable)',
       stopDesc: 'stop — kill the agent + tmux but KEEP the worktree, so it can be resumed',
       archiveTitle: 'archive this session',

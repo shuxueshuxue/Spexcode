@@ -207,7 +207,7 @@ refuses (an unreadable record, a retired session — [[sessions-core]]) says so 
 global session dir (created on demand even for a session with no `session.json`). So board state is a managed-
 session concern; spec-awareness is universal.
 
-For the known pre-structured `mark-active` source bytes still tracked by existing projects, the dispatcher
+For the two known pre-structured `mark-active` source blobs still tracked by existing projects, the dispatcher
 executes the package-owned structured implementation without rewriting the tracked hook; that bounded compatibility
 is specified by [[dispatcher-runtime]]. Thus a package upgrade protects frozen worktrees immediately, while a
 project's eventual source migration remains an explicit reviewed change rather than a hidden materialize effect.

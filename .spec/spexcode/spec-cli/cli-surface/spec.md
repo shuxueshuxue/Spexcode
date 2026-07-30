@@ -104,3 +104,17 @@ verb is the bug this node exists to prevent), and capabilities that do not exist
 — help grows a line only when the verb lands. `cli.ts` remains the thin dispatch hub — verbs' logic
 lives in their own modules; help text lives in `help.ts`; a sibling verb's churn in the hub is that
 feature's, not this node's drift.
+
+The hub rule has a MECHANISM, and stating only the rule leaves the mechanism unprotected. Every dispatch site
+reaches its verb through a lazy `await import(...)` — around eighty of them, one per verb — and the point is
+what a single invocation must NOT pay for: `spex session ls` cannot afford to load the eval engine, the harness
+adapters, the forge drivers and every other verb's module before it prints a row. So a module graph that keeps
+each verb's logic in its own file while importing all of those files EAGERLY satisfies the sentence above and
+loses the property the sentence exists to buy. Both halves are the contract: logic lives elsewhere, AND the hub
+reaches it only when that verb is the one being run.
+
+The corollary is a refusal, and it is worth naming because the pressure to break it arrives disguised as
+tidying: when some other module turns out to be hosting a CLI surface at the wrong altitude, the hub is NOT its
+new home. Moving that surface's implementation here would trade one module hosting two altitudes for another
+doing the same — the hub would begin holding argv parsing AND verb bodies, which is the shape it is defined
+against. Such a surface goes to a module of its own, and the hub gains one more lazy line pointing at it.

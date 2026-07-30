@@ -39,6 +39,55 @@ scenarios:
       tens-of-seconds a per-request rebuild causes. The baseline (route calling buildBoard() inline, no
       cache) fails this: warm /api/graph rebuilds every time (~5s) and worst /health under the storm blows
       past 50s as the git-free liveness probe starves behind N concurrent full builds.
+  - name: cold-board-does-not-stall-health
+    tags: [backend-api]
+    code: [spec-cli/src/graph.ts, spec-cli/src/anchors.ts]
+    description: >-
+      On an isolated, pinned-port backend serving a corpus with historical anchored readings, first measure
+      at least 40 sequential idle `/health` requests. Then start one cold `/api/graph` request and probe
+      `/health` every 250ms until that request settles, retaining every probe's start/end time, status and
+      the graph DEBUG log. Run with `env -u SPEXCODE_API_URL` and an isolated runtime; the cold producer is
+      started once, not multiplied into a poll storm. Record the machine load and the count of local
+      `spex serve` observers with the evidence.
+    expected: >-
+      Every health request returns 200, and its p99 during the cold producer remains at or below the larger
+      of 500ms and five times the same backend's idle p99. A multi-second contiguous delay while the graph
+      is building is a liveness stall even when the deferred probe eventually returns 200; the probe is
+      git-free and the graph build must yield the event loop. Loss is a non-200 probe, a latency above that
+      normalized bound, or evidence that the probe could not run until the cold build settled.
+  - name: non-input-root-churn-starts-no-full-build
+    tags: [backend-api]
+    code: spec-cli/src/graphCache.ts
+    related: [spec-cli/src/graphStream.ts, spec-cli/src/graph.ts]
+    description: >-
+      A/B the real HTTP and delta-SSE surfaces on two INDEPENDENT copies of one frozen session-bearing
+      fixture: a production-shaped corpus (~227 spec nodes) with two linked worktrees, two governed
+      non-archived session records in an isolated `SPEXCODE_HOME`, each backed by a real tmux window and a
+      live rendezvous listener so liveness reads online and the per-worktree root watchers actually attach.
+      Start each throwaway backend on its own pinned free port with `env -u SPEXCODE_API_URL` and
+      `SPEXCODE_BOARD_DEBUG=1`, hold one `/api/graph/stream?mode=delta` subscriber, and count `cache-commit`
+      rows by scope around each round, letting the cache settle between rounds. Drive BOTH directions on the
+      same fixture. FORWARD (bytes no board input reads): create and then remove a gitignored generated
+      harness artifact inside a live governed worktree, and add and then remove a linked worktree that no
+      governed session record names. REVERSE (real board inputs): a new draft spec node in a live governed
+      worktree, an uncommitted governed source edit there, that worktree's commit, a commit on the served
+      checkout's main branch, a session-record lifecycle write, an issue persisted through its real HTTP
+      route, and a governed session record removed. For every round record the full/sessions publication
+      counts, the ETag, and the exact leaf-level diff between the settled board before and after.
+    expected: >-
+      Forward rounds start ZERO full board assemblies, and no board byte is lost to that subtraction: each
+      forward round's settled board still carries exactly the leaf changes the unfixed binary produced for
+      the same round (on this fixture, the session-eval generation the worktree event advances), delivered
+      by the cheap sessions splice instead of a full rebuild. Reverse rounds are unchanged: every real
+      input — worktree `.spec`, worktree HEAD, served-checkout HEAD, config, the governed root set, the
+      issue store, and the session records — still produces its publication and its exact board delta, at
+      the same publication scope and within the existing watch/patrol cadence. `/health` answers 200
+      throughout and the route never 503s once a last-good board exists. Loss is any real change dropped,
+      silently downgraded, or delayed past the patrol; a forward round still paying a full assembly; a
+      forward round losing a board field the unfixed binary carried; or a green result bought by raising
+      `SPEXCODE_BOARD_TIMEOUT_MS`, adding another cache layer, or hard-coding a table of ignorable
+      filenames or gitignore rules — an adopter may govern generated and ignored paths, so the verdict must
+      be derived from what the board actually reads, never assigned by name.
   - name: stale-readers-ride-last-good-during-rebuild
     tags: [backend-api]
     description: >-

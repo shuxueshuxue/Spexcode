@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { loadIssue, postIssueClose, postIssuePromote, postIssueReply, postIssueThread } from './data.js'
 import { MENTION_RE, TriggerButton, typeTrigger, useMentionAutocomplete } from './mentions.jsx'
-import { useLaunchers } from './launch.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { SpecBody } from './NodeView.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness } from './Thread.jsx'
@@ -363,10 +362,9 @@ function NewIssuePage({ specs, sessions, stores, onCreated }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const taRef = useRef(null)
-  const { launchers } = useLaunchers()
   // on a PAGE the menu opens downward under the caret line — no pop-out boundary to clear, so no `up`/
   // `fixedAbove` overlay geometry ([[mentions]]).
-  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers })
+  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions })
   useEffect(() => {
     if (!stores.some((s) => s.id === store)) setStore(stores[0]?.id || 'local')
   }, [stores, store])

@@ -48,6 +48,33 @@ test('headline precedence: name > activity > promptPreview > node > …', () => 
   assert.equal(deriveHeadline({ ...parts, activity: null, promptPreview: null }), 'nd')
 })
 
+test('a lifecycle note never replaces the title chain', () => {
+  const url = 'http://127.0.0.1:9/p/session-label-repro'
+  const declared = {
+    id: 'i', name: null, note: 'M4b-A landed; next is M4b-B — waiting for a human go', activity: 'debugging the launch failure',
+    promptPreview: url, node: null, title: url, branch: `node/${url.replace(/\W+/g, '-')}`,
+  }
+  assert.equal(deriveHeadline(declared), 'debugging the launch failure')
+  assert.equal(deriveHeadline({ ...declared, name: 'my-rename' }), 'my-rename', 'the human rename still wins')
+  assert.equal(deriveHeadline({ ...declared, activity: null }), url, 'without activity the launch ask remains the title')
+})
+
+test('a long note cannot affect a headline', () => {
+  const note = `${'declared: '.padEnd(80, 'x')}\nsecond line`
+  const withLongNote = { id: 'i', note, activity: 'stale title' }
+  const withBlankNote = { id: 'i', note: '   \n  ', activity: 'stale title' }
+  const headline = deriveHeadline(withLongNote)
+  assert.equal(headline, 'stale title')
+  assert.equal(deriveHeadline(withBlankNote), 'stale title')
+})
+
+test('toSession keeps a record note separate from the live headline', () => {
+  const s = toSession(rec({ status: 'awaiting', proposal: 'nothing', note: 'parked on the human: which of the two shapes do you want?' }), 'done', 'online', 'debugging the launch failure')
+  assert.equal(s.headline, 'debugging the launch failure')
+  assert.equal(s.note, 'parked on the human: which of the two shapes do you want?')
+  assert.equal(s.label, 'x', 'the stable handle is untouched by a declaration')
+})
+
 test('toSession derives with liveness-gated activity; accessors are the precomputed fields', () => {
   const on = toSession(rec(), 'working', 'online', 'live summary')
   assert.equal(on.headline, 'live summary')

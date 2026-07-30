@@ -8,6 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
 const dispatch = join(repo, 'spec-cli', 'hooks', 'dispatch.sh')
 const legacyMarkActive = join(repo, 'spec-cli', 'hooks', 'compat', 'mark-active-sed-v0.fixture')
+const legacyMarkActive052 = join(repo, 'spec-cli', 'hooks', 'compat', 'mark-active-0.5.2-eef1.fixture')
 
 test('dispatch exits 2 when a blocking handler emits decision:block JSON', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-'))
@@ -27,7 +28,7 @@ test('dispatch exits 2 when a blocking handler emits decision:block JSON', () =>
   assert.match(r.stdout, /"decision":"block"/)
 })
 
-function legacyMarkActiveRig(custom = false) {
+function legacyMarkActiveRig(source = legacyMarkActive, custom = false) {
   const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-legacy-mark-active-'))
   const home = join(dir, 'home')
   const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
@@ -36,7 +37,7 @@ function legacyMarkActiveRig(custom = false) {
   execFileSync('git', ['init', '-q'], { cwd: dir })
   mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
   mkdirSync(join(dir, '.spec', 'project', '.plugins', 'core', 'mark-active'), { recursive: true })
-  const legacy = readFileSync(legacyMarkActive, 'utf8')
+  const legacy = readFileSync(source, 'utf8')
   writeFileSync(hook, custom ? legacy.replace('payload=$(cat 2>/dev/null)', 'printf "CUSTOM-HOOK\\n"\npayload=$(cat 2>/dev/null)') : legacy)
   const manifest = join(runtime, 'hooks-manifest')
   writeFileSync(manifest, 'PreToolUse\t10\tfalse\t.spec/project/.plugins/core/mark-active/mark-active.sh\n')
@@ -58,47 +59,59 @@ function legacyMarkActiveRig(custom = false) {
   return { dir, home, hook, fire, rec, sid, writeRecord }
 }
 
-test('the exact legacy mark-active bytes corrupt a quoted note without the dispatcher override', () => {
-  const t = legacyMarkActiveRig()
-  t.writeRecord()
-  const r = spawnSync('bash', [t.hook], {
-    cwd: t.dir,
-    env: {
-      ...process.env,
-      SPEXCODE_HARNESS: 'claude',
-      SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh'),
-      SPEXCODE_HOME: t.home,
-    },
-    input: JSON.stringify({
+const legacyMarkActiveFixtures = [
+  ['incident-captured pre-subagent source', legacyMarkActive],
+  ['0.5.2 release eef1e154 source', legacyMarkActive052],
+] as const
+
+test('the 0.5.2 release fixture is byte-identical to eef1e154', () => {
+  const releaseSource = execFileSync('git', ['show', 'eef1e154:spec-cli/templates/spec/project/.plugins/core/mark-active/mark-active.sh'], { encoding: 'utf8' })
+  assert.equal(readFileSync(legacyMarkActive052, 'utf8'), releaseSource)
+})
+
+for (const [label, source] of legacyMarkActiveFixtures) {
+  test(`${label} corrupts a quoted note when invoked directly`, () => {
+    const t = legacyMarkActiveRig(source)
+    t.writeRecord()
+    const r = spawnSync('bash', [t.hook], {
+      cwd: t.dir,
+      env: {
+        ...process.env,
+        SPEXCODE_HARNESS: 'claude',
+        SPEXCODE_HARNESS_LIB: join(repo, 'spec-cli', 'hooks', 'harness.sh'),
+        SPEXCODE_HOME: t.home,
+      },
+      input: JSON.stringify({
+        session_id: t.sid,
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUserQuestion',
+        tool_input: { question: 'GUGU_E2E_PORT="undefined"' },
+      }),
+      encoding: 'utf8',
+    })
+    assert.equal(r.status, 0, r.stderr)
+    assert.throws(() => JSON.parse(readFileSync(t.rec, 'utf8')))
+  })
+
+  test(`dispatch routes ${label} through the structured writer`, () => {
+    const t = legacyMarkActiveRig(source)
+    const note = 'GUGU_E2E_PORT="undefined"\n中文'
+    t.writeRecord()
+    const r = t.fire({
       session_id: t.sid,
       hook_event_name: 'PreToolUse',
       tool_name: 'AskUserQuestion',
-      tool_input: { question: 'GUGU_E2E_PORT="undefined"' },
-    }),
-    encoding: 'utf8',
+      tool_input: { question: note },
+    })
+    assert.equal(r.status, 0, r.stderr)
+    const record = JSON.parse(readFileSync(t.rec, 'utf8'))
+    assert.equal(record.status, 'asking')
+    assert.equal(record.note, note)
   })
-  assert.equal(r.status, 0, r.stderr)
-  assert.throws(() => JSON.parse(readFileSync(t.rec, 'utf8')))
-})
+}
 
-test('dispatch routes the known legacy mark-active bytes through the structured writer', () => {
-  const t = legacyMarkActiveRig()
-  const note = 'GUGU_E2E_PORT="undefined"\n中文'
-  t.writeRecord()
-  const r = t.fire({
-    session_id: t.sid,
-    hook_event_name: 'PreToolUse',
-    tool_name: 'AskUserQuestion',
-    tool_input: { question: note },
-  })
-  assert.equal(r.status, 0, r.stderr)
-  const record = JSON.parse(readFileSync(t.rec, 'utf8'))
-  assert.equal(record.status, 'asking')
-  assert.equal(record.note, note)
-})
-
-test('dispatch does not override a byte-different mark-active customization', () => {
-  const t = legacyMarkActiveRig(true)
+test('dispatch does not override a byte-different 0.5.2 mark-active customization', () => {
+  const t = legacyMarkActiveRig(legacyMarkActive052, true)
   t.writeRecord()
   const r = t.fire({
     session_id: t.sid,

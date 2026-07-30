@@ -2,7 +2,7 @@
 title: session-label
 status: active
 hue: 290
-desc: A session's display name is derived ONCE, server-side — the wire carries label (stable) + headline (live) and hides the bare name/title parts, so no surface can grow its own naming chain.
+desc: A session's display strings are derived ONCE, server-side — the wire carries label (the stable handle) + headline (the current work title) and hides the bare name/title parts, so no surface can grow its own naming chain or turn a lifecycle note into a title.
 code:
   - spec-cli/src/sessionLabel.test.ts
 related:
@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/session.js
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/SessionContextMenu.jsx
+  - spec-dashboard/test/session-note-title.e2e.mjs
 ---
 
 # session-label
@@ -27,9 +28,27 @@ the raw name and can only consume the derived one.
 
 **One computation site.** `toSession` is the single place display strings are derived: `label` — the
 STABLE handle (name > node > title > branch > id; tables, selectors, tooltips, search) — and `headline` —
-the LIVE line a human reads (name > activity > promptPreview > node > title > branch > id, activity gated
-on liveness; see [[session-activity]]). Both ride every session on the wire; every surface — CLI tables,
+the current work title (name > activity > promptPreview > node > title > branch > id, activity gated on
+liveness; see [[session-activity]]). Both ride every session on the wire; every surface — CLI tables,
 watch/notify lines, the reply-channel footer, board rows, the @-mention dropdown, search — reads them.
+
+**Notes are state prose, not titles.** `note` records why the session declared its current lifecycle. It remains
+full-fidelity in the timeline, review output, JSON, and the CLI's explicit NOTE column; it never participates in
+either display-name chain. A declaration may explain why a session stopped, but it must not silently rename the
+row, tab, search result, or lock hint. The human's `name` remains the authoritative title override; otherwise a
+live worker's `activity` describes current work and the launch prompt is its fallback. This keeps identity and
+state separate: a user can scan titles without lifecycle prose repeatedly replacing them, while opening the
+session still shows the exact declaration that explains its status.
+
+**Two chains, deliberately — merging them would cost something.** They differ in kind, not merely in content.
+Every cell of `label` is a fact that cannot go stale: a rename only a human unwrites, and node/title/branch/id
+are fixed at creation. That is exactly what its consumers need — search MATCHING (a handle that renarrated on
+every declaration would stop finding a session under the name its human remembers), the avatar/hover tooltip,
+mobile's handle-line, `spex review`'s identity line, and `spex ls`'s NODE column, a table that already carries
+PROMPT and NOTE in columns of their own. `headline` is the current work title: it may follow the live activity,
+but lifecycle prose never enters it. A URL-shaped label is thus not the same defect as a URL-shaped headline: for a session launched from a
+pasted URL, that truncation IS the identity its human typed and will type again to find it. The repair belongs
+to the live line alone; the stable chain has no staleness to repair.
 
 The narrower payloads that are NOT a full session on the wire carry the derived identity too, from the
 same seam: the review/merge `ReviewPayload` includes a precomputed `label` (`deriveLabel` over the record's

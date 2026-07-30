@@ -75,8 +75,8 @@ scenarios:
       a `![frame](/api/evidence/<hash>)` link, and the routing line — with the stage still on screen.
       Sending it creates/appends the eval's local Issue thread ('eval: <node> · <scenario>') with that
       frame in the body AND on the thread's typed evidence[]; the sent comment shows an anchor chip that
-      SEEKS + selects on click and renders the circled frame inline. '@new' dispatches a fresh worker
-      with the anchor in its prompt. The pane carries NO verdict-filing controls — no pass/fail bar, no
+      SEEKS + selects on click and renders the circled frame inline. An @session reference remains in the
+      stored comment without waking that session. The pane carries NO verdict-filing controls — no pass/fail bar, no
       verdict-note input, no file-reading button (readings are filed by agents via `spex eval add`; the
       human judges through the remark composer). Switching selection resets the working draft.
   - name: no-instructional-caption
@@ -155,7 +155,7 @@ scenarios:
       send a first comment; send a second; confirm the trunk store holds exactly ONE local issue for that
       concern — read it from the board overlay's `entry.thread` (or the store's git log), since
       /api/issues excludes eval concerns by construction — and that no row for it renders on #/issues;
-      send a third containing '@new'. Read the overlay between sends.
+      send a third containing an @session reference. Read the overlay between sends.
     expected: |
       The first comment lazily CREATES a local issue bound by concern 'eval: <node> · <scenario>'
       (nodes:[node], the comment its first reply) and it renders in place in the thread. The
@@ -164,8 +164,8 @@ scenarios:
       `entry.thread`. The thread IS a real local issue (store local, concern-keyed) but — after the
       eval-remark read-time split — it is EXCLUDED from the merged issue list server-side (/api/issues'
       mergedIssues drops isEvalConcern); it surfaces only under its eval, never as an Issues-page row.
-      The '@new' comment dispatches a fresh worker through the same write path — the one-line outcome
-      ('@ new→<session>') echoes on the page.
+      The @session comment stays in the thread without waking the referenced session or producing a mention
+      outcome.
   - name: composer-trigger-buttons
     tags: [frontend-e2e]
     code: [spec-dashboard/src/Thread.jsx, spec-dashboard/src/mentions.jsx]
@@ -340,7 +340,7 @@ scenarios:
 
 YATU through the real browser over a real backend: the detail page's GitHub grammar (main column + side
 rail, sticky docked composer), the seek, the ⏱ anchor, the circled-frame comment (its frame on
-/api/evidence and the thread's evidence[]), the anchor-chip seek, the @new dispatch, and the absence of
+/api/evidence and the thread's evidence[]), the anchor-chip seek, passive @session references, and the absence of
 verdict-filing controls are all read from live surfaces (DOM, /api/issues) — never asserted from the
 component code. There is ONE annotation primitive (an anchored comment on the eval's thread); the pane
 reads readings, it files none.

@@ -418,9 +418,10 @@ export function diffHunkRanges(patch: string, side: 'old' | 'new' = 'new'): [num
 type FileRevisionUnits = { units: Unit[] } | { absent: true } | { unparseable: string }
 const fileRevisionUnitMemo = new Map<string, FileRevisionUnits>()
 const MEMO_MAX = 4096
+const fileRevisionMemoKey = (objectFormat: string, oid: string, x: Extractor, path: string) => `${objectFormat}\0${oid}\0${x.memoKey(path)}`
 async function unitsAtFileRevision(commit: string, path: string, x: Extractor, objectFormat: string, oid: string | null, text?: string): Promise<FileRevisionUnits> {
   if (!oid) return { absent: true }
-  const key = `${objectFormat}\0${oid}\0${x.memoKey(path)}`
+  const key = fileRevisionMemoKey(objectFormat, oid, x, path)
   const hit = fileRevisionUnitMemo.get(key)
   if (hit) return hit
   if (text === undefined) throw new Error(`git cat-file --batch omitted object ${oid} for ${commit}:${path}`)
@@ -435,14 +436,50 @@ async function unitsAtFileRevision(commit: string, path: string, x: Extractor, o
 // retain one before-image per parent and only all-parent authored rows; an owned line never widens to an
 // adjacent inherited line merely because Git placed both in one `@@@` hunk.
 type HunkRanges = { after: DiffLineRange[]; before: DiffLineRange[][] }
+// @@@ RANGE_SEMANTICS - hunk ranges must not depend on ambient Git state, because a range that moves with
+// config or attributes is neither a sound anchor verdict nor a reusable fact. Outside the commit, three
+// classes decide them: presentation (`.gitattributes` `-diff` prints `Binary files … differ` with no `@@` at
+// all — measured: one hunk bare, ZERO under `src/x.py -diff`, so an attribute edit silently disabled an
+// anchored contract's drift; a textconv or external driver replaces the text compared), the ALGORITHM and
+// its heuristics (`diff.algorithm`, `diff.indentHeuristic` — both repo config), and hunk COALESCING
+// (`diff.interHunkContext`). All are pinned here, on the two readers this node owns.
+//
+// The algorithm's VALUE is a product choice, not a formality, because the algorithms genuinely disagree:
+// on `c a c a` -> `c c a a a`, myers authors new lines 4-5 and deletes old line 2, while histogram authors
+// new lines 2-3 and deletes old line 3 — so a unit on line 3 is a HIT under histogram and a MISS under
+// myers, on one commit. histogram is pinned because it aligns the change with the unit that actually moved,
+// which for a BLOCKING gate is the conservative direction; myers (Git's default) would silently miss that
+// drift. So this pin is not merely determinism: it settles which reading a verdict means.
+// `--no-color` is not cosmetic here: under an ambient `color.ui=always` Git prefixes every `@@` with an
+// ANSI escape, so a `/^@@/` parse finds NO hunks and every anchored path reads as "nothing changed" — a
+// silent zero-drift verdict for the whole corpus, and one that would then be memoized. `-M -l0` pins rename
+// detection with no candidate limit, matching the identity stream this engine's events come from, so a large
+// rename set cannot quietly change which pairs are compared.
+const RANGE_SEMANTICS = [
+  '--text', '--no-textconv', '--no-ext-diff', '--no-color',
+  '--diff-algorithm=histogram', '--no-indent-heuristic', '--inter-hunk-context=0',
+  '-M', '-l0',
+] as const
 const hunkMemo = new Map<string, HunkRanges>()
-async function hunksAt(root: string, event: DriftPathEvent): Promise<HunkRanges> {
+// @@@ the reusable fact is a diff of ORDERED IMAGES, not of a commit id - a commit id is not immutable
+// interpretation: `refs/replace` can swap the object, and a graft or an unshallow can change its parents, so
+// one (commit,path) can name two different diffs inside one process. The inputs that actually decide the
+// hunks are the result image and each parent image, in order, each identified by its resolved blob oid and
+// historical path. Keying on those makes the key move exactly when an input does, and the oids are already
+// resolved by this read's one `cat-file --batch-check`, so completeness costs no extra child and no new state.
+const ABSENT_IMAGE = '-'
+const hunkMemoKey = (images: string[]) => images.join('\0')
+function rememberHunks(key: string, ranges: HunkRanges): HunkRanges {
+  if (hunkMemo.size >= MEMO_MAX) hunkMemo.clear()
+  hunkMemo.set(key, ranges)
+  return ranges
+}
+async function hunksAt(root: string, event: DriftPathEvent, key: string): Promise<HunkRanges> {
   const paths = [...new Set([event.historicalPath, ...event.parents.map((parent) => parent.historicalPath)])]
-  const key = `${event.commit}\0${paths.join('\x1e')}`
   const hit = hunkMemo.get(key)
   if (hit) return hit
   const merge = event.parents.length > 1
-  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--combined-all-paths', '--unified=0', '-M', '--format=', event.commit,
+  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--combined-all-paths', '--unified=0', ...RANGE_SEMANTICS, '--format=', event.commit,
     ...(merge ? [] : ['--', ...paths])],
     `cannot derive anchor hunks for ${event.commit}:${event.historicalPath}`)
   let ranges: HunkRanges = { after: [], before: [[]] }
@@ -458,25 +495,35 @@ async function hunksAt(root: string, event: DriftPathEvent): Promise<HunkRanges>
       if (newCount > 0) ranges.after.push([newStart, newStart + newCount - 1])
     }
   }
-  if (hunkMemo.size >= MEMO_MAX) hunkMemo.clear()
-  hunkMemo.set(key, ranges)
-  return ranges
+  return rememberHunks(key, ranges)
 }
 
 // Ordinary commits whose two images keep one path share a single query. Renames and merges retain distinct
 // image paths, so they stay on hunksAt's exact event-shaped query. Commits ride argv here, so a build-wide
 // batch is split to stay clear of the kernel's exec argument limit; the records are order-independent.
+//
+// @@@ the demand set is the MISSES - a hunk is reusable by the identity of the IMAGES it diffed, never by the
+// commit id (see hunkMemoKey): under that identity, plus this seam's pinned interpretation, the fact cannot be
+// reinterpreted inside one process, so the batch may ask git only for what it has not read. Asking for the
+// whole window again is what made a repeated read cost the CORPUS instead of the movement: a re-lint after one
+// trunk commit or one dirty edit re-forked one `log --patch` per anchored path (22 here) to re-derive
+// byte-identical answers.
 const HUNK_COMMIT_CHUNK = 400
-async function hunksAtMany(root: string, commits: string[], path: string): Promise<Map<string, HunkRanges>> {
+async function hunksAtMany(root: string, path: string, entries: Map<string, string>): Promise<Map<string, HunkRanges>> {
   const result = new Map<string, HunkRanges>()
-  const ordinary = [...new Set(commits)]
+  const ordinary: string[] = []
+  for (const [commit, key] of entries) {
+    const hit = hunkMemo.get(key)
+    if (hit) result.set(commit, hit)
+    else ordinary.push(commit)
+  }
   if (!ordinary.length) return result
   for (let cursor = 0; cursor < ordinary.length; cursor += HUNK_COMMIT_CHUNK)
-    await hunkRecordsInto(root, ordinary.slice(cursor, cursor + HUNK_COMMIT_CHUNK), path, result)
+    await hunkRecordsInto(root, ordinary.slice(cursor, cursor + HUNK_COMMIT_CHUNK), path, entries, result)
   return result
 }
-async function hunkRecordsInto(root: string, ordinary: string[], path: string, result: Map<string, HunkRanges>): Promise<void> {
-  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0', '-M',
+async function hunkRecordsInto(root: string, ordinary: string[], path: string, keys: Map<string, string>, result: Map<string, HunkRanges>): Promise<void> {
+  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0', ...RANGE_SEMANTICS,
     `--format=${RS}%H`, ...ordinary, '--', path], `cannot derive anchor hunks for ${path}`)
   for (const rec of out.split(RS)) {
     const normalized = rec.replace(/^\n/, '')
@@ -492,7 +539,8 @@ async function hunkRecordsInto(root: string, ordinary: string[], path: string, r
       if (oldCount > 0) ranges.before[0].push([oldStart, oldStart + oldCount - 1])
       if (newCount > 0) ranges.after.push([newStart, newStart + newCount - 1])
     }
-    result.set(hash, ranges)
+    const key = keys.get(hash)
+    result.set(hash, key === undefined ? ranges : rememberHunks(key, ranges))
   }
 }
 
@@ -516,24 +564,41 @@ type AnchorRevision = { commit: string; path: string }
 const anchorRevisionKey = ({ commit, path }: AnchorRevision) => `${commit}\0${path}`
 
 // One lint can judge several selectors with overlapping windows. Their Git images and ordinary hunks are
-// immutable facts, so the batch owns them once and each query keeps its own selector verdict.
+// reusable under the identity of those images, so the batch owns them once and each query keeps its own
+// selector verdict.
 export async function anchorHitQueries(root: string, queries: AnchorHitQuery[], regs: Extractor[]): Promise<AnchorHit[][]> {
   if (!queries.length) return []
   const objectFormat = gitObjectFormat(root)
   const revisions = new Map<string, AnchorRevision>()
-  const ordinaryByPath = new Map<string, Set<string>>()
+  const ordinaryEvents: { path: string; commit: string; event: DriftPathEvent }[] = []
   for (const { win } of queries) for (const event of win) {
     const refs = [{ commit: event.commit, path: event.historicalPath }, ...event.parents.map(({ commit, historicalPath }) => ({ commit, path: historicalPath }))]
     for (const ref of refs) revisions.set(anchorRevisionKey(ref), ref)
     if (event.parents.length > 1 || event.parents.some((parent) => parent.historicalPath !== event.historicalPath)) continue
-    const commits = ordinaryByPath.get(event.historicalPath) ?? new Set<string>()
-    commits.add(event.commit)
-    ordinaryByPath.set(event.historicalPath, commits)
+    ordinaryEvents.push({ path: event.historicalPath, commit: event.commit, event })
   }
   const refs = [...revisions.values()]
   const oids = await batchRevisionOids(root, refs.map(({ commit, path }) => `${commit}:${path}`))
-  const blobs = await batchBlobTexts(root, oids.filter((oid): oid is string => !!oid))
+  // Every image this read will diff is now resolved, so the reusable hunk fact can be named by the identity
+  // that actually decides it: the result image and each parent image, in order, oid + historical path.
+  const oidByRef = new Map<string, string | null>()
+  for (let index = 0; index < refs.length; index++) oidByRef.set(anchorRevisionKey(refs[index]), oids[index])
+  const imageOf = (commit: string, path: string) => `${oidByRef.get(anchorRevisionKey({ commit, path })) ?? ABSENT_IMAGE}:${path}`
+  const imageIdentity = (event: DriftPathEvent) => hunkMemoKey([
+    imageOf(event.commit, event.historicalPath),
+    ...event.parents.map(({ commit, historicalPath }) => imageOf(commit, historicalPath)),
+  ])
+  const ordinaryByPath = new Map<string, Map<string, string>>()
+  for (const { path, commit, event } of ordinaryEvents) {
+    const entries = ordinaryByPath.get(path) ?? new Map<string, string>()
+    entries.set(commit, imageIdentity(event))
+    ordinaryByPath.set(path, entries)
+  }
+  // The image's own memo answers before any bytes move, so the read asks git only for the revisions this
+  // process has not parsed yet — the retention half of the same rule the hunk demand set follows.
   const units = new Map<string, FileRevisionUnits>()
+  const pending: { ref: AnchorRevision; oid: string; x: Extractor }[] = []
+  const wanted = new Set<string>()
   for (let index = 0; index < refs.length; index++) {
     const ref = refs[index], oid = oids[index]
     const x = extractorFor(regs, extOf(ref.path))
@@ -542,10 +607,16 @@ export async function anchorHitQueries(root: string, queries: AnchorHitQuery[], 
       units.set(anchorRevisionKey(ref), { unparseable: !x ? `no designated extractor for ${ref.path}` : String(ready) })
       continue
     }
-    units.set(anchorRevisionKey(ref), await unitsAtFileRevision(ref.commit, ref.path, x, objectFormat, oid, oid ? blobs.get(oid) : undefined))
+    if (!oid) { units.set(anchorRevisionKey(ref), { absent: true }); continue }
+    const hit = fileRevisionUnitMemo.get(fileRevisionMemoKey(objectFormat, oid, x, ref.path))
+    if (hit) { units.set(anchorRevisionKey(ref), hit); continue }
+    pending.push({ ref, oid, x }); wanted.add(oid)
   }
+  const blobs = await batchBlobTexts(root, [...wanted])
+  for (const { ref, oid, x } of pending)
+    units.set(anchorRevisionKey(ref), await unitsAtFileRevision(ref.commit, ref.path, x, objectFormat, oid, blobs.get(oid)))
   const ordinaryHunks = new Map<string, Map<string, HunkRanges>>()
-  for (const [path, commits] of ordinaryByPath) ordinaryHunks.set(path, await hunksAtMany(root, [...commits], path))
+  for (const [path, entries] of ordinaryByPath) ordinaryHunks.set(path, await hunksAtMany(root, path, entries))
   const intersects = (ranges: DiffLineRange[], candidates: Unit[]) =>
     ranges.some(([start, end]) => candidates.some((unit) => start <= unit.end && unit.start <= end))
   const results: AnchorHit[][] = []
@@ -555,7 +626,7 @@ export async function anchorHitQueries(root: string, queries: AnchorHitQuery[], 
       const after = units.get(anchorRevisionKey({ commit: event.commit, path: event.historicalPath }))!
       const before = event.parents.map(({ commit, historicalPath }) => units.get(anchorRevisionKey({ commit, path: historicalPath }))!)
       const ranges = ordinaryHunks.get(event.historicalPath)?.get(event.commit)
-        ?? await hunksAt(root, event)
+        ?? await hunksAt(root, event, imageIdentity(event))
       if (event.parents.length && ranges.before.length !== before.length)
         throw new Error(`anchor diff for ${event.commit}:${event.historicalPath} has ${ranges.before.length} parent ranges for ${before.length} parents`)
       const hit = hits.get(event.commit) ?? { selectors: new Set<string>() }

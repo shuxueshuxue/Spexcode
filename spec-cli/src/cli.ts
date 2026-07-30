@@ -567,12 +567,12 @@ if (cmd === 'serve') {
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('issue'))
   } else {
-    const { runIssues } = await import('./issues.js')
+    const { runIssues } = await import('./issues-cli.js')
     await flushExit(await runIssues(process.argv.slice(3)))
   }
 } else if (cmd === 'remark') {
   const sub = process.argv[3]
-  const m = sub === 'add' || sub === 'resolve' || sub === 'retract' ? await import('./localIssues.js') : null
+  const m = sub === 'add' || sub === 'resolve' || sub === 'retract' ? await import('./issues-cli.js') : null
   if (sub === undefined) {
     console.log((await import('./help.js')).commandHelp('remark'))
   } else if (sub === 'add') {

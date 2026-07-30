@@ -811,7 +811,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
   }, () => {
     // DEGRADED: the record dir still exists but reading session.json failed transiently. NEVER drop a live
     // session — serve its last-known row. (No last-known means a first sighting raced a failure; nothing to
-    // show yet, it reappears next poll — and since it was never in watchSessions' `prev`, no false closed.)
+    // show yet, and it reappears on the next build.)
     return lastKnownSession.get(id) ?? null
   }))
   // prune last-known entries for ids that no longer appear at all (genuinely removed), keeping it bounded.

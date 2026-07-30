@@ -61,6 +61,13 @@ first words of the launch prompt (`promptPreview`) as a **placeholder** that the
 moment it arrives, so the human's initial wording disappears once the agent has named its own task. A human
 **rename (`name`) still wins** over both — the [[session-rename]] override stays authoritative everywhere.
 
+The self-summary holds the line only while the agent is still *producing* it. A pane title is a byproduct: an
+agent that has stopped working stops rewriting it, so it freezes on the last task and would go on speaking for
+a session that has since **declared** something — which is why a standing declaration's note outranks it
+([[session-label]] owns that precedence: name > note > activity > promptPreview > …). Nothing here is
+suppressed: `activity` is still captured, still rides the wire, still headlines every working session — it is
+simply not the session's most current word once the session has said one.
+
 There is ONE row face, and one thing flexes by surface: `showAvatar`. Every list surface — the two desktop
 lists and the phone's ([[mobile-ui]]) — renders the **compact one-line** face: the headline followed by a
 single colour-coded status **glyph** (`STATUS_GLYPH`, painted by `STATUS_COLOR`) rather than the word — the

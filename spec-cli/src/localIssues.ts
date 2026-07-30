@@ -361,51 +361,16 @@ export function reply(id: string, body: string, author?: string, evidence?: stri
 // plus the @-dispatch outcomes so a caller can echo who was notified.
 // The two reply deliveries are orthogonal: `evidence?` (f15b) carries a video annotation's frame blobs onto
 // the thread; the originator loop-in ([[mentions]]) notifies who raised the thread. Both apply on every reply.
-export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
+export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
   const thread = reply(id, body, author, evidence, remark)
   const node = thread.nodes[0] || null
   const outcomes = await dispatchMentions(body, { threadId: id, node, author, status: thread.status })
-  // implicit originator loop-in ([[mentions]] / [[remark-substrate]] R3): a courtesy copy down the fallback
-  // chain — the reading's filer, then the node's governing session — delivered to the first online link.
-  const loopIn = await notifyOriginator(await threadOriginators(thread), author, body,
-    { threadId: id, node, alreadyDelivered: deliveredIds(outcomes) })
-  return { thread, outcomes, loopIn }
+  // the originator loop-in is composed ABOVE this layer ([[loop-in]]): its candidate resolution has to ask the
+  // eval package who filed a reading, and the eval package imports this module.
+  return { thread, outcomes }
 }
 
-// The FALLBACK CHAIN of candidates a reply loops in ([[mentions]] loop-in / [[remark-substrate]] R3's dispatch
-// clause), tried in order until one is online. A plain thread's only candidate is its author (`by`). An
-// EVAL-COMMENT thread (concern `eval: <node> · <scenario>`, the eval-remark track) chains: the agent who FILED
-// the reading the remark judges FIRST — resolved from the TRUNK sidecar, then from each LIVE session's
-// WORKTREE (an in-flight reading, filed on an unmerged branch, is invisible to the trunk — exactly the
-// review-time case, when the filer sits online awaiting review and the remark must reach them) — then, when
-// every filer is offline/absent, the NODE's governing session, so an unresolved remark still REACHES an agent
-// who can act on it. A broken/absent worktree sidecar falls through silently — one bad worktree never fails
-// the remark write. This is notification only; it resolves nothing (R3: resolve is a deliberate
-// `spex remark resolve`). Non-eval threads pay nothing (no eval/specs/sessions import).
-const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/   // node first (never contains ' · '), then the scenario (may)
-async function threadOriginators(thread: Issue): Promise<(string | null)[]> {
-  const m = EVAL_CONCERN_RE.exec(thread.concern)
-  if (!m) return [thread.by]
-  const node = m[1].trim(), scenario = m[2].trim()
-  const { evalReadingFiler } = await import('../../spec-eval/src/filing.js')
-  const chain: (string | null)[] = [evalReadingFiler(node, scenario)]
-  try {
-    const { listSessions } = await import('./sessions.js')
-    for (const s of await listSessions()) {
-      try { if (s.path) chain.push(evalReadingFiler(node, scenario, s.path)) } catch { /* one unreadable worktree → next link */ }
-    }
-  } catch { /* sessions unavailable (bare store, no tmux) → trunk-only chain, as before */ }
-  chain.push(await nodeGoverningSession(node))
-  return chain
-}
 
-// A node's governing session — the `session` its spec resolves to (the Session: trailer of its latest version,
-// else the frontmatter `session:` fallback; specs.ts owns that derivation). The fallback link when a reading's
-// filer is unreachable. null when the node is unknown or has no governing session.
-async function nodeGoverningSession(nodeId: string): Promise<string | null> {
-  const { loadSpecs } = await import('./specs.js')
-  return (await loadSpecs()).find((s) => s.id === nodeId)?.session ?? null
-}
 
 export async function postLocalIssue(
   concern: string,
@@ -430,7 +395,16 @@ export function closeLocalIssue(id: string): { status: 'landed'; already: boolea
 // (node, scenario). The scenario track is NOT a new store — it is the annotator's lazy eval thread, keyed by
 // its `eval: <node> · <scenario>` concern; a remark reuses it, creating it on first remark as a stub
 // container (every remark is a reply, never the thread body, so the resolved bit always lives in one place).
+// @@@ the eval-concern format, once - composer and parser side by side. The parser existed in two copies while
+// a CLI surface down here had to recognise the format without being able to import the module that composes it;
+// [[issues-cli]] removed that constraint, so the format is one pair now. `node` is matched non-greedily because
+// it can never contain ' · ' while a scenario name may.
 const evalConcernKey = (node: string, scenario: string): string => `eval: ${node} · ${scenario}`
+const EVAL_CONCERN_RE = /^eval: (.+?) · (.+)$/
+export const parseEvalConcern = (concern: string): { node: string; scenario: string } | null => {
+  const m = EVAL_CONCERN_RE.exec(concern)
+  return m ? { node: m[1].trim(), scenario: m[2].trim() } : null
+}
 
 // find-or-create the ONE scenario thread for (node, scenario), keyed by its eval concern, ATOMICALLY under
 // the store lock. R4 says a scenario's remark track lives ONCE — but a concurrent first-remark burst is a
@@ -472,13 +446,13 @@ export async function remarkOnHost(
   host: { issue?: string; node?: string; scenario?: string },
   body: string,
   opts: { codeSha?: string; author?: string; evidence?: string[] } = {},
-): Promise<{ ref: string; rid: string; codeSha: string; thread: Issue; outcomes: DispatchOutcome[]; loopIn: LoopIn | null }> {
+): Promise<{ ref: string; rid: string; codeSha: string; thread: Issue; author: string; outcomes: DispatchOutcome[] }> {
   const author = opts.author || currentSession()
   const codeSha = opts.codeSha || headSha(repoRoot())
   const id = resolveRemarkHost(host, author)
-  const { thread, outcomes, loopIn } = await replyLocalIssue(id, body, author, opts.evidence, { targetCodeSha: codeSha })
+  const { thread, outcomes } = await replyLocalIssue(id, body, author, opts.evidence, { targetCodeSha: codeSha })
   const rid = thread.replies[thread.replies.length - 1].rid!
-  return { ref: `${id}#${rid}`, rid, codeSha, thread, outcomes, loopIn }
+  return { ref: `${id}#${rid}`, rid, codeSha, thread, author, outcomes }
 }
 
 // a remark ref is `<thread-id>#<rid>`; the thread id (a store slug) never contains '#', so split on the last.
@@ -563,7 +537,7 @@ export function nudge(node: string): string {
 export function closeoutNudge(sessionId: string | null | undefined): string {
   if (!sessionId || sessionId === 'unknown' || !issuesEnabled()) return ''
   const mine = loadLocalIssues().filter((t) =>
-    t.status === 'open' && !EVAL_CONCERN_RE.test(t.concern) &&
+    t.status === 'open' && !parseEvalConcern(t.concern) &&
     (t.by === sessionId || t.replies.some((r) => r.by === sessionId)))
   if (!mine.length) return ''
   return `\n\nIssue closeout — ${mine.length} still-open local issue(s) you touched (opened or replied): ${mine.map((t) => t.id).join(', ')}. For each, close it now if its work is finished (\`spex issue close <id>\`), or reply why it should stay open past this session (\`spex issue reply <id> --body "<why>"\`). Some issues rightly outlive their session — this is a reminder to sweep, not a gate.`

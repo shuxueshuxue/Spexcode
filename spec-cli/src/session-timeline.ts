@@ -43,8 +43,8 @@ export function appendSent(id: string, text: string, from: string | null, replyV
   return { mid }
 }
 
-// The L0 read: any process may take it with nothing but filesystem access, and taking it perturbs nothing
-// ([[layers]]). Index = event position, which is what a cursor names ([[session-cursors]]).
+// The unowned read: any process may take it with nothing but filesystem access, and taking it perturbs
+// nothing. Index = event position, which is what a cursor names ([[session-cursors]]).
 export function timelineEvents(id: string): TimelineEvent[] {
   try {
     const p = timelinePath(id)

@@ -24,7 +24,7 @@ one, so information is genuinely **lost**. The poll's cost is a full board build
 control-plane probe for **every live session** — so the probe rate grows as *observers × sessions*, and on
 the harness whose control channel keeps a single connection, every probe is a chance to kick a delivery in
 flight. A mechanism whose cost is quadratic in the size of the fleet is the thing that caps the fleet,
-which makes it a defect at [[layers]]' L1 altitude however fast it is today. And the wake-up depended on
+which makes it a defect at the orchestration layer's altitude however fast it is today. And the wake-up depended on
 the harness re-invoking an agent when a background command exits — an unstated capability only some
 harnesses have.
 
@@ -87,8 +87,8 @@ ordinary message — an appended line, like any other ([[session-timeline]]) —
 per follow process, so a stream never re-nags; a one-shot `wait` does not announce.
 
 Nothing here observes liveness, and nothing here can. A log carries only what a session authored
-([[layers]]), so a follower learns that a session declared, asked, parked, or errored, and never learns
-that it died. `offline` is therefore not among the states a follow can reach, where the old poll counted it
+([[state]]), so a follower learns that a session declared, asked, parked, or errored, and never learns that
+it died. `offline` is therefore not among the states a follow can reach, where the old poll counted it
 actionable — a derived probe result was never a transition anyone authored. Death remains a probe question
-owned by [[state]], answered for the surfaces that genuinely act on it — the board, the resume guard — and
-deliberately absent from the supervision path, which must scale.
+owned by that same authored/derived split, answered for the surfaces that genuinely act on it — the board,
+the resume guard — and deliberately absent from the supervision path, which must scale.

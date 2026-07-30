@@ -71,7 +71,7 @@ provably cannot land.`, ['selector', 'project-bound']],
     unarchive: ['spex session unarchive <SEL>', 'Deprecated compatibility spelling: same behavior as resume, relaunching the same conversation.', ['selector']],
     close: ['spex session close <SEL>', 'Retire the session and its worktree.', ['selector', 'project-bound']],
     quarantine: ['spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]',
-      'Move only an unreadable record after the backend proves every named residue absent. Quarantine and --restore both require the original exact id because corrupt rows are outside selectors.', ['project-bound']],
+      'Move only an unreadable record after the backend proves every named residue absent. --thread is an adapter-native conversation id, never the SpexCode session id; omit it for Claude. Quarantine and --restore both require the original exact id because corrupt rows are outside selectors.', ['project-bound']],
     maintain: [[
       'spex session maintain --allow-stop <SEL> [--allow-resume <SEL>[:force]] … -- <command> [args…]',
       'spex session maintain --status',

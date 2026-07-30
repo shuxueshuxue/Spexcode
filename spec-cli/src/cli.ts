@@ -875,7 +875,7 @@ if (cmd === 'serve') {
       console.log(`closed ${full}`)
     } else if (sub === 'quarantine') {
       rejectUnknownFlags('spex session quarantine', 4, ['adapter', 'thread', 'tmux', 'worktree', 'branch', 'restore', 'api', 'port'])
-      if (!id) { console.error('usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <session-id> --worktree <absent-path> --branch <absent-branch>') ; process.exit(2) }
+      if (!id) { console.error('usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <session-id> --worktree <absent-path> --branch <absent-branch> (--thread is adapter-native; omit it for Claude)') ; process.exit(2) }
       if (has('restore')) {
         // Quarantine addresses an unreadable row which selector resolution intentionally excludes. Both the
         // move and its reverse therefore take the literal exact id, with the backend proving record state.
@@ -884,7 +884,7 @@ if (cmd === 'serve') {
       } else {
         const adapter = flag('adapter'), tmux = flag('tmux'), worktree = flag('worktree'), branch = flag('branch')
         if (!adapter || !tmux || !worktree || !branch) {
-          console.error('usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <session-id> --worktree <absent-path> --branch <absent-branch>')
+          console.error('usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <session-id> --worktree <absent-path> --branch <absent-branch> (--thread is adapter-native; omit it for Claude)')
           process.exit(2)
         }
         const quarantined = await c.clientQuarantine(id, { adapter, thread: flag('thread') ?? null, tmux, worktree, branch })

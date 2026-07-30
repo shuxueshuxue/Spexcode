@@ -36,6 +36,35 @@ scenarios:
     related:
       - spec-cli/src/init.ts
       - scripts/prepack.mjs
+  - name: omit-optional-l0-adopter
+    tags: [cli]
+    description: >
+      From a clean SpexCode checkout, install only the L0 dependency set with
+      `npm install --omit=optional --omit=dev --ignore-scripts`; explicitly install the matching
+      `@esbuild/<platform>-<arch>` compiler binary with `--omit=optional --no-save --no-package-lock
+      --ignore-scripts`, then drive every L0 verb through the shipped launcher. Run `spec lint`, `graph`,
+      `materialize`, `init --harness claude` in a fresh Git directory, and `guide`. In the same dependency
+      set, drive `serve` and `dashboard` without their optional packages. Finally, drive the read-only L0
+      verbs from a real non-TypeScript adopter whose tracked config governs `.` with `sourceExtensions: [py]`;
+      run `materialize` only in a disposable clone of that adopter and compare the live project's Git state
+      before and after.
+    expected: >
+      Every L0 verb exits 0: lint reports zero errors, graph renders a nonempty tree, materialize completes,
+      init seeds `.spec/project/spec.md` and `spexcode.json`, and guide prints the workflow. `serve` and
+      `dashboard` each exit 1 before binding a port, with no stack trace and an actionable command installing
+      precisely their missing Hono/node-pty dependencies. The Python adopter's real `.`/`py` configuration is
+      honored by its lint and graph reads, its live worktree remains byte-for-byte Git-clean, and materialize
+      succeeds in the isolated clone. The explicit esbuild package is only necessary because the probe
+      suppresses lifecycle scripts; normal `npm install --omit=optional` retains esbuild's postinstall repair.
+    code:
+      - package.json
+      - spec-cli/package.json
+      - spec-cli/bin/spex.mjs
+      - spec-cli/src/cli.ts
+      - spec-cli/src/tsx-bin.ts
+    related:
+      - spec-cli/src/init.ts
+      - spec-cli/src/materialize.ts
   - name: dev-loop-launch-no-prefix-leak
     tags: [cli]
     description: >

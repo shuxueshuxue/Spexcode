@@ -87,7 +87,6 @@ scenarios:
       the auxiliary symbolic-ref control rejects before publication. Neither becomes zero impact or fake current.
   - name: session-summary-coherence
     tags: [backend-api, frontend-e2e, desktop]
-    test: spec-dashboard/test/session-toolbar.e2e.mjs
     code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, spec-cli/src/graph.ts, spec-cli/src/graphStream.ts, spec-cli/src/graphStream.test.ts, spec-dashboard/src/data.js, spec-dashboard/src/App.jsx, spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx]
     description: >
       Start from a cold graph projection and drive a real Chromium session toolbar through first paint,

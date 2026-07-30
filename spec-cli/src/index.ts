@@ -7,16 +7,18 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, loadReviewConfig } from './specs.js'
-import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
-import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
+import { issuesEnabled, resolveRemark, retractRemark } from './localIssues.js'
+import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote } from './issues.js'
+import { remarkWithLoopIn, replyIssueWithLoopIn } from './loop-in.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
-import { summarize } from './mentions.js'
+import { summarizeLoopIn } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
+import { cockpitReview } from './cockpit.js'
+import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
@@ -247,9 +249,8 @@ app.get('/api/issues/:id', (c) => {
 })
 // the WRITE surface ([[local-issues]] / [[issues-view]]) — the human reply path, STORE-ROUTED through the one
 // reply verb ([[issues]] replyIssue): a local id git-commits to the trunk store, a forge id ('github#N')
-// posts a REAL comment through the driver; either way the text's @-mentions dispatch (a human summons an
-// agent from the issues page). `outcomes` is the one-line @-dispatch summary the dashboard echoes. The
-// server owns its freshness: a forge write forces the resident slice's read-back before answering, so the
+// posts a REAL comment through the driver. @session remains prose in either store; it never sends or spawns.
+// The server owns its freshness: a forge write forces the resident slice's read-back before answering, so the
 // reload that follows shows the comment. Honor the on/off switch: 403 when the feature is OFF; an unknown
 // local thread → 404; a failed forge write → 502 with the driver's own message (fail loud, never queued).
 app.post('/api/issues/:id/reply', async (c) => {
@@ -266,10 +267,10 @@ app.post('/api/issues/:id/reply', async (c) => {
     const node = id.includes('#')
       ? mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id)).find((i) => i.id === id)?.nodes[0] ?? null
       : null
-    const r = await replyIssue(id, text, { author: 'human', node, evidence })
+    const r = await replyIssueWithLoopIn(id, text, { author: 'human', node, evidence })
     if (r.store !== 'local') await refreshForgeNow()
     notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
-    return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarize(r.outcomes, r.loopIn) })
+    return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarizeLoopIn(r.loopIn) })
   } catch (e) {
     const msg = String((e as Error).message || e)
     return c.json({ error: msg }, id.includes('#') ? 502 : 404)
@@ -304,7 +305,7 @@ app.post('/api/issues', async (c) => {
     const r = await createIssue(concern, { store, nodes, body: postBody, evidence, author: 'human' })
     if (r.store !== 'local') await refreshForgeNow()
     notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
-    return c.json({ ok: true, id: r.id, store: r.store, url: r.url, outcomes: summarize(r.outcomes) }, 201)
+    return c.json({ ok: true, id: r.id, store: r.store, url: r.url }, 201)
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, store === 'local' ? 500 : 502)
   }
@@ -357,9 +358,9 @@ app.post('/api/remarks', async (c) => {
     : { issue: typeof body?.issue === 'string' ? body.issue : undefined }
   const codeSha = typeof body?.codeSha === 'string' ? body.codeSha : undefined
   try {
-    const r = await remarkOnHost(host, text, { codeSha, author: 'human', evidence })
+    const r = await remarkWithLoopIn(host, text, { codeSha, author: 'human', evidence })
     notifyBoardChanged('full')
-    return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: summarize(r.outcomes, r.loopIn) }, 201)
+    return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: summarizeLoopIn(r.loopIn) }, 201)
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, 400)
   }
@@ -467,7 +468,7 @@ app.post('/api/sessions', async (c) => {
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
 // dashboard and `spex session review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].
 app.get('/api/sessions/:id/review', async (c) => {
-  const r = await reviewPayload(c.req.param('id'))
+  const r = await cockpitReview(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
 // The self-contained HTML is the sole full-model transport exception. Interactive rows, including the CLI,
@@ -600,7 +601,7 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   }
 }))
 // ONE input route, `kind` the discriminator — the transport split is an implementation fact, not API surface.
-// kind:"text" (Command Box, `spex session send`, the server-side merge dispatch) appends the prompt to the
+// kind:"text" (`spex session send`, the server-side merge dispatch) appends the prompt to the
 // target timeline, then best-effort pokes its adapter. A dead channel delays context injection but does not
 // change the successful append response; 502 means the record rejected the write.
 // kind:"keys" is the LAST-RESORT raw face (`spex session send --keys`): an ORDERED BATCH of
@@ -609,7 +610,7 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
 // loud 400, never a guessed channel.
 app.post('/api/sessions/:id/input', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  if (body?.kind === 'text') {
+  if (body?.kind === 'text' || body?.kind === 'command') {
     // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
     // edge ([[session-timeline]]); a raw human dispatch omits it and is not logged. `replyVia:"note"` marks a
     // terminal-free sender ([[session-timeline]]): the server appends the note-reply insert to the delivery.
@@ -623,7 +624,7 @@ app.post('/api/sessions/:id/input', async (c) => {
     const ok = await rawKey(c.req.param('id'), keys)
     return c.json({ ok }, ok ? 200 : 404)
   }
-  return c.json({ error: 'input needs kind: "text" | "keys"' }, 400)
+  return c.json({ error: 'input needs kind: "text" | "command" | "keys"' }, 400)
 })
 // soft stop: kill the agent's tmux + socket but KEEP the worktree (resumable). Distinct from close, which
 // removes the worktree. {ok:false} = no such session.

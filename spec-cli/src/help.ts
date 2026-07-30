@@ -25,9 +25,9 @@ const DOT_NOTE = `\`.\` as a node argument means the node THIS worktree works on
 node/<id> branch). One-shot payload reads (graph · spec search · session ls/show/review · eval ls ·
 scenario ls · issue ls/show/links) take --json.`
 
-const MENTION_NOTE = `Mentions: @session · [[node]] · @new / @new:<launcher> work in ANY prompt, issue, or remark body —
-text passed as a CLI arg included. [[node]] names the topic node; @session hands the text to that live agent;
-@new spawns a fresh worker on the thread's node (bare = configured default; :<launcher> = that named profile).`
+const MENTION_NOTE = `Mentions: @session · [[node]] work in ANY prompt, issue, or remark body — text passed as a CLI arg included.
+[[node]] names a topic; @session names a retained session for the receiving agent to inspect, contact with
+\`spex session send\`, or inherit with \`/distill\`. Mentions are references only: they never send or spawn.`
 
 type SessionVerbNote = 'selector' | 'project-bound'
 type SessionVerbHelp = readonly [usage: string | readonly string[], detail: string, notes?: readonly SessionVerbNote[]]
@@ -74,9 +74,12 @@ provably cannot land.`, ['selector', 'project-bound']],
     close: ['spex session close <SEL>', 'Retire the session and its worktree.', ['selector', 'project-bound']],
     quarantine: ['spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]',
       'Move only an unreadable record after the backend proves every named residue absent. Quarantine and --restore both require the original exact id because corrupt rows are outside selectors.', ['project-bound']],
-    done: ['spex session done --propose merge|nothing|close [--note T]', 'Declare your own work committed and stop.'],
-    park: ['spex session park --note <what-you-await>', 'Declare that a real background task will wake your own session.'],
-    ask: ['spex session ask --note <your-question>', 'Declare that your own session is stopped on the human and resumes on reply.'],
+    done: ['spex session done --propose merge|nothing|close [--note T]',
+      '`merge` declares review: committed work ready for human review, and it is the ONLY declaration that offers a clickable merge. `nothing` declares done: committed work, but no merge proposal. `close` declares close-pending: propose discarding this worktree.'],
+    park: ['spex session park --note <what-you-await>',
+      'Declare parked only when a real background task will wake your own session. It self-resumes; waiting for a human is asking, not parked.'],
+    ask: ['spex session ask --note <your-question>',
+      'Declare asking when the session needs a human reply or direction. It resumes only when the human replies; a background wake-up is parked instead.'],
     attach: ['spex session attach <SEL>', `Attaches the current terminal to the worker's tmux (detach: C-b d) and blocks until detached.
 LOCAL-only (fails loud on a remote backend); show --capture and send are non-interactive.`, ['selector']],
   }

@@ -7,8 +7,9 @@ import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadConfig, loadReviewConfig } from './specs.js'
-import { issuesEnabled, remarkOnHost, resolveRemark, retractRemark } from './localIssues.js'
-import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote, replyIssue } from './issues.js'
+import { issuesEnabled, resolveRemark, retractRemark } from './localIssues.js'
+import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote } from './issues.js'
+import { remarkWithLoopIn, replyIssueWithLoopIn } from './loop-in.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { dispatchMentions, summarize } from './mentions.js'
@@ -267,7 +268,7 @@ app.post('/api/issues/:id/reply', async (c) => {
     const node = id.includes('#')
       ? mergedIssues({ host: resolveForgeHost(), state: residentForgeState() }, loadSpecsLite().map((s) => s.id)).find((i) => i.id === id)?.nodes[0] ?? null
       : null
-    const r = await replyIssue(id, text, { author: 'human', node, evidence })
+    const r = await replyIssueWithLoopIn(id, text, { author: 'human', node, evidence })
     if (r.store !== 'local') await refreshForgeNow()
     notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
     return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarize(r.outcomes, r.loopIn) })
@@ -358,7 +359,7 @@ app.post('/api/remarks', async (c) => {
     : { issue: typeof body?.issue === 'string' ? body.issue : undefined }
   const codeSha = typeof body?.codeSha === 'string' ? body.codeSha : undefined
   try {
-    const r = await remarkOnHost(host, text, { codeSha, author: 'human', evidence })
+    const r = await remarkWithLoopIn(host, text, { codeSha, author: 'human', evidence })
     notifyBoardChanged('full')
     return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: summarize(r.outcomes, r.loopIn) }, 201)
   } catch (e) {

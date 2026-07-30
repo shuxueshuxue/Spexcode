@@ -53,8 +53,12 @@ per-status whitelist, is what keeps this ONE precedence rather than a branch per
 which a note is present but obsolete, so nothing needs to ask which state we are in. Draining a queued session
 into `active` therefore clears the launch-blocker note it may have stamped — that message was the queued
 state's word, not the working session's, and leaving it behind would be the only way to falsify the invariant
-the precedence rests on. A note enters as the same one-line preview a prompt gets (first non-empty line, 60
-columns): the headline is one line, and the author's full note stays readable where it already was ([[state]]).
+the precedence rests on. A note enters as the same one-line preview a prompt gets (first non-empty line,
+`HEADLINE_PREVIEW_COLUMNS`): the headline is one line, and the author's full note stays readable where it
+already was. That preview is a display **cut of the author's own prose**, so it is owed the same transparency
+the table's NOTE column already owed — the declaration echo names it, and names it by the size this constant
+actually is ([[state]]). Giving the note a second display surface without saying so would have left a promise
+the author was already trusting quietly incomplete.
 
 **Two chains, deliberately — merging them would cost something.** They differ in kind, not merely in content.
 Every cell of `label` is a fact that cannot go stale: a rename only a human unwrites, and node/title/branch/id

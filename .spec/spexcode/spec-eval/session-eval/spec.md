@@ -105,7 +105,12 @@ a rename with edits intersects the old and new units on their respective sides.
 This is the **one product predicate**. Scoped `/api/evals`, its list/detail model, summaries, and export consume
 the same projection; none retain a path-only scenario candidate fallback. Each projection reads the base/head
 changed-path set once, batch-reads each distinct exact `.spec` tree once for both spec and eval declarations,
-and shares selector source/window/hunk results inside that build. It adds no second resident cache, generation,
+and shares selector source/window/hunk results inside that build. The scope's **reading timelines obey the same
+rule**: the whole affected node set is read through ONE batched timeline pass, so the off-history content probes
+and the anchor probes union across every node in scope and issue one child per probe kind. Reading a timeline
+per node inside the scope loop is the same defect one level down — it multiplies a build's Git children by the
+node count, and a single open's cost must grow with the selected session's node closure, never with a
+per-node or per-reading spawn. It adds no second resident cache, generation,
 or gate: the result enters the existing content-revision/projection cache like every other session model.
 
 **The toolbar summary is a coherent projection, not a small fetch.** `sessionEvalSummary` lives beside the
@@ -120,6 +125,19 @@ and their semantic hashes/code axes, reading/retraction sidecars, and the trunk 
 freshness. A build reads the revision before and after the fold; a mismatch is discarded and recomputed. Thus a
 summary and a demand projection bearing the same revision are the same evaluation cut, not two coincidentally similar
 reads.
+
+That same content-addressed cut carries the **derived full model**, not only the summary. A demand build
+deposits its model beside the summary under the one `session + content revision` key, so a repeat open at an
+unmoved revision replays it instead of re-deriving it from Git — the observable difference between opening a
+session's evaluation once and opening it again is a read, not a rebuild. It is the same cache owner, key and
+invalidation: a moved input yields a different key, only the newest key per session is retained, and summary
+and model are dropped together so they can never describe different revisions. The two builders do not share
+a model — the summary fold keeps only the latest reading per scenario while a demand needs the complete
+history — so only a demand deposits a model and only a demand consumes one. A replay still passes the
+stability, observer and generation fences, and it never weakens the validity contract: an unavailable
+projection deposits nothing, so a dead or unextractable selector re-derives and raises again rather than
+being masked by an earlier successful model. No TTL, patrol, second generation, extra gate, or client-side
+copy participates.
 
 The backend retains a content-addressed, per-session projection cache. Each entry has a process epoch and a
 monotonic input generation `g`, a single in-flight build, and the last stable projection. A cache miss is

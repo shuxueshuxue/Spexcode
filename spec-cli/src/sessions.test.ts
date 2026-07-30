@@ -686,6 +686,11 @@ test('a successful archive clears a prior adapter recovery marker so the cold se
     const archived = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     assert.equal(archived.archived, true)
     assert.equal(archived.adapter_recovery, '', 'a fresh cold proof settles an older recovery warning')
+    archived.adapter_recovery = 'restore-runtime:legacy archive marker survived a prior successful cold proof'
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify(archived, null, 2)}\n`)
+    assert.equal(await archiveSession(id), true)
+    const rearchived = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(rearchived.adapter_recovery, '', 'idempotent re-archive repairs an older marker on an otherwise valid cold record')
     rmSync(worktree, { recursive: true, force: true })
     assert.equal(await closeSession(id), true)
     assert.equal(existsSync(sessionStoreDir(id)), false)

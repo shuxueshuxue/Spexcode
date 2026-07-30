@@ -42,3 +42,24 @@ reported as broken.
 Overflow is the one case that legitimately replaces the code, because exceeding the buffer is this seam's own
 verdict rather than the child's, and the kill it performs would otherwise surface as an unrelated signal.
 Timeout marks itself separately for the same reason. Everything else keeps whatever cause it arrived with.
+
+## who reads this classification
+
+Seven call sites branch on it, across two packages and in BOTH polarities, so the cause this seam preserves
+is not a local concern:
+
+    spec-cli/src/sessions.ts   1718 · 2660 · 2692 · 2693 · 2792   `failure !== 'exit'`
+    spec-eval/src/freshness.ts 183                                `failure !== 'exit'`
+    spec-eval/src/sessioneval.ts 410                              `failure === 'exit'`
+
+The reversed-polarity one is the clearest illustration of what a mislabelled failure costs. Both of its
+branches raise the same error type; only the sentence differs. Classified as `exit`, an unexecutable git
+produced *"base X is not an ancestor of head Y; use the session merge-base as base"* — a confident diagnosis
+pointing the reader at their own arguments. Classified truthfully, it produces *"cannot verify base/head
+ancestry"*, which is what actually happened. A wrong cause does not merely lose information here; it spends
+the reader's time on a repair that cannot work.
+
+Neither branch has a test. That is worth knowing before the next change to this seam: five of the seven sites
+are reached only on a machine where git is missing, unexecutable, or timing out, so ordinary runs never
+exercise the distinction — the guard is the freshness loud-failure test alone, and it had itself been failing
+on trunk long enough to be filed as a known red.

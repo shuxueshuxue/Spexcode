@@ -34,7 +34,11 @@ open above the caret/footer inside the available upper space. At phone width the
 replace [[mobile-ui]]'s existing composer.
 
 Sending appends the prompt to the target's durable log ([[dispatch]]), so one authored prompt lands atomically
-even while the terminal is in copy mode. The box owns one right-pane action-outcome surface: it exposes sending
+even while the terminal is in copy mode. In this control surface the selected session is also the actor behind an
+`@` mention: `@new` creates a worker whose durable `parent` is that selected session's exact id, so it appears as
+its child in the session tree; `@new:<launcher>` changes only the child's launcher. The appended prompt and any
+mention outcomes are one command submission: a child-creation failure is visible while the already-appended prompt
+remains delivered. The box owns one right-pane action-outcome surface: it exposes sending
 while the request is pending, retains the complete draft and returned HTTP/body error for a refused delivery,
 and therefore stays ready for retry. It carries no delivery marker of its own: a send either put the bytes in
 the log or did not, so a retry is only ever a retry of something that never landed. On a 2xx it visibly acknowledges delivery in that same surface before

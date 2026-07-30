@@ -56,10 +56,11 @@ await page.route('**/api/graph*', async (route) => {
 await page.route(`**/api/sessions/${SESSION}/input`, async (route) => {
   const body = route.request().postDataJSON()
   inputs.push(body)
-  if (body.kind === 'command') {
+  if (body.kind === 'command' && body.text.startsWith('@new ')) {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
       ok: true,
       mentions: [{ token: 'new', result: 'spawned', detail: 'child-session' }],
+      mentionSummary: '@ new→child-session',
     }) })
     return
   }
@@ -191,10 +192,23 @@ const newSubmission = page.waitForRequest((request) => request.url().endsWith(`/
 await page.locator('.si-command-send').click()
 assert.deepEqual((await newSubmission).postDataJSON(), { kind: 'command', text: '@new delegate the focused work' })
 await page.locator('.si-command-box .si-action-outcome.delivered').waitFor({ state: 'visible' })
+assert.match((await page.locator('.si-command-box .si-action-outcome.delivered').textContent()) || '', /child-session/)
+if (process.env.COMMAND_BOX_NEW_ONLY === '1') await page.screenshot({ path: join(OUT, 'command-box-new-child-delivered.png'), fullPage: true })
 await command.waitFor({ state: 'hidden' })
 await page.keyboard.press('Alt+i')
 await page.waitForFunction(() => document.activeElement?.classList?.contains('si-command-input'))
 step('@new submits through the Command Box control path')
+
+if (process.env.COMMAND_BOX_NEW_ONLY === '1') {
+  const video = page.video()
+  await context.close()
+  await video.saveAs(join(OUT, 'command-box.webm'))
+  await browser.close()
+  writeFileSync(join(OUT, 'timeline.json'), JSON.stringify({ v: 2, axis: 'time', events }, null, 2))
+  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ session: SESSION, inputs }, null, 2))
+  console.log(JSON.stringify({ ok: true, video: join(OUT, 'command-box.webm'), timeline: join(OUT, 'timeline.json') }))
+  process.exit(0)
+}
 
 await input.fill('')
 const [chooser] = await Promise.all([
@@ -251,7 +265,7 @@ assert.equal(await input.inputValue(), '')
 await page.screenshot({ path: join(OUT, 'command-box-delivered.png'), fullPage: true })
 await command.waitFor({ state: 'hidden' })
 await page.waitForFunction(() => document.activeElement?.classList?.contains('xterm-helper-textarea'))
-assert.deepEqual(inputs.at(-1), { kind: 'text', text: expandedDraft })
+assert.deepEqual(inputs.at(-1), { kind: 'command', text: expandedDraft })
 step('successful append-backed send clears, closes, and returns TUI focus')
 
 sessionLiveness = 'offline'

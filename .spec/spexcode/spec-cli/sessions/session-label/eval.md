@@ -16,18 +16,16 @@ scenarios:
       surface, and the raw parts reachable only where editing them is the point.
     code: [spec-cli/src/sessionLabel.test.ts]
     related: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionContextMenu.jsx, spec-dashboard/src/session.js]
-  - name: declaration-outranks-byproduct
+  - name: note-never-replaces-title
     tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-note-title.e2e.mjs
     description: >
-      Launch a session whose prompt is a bare URL — so its `promptPreview`, `title` and `branch` all
-      degrade to that same URL — let its agent narrate itself once (the tmux pane title behind
-      `activity`), then let it STOP and DECLARE (`awaiting`/`asking`/`parked`) with a note. Read that
-      session's board row in a real browser, and its derived `headline` on the wire.
+      Give a live session a human rename, then declare a long lifecycle note. Read its board row, search
+      result, and lock hint in a real browser, then open its timeline and inspect the declaration.
     expected: >
-      The row reads the session's DECLARED note — never the now-frozen pane title, never the URL. A
-      standing declaration is the session's current word about itself and outranks every byproduct of
-      what it was doing or was asked to do; a human rename still outranks the note. Zero loss = the
-      board never makes a correctly-declared agent look like a stalled one.
+      Every title surface still reads the human rename; the note is readable in the timeline as declaration
+      prose and never becomes a row, tab, search, or lock-hint title. Clearing the rename falls back to the
+      live activity or prompt title, still never the note. Zero loss = lifecycle state cannot rename a session.
     code: [spec-cli/src/sessionLabel.test.ts]
     related: [spec-cli/src/sessions.ts, spec-dashboard/src/SessionWindow.jsx]
   - name: cli-identity-consistency
@@ -46,7 +44,6 @@ scenarios:
 
 # session-label — measurement
 
-YATU: the loss is a session reading as two different names on one screen. Measure by looking at the two
-surfaces together in a real browser — the mention dropdown against the session list — plus the rename
-dialog's prefill; the wire-shape half (bare fields absent, precedence) is pinned by the unit test and
-needs no browser.
+YATU: the loss is a session reading as two different names on one screen, or a lifecycle note replacing a
+title. Measure the board title surfaces together in a real browser, compare a declaration in Timeline, and
+verify the rename dialog's prefill; the wire-shape and precedence halves are pinned by the unit test.

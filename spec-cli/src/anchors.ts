@@ -442,12 +442,23 @@ type HunkRanges = { after: DiffLineRange[]; before: DiffLineRange[][] }
 // all — measured: one hunk bare, ZERO under `src/x.py -diff`, so an attribute edit silently disabled an
 // anchored contract's drift; a textconv or external driver replaces the text compared), the ALGORITHM and
 // its heuristics (`diff.algorithm`, `diff.indentHeuristic` — both repo config), and hunk COALESCING
-// (`diff.interHunkContext`). All are pinned here, on the two readers this node owns. Honest limit: on the
-// fixtures tried, all four algorithms and both heuristic settings agreed, so the algorithm pin is
-// determinism by construction rather than a divergence this session reproduced.
+// (`diff.interHunkContext`). All are pinned here, on the two readers this node owns.
+//
+// The algorithm's VALUE is a product choice, not a formality, because the algorithms genuinely disagree:
+// on `c a c a` -> `c c a a a`, myers authors new lines 4-5 and deletes old line 2, while histogram authors
+// new lines 2-3 and deletes old line 3 — so a unit on line 3 is a HIT under histogram and a MISS under
+// myers, on one commit. histogram is pinned because it aligns the change with the unit that actually moved,
+// which for a BLOCKING gate is the conservative direction; myers (Git's default) would silently miss that
+// drift. So this pin is not merely determinism: it settles which reading a verdict means.
+// `--no-color` is not cosmetic here: under an ambient `color.ui=always` Git prefixes every `@@` with an
+// ANSI escape, so a `/^@@/` parse finds NO hunks and every anchored path reads as "nothing changed" — a
+// silent zero-drift verdict for the whole corpus, and one that would then be memoized. `-M -l0` pins rename
+// detection with no candidate limit, matching the identity stream this engine's events come from, so a large
+// rename set cannot quietly change which pairs are compared.
 const RANGE_SEMANTICS = [
-  '--text', '--no-textconv', '--no-ext-diff',
-  '--diff-algorithm=myers', '--no-indent-heuristic', '--inter-hunk-context=0',
+  '--text', '--no-textconv', '--no-ext-diff', '--no-color',
+  '--diff-algorithm=histogram', '--no-indent-heuristic', '--inter-hunk-context=0',
+  '-M', '-l0',
 ] as const
 const hunkMemo = new Map<string, HunkRanges>()
 // @@@ the reusable fact is a diff of ORDERED IMAGES, not of a commit id - a commit id is not immutable
@@ -468,7 +479,7 @@ async function hunksAt(root: string, event: DriftPathEvent, key: string): Promis
   const hit = hunkMemo.get(key)
   if (hit) return hit
   const merge = event.parents.length > 1
-  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--combined-all-paths', '--unified=0', ...RANGE_SEMANTICS, '-M', '--format=', event.commit,
+  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'show', '--cc', '--combined-all-paths', '--unified=0', ...RANGE_SEMANTICS, '--format=', event.commit,
     ...(merge ? [] : ['--', ...paths])],
     `cannot derive anchor hunks for ${event.commit}:${event.historicalPath}`)
   let ranges: HunkRanges = { after: [], before: [[]] }
@@ -512,7 +523,7 @@ async function hunksAtMany(root: string, path: string, entries: Map<string, stri
   return result
 }
 async function hunkRecordsInto(root: string, ordinary: string[], path: string, keys: Map<string, string>, result: Map<string, HunkRanges>): Promise<void> {
-  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0', ...RANGE_SEMANTICS, '-M',
+  const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0', ...RANGE_SEMANTICS,
     `--format=${RS}%H`, ...ordinary, '--', path], `cannot derive anchor hunks for ${path}`)
   for (const rec of out.split(RS)) {
     const normalized = rec.replace(/^\n/, '')

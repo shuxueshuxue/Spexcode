@@ -4,6 +4,8 @@ status: active
 hue: 15
 desc: A code: entry may pin named units (`path#symbol` selectors, any number, one base file, OR'd); drift touching any pinned unit is the BLOCKING tier (one anchor-drift error naming hit selectors), replacing the retired count-based driftErrorThreshold gate. related: selectors warn on hit, stay silent on miss. Anchors are optional — an unanchored node never blocks.
 code:
+  - spec-cli/src/anchors.ts#RANGE_SEMANTICS
+  - spec-cli/src/anchors.ts#ABSENT_IMAGE
   - spec-cli/src/anchors.ts#anchorHitQueries
   - spec-cli/src/anchors.ts#anchorHitCommits
   - spec-cli/src/anchors.ts#resolveAnchor
@@ -258,15 +260,24 @@ path yield one hunk bare and ZERO under `-diff`, so an anchored contract's drift
 an attribute edit, and any store keyed on `(commit,path)` could serve either answer.
 
 So this engine fixes both halves, inside the readers this node owns. RANGE SEMANTICS are PINNED on those
-readers across every class of ambient state that decides a boundary: presentation (text, no textconv, no
-external driver), the algorithm and its heuristics (an explicit algorithm, no indent heuristic — both
-otherwise repository config), and hunk coalescing (inter-hunk context zero). Identity is the ORDERED IMAGES —
+readers across every class of ambient state that decides a boundary or the parse: presentation (text, no
+textconv, no external driver), the algorithm and its heuristics (an explicit algorithm, no indent heuristic —
+both otherwise repository config), hunk coalescing (inter-hunk context zero), rename candidacy (rename
+detection with no candidate limit), and COLOUR. Colour belongs in that list because it is the sharpest of
+them: under an ambient `color.ui=always` Git prefixes every hunk header with an ANSI escape, a header parse
+then matches NOTHING, and the engine reports no drift for every anchored path — a silently clean blocking gate
+for anyone whose global Git config turns colour on. Measured: two hunks become zero. Pinning colour off is
+therefore a correctness requirement of the gate, not tidiness. Identity is the ORDERED IMAGES —
 the result image and each parent image, in order, each named by its resolved blob oid and historical path — so
 replace, graft and unshallow all move the identity and are re-read, while an unchanged image set is reused.
 Those oids are already resolved by the read's one `cat-file --batch-check`, so completeness adds no child, no
-state and no second store. Determinism is the claim for the algorithm pin, not a divergence: on the fixtures
-exercised, every algorithm and both heuristic settings agreed, so it removes a dependence rather than repairs
-a measured wrong answer.
+state and no second store. The algorithm's VALUE is itself a product decision, because the algorithms
+genuinely disagree about which lines an edit authored: measured, `c a c a` becoming `c c a a a` has myers
+authoring new lines 4–5 while histogram authors new lines 2–3, so a unit on line 3 is a HIT under one and a
+MISS under the other for the same commit. **histogram** is pinned, because it aligns an edit with the unit
+that actually moved, and for a BLOCKING gate the conservative reading is the honest one — Git's default myers
+would silently miss that drift. A pinned algorithm therefore settles what a verdict MEANS, not merely that it
+is reproducible.
 
 **Residual, explicit: the PERSISTED merge derivation is not pinned and is not this node's.** The combined-diff
 rows the history event ledger stores are produced by [[source-of-truth]]'s own streams under ambient Git

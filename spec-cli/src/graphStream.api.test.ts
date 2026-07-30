@@ -654,6 +654,7 @@ exec "${realGit}" "$@"
   const abort = new AbortController()
   let streamRead: Promise<void> | null = null
   const frames: string[] = []
+  const frameData: string[] = []
 
   try {
     await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
@@ -673,14 +674,17 @@ exec "${realGit}" "$@"
           const block = buffered.slice(0, boundary)
           buffered = buffered.slice(boundary + 2)
           const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
-          if (event) frames.push(event)
+          if (event) {
+            frames.push(event)
+            frameData.push(block.split('\n').filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n'))
+          }
         }
       }
     })().catch((error) => { if (!abort.signal.aborted) throw error })
     await waitFor(() => frames.includes('graph-full'), `the delta subscriber never anchored:\n${serverLog}`)
     await waitForQuiet(frames, 2_000)
 
-    const dataFramesBefore = frames.filter((event) => event === 'graph-full' || event === 'graph-delta').length
+    const logBeforeFailure = serverLog.length
     writeFileSync(hang, 'hang\n')
     writeFileSync(spec, readFileSync(spec, 'utf8').replace('Before failure', 'After recovery'))
     git(project, 'add', '.spec/project/spec.md')
@@ -696,8 +700,9 @@ exec "${realGit}" "$@"
     await waitFor(() => /graph build did not settle .*aborting/.test(serverLog),
       `the board watchdog did not abort the wedged producer:\n${serverLog}`, 10_000)
     rmSync(hang, { force: true })
+    const framesBeforeRecovery = frameData.length
 
-    await waitFor(() => frames.filter((event) => event === 'graph-full' || event === 'graph-delta').length > dataFramesBefore,
+    await waitFor(() => frameData.slice(framesBeforeRecovery).some((data) => data.includes('After recovery')),
       `the next patrol did not recover and broadcast the failed work:\n${serverLog}`, 25_000)
     const graph = await fetch(`${base}/api/graph`).then((result) => result.json()) as {
       nodes: Array<{ title: string }>
@@ -708,10 +713,16 @@ exec "${realGit}" "$@"
       'the recovered stream swallowed the session event that arrived during the failed flight')
     assert.doesNotMatch(serverLog, /PATROL-REPAIR/,
       `a producer failure with healthy watcher causes is not a blind-watcher repair:\n${serverLog}`)
-    const recoveryBroadcast = [...serverLog.matchAll(/graph broadcast .*triggers \{([^}]*)\}/g)].at(-1)?.[1] ?? ''
-    assert.match(recoveryBroadcast, /full/, `the failed full cause was not retained: {${recoveryBroadcast}}`)
-    assert.match(recoveryBroadcast, /sessions/, `the in-flight session cause was not retained: {${recoveryBroadcast}}`)
-    assert.match(recoveryBroadcast, /patrol/, `the recovering patrol was not recorded: {${recoveryBroadcast}}`)
+    const ledgers = [...serverLog.slice(logBeforeFailure).matchAll(/graph broadcast .*triggers \{([^}]*)\}/g)]
+      .map((match) => match[1]!.split(',').map((tag) => tag.trim()).filter(Boolean))
+    const sessionProjection = ledgers.findIndex((tags) => tags.includes('full') && tags.includes('sessions'))
+    assert.ok(sessionProjection >= 0,
+      `the successful session projection did not consume its own cause: ${JSON.stringify(ledgers)}`)
+    const recovery = ledgers.findIndex((tags, index) => index > sessionProjection && tags.includes('full') && tags.includes('patrol'))
+    assert.ok(recovery >= 0,
+      `the later patrol recovery did not retain the structural obligation: ${JSON.stringify(ledgers)}`)
+    assert.deepEqual([...new Set(ledgers[recovery])].sort(), ['full', 'patrol'],
+      `the patrol recovery repeated the already-consumed session cause: ${JSON.stringify(ledgers[recovery])}`)
   } catch (error) {
     assert.fail(`${error instanceof Error ? error.stack : String(error)}\nframes:\n${frames.join(', ')}\nserver log:\n${serverLog}`)
   } finally {
@@ -837,8 +848,6 @@ exec "${realGit}" "$@"
     await waitFor(() => frames.some((frame) => frame.event === 'graph-full'), `the delta stream never anchored:\n${serverLog}`)
     await waitForQuiet(eventNames, 500)
 
-    const logBeforeFull = serverLog.length
-    const framesBeforeFull = frames.length
     const fullWorktree = join(fixture, 'full-domain-worktree')
     writeFileSync(hold, 'hold\n')
     const fullNode = join(project, '.spec', 'project', fullNodeId, 'spec.md')
@@ -865,6 +874,26 @@ exec "${realGit}" "$@"
     await waitQuickly(() => existsSync(argvLog) && /^HANG /m.test(readFileSync(argvLog, 'utf8')),
       `the route-owned full never entered the controlled layout hold:\n${serverLog}`, 1_000)
     mark('route-owned full producer is held')
+    await waitForQuiet(eventNames, 500)
+
+    const renamed = 'renamed before close'
+    const framesBeforeRename = frames.length
+    const renameResponse = await fetch(`${base}/api/sessions/${sessionId}/rename`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: renamed }),
+    })
+    assert.equal(renameResponse.status, 200)
+    assert.deepEqual(await renameResponse.json(), { ok: true })
+    const carriesRename = (frame: { data: string }) => {
+      const payload = JSON.parse(frame.data) as { set?: Record<string, { label?: string }>; graph?: { sessions?: Array<{ id: string; label?: string }> } }
+      return payload.set?.[`sess:${sessionId}`]?.label === renamed
+        || payload.graph?.sessions?.some((session) => session.id === sessionId && session.label === renamed) === true
+    }
+    await waitFor(() => frames.slice(framesBeforeRename).some(carriesRename),
+      `the first session projection waited for releaseFull:\n${serverLog}`, 2_000)
+    await waitForQuiet(eventNames, 100)
+
     const logBeforeClose = serverLog.length
     const framesBeforeClose = frames.length
 

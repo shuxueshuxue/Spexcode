@@ -904,3 +904,54 @@ test('content revision covers dirty source, index, rename, sidecar, remark, and 
     rmSync(remarks, { recursive: true, force: true })
   }
 })
+
+// The ancestry gate raises the SAME error type either way and differs only in its sentence, so the sentence is
+// the whole contract ([[git-exec]]). One of the two is ACTIONABLE — it tells the reader their base is wrong and
+// to use the session merge-base — so handing it to someone whose git merely failed to run sends them to change
+// an input that was already correct. That is worse than an unknown error: an unknown sends you to the
+// environment, a false diagnosis sends you to edit the thing that was right. Five of the seven call sites that
+// read this classification are reachable only where git is missing or unexecutable, so these two branches are
+// where a test is worth the most, not where the call sites are densest.
+test('ancestry gate: a real non-ancestor says so; a git that could not RUN never claims the base is wrong', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-ancestry-gate-'))
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+  git('init', '-q')
+  git('config', 'user.email', 't@t'); git('config', 'user.name', 't')
+  mkdirSync(join(root, '.spec/project'), { recursive: true })
+  writeFileSync(join(root, '.spec/project/spec.md'), '---\ntitle: project\n---\n# project\n')
+  writeFileSync(join(root, 'a.txt'), 'one\n')
+  git('add', '-A'); git('commit', '-q', '-m', 'root')
+  const rootCommit = git('rev-parse', 'HEAD')
+  writeFileSync(join(root, 'a.txt'), 'two\n'); git('add', '-A'); git('commit', '-q', '-m', 'left')
+  const left = git('rev-parse', 'HEAD')
+  git('checkout', '-q', '-b', 'right', rootCommit)
+  writeFileSync(join(root, 'b.txt'), 'three\n'); git('add', '-A'); git('commit', '-q', '-m', 'right')
+  const right = git('rev-parse', 'HEAD')
+
+  // (1) a genuine non-ancestor — the actionable sentence is CORRECT here, and must still be produced
+  await assert.rejects(
+    projectSessionImpact(root, { base: left, head: right }),
+    (error: any) => error instanceof SessionImpactUnavailableError && /is not an ancestor of head/.test(error.message),
+    'a real non-ancestor keeps the actionable diagnosis',
+  )
+
+  // (2) git cannot be executed — classified 'spawn', so the gate must NOT claim the base is wrong
+  const shimDir = mkdtempSync(join(tmpdir(), 'spex-ancestry-shim-'))
+  writeFileSync(join(shimDir, 'git'), '#!/bin/sh\nexec /usr/bin/git "$@"\n')
+  chmodSync(join(shimDir, 'git'), 0o644)
+  const realPath = process.env.PATH
+  process.env.PATH = shimDir
+  try {
+    await assert.rejects(
+      projectSessionImpact(root, { base: rootCommit, head: left }),
+      (error: any) => error instanceof SessionImpactUnavailableError
+        && !/is not an ancestor of head/.test(error.message),
+      'a git that never ran must not be reported as a wrong base',
+    )
+  } finally {
+    process.env.PATH = realPath
+    rmSync(shimDir, { recursive: true, force: true })
+  }
+  rmSync(root, { recursive: true, force: true })
+})
+

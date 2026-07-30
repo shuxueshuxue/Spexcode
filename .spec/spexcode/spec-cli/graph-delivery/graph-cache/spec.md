@@ -171,6 +171,16 @@ row — the exact inverse of what a batch flag is for. Scanning a window past it
 one layer up: measured on this corpus, it parsed 1,158 historical file revisions (52.6 MB through the host
 TypeScript parser) to settle 858 booleans that 307 revisions (21.9 MB) already decide.
 
+The same invariant binds the CURRENT-tree half, and along a different axis. Before a reading's code axis may
+testify, every `code:` selector is resolved against the working tree, which parses that file — and a node's
+entries are asked one at a time, so the identical file was re-parsed once per entry: measured, 922 parses
+over 46 distinct files, 40.4 MB, and again on every rebuild because nothing carried the result. Extraction is
+a pure function of (text, path, extractor), so the bound is DISTINCT CONTENT, never the entry count: one
+parse per content digest, reused for every entry that content backs and across rebuilds until the bytes
+change. The key is a digest and never mtime or size, because this gate decides whether a reading may testify
+at all — a stale unit list would let a dead selector read as alive, the exact silence this gate exists to
+break — and digesting costs about a tenth of parsing, so the read remains and only the parse is saved.
+
 Two costs this build still pays are named here rather than folded in, because each needs its own argument.
 The per-revision extraction memo is process-local, so a cold process re-parses revisions a previous one
 already settled; making it durable is a persistent-state decision that must argue its own case against

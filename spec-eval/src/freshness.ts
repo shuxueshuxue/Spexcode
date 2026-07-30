@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { join, resolve } from 'node:path'
 import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent, eventsSince } from '../../spec-cli/src/git.js'
-import { anchorHitExists, extOf, extractorFor, extractors, resolveAnchor, type AnchorHitQuery, type Extractor, type RelationEntry } from '../../spec-cli/src/anchors.js'
+import { anchorHitExists, extOf, extractorFor, extractors, resolveAnchor, type AnchorHitQuery, type Extractor, type RelationEntry, type Unit } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
 import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
@@ -272,6 +273,31 @@ export type AnchorDemand = { sinceSha: string; entries: readonly RelationEntry[]
 const anchorKey = (sinceSha: string, path: string, selectors: readonly string[]) =>
   `${sinceSha}\x1f${path}\x1f${[...selectors].sort().join('\x1e')}`
 
+// @@@ one parse per CONTENT, not per selector entry - a node's `code:` entries are asked one at a time, and
+// the same working-tree file backs many of them, so the unmemoized read parsed 46 distinct files 922 times
+// per build (40.4 MB through the TypeScript parser) and did it again on every rebuild. `extract` is a pure
+// function of (text, path, extractor), so its result is reusable exactly as far as the CONTENT is unchanged.
+// The key is a content digest and never mtime/size: this gate decides whether a reading may testify, so a
+// stale unit list would let a dead selector read as alive — the precise failure the comment below warns
+// about. Digesting is ~10x cheaper than parsing, so the read stays and only the parse is saved. Bounded like
+// the historical-revision memo it mirrors ([[code-anchor]]), and it caches the extractor's REJECTION too, so
+// an unparseable file does not re-parse once per entry.
+const CURRENT_TREE_MEMO_MAX = 4096
+const currentTreeUnitMemo = new Map<string, { units: Unit[] } | { failed: string }>()
+function currentTreeUnits(root: string, x: Extractor, path: string): Unit[] {
+  const source = readFileSync(join(root, path), 'utf8')
+  const key = `${x.memoKey(path)}\0${createHash('sha1').update(source).digest('hex')}`
+  const hit = currentTreeUnitMemo.get(key)
+  if (hit) { if ('failed' in hit) throw new Error(hit.failed); return hit.units }
+  let entry: { units: Unit[] } | { failed: string }
+  try { entry = { units: x.extract(source, path) } }
+  catch (err: any) { entry = { failed: err?.message ?? String(err) } }
+  if (currentTreeUnitMemo.size >= CURRENT_TREE_MEMO_MAX) currentTreeUnitMemo.clear()
+  currentTreeUnitMemo.set(key, entry)
+  if ('failed' in entry) throw new Error(entry.failed)
+  return entry.units
+}
+
 // every selector of one entry resolves to exactly one unit in the CURRENT tree, or the entry cannot testify.
 // This gate is what stops a DEAD selector from reading fresh: the hit engine answers "no commit touched a
 // unit of that name", which for a name that exists nowhere is a vacuous no — true of spec drift, where the
@@ -283,7 +309,7 @@ function entryUnverifiable(root: string, regs: Extractor[], entry: RelationEntry
   const ready = x.ready()
   if (ready !== true) return `\`code\` anchors on ${entry.path} are unverified: ${ready}`
   let units
-  try { units = x.extract(readFileSync(join(root, entry.path), 'utf8'), entry.path) }
+  try { units = currentTreeUnits(root, x, entry.path) }
   catch (err: any) { return `\`code\` anchors on ${entry.path} are unverified: ${err?.message ?? String(err)}` }
   for (const sym of entry.selectors) {
     const r = resolveAnchor(units, sym)

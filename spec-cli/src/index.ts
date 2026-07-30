@@ -16,7 +16,8 @@ import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, reviewPayload, captureSessionResult, sessionPrompt, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
+import { cockpitReview } from './cockpit.js'
+import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
@@ -467,7 +468,7 @@ app.post('/api/sessions', async (c) => {
 // one server-side merge bundle (ahead/dirty/diff(merge-base)/gates/proposal) for the manager cockpit;
 // dashboard and `spex session review` are thin callers. 404 for an unknown id. See [[manager-cockpit]].
 app.get('/api/sessions/:id/review', async (c) => {
-  const r = await reviewPayload(c.req.param('id'))
+  const r = await cockpitReview(c.req.param('id'))
   return r ? c.json(r) : c.json({ error: 'no such session' }, 404)
 })
 // The self-contained HTML is the sole full-model transport exception. Interactive rows, including the CLI,

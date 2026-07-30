@@ -540,7 +540,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         body: JSON.stringify({ kind: 'text', text }),
       })
       const outcome = await res.json().catch(() => null)
-      if (!res.ok || !outcome?.ok) {
+      if (!res.ok) {
         setActionOutcome({
           owner: 'command',
           phase: 'failed',

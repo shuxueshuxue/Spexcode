@@ -166,6 +166,30 @@ scenarios:
       generation remains owed for cheap convergence. A sessions splice does not walk full topology inputs, stale
       reads do not manufacture a full beside a held splice, and a patrol-owned full retains patrol attribution
       through the early session frame without amplifying into a patrol successor treadmill.
+  - name: cold-board-batches-freshness-per-read
+    tags: [backend-api]
+    code: spec-cli/src/graph.ts
+    related: [spec-eval/src/evaltab.ts, spec-eval/src/freshness.ts, spec-cli/src/anchors.ts, spec-cli/src/git.ts]
+    description: >-
+      A/B one cold board assembly over a corpus that actually carries anchored eval readings. Hold the CORPUS
+      fixed and vary only the builder binary — run the candidate's `spex` with its working directory set to a
+      clone checked out at the parent commit — so nothing but the code differs. Count the build's git children
+      with a PATH shim that logs every invocation, and record wall clock and peak RSS. Then drive the real HTTP
+      surface: launch each binary through the default Node supervisor on its own free port, with isolated
+      runtime state and no inherited `SPEXCODE_API_URL`, never touching a deployed backend; issue three
+      successive `/api/graph` reads from a cold start and sample `/health` throughout. Repeat the binary
+      comparison at several pinned history depths so the claim is not one lucky tip.
+    expected: >-
+      The serialized board is byte-identical between the two binaries at every pinned tip — the batch is a cost
+      boundary and owes exactly this equality. One cold build's git children are bounded by the READ: the anchor
+      engine's object reads appear as a handful of chunked `cat-file --batch` calls plus one hunk query per
+      distinct governed path, and their count does not grow one-for-one with the anchored-reading count. The
+      first cold `/api/graph` read answers 200 inside the route timeout rather than 503, later reads hit the
+      cache, and `/health` answers 200 throughout. Peak build RSS stays at or below the per-reading path's.
+      Loss is: a board differing by one byte, `cat-file --batch`/`--batch-check` re-spawned per reading, a
+      first cold read still exhausting the route timeout, a `/health` non-200 during assembly, or RSS above
+      the per-reading peak. Lengthening the route timeout, the patrol interval or the memory budget instead of
+      lowering the work is loss, not a pass.
 ---
 # eval.md — board-cache
 

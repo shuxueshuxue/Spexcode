@@ -8,12 +8,18 @@ import { boardThreads } from './issues.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { residentForgeState } from '../../spec-forge/src/resident.js'
 import { resolveProjectIdentity } from './project-identity.js'
+import { readReviewSnapshot } from './reviewSnapshot.js'
 import { sessionEvalProjection } from '../../spec-eval/src/sessioneval.js'
 
 export type Board = Awaited<ReturnType<typeof buildBoard>>
 export type BoardConsistency = 'fresh' | 'stale-ok'
 export type BoardRead = { board: Board; freshness: 'fresh' | 'stale'; refreshing: boolean; error?: string }
 export type BoardJsonRead = BoardRead & { json: string }
+export type RevisionPublication = {
+  revision: () => number
+  invalidate: () => void
+  wait: () => Promise<void>
+}
 
 type BoardInputRevision = {
   full: string
@@ -554,6 +560,29 @@ export function getBoard(): Promise<Board> {
   const flight = startBuild('dirty')
   if (flight) return flight.wait
   return Promise.reject(lastFailure ?? new Error('graph build retry is temporarily backing off'))
+}
+
+export async function waitForPublishedRevision(required: number, publication: RevisionPublication): Promise<void> {
+  while (publication.revision() < required) {
+    publication.invalidate()
+    await publication.wait()
+  }
+}
+
+// A board flight can have captured a resident forge slice before its reconcile publishes a newer revision.
+// That older flight may settle, but cannot discharge this request: its invalidation stays owed and the fence
+// consumes the next publication instead of letting a fresh /api/issues read return the old review snapshot.
+export async function getBoardForForgeRevision(required: number): Promise<Board> {
+  await waitForPublishedRevision(required, {
+    revision: () => readReviewSnapshot().forgeRevision,
+    invalidate: () => invalidateBoard('full'),
+    wait: async () => {
+      const current = inflight
+      if (current) await current.settle
+      else await getBoard()
+    },
+  })
+  return cached ?? getBoard()
 }
 
 // Delta delivery may choose the sessions obligation while a route-owned full is still in flight. Starting

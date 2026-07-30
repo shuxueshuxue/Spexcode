@@ -35,6 +35,12 @@ The graph is built **once per change, not once per poll — and only as much of 
   Under `SPEXCODE_BOARD_DEBUG=1`, each successful full or sessions cache publication emits one structured
   `cache-commit` row after its anchor is committed, carrying `stage=cache-commit`, `at`, `scope` and `buildMs`; validation hits,
   stale reads and failed, aborted or timed-out producers emit no such row.
+- **Revision-fenced publication.** A consumer that has observed a newer resident-forge content revision asks
+  the cache for a board that carries at least that revision. The cache records a full invalidation and waits
+  for publication, but an already-running flight that captured an older forge slice cannot discharge that
+  obligation: it may settle normally, then the still-owed full producer publishes the required revision.
+  This is one cache-owned publication fence, not API polling or a forge-specific retry path; failure from
+  either flight remains loud through the existing build/watchdog path.
 - **Patrol verification is cache-owned.** Graph-stream's existing ~15s patrol does not manufacture a full
   invalidation. It asks the cache for the same single-flight refresh every other fresh reader uses. On a clean
   cache that refresh first compares one compact board-input revision: the served checkout's HEAD, `.spec` tree

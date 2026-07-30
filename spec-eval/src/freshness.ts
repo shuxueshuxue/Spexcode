@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent, eventsSince } from '../../spec-cli/src/git.js'
-import { anchorHitQueries, extOf, extractorFor, extractors, resolveAnchor, type AnchorHitQuery, type Extractor, type RelationEntry } from '../../spec-cli/src/anchors.js'
+import { anchorHitExists, extOf, extractorFor, extractors, resolveAnchor, type AnchorHitQuery, type Extractor, type RelationEntry } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
 import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
@@ -314,8 +314,8 @@ export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
         queries.push({ win, symbols: [...e.selectors] })
       }
       if (!queries.length) return
-      const results = await anchorHitQueries(root, queries, regs)
-      results.forEach((hits, index) => verdicts.set(keys[index], hits.length > 0))
+      const results = await anchorHitExists(root, queries, regs)
+      results.forEach((hit, index) => verdicts.set(keys[index], hit))
     },
     hit(sinceSha, path, selectors) {
       return verdicts.get(anchorKey(sinceSha, path, selectors)) ?? null

@@ -7,16 +7,20 @@ import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFile
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, sessionGraph, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 import { readTimeline } from './session-timeline.js'
+import { tsxBin } from './tsx-bin.js'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 // This file mutates process-global harness and runtime state, so its fixtures must not overlap.
 const serial = { concurrency: false } as const
+const thisTestFile = fileURLToPath(import.meta.url)
+const packageRoot = dirname(dirname(thisTestFile))
 const waitUntil = async (check: () => boolean, label: string, timeoutMs = 5000) => {
   const deadline = Date.now() + timeoutMs
   while (!check()) {
@@ -642,7 +646,17 @@ test('archive returns the exact adapter receipt when filing fails after cold run
   }
 })
 
-test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', serial, async () => {
+test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', { timeout: 150_000, ...serial }, async () => {
+  if (process.env.SPEX_QUEUE_CLOSE_FIXTURE !== '1') {
+    const fixture = spawnSync(process.execPath, [tsxBin(packageRoot), '--test', '--test-name-pattern=^public close cancels', thisTestFile], {
+      cwd: packageRoot,
+      env: { ...process.env, SPEX_QUEUE_CLOSE_FIXTURE: '1' },
+      encoding: 'utf8',
+      timeout: 120_000,
+    })
+    assert.equal(fixture.status, 0, `${fixture.stdout}\n${fixture.stderr}`)
+    return
+  }
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = codexHarness.sharedRuntimes
   const originalCleanup = codexHarness.cleanupRuntime

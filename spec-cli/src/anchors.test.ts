@@ -311,6 +311,40 @@ test('a replaced commit object and a regrafted parent are different hunk facts, 
   }
 })
 
+// Repo config decides hunk boundaries too — `diff.algorithm`, `diff.indentHeuristic` and
+// `diff.interHunkContext` are all settable per repository and all move ranges on some inputs. Pinned, a
+// same-process config flip must leave the verdict alone. (On these fixtures every algorithm agreed, so this
+// asserts INVARIANCE; it is not a red-to-green pair, and is not presented as one.)
+test('an anchor verdict is invariant under a same-process diff-config flip', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-anchor-config-'))
+  const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  try {
+    g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'src/c.py'), 'def f():\n    return 1\n\ndef tail():\n    return 9\n')
+    g('add', '-A'); g('commit', '-qm', 'v1'); const v1 = g('rev-parse', 'HEAD')
+    writeFileSync(join(root, 'src/c.py'), 'def f():\n    return 1\n\ndef f():\n    return 1\n\ndef tail():\n    return 9\n')
+    g('add', '-A'); g('commit', '-qm', 'duplicate the block'); const dup = g('rev-parse', 'HEAD')
+    const mod = await import('./anchors.js')
+    const win = [{ commit: dup, historicalPath: 'src/c.py', parents: [{ commit: v1, historicalPath: 'src/c.py' }] }]
+    const ask = async () => (await mod.anchorHitQueries(root, [{ win, symbols: ['f'] }], mod.extractors(root)))[0].map((r) => r.selectors)
+
+    const verdicts: string[][][] = []
+    for (const [algorithm, heuristic, inter] of [['myers', 'false', '0'], ['histogram', 'true', '3'], ['patience', 'false', '1'], ['minimal', 'true', '0']]) {
+      g('config', 'diff.algorithm', algorithm)
+      g('config', 'diff.indentHeuristic', heuristic)
+      g('config', 'diff.interHunkContext', inter)
+      verdicts.push(await ask())
+    }
+    const fresh = (await (await import(`./anchors.js?config-oracle=${dup}`)).anchorHitQueries(
+      root, [{ win, symbols: ['f'] }], mod.extractors(root)))[0].map((r: any) => r.selectors)
+    for (const v of verdicts) assert.deepEqual(v, verdicts[0], 'repo diff config must not move an anchor verdict')
+    assert.deepEqual(verdicts[0], fresh, 'and the memoized verdict must equal a fresh module\'s under the flipped config')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('historical extractor memo stays stable across order and same-process repetition', { skip: !gitAvailable() && 'git not available' }, async () => {
   const source = 'export const f = <T>(x: T) => x\n'
   for (const order of [['src/same.tsx', 'src/same.ts'], ['src/same.ts', 'src/same.tsx']]) {

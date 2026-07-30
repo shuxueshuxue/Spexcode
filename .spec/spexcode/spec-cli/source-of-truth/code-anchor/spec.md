@@ -257,13 +257,25 @@ historical diffs — decides whether Git emits `@@` at all or calls the path bin
 path yield one hunk bare and ZERO under `-diff`, so an anchored contract's drift was silently unblockable by
 an attribute edit, and any store keyed on `(commit,path)` could serve either answer.
 
-So this engine fixes both halves. Presentation is PINNED for the seam — every reader of anchor hunk ranges
-asks Git to treat the content as text with no textconv and no external diff — which makes the answer
-independent of attributes and of content sniffing, and is why the seam reads the ordinary text diff of the
-file it will parse with its own extractor. Identity is the ORDERED IMAGES — the result image and each parent
-image, in order, each named by its resolved blob oid and historical path — so replace, graft and unshallow all
-move the identity and are re-read, while an unchanged image set is reused. Those oids are already resolved by
-the read's one `cat-file --batch-check`, so completeness adds no child, no state and no second store.
+So this engine fixes both halves, inside the readers this node owns. RANGE SEMANTICS are PINNED on those
+readers across every class of ambient state that decides a boundary: presentation (text, no textconv, no
+external driver), the algorithm and its heuristics (an explicit algorithm, no indent heuristic — both
+otherwise repository config), and hunk coalescing (inter-hunk context zero). Identity is the ORDERED IMAGES —
+the result image and each parent image, in order, each named by its resolved blob oid and historical path — so
+replace, graft and unshallow all move the identity and are re-read, while an unchanged image set is reused.
+Those oids are already resolved by the read's one `cat-file --batch-check`, so completeness adds no child, no
+state and no second store. Determinism is the claim for the algorithm pin, not a divergence: on the fixtures
+exercised, every algorithm and both heuristic settings agreed, so it removes a dependence rather than repairs
+a measured wrong answer.
+
+**Residual, explicit: the PERSISTED merge derivation is not pinned and is not this node's.** The combined-diff
+rows the history event ledger stores are produced by [[source-of-truth]]'s own streams under ambient Git
+interpretation, and its schema stamp is unchanged — so a ledger row written under one interpretation stays
+eligible under another, and a merge event's window membership can rest on a different reading than the range
+this engine then pins. Unifying that requires the ledger's schema identity to carry the interpretation, which
+is that node's contract to change and deliberately untouched here; the alternative — quietly re-interpreting
+the persisted stream without moving its schema — would leave old rows eligible under new semantics, which is
+worse than the split being written down.
 
 Under that identity the demand set a batch sends Git is its MISSES, and a second READ in the same process asks
 only about images it has not read — work proportional to what MOVED, not to the corpus. The waste that removes:

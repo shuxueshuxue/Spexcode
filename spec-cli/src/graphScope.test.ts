@@ -224,10 +224,13 @@ test('boardCache scope: sessions-scoped splices (skips node work), full-scoped (
     'a moved full revision promotes a nominal session refresh to the full producer')
   assert.notEqual(b2.nodes, b1.nodes, 'the stale node/meta anchor must not survive the promoted refresh')
 
-  // Explicit escalation still owns one full producer (full subsumes the pending session scope).
+  // Explicit escalation still owns one full producer: a 'sessions' signal in the same window cannot demote a
+  // moved graph domain to a splice.
+  writeSpec('.spec/proj/child', 'Child Node ESCALATED')
   cache.invalidateBoard('sessions')
   cache.invalidateBoard('full')
   const b3 = await cache.getBoard()
+  assert.equal(b3.nodes.find((n: any) => n.id === 'child')?.title, 'Child Node ESCALATED')
   assert.notEqual(b3.nodes, b2.nodes, 'an explicitly escalated full rebuild produced fresh node objects')
 
   // Patrol repairs derive their scope from the changed revision component. A missed record event is
@@ -243,6 +246,42 @@ test('boardCache scope: sessions-scoped splices (skips node work), full-scoped (
   const b5 = await cache.patrolBoard()
   assert.equal(b5.nodes, b4.nodes, 'a prompt-only repair remains sessions-scoped')
   assert.equal(b5.sessions[0].prompt, 'A newly discovered originating prompt.\n')
+})
+
+// ---------------------------------------------------------------------------------------------------------
+// 3. DERIVED SCOPE — a 'full' SIGNAL is a claim, not a verdict. The producer's domain comes from the inputs
+//    that actually moved, so churn no board input reads buys no structural assembly, while the same seam
+//    still rebuilds for every real one. The watchers fire 'full' for any byte under a live worktree root and
+//    for any `.git/worktrees` registry entry — neither of which is evidence that the board changed.
+// ---------------------------------------------------------------------------------------------------------
+test('a full signal whose board inputs did not move discharges without a structural assembly', { skip: !gitOk && 'git not available' }, async () => {
+  writeSpec('.spec/proj/child', 'Child Node DERIVED BASE')
+  cache.invalidateBoard('full')
+  const base = await cache.getBoard()
+  assert.equal(base.nodes.find((n: any) => n.id === 'child')?.title, 'Child Node DERIVED BASE')
+
+  // a generated harness artifact rewritten inside the governed worktree — exactly what the root watcher sees
+  mkdirSync(join(proj, '.claude'), { recursive: true })
+  writeFileSync(join(proj, '.claude', 'settings.json'), '{"generated":true}\n')
+  cache.invalidateBoard('full')
+  assert.equal(await cache.getBoard(), base, 'a generated-artifact write must not buy a full assembly')
+
+  rmSync(join(proj, '.claude', 'settings.json'), { force: true })
+  cache.invalidateBoard('full')
+  assert.equal(await cache.getBoard(), base, 'removing it must not buy one either')
+
+  // Discharging must CONSUME the claim, not merely skip the producer: a claim left standing keeps the route
+  // surface permanently stale/refreshing and makes every later read re-enter validation.
+  const settled = await cache.readBoard('stale-ok')
+  assert.equal(settled.freshness, 'fresh', 'a discharged signal must leave the cache clean')
+  assert.equal(settled.refreshing, false, 'a discharged signal must leave nothing refreshing')
+
+  // and the SAME seam still rebuilds the moment a real board input moves.
+  writeSpec('.spec/proj/child', 'Child Node DERIVED REBUILD')
+  cache.invalidateBoard('full')
+  const rebuilt = await cache.getBoard()
+  assert.notEqual(rebuilt, base, 'a real graph input must still start the structural producer')
+  assert.equal(rebuilt.nodes.find((n: any) => n.id === 'child')?.title, 'Child Node DERIVED REBUILD')
 })
 
 test('boardCache DEBUG cache commits report one successful full and sessions publication only', { skip: !gitOk && 'git not available' }, async () => {
@@ -270,6 +309,7 @@ test('boardCache DEBUG cache commits report one successful full and sessions pub
     assert.equal(rows[0].scope, 'sessions')
     assert.ok(Number.isFinite(rows[0].at) && Number.isFinite(rows[0].buildMs))
 
+    writeSpec('.spec/proj/child', 'Child Node CACHE COMMIT')
     cache.invalidateBoard('full')
     await cache.getBoard()
     assert.equal(rows.length, 2)
@@ -459,5 +499,36 @@ test('a full completion re-bases a published session projection and leaves only 
     process.env.PATH = previousPath
     try { g('worktree', 'remove', '--force', linked) } catch { rmSync(linked, { recursive: true, force: true }) }
     rmSync(gateRoot, { recursive: true, force: true })
+  }
+})
+
+// LAST ON PURPOSE — this one adds and removes a linked worktree, which rewrites the fixture's `packed-refs`.
+// That file is an input to git.ts's event-cache identity, so the next assembly re-derives it through one
+// SYNCHRONOUS git probe; a later test that holds git at a controlled gate would claim that probe and stall
+// its own event loop. The state this leaves belongs at the end of the fixture's life, not in the middle of it.
+test('an unrelated worktree root is not a board input, so its birth and death start no assembly', { skip: !gitOk && 'git not available' }, async () => {
+  const ignored = join(tmpdir(), `boardscope-ignored-wt-${process.pid}-${Date.now()}`)
+  try {
+    cache.invalidateBoard('full')
+    const base = await cache.getBoard()
+
+    // git's worktree registry moved; the board's governed root set (governed, non-archived records) did not.
+    g('worktree', 'add', '-q', '-b', 'node/boardscope-ignored', ignored)
+    cache.invalidateBoard('full')
+    assert.equal(await cache.getBoard(), base, 'an unrelated worktree root is not a board input')
+
+    g('worktree', 'remove', '--force', ignored)
+    g('branch', '-qD', 'node/boardscope-ignored')
+    cache.invalidateBoard('full')
+    assert.equal(await cache.getBoard(), base, 'nor is its removal')
+    assert.equal((await cache.readBoard('stale-ok')).refreshing, false, 'the discharged claim is consumed')
+
+    writeSpec('.spec/proj/child', 'Child Node AFTER IGNORED ROOTS')
+    cache.invalidateBoard('full')
+    const rebuilt = await cache.getBoard()
+    assert.equal(rebuilt.nodes.find((n: any) => n.id === 'child')?.title, 'Child Node AFTER IGNORED ROOTS',
+      'a real graph input still rebuilds after the ignored roots came and went')
+  } finally {
+    try { g('worktree', 'remove', '--force', ignored) } catch { rmSync(ignored, { recursive: true, force: true }) }
   }
 })

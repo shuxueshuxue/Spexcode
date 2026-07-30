@@ -2212,10 +2212,12 @@ function porcelainPath(line: string): string {
 
 export type ReviewEvalFacts = { freshPass: number; freshFail: number; needReview: number; blind: number }
 export type ReviewEvalGate = ({ phase: 'ready' } & ReviewEvalFacts) | { phase: 'unavailable' | 'loading' | 'updating' | 'error' }
+// the session-side gates only. The measured-loss readout is composed ABOVE this layer ([[manager-cockpit]]'s
+// cockpit.ts): the eval package imports this module, so reading it from here could only ever be a deferred
+// import working around a cycle. The eval side never consumed this field — it reads lint/conflict/ahead/dirty.
 export type ReviewGates = {
   conflictsWithMain: boolean                       // a dry-run merge into main would conflict (in-memory, safe)
   lint: { errorCount: number; warningCount: number } // the spec↔code graph lint
-  evals: ReviewEvalGate                            // [[session-eval]]'s already-computed scenario categories
 }
 export type ReviewPayload = {
   id: string; node: string | null; branch: string | null
@@ -2265,22 +2267,6 @@ async function lintGate(): Promise<ReviewGates['lint']> {
   return p
 }
 
-// @@@ evalGate - the cockpit's measured-loss readout, taken from [[session-eval]]'s EXISTING projection.
-// This is a cache READ and must stay one: buildSessionEvals() itself calls reviewPayload(), so building the
-// model from here would recurse. The import is dynamic for the same reason the lint gate's is — the eval
-// package imports this module, and the cockpit only needs it at call time.
-async function evalGate(id: string): Promise<ReviewEvalGate> {
-  const { sessionEvalProjection } = await import('../../spec-eval/src/sessioneval.js')
-  const projection = sessionEvalProjection(id)
-  if (!projection) return { phase: 'unavailable' }
-  // only a `ready` projection carries a CURRENT value; last-known is deliberately not reported as current.
-  if (projection.phase !== 'ready' || !projection.value) {
-    return { phase: projection.phase === 'ready' ? 'unavailable' : projection.phase }
-  }
-  const summary = projection.value
-  return { phase: 'ready', freshPass: summary.pass, freshFail: summary.fail, needReview: summary.review, blind: summary.blind }
-}
-
 // @@@ reviewPayload - assemble the cockpit review for one session. The four session-specific reads
 // (ahead / dirty / diff / conflict gate) plus the one location gate (lint) are all independent, so they run
 // in parallel. The lint gate goes through lintGate(), which memoizes it on the checkout's tree fingerprint —
@@ -2290,13 +2276,12 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   const wt = await findWorktree(id)
   if (!wt) return null
   const base = mainBranch()
-  const [aheadOut, statusOut, diff, conflictsWithMain, lint, evals] = await Promise.all([
+  const [aheadOut, statusOut, diff, conflictsWithMain, lint] = await Promise.all([
     gitA(['-C', wt.path, 'rev-list', '--count', `${base}..HEAD`]),
     gitA(['-C', wt.path, 'status', '--porcelain', '--untracked-files=all']),
     mergeBaseDiff(wt.path, base),
     mergeConflicts(wt.path, base),
     lintGate(),   // lint — memoized on the checkout fingerprint, not re-run per session/open
-    evalGate(id), // measured loss — a READ of the existing projection, never a build
   ])
   // the worktree carries no SpexCode runtime files any more (the store lives in ~/.spexcode), so every dirty
   // path is genuine work — this is just the total uncommitted count.
@@ -2306,7 +2291,7 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
     label: deriveLabel({ id, name: wt.rec.name, node: wt.rec.node, title: wt.rec.title, branch: wt.branch }),
     ahead: Number(aheadOut.trim()) || 0,
     dirtyNonRuntime, diff,
-    gates: { conflictsWithMain, lint, evals },
+    gates: { conflictsWithMain, lint },
     proposal: { kind: wt.rec.proposal, note: wt.rec.note },
   }
 }

@@ -299,7 +299,14 @@ function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, m
       const error: any = spawnError ?? new Error(overflow
         ? `git output exceeded ${maxBuffer} bytes`
         : `git exited with ${code ?? childSignal ?? 'unknown status'}`)
-      error.code = overflow ? 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' : code
+      // @@@ a spawn failure keeps its OWN cause - a child that never started still emits `close`, with the
+      // negated errno as its code (EACCES arrives as -13). Overwriting the spawn error's `'EACCES'`/`'ENOENT'`
+      // with that number turns "git could not RUN" into "git ran and exited", and every caller that separates
+      // the two reads the second as a real git answer: the freshness batch concluded "the anchor object is
+      // unreadable", session create concluded "the branch does not exist". A machine where git is missing or
+      // unexecutable would have been told, silently, that the thing it asked about is absent.
+      if (overflow) error.code = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+      else if (!spawnError) error.code = code
       error.signal = childSignal
       error.stdout = result.stdout.toString('utf8')
       error.stderr = result.stderr

@@ -127,8 +127,8 @@ verbs the CLI uses.
   via `replyIssue` — a local reply git-commits, a forge reply posts a REAL comment — then the list
   refetches. A reply that is a REMARK gets its resolve/retract verbs ([[remark-substrate]]); a
   `▶m:ss · step` first line is a time anchor; attached blobs render through the one shared evidence
-  renderer. A `@session`/`@new` in any composer **dispatches** ([[mentions]]) and the one-line outcome
-  echoes briefly as a page notice — a summons is never silent.
+  renderer. An `@session` in any composer is a passive [[mentions]] reference retained in the posted prose;
+  it produces no notification or worker side effect.
 - **New is a PAGE — `#/issues/new`, GitHub's compose grammar.** The list's New is the page-title action and
   a REAL anchor into that address: a click is the same hash transaction the address bar produces, so
   middle-click/new-tab/copy-address come free and the page itself survives a reload, a bookmark, and a

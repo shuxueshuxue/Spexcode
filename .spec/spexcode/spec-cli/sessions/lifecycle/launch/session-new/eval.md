@@ -12,8 +12,8 @@ scenarios:
       controllable launcher and run one ordinary successful create with a [[node]] target. Generate two
       different keys whose deterministic ids share the same four-character branch suffix and send the same
       prompt with both. Through the real CLI without --api, point SPEXCODE_API_URL at a listener that accepts
-      but never answers settings. Verify that issue `@new` reaches the same bounded transaction owner rather
-      than an exported preparation function. In isolated backend processes, kill the backend immediately
+      but never answers settings. Verify that every explicit create entrance reaches the same bounded
+      transaction owner rather than an exported preparation function. In isolated backend processes, kill the backend immediately
       after a real Git worktree add and again immediately after the candidate store files are written; restart
       on the same project/store and retry the same Idempotency-Key. Also present an occupied candidate under a
       different key and an occupied orphan with an invalid or absent private receipt. Force private-receipt
@@ -32,7 +32,7 @@ scenarios:
       same-suffix collision fails without changing the first receipt's row, store, exact branch, or worktree;
       an owned abort still removes only its own resources. The implicit-target slow listener settles inside the
       one settings-probe wall with an indeterminate error and no POST/fallback/artifacts. `sessionCreateRequest`
-      is the sole exported create function and `@new` enters it, so maintenance/deadline ownership cannot be
+      is the sole exported create function, so maintenance/deadline ownership cannot be
       bypassed. After either process death, the matching-key restart uses the atomic private receipt to remove
       only its pre-publication resources and then yields one exact published receipt (or an exact cleanup
       failure), never permanent occupied `409`. A different key or invalid/unreceipted orphan is preserved and

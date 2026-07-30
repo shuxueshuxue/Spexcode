@@ -2,7 +2,7 @@
 title: event-detail-fixes
 status: active
 hue: 200
-desc: Event detail regression guardrails: eval remark drafts are scoped to the selected (node, scenario), filer/originator chips route to their live session, and eval-page mention outcomes echo like issue replies.
+desc: Event detail regression guardrails: eval remark drafts are scoped to the selected (node, scenario), filer/originator chips route to their live session, and passive references never create a side effect.
 code:
   - spec-dashboard/src/evalsPage.test.mjs
 related:
@@ -22,10 +22,9 @@ The eval detail workspace is a reviewer surface over one semantic review identit
 not merely to the server-facing remark thread. An unrelated board repaint preserves it; changing scope,
 scenario, or A/B reading clears ordinary and anchored drafts before another context can send them.
 
-The same surface is also a navigation and dispatch surface. A live filer/originator chip names the session
+The same surface is also a navigation surface. A live filer/originator chip names the session
 that filed or opened the thread, so activating it must open that session's console, not the generic new
-session route. When a human reply contains a mention that dispatches or summons a session, the resulting
-one-line outcome must echo on the Evals page just as it does on the Issues page; a summon is never silent.
+session route. A human reply's @session reference remains in the stored prose and returns no mention outcome.
 
 ## expanded spec
 
@@ -43,9 +42,8 @@ list concern, not a validity test. Offline or unresolved identities remain label
 same route used by the Issues page and session board, keeping originator and filer chips as direct doors back
 to the running work.
 
-The Evals page handles write outcomes from the shared event detail exactly like the Issues page handles
-thread replies: after a successful write it refreshes the board and briefly flashes any mention outcome the
-server returned. This is host responsibility; the shared detail pane emits the write result and does not
+The Evals page refreshes after a successful shared-detail write. Courtesy loop-in status may be surfaced by
+the host, but a mention itself returns no outcome. The shared detail pane emits the write result and does not
 own page-level notices.
 
 The source-contract guardrail pins the cross-module boundaries behind these flows: session-scoped history

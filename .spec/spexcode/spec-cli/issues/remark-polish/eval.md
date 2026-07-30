@@ -24,8 +24,7 @@ scenarios:
       (a) the filer is notified; (b) delivery falls through to the node's governing session; (c) nobody is
       notified and it stays silent (the teeth still surface the remark). In every case the notification
       RESOLVES nothing — the remark stays unresolved (resolve is a deliberate `spex resolve`), no worker is
-      spawned (only `@new` spawns), and the chain stops at the first online link (no double-delivery to a link
-      already reached by an explicit `@`-mention).
+      spawned, and the chain stops at the first online link.
   - name: dangling-orphan-visible
     tags: [cli, frontend-e2e]
     related: [spec-eval/src/evaltab.ts, spec-eval/src/cli.ts, spec-dashboard/src/NodeView.jsx]

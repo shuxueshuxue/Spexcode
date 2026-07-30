@@ -18,16 +18,18 @@ const evalPage = await fetch(`${BASE}/api/evals?q=is%3Aeval&page=1`).then((respo
 const issue = issuePage.items.find((item) => item.store === 'local') || issuePage.items[0]
 const reading = evalPage.items.find((item) => item.filterKind !== 'blind')
 const commandNode = graph.nodes.find((node) => node.id === 'command-box')
+const offlineReference = graph.sessions.find((session) => session.liveness === 'offline')
 assert.ok(graph.sessions.some((session) => session.id === SESSION), 'live session must exist')
 assert.ok(issue, 'an issue detail is required to compare the shared composer')
 assert.ok(reading, 'an eval result detail is required to compare the shared composer')
 assert.ok(commandNode, 'the command-box spec node is required to prove mention expansion')
+assert.ok(offlineReference, 'an offline retained session is required to prove reference discovery')
 
 const events = []
 const started = Date.now()
 const step = (name) => events.push({ at: Date.now() - started, step: name })
 const inputs = []
-let failNext = true
+let failNext = false
 let sessionLiveness = 'online'
 let resumeFails = true
 
@@ -56,14 +58,6 @@ await page.route('**/api/graph*', async (route) => {
 await page.route(`**/api/sessions/${SESSION}/input`, async (route) => {
   const body = route.request().postDataJSON()
   inputs.push(body)
-  if (body.kind === 'command' && body.text.startsWith('@new ')) {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
-      ok: true,
-      mentions: [{ token: 'new', result: 'spawned', detail: 'child-session' }],
-      mentionSummary: '@ new→child-session',
-    }) })
-    return
-  }
   if (failNext) {
     await new Promise((resolve) => setTimeout(resolve, 120))
     await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'upstream 502: append unavailable' }) })
@@ -182,31 +176,35 @@ await commandMention.click()
 assert.equal(await input.inputValue(), '[[command-box]] ')
 
 await input.fill('@')
-const sessionMention = page.locator('.si-command-box .mention-item:not(.new)').first()
+const sessionMention = page.locator('.si-command-box .mention-item').first()
 await sessionMention.waitFor({ state: 'visible' })
 await sessionMention.click()
 assert.match(await input.inputValue(), /^@[a-f0-9-]+ $/)
 
-await input.fill('@new delegate the focused work')
-const newSubmission = page.waitForRequest((request) => request.url().endsWith(`/api/sessions/${SESSION}/input`))
+await input.fill(`@${offlineReference.id.slice(0, 8)}`)
+const offlineMention = page.locator('.si-command-box .mention-item').first()
+await offlineMention.waitFor({ state: 'visible' })
+await offlineMention.click()
+assert.equal(await input.inputValue(), `@${offlineReference.id} `)
+
+await input.fill(`@${SESSION} inspect the focused work`)
+const mentionSubmission = page.waitForRequest((request) => request.url().endsWith(`/api/sessions/${SESSION}/input`))
 await page.locator('.si-command-send').click()
-assert.deepEqual((await newSubmission).postDataJSON(), { kind: 'command', text: '@new delegate the focused work' })
+assert.deepEqual((await mentionSubmission).postDataJSON(), { kind: 'command', text: `@${SESSION} inspect the focused work` })
 await page.locator('.si-command-box .si-action-outcome.delivered').waitFor({ state: 'visible' })
-assert.match((await page.locator('.si-command-box .si-action-outcome.delivered').textContent()) || '', /child-session/)
-if (process.env.COMMAND_BOX_NEW_ONLY === '1') await page.screenshot({ path: join(OUT, 'command-box-new-child-delivered.png'), fullPage: true })
 await command.waitFor({ state: 'hidden' })
 await page.keyboard.press('Alt+i')
 await page.waitForFunction(() => document.activeElement?.classList?.contains('si-command-input'))
-step('@new submits through the Command Box control path')
+step('@session stays passive and offline retained sessions remain discoverable')
 
-if (process.env.COMMAND_BOX_NEW_ONLY === '1') {
+if (process.env.COMMAND_BOX_REFERENCE_ONLY === '1') {
   const video = page.video()
   await context.close()
-  await video.saveAs(join(OUT, 'command-box.webm'))
+  await video.saveAs(join(OUT, 'command-box-reference.webm'))
   await browser.close()
   writeFileSync(join(OUT, 'timeline.json'), JSON.stringify({ v: 2, axis: 'time', events }, null, 2))
   writeFileSync(join(OUT, 'result.json'), JSON.stringify({ session: SESSION, inputs }, null, 2))
-  console.log(JSON.stringify({ ok: true, video: join(OUT, 'command-box.webm'), timeline: join(OUT, 'timeline.json') }))
+  console.log(JSON.stringify({ ok: true, video: join(OUT, 'command-box-reference.webm'), timeline: join(OUT, 'timeline.json') }))
   process.exit(0)
 }
 
@@ -247,6 +245,7 @@ await input.evaluate((element) => element.dispatchEvent(new KeyboardEvent('keydo
 })))
 assert.equal(inputs.length, beforeIme)
 
+failNext = true
 await page.locator('.si-command-send').click()
 await page.locator('.si-command-box .si-action-outcome.sending').waitFor({ state: 'visible' })
 await page.locator('.si-command-box .si-action-outcome.failed').waitFor({ state: 'visible' })

@@ -290,6 +290,13 @@ surface:
   a DEAD pane as `online` for as long as that stale file lingered — the incident's "dead pane stuck `working`
   for 30+ minutes". A `connect()` is the honest test: a live claude accepts it, a stale file refuses it
   (ECONNREFUSED, instant), an absent file ENOENTs (instant) — so a dead claude reads `offline` within seconds.
+  The rendezvous pathname is a launch-time fact, stamped beside the session record so future derivations cannot
+  strand an existing worker. New paths live in a short, per-uid `0700` directory under the literal `/tmp`
+  spelling, not the platform's expanded `TMPDIR`: macOS commonly expands that variable under `/var/folders/...`,
+  and adding the runtime hash plus session UUID can exceed its ~104-byte `sun_path` cap. That failure is
+  particularly deceptive — the socket inode can exist while every `connect()` fails `EINVAL`, falsely reading
+  every otherwise healthy Claude session as `unknown`. The short path is therefore unconditional, like Codex's
+  short app-server path; platform limits belong at this transport boundary, never in lifecycle semantics.
   (The pane command is always the wrapper/shell while claude runs as its child, so claude still IGNORES the pane
   probe.) **codex** = the tmux window is up AND a
   **codex process is live in the pane's DESCENDANT process tree**. The pane's FOREGROUND name is NOT the signal:

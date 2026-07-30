@@ -252,12 +252,19 @@ scenarios:
       One open's child count tracks the SELECTED session's scope and nothing else. There is no per-node or
       per-reading spawn multiplier: the readings and history the scope needs are read in per-build batches, so
       a scope spanning many nodes does not spawn one `git log` per node nor one `cat-file` per node's timeline.
-      No identical, fully-argv-determined query (`rev-parse HEAD`, `rev-parse main`, `merge-base main HEAD`,
-      `status --porcelain`, `diff HEAD --binary`, a `^{commit}` verify) is asked more than once inside a single
-      build — the build reads each such fact once and shares it, as the projection's one-read-per-input
-      contract already states. A session with an empty range and no readings therefore pays a small constant
-      that carries no whole-repository component, and the loaded session's cost above that constant is
-      attributable to its own scope.
+      Repeated reads are counted against the build only where they answer the SAME question for the same
+      consumer. The build's two deliberate fences are exempt and must never be memoised away: the content
+      revision is read once BEFORE and once AFTER the fold so a moving input can be detected and the result
+      discarded, and every base/head selector is resolved once up front and re-verified once before
+      publication. Those two mechanisms make several queries (`rev-parse main`, `rev-parse HEAD`,
+      `merge-base <base> HEAD`, `status --porcelain`, `diff HEAD --binary`, a `^{commit}` verify) appear twice
+      per build by design, and on a session where base equals head the re-verify is argv-identical to the
+      initial resolve while still being a different question. Collapsing either fence to one read would trade
+      a certified-current answer for a cheap stale one, which this scenario forbids outright. What the
+      scenario does require is that no consumer re-asks a fact ANOTHER consumer in the same build already
+      established outside those fences. A session with an empty range and no readings therefore pays a small
+      constant that carries no whole-repository component, and the loaded session's cost above that constant
+      is attributable to its own scope.
       Opening the same unchanged session again serves the published projection: the second and third opens do
       not re-spawn the first open's children, because a stable build at an unmoved generation and content
       revision is exactly what the projection cache exists to publish. Repeat opens that re-pay full price are

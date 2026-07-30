@@ -2,7 +2,7 @@
 title: mentions
 status: active
 hue: 200
-desc: Two universal in-text reference primitives — [[node]] (a topic) and @session (an actor that carries dispatch) — parsed the same way in EVERY input box. CLI-first; the dashboard is a thin autocomplete over the same resolver. First consumer is the issue store; adopted on more surfaces incrementally.
+desc: Two universal in-text reference primitives — [[node]] (a topic) and @session (an actor that carries dispatch) — parsed the same way in EVERY input box. CLI-first; the dashboard is a thin autocomplete over the same resolver. Consumers include issue/remark threads and the desktop Command Box.
 code:
   - spec-cli/src/mentions.ts#dispatchMentions
   - spec-cli/src/mentions.ts#parseMentions
@@ -90,7 +90,7 @@ grammar is uniform, the logic is tiny.
   and each node-arg read site (eval add/retract/ls, `owner`, the `--node` flags) passes through it.
   Tolerance never widens matching: a stripped token matches exactly what the bare token matches, and a
   wrong sigiled token errors exactly like the bare one.
-- **No new delivery pipe.** `@session` → [[dispatch]]'s `sendKeys` (a prompt = the surrounding text + a
+- **No new delivery pipe.** `@session` → [[dispatch]]'s `sendText` (a prompt = the surrounding text + a
   pointer to where it was written); `@new` → [[launch]]'s bounded session-create owner (a fresh worker).
   Offline/unreachable
   fails loud (the `DispatchResult`), and the text still persists for the drain.

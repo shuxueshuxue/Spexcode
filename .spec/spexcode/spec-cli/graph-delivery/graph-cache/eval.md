@@ -39,6 +39,33 @@ scenarios:
       tens-of-seconds a per-request rebuild causes. The baseline (route calling buildBoard() inline, no
       cache) fails this: warm /api/graph rebuilds every time (~5s) and worst /health under the storm blows
       past 50s as the git-free liveness probe starves behind N concurrent full builds.
+  - name: existence-scan-stops-at-first-hit
+    tags: [backend-api]
+    code: [spec-cli/src/anchors.ts, spec-eval/src/freshness.ts]
+    description: >-
+      Cost A/B of one COLD full board assembly, measured through the real `/api/graph` HTTP surface, on a
+      substrate where the anchored-reading corpus is fixed byte for byte: a fresh clone of the product repo
+      checked out at one pinned commit (no worktrees, no session records), with `node_modules` linked so the
+      host TypeScript the ts-ast extractor needs actually resolves. Serve that one corpus twice — once with
+      the old binary, once with the new — each on its own pinned free port with `env -u SPEXCODE_API_URL`,
+      polling `/health` before the first read. Time the FIRST `/api/graph` (the cold build) and one warm read,
+      and keep both response bodies. Instrument BOTH trees identically at the one call that runs the
+      extractor, counting file revisions parsed and bytes handed to the parser. Record loadavg with every
+      timing, and separately verify equality on a session-bearing substrate (a checkout carrying real governed
+      worktrees and session records), where a same-binary control first establishes which board fields move
+      on their own. Also dump the per-query anchor booleans on both binaries and compare them one by one.
+    expected: >-
+      The new binary's cold `/api/graph` is materially cheaper than the old one's, and the saving is visible
+      in the mechanism, not only the clock: it hands the parser strictly fewer file revisions and fewer bytes
+      for the SAME corpus, because an existence read stops at its window's first hit. Equality is the primary
+      judgement, held to the byte: identical `/api/graph` response bodies on the pinned substrate with NO
+      normalization, and an identical board on the session-bearing substrate once — and only once — the
+      fields the same-binary control proved are per-process are normalized. Every per-query anchor boolean
+      must match one for one, which is the minimal sufficient evidence for this change: the one way a
+      short-circuit can be wrong is reporting a window it stopped scanning early as "no hit", and that
+      failure lands precisely on the queries that hold no hit at all — too few to move aggregate bytes, but
+      individually visible here. Loss is any board or wire byte that differs beyond the controlled fields,
+      any per-query boolean that flips, or a parse volume that did not actually fall.
   - name: cold-board-does-not-stall-health
     tags: [backend-api]
     code: [spec-cli/src/graph.ts, spec-cli/src/anchors.ts]

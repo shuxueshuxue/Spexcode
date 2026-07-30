@@ -155,12 +155,29 @@ same current-root cache ownership. Path-specific history remains lazy and bounde
 Git images and ordinary hunks are permanent properties of their commits, so the build asks for them ONCE.
 Assembly therefore plans every node's rows first — a pure sidecar-read and axis projection that forks
 nothing — then primes the content and anchor probes with the WHOLE demand set, and only then decorates rows
-from settled verdicts. A corpus of N anchored readings costs one batch, not N. This is a cost boundary only:
-the batch computes the same verdicts from the same immutable inputs, and the served board is byte-identical
-to the reading-at-a-time path at every tip, which is the standing obligation whenever the batch is retuned.
-The waste it removed is the shape to recognize again: priming per reading forked ~2,700 children to answer
-~800 verdicts, of which ~2,500 were the same two `cat-file --batch` calls re-spawned per row — the exact
-inverse of what a batch flag is for.
+from settled verdicts. The invariant is that anchored-reading cost is bounded by what the verdicts actually
+require and is INDEPENDENT of the reading count N — never one batch per reading. That is the property to
+preserve; "one batch" was its original spelling because the two then coincided: every window was scanned to
+its end, so the whole demand set was known before any bytes moved and one batch WAS the entire read. A board
+asks the anchor engine only whether a window holds ANY hit ([[code-anchor]]'s existence read), so the scan
+stops at its first hit and the demand set must be discovered rather than declared; it advances in
+corpus-wide rounds whose number is bounded by hit DEPTH, still independent of N. Rounds that asked one
+reading at a time would re-fork the batch per unit, which is exactly what this rule forbids. This is a cost
+boundary only: the same verdicts are computed from the same immutable inputs, and the served board is
+byte-identical to the reading-at-a-time path at every tip, which is the standing obligation whenever the
+batch is retuned. The waste it removed is the shape to recognize again: priming per reading forked ~2,700
+children to answer ~800 verdicts, of which ~2,500 were the same two `cat-file --batch` calls re-spawned per
+row — the exact inverse of what a batch flag is for. Scanning a window past its first hit is the same shape
+one layer up: measured on this corpus, it parsed 1,158 historical file revisions (52.6 MB through the host
+TypeScript parser) to settle 858 booleans that 307 revisions (21.9 MB) already decide.
+
+Two costs this build still pays are named here rather than folded in, because each needs its own argument.
+The per-revision extraction memo is process-local, so a cold process re-parses revisions a previous one
+already settled; making it durable is a persistent-state decision that must argue its own case against
+[[drift-by-ancestry]]'s no-stored-state rule, not ride in as a cost tweak. And extraction is synchronous, so
+a cold build's remaining parse volume is still an uninterruptible stretch — the reason `/health` can freeze
+during one. Reducing HOW MUCH is parsed shortens that stretch proportionally; it does not make the parse
+yield, which is a separate repair.
 
 **How that equality may be measured is part of the obligation, because the board is NOT byte-reproducible
 run to run on a live corpus.** Two runs of the SAME binary against a checkout that carries worktrees and

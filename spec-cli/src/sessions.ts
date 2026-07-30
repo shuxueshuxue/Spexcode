@@ -2483,6 +2483,10 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
   archiving.add(id)
   try {
   const h = harnessById(wt.rec.harness || defaultHarness.id)
+  const settleArchiveRecovery = () => {
+    const current = readRecord(id)
+    if (current?.adapterRecovery) writeRecord({ ...current, adapterRecovery: null })
+  }
   // A proven cold record is already archived; never clear it and issue a second thread/archive RPC. Verify the
   // adapter's exact resident reference first so an externally respawned thread is repaired rather than hidden.
   if (wt.rec.archived && hasValidColdProof(wt.rec)) {
@@ -2501,11 +2505,17 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
         const state = await descriptor.residency()
         return state.healthy && state.rootAbsent === true && state.referenceIds.length === 0
       })).then((states) => states.some(Boolean))
-      if (rootAbsent) return true
+      if (rootAbsent) {
+        settleArchiveRecovery()
+        return true
+      }
       const pre = await h.coldPreflight?.({ ...wt.rec, archived: false, stopped: true })
       if (!pre || pre.ok) {
         const cold = await h.coldRuntime?.({ ...wt.rec, archived: false, stopped: true }, pre?.ok ? pre.receipt : undefined)
-        if (!cold || cold.ok) return true
+        if (!cold || cold.ok) {
+          settleArchiveRecovery()
+          return true
+        }
       }
     }
   }

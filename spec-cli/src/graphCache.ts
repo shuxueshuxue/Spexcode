@@ -357,15 +357,15 @@ function startSessionSplice(): Flight | null {
   return flight
 }
 
-// One flight owns BOTH patrol validation and a producer. A patrol first folds the cheap input revision; an
-// exact match resolves to `cached` without calling either producer. A mismatch derives the changed domain and
-// falls through to the same build path an explicit watcher invalidation takes. An invalidation during validation
-// also falls through under this flight, so validation can never race a second producer into existence.
+// One flight owns BOTH validation and a producer. Every refresh — patrol or watcher-signalled — first folds
+// the cheap input revision; an exact match resolves to `cached` without calling either producer. A mismatch
+// derives the changed domain and falls through to the build path. An invalidation during validation also falls
+// through under this flight, so validation can never race a second producer into existence. `mode` no longer
+// selects who validates; it only says whether a stale HTTP response is waiting for a turn to flush first.
 type FlightMode = 'dirty' | 'patrol'
 function startBuild(mode: FlightMode = 'dirty'): Flight | null {
   if (inflight) return inflight
   if (Date.now() < retryAt) return null
-  const flightStartGen = gen
   const controller = new AbortController()
   let watchdog: ReturnType<typeof setTimeout> | undefined
   let timedOut = false
@@ -397,41 +397,42 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
     }
     try {
       Promise.resolve(withGitAbortSignal(controller.signal, async () => {
-        if (mode === 'patrol' && dirty === 'none' && cached && cachedRevision) {
-          const anchorRevision = cachedRevision
-          const observed = await boardInputRevision(cached)
-          if (controller.signal.aborted)
-            throw Object.assign(new Error('graph patrol aborted'), { name: 'AbortError' })
-          if (gen === flightStartGen && dirty === 'none' && observed.combined === anchorRevision.combined)
-            return cached
-          // A changed revision with no watcher event is the patrol doing its repair job. If an explicit event
-          // arrived meanwhile it already set the correct (possibly sessions-only) scope, which we must not
-          // overwrite. An otherwise-clean mismatch derives its scope from the moved input domain.
-          if (gen === flightStartGen && dirty === 'none') {
-            gen++
-            if (DEBUG) {
-              const moved = Object.keys(observed.fullParts)
-                .filter((key) => observed.fullParts[key] !== anchorRevision.fullParts[key])
-              console.warn(`spec-cli: graph patrol revision moved — scope=${observed.full === anchorRevision.full ? 'sessions' : 'full'} inputs=[${moved.join(', ')}]`)
-          }
-            if (observed.full === anchorRevision.full) {
-              dirty = 'sessions'
-              sessionOwed = true
-              sessionGeneration++
-            } else dirty = 'full'
-          }
-        }
-
         const prev = cached
+        const anchor = cachedRevision
+        const sampledGen = gen
         const before = await boardInputRevision(prev)
         if (controller.signal.aborted)
           throw Object.assign(new Error('graph build aborted before producer start'), { name: 'AbortError' })
-        // A session signal cannot vouch for the graph domain. Before splicing, compare the current full inputs
-        // to the revision the cached node/meta units actually carry; a missed graph watcher promotes this same
-        // flight to full instead of certifying old nodes under a new revision.
-        if (dirty === 'sessions' && prev && cachedRevision && before.full !== cachedRevision.full) {
-          if (DEBUG) console.warn('spec-cli: session refresh found moved graph inputs — promoting to full')
-          dirty = 'full'
+        // ONE rule for every refresh: the domain a producer runs is DERIVED from the inputs that actually
+        // moved, never assigned by whoever signalled. A watcher names the leaf it saw, not what the board
+        // reads — a generated harness artifact rewritten inside a live worktree, or a linked worktree no
+        // governed record names, moves no board input at all, and used to buy a whole structural assembly
+        // anyway. The revision sampled here is the complete full-domain contract, so an unmoved full
+        // obligation is DISCHARGED without assembly. The session projection is deliberately NOT
+        // dischargeable: liveness lives on graph-stream's poller axis, outside this revision, so a claimed
+        // sessions obligation always survives and takes its splice. A sample taken after the write is what
+        // the watcher event was about; an invalidation arriving after the sample keeps its own dirty window.
+        if (prev && anchor && gen === sampledGen) {
+          const fullMoved = before.full !== anchor.full
+          const projectionMoved = before.sessions !== anchor.sessions || before.projections !== anchor.projections
+          // A projection move nobody signalled is this validation doing the patrol's repair job.
+          if (projectionMoved && !sessionOwed && dirty !== 'sessions') {
+            gen++
+            sessionOwed = true
+            sessionGeneration++
+          }
+          const owed = fullMoved ? 'full' : (sessionOwed || dirty === 'sessions') ? 'sessions' : 'none'
+          if (DEBUG && owed !== 'none') {
+            const moved = Object.keys(before.fullParts).filter((key) => before.fullParts[key] !== anchor.fullParts[key])
+            console.warn(`spec-cli: graph refresh revision moved — signalled=${dirty} scope=${owed} inputs=[${moved.join(', ')}]`)
+          } else if (DEBUG && dirty !== 'none') {
+            console.warn(`spec-cli: graph refresh discharged a ${dirty} signal — no board input moved`)
+          }
+          if (fullMoved) dirty = 'full'
+          else if (sessionOwed || dirty === 'sessions') dirty = 'sessions'
+          // Discharging CONSUMES the claim. Leaving it standing would make every later read re-enter this
+          // validation, hold the board permanently stale/refreshing, and never converge.
+          else { dirty = 'none'; return prev }
         }
         const sessionsOnly = dirty === 'sessions' && prev !== null
         buildScope = sessionsOnly ? 'sessions' : 'full'
@@ -447,7 +448,6 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
         buildStartedAt = Date.now()
         const board = await (sessionsOnly ? spliceSessions(prev!) : buildBoard())
         const after = await boardInputRevision(prev)
-        const carried = revisionCarriedByBoard(after, board)
         const movedFull = Object.keys(after.fullParts)
           .filter((key) => after.fullParts[key] !== before.fullParts[key])
         // The first build can initialize the resident forge carrier that it then returns. That movement is
@@ -455,13 +455,20 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
         // movement remains dirty just like a warm one; cold start is not a blanket race exemption.
         const coldIssueInitialization = prev === null
           && movedFull.every((key) => key === 'issuesStamp')
-          && after.fullParts.issuesStamp === carried.fullParts.issuesStamp
+          && after.fullParts.issuesStamp === digest(board.issuesStamp)
         buildFullStable = before.full === after.full || coldIssueInitialization
         buildSessionsStable = before.sessions === after.sessions
         if (DEBUG && (!buildFullStable || !buildSessionsStable)) {
           console.warn(`spec-cli: graph inputs moved during ${buildScope} producer — next=${buildFullStable ? 'sessions' : 'full'} inputs=[${movedFull.join(', ')}] sessions=${buildSessionsStable ? 'stable' : 'moved'}`)
         }
-        completedRevision = carried
+        // The anchor must name the sample this board is KNOWN to have read, because validation now discharges
+        // an unmoved obligation for every refresh, not only the patrol's. An input that moved DURING the
+        // producer leaves the board built from the pre-move value while the after-sample already names the
+        // post-move one; anchoring on `after` would let the next validation discharge the re-owed dirty scope
+        // against a revision this board never carried, and the cache would converge on nothing. So a moved
+        // half anchors on `before` — the conservative direction, which costs at most one extra rebuild and can
+        // never certify unread bytes.
+        completedRevision = revisionCarriedByBoard(buildFullStable && buildSessionsStable ? after : before, board)
         return board
       }))
         .then(resolveBuild, rejectBuild)

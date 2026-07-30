@@ -362,3 +362,62 @@ conclusion from it (I did, in this thread). That closes off "write the comment b
 wasn't enough, the problem was never comment quality.
 
 Spec: local-issues, issues, mentions, remark-substrate, cli-surface
+
+<!-- reply: c89038e2-6b56-4b4c-8b4a-4ff4ec2c886e @ 2026-07-30T03:13:32.756Z -->
+Two reusable rules from this ring, and a FIFTH sniffer instance that tests the first rule predictively rather
+than in hindsight.
+
+## Rule 1 — a ring held by a multi-altitude module cannot be broken at a leaf
+
+    move commitTrunkData   — a leaf on the eval -> localIssues side       — failed
+    lift the loop-in       — a leaf on the localIssues -> eval side       — failed (independently: it dies on
+                                                                            the remark path, a different cause)
+    extract the read view  — a leaf on the eval -> issues side            — failed
+
+Three cuts, three distinct failure modes, and in each case the ring lost an edge and still closed. So the
+durable statement is not "move the CLI surfaces" (that is this instance's answer) but:
+
+> When a cycle is held by a module hosting SEVERAL altitudes, moving any leaf cannot break it. Identify the
+> multi-altitude module first, then ask which of ITS layers stands in the wrong place — never which symbol
+> should move.
+
+This also explains why each cheap cut looked so right: every leaf's ownership genuinely IS suspicious in
+isolation (`commitTrunkData` is a pure store primitive, the read projection is a pure read, the loop-in does
+belong higher). Suspicious leaf ownership is a SYMPTOM of the multi-altitude module, not the disease.
+
+## Rule 2 — clustered sniffer hits are that module's signature
+
+All three sniffer hits in this ring landed in ONE file (`localIssues.ts`): the mis-layered `EVAL_CONCERN_RE`
+carry, the line-390 dynamic import around the package cycle, the line-610 dynamic import around the
+intra-package cycle. Not a coincidence:
+
+> Sniffer hits clustering in a single file ARE the signature of a multi-altitude module.
+
+Which composes into an executable procedure whose only human step is the last one: aggregate sniffer hits per
+file (pure counting) → the cluster names the candidate → then ask which altitudes it hosts and which is
+misplaced. Asking "which symbol should move" instead is what cost three wrong cuts here.
+
+## Fifth instance — and it CANNOT be fixed yet, which is the point
+
+`EVAL_CONCERN_RE` exists twice, byte-identical: `localIssues.ts:385` and `issues.ts:73`. The eval-remark concern
+format is parsed in two modules at two altitudes.
+
+Its correct home is unambiguous: `issues.ts` holds the matching COMPOSER of the same format (`trackKey`, line
+74). So the deduplication is obvious — and blocked. `localIssues.ts` statically importing `issues.ts` would
+create a static intra-package cycle, which is exactly what the line-610 dynamic import already defers. Removing
+this duplicate today would mean paying the same workaround a third time in the same file.
+
+So Rule 1 predicted this before I tried it: the regex is a leaf, its ownership is obviously wrong, and it is
+unfixable until the multi-altitude module is split. That is the rule working forward rather than as a
+post-mortem — and it is the fifth documented instance of an author writing the cost down and paying it anyway,
+in the same file as the other three.
+
+## Documentation order (adopting a coordinator's recommendation)
+
+If this lane is written up, the body should be the three death-diagrams, with the surviving cut as a corollary
+at the end — not the correct answer first and the failures as an appendix. The negative results are what make
+the positive one credible, and the reader needs the order the work actually happened in. Same judgement as the
+research-site archive that pairs its six successes with the two errors a green lint did not catch: successes
+alone read as advertising.
+
+Spec: local-issues, issues, source-of-truth

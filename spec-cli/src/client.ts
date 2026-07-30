@@ -8,7 +8,7 @@ import { apiBase, apiBaseInfo, assertProjectMatch, fromRaw, resolveSession, revi
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number) {
     super(message)
-    this.name = 'BackendError'   // sessions.ts's isBackendDown matches on this name (no runtime import cycle)
+    this.name = 'BackendError'   // cli.ts's top-level handler matches on the NAME, so it needs no import of this class
   }
 }
 
@@ -48,7 +48,10 @@ function corruptCachedSession(id: string, reason: string): Session {
   }
 }
 
-function localCachedSessions(includeArchived = false): Session[] {
+// Also the board a FOLLOW resolves its selectors against ([[session-follow]]): following must work with no
+// `spex serve` running, and asking a backend for the board would cost exactly the tmux/rendezvous probes the
+// follow exists to eliminate. Every field here comes from the store — nothing is probed.
+export function localCachedSessions(includeArchived = false): Session[] {
   const rows: Session[] = []
   for (const id of listSessionIds()) {
     const entry = readPublicRecordEntry(id)

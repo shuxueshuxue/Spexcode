@@ -2478,6 +2478,10 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
   archiving.add(id)
   try {
   const h = harnessById(wt.rec.harness || defaultHarness.id)
+  const settleArchiveRecovery = () => {
+    const current = readRecord(id)
+    if (current?.adapterRecovery) writeRecord({ ...current, adapterRecovery: null })
+  }
   // A proven cold record is already archived; never clear it and issue a second thread/archive RPC. Verify the
   // adapter's exact resident reference first so an externally respawned thread is repaired rather than hidden.
   if (wt.rec.archived && hasValidColdProof(wt.rec)) {
@@ -2496,11 +2500,17 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
         const state = await descriptor.residency()
         return state.healthy && state.rootAbsent === true && state.referenceIds.length === 0
       })).then((states) => states.some(Boolean))
-      if (rootAbsent) return true
+      if (rootAbsent) {
+        settleArchiveRecovery()
+        return true
+      }
       const pre = await h.coldPreflight?.({ ...wt.rec, archived: false, stopped: true })
       if (!pre || pre.ok) {
         const cold = await h.coldRuntime?.({ ...wt.rec, archived: false, stopped: true }, pre?.ok ? pre.receipt : undefined)
-        if (!cold || cold.ok) return true
+        if (!cold || cold.ok) {
+          settleArchiveRecovery()
+          return true
+        }
       }
     }
   }
@@ -2542,7 +2552,7 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
       : liveness({ ...latest, archived: false, stopped: false }, finalSnap)
     if (finalLv === 'unknown' || finalLv === 'starting' || finalLv === 'online')
       throw new ResourceConflict(`refusing to archive ${id}: leaf became ${finalLv} before filing`)
-    writeRecord({ ...latest, archived: true, stopped: true, coldProof: coldProofFor(latest) })
+    writeRecord({ ...latest, archived: true, stopped: true, coldProof: coldProofFor(latest), adapterRecovery: null })
   } catch (error) {
     if (coldCommitted) {
       const restored = await h.restoreRuntime?.(wt.rec, preflight?.ok ? preflight.receipt : undefined)

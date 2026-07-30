@@ -24,8 +24,8 @@ world — what it declared, what was said to it — is a sequence of events, and
 solved separately and worse: it is the **conversation** a terminal-free surface renders, and it is the
 **delivery** itself. A message is delivered when its bytes are in this file; the transport that pokes the
 agent afterwards is a courtesy, not the fact. And because the file is only a file, it is the one thing
-about a session that any process may observe without owning anything — which is how [[layers]]' L1 lets a
-supervisor, a CI, or any external orchestrator watch a fleet without being granted anything.
+about a session that any process may observe without owning anything — which is how a supervisor, a CI, or
+any external orchestrator watches a fleet without being granted access to it.
 
 ## expanded spec
 
@@ -73,7 +73,7 @@ vanishing without one.
 
 Only the AUTHORED axis is history. Liveness (offline/starting/unknown) is a present-tense probe derivation
 ([[state]]) — re-derived, never authored — so it stays off the durable log; surfaces show current liveness
-from the board row. This is what [[layers]] keeps inside L1: a reader that has
+from the board row. This is the axis split [[state]] owns, read from outside: a reader that has
 only this file can learn everything a session declared and nothing about whether it is alive, and therefore
 can never take an action that needs to know. The timeline dies with the session record (close sweeps the
 store dir).

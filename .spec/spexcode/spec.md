@@ -17,6 +17,21 @@ resolves a forge's open issues/PRs to the spec nodes they serve), and **spec-eva
 loss-measurement system — each node's scenarios scored against their expected outcome, the signal the
 optimizer reads).
 
+Those packages implement **three stacked layers**, and keeping them distinct is what keeps the project
+from rotting into one blur. **L0 — the data asset**: the spec↔code graph, its git-derived history, and
+`spex lint`; the thing an organisation adopts and never throws away, so it is judged by generality,
+robustness, and an **install surface small enough that nothing can stop it landing** (an install-time
+dependency that can fail on a user's machine is a barrier to the asset ever starting to accumulate, and
+is refused at this altitude). **L1 — the agent-army substrate**: the session state machine that drives
+workers on top of that asset, the brick a CI, a review pipeline, or a software factory builds with, so it
+is judged by **scale and composability** — a mechanism whose cost grows with (observers × subjects) is a
+defect here even while it is fast enough today, because the growth term is what caps the army. **L2 — the
+reference workspace**: the HTTP/SSE/WS faces, the dashboard, the gateway; a **consumer** of L1 and never
+its gatekeeper, judged by interaction density, and the reason this project can dogfood itself at all.
+
+The stack is also the adoption ladder — take L0 alone and get the whole data asset, add L1 for an agent
+army, add L2 for the workspace — so **each layer must be worth having without the ones above it**.
+
 `config/` holds **reflexive, skill-shaped preset nodes** — each a spec node whose folder bundles a prompt
 template (`spec.md`, with a `{{targets}}` placeholder) plus any helper scripts/assets, served by
 `GET /api/plugins` for the new-session `/` dropdown to compose over @-referenced target nodes.

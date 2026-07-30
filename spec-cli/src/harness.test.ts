@@ -393,7 +393,7 @@ const runReplacementArchiveCase = async (response: 'success' | 'error') => {
   let unarchiveCalls = 0
   const server = codexRpcFixture((message) => {
     if (message.method === 'thread/loaded/list') return { data: archived ? [] : [{ id: target }], nextCursor: null }
-    if (message.method === 'thread/read') return { thread: { turns: [] } }
+    if (message.method === 'thread/turns/list') return { data: [], nextCursor: null }
     if (message.method === 'thread/archive') {
       archiveCalls++
       archived = true
@@ -442,7 +442,7 @@ test('Codex corrupt-record quarantine archives only an exact orphan native threa
   let archiveCalls = 0
   const server = codexRpcFixture((message) => {
     if (message.method === 'thread/loaded/list') return { data: loaded ? [{ id: target }] : [], nextCursor: null }
-    if (message.method === 'thread/read') return { thread: { turns: [] } }
+    if (message.method === 'thread/turns/list') return { data: [], nextCursor: null }
     if (message.method === 'thread/archive') { archiveCalls++; archived = true; loaded = false; return {} }
     if (message.method === 'thread/list') {
       if (message.params.ancestorThreadId) return { data: descendant && !message.params.archived ? [{ id: 'native-child', parentThreadId: target }] : [], nextCursor: null }
@@ -556,12 +556,12 @@ test('Codex archive refuses a shared generation swap during exact target guard b
   const root = runtimeRoot()
   const server = codexRpcFixture((message) => {
     if (message.method === 'thread/loaded/list') return { data: archived ? [] : [{ id: target }], nextCursor: null }
-    if (message.method === 'thread/read') {
+    if (message.method === 'thread/turns/list') {
       if (!swapped) {
         swapped = true
         writeFileSync(codexAppServerReceipt(root), `swapped fixture ${process.pid}\n`)
       }
-      return { thread: { status: { type: 'idle' }, turns: [] } }
+      return { data: [], nextCursor: null }
     }
     if (message.method === 'thread/archive') { archiveCalls++; archived = true; return {} }
     if (message.method === 'thread/unarchive') { archived = false; return {} }
@@ -621,9 +621,9 @@ test('Codex archive refuses an unknown exact loaded target and an unowned archiv
   let targetUnknown = true
   const server = codexRpcFixture((message) => {
     if (message.method === 'thread/loaded/list') return { data: [{ id: target }, { id: 'unrelated-sibling' }], nextCursor: null }
-    if (message.method === 'thread/read') {
+    if (message.method === 'thread/turns/list') {
       if (message.params.threadId === target) throw new Error('exact target read unavailable')
-      return { thread: { turns: [] } }
+      return { data: [], nextCursor: null }
     }
     if (message.method === 'thread/list') {
       if (message.params.ancestorThreadId) return { data: !targetUnknown && message.params.archived
@@ -689,10 +689,10 @@ test('Codex archive cold-tears down the exact active and archived transitive des
   }
   const server = codexRpcFixture((message) => {
     if (message.method === 'thread/loaded/list') return { data: [...loaded].map((id) => ({ id })), nextCursor: null }
-    if (message.method === 'thread/read') {
+    if (message.method === 'thread/turns/list') {
       threadReads.push(message.params.threadId)
       if (message.params.threadId === sibling) throw new Error('unrelated sibling must never be read')
-      return { thread: { status: { type: 'idle' }, turns: [{ id: histories.get(message.params.threadId), status: 'completed' }] } }
+      return { data: [{ id: histories.get(message.params.threadId), status: 'completed' }], nextCursor: null }
     }
     if (message.method === 'thread/archive') {
       const id = message.params.threadId
@@ -789,7 +789,7 @@ test('Codex archive rejects duplicate, unowned, reassigned, and late subtree mem
     let reassigned = false
     const server = codexRpcFixture((message) => {
       if (message.method === 'thread/loaded/list') return { data: [...loaded].map((id) => ({ id })), nextCursor: null }
-      if (message.method === 'thread/read') return { thread: { status: { type: 'idle' }, turns: [] } }
+      if (message.method === 'thread/turns/list') return { data: [], nextCursor: null }
       if (message.method === 'thread/archive') {
         const id = message.params.threadId
         mutations.push(`archive:${id}`)
@@ -1141,11 +1141,15 @@ test('Codex archive uses the fresh inProgress turn, not stale thread status, as 
   let targetTurn = 'inProgress'
   let archived = false
   const mutations: string[] = []
+  const turnCensuses: any[] = []
   const server = codexRpcFixture((message) => {
     if (message.method === 'thread/loaded/list') return { data: archived ? [{ id: 'unrelated-loaded-sibling' }] : [{ id: target }, { id: 'unrelated-loaded-sibling' }], nextCursor: null }
-    if (message.method === 'thread/read') return message.params.threadId === target
-      ? { thread: { status: { type: 'active' }, turns: [{ id: 'target-turn', status: targetTurn }] } }
-      : { thread: { status: { type: 'idle' }, turns: [] } }
+    if (message.method === 'thread/turns/list') {
+      turnCensuses.push(message.params)
+      return message.params.threadId === target
+        ? { data: [{ id: 'target-turn', status: targetTurn }], nextCursor: null }
+        : { data: [], nextCursor: null }
+    }
     if (message.method === 'thread/archive') { archived = true; mutations.push('archive'); return {} }
     if (message.method === 'thread/unarchive') { archived = false; mutations.push('unarchive'); return {} }
     if (message.method === 'thread/list') {
@@ -1170,6 +1174,9 @@ test('Codex archive uses the fresh inProgress turn, not stale thread status, as 
     targetTurn = 'completed'
     assert.deepEqual(await codexHarness.coldRuntime?.({ session: 'archive-turn-race-session', harnessSessionId: target }), { ok: true })
     assert.deepEqual(mutations, ['archive'], 'a complete idle turn census archives even while top-level thread status remains active')
+    assert.ok(turnCensuses.length >= 2)
+    assert.ok(turnCensuses.every((params) => JSON.stringify(params) === JSON.stringify({ threadId: target, limit: 1, sortDirection: 'desc', itemsView: 'notLoaded' })),
+      'the guard asks only for the newest turn with no item history')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await stopCodexOwner(owner)
@@ -1197,7 +1204,7 @@ test('Codex archive re-censuses native descendants after mutation and compensate
       ...(lateCreated ? [{ id: 'late-native-descendant' }] : []),
       { id: 'unrelated-loaded-sibling' },
     ], nextCursor: null }
-    if (message.method === 'thread/read') return { thread: { status: { type: 'idle' }, turns: [] } }
+    if (message.method === 'thread/turns/list') return { data: [], nextCursor: null }
     if (message.method === 'thread/archive') { archived = true; lateCreated = true; mutations.push('archive'); return {} }
     if (message.method === 'thread/unarchive') { archived = false; mutations.push('unarchive'); return {} }
     if (message.method === 'thread/list') {

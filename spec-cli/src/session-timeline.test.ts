@@ -1,11 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { appendSent, lastHumanSendVia, readTimeline, timelineEvents } from './session-timeline.js'
 import { inboxCursor } from './session-cursors.js'
+import { rvSock } from './harness.js'
 import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
 import { composeSessionPrompt, markState, sendText, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
@@ -252,14 +254,12 @@ test('withTerminalReplyHint: keeps the message and explicitly countermands the n
 
 // ---- the append IS the delivery ([[dispatch]]) ----
 
-test('appendSent stamps a unique mid and reports the event index its line took', () => {
+test('appendSent stamps a unique mid on each durable line', () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
   seedSessionRecord(home)
   withHome(home, () => {
     const first = appendSent(ID, 'hello', null)
     const second = appendSent(ID, 'again', 'sender-1', 'note')
-    assert.equal(first.pos, 0)
-    assert.equal(second.pos, 1)
     assert.notEqual(first.mid, second.mid)
     const evs = timelineEvents(ID)
     assert.deepEqual(evs.map((e) => e.kind === 'sent' ? [e.mid, e.text, e.from, e.replyVia ?? null] : [e.kind]), [
@@ -282,6 +282,35 @@ test('a send whose poke cannot land still succeeds and still leaves the message 
     assert.equal(evs[0].kind === 'sent' && evs[0].text, 'the poke will fail')
     // a failed poke showed the agent nothing, so the line stays UNREAD for the turn-boundary reader
     assert.equal(inboxCursor(ID), 0)
+  })
+})
+
+test('an accepted rendezvous poke never consumes the durable line on the sender side', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home)
+  await withHomeAsync(home, async () => {
+    const sock = rvSock(ID)
+    rmSync(sock, { force: true })
+    let received = ''
+    let resolveReceived!: () => void
+    const receivedReply = new Promise<void>((resolve) => { resolveReceived = resolve })
+    const server = createServer((socket) => socket.on('data', (chunk) => {
+      received += chunk
+      resolveReceived()
+    }))
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(sock, resolve)
+    })
+    try {
+      assert.deepEqual(await sendText(ID, 'the listener only accepted a poke'), { ok: true })
+      await receivedReply
+      assert.match(received, /the listener only accepted a poke/)
+      assert.equal(inboxCursor(ID), 0, 'only the target turn-boundary reader may consume the line')
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+      rmSync(sock, { force: true })
+    }
   })
 })
 

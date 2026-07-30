@@ -600,9 +600,9 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
   }
 }))
 // ONE input route, `kind` the discriminator — the transport split is an implementation fact, not API surface.
-// kind:"text" (Command Box, `spex session send`, the server-side merge dispatch) injects a whole prompt
-// through the rendezvous control socket — socket-only + fail-loud: a prompt the agent doesn't confirm
-// accepting returns 502 with the reason (never a silent 200), so a dead dispatch is seen, not a false success.
+// kind:"text" (Command Box, `spex session send`, the server-side merge dispatch) appends the prompt to the
+// target timeline, then best-effort pokes its adapter. A dead channel delays context injection but does not
+// change the successful append response; 502 means the record rejected the write.
 // kind:"keys" is the LAST-RESORT raw face (`spex session send --keys`): an ORDERED BATCH of
 // nav-mode key tokens over tmux send-keys, delivered in array order so tap order survives
 // ([[nav-mode-key-ordering]]); unstable by nature — callers try a plain text send first. An unknown kind is a

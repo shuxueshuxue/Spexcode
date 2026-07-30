@@ -8,7 +8,7 @@ import type { DispatchResult, HarnessDeliveryRecord } from './harness.js'
 import { controlRequest, withTimeout } from './headless-controller.js'
 import { shQuote } from './sh.js'
 
-type ControlRequest = { type: 'deliver'; text: string }
+type ControlRequest = { type: 'deliver'; text: string; mid?: string }
 type ChildTurn = { process: ChildProcess; exited: Promise<number | null> }
 
 const PKG = fileURLToPath(new URL('..', import.meta.url))
@@ -24,7 +24,7 @@ export function piHeadlessLaunchCommand(id: string, runtimeDir: string, piCmd: s
 }
 
 export const deliverViaPiHeadless = (rec: HarnessDeliveryRecord, text: string) =>
-  controlRequest(piHeadlessSock(rec.session), { type: 'deliver', text }, {
+  controlRequest(piHeadlessSock(rec.session), { type: 'deliver', text, mid: rec.mid }, {
     name: 'pi-headless', session: rec.session, timeoutMs: CONTROL_TIMEOUT_MS,
     rejected: 'pi-headless controller rejected the request',
   })
@@ -101,10 +101,10 @@ export class PiHeadlessController {
     if (request.type !== 'deliver') return { ok: false, error: 'unknown pi-headless control request' }
     if (!request.text) return { ok: false, error: 'empty prompt - nothing to deliver' }
 
-    // A live extension listener is an in-flight pi turn. The native steer path is parse-confirmed by the
-    // shared rendezvous protocol. Only a proven absent listener may cold-wake a saved session.
+    // A live extension listener is an in-flight pi turn. Only a proven absent listener may cold-wake a saved
+    // session; an inconclusive probe must not start a duplicate turn.
     const { deliverViaSocketOrWake } = await import('./harness.js')
-    return deliverViaSocketOrWake(this.id, request.text, async () => {
+    return deliverViaSocketOrWake(this.id, request.text, request.mid, async () => {
       if (this.child) await withTimeout(this.child.exited, 5_000, `previous pi-headless turn did not exit for session ${this.id}`)
       await this.spawnTurn(request.text, true)
       return { ok: true }

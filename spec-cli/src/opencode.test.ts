@@ -230,6 +230,7 @@ test('resumed session (--session route): the env-seeded rootSession makes the da
   for (let i = 0; i < 100 && !existsSync(rvSock(session)); i++) await new Promise((r) => setTimeout(r, 20))
   const r = await deliverViaRendezvous(session, 'steer straight after resume')   // no event fired at all
   assert.equal(r.ok, true)
+  for (let i = 0; i < 100 && t.prompts.length === 0; i++) await new Promise((r) => setTimeout(r, 10))
   const p = t.prompts[0] as { path: { id: string }; body: { parts: { text: string }[] } }
   assert.equal(p.path.id, 'oc_resumed')                       // injected into the RESUMED conversation
   assert.equal(p.body.parts[0].text, 'steer straight after resume')
@@ -252,45 +253,40 @@ test('resumed session (--continue route): the SDK session.list fallback adopts t
     if (!ok) await new Promise((r2) => setTimeout(r2, 50))
   }
   assert.equal(ok, true, 'the fallback adopted a session and the daemon accepted the delivery')
+  for (let i = 0; i < 100 && t.prompts.length === 0; i++) await new Promise((r) => setTimeout(r, 10))
   const p = t.prompts[0] as { path: { id: string } }
   assert.equal(p.path.id, 'oc_newest')
   rmSync(t.dir, { recursive: true, force: true })
   rmSync(rvSock(session), { force: true })
 })
 
-test('rendezvous daemon: the REAL claude deliver (atomic reply+repaint, parse-confirmed) lands a prompt in the session', async () => {
+test('rendezvous daemon: the shared poke lands one prompt for an idempotent mid', async () => {
   const session = `oc-t4-${process.pid}`
   const t = await loadPlugin({ session })
   await t.hooks.event({ event: { type: 'session.created', properties: { info: { id: 'oc_root' } } } })
   for (let i = 0; i < 100 && !existsSync(rvSock(session)); i++) await new Promise((r) => setTimeout(r, 20))
   assert.ok(existsSync(rvSock(session)), 'the plugin bound the rendezvous socket from the launch env')
-  const r = await deliverViaRendezvous(session, 'manager says: also update the docs')
-  assert.equal(r.ok, true)                                    // repaint-done arrived → parse-confirmed, not optimistic
+  const r = await deliverViaRendezvous(session, 'manager says: also update the docs', 'mid-opencode-once')
+  assert.equal(r.ok, true)
+  const replay = await deliverViaRendezvous(session, 'manager says: also update the docs', 'mid-opencode-once')
+  assert.equal(replay.ok, true)
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  assert.equal(t.prompts.length, 1)
   assert.equal((t.prompts[0] as { body: { parts: { text: string }[] } }).body.parts[0].text, 'manager says: also update the docs')
   rmSync(t.dir, { recursive: true, force: true })
   rmSync(rvSock(session), { force: true })
 })
 
-test('rendezvous daemon under probe pressure: kicking connects + a turn-length prompt call still parse-confirm — ONE injection, no false negative', async () => {
-  // the field bug (deliver-second-message A-side): session.prompt resolves only when the injected TURN ends,
-  // and the board liveness probe connects to the socket on every snapshot. The daemon awaiting the injection
-  // INSIDE its parse loop left repaint-done unsent for the whole turn, so every probe connect kicked the
-  // pending confirm — sender reported "NOT delivered" (false) and its retries re-injected the same prompt.
-  // The daemon must confirm at PARSE time, synchronously, before any concurrent connect can run.
+test('rendezvous daemon: a turn-length injection does not hold the poke open', async () => {
   const session = `oc-t5-${process.pid}`
-  const t = await loadPlugin({ session, promptMs: 1500 })     // a realistic slow turn, longer than the whole deliver
+  const t = await loadPlugin({ session, promptMs: 1500 })
   await t.hooks.event({ event: { type: 'session.created', properties: { info: { id: 'oc_root' } } } })
   for (let i = 0; i < 100 && !existsSync(rvSock(session)); i++) await new Promise((r) => setTimeout(r, 20))
   assert.ok(existsSync(rvSock(session)), 'the plugin bound the rendezvous socket from the launch env')
-  const storm = setInterval(() => {                           // the probe: connect (which kicks) then drop, every 20ms
-    const p = createConnection({ path: rvSock(session) })
-    p.on('error', () => { /* daemon may kick us right back */ })
-    setTimeout(() => p.destroy(), 10)
-  }, 20)
   const r = await deliverViaRendezvous(session, 'second message under fire')
-  clearInterval(storm)
-  assert.equal(r.ok, true, `deliver must parse-confirm despite the probe storm (got: ${JSON.stringify(r)})`)
-  assert.equal(t.prompts.length, 1)                           // exactly one injection — a confirmed prompt is never resent
+  assert.equal(r.ok, true)
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  assert.equal(t.prompts.length, 1)
   assert.equal((t.prompts[0] as { body: { parts: { text: string }[] } }).body.parts[0].text, 'second message under fire')
   rmSync(t.dir, { recursive: true, force: true })
   rmSync(rvSock(session), { force: true })

@@ -805,7 +805,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // Lifecycle actions consume both status and structured bodies before reload. Their outcome belongs to the
   // selected action panel, never to the navigation list, so one refusal cannot masquerade as two operations.
   const act = async (verb, body, owner = 'panel') => {
-    setActionOutcome({ owner, phase: 'sending', message: t('session.outcomeSending') })
+    setActionOutcome({ owner, phase: 'pending', message: t('session.outcomeWorking') })
     let ok = true
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/${verb}`), body

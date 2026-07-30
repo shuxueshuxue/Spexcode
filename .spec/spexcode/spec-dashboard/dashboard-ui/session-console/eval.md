@@ -17,13 +17,16 @@ scenarios:
       focus, and desktop activation focuses the mounted textarea.
   - name: headless-stop-relaunch-preserves-history
     tags: [frontend-e2e, desktop, backend-api]
+    test: spec-dashboard/test/lifecycle-outcome.e2e.mjs
     description: >-
       Open a real governed headless session's desktop console in Chromium after its timeline contains a unique
       declaration note. Use Alt+I to run `/stop`, inspect the rendered offline surface and available commands,
       click relaunch, then inspect the restored conversation and public timeline.
     expected: >-
       `/stop` is handled as the real board command and never sent as agent text. The console changes to a visible,
-      clickable `.si-offline` panel with relaunch available and Command Box unavailable. Relaunch returns the
+      clickable `.si-offline` panel with relaunch available and Command Box unavailable. While the relaunch
+      request is pending, its one right-pane status reports a lifecycle transition (`working...`), never a
+      message delivery (`sending...`); prompt dispatch retains its own sending outcome. Relaunch returns the
       session online; the same mounted conversation reappears with the unique pre-stop note and timeline intact.
   - name: dashboard-session-state-push-latency
     tags: [frontend-e2e, desktop, backend-api]

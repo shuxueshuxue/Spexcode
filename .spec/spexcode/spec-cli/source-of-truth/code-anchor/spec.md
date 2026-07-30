@@ -239,8 +239,18 @@ same bytes under `.ts` and `.tsx` therefore never share a result by oid alone, a
 of call order. Within one READ — a lint run, a board build, a CLI scan — every live anchored window is one
 query batch: the engine reads a
 historical `(commit,path)` image, its blob, and an ordinary `(commit,path)` hunk once, then applies each
-node's own selector set and emits findings in declaration order. The batch ends with that invocation;
-it does not become a resident cache or a second history truth. Git access stays batch/short-lived; no resident
+node's own selector set and emits findings in declaration order.
+
+All three are permanent properties of that commit, so all three answer from that one bounded memo, and the
+demand set a batch actually sends Git is its MISSES. A second READ in the same process therefore asks Git only
+about facts it has not read — work proportional to what MOVED since, not to the corpus. The waste that rule
+removes is the ordinary hunk having been the one immutable fact re-derived every time: a re-lint after a
+single trunk commit or one dirty edit re-forked one `log --patch` per anchored path (22 on this tree, argv
+byte-identical to the previous run) and re-streamed every window blob, so a consumer that re-verdicts per tree
+state — [[manager-cockpit]]'s review gate — paid the whole corpus per movement. The batch ends with that
+invocation; the memo it fills is per-object and holds no window, verdict or reachability, so it is neither a
+resident cache of results nor a second history truth, and a `(commit,path)` Git was never asked about is
+always asked. Git access stays batch/short-lived; no resident
 process. The READ is the unit deliberately: a consumer that batches something narrower — one node, one
 reading — re-forks the whole batch per unit and inverts the flag's purpose, so both the spec-drift and the
 eval-freshness consumers hand the engine their entire demand set at once. Batch width lengthens a queue

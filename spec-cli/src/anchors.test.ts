@@ -166,6 +166,58 @@ test('anchor query batch reads one shared immutable window for distinct selector
   }
 })
 
+test('a repeated read costs the MOVEMENT, and a commit git was never asked about is always asked', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-anchor-repeat-'))
+  const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  const oldPath = process.env.PATH
+  const bin = mkdtempSync(join(tmpdir(), 'spex-git-argv-'))
+  const argv = join(bin, 'argv')
+  const unit = (name: string, body: string) => `export function ${name}() {\n  return ${body}\n}\n`
+  const calls = () => readFileSync(argv, 'utf8').split('\n').filter(Boolean)
+  const hunkQueries = () => calls().filter((line) => line.includes(' log ')).length
+  const blobReads = () => calls().filter((line) => /cat-file --batch$/.test(line)).length
+  try {
+    g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
+    mkdirSync(join(root, 'src'))
+    writeFileSync(join(root, 'src/repeat.ts'), unit('f', '1') + unit('g', '2'))
+    g('add', '-A'); g('commit', '-qm', 'v1')
+    writeFileSync(join(root, 'src/repeat.ts'), unit('f', '11') + unit('g', '2'))
+    g('add', '-A'); g('commit', '-qm', 'f moves'); const first = g('rev-parse', 'HEAD')
+    writeFileSync(join(bin, 'git'), `#!/bin/sh\nprintf '%s\\n' "$*" >> ${argv}\nexec /usr/bin/git "$@"\n`)
+    chmodSync(join(bin, 'git'), 0o755)
+    process.env.PATH = `${bin}:${oldPath}`
+    const x = tsAstExtractor(ROOT)
+    const event = (commit: string) => ({ commit, historicalPath: 'src/repeat.ts', parents: [] })
+
+    writeFileSync(argv, '')
+    const cold = await anchorHitQueries(root, [{ win: [event(first)], symbols: ['f', 'g'] }], [x])
+    assert.deepEqual(cold[0].map((row) => row.selectors), [['f']])
+    assert.equal(hunkQueries(), 1, 'the cold read asks for the window it has not read')
+
+    // Same window, same process: every image and ordinary hunk is a permanent property of that commit.
+    writeFileSync(argv, '')
+    const repeat = await anchorHitQueries(root, [{ win: [event(first)], symbols: ['f', 'g'] }], [x])
+    assert.deepEqual(repeat, cold, 'the reused verdict must be the measured one')
+    assert.equal(hunkQueries(), 0, 'a repeated read re-derives no immutable hunk')
+    assert.equal(blobReads(), 0, 'and re-streams no immutable blob')
+
+    // The movement, and only the movement, is asked for — and its verdict is never masked by the memo.
+    writeFileSync(join(root, 'src/repeat.ts'), unit('f', '11') + unit('g', '22'))
+    g('add', '-A'); g('commit', '-qm', 'g moves'); const second = g('rev-parse', 'HEAD')
+    writeFileSync(argv, '')
+    const advanced = await anchorHitQueries(root, [{ win: [event(first), event(second)], symbols: ['f', 'g'] }], [x])
+    assert.deepEqual(advanced[0].map((row) => ({ commit: row.commit, selectors: row.selectors })), [
+      { commit: first, selectors: ['f'] },
+      { commit: second, selectors: ['g'] },
+    ])
+    assert.equal(hunkQueries(), 1, 'one query for the advance, not one per window commit')
+  } finally {
+    process.env.PATH = oldPath
+    rmSync(bin, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('historical extractor memo stays stable across order and same-process repetition', { skip: !gitAvailable() && 'git not available' }, async () => {
   const source = 'export const f = <T>(x: T) => x\n'
   for (const order of [['src/same.tsx', 'src/same.ts'], ['src/same.ts', 'src/same.tsx']]) {

@@ -12,7 +12,6 @@ import { adapterLoadedReferenceState, defaultHarness, HARNESSES, sessionIdentity
 import { materialize } from './materialize.js'
 import { mainBranch, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
 import { appendSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
-import { consumeInboxAt } from './session-cursors.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
@@ -3102,7 +3101,7 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
   const rec = readRecord(id)
   if (!rec) return { ok: false, error: `no session record for ${id} — prompt NOT delivered` }
   const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
-  let sent: { mid: string; pos: number }
+  let sent: { mid: string }
   try {
     // The lock covers the append alone. Codex's native turn can synchronously run hooks that write this same
     // record, so holding it across the adapter poke below would deadlock the app-server's confirmation.
@@ -3112,26 +3111,26 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
   }
   const h = harnessById(rec.harness || defaultHarness.id)
   // Awaited, not fire-and-forget: `spex session send` is a short-lived process that would exit before an
-  // unawaited poke ever reached the socket, costing every CLI send its same-turn arrival. The result only
-  // decides whether the agent has ALREADY been shown this line.
-  const poked = await pokeAdapter(h, rec, prompt.text, sent.mid)
-  if (poked) consumeInboxAt(id, sent.pos)
+  // unawaited poke ever reached the socket, costing every CLI send its same-turn arrival. Its result never
+  // advances the inbox: a write cannot prove the target parsed it, so only the target's reader consumes the
+  // durable line.
+  await pokeAdapter(h, rec, prompt.text, sent.mid)
   return { ok: true }
 }
 
 // The courtesy kick. Carries `mid` as the adapter's native message marker, so an adapter that replays or
 // duplicates it stays harmless. Never throws and never reports: a poke has no outcome the caller can act on.
-async function pokeAdapter(h: Harness, rec: SessRec, text: string, mid: string): Promise<boolean> {
+async function pokeAdapter(h: Harness, rec: SessRec, text: string, mid: string): Promise<void> {
   // the pane guard ([[harness-adapter]] deliveryBlockedBy): the ONE pane state where the harness swallows a
   // prompt its channel confirms (claude's sessions panel), checkable only from the pane. It no longer refuses
   // the send — the message is already delivered — it only skips a kick known to be swallowed.
   if (h.deliveryBlockedBy) {
     try {
-      if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return false
+      if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
     } catch { /* no pane to consult — let the poke itself decide */ }
   }
-  try { return (await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid }, text)).ok }
-  catch { return false }
+  try { await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid }, text) }
+  catch { /* the unread timeline line remains the delivery */ }
 }
 
 // Hard interrupt is adapter-native control, distinct from stop's process teardown. A harness without a

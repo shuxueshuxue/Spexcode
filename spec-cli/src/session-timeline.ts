@@ -36,13 +36,11 @@ export function recordStatus(id: string, status: Lifecycle, proposal: Proposal |
 // The DELIVERY ([[dispatch]]): appending this line IS the send, so unlike a status line it must fail LOUD —
 // the caller reports the throw rather than a false success. `text` is the message BEFORE any mechanism insert
 // (hints are transport, not conversation); `replyVia` is the effective channel the prompt seam chose. Returns
-// the new line's `mid` (what a poke carries and a reader dedupes against) and its event index, which is where
-// the target's inbox cursor must be for that poke to count as already-shown.
-export function appendSent(id: string, text: string, from: string | null, replyVia?: 'note'): { mid: string; pos: number } {
+// the new line's `mid`, which a best-effort poke carries.
+export function appendSent(id: string, text: string, from: string | null, replyVia?: 'note'): { mid: string } {
   const mid = randomUUID()
-  const pos = timelineEvents(id).length
   append(id, { ts: new Date().toISOString(), kind: 'sent', mid, text, from, ...(replyVia ? { replyVia } : {}) })
-  return { mid, pos }
+  return { mid }
 }
 
 // The L0 read: any process may take it with nothing but filesystem access, and taking it perturbs nothing

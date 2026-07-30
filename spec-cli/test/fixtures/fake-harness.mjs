@@ -33,8 +33,6 @@ const server = createServer((connection) => {
       try { message = JSON.parse(line) } catch { continue }
       if (message?.type === 'reply' && typeof message.text === 'string') {
         write(`FAKE-HARNESS REPLY ${compact(message.text)}`)
-      } else if (message?.type === 'repaint') {
-        connection.write(JSON.stringify({ type: 'repaint-done' }) + '\n')
       } else if (message?.type === 'ping') {
         connection.write(JSON.stringify({ type: 'pong' }) + '\n')
       }

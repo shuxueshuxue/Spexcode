@@ -53,10 +53,9 @@ is pi's OWN half, chosen so the rest of the product needs NO pi branch:
   the runtime.
 - **The rendezvous inject.** The pi adapter's `launchEnv(id)` exports
   `CLAUDE_BG_RENDEZVOUS_SOCK=<rvSock(id)>`; the runtime's server binds it and pi supplies only the inject —
-  `sendUserMessage({deliverAs: steer})`, always able, so no reject gate. claude's delivery
-  (`deliverViaRendezvous`, parse-confirmed by the repaint barrier) and claude's liveness (the socket-LISTENER
-  connect probe) work for pi **unchanged** — `ownsRendezvous: true`, zero new transport code; the runtime's
-  server is multi-connection, so a probe can never kick a delivery mid-parse.
+  `sendUserMessage({deliverAs: steer})`, always able, so no reject gate. Claude's best-effort rendezvous
+  poke and socket-LISTENER liveness work for pi **unchanged** — `ownsRendezvous: true`, zero new transport
+  code; the runtime's server is multi-connection, so a probe cannot displace another poke.
 
 The extension also exports `PI_SESSION_ID` (the adapter's `sessionEnvVar`) at `session_start`, so tool
 subprocesses — and the agent's own `spex` calls — inherit their session identity; the pinned `--session-id`

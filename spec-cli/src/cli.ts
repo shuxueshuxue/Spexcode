@@ -824,8 +824,8 @@ if (cmd === 'serve') {
         console.error(`spex session send --keys: nothing delivered to ${full} (offline, unknown session, or no valid key token)`)
         process.exit(1)
       }
-      // prompt dispatch is socket-only + fail-loud (the backend enforces it): a non-accepted prompt prints the
-      // reason AND exits non-zero, so a manager/script never mistakes a dead dispatch for success.
+      // The backend decides send success at the timeline append. A dead adapter poke only delays context
+      // injection, while a refused record write prints the reason and exits non-zero.
       // BIDIRECTIONAL: stamp the SENDER (this send process's OWN session — the only process that knows it, via
       // ownSessionId from CLAUDE_CODE_SESSION_ID) + a one-line reply hint into the delivered
       // message, so the recipient can reply over the SAME send. The sender's row (hence its display label) is

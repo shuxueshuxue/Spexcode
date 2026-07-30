@@ -619,8 +619,14 @@ export default {
     // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
     cmd: {
       evalDesc: '切换到此会话的评测页 —— 评测证据、改动、合并门禁',
-      mergeTitle: '将此会话合并到 main',
-      mergeDesc: '将此会话合并到 main',
+      mergeTitle: '将此待审查提案合并到 main',
+      mergeDesc: '将此待审查提案合并到 main',
+      mergeUnavailableArchived: '不能合并：该会话已归档',
+      mergeUnavailableNoProposal: '不能合并：此会话尚未提出合并；只有 done --propose merge 才会提出可点击的合并',
+      mergeUnavailableNothing: '不能合并：done --propose nothing 表示已完成但未提出合并',
+      mergeUnavailableClose: '不能合并：done --propose close 表示等待关闭，不是合并',
+      mergeUnavailableLifecycle: '不能合并：该合并提案已不处于待审查状态',
+      mergeUnavailableLiveness: '不能合并：该会话未在线',
       stopTitle: '停止此会话（结束智能体，保留工作树 —— 可恢复）',
       stopDesc: '停止 —— 结束智能体与 tmux，但保留工作树，之后可恢复',
       archiveTitle: '归档此会话',

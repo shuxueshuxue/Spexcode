@@ -11,6 +11,7 @@ related:
   - spec-forge/src/port.ts
   - spec-forge/src/drivers.ts
   - spec-forge/src/gitlab.test.ts
+  - spec-forge/src/resident.api.test.ts
 ---
 # gitlab
 

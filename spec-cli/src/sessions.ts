@@ -3446,7 +3446,7 @@ async function proveQuarantineAdapter(id: string, witness: CorruptRecordQuaranti
     if (socket === 'unproven') throw new ResourceConflict(`refusing to quarantine ${id}: ${harness.id} rendezvous transport absence is unknown`)
   }
   if (witness.thread) {
-    if (!harness.quarantineOrphanThread) throw new ResourceConflict(`refusing to quarantine ${id}: ${harness.id} cannot prove and unload an exact native thread`)
+    if (!harness.quarantineOrphanThread) throw new ResourceConflict(`refusing to quarantine ${id}: ${harness.id} has no archivable native thread; omit --thread (a SpexCode session id is not an adapter thread)`)
     const native = await harness.quarantineOrphanThread(witness.thread, { excludingSessionId: id })
     if (!native.ok) throw new ResourceConflict(`refusing to quarantine ${id}: ${native.reason}`)
     return { adapter: native.audit.adapter, thread: native.audit.threadId, action: native.audit.action, compensate: native.compensate }

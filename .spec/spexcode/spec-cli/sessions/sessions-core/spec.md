@@ -135,7 +135,9 @@ the harness can recognize is the harness's to declare ([[harness-adapter]]).
 
 An unreadable governed record has one separate recovery control: **quarantine** is neither `close` nor a
 repair. The caller supplies the exact former adapter/thread (or explicitly no native thread), tmux session,
-worktree path, and branch it extracted from the opaque incident. The shared layer then re-proves, at execution
+worktree path, and branch it extracted from the opaque incident. The thread field is an adapter-native
+conversation id, never the SpexCode session id: CLI omission explicitly sends no native thread, which is the
+required witness for an adapter such as Claude that has none to archive. The shared layer then re-proves, at execution
 time, that the session's registered leaf process is absent, that exact tmux session/worktree/branch are absent,
 and that the named adapter is healthy. A named native thread must either be absent, or be an exactly-unowned,
 idle, descendant-free native thread that its own adapter archives and re-censuses as unloaded; every live,

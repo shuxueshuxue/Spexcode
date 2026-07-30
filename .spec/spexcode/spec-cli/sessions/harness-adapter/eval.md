@@ -184,6 +184,22 @@ scenarios:
       - spec-cli/src/harness.ts#replyViaSocket
       - spec-cli/src/harness.ts#deliverViaRendezvous
       - spec-cli/src/harness.ts#POKE_ATTEMPTS
+  - name: claude-rendezvous-short-path-on-macos
+    tags: [backend-api]
+    description: >-
+      On macOS, with the platform's ordinary deep `/var/folders/...` TMPDIR, launch a REAL governed Claude
+      session through a configured reclaude launcher. Read its stamped `rv.path`, measure its byte length, then
+      wait through the launch grace and read the board plus the real delivery path.
+    expected: >-
+      The stamped socket is in SpexCode's per-uid 0700 literal `/tmp` directory and remains below macOS's
+      ~104-byte sun_path ceiling. The real Claude accepts the liveness connect, the board becomes
+      `online`/`working` rather than permanently `unknown`, and a real `spex session send` reaches the session.
+      A socket inode at an overlong TMPDIR path is not accepted as evidence: its client connect fails EINVAL,
+      which is the pre-fix failure this scenario locks.
+    code:
+      - spec-cli/src/harness.ts#rendezvousSocketBase
+      - spec-cli/src/harness.ts#scopedRvSock
+      - spec-cli/src/harness.ts#stampRvSock
   - name: claude-delivery-survives-sessions-panel
     tags: [backend-api]
     description: >-

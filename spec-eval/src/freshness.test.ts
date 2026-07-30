@@ -595,7 +595,7 @@ test('scenario code axis: an unrelated unit\'s change leaves an anchored reading
   const sc: any = scOf(['m.ts#alpha'])
   const reading: any = { ...readingAt(base), scenarioHash: scenarioHash(sc) }
   const axis = scenarioCodeAxis(sc.code, [])
-  await anchors.prime?.(base, axis.entries)
+  await anchors.prime?.([{ sinceSha: base, entries: axis.entries }])
   assert.equal(changedSince(idx, base, 'm.ts'), true, 'the FILE really moved — the narrowing is what must save it')
   assert.deepEqual(staleAxes(reading, sc.code, 'n/eval.md', idx, new Map(), [], undefined, sc, anchors), [],
     'a sibling unit\'s edit must not stale a reading anchored elsewhere in the same file')
@@ -611,7 +611,7 @@ test('scenario code axis: changing the DECLARED unit still stales it', async () 
   const anchors = anchorProbeFor(root, idx)
   const sc: any = scOf(['m.ts#alpha'])
   const reading: any = { ...readingAt(base), scenarioHash: scenarioHash(sc) }
-  await anchors.prime?.(base, scenarioCodeAxis(sc.code, []).entries)
+  await anchors.prime?.([{ sinceSha: base, entries: scenarioCodeAxis(sc.code, []).entries }])
   assert.deepEqual(staleAxes(reading, sc.code, 'n/eval.md', idx, new Map(), [], undefined, sc, anchors), ['code'])
   rmSync(root, { recursive: true, force: true })
 })
@@ -625,7 +625,7 @@ test('scenario code axis: two scenarios anchoring DIFFERENT units of one file ge
   const anchors = anchorProbeFor(root, idx)
   const onAlpha: any = scOf(['m.ts#alpha'])
   const onBeta: any = { ...scOf(['m.ts#beta']), name: 's2' }
-  for (const sc of [onAlpha, onBeta]) await anchors.prime?.(base, scenarioCodeAxis(sc.code, []).entries)
+  for (const sc of [onAlpha, onBeta]) await anchors.prime?.([{ sinceSha: base, entries: scenarioCodeAxis(sc.code, []).entries }])
   const judge = (sc: any) => staleAxes({ ...readingAt(base, sc.name), scenarioHash: scenarioHash(sc) } as any,
     sc.code, 'n/eval.md', idx, new Map(), [], undefined, sc, anchors)
   assert.deepEqual(judge(onAlpha), [], 'alpha did not move')
@@ -660,7 +660,7 @@ test('scenario code axis: a dead selector is LOUD and leaves the reading conserv
   const problems = anchorProblems(root, axis.entries)
   assert.equal(problems.length, 1)
   assert.match(problems[0], /m\.ts#gone.*names no unit/)
-  await anchors.prime?.(base, axis.entries)
+  await anchors.prime?.([{ sinceSha: base, entries: axis.entries }])
   assert.deepEqual(staleAxes({ ...readingAt(base), scenarioHash: scenarioHash(sc) } as any,
     sc.code, 'n/eval.md', idx, new Map(), [], undefined, sc, anchors), ['code'],
     'an unresolvable selector must cost a false stale, never a false fresh')

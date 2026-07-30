@@ -73,6 +73,14 @@ the plain ancestry window ([[drift-by-ancestry]]) and never subtracts `Spec-OK` 
 question asked at the axis, not a new verdict: freshness's decision functions stay pure over their inputs and
 the anchor answer is fed in at the call sites, exactly like the content probe and the remark track.
 
+The anchor probe's prime is **plural**, mirroring the engine it feeds ([[code-anchor]]'s one-batch-per-read
+rule): a caller hands it every (anchor, entry) demand its whole read will ask about, and ONE batch answers
+them all. A reader that walks many readings therefore plans its rows first — a pure sidecar-and-axis pass —
+and primes once, instead of asking row by row; the same computation billed per row cost ~2,500 redundant Git
+children for ~800 verdicts on this corpus. Verdicts stay keyed by (anchor, path, selector set) exactly as
+before, so the batch changes only cost: a batched read and a reading-at-a-time read return the same verdicts,
+and that equality is what any faster path owes.
+
 The narrowing exists because **a shared file is not a shared behaviour**, and on this corpus that gap is
 expensive. `harness.ts` is ONE file carrying eight adapters, and its scenarios measure liveness, delivery,
 wake and teardown per adapter — each refreshed only by a REAL dispatched session of that harness

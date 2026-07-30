@@ -3,7 +3,8 @@ import { repoRoot, driftIndex, historyIndex, commitReachable, type DriftIndex, t
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
 import { evalNodes, scenarioCodeAxis, type EvalNode, type ScenarioTestReference } from './scenarios.js'
-import { readSidecar, applyRetractions, evidenceOf, isJsonBlob, humanOkFor, type Verdict, type EvidenceKind, type Retraction } from './sidecar.js'
+import { readSidecar, applyRetractions, evidenceOf, isJsonBlob, humanOkFor, type Verdict, type EvidenceKind, type Retraction, type Reading, type HumanOk } from './sidecar.js'
+import type { RelationEntry } from '../../spec-cli/src/anchors.js'
 import { staleAxes, codeDrift, contentProbeFor, anchorProbeFor, type StaleAxis } from './freshness.js'
 import { scenarioIndex, type ScenarioIndex } from './scenariofresh.js'
 import { hasBlob, getBlob, MISS_BLOB } from './cache.js'
@@ -93,17 +94,66 @@ export async function evalContext(
   return { root, specs, idx, hidx, scidx, ynodes: nodes, remarks: remarks ?? loadEvalRemarkTracks() }
 }
 
-export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalTimeline> {
+// @@@ one read, one batch - the freshness engine's Git work is immutable-object work, so it is owned ONCE
+// per read rather than once per reading. evalTimelines is the plural the graph build actually wants: it
+// plans every node's rows first (pure fs + in-memory projection), primes the content and anchor probes with
+// the WHOLE demand set, then assembles. Singular evalTimeline is the one-id case of the same path.
+export async function evalTimelines(ids: readonly string[], ctx?: EvalContext): Promise<EvalTimeline[]> {
   const root = ctx?.root ?? repoRoot()
-  const ynode = (ctx?.ynodes ?? evalNodes(root)).find((n) => n.id === id)
-  if (!ynode) return { node: id, hasEvalFile: false, scenarios: [], readings: [], retractions: [], dangling: [] }
+  const ynodes = ctx?.ynodes ?? evalNodes(root)
   const specs = ctx?.specs ?? await loadSpecs()
-  const codeEntries = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.codeEntries ?? []
   const idx = ctx?.idx ?? await driftIndex(root)
   const hidx = ctx?.hidx ?? await historyIndex(root)
-  const scidx = ctx?.scidx ?? await scenarioIndex(root, (ctx?.ynodes ?? evalNodes(root)).map((n) => n.evalPath))
-  const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))
+  const scidx = ctx?.scidx ?? await scenarioIndex(root, ynodes.map((n) => n.evalPath))
   const tracks = ctx?.remarks ?? loadEvalRemarkTracks()
+  const probe = contentProbeFor(root)
+  const anchors = anchorProbeFor(root, idx)
+
+  type Row = { reading: Reading; axis: ReturnType<typeof scenarioCodeAxis> }
+  type Plan = { id: string; ynode?: EvalNode; codeEntries: RelationEntry[]; rows: Row[]; retractions: Retraction[]; oks: HumanOk[] }
+  const plans: Plan[] = ids.map((id) => {
+    const ynode = ynodes.find((n) => n.id === id)
+    if (!ynode) return { id, codeEntries: [], rows: [], retractions: [], oks: [] }
+    const codeEntries = specs.find((s) => dirname(s.path) === relative(root, ynode.dir))?.codeEntries ?? []
+    const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))
+    const { readings, retractions, oks } = readSidecar(ynode.sidecarPath)
+    const rows = applyRetractions(readings, retractions).map((reading) => ({
+      reading, axis: scenarioCodeAxis(byName.get(reading.scenario)?.code, codeEntries),
+    }))
+    return { id, ynode, codeEntries, rows, retractions, oks }
+  })
+
+  // An off-history anchor is the only reading that needs a content verdict; those primes serialize inside the
+  // probe per anchor, so issuing them together lets one anchor's paths union into one child instead of N.
+  await Promise.all(plans.flatMap((plan) => plan.ynode
+    ? plan.rows.filter((row) => !commitReachable(idx, row.reading.codeSha))
+        .map((row) => probe.prime?.(row.reading.codeSha, row.axis.paths, plan.ynode!.evalPath))
+    : []))
+  await anchors.prime?.(plans.flatMap((plan) => plan.rows.map((row) => ({ sinceSha: row.reading.codeSha, entries: row.axis.entries }))))
+
+  return plans.map((plan) => assembleTimeline(plan.id, plan.ynode, plan.rows, plan.retractions, plan.oks, {
+    idx, scidx, tracks, probe, anchors,
+  }))
+}
+
+export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalTimeline> {
+  return (await evalTimelines([id], ctx))[0]
+}
+
+type AssembleDeps = {
+  idx: DriftIndex; scidx: ScenarioIndex; tracks: Map<string, RemarkTrack>
+  probe: ReturnType<typeof contentProbeFor>; anchors: ReturnType<typeof anchorProbeFor>
+}
+function assembleTimeline(
+  id: string,
+  ynode: EvalNode | undefined,
+  rows: { reading: Reading; axis: ReturnType<typeof scenarioCodeAxis> }[],
+  retractions: Retraction[],
+  oks: HumanOk[],
+  { idx, scidx, tracks, probe, anchors }: AssembleDeps,
+): EvalTimeline {
+  if (!ynode) return { node: id, hasEvalFile: false, scenarios: [], readings: [], retractions: [], dangling: [] }
+  const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))
   const remarksFor = (scenario: string): RemarkTrack['remarks'] => tracks.get(trackKey(id, scenario))?.remarks ?? []
   const threadFor = (scenario: string): Issue | undefined => tracks.get(trackKey(id, scenario))?.thread
   const scenarios: ScenarioInfo[] = ynode.scenarios.map((s) => ({
@@ -111,15 +161,9 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
     ...(s.tags?.length ? { tags: s.tags } : {}), ...(s.test ? { test: s.test } : {}),
     ...(s.code?.length ? { code: s.code } : {}),
   }))
-  const { readings: rawReadings, retractions, oks } = readSidecar(ynode.sidecarPath)
-  const probe = contentProbeFor(root)
-  const anchors = anchorProbeFor(root, idx)
   const readings: EvalEntry[] = []
-  for (const r of applyRetractions(rawReadings, retractions)) {
+  for (const { reading: r, axis } of rows) {
     const sc = byName.get(r.scenario)
-    const axis = scenarioCodeAxis(sc?.code, codeEntries)
-    if (!commitReachable(idx, r.codeSha)) await probe.prime?.(r.codeSha, axis.paths, ynode.evalPath)
-    await anchors.prime?.(r.codeSha, axis.entries)
     const axes = staleAxes(r, axis.entries, ynode.evalPath, idx, scidx,
       remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc, anchors)
     const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, axis.entries, probe) : []
@@ -151,8 +195,8 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
   const dangling: DanglingTrack[] = []
   for (const [, track] of tracks) {
     if (track.node !== id || !track.remarks.length) continue
-    const rows = readings.filter((r) => r.scenario === track.scenario)
-    if (!rows.length) {
+    const hosts = readings.filter((r) => r.scenario === track.scenario)
+    if (!hosts.length) {
       if (!declared.has(track.scenario)) {
         dangling.push({
           scenario: track.scenario, threadId: track.threadId, thread: track.thread,
@@ -161,9 +205,9 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
       }
       continue
     }
-    const latest = rows[0]
+    const latest = hosts[0]
     for (const rm of track.remarks) {
-      const target = rows.find((r) => r.codeSha === rm.targetCodeSha)
+      const target = hosts.find((r) => r.codeSha === rm.targetCodeSha)
       const host = target ?? latest
       ;(host.remarks ??= []).push(toRemarkView(rm, track.threadId, !target))
     }

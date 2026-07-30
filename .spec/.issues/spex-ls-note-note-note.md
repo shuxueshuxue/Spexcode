@@ -24,3 +24,6 @@ created: 2026-07-30T07:08:18.522Z
 这不是"切割不透明"那一类（内容该显示多少是另一回事，那条已修），是渲染器把任意 prose 当单行用。修法看起来是一行：NOTE 单元格先取首个非空行再截宽，跟 headline 现在用的 `oneLinePreview` 同一个形状——PROMPT 列已经是这么做的（promptPreview 取首行），所以 NOTE 列是这张表里唯一没拍平的自由 prose 列。
 
 没有顺手改，因为它会改 `spex ls` 的输出，需要自己的读数；而且它不是我那一刀造成的。
+
+<!-- reply: a1061fec-dbd2-41c2-bbb2-545f29c91cc8 @ 2026-07-30T07:18:38.302Z -->
+这条**故意留 open**：它早于 node/session-label-a106 那一刀（merge 76cb374a），也不是它造成的。formatTable 的 NOTE 单元格不拍平换行这件事今天仍然如此——落地后未改动一行 formatTable。修它会改 `spex ls` 的输出，需要自己的 A/B 读数，所以不该搭车进一条讲派生优先级和切割透明性的 lane。证据在 [[state]] long-note-truncation-transparent 的 A 读数转录里（隔离 SPEXCODE_HOME + 真 CLI 的原始表格输出，可直接复现）。留给接手的人。

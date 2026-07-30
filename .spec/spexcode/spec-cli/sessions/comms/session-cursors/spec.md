@@ -50,7 +50,10 @@ re-recorded each real move (one measured transition landed as six lines inside 1
 history and are never rewritten, so the *read* is where an edge is decided — by comparing VALUES, never
 adjacency, and never against only the slice being read: a duplicate straddling the cursor boundary would
 otherwise read as a fresh move on the very next tick. A dropped duplicate is still **consumed** — the cursor
-advances past everything it read, so the same bytes are never re-examined.
+advances past everything it read, so the same bytes are never re-examined. A reader that STOPS on one event
+instead of draining the slice ([[session-follow]]'s take-one wait) needs the opposite guarantee, so the slice
+also names each event's absolute index: that reader advances to exactly the event it took, and the moves
+behind it in the same slice stay unread rather than being swallowed by the stop.
 
 **Expiry is a read-time consequence, never a timer.** Reading the file drops every followed entry whose target
 store dir no longer exists, and the next write persists that reckoning. A cursor is the whole record of who

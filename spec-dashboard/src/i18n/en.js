@@ -259,7 +259,7 @@ export default {
   thread: {
     anchorNow: 'anchor',
     anchorTitle: 'anchor this comment to the current frame',
-    mentionActor: 'insert @ — mention a session or summon a worker',
+    mentionActor: 'insert @ — mention a session',
     mentionNode: 'insert [[ — link a spec node',
     reviewCommands: 'insert / — review commands',
     resolved: 'resolved',

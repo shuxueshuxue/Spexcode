@@ -17,7 +17,7 @@ import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmdirS
 import { join, dirname, resolve as resolvePath } from 'node:path'
 import { git, headSha, repoRoot } from './git.js'
 import { mainCheckout, envSessionId, readConfig } from './layout.js'
-import { parseMentions, dispatchMentions, notifyOriginator, deliveredIds, summarize, type DispatchOutcome, type LoopIn } from './mentions.js'
+import { parseMentions } from './mentions.js'
 import type { Issue, Reply } from './issues.js'
 
 const LOCAL_STORE_REL = '.spec/.issues'
@@ -356,18 +356,11 @@ export function reply(id: string, body: string, author?: string, evidence?: stri
 
 // @@@ the PROGRAMMATIC store write surface — the dashboard's human write path calls these (author `'human'`).
 // The store is git-native data, so a human's write goes through the SAME open/reply the CLI uses (committed
-// straight to the trunk), and — because the store is the programmatic surface — a human's @-mention DOES
-// dispatch (a human summons an agent from the issues page, per [[mentions]]). Each returns the written thread
-// plus the @-dispatch outcomes so a caller can echo who was notified.
-// The two reply deliveries are orthogonal: `evidence?` (f15b) carries a video annotation's frame blobs onto
-// the thread; the originator loop-in ([[mentions]]) notifies who raised the thread. Both apply on every reply.
-export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
+// straight to the trunk). @session remains text in that committed discussion; it never summons an agent.
+// Originator courtesy is composed above this store because it needs eval-aware candidate resolution.
+export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue }> {
   const thread = reply(id, body, author, evidence, remark)
-  const node = thread.nodes[0] || null
-  const outcomes = await dispatchMentions(body, { threadId: id, node, author, status: thread.status })
-  // the originator loop-in is composed ABOVE this layer ([[loop-in]]): its candidate resolution has to ask the
-  // eval package who filed a reading, and the eval package imports this module.
-  return { thread, outcomes }
+  return { thread }
 }
 
 
@@ -375,10 +368,9 @@ export async function replyLocalIssue(id: string, body: string, author: string, 
 export async function postLocalIssue(
   concern: string,
   opts: { nodes?: string[]; body?: string; evidence?: string[]; author: string },
-): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
+): Promise<{ thread: Issue }> {
   const thread = openIssue(concern, { nodes: opts.nodes, body: opts.body, evidence: opts.evidence, author: opts.author })
-  const outcomes = await dispatchMentions(opts.body || concern, { threadId: thread.id, node: thread.nodes[0] || null, author: opts.author, status: thread.status })
-  return { thread, outcomes }
+  return { thread }
 }
 
 export function closeLocalIssue(id: string): { status: 'landed'; already: boolean } {
@@ -412,7 +404,7 @@ export const parseEvalConcern = (concern: string): { node: string; scenario: str
 // two racers could both read "absent" and both create, minting a second thread whose remarks are invisible
 // to the concern key (a silent teeth blind spot). Holding one lock across both the find AND the create closes
 // that window: a racer either sees the thread the first created, or is the first. The stub is a pure
-// container (its body carries a [[wiki-link]], never an @-mention), so it needs no async dispatch — a
+// container (its body carries a [[wiki-link]], never an @-reference), so it needs no async notification — a
 // synchronous create suffices, and staying sync is exactly what lets it share the lock hold.
 function findOrCreateEvalThread(node: string, scenario: string, author: string): Issue {
   ensureStoreMigrated()   // migrate before the lock (ensure takes it itself; never nest a store-lock hold)
@@ -446,13 +438,13 @@ export async function remarkOnHost(
   host: { issue?: string; node?: string; scenario?: string },
   body: string,
   opts: { codeSha?: string; author?: string; evidence?: string[] } = {},
-): Promise<{ ref: string; rid: string; codeSha: string; thread: Issue; author: string; outcomes: DispatchOutcome[] }> {
+): Promise<{ ref: string; rid: string; codeSha: string; thread: Issue; author: string }> {
   const author = opts.author || currentSession()
   const codeSha = opts.codeSha || headSha(repoRoot())
   const id = resolveRemarkHost(host, author)
-  const { thread, outcomes } = await replyLocalIssue(id, body, author, opts.evidence, { targetCodeSha: codeSha })
+  const { thread } = await replyLocalIssue(id, body, author, opts.evidence, { targetCodeSha: codeSha })
   const rid = thread.replies[thread.replies.length - 1].rid!
-  return { ref: `${id}#${rid}`, rid, codeSha, thread, author, outcomes }
+  return { ref: `${id}#${rid}`, rid, codeSha, thread, author }
 }
 
 // a remark ref is `<thread-id>#<rid>`; the thread id (a store slug) never contains '#', so split on the last.

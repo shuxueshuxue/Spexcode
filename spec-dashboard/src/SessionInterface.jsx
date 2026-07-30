@@ -537,7 +537,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/input`), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'text', text }),
+        body: JSON.stringify({ kind: 'command', text }),
       })
       const outcome = await res.json().catch(() => null)
       if (!res.ok) {
@@ -549,7 +549,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         return
       }
       setMsg((current) => current === raw ? '' : current)
-      setActionOutcome({ owner: 'command', phase: 'delivered', message: t('session.outcomeDelivered') })
+      setActionOutcome({ owner: 'command', phase: 'delivered', message: outcome?.mentionSummary
+        ? `${t('session.outcomeDelivered')} - ${outcome.mentionSummary}`
+        : t('session.outcomeDelivered') })
       outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
     } catch (error) {
       setActionOutcome({

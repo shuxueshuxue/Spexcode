@@ -27,6 +27,17 @@ The full TypeScript compiler is deliberately not runtime cargo: it remains a dev
 SpexCode's own typecheck and JS anchors, while an adopter's optional JS-anchor extractor resolves that
 adopter's TypeScript and fails loud when it is absent ([[code-anchor]]).
 
+**L0 is the adoption floor, not a daemon fallback.** `spex spec lint`, `spex graph`, `spex materialize`,
+`spex init`, and `spex guide` need only Node and the ordinary `tsx` dependency, so a clean source checkout
+after `npm install --omit=optional` can start and use the spec/code asset without Hono or a native addon.
+`hono`, `@hono/node-server`, `@hono/node-ws`, and `node-pty` belong to the optional daemon tier only. A
+`spex serve` or `spex dashboard` without any required daemon package refuses before importing daemon code:
+it names the missing packages and prints the exact `npm install ...` repair command. It never substitutes a
+reduced server, hides the command, or leaks a module-resolution stack trace. The stricter CI-like install
+that also uses `--ignore-scripts` suppresses esbuild's own platform-binary repair, so its probe explicitly
+installs the matching `@esbuild/<platform>-<arch>` package with `--no-save --no-package-lock`; that is test
+scaffolding only, not an extra normal-adopter step.
+
 The published unit is the **monorepo root**, shipping the runtime subset with the **layout preserved**: an
 explicit `files` allowlist of `spec-cli/{src,bin,templates,hooks}`, the siblings `spec-eval/src` and
 `spec-forge/src`, and `spec-dashboard/dist`. The dist is the one shipped artifact not in git, so it is built

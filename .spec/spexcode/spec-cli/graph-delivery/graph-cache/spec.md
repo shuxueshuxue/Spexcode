@@ -140,6 +140,20 @@ The waste it removed is the shape to recognize again: priming per reading forked
 ~800 verdicts, of which ~2,500 were the same two `cat-file --batch` calls re-spawned per row — the exact
 inverse of what a batch flag is for.
 
+**How that equality may be measured is part of the obligation, because the board is NOT byte-reproducible
+run to run on a live corpus.** Two runs of the SAME binary against a checkout that carries worktrees and
+session records already differ: `evalSummary.epoch` is minted once per process, and a row's lifecycle, note
+and status are live state that moves between two builds minutes apart. So a raw before/after diff there
+reports the world's churn as a code difference. An equality claim on a live corpus therefore owes a
+same-binary control run establishing which fields vary on their own; only fields that control proves are
+per-process or live may be normalized, and every other field stays exactly as measured — normalization is
+how a real difference is kept visible, never how it is absorbed. The complementary trap is the quiet one: a
+corpus of fresh clones has no worktrees and no sessions, so the board's session half is empty on BOTH sides
+and equality over it is vacuous — a green result that never touched the half a session-side change would
+break. A claim about the whole board needs both substrates: pinned corpora for the node/eval/issue half,
+and a session-bearing one for the rest. This binds every reader of this cache, not only the batching above:
+[[graph-stream]]'s invalidation and push half is measured against the same board and inherits the same rule.
+
 Because those object reads are build-wide rather than per-reading, they ride the same abort-aware async
 transport as every other build child. A synchronous child is outside the permit pool and cannot see the
 watchdog's signal, so it can be neither bounded nor killed; and one build-wide synchronous object read would

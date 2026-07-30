@@ -2,7 +2,7 @@
 title: mentions
 status: active
 hue: 200
-desc: Two universal in-text reference primitives — [[node]] (a topic) and @session (an actor that carries dispatch) — parsed the same way in EVERY input box. CLI-first; the dashboard is a thin autocomplete over the same resolver. First consumer is the issue store; adopted on more surfaces incrementally.
+desc: Two universal in-text reference primitives — [[node]] (a topic) and @session (an actor that carries dispatch) — parsed the same way in EVERY input box. CLI-first; the dashboard is a thin autocomplete over the same resolver. Consumers include issue/remark threads and the desktop Command Box.
 code:
   - spec-cli/src/mentions.ts#dispatchMentions
   - spec-cli/src/mentions.ts#parseMentions
@@ -35,7 +35,8 @@ grammar is uniform, the logic is tiny.
   contact you hand to a reader; what happens next is a **dispatch**, never a new datastore. **Any spawn's
   parent = its originator**: the `@new` worker records the mentioning author as its `parent`
   ([[session-nesting]]) so it folds under the session that summoned it — but only when that author IS a
-  real board session id; a dashboard `human`, an `unknown` CLI author, or a forge login is no session →
+  real board session id; the desktop [[command-box]] names its selected session as that originator, while a
+  dashboard `human`, an `unknown` CLI author, or a forge login is no session →
   null parent, a top-level worker, never a phantom nest (the same no-sender rule `spex new` from a plain
   shell follows).
 - **The grammar is script-agnostic, and its charset is not defined here.** A reference token speaks
@@ -89,7 +90,7 @@ grammar is uniform, the logic is tiny.
   and each node-arg read site (eval add/retract/ls, `owner`, the `--node` flags) passes through it.
   Tolerance never widens matching: a stripped token matches exactly what the bare token matches, and a
   wrong sigiled token errors exactly like the bare one.
-- **No new delivery pipe.** `@session` → [[dispatch]]'s `sendKeys` (a prompt = the surrounding text + a
+- **No new delivery pipe.** `@session` → [[dispatch]]'s `sendText` (a prompt = the surrounding text + a
   pointer to where it was written); `@new` → [[launch]]'s bounded session-create owner (a fresh worker).
   Offline/unreachable
   fails loud (the `DispatchResult`), and the text still persists for the drain.

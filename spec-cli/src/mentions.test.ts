@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { parseMentions, resolveActors, spawnParent, newWorkerPrompt, summarize, deliveredIds, notifyOriginator, pickLoopIn, stripRefSigil, type ActorSession } from './mentions.js'
+import { commandWorkerPrompt, parseMentions, resolveActors, spawnParent, newWorkerPrompt, summarize, deliveredIds, notifyOriginator, pickLoopIn, stripRefSigil, type ActorSession } from './mentions.js'
 
 // ---- parseMentions: the pure grammar ----
 
@@ -46,6 +46,12 @@ test('spawnParent: an author that IS a board session id becomes the parent (exac
 test('spawnParent: human / unknown / forge-login / id-prefix authors are no parent — top-level, never a phantom nest', () => {
   const sessions = [on('abcd1234', 'scout')]
   for (const author of ['human', 'unknown', 'shuxueshuxue', 'abcd']) assert.equal(spawnParent(author, sessions), null)
+})
+
+test('commandWorkerPrompt: retains the authored request under the selected session context', () => {
+  const prompt = commandWorkerPrompt('abcd1234', '@new investigate [[mentions]]')
+  assert.match(prompt, /Session "abcd1234" opened a child worker/)
+  assert.match(prompt, /@new investigate \[\[mentions\]\]/)
 })
 
 // ---- the drain guard: @new on a settled thread ----

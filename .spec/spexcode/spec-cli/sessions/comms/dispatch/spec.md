@@ -71,8 +71,8 @@ from the **main checkout** (`-C <main>`, not its node worktree), resolve any con
 work's intent), verify the base HEAD advanced with no merge left in progress, `git merge --abort` if
 anything went half-merged, and propose close once verified — so the guarantee lives in the agent's
 verification, never a server check, and the base is never left half-merged. Async: `POST
-/api/sessions/:id/merge` returns `{dispatched:true}` once the prompt is **confirmed accepted** (409 if
-unreachable). The server no longer bumps `merges` on a click.
+/api/sessions/:id/merge` returns `{dispatched:true}` once the merge prompt is appended (409 only when the
+record cannot accept it). The server no longer bumps `merges` on a click.
 
 **Prompts state the task; the git flow is mechanism, not duplicated prose.** The merge prompt above states
 only the **task** plus its own safety steps. It deliberately does **not** re-state the git flow's mechanics,

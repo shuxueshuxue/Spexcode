@@ -66,8 +66,8 @@ when tmux died, which waits for the rendezvous socket so the dispatch hits a liv
 lives: a `--no-ff` commit `merge <branch>: <reason>` from the main checkout (`reason` = the branch's latest
 commit subject minus a leading `spec: `), with the agent told to resolve conflicts, VERIFY the base's HEAD
 advanced with no half-merge, then propose CLOSE (not merge — the commit gate exempts propose-close) for the
-human. Async + fail-loud: `{dispatched:true}` once the prompt is CONFIRMED accepted, else
-`{dispatched:false, reason}` (HTTP 409 / non-zero) when the agent is unreachable. Landing is thus the
+human. Async + fail-loud: `{dispatched:true}` once the prompt is appended, else `{dispatched:false, reason}`
+(HTTP 409 / non-zero) only when the record rejects it. Landing is thus the
 agent's verified act, never a server gate — review SHOWS the gates; the agent ENFORCES them by verifying.
 
 Two read verbs round out the manager surface, both backend-computed so a client (incl. a REMOTE one over

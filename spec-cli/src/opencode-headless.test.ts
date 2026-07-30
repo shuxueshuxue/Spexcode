@@ -70,7 +70,7 @@ test('launch and wake commands preserve the native id capture/resume markers and
   rmSync(dir, { recursive: true, force: true })
 })
 
-test('a live turn uses the existing parse-confirmed rendezvous delivery', async (t) => {
+test('a live turn uses the rendezvous poke before considering a cold wake', async (t) => {
   const id = `oh-live-${process.pid}`
   const sock = rvSock(id)
   rmSync(sock, { force: true })
@@ -87,7 +87,6 @@ test('a live turn uses the existing parse-confirmed rendezvous delivery', async 
         buffer = buffer.slice(nl + 1)
         const event = JSON.parse(line)
         if (event.type === 'reply') replies.push(event.text)
-        if (event.type === 'repaint') connection.write('{"type":"repaint-done"}\n')
       }
     })
   })
@@ -100,6 +99,7 @@ test('a live turn uses the existing parse-confirmed rendezvous delivery', async 
     rmSync(sock, { force: true })
   })
   const result = await opencodeHeadlessHarness.deliver({ session: id }, 'steer the live turn')
+  await new Promise((resolve) => setTimeout(resolve, 10))
   assert.deepEqual(result, { ok: true })
   assert.deepEqual(replies, ['steer the live turn'])
 })

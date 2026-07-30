@@ -38,8 +38,9 @@ scenarios:
       agent_id BEFORE tool_input (the harness.sh prefix-scan contract); a PreToolUse block THROWS and a Stop
       block re-injects the gate reason as a prompt (the stop-gate loop); the launch script maps a prompt tail
       to --prompt, a --resume marker to --session <id>, a --continue marker to --continue; and
-      deliverViaRendezvous returns parse-CONFIRMED ok with the text landing in the session — claude's
-      transport reused verbatim, zero opencode transport code.
+      deliverViaRendezvous writes the same best-effort reply poke the Claude adapter uses, with the text
+      reaching the adopted session when the live channel accepts it and otherwise remaining in its durable
+      timeline — zero opencode transport code.
   - name: adopted-repo-grows-opencode-artifacts
     tags: [cli]
     description: >-
@@ -164,7 +165,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-opencode-launch-in-turn
@@ -186,7 +187,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-opencode-dashboard-note-in-turn
@@ -197,7 +198,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-opencode-cli-send-idle
@@ -208,7 +209,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-opencode-cli-send-in-turn
@@ -219,7 +220,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as the interactive TUI pane containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as the interactive TUI pane containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   # harness-delivery-campaign:end

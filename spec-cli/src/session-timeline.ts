@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, appendFileSync, mkdirSync } from 'node:fs'
+import { existsSync, readFileSync, appendFileSync, mkdirSync, statSync } from 'node:fs'
 import { sessionStoreDir, sessionArtifactPath, readAliasedRawRecord } from './layout.js'
 import type { Lifecycle, Proposal } from './sessions.js'
 
@@ -36,17 +36,15 @@ export function recordStatus(id: string, status: Lifecycle, proposal: Proposal |
 // The DELIVERY ([[dispatch]]): appending this line IS the send, so unlike a status line it must fail LOUD —
 // the caller reports the throw rather than a false success. `text` is the message BEFORE any mechanism insert
 // (hints are transport, not conversation); `replyVia` is the effective channel the prompt seam chose. Returns
-// the new line's `mid` (what a poke carries and a reader dedupes against) and its event index, which is where
-// the target's inbox cursor must be for that poke to count as already-shown.
-export function appendSent(id: string, text: string, from: string | null, replyVia?: 'note'): { mid: string; pos: number } {
+// the new line's `mid`, which a best-effort poke carries.
+export function appendSent(id: string, text: string, from: string | null, replyVia?: 'note'): { mid: string } {
   const mid = randomUUID()
-  const pos = timelineEvents(id).length
   append(id, { ts: new Date().toISOString(), kind: 'sent', mid, text, from, ...(replyVia ? { replyVia } : {}) })
-  return { mid, pos }
+  return { mid }
 }
 
-// The L0 read: any process may take it with nothing but filesystem access, and taking it perturbs nothing
-// ([[layers]]). Index = event position, which is what a cursor names ([[session-cursors]]).
+// The unowned read: any process may take it with nothing but filesystem access, and taking it perturbs
+// nothing. Index = event position, which is what a cursor names ([[session-cursors]]).
 export function timelineEvents(id: string): TimelineEvent[] {
   try {
     const p = timelinePath(id)
@@ -57,12 +55,20 @@ export function timelineEvents(id: string): TimelineEvent[] {
   } catch { return [] }
 }
 
+// the same L0 read taken as CHEAPLY as it can be: a follower ([[session-follow]]) ticks over many logs, so it
+// stats first and parses only what grew. null = no log yet (a session that has authored nothing).
+export function timelineStamp(id: string): string | null {
+  try { const s = statSync(timelinePath(id)); return `${s.size}:${s.mtimeMs}` }
+  catch { return null }
+}
+
 // the display word for an authored state — the SAME vocabulary every other surface speaks (awaiting → its
 // proposal's label, active → working), duplicated here as a tiny read-time map rather than importing the state
 // machine (sessions.ts imports THIS module for appendSent; a value import back would be a cycle — the
 // Lifecycle/Proposal imports above are type-only, erased at runtime).
-const PROPOSAL_DISPLAY: Record<string, string> = { merge: 'review', nothing: 'done', close: 'close-pending' }
-const displayOf = (e: { status: Lifecycle; proposal: Proposal | null }): string =>
+const PROPOSAL_DISPLAY: Record<string, DisplayWord> = { merge: 'review', nothing: 'done', close: 'close-pending' }
+type DisplayWord = 'working' | 'idle' | 'review' | 'done' | 'close-pending' | 'parked' | 'error' | 'asking' | 'queued'
+export const timelineDisplay = (e: { status: Lifecycle; proposal: Proposal | null }): DisplayWord =>
   e.status === 'awaiting' ? (PROPOSAL_DISPLAY[e.proposal ?? 'nothing'] ?? 'done')
   : e.status === 'active' ? 'working' : e.status
 
@@ -88,5 +94,5 @@ export function readTimeline(id: string, limit = 500): { events: TimelineEvent[]
   if (!raw || !raw.governed) return null
   const evs = timelineEvents(id)
   const tail = evs.slice(Math.max(0, evs.length - Math.max(1, limit)))
-  return { events: tail.map((e) => (e.kind === 'status' ? { ...e, display: displayOf(e) } : e)) }
+  return { events: tail.map((e) => (e.kind === 'status' ? { ...e, display: timelineDisplay(e) } : e)) }
 }

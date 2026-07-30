@@ -44,20 +44,22 @@ session to that node. --prompt-file <path>|- carries a long prompt without shell
     ls: ['spex session ls [SEL…] [--status a,b] [--all] [--json]',
       'One-shot table of living sessions. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
-    watch: ['spex session watch [SEL…] [--as NAME] [--idle] [--interval N=5]',
+    watch: ['spex session watch [SEL…] [--as NAME] [--idle] [--interval N=1]',
       'Streams lifecycle transitions and blocks until killed; `session wait` is the one-shot alternative.', ['selector']],
-    wait: ['spex session wait <SEL> [--timeout S=1200] [--interval S=2] [--idle]',
-      `EDGE-TRIGGERED wait on one session. Prints the current status immediately (stderr), then
-exits 0 only when it OBSERVES
-the session TRANSITION from a non-actionable status into an actionable one, printing the
-observed path on stdout (e.g. working→review — read the LAST token as the status reached).
-It NEVER returns just because the session is actionable ALREADY — for "what is it right NOW"
-use \`session ls\` / \`session review\` instead. --timeout is the guaranteed exit (code 1,
-observed path on stderr).`, ['selector']],
+    wait: ['spex session wait [SEL…] [--timeout S=1200] [--interval S=1] [--idle]',
+      `EDGE-TRIGGERED wait: follows the selected sessions' logs AND your own inbox, and exits 0 on
+the FIRST thing worth waking for — a followed session TRANSITIONING from a non-actionable
+status into an actionable one (stdout = the observed path, e.g. working→review; read the LAST
+token as the status reached), or a message arriving for you (stdout = message). The arrival
+status is printed immediately on stderr but never returns it: it NEVER returns just because a
+session is actionable ALREADY — for "what is it right NOW" use \`session ls\` / \`session review\`.
+It reads files only, so it needs no \`spex serve\` and costs the sessions it follows nothing.
+--timeout is the guaranteed exit (code 1, observed path on stderr); code 2 = a followed
+session's store is gone.`, ['selector']],
     review: ['spex session review <SEL> [--json]', 'Reports ahead · uncommitted · proposal · gates · merge-base diff.', ['selector']],
     merge: ['spex session merge <SEL>', 'Dispatches a gated merge to the session\'s own agent; it does not close the session.', ['selector', 'project-bound']],
     send: [['spex session send <SEL> "<msg>"', 'spex session send <SEL> --keys "<keys>"'],
-      `Plain send delivers a message and fails loud when dispatch is dead. --keys is the LAST RESORT:
+      `Plain send delivers a message once its timeline append succeeds; a dead adapter only delays its context. --keys is the LAST RESORT:
 raw nav-mode keystrokes to a TUI dialog ("Up Up Enter", C-/M-/S- combos). The raw key surface
 is UNSTABLE and can confirm dangerous dialogs — try a plain send first; use keys only when text
 provably cannot land.`, ['selector', 'project-bound']],

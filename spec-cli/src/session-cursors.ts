@@ -41,21 +41,12 @@ function writeCursors(id: string, cursors: Cursors): void {
 
 export const inboxCursor = (id: string): number => readCursors(id).inbox
 
-// A reader that has shown everything up to `to`. Monotonic: an interleaved write can leave the position too
-// low (a message shown twice), never too high (a message lost).
+// A reader that has shown everything up to `to`. Monotonic: a stale read can leave the position too low
+// (a message shown twice), never too high (a message lost).
 export function advanceInbox(id: string, to: number): void {
   const cursors = readCursors(id)
   if (to <= cursors.inbox) return
   writeCursors(id, { ...cursors, inbox: to })
-}
-
-// The sender's post-poke advance ([[dispatch]]): a landed poke already showed the agent the line at `pos`, so
-// skip it at the next turn boundary — but ONLY when it is genuinely the next unread one. If an earlier line is
-// still unread (its own poke was lost), this does nothing and the reader delivers both rather than one.
-export function consumeInboxAt(id: string, pos: number): void {
-  const cursors = readCursors(id)
-  if (cursors.inbox !== pos) return
-  writeCursors(id, { ...cursors, inbox: pos + 1 })
 }
 
 export const followCursor = (id: string, target: string): number | null => {
@@ -83,13 +74,16 @@ const sameStatus = (a: TimelineEvent, b: TimelineEvent): boolean =>
 // re-recorded each real move, so ONE transition landed as up to 6 lines within ~200ms). Those bytes are
 // history and stay. Any consumer that decides "did it move?" must therefore compare VALUES, never adjacency,
 // and must compare against the last status the reader ALREADY saw — otherwise a duplicate straddling the
-// cursor boundary reads as a fresh move on the very next tick. `next` is where the cursor goes after
-// consuming: the full length, because a dropped duplicate is still consumed.
-export function unreadSince(events: TimelineEvent[], from: number): { events: TimelineEvent[]; next: number } {
+// cursor boundary reads as a fresh move on the very next tick. `next` is where the cursor goes after consuming
+// the WHOLE slice: the full length, because a dropped duplicate is still consumed. `at[i]` is the absolute
+// index of `events[i]`, which is what lets a reader that STOPS on one event ([[session-follow]]'s take-one
+// wait) advance to exactly `at[i] + 1` and leave the lines behind it unread for the next reader.
+export function unreadSince(events: TimelineEvent[], from: number): { events: TimelineEvent[]; at: number[]; next: number } {
   const start = Math.min(Math.max(0, Math.floor(from)), events.length)
   let prev: TimelineEvent | null = null
   for (let i = start - 1; i >= 0; i--) if (events[i].kind === 'status') { prev = events[i]; break }
   const out: TimelineEvent[] = []
+  const at: number[] = []
   for (let i = start; i < events.length; i++) {
     const e = events[i]
     if (e.kind === 'status') {
@@ -97,6 +91,7 @@ export function unreadSince(events: TimelineEvent[], from: number): { events: Ti
       prev = e
     }
     out.push(e)
+    at.push(i)
   }
-  return { events: out, next: events.length }
+  return { events: out, at, next: events.length }
 }

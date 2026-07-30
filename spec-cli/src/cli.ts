@@ -129,25 +129,58 @@ function signpost(oldSpelling: string, newSpelling: string): never {
 }
 if (cmd !== undefined && SIGNPOSTS[cmd]) signpost(`spex ${cmd}`, SIGNPOSTS[cmd])
 
+// @@@ followKit - the ONE seam where a CLI follow verb ([[session-follow]]) binds to what it follows.
+// Resolution reads the LOCAL store, never a backend: following is reading a file, so it must answer with no
+// `spex serve` running, and asking for the derived board would cost exactly the tmux/rendezvous probes a follow
+// exists to eliminate. No selector = follow every session, re-enumerated each tick so one that launches
+// mid-follow joins the feed; an explicit selector resolves once to a fixed set.
+type FollowRest = Omit<import('./session-follow.js').FollowOpts, 'targets' | 'self' | 'row'>
+async function followKit(selectors: string[], verb: string): Promise<{
+  watcher: string | null
+  follow: (emit: (line: string) => void, opts: FollowRest) => Promise<import('./session-follow.js').FollowOutcome>
+}> {
+  const { followSessions } = await import('./session-follow.js')
+  const { localCachedSessions } = await import('./client.js')
+  const { fromRaw, ownSessionId, selectSessions, toSession } = await import('./sessions.js')
+  const { listSessionIds, readPublicRecordEntry } = await import('./layout.js')
+  const real = selectors.filter((sel) => sel && sel !== '@all')
+  let picked: string[] = []
+  if (real.length) {
+    picked = selectSessions(localCachedSessions(true), real).map((s) => s.id)
+    if (!picked.length) { console.error(`${verb}: no such session: ${real.join(' ')}`); process.exit(2) }
+  }
+  const targets = real.length ? () => picked : () => listSessionIds()
+  // A feed line needs a session's NAME, which is record data; its STATUS comes from the log event, never from
+  // a fresh sample of the mutable record — that resample is what made the old poll lose moves.
+  const row = (id: string, status: import('./sessions.js').DisplayStatus, note: string | null) => {
+    const entry = readPublicRecordEntry(id)
+    if (entry.kind !== 'ok') return null
+    return { ...toSession(fromRaw(entry.raw), status, 'unknown'), note }
+  }
+  const watcher = ownSessionId()
+  return { watcher, follow: (emit, opts) => followSessions(emit, { ...opts, targets, self: watcher, row }) }
+}
+
 const greeted = new Set<string>()
+// Starting a STREAM follow on named live sessions announces itself ([[session-follow]]): one appended line per
+// target per process, so a stream never re-nags and a one-shot `wait` never announces at all. The append is the
+// delivery, taken locally, so the announce needs no backend either.
 async function greetWatchTargets(watcher: string, selectors: string[]): Promise<void> {
   try {
     const real = selectors.filter((sel) => sel && sel !== '@all')
     if (!real.length) return
-    const { resolveClientSession, clientSend } = await import('./client.js')
-    const { sessionHeadline } = await import('./sessions.js')
-    const meR = await resolveClientSession(watcher)
+    const { localCachedSessions } = await import('./client.js')
+    const { selectSessions, sendText, sessionHeadline } = await import('./sessions.js')
+    const board = localCachedSessions(true)
     // name the watcher by its board HEADLINE (same as the reply-channel footer), delimited as a session title.
-    const me = 'ok' in meR ? sessionHeadline(meR.ok) : watcher
+    const mine = board.find((s) => s.id === watcher)
+    const me = mine ? sessionHeadline(mine) : watcher
     const meWho = me && me !== watcher ? `session "${me}" (${watcher})` : `session ${watcher}`
-    for (const sel of real) {
-      const r = await resolveClientSession(sel)
-      if (!('ok' in r)) continue   // none/ambiguous → don't guess a target to interrupt
-      const target = r.ok.id
+    for (const target of selectSessions(board, real).map((s) => s.id)) {
       if (target === watcher || greeted.has(target)) continue
       greeted.add(target)
       const text = `🔭 ${meWho} is now supervising you — they started \`spex session watch\` over this session. To reach them directly, run: spex session send ${watcher} "<your message>". (One-time heads-up; reply only if you need to.)`
-      void clientSend(target, text)   // no sender id → the connection notice is not double-counted as comms
+      void sendText(target, text)   // no sender id → the connection notice is not double-counted as comms
     }
   } catch { /* greeting is best-effort — it must never disturb the watch */ }
 }
@@ -617,74 +650,47 @@ if (cmd === 'serve') {
     if (has('json')) console.log(JSON.stringify(report, null, 2))
     else console.log((await import('./host-resources.js')).formatResourceReport(report))
   } else if (sub === 'watch') {
-    const { watchSessions, ownSessionId } = await import('./sessions.js')
-    const { clientListSessions } = await import('./client.js')
     const selectors = positionals(4)
-    const intervalMs = (Number(flag('interval')) || 5) * 1000
-    // Broad watch keeps the default active-only event population, so the archive shelf is not replayed into
-    // ordinary monitoring. Presence is a separate all-record read: hiding a cold row must not turn it into
-    // "gone"/closed. An explicit selector opts into the history population so its archive/offline transition
-    // remains observable.
-    const history = () => clientListSessions(true)
-    const events = selectors.length ? history : () => clientListSessions(false)
-    const watcher = ownSessionId()
-    if (watcher) void greetWatchTargets(watcher, selectors)
-    await watchSessions((line) => console.log(line), {
-      source: events,
-      presenceSource: history,
-      selectors,
+    const kit = await followKit(selectors, 'spex session watch')
+    if (kit.watcher) void greetWatchTargets(kit.watcher, selectors)
+    await kit.follow((line) => console.log(line), {
       statuses: flag('status')?.split(','),
       includeIdle: has('idle'),
       as: flag('as'),
-      intervalMs,
+      intervalMs: (Number(flag('interval')) || 1) * 1000,
     })
   } else if (sub === 'wait') {
-    const { watchSessions, ownSessionId } = await import('./sessions.js')
-    const { clientListSessions } = await import('./client.js')
-    const [id] = positionals(4)
-    if (!id) { console.error('usage: spex session wait <id> [--timeout SECONDS] [--interval SECONDS] [--idle]'); process.exit(2) }
+    const selectors = positionals(4)
+    const kit = await followKit(selectors, 'spex session wait')
+    const named = selectors.join(' ') || 'your inbox'
     // point-of-use turn-freeze warning ([[session-follow]]): a managed agent that runs this wait in the FOREGROUND
     // freezes its whole turn until the target produces an edge — a warning that used to live only in help
     // prose, now said where it matters. Foreground vs background is invisible from here, so the hint prints
     // for ANY managed-agent shell (harmless in a background transcript), on stderr, and changes nothing else.
-    const own = ownSessionId()
-    if (own) console.error(`spex session wait: heads-up (managed agent ${own.slice(0, 8)}) — this command BLOCKS until it OBSERVES ${id} transition from non-actionable into an actionable status (edge-triggered: an already-actionable current state does NOT return it — to just read the state now, use \`spex session ls\`/\`review\`); run it in the BACKGROUND or it freezes your whole turn (its exit is your wake-up). Proceeding.`)
-    const intervalMs = (Number(flag('interval')) || 2) * 1000
+    if (kit.watcher) console.error(`spex session wait: heads-up (managed agent ${kit.watcher.slice(0, 8)}) — this command BLOCKS until it OBSERVES ${named} transition from non-actionable into an actionable status, or a message arrives for you (edge-triggered: an already-actionable current state does NOT return it — to just read the state now, use \`spex session ls\`/\`review\`); run it in the BACKGROUND or it freezes your whole turn (its exit is your wake-up). Proceeding.`)
     const timeoutSec = Number(flag('timeout')) || 1200
-    // `wait` addresses one explicit record. Read its history row for both events and presence so archive is an
-    // offline transition, not a vanished session; only a missing all-record row is a genuine gone/closed result.
-    const history = () => clientListSessions(true)
-    const r = await watchSessions(() => {}, {
-      source: history,
-      presenceSource: history,
-      selectors: [id],
+    const r = await kit.follow(() => {}, {
       includeIdle: has('idle'),
-      intervalMs,
-      until: {
-        timeoutMs: timeoutSec * 1000,
-        // the arrival state and each observed transition narrate on stderr AS THEY HAPPEN, so a backgrounded
-        // wait's transcript is the state sequence itself; stdout stays the one machine verdict (the observed
-        // path on an edge, or a transport token).
-        onObserved: (st, was) => console.error(was
-          ? `spex session wait: observed ${was} → ${st}`
-          : `spex session wait: current status ${st} — recorded as the path start; returns on the next non-actionable→actionable transition`),
-      },
+      intervalMs: (Number(flag('interval')) || 1) * 1000,
+      take: true,
+      timeoutMs: timeoutSec * 1000,
+      // the arrival state and each observed transition narrate on stderr AS THEY HAPPEN, so a backgrounded
+      // wait's transcript is the state sequence itself; stdout stays the one machine verdict.
+      onObserved: (sid, st, was) => console.error(was
+        ? `spex session wait: observed ${sid.slice(0, 8)} ${was} → ${st}`
+        : `spex session wait: ${sid.slice(0, 8)} current status ${st} — recorded as the path start; returns on the next non-actionable→actionable transition`),
     })
     // the observed status path is the stdout verdict: read the LAST token as the status reached. Printing the
     // whole path (not just the final status) is the point — a manager sees what the wait lived through
     // (e.g. review→working→close-pending across a merge dispatch), not a bare word out of context.
     if ('reached' in r) { console.log(r.path.join('→')); process.exit(0) }
-    if ('gone' in r) { console.error(`spex session wait: no such (living) session ${id}`); process.exit(2) }
-    // a backend failure is a verdict about the TRANSPORT, never the session ([[session-follow]], issue #40): it prints
-    // its own outcome token on stdout — a word OUTSIDE the session-status vocabulary, so a supervisor reading
-    // the one status line can never mistake "I could not reach the board" for "the session is offline" — and
-    // exits 3, distinct from the plain no-edge timeout (1) and the vanished target (2).
-    if ('backendDown' in r) {
-      console.error(`spex session wait: ${r.backendDown}`)
-      console.log(r.kind === 'unreachable' ? 'backend-unreachable' : 'backend-error')
-      process.exit(3)
+    if ('mail' in r) {
+      console.error(`spex session wait: message from ${r.mail.from ?? 'a human'} — ${r.mail.text}`)
+      console.log('message')
+      process.exit(0)
     }
-    console.error(`spex session wait: timeout — observed no non-actionable→actionable transition on ${id} within ${timeoutSec}s (status path: ${r.path.join('→') || 'never sighted'})`)
+    if ('gone' in r) { console.error(`spex session wait: session ${r.gone} is gone — its store dir no longer exists`); process.exit(2) }
+    console.error(`spex session wait: timeout — observed no non-actionable→actionable transition on ${named} within ${timeoutSec}s (status path: ${r.path.join('→') || 'never sighted'})`)
     process.exit(1)
   } else if (sub === 'review') {
     const first = positionals(4)[0]
@@ -818,8 +824,8 @@ if (cmd === 'serve') {
         console.error(`spex session send --keys: nothing delivered to ${full} (offline, unknown session, or no valid key token)`)
         process.exit(1)
       }
-      // prompt dispatch is socket-only + fail-loud (the backend enforces it): a non-accepted prompt prints the
-      // reason AND exits non-zero, so a manager/script never mistakes a dead dispatch for success.
+      // The backend decides send success at the timeline append. A dead adapter poke only delays context
+      // injection, while a refused record write prints the reason and exits non-zero.
       // BIDIRECTIONAL: stamp the SENDER (this send process's OWN session — the only process that knows it, via
       // ownSessionId from CLAUDE_CODE_SESSION_ID) + a one-line reply hint into the delivered
       // message, so the recipient can reply over the SAME send. The sender's row (hence its display label) is

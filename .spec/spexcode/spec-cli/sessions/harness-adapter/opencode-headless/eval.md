@@ -43,19 +43,19 @@ scenarios:
       - spec-cli/src/opencode-headless.ts#turnHome
   - name: opencode-headless-live-steer
     description: While a real opencode-headless turn is running with its plugin rendezvous socket bound, send a second prompt through the public session send surface.
-    expected: The existing parse-confirmed rendezvous transport accepts the prompt exactly once through `client.session.prompt`; no second turn process or PTY input bridge is used.
+    expected: The existing rendezvous poke reaches `client.session.prompt` when the live channel accepts it; no second turn process or PTY input bridge is used, and a missed poke remains in the timeline for the reader.
     tags: [backend-api, cli]
     code: [spec-cli/src/opencode-headless.ts]
   - name: opencode-headless-fail-loud
     description: Remove the session's turn home, then send a prompt through the public session send surface.
-    expected: Delivery returns a non-success result naming the failed wake; it never records a sent message or silently falls back to terminal typing.
+    expected: Send succeeds once its timeline line is appended; the failed immediate wake leaves that line unread, records no false native poke success, and never falls back to terminal typing.
     tags: [backend-api, cli]
     code:
       - spec-cli/src/opencode-headless.ts#spawnOpenCodeHeadlessTurn
       - spec-cli/src/opencode-headless.ts#turnHome
   - name: opencode-headless-wake-turn-fail-loud
     description: Through the public session send surface, cold-wake a real governed session with an OpenCode launcher whose turn process exits non-zero immediately after spawn.
-    expected: Delivery returns non-success with the observed turn exit, the active-only turn-outcome CAS records lifecycle error, and no sent-success event is recorded merely because tmux accepted the respawn.
+    expected: Send succeeds once its timeline line is appended; the failed immediate wake reports its observed turn exit through the active-only turn-outcome CAS, and no false native poke success is inferred merely because tmux accepted the respawn.
     tags: [backend-api, cli]
     code:
       - spec-cli/src/opencode-headless.ts#spawnOpenCodeHeadlessTurn
@@ -71,7 +71,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-opencode-headless-launch-in-turn
@@ -93,7 +93,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-opencode-headless-dashboard-note-in-turn
@@ -104,7 +104,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-opencode-headless-cli-send-idle
@@ -115,7 +115,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   - name: delivery-combo-opencode-headless-cli-send-in-turn
@@ -126,7 +126,7 @@ scenarios:
       only `spex session new`, the public `/api/sessions/:id/input` route, or plain
       `spex session send`, then read the public timeline/board and the real pane where applicable.
     expected: >-
-      Delivery is confirmed by the native product surface; the answer is readable as a timeline status note containing the answer marker;
+      The immediate native poke is observed at the product surface; the answer is readable as a timeline status note containing the answer marker;
       every observed liveness value is truthful for the live session; and a post-delivery authored
       declaration is present. A missing default note hint on a headless target is a failure.
   # harness-delivery-campaign:end

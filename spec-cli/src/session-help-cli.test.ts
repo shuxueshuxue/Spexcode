@@ -14,7 +14,7 @@ function sessionHelp(verb?: string) {
 test('session noun-verb help projects the exact verb from the shared drawer definition', () => {
   const cases = [
     { verb: 'send', usage: 'Usage: spex session send <SEL> "<msg>"', behavior: /LAST RESORT:[\s\S]*UNSTABLE[\s\S]*SEL = session id[\s\S]*PROJECT-BOUND/ },
-    { verb: 'wait', usage: 'Usage: spex session wait <SEL>', behavior: /EDGE-TRIGGERED[\s\S]*non-actionable status into an actionable one[\s\S]*SEL = session id/ },
+    { verb: 'wait', usage: 'Usage: spex session wait [SEL…]', behavior: /EDGE-TRIGGERED[\s\S]*non-actionable\s+status into an actionable one[\s\S]*SEL = session id/ },
     { verb: 'new', usage: 'Usage: spex session new "<prompt>"', behavior: /--prompt-file[\s\S]*successful receipt/ },
   ]
   const outputs = cases.map(({ verb, usage, behavior }) => {
@@ -37,7 +37,7 @@ test('bare session keeps the complete compatible drawer', () => {
   assert.equal(result.stderr, '')
   assert.match(result.stdout, /Manager verbs \(dispatch, monitor, land\)/)
   assert.match(result.stdout, /spex session new "<prompt>"/)
-  assert.match(result.stdout, /spex session wait <SEL>/)
+  assert.match(result.stdout, /spex session wait \[SEL…\]/)
   assert.match(result.stdout, /spex session send <SEL> "<msg>"/)
   assert.match(result.stdout, /spex session unarchive <SEL>/)
 })

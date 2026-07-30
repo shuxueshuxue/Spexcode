@@ -16,7 +16,7 @@ related:
 # command-box
 
 The dashboard's authored control channel is a **Command Box**, not a second terminal input. The name states
-why it exists: this is where a human addresses SpexCode's board and sends an atomic out-of-band prompt, while
+why it exists: this is where a human addresses SpexCode's board and appends an out-of-band prompt, while
 the agent's own TUI remains the default place to converse and drive interactive menus ([[terminal-input]]).
 
 The reserved single-modifier chord `Alt+I` toggles it for a live session; Command/Ctrl+I remain native or

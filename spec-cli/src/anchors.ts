@@ -464,11 +464,18 @@ async function hunksAt(root: string, event: DriftPathEvent): Promise<HunkRanges>
 }
 
 // Ordinary commits whose two images keep one path share a single query. Renames and merges retain distinct
-// image paths, so they stay on hunksAt's exact event-shaped query.
+// image paths, so they stay on hunksAt's exact event-shaped query. Commits ride argv here, so a build-wide
+// batch is split to stay clear of the kernel's exec argument limit; the records are order-independent.
+const HUNK_COMMIT_CHUNK = 400
 async function hunksAtMany(root: string, commits: string[], path: string): Promise<Map<string, HunkRanges>> {
   const result = new Map<string, HunkRanges>()
   const ordinary = [...new Set(commits)]
   if (!ordinary.length) return result
+  for (let cursor = 0; cursor < ordinary.length; cursor += HUNK_COMMIT_CHUNK)
+    await hunkRecordsInto(root, ordinary.slice(cursor, cursor + HUNK_COMMIT_CHUNK), path, result)
+  return result
+}
+async function hunkRecordsInto(root: string, ordinary: string[], path: string, result: Map<string, HunkRanges>): Promise<void> {
   const out = await gitRequiredA(['-C', root, '-c', 'core.quotePath=false', 'log', '--no-walk', '--no-merges', '--patch', '--unified=0', '-M',
     `--format=${RS}%H`, ...ordinary, '--', path], `cannot derive anchor hunks for ${path}`)
   for (const rec of out.split(RS)) {
@@ -487,7 +494,6 @@ async function hunksAtMany(root: string, commits: string[], path: string): Promi
     }
     result.set(hash, ranges)
   }
-  return result
 }
 
 // the drift window of an anchored file: every commit to `path` not reachable from the spec's version
@@ -525,8 +531,8 @@ export async function anchorHitQueries(root: string, queries: AnchorHitQuery[], 
     ordinaryByPath.set(event.historicalPath, commits)
   }
   const refs = [...revisions.values()]
-  const oids = batchRevisionOids(root, refs.map(({ commit, path }) => `${commit}:${path}`))
-  const blobs = batchBlobTexts(root, oids.filter((oid): oid is string => !!oid))
+  const oids = await batchRevisionOids(root, refs.map(({ commit, path }) => `${commit}:${path}`))
+  const blobs = await batchBlobTexts(root, oids.filter((oid): oid is string => !!oid))
   const units = new Map<string, FileRevisionUnits>()
   for (let index = 0; index < refs.length; index++) {
     const ref = refs[index], oid = oids[index]

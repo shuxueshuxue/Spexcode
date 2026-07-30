@@ -904,3 +904,57 @@ test('content revision covers dirty source, index, rename, sidecar, remark, and 
     rmSync(remarks, { recursive: true, force: true })
   }
 })
+
+// [[git-exec]]'s classification, locked where it is actually OBSERVABLE. The first version of this test aimed
+// at the ancestry gate, because that gate is the one place whose message is ACTIONABLE — it tells the reader
+// their base is wrong and to use the session merge-base, which someone will act on. Measuring it showed the
+// aim was wrong: an unexecutable git never reaches that gate, because revision resolution runs first and fails
+// first. The test passed on BOTH sides of the fix, which is the "instrument not plugged in" failure — an
+// assertion satisfied because the code never arrives at the branch it names.
+//
+// The difference the fix really makes is one line earlier, in the resolution error's own words: the same
+// unexecutable git reports `exit failure` before and `spawn failure` after. That is the two-sided difference,
+// so that is where the lock belongs. The genuine non-ancestor case stays because the actionable sentence is
+// TRUE there and must keep being produced.
+test('git-exec classification survives into session impact: a git that never ran says spawn, not exit', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-ancestry-gate-'))
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+  git('init', '-q')
+  git('config', 'user.email', 't@t'); git('config', 'user.name', 't')
+  mkdirSync(join(root, '.spec/project'), { recursive: true })
+  writeFileSync(join(root, '.spec/project/spec.md'), '---\ntitle: project\n---\n# project\n')
+  writeFileSync(join(root, 'a.txt'), 'one\n')
+  git('add', '-A'); git('commit', '-q', '-m', 'root')
+  const rootCommit = git('rev-parse', 'HEAD')
+  writeFileSync(join(root, 'a.txt'), 'two\n'); git('add', '-A'); git('commit', '-q', '-m', 'left')
+  const left = git('rev-parse', 'HEAD')
+  git('checkout', '-q', '-b', 'right', rootCommit)
+  writeFileSync(join(root, 'b.txt'), 'three\n'); git('add', '-A'); git('commit', '-q', '-m', 'right')
+  const right = git('rev-parse', 'HEAD')
+
+  // a genuine non-ancestor: the actionable sentence is correct here and must keep being produced
+  await assert.rejects(
+    projectSessionImpact(root, { base: left, head: right }),
+    (error: any) => error instanceof SessionImpactUnavailableError && /is not an ancestor of head/.test(error.message),
+    'a real non-ancestor keeps the actionable diagnosis',
+  )
+
+  // a git that cannot be executed: the failure must be named for what it was, never as an exit status
+  const shimDir = mkdtempSync(join(tmpdir(), 'spex-ancestry-shim-'))
+  writeFileSync(join(shimDir, 'git'), '#!/bin/sh\nexec /usr/bin/git "$@"\n')
+  chmodSync(join(shimDir, 'git'), 0o644)
+  const realPath = process.env.PATH
+  process.env.PATH = shimDir
+  try {
+    await assert.rejects(
+      projectSessionImpact(root, { base: rootCommit, head: left }),
+      (error: any) => error instanceof SessionImpactUnavailableError
+        && /spawn failure/.test(error.message) && !/exit failure/.test(error.message),
+      'an unexecutable git is a spawn failure, not an exit status',
+    )
+  } finally {
+    process.env.PATH = realPath
+    rmSync(shimDir, { recursive: true, force: true })
+  }
+  rmSync(root, { recursive: true, force: true })
+})

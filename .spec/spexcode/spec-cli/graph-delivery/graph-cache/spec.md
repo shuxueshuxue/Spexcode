@@ -35,22 +35,44 @@ The graph is built **once per change, not once per poll — and only as much of 
   Under `SPEXCODE_BOARD_DEBUG=1`, each successful full or sessions cache publication emits one structured
   `cache-commit` row after its anchor is committed, carrying `stage=cache-commit`, `at`, `scope` and `buildMs`; validation hits,
   stale reads and failed, aborted or timed-out producers emit no such row.
-- **Patrol verification is cache-owned.** Graph-stream's existing ~15s patrol does not manufacture a full
-  invalidation. It asks the cache for the same single-flight refresh every other fresh reader uses. On a clean
-  cache that refresh first compares one compact board-input revision: the served checkout's HEAD, `.spec` tree
-  and config; the main branch tip; exact session records and originating prompt artifacts; each
-  non-archived governed worktree's HEAD and `.spec` tree; the whole issue/remark-store stamp; and the current
-  session-eval projection states. An equal revision returns the cached board and starts no assembly. A moved session record or
-  projection revision takes the existing `sessions` splice; a moved graph/config/worktree/issue revision takes
-  the existing `full` producer, so a blinded observer is still repaired and reported by [[graph-stream]]. This
-  is the existing patrol timer's validation step, not a second poller or TTL. The revision is sampled around a
-  real build; input movement while it runs leaves the result dirty for
-  the next read even when the corresponding watcher event was missed. The completed board's own issue and
-  projection values become the cache anchor, so verification never certifies a value the board did not carry.
-  A slow validation or producer stays inside the same watchdog/abort/backoff path, and a patrol arriving during
-  another refresh joins it rather than queueing a second operation.
+- **Revision-fenced publication.** A consumer that has observed a newer resident-forge content revision asks
+  the cache for a board that carries at least that revision. The cache records a full invalidation and waits
+  for publication, but an already-running flight that captured an older forge slice cannot discharge that
+  obligation: it may settle normally, then the still-owed full producer publishes the required revision.
+  This is one cache-owned publication fence, not API polling or a forge-specific retry path; failure from
+  either flight remains loud through the existing build/watchdog path.
+- **Verification is cache-owned, and it is the FIRST step of every refresh.** A change signal names the leaf a
+  watcher saw; that is not evidence the board moved. So every refresh — graph-stream's ~15s patrol, an HTTP
+  read, a watcher-driven rebuild alike — first compares one compact board-input revision: the served checkout's
+  HEAD, `.spec` tree and config; the main branch tip; exact session records and originating prompt artifacts;
+  each non-archived governed worktree's HEAD and `.spec` tree; the whole issue/remark-store stamp; and the
+  current session-eval projection states. That list IS this cache's answer to "is this a board input?", and a
+  producer's domain is DERIVED from what it says moved rather than assigned by whoever signalled. An equal
+  revision returns the cached board and starts no assembly, whoever asked. A moved session record or projection
+  revision takes the `sessions` splice; a moved graph/config/worktree/issue revision takes the `full` producer,
+  so a blinded observer is still repaired and reported by [[graph-stream]]. This is validation, not a second
+  poller or TTL.
+
+  The two obligations settle differently, because this revision can settle only one of them. A structural
+  `full` claim whose full revision did not move is DISCHARGED without assembly — bytes the board never reads
+  (a generated harness artifact rewritten inside a live worktree, a linked worktree no governed record names)
+  bought a whole structural assembly before, which on an adopter-scale corpus is the difference between a
+  cached read and a timed-out one. A `sessions` claim is never discharged here: liveness is graph-stream's
+  poller axis, deliberately outside this revision, so a claimed session projection always takes its splice, and
+  a projection the revision shows moved is owed one even when nothing signalled. Nothing is ignored by NAME —
+  no filename table, no gitignore rule — because an adopter may govern generated and ignored paths; the only
+  verdict is what the board actually reads.
+
+  The revision is sampled around a real build, and the anchor names the sample the finished board is KNOWN to
+  have read. Input movement while a producer runs leaves the result dirty for the next read even when the
+  corresponding watcher event was missed, and that anchor keeps the pre-move value, so the re-owed obligation
+  cannot discharge itself against a revision the board never carried and converge on nothing. The completed
+  board's own issue and projection values become part of the anchor, so verification never certifies a value
+  the board did not carry. A slow validation or producer stays inside the same watchdog/abort/backoff path, and
+  a refresh arriving during another joins it rather than queueing a second operation.
 - **Scoped invalidation (the dirty state carries independent obligations).** `invalidateBoard(scope)` records
-  a structural `full` obligation and a session-projection obligation separately. A full signal still subsumes
+  a structural `full` obligation and a session-projection obligation separately — as CLAIMS, which the
+  verification above then settles against the inputs. A full signal still subsumes
   nothing except another structural full: when a sessions signal arrives in the same debounce window or while a
   route-owned/full producer is running, the cache owes **both** a full convergence and a sessions splice. A
   'sessions' read with a cached graph takes the SPLICE path — `spliceSessions(prev)`: one fresh
@@ -212,4 +234,4 @@ env-overridable (`SPEXCODE_BOARD_BUDGET_MS` /
 
 This is the third half of [[graph-delivery]]'s one budget: [[graph-lean]] decides *how much* rides the
 wire, [[graph-stream]] decides *when* the wire is paid, and graph-cache decides *how often the graph is
-built* — one build per change, shared by every reader.
+built* — one build per MEASURED change, shared by every reader.

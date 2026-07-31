@@ -28,9 +28,8 @@ declarations had to be *consumed* as if they were mail because they shared the c
 for none of that. Nothing is owed exactly when the queue is empty, which is a fact about a small file rather
 than a computation over a large one.
 
-That is also why an old session cannot be ambushed by its own past: a queue is only ever filled by an enqueue,
-so a session that predates this mechanism starts owing nothing, and the thousands of lines its log already
-holds stay what they always were — history.
+A queue is only ever filled by an enqueue, so nothing is owed that was not sent, and a log stays history no
+matter how many thousands of lines it grows to.
 
 ## expanded spec
 
@@ -73,12 +72,3 @@ point of arrival, which is the only thing that lets an agent answer it without k
 
 A queue dies with its session's store dir. It is transport state with no evidentiary value — what was actually
 said is in the log, and what an agent was shown is in its own transcript.
-
-**Adopting this costs an ordering, and getting it backwards loses messages.** Two halves move: the sender's
-backend, which learns to enqueue, and each session's materialized hook, which stops replaying. A backend that
-enqueues talking to a session that still replays delivers twice — annoying, visible, harmless. The reverse —
-an OLD backend, which only pokes, aimed at a session whose hook already stopped replaying — has nothing
-holding the message when the poke does not land: it is recorded, reported successful, and never handed over.
-Measured, not theorised. So the backend must be upgraded BEFORE a session's hook is re-materialized, which is
-the opposite of the usual materialize-then-restart order, and the window lasts exactly as long as the gap
-between the two.

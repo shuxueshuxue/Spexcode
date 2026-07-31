@@ -48,28 +48,15 @@ scenarios:
       redundancy rather than duplication. Neither backend needs to be the one that launched the session. A
       send made through either reaches the same queue, because delivery state lives in the store, not in a
       process.
-  - name: rollout-window-old-sender-new-hook
+  - name: history-is-not-a-work-list
     tags: [cli]
     description: >-
-      The mixed-version window a fleet passes through. Point an OLD-code backend (one whose sendText only
-      pokes, without enqueueing) at a session whose worktree has ALREADY materialized the mail-free hook.
-      Stop that session's runtime, send one message from the old backend and one from a new one, then resume
-      and count arrivals.
+      Take a session whose timeline holds hundreds of `sent` lines and whose queue is empty. Start a backend
+      over that store and let the sweep run.
     expected: >-
-      The new backend's message is queued and handed over exactly once on resume. The old backend's is
-      recorded in the log, reports success, and NEVER ARRIVES — nothing enqueued it and the hook that used
-      to replay it is gone. This is a real loss window, not a theoretical one, and it names the required
-      rollout order: the backend must be upgraded BEFORE a session's hook is re-materialized, never after.
-      A deployment that materializes first and restarts second opens exactly this gap.
-  - name: old-session-owes-nothing
-    tags: [cli]
-    description: >-
-      Take a session record whose timeline already holds hundreds of `sent` lines from before this mechanism
-      existed and that has no pending queue. Start a backend over that store and let the sweep run.
-    expected: >-
-      Nothing is handed over at all: a queue is only ever filled by an enqueue, so history is never replayed
-      as a work list. This is why no backlog migration exists — the old lines stay exactly what they always
-      were, a record. A message sent to that same session AFTER the sweep starts is delivered normally.
+      Nothing is handed over at all: a queue is only ever filled by an enqueue, so a log is never read as a
+      work list however long it grows. A message sent to that same session AFTER the sweep starts is
+      delivered normally.
 ---
 
 # delivery-queue — yatsu

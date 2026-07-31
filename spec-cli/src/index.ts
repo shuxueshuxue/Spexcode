@@ -15,7 +15,7 @@ import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { summarizeLoopIn } from './mentions.js'
 import { resolveLayout, mainBranch } from './layout.js'
 import { getBoardJson } from './graphCache.js'
-import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged } from './graphStream.js'
+import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from './git.js'
 import { cockpitReview } from './cockpit.js'
 import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
@@ -455,12 +455,16 @@ app.post('/api/sessions', async (c) => {
   try {
     const body = await c.req.json().catch(() => null)
     const result = await sessionCreateRequest(body, { requestKey, signal: controller.signal })
+    // A candidate registry event is intentionally held while Git creates the private worktree. Once the
+    // transaction has published or cleaned up its record, release the one deferred full refresh.
+    flushDeferredWorktreeRegistryChange()
     if (result.status === 201) {
       c.header('Idempotency-Key', requestKey)
       return c.json(result.session, 201)
     }
     return c.json({ error: result.error, ...(result.code ? { code: result.code } : {}), ...(result.phase ? { phase: result.phase } : {}) }, result.status as any)
   } finally {
+    flushDeferredWorktreeRegistryChange()
     rawSignal.removeEventListener('abort', cancelFromRequest)
     outgoing?.off('close', cancel)
   }

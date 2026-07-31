@@ -1670,6 +1670,23 @@ type SessionCandidateReceiptRead =
 const sessionCandidateReceiptDir = () => join(runtimeRoot(), '.session-create-candidates')
 const sessionCandidateReceiptPath = (id: string) => join(sessionCandidateReceiptDir(), `${id}.json`)
 const sessionCandidateLockId = (path: string, branch: string) => `create-resource-${digest(`${path}\0${branch}`)}`
+// The graph watcher uses this private fence to avoid rebuilding the full board while Git is still
+// registering a session candidate. The receipt is written before `git worktree add` and retired only
+// after publication or bounded cleanup, so the path names exactly the transaction-owned worktree.
+export function pendingSessionCreateWorktreePaths(): Set<string> {
+  const paths = new Set<string>()
+  let entries: import('node:fs').Dirent[]
+  try { entries = readdirSync(sessionCandidateReceiptDir(), { withFileTypes: true }) }
+  catch { return paths }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+    try {
+      const value = JSON.parse(readFileSync(join(sessionCandidateReceiptDir(), entry.name), 'utf8')) as Partial<SessionCandidateReceipt>
+      if (typeof value.path === 'string' && value.path && typeof value.stage === 'string') paths.add(resolve(value.path))
+    } catch { /* an in-flight atomic replace is not a candidate path */ }
+  }
+  return paths
+}
 function readSessionCandidateReceipt(id: string): SessionCandidateReceiptRead {
   const path = sessionCandidateReceiptPath(id)
   if (!existsSync(path)) return { kind: 'absent' }

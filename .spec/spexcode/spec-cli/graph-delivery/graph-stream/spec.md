@@ -55,7 +55,11 @@ sidecars; the gitdir watch covers `index` changes from stage/reset that do not r
 fire 'full'. A root watcher cannot tell a governed byte from a generated one, and is not asked to: what it
 fires is a claim about DOMAIN, and [[graph-cache]]'s verification decides whether any board input actually
 moved before a producer runs. Naming a scope is this module's whole job; deciding that a producer is owed is
-never it. Only `.git` transport metadata (covered by its own watchers) and `node_modules` dependency bytes
+never it. A session-create transaction writes a private candidate receipt before `git worktree add`; while that
+receipt names the registry entry, its add/remove events are held rather than starting a full build against an
+unpublished worktree. The create route flushes the held event after publication or bounded cleanup, so final full
+convergence is preserved without competing with Git's checkout. A bounded fallback releases a held event if the
+request dies. Only `.git` transport metadata (covered by its own watchers) and `node_modules` dependency bytes
 are ignored; generated project paths are not guessed away, because an adopter may govern them. A
 pathless/overflow-like event or watcher error is treated as an unknown full change, never ignored. For the eval
 projection specifically, losing either the refs observer or a worktree observer places a keyed hold before the

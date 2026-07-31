@@ -1,9 +1,9 @@
 import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { watch, mkdirSync, readdirSync, readFileSync, type FSWatcher } from 'node:fs'
-import { join, dirname, relative, resolve } from 'node:path'
+import { join, dirname, relative, resolve, basename } from 'node:path'
 import { sessionsRoot, gitCommonDir } from './layout.js'
-import { hotSignature, warmSignature, listSessions } from './sessions.js'
+import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
 import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard } from './graphCache.js'
 import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
 import {
@@ -216,6 +216,16 @@ export const addPendingGraphChange = (pending: PendingGraphChanges, scope: Scope
   full: pending.full || scope === 'full',
   sessions: pending.sessions || scope === 'sessions',
 })
+
+// Git creates the registry entry before the session transaction publishes its durable record. A registry
+// event for that private candidate must not start a full board build while the `git worktree add` child is
+// still running; the create route flushes the deferred event after publication (or cleanup).
+export function isSessionCreateCandidateRegistryEvent(relativePath: string, candidatePaths: Iterable<string>): boolean {
+  const entry = relativePath.split(/[\\/]+/).filter(Boolean)[0] ?? ''
+  if (!entry) return false
+  for (const path of candidatePaths) if (basename(resolve(path)) === entry) return true
+  return false
+}
 
 // under SPEXCODE_BOARD_DEBUG=1, every broadcast logs its changed unit keys + trigger tags + build ms.
 const DEBUG = process.env.SPEXCODE_BOARD_DEBUG === '1'
@@ -745,10 +755,37 @@ function reconcileWorktrees(forceSessionId?: string): Promise<void> {
   return flight
 }
 const WORKTREE_REGISTRY_OBSERVER = 'graph:worktree-registry'
+let deferredRegistryChange = false
+let deferredRegistryTimer: ReturnType<typeof setTimeout> | null = null
+
+function flushDeferredRegistryChange(): void {
+  if (!deferredRegistryChange) return
+  deferredRegistryChange = false
+  if (deferredRegistryTimer) { clearTimeout(deferredRegistryTimer); deferredRegistryTimer = null }
+  void reconcileWorktrees()
+  fireChanged('full', 'all')
+}
+
+// A crashed or disconnected create request must not leave the registry event deferred forever. The normal
+// route flush is immediate; this bounded fallback preserves the watcher contract if the process never reaches
+// its response boundary.
+function deferRegistryChange(): void {
+  deferredRegistryChange = true
+  if (deferredRegistryTimer) return
+  deferredRegistryTimer = setTimeout(() => {
+    deferredRegistryTimer = null
+    flushDeferredRegistryChange()
+  }, 10_000)
+  deferredRegistryTimer.unref?.()
+}
+
+export function flushDeferredWorktreeRegistryChange(): void {
+  flushDeferredRegistryChange()
+}
 
 export function watchSessionEvalRegistry(
   dir: string,
-  onInput: () => void,
+  onInput: (event: 'rename' | 'change', relativePath: string) => void,
   onFailure: (error: Error) => void,
 ): TreeWatcherRegistry {
   let ready = false
@@ -758,7 +795,7 @@ export function watchSessionEvalRegistry(
     source: 'worktree-registry',
     scope: 'full',
     recursive: false,
-    onInput: () => onInput(),
+    onInput: (_event, relativePath) => onInput(_event, relativePath),
     onFailure: (error) => {
       if (ready) onFailure(error)
       else attachError = error
@@ -807,7 +844,11 @@ async function ensureWorktreeRegistry(forceSessionId?: string): Promise<void> {
     catch (error) { console.error(`spec-cli: graph watcher 'worktree-registry' could not create ${dir}: ${error instanceof Error ? error.message : String(error)}`) }
     // a registry add/remove is itself a 'full' change (a new/gone worktree reshapes the overlay); also
     // reconcile the per-worktree `.spec` watchers on every registry event.
-    registryWatcher = watchSessionEvalRegistry(dir, () => {
+    registryWatcher = watchSessionEvalRegistry(dir, (_event, relativePath) => {
+      if (isSessionCreateCandidateRegistryEvent(relativePath, pendingSessionCreateWorktreePaths())) {
+        deferRegistryChange()
+        return
+      }
       void reconcileWorktrees()
       fireChanged('full', 'all')
     }, registryWatcherFailed)
@@ -841,6 +882,8 @@ export async function ensureBoardFileWatchers(forceSessionId?: string): Promise<
 export function closeBoardFileWatchers(): void {
   watcherEra++
   if (repairTimer) { clearTimeout(repairTimer); repairTimer = null }
+  if (deferredRegistryTimer) { clearTimeout(deferredRegistryTimer); deferredRegistryTimer = null }
+  deferredRegistryChange = false
   heldSources.clear()
   repairStep = 0
   repairing = false

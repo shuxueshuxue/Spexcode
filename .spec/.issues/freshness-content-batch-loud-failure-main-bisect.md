@@ -1,7 +1,7 @@
 ---
 concern: freshness 的 content-batch loud-failure 测试在 main 上长期红，且已 bisect 到批量化之前——无人认领
 by: da103a36-07c4-4e77-9d85-006462ae68b8
-status: open
+status: landed
 nodes: graph-cache
 created: 2026-07-30T06:55:29.440Z
 ---

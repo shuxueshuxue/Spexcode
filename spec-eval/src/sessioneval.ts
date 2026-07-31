@@ -1449,7 +1449,6 @@ async function sessionScopeNodes(
   ctx: Awaited<ReturnType<typeof evalContext>>,
   impact: SessionImpactProjection,
   shas: ReadonlySet<string>,
-  latestOnly = false,
 ): Promise<SessionEvalNode[]> {
   const evalById = new Map(ctx.ynodes.map((node) => [node.id, node]))
   const specById = new Map(ctx.specs.map((spec) => [spec.id, spec]))
@@ -1507,7 +1506,7 @@ async function sessionScopeNodes(
       scenarios: scoped.scenarios,
       // Preserve the whole A/B history for selected scenarios. Fresh, stale, legacy and missing remain
       // honest downstream states; impact selection never removes a row because its reading is stale.
-      evals: latestOnly ? latestPerScenario(scoped.evals) as (EvalEntry & { inSession: boolean })[] : scoped.evals,
+      evals: scoped.evals,
     })
   }
 
@@ -1572,7 +1571,6 @@ async function buildSessionEvalModel(
   id: string,
   payload: ReviewPayloadValue,
   wtPath: string | null,
-  latestOnly: boolean,
 ): Promise<SessionEvalModel> {
   // spec tree from the session worktree, same root as readings/indexes — a branch-NEW node must exist
   // in this model or the Eval tab/deep link can never reach its readings (see buildExportModel above).
@@ -1582,7 +1580,7 @@ async function buildSessionEvalModel(
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
   const { impact, shas } = await sessionImpactForContext(id, ctx, wtPath)
-  const nodes = await sessionScopeNodes(id, ctx, impact, shas, latestOnly)
+  const nodes = await sessionScopeNodes(id, ctx, impact, shas)
   // nodes with in-session measurements lead, then the most-measured — the session's own evidence first.
   nodes.sort((a, b) => (b.evals.filter((e) => e.inSession).length - a.evals.filter((e) => e.inSession).length)
     || (b.scenarios.length - a.scenarios.length) || (b.unknownCoverage.length - a.unknownCoverage.length))
@@ -2017,22 +2015,26 @@ async function buildSummaryAttempt(id: string, _path: string): Promise<SummaryBu
       ? { kind: 'stable', revision: after, summary: cached.summary }
       : { kind: 'unstable' }
   }
-  const model = await buildSessionEvalModel(id, payload, wtPath, true)
+  const model = await buildSessionEvalModel(id, payload, wtPath)
   const after = await sessionEvalContentRevision(ctxPath)
   if (before !== after) return { kind: 'unstable' }
   const summary = sessionEvalSummary(model.nodes)
-  // Keep one content-addressed stable value per session. Revisions, not elapsed time, decide reuse. This
-  // fold is latestOnly, so it deposits no model — it only carries any model an earlier demand left here.
-  depositStableCut(id, after, { summary })
+  // Keep one content-addressed stable value per session. Revisions, not elapsed time, decide reuse.
+  // This fold IS the demand's fold, so it deposits the model too and a later open replays it.
+  depositStableCut(id, after, { summary, model })
   return { kind: 'stable', revision: after, summary }
 }
 
-// ONE content-addressed cut per session, keyed by id + content revision. It carries the summary the graph
-// reads and — only when the demand path built it — the derived full model a repeat open replays.
-// @@@the two builders do not produce the same model - buildSummaryAttempt folds latestOnly=true (latest
-// reading per scenario, enough for counts) while the demand path needs the complete A/B history. Only the
-// demand path may deposit `model`, and only a demand read may consume it; serving the summary path's fold
-// to a demand would silently truncate every scenario's history.
+// ONE content-addressed cut per session, keyed by id + content revision, carrying the summary the graph
+// reads and the full model a repeat open replays.
+// @@@one builder, not two - these used to be separate folds: the graph's built latestOnly (latest reading
+// per scenario) and deposited counts alone, so the demand path re-derived the WHOLE thing to get history
+// the graph fold had held one line earlier and thrown away. The trim never made the fold cheaper — the
+// expensive part is the freshness pass over every node in scope, and it ran identically either way — and
+// it never mattered to the counts, because sessionEvalSummary folds latestPerScenario itself. So the trim
+// bought nothing and cost a second full build per session per revision. The price of dropping it is
+// MEMORY: a cut now retains complete A/B history rather than latest-per-scenario, bounded by the one-cut-
+// per-session rule below.
 type StableCut = { summary: SessionEvalSummary; model?: SessionEvalModel }
 const summaryByContent = new Map<string, StableCut>()
 
@@ -2108,7 +2110,7 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
         if (before !== settled) projectionCache.invalidate({ id })
         return { kind: 'retry' as const }
       }
-      const model = await buildSessionEvalModel(id, payload, wtPath, false)
+      const model = await buildSessionEvalModel(id, payload, wtPath)
       const after = await sessionEvalContentRevision(ctxPath)
       const current = projectionCache.get(id)
       if (before !== after || projectionCache.isObserverHeld(id, ctxPath)

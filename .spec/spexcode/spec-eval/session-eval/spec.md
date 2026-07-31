@@ -126,14 +126,20 @@ freshness. A build reads the revision before and after the fold; a mismatch is d
 summary and a demand projection bearing the same revision are the same evaluation cut, not two coincidentally similar
 reads.
 
-That same content-addressed cut carries the **derived full model**, not only the summary. A demand build
+That same content-addressed cut carries the **derived full model**, not only the summary. Every build
 deposits its model beside the summary under the one `session + content revision` key, so a repeat open at an
 unmoved revision replays it instead of re-deriving it from Git — the observable difference between opening a
 session's evaluation once and opening it again is a read, not a rebuild. It is the same cache owner, key and
 invalidation: a moved input yields a different key, only the newest key per session is retained, and summary
-and model are dropped together so they can never describe different revisions. The two builders do not share
-a model — the summary fold keeps only the latest reading per scenario while a demand needs the complete
-history — so only a demand deposits a model and only a demand consumes one. A replay still passes the
+and model are dropped together so they can never describe different revisions.
+
+**There is ONE builder, and the graph's fold IS the demand's fold.** These were two: the graph's kept only
+the latest reading per scenario and deposited counts alone, so opening the page re-derived the whole model to
+recover history the graph fold had held one line earlier and discarded. The trim never made that fold
+cheaper — the cost is the freshness pass over every node in scope, and it ran identically either way — and it
+never mattered to the counts, because the summary reduction folds latest-per-scenario itself. So the second
+build bought nothing. Its price is paid in MEMORY instead: a cut retains complete A/B history rather than
+latest-per-scenario, bounded by the same one-cut-per-session rule. A replay still passes the
 stability, observer and generation fences, and it never weakens the validity contract: an unavailable
 projection deposits nothing, so a dead or unextractable selector re-derives and raises again rather than
 being masked by an earlier successful model. No TTL, patrol, second generation, extra gate, or client-side

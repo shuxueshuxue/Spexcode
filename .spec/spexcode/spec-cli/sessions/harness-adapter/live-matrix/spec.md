@@ -2,12 +2,13 @@
 title: live-matrix
 status: active
 hue: 280
-desc: The parameterized harness conformance suite — the eight-behavior acceptance matrix defined once as data, run against any registered launcher by `spex eval matrix <launcher>`, filing per-row eval readings on that harness's node.
+desc: The parameterized harness conformance scenario suite — eight live behaviors exercised by a test file against any registered launcher, filing per-scenario eval readings on that harness's node.
 code:
-  - spec-eval/src/matrix.ts
+  - spec-cli/scenarios/harness-live-matrix.ts
 related:
-  - spec-eval/src/cli.ts
   - spec-eval/src/filing.ts
+  - spec-eval/src/scenarios.ts
+  - spec-cli/src/harness.ts
 ---
 
 # live-matrix
@@ -15,25 +16,23 @@ related:
 [[harness-adapter]]'s acceptance rule — an adapter merges only with per-behavior readings measured through
 a REAL dispatched session — used to live as prose: each harness's eval.md hand-transcribed its own wording
 of the eight behaviors and a worker ran them by hand, so every new harness re-copied the matrix or silently
-dropped rows. This node de-patches that: the matrix is DATA, defined exactly once, and running it against
-any harness is one command.
+dropped rows. This node keeps that coverage as a parameterized test asset: the behavior contracts live in each
+harness's `eval.md` scenarios, while one test file supplies the shared drive and evidence collection. Running
+the test against a launcher is a test action, not a new SpexCode CLI verb.
 
-Each row carries the three things a measurement needs: the DRIVE (real steps over the public session verbs
-— new/send/show/stop/resume/close, plus a materialize for the transient guard hook and tmux for the
-liveness kill; never a parallel mechanism), the EXPECTED (the harness-agnostic contract text), and the
-EVIDENCE (a per-row transcript of every command, board observation, and pane capture, filed with the
-reading). `spex eval matrix <launcher>` resolves the launcher to its harness, targets the
+Each scenario carries its contract in `eval.md` and points at the test case that supplies the DRIVE (real
+steps over the public session verbs — new/send/show/stop/resume/close, plus a materialize for the transient
+guard hook and tmux for the liveness kill; never a parallel mechanism). The test captures EVIDENCE as a
+per-scenario transcript of every command, board observation, and pane capture, then files it with the
+reading. `spec-cli/scenarios/harness-live-matrix.ts` resolves the launcher to its harness, targets the
 `<harness>-harness` spec node (`--node` overrides), and walks ONE real worker through the whole lifecycle:
 undeclared-stop · pretooluse-block · ask-note · deliver-steer · resume · liveness · commit-gate ·
 close-residue.
 
-The rows are also the single source of the matrix's contract TEXT for adapters that share their process-resident
-semantics: before running, the suite syncs each
-row's description/expected into the target node's eval.md — a scenario matching a row (canonical key,
-harness-prefixed key, or historical alias) keeps its NAME so reading history is never orphaned while its
-contract converges on the shared wording; a row with no scenario is appended under the canonical key;
-hand-written harness-specific scenarios pass through byte-for-byte. One definition, N materializations —
-the same shape materialize gives the plugin surfaces.
+The scenario declaration is the contract source: the test resolves the existing canonical name or historical
+alias and fails loudly when the harness node has not declared it. It never creates or rewrites `eval.md`.
+Adding coverage means adding scenario data and, where needed, a parameterized test case; it does not widen the
+CLI or add a harness-specific route.
 
 A harness whose declared runtime semantics intentionally remove a matrix premise does not fake the row.
 [[claude-headless]] is record-backed and has ephemeral turn children, so `stop -> offline -> resume` and
@@ -45,5 +44,5 @@ Verdicts stay honest three ways: a row that could not be provoked (the worker de
 mid-turn window opened) files NOTHING and reports skip — never a fabricated loss signal; a measured row
 files pass or fail immediately, so an aborted run keeps its partial readings; and the runner's own board
 polling is exactly the probe pressure the delivery path must survive, so the measurement environment is the
-adversarial one. A new harness is covered by registering its launcher and creating its node — zero new
-runner code.
+adversarial one. A new harness is covered by registering its launcher and adding its scenario data — zero new
+CLI code.

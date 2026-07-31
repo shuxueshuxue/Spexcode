@@ -48,8 +48,9 @@ scenarios:
       conversation, not a fresh session.
   - name: stop-gate-bridge
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "pi / undeclared-stop" }
     description: >-
-      Live-behavior matrix row (run by `spex eval matrix <launcher>`): dispatch a real worker of
+      Live-behavior scenario: dispatch a real worker of
       this harness with a controlled prompt that answers one line and stops WITHOUT declaring, then
       watch the settle from the outside — no steering, no help.
     expected: >-
@@ -58,6 +59,7 @@ scenarios:
       signature is a record stuck `active` forever with the rejection silently dropped.
   - name: pi-pretooluse-block
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "pi / pretooluse-block" }
     description: >-
       Matrix row: plant a transient `surface: hook` node (PreToolUse, block: true) guarding one
       marked file in the live worker's worktree, `spex materialize` there, then tell the worker to
@@ -68,6 +70,7 @@ scenarios:
       continues normally after the block.
   - name: pi-ask-note
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "pi / ask-note" }
     description: >-
       Matrix row: the live worker runs `spex session ask --note '<question>'` (its own declaration
       verb, from inside its worktree) with a unique marker in the note.
@@ -76,6 +79,7 @@ scenarios:
       session show`), attributed to the right record.
   - name: pi-deliver-steer
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "pi / deliver-steer" }
     description: >-
       Matrix row: `spex session send` a task to the settled (idle) worker that starts a long turn,
       then send a SECOND message while that turn is in flight — all under normal board-probe
@@ -86,6 +90,7 @@ scenarios:
       output — never dropped, never duplicated.
   - name: pi-resume
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "pi / resume" }
     description: >-
       Matrix row: seed the live worker with a token to remember, `spex session stop` it (tmux
       killed, worktree kept), `spex session resume` it, then ask for the token back without
@@ -96,6 +101,7 @@ scenarios:
       to online.
   - name: pi-liveness
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "pi / liveness" }
     description: >-
       Matrix row: SIGKILL an ESTABLISHED agent's whole process tree out from under the pane (the
       kill lands outside the launcher boot-grace window; the tmux window and any stale socket file
@@ -106,6 +112,7 @@ scenarios:
       online again.
   - name: pi-commit-gate
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "pi / commit-gate" }
     description: >-
       Matrix row: the runner plants an uncommitted file in the live worker's worktree and the worker
       runs `spex session done --propose merge`; the gate must reject the dirty proposal, and a
@@ -117,6 +124,7 @@ scenarios:
       it to this record.
   - name: pi-close-residue
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "pi / close-residue" }
     description: >-
       Matrix row: `spex session close` the worker, then sweep the box — tmux window, surviving
       processes of that worktree, the worktree directory and node branch, the session record and its

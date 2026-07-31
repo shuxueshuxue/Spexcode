@@ -77,9 +77,10 @@ scenarios:
       the mechanical layer above is measured, this end-to-end reading is the open item.
   - name: undeclared-stop-gate-rejection
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "opencode / undeclared-stop" }
     code: [spec-cli/src/opencode.ts]
     description: >-
-      Live-behavior matrix row (run by `spex eval matrix <launcher>`): dispatch a real worker of
+      Live-behavior scenario: dispatch a real worker of
       this harness with a controlled prompt that answers one line and stops WITHOUT declaring, then
       watch the settle from the outside — no steering, no help.
     expected: >-
@@ -88,6 +89,7 @@ scenarios:
       signature is a record stuck `active` forever with the rejection silently dropped.
   - name: pretooluse-block-live
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "opencode / pretooluse-block" }
     code: [spec-cli/src/opencode.ts]
     description: >-
       Matrix row: plant a transient `surface: hook` node (PreToolUse, block: true) guarding one
@@ -99,6 +101,7 @@ scenarios:
       continues normally after the block.
   - name: ask-note
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "opencode / ask-note" }
     description: >-
       Matrix row: the live worker runs `spex session ask --note '<question>'` (its own declaration
       verb, from inside its worktree) with a unique marker in the note.
@@ -107,6 +110,7 @@ scenarios:
       session show`), attributed to the right record.
   - name: deliver-mid-turn
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "opencode / deliver-steer" }
     description: >-
       Matrix row: `spex session send` a task to the settled (idle) worker that starts a long turn,
       then send a SECOND message while that turn is in flight — all under normal board-probe
@@ -117,6 +121,7 @@ scenarios:
       output — never dropped, never duplicated.
   - name: resume-continuity
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "opencode / resume" }
     description: >-
       Matrix row: seed the live worker with a token to remember, `spex session stop` it (tmux
       killed, worktree kept), `spex session resume` it, then ask for the token back without
@@ -127,6 +132,7 @@ scenarios:
       to online.
   - name: liveness-signals
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "opencode / liveness" }
     description: >-
       Matrix row: SIGKILL an ESTABLISHED agent's whole process tree out from under the pane (the
       kill lands outside the launcher boot-grace window; the tmux window and any stale socket file
@@ -137,6 +143,7 @@ scenarios:
       online again.
   - name: commit-gate-rejection
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "opencode / commit-gate" }
     description: >-
       Matrix row: the runner plants an uncommitted file in the live worker's worktree and the worker
       runs `spex session done --propose merge`; the gate must reject the dirty proposal, and a
@@ -148,6 +155,7 @@ scenarios:
       it to this record.
   - name: close-residue
     tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "opencode / close-residue" }
     description: >-
       Matrix row: `spex session close` the worker, then sweep the box — tmux window, surviving
       processes of that worktree, the worktree directory and node branch, the session record and its

@@ -3,34 +3,29 @@ import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { repoRoot } from '../../spec-cli/src/git.js'
-import { resolveLauncher, type Launcher } from '../../spec-cli/src/harness.js'
-import { envSessionId, mainCheckout, sessionStoreDir } from '../../spec-cli/src/layout.js'
-import { BOOT_GRACE_MS, TMUX_SOCK } from '../../spec-cli/src/sessions.js'
-import { fileHumanReading } from './filing.js'
-import { parseScenarios, type Scenario } from './scenarios.js'
+import { repoRoot } from '../src/git.js'
+import { resolveLauncher, type Launcher } from '../src/harness.js'
+import { envSessionId, mainCheckout, sessionStoreDir } from '../src/layout.js'
+import { BOOT_GRACE_MS, TMUX_SOCK } from '../src/sessions.js'
+import { fileHumanReading } from '../../spec-eval/src/filing.js'
+import { parseScenarios } from '../../spec-eval/src/scenarios.js'
 
 // @@@ live-behavior matrix - the parameterized conformance suite behind [[harness-adapter]]'s acceptance
 // rule. The eight lifecycle behaviors an adapter must prove are defined ONCE here, harness-agnostically —
-// each row = drive steps + expected + evidence collection — and `spex eval matrix <launcher>` runs them
+// each row = drive steps + evidence collection. The scenario test runs them
 // against a REAL dispatched session of any registered launcher, reusing only the public CLI verbs
 // (session new/send/show/stop/resume/close, materialize) plus tmux for the kill. A new harness is covered
 // by registering its launcher and creating its `<harness>-harness` spec node — zero new runner code.
 //
-// The rows are also the single source of the matrix's CONTRACT TEXT: before running, the suite SYNCS each
-// row's description/expected into the target harness node's eval.md scenarios (matching the node's
-// HISTORICAL scenario names via exact key, `<harness>-` prefix, or the alias list, so reading history is
-// never orphaned; a missing scenario is appended under the canonical key). One definition, N
-// materializations — the same shape materialize gives the plugin surfaces.
+// Scenario declarations live in each harness node's eval.md. The runner only resolves an existing
+// declaration and files its reading; it never creates or rewrites contract text.
 
-const SPEX_BIN = fileURLToPath(new URL('../../spec-cli/bin/spex.mjs', import.meta.url))
+const SPEX_BIN = fileURLToPath(new URL('../bin/spex.mjs', import.meta.url))
 
 export type RowVerdict = { status: 'pass' | 'fail' | 'skip'; note: string }
 export type MatrixRow = {
-  key: string            // canonical scenario name (used verbatim for a freshly-scaffolded harness node)
-  aliases: string[]      // the historical per-harness scenario names this row also answers to
-  description: string    // the harness-agnostic measurement contract (synced into eval.md)
-  expected: string
+  key: string            // canonical scenario name
+  aliases: string[]      // historical scenario names this test also answers to
   drive: (ctx: MatrixRun) => Promise<RowVerdict>
 }
 
@@ -63,7 +58,7 @@ export class MatrixRun {
 
   beginRow(key: string): void { this.rowStart = this.lines.length; this.log(`--- row ${key} ---`) }
   rowTranscript(): string {
-    return [`spex eval matrix ${this.launcher.name} (harness ${this.launcher.harness})`, ...this.lines.slice(this.rowStart)].join('\n')
+    return [`harness-live-matrix ${this.launcher.name} (harness ${this.launcher.harness})`, ...this.lines.slice(this.rowStart)].join('\n')
   }
 
   exec(cmd: string, args: string[], opts: { cwd?: string; quiet?: boolean } = {}): Promise<ExecResult> {
@@ -211,12 +206,6 @@ export const MATRIX: MatrixRow[] = [
   {
     key: 'undeclared-stop',
     aliases: ['stop-gate-bridge', 'undeclared-stop-gate-rejection'],
-    description: 'Live-behavior matrix row (run by `spex eval matrix <launcher>`): dispatch a real worker of '
-      + 'this harness with a controlled prompt that answers one line and stops WITHOUT declaring, then watch '
-      + 'the settle from the outside — no steering, no help.',
-    expected: "The stop-gate's rejection reaches the session — the gate's teach sentinel is planted and the "
-      + 'record flows out of `active` into a declared status (asking/review) on its own. The failure '
-      + 'signature is a record stuck `active` forever with the rejection silently dropped.',
     drive: async (ctx) => {
       if (ctx.worker) return { status: 'skip', note: 'worker already launched — the first settle is gone' }
       if (!(await ctx.launchWorker())) return { status: 'fail', note: 'session new failed' }
@@ -233,12 +222,6 @@ export const MATRIX: MatrixRow[] = [
   {
     key: 'pretooluse-block',
     aliases: ['pretooluse-block-live'],
-    description: 'Matrix row: plant a transient `surface: hook` node (PreToolUse, block: true) guarding one '
-      + "marked file in the live worker's worktree, `spex materialize` there, then tell the worker to modify "
-      + 'the guarded file; sweep the node and re-materialize afterwards.',
-    expected: "The tool call is genuinely blocked — the guarded file's content is untouched — and the "
-      + "handler's OWN reason (a unique marker) is visible to the agent, who reports it; the session "
-      + 'continues normally after the block.',
     drive: async (ctx) => {
       if (!(await ctx.ensureSettledWorker())) return { status: 'skip', note: 'no settled worker to drive' }
       const wt = ctx.worker!.path
@@ -251,7 +234,7 @@ export const MATRIX: MatrixRow[] = [
       try {
         writeFileSync(guardFile, guardContent)
         mkdirSync(nodeDir, { recursive: true })
-        writeFileSync(join(nodeDir, 'spec.md'), '---\ntitle: tmp-matrix-guard\nsurface: hook\nstatus: active\nevents:\n- PreToolUse\norder: 5\nblock: true\n---\nTransient guard planted by `spex eval matrix` for the pretooluse-block row; swept by the same run.\n')
+        writeFileSync(join(nodeDir, 'spec.md'), '---\ntitle: tmp-matrix-guard\nsurface: hook\nstatus: active\nevents:\n- PreToolUse\norder: 5\nblock: true\n---\nTransient guard planted by the harness conformance scenario; swept by the same run.\n')
         const reason = `${marker}: matrix-guard.txt is guarded by the live-behavior matrix run. Do not try another way; report the marker you saw, then run: spex session ask --note 'blocked ${marker}'`
         writeFileSync(join(nodeDir, 'tmp-matrix-guard.sh'), `#!/usr/bin/env bash\npayload=$(cat 2>/dev/null)\ncase "$payload" in\n  *matrix-guard.txt*) printf '%s\\n' ${shellQuote(JSON.stringify({ decision: 'block', reason }))} ;;\nesac\nexit 0\n`)
         const mat = await ctx.spex(['materialize'], { cwd: wt })
@@ -280,10 +263,6 @@ export const MATRIX: MatrixRow[] = [
   {
     key: 'ask-note',
     aliases: ['pi-ask-note'],
-    description: "Matrix row: the live worker runs `spex session ask --note '<question>'` (its own "
-      + 'declaration verb, from inside its worktree) with a unique marker in the note.',
-    expected: "The record flips to `asking` with the note carried verbatim in the graph's session entry "
-      + '(`spex session show`), attributed to the right record.',
     drive: async (ctx) => {
       if (!(await ctx.ensureSettledWorker())) return { status: 'skip', note: 'no settled worker to drive' }
       const marker = `MATRIX-ASK-${ctx.nonce()}`
@@ -300,12 +279,6 @@ export const MATRIX: MatrixRow[] = [
   {
     key: 'deliver-steer',
     aliases: ['pi-deliver-steer', 'deliver-second-message', 'deliver-mid-turn'],
-    description: 'Matrix row: `spex session send` a task to the settled (idle) worker that starts a long '
-      + 'turn, then send a SECOND message while that turn is in flight — all under normal graph-probe '
-      + 'pressure (the runner polls the graph throughout).',
-    expected: 'Both sends exit 0; the idle send lands EXACTLY once (no duplicate injection of the message '
-      + 'text); the mid-turn send reaches the LIVE turn — its steer marker shows in that same turn\'s '
-      + 'output — never dropped, never duplicated.',
     drive: async (ctx) => {
       if (!(await ctx.ensureSettledWorker())) return { status: 'skip', note: 'no settled worker to drive' }
       const ack = `ACK-${ctx.nonce()}`
@@ -333,10 +306,6 @@ export const MATRIX: MatrixRow[] = [
   {
     key: 'resume',
     aliases: ['pi-resume', 'resume-continuity'],
-    description: 'Matrix row: seed the live worker with a token to remember, `spex session stop` it (tmux '
-      + 'killed, worktree kept), `spex session resume` it, then ask for the token back without repeating it.',
-    expected: 'The resumed agent continues the SAME conversation — it answers with the seeded token from '
-      + 'prior context in a fresh RECALL=<token> line — never a fresh empty session; the graph reports it online again.',
     drive: async (ctx) => {
       if (!(await ctx.ensureSettledWorker())) return { status: 'skip', note: 'no settled worker to drive' }
       const token = `TK${ctx.nonce()}`
@@ -364,11 +333,6 @@ export const MATRIX: MatrixRow[] = [
   {
     key: 'liveness',
     aliases: ['pi-liveness', 'liveness-signals'],
-    description: "Matrix row: SIGKILL an ESTABLISHED agent's whole process tree out from under the pane "
-      + '(the kill lands outside the launcher boot-grace window; the tmux window and any stale socket file '
-      + 'stay), read graph liveness until it flips; then `spex session resume` and read again.',
-    expected: 'Liveness reads `offline` within seconds of the kill — a stale socket FILE never reads as '
-      + "alive; the adapter's own per-harness signal decides — and after resume the session reads online again.",
     drive: async (ctx) => {
       if (!(await ctx.ensureSettledWorker())) return { status: 'skip', note: 'no settled worker to drive' }
       await ctx.waitEstablished()
@@ -396,13 +360,6 @@ export const MATRIX: MatrixRow[] = [
   {
     key: 'commit-gate',
     aliases: ['pi-commit-gate', 'commit-gate-rejection'],
-    description: 'Matrix row: the runner plants an uncommitted file in the live worker\'s worktree and the '
-      + 'worker runs `spex session done --propose merge`; the gate must reject the dirty proposal, and a '
-      + 'committed re-proposal must be accepted.',
-    expected: 'The dirty proposal is rejected at settle with the reason delivered into the session (the '
-      + 'record never stands as review while the tree is dirty); once the work is committed the same '
-      + 'proposal is accepted (status review) and the commit carries the `Session:` trailer attributing it '
-      + 'to this record.',
     drive: async (ctx) => {
       if (!(await ctx.ensureSettledWorker())) return { status: 'skip', note: 'no settled worker to drive' }
       const wt = ctx.worker!.path
@@ -461,12 +418,6 @@ export const MATRIX: MatrixRow[] = [
   {
     key: 'close-residue',
     aliases: ['pi-close-residue'],
-    description: 'Matrix row: `spex session close` the worker, then sweep the box — tmux window, surviving '
-      + 'processes of that worktree, the worktree directory and node branch, the session record and its '
-      + 'global store dir.',
-    expected: 'Zero residue: the tmux window is gone, no process of that worktree survives, worktree and '
-      + "branch are retired, and the session's record/store dir is swept (durable history lives in git and "
-      + 'the eval filings, not the record).',
     drive: async (ctx) => {
       if (!ctx.worker) return { status: 'skip', note: 'no worker to close' }
       const { id, path: wt, branch } = ctx.worker
@@ -514,98 +465,11 @@ function findPluginsRoot(wt: string): string | null {
 }
 
 // ---------------------------------------------------------------------------------------------------------
-// eval.md sync — project the rows' contract text into the harness node's scenarios (see the header note).
+// scenario lookup — the harness node owns the contract text; this test only selects declared cases.
 // ---------------------------------------------------------------------------------------------------------
 
-const wrap = (text: string, indent: number, width = 100): string => {
-  const words = text.split(/\s+/)
-  const pad = ' '.repeat(indent)
-  const lines: string[] = []
-  let cur = pad
-  for (const w of words) {
-    if (cur.length > indent && cur.length + w.length + 1 > width) { lines.push(cur); cur = pad + w }
-    else cur += (cur.length > indent ? ' ' : '') + w
-  }
-  if (cur.trim()) lines.push(cur)
-  return lines.join('\n')
-}
-
-// render one scenario chunk in the suite's canonical shape, carrying over the node's own name/tags/code/
-// related/test while the description/expected come from the row (the shared contract).
-function renderChunk(name: string, row: MatrixRow, keep?: Scenario): string {
-  const tags = keep?.tags?.length ? keep.tags : ['backend-api']
-  const lines = [`  - name: ${name}`, `    tags: [${tags.join(', ')}]`]
-  if (keep?.code?.length) lines.push(`    code: [${keep.code.join(', ')}]`)
-  if (keep?.related?.length) lines.push(`    related: [${keep.related.join(', ')}]`)
-  if (keep?.test) lines.push(`    test: { path: ${keep.test.path}${keep.test.name ? `, name: "${keep.test.name}"` : ''} }`)
-  lines.push('    description: >-', wrap(row.description, 6), '    expected: >-', wrap(row.expected, 6))
-  return lines.join('\n')
-}
-
-export type SyncResult = { evalPath: string; matched: Map<string, string[]>; changed: boolean; created: boolean }
-
-// converge the node's eval.md matrix scenarios onto the rows: a scenario matching a row (exact canonical
-// key, `<harness>-<key>`, or a historical alias) keeps its NAME (and tags/code/test) but its
-// description/expected are rewritten to the row's; a row with no match is appended under the canonical key.
-// Non-matrix scenarios and the body prose pass through byte-for-byte.
-export function syncMatrixEvalMd(nodeDir: string, harnessId: string): SyncResult {
-  const evalPath = join(nodeDir, 'eval.md')
-  const matched = new Map<string, string[]>()
-  if (!existsSync(evalPath)) {
-    const chunks = MATRIX.map((row) => { matched.set(row.key, [row.key]); return renderChunk(row.key, row) })
-    writeFileSync(evalPath, `---\nscenarios:\n${chunks.join('\n')}\n---\n\nThe scenarios above are the live-behavior matrix of the harness-adapter acceptance rule, synced from\nspec-eval/src/matrix.ts by \`spex eval matrix <launcher>\` — edit the rows there, not here (a re-run\nre-syncs). Harness-specific scenarios may be added beside them by hand.\n`)
-    return { evalPath, matched, changed: true, created: true }
-  }
-  const src = readFileSync(evalPath, 'utf8')
-  const fm = src.match(/^---\n([\s\S]*?)\n---/)
-  if (!fm) throw new Error(`${evalPath} has no frontmatter — cannot sync the matrix scenarios`)
-  const scenarios = parseScenarios(src)
-  const byName = new Map(scenarios.map((s) => [s.name, s]))
-  const lines = fm[1].split('\n')
-  const start = lines.findIndex((l) => /^scenarios:\s*$/.test(l))
-  if (start < 0) throw new Error(`${evalPath} declares no scenarios: key — cannot sync the matrix scenarios`)
-  // chunk the block into items by the first item's `- ` indent (the same walk scenarios.ts parses by)
-  const indentOf = (l: string) => l.length - l.replace(/^\s+/, '').length
-  let end = lines.length
-  const bounds: number[] = []
-  let itemIndent = -1
-  for (let i = start + 1; i < lines.length; i++) {
-    const line = lines[i]
-    if (!line.trim()) continue
-    if (indentOf(line) === 0) { end = i; break }
-    const dash = line.trim().startsWith('- ')
-    if (dash && (itemIndent < 0 || indentOf(line) <= itemIndent)) { itemIndent = indentOf(line); bounds.push(i) }
-  }
-  const chunks = bounds.map((b, i) => {
-    const text = lines.slice(b, i + 1 < bounds.length ? bounds[i + 1] : end).join('\n').replace(/\n+$/, '')
-    const name = /name:\s*(.+)/.exec(text)?.[1].trim().replace(/^["'](.*)["']$/, '$1') ?? ''
-    return { name, text }
-  })
-  const rowFor = (name: string): MatrixRow | undefined =>
-    MATRIX.find((r) => name === r.key || name === `${harnessId}-${r.key}` || r.aliases.includes(name))
-  const rebuilt = chunks.map((c) => {
-    const row = rowFor(c.name)
-    if (!row) return c.text
-    matched.set(row.key, [...(matched.get(row.key) ?? []), c.name])
-    return renderChunk(c.name, row, byName.get(c.name))
-  })
-  for (const row of MATRIX) {
-    if (matched.has(row.key)) continue
-    matched.set(row.key, [row.key])
-    rebuilt.push(renderChunk(row.key, row))
-  }
-  const out = `---\n${[...lines.slice(0, start + 1), ...rebuilt, ...lines.slice(end)].join('\n')}\n---${src.slice(fm[0].length)}`
-  const changed = out !== src
-  if (changed) writeFileSync(evalPath, out)
-  return { evalPath, matched, changed, created: false }
-}
-
-// ---------------------------------------------------------------------------------------------------------
-// the CLI verb: spex eval matrix <launcher> [--node <id>] [--rows k1,k2]
-// ---------------------------------------------------------------------------------------------------------
-
-// the target spec node's directory: --node override or the `<harness>-harness` convention. Fail loud with
-// the repair when it doesn't exist — creating a harness's spec node is spec work, not runner work.
+// The test target is resolved from the registered launcher, while its scenario declarations remain owned by
+// the harness node's eval.md. Missing declarations fail loudly instead of being generated by the test.
 function findNodeDir(root: string, id: string): string | null {
   const specDir = join(root, '.spec')
   const hits: string[] = []
@@ -627,7 +491,16 @@ function findNodeDir(root: string, id: string): string | null {
 
 const VALUE_FLAGS = ['--node', '--rows']
 
-export async function runMatrix(args: string[]): Promise<number> {
+function scenarioNames(nodeDir: string, harnessId: string, row: MatrixRow): string[] {
+  const evalPath = join(nodeDir, 'eval.md')
+  if (!existsSync(evalPath)) throw new Error(`${evalPath} is missing — declare the scenario before running its test`)
+  const scenarios = parseScenarios(readFileSync(evalPath, 'utf8'))
+  return scenarios
+    .filter((scenario) => scenario.name === row.key || scenario.name === `${harnessId}-${row.key}` || row.aliases.includes(scenario.name))
+    .map((scenario) => scenario.name)
+}
+
+export async function runHarnessMatrix(args: string[]): Promise<number> {
   const flag = (name: string): string | undefined => {
     const i = args.indexOf(`--${name}`)
     return i >= 0 ? args[i + 1] : undefined
@@ -642,26 +515,24 @@ export async function runMatrix(args: string[]): Promise<number> {
     break
   }
   if (!launcherName) {
-    console.error('usage: spex eval matrix <launcher> [--node <id>] [--rows key1,key2]\n  runs the eight-row live-behavior matrix against a REAL dispatched session of that launcher and files a per-row eval (rows: ' + MATRIX.map((r) => r.key).join(', ') + ')')
+    console.error('usage: npx tsx spec-cli/scenarios/harness-live-matrix.ts <launcher> [--node <id>] [--rows key1,key2]\n  runs declared harness scenarios against a REAL dispatched session and files readings (rows: ' + MATRIX.map((r) => r.key).join(', ') + ')')
     return 2
   }
   let launcher: Launcher
-  try { launcher = resolveLauncher(launcherName) } catch (e) { console.error(`spex eval matrix: ${(e as Error).message}`); return 2 }
+  try { launcher = resolveLauncher(launcherName) } catch (e) { console.error(`harness-live-matrix: ${(e as Error).message}`); return 2 }
   const root = repoRoot()
   const nodeId = flag('node') ?? `${launcher.harness}-harness`
   const nodeDir = findNodeDir(root, nodeId)
   if (!nodeDir) {
-    console.error(`spex eval matrix: no spec node '${nodeId}' in this tree — create .spec/…/${nodeId}/spec.md (the harness's acceptance node) first, or pass --node <id>`)
+    console.error(`harness-live-matrix: no spec node '${nodeId}' in this tree — create its spec and eval scenarios first, or pass --node <id>`)
     return 2
   }
   const rowKeys = flag('rows')?.split(',').map((s) => s.trim()).filter(Boolean)
   const rows = rowKeys ? MATRIX.filter((r) => rowKeys.includes(r.key)) : MATRIX
   if (rowKeys && rows.length !== rowKeys.length) {
-    console.error(`spex eval matrix: unknown row(s) ${rowKeys.filter((k) => !MATRIX.some((r) => r.key === k)).join(', ')} — rows: ${MATRIX.map((r) => r.key).join(', ')}`)
+    console.error(`harness-live-matrix: unknown row(s) ${rowKeys.filter((k) => !MATRIX.some((r) => r.key === k)).join(', ')} — rows: ${MATRIX.map((r) => r.key).join(', ')}`)
     return 2
   }
-  const sync = syncMatrixEvalMd(nodeDir, launcher.harness)
-  console.log(`matrix: target node '${nodeId}' (${sync.created ? 'eval.md scaffolded' : sync.changed ? 'eval.md scenarios synced' : 'eval.md already in sync'})`)
   const by = envSessionId() ?? undefined
   const ctx = new MatrixRun(launcher)
   const results: { row: MatrixRow; verdict: RowVerdict; filedAs: string[] }[] = []
@@ -675,10 +546,16 @@ export async function runMatrix(args: string[]): Promise<number> {
     ctx.log(`row ${row.key}: ${verdict.status.toUpperCase()} — ${verdict.note}`)
     const filedAs: string[] = []
     if (verdict.status !== 'skip') {
-      for (const name of sync.matched.get(row.key) ?? [row.key]) {
+      const names = scenarioNames(nodeDir, launcher.harness, row)
+      if (!names.length) {
+        ctx.log(`row ${row.key}: no matching scenario declaration in ${nodeId}/eval.md`)
+        results.push({ row, verdict: { status: 'fail', note: `scenario '${row.key}' is not declared in ${nodeId}/eval.md` }, filedAs })
+        continue
+      }
+      for (const name of names) {
         const filed = fileHumanReading(nodeId, { scenario: name, status: verdict.status, note: verdict.note, transcript: ctx.rowTranscript(), ...(by ? { by } : {}) })
-        if (filed.ok) filedAs.push(name)
-        else ctx.log(`filing to scenario '${name}' failed: ${filed.error}`)
+        if (!filed.ok) ctx.log(`filing to scenario '${name}' failed: ${'error' in filed ? filed.error : 'unknown filing failure'}`)
+        else filedAs.push(name)
       }
     }
     results.push({ row, verdict, filedAs })
@@ -690,4 +567,11 @@ export async function runMatrix(args: string[]): Promise<number> {
   }
   if (ctx.worker) console.log(`note: worker ${ctx.worker.id} left open for inspection (close-residue did not run/pass) — spex session close ${ctx.worker.id}`)
   return results.every((r) => r.verdict.status === 'pass') ? 0 : 1
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  runHarnessMatrix(process.argv.slice(2)).then((code) => { process.exitCode = code }).catch((error) => {
+    console.error(`harness-live-matrix: ${error.stack || error}`)
+    process.exitCode = 2
+  })
 }

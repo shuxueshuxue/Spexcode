@@ -10,7 +10,7 @@ related:
   - spec-cli/test/fixtures/fake-claude
   - spec-cli/src/session-terminal-fixture.test.ts
   - spec-cli/test/terminal-socket-lifecycle.ts
-  - spec-eval/src/matrix.ts
+  - spec-cli/scenarios/harness-live-matrix.ts
 ---
 
 # fake-harness-fixture

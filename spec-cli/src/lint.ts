@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, type DriftPathEvent } from './git.js'
 import { loadSpecs, parseFrontmatter } from './specs.js'
 import { readJsonConfig } from './layout.js'
-import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, resolveAnchor, windowEvents, anchorHitQueries } from './anchors.js'
+import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, resolveAnchor, resolveSelectors, windowEvents, anchorHitQueries } from './anchors.js'
 import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
@@ -355,9 +355,11 @@ export async function specLint(root = repoRoot(), regs = extractors(root), optio
           continue
         }
         // each selector resolves (or errors) on its own; only the live ones feed the window engine.
+        // The dead/ambiguous verdict itself comes from the ONE shared classifier ([[code-anchor]]); only the
+        // wording of the gate's findings lives here.
         const live: string[] = []
-        for (const sym of selectors) {
-          const res = resolveAnchor(units, sym)
+        for (const res of resolveSelectors(units, selectors)) {
+          const sym = res.selector
           if ('dead' in res) {
             anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `dead anchor: ${path}#${sym} ('${s.id}') names no unit on the current tree — the unit was deleted or renamed; update the spec's ${relation}: entry to follow it` } })
             continue

@@ -1,7 +1,7 @@
 ---
 concern: board 冷重建 13.8–14.8s 对 index.ts 的 20s BOARD_TIMEOUT_MS 余量偏薄，忙机上仍会 503
 by: da103a36-07c4-4e77-9d85-006462ae68b8
-status: open
+status: landed
 nodes: graph-cache, cold-board-assembly-still-freezes-health-for-3-6
 evidence: fabc8fb96cbde5546679981b20d2e3fd85eda87f63640992c6caf5a14b7c501f
 created: 2026-07-30T05:16:47.975Z

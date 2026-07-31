@@ -6,10 +6,10 @@ import { loadSystemConfig, loadSkillConfig, loadAgentConfig, loadConfig } from '
 import { compileManifest } from './hooks.js'
 import { writeManagedBlock, removeManagedBlock, HARNESSES, type HarnessArtifacts } from './harness.js'
 import { git } from './git.js'
-import { runtimeRoot, treeSlotDir, mainCheckout, readConfig, encodeProject } from './layout.js'
+import { runtimeRoot, treeSlotDir, mainCheckout, readConfig } from './layout.js'
 import { resolveHarnessTargets, partitionHarnesses } from './harness-select.js'
 import { emitPlugin, cleanPlugin, pluginBundleDir, pluginVersion } from './plugin-harness.js'
-import { plantContractFilter, removeContractFilter, retireLegacyContractBlock, settleIndexStat, type ContractFilterBinding, type ContractFilterPayload } from './contract-filter.js'
+import { clearContractFilterPayload, contractFilterPlanted, plantContractFilter, removeContractFilter, settleIndexStat, type ContractFilterBinding, type ContractFilterPayload } from './contract-filter.js'
 
 export type MaterializedArtifact = {
   kind: 'hook manifest' | 'contract' | 'shim' | 'skill' | 'agent' | 'plugin bundle' | 'trust'
@@ -62,26 +62,14 @@ function isTracked(proj: string, file: string): boolean {
   try { git(['-C', proj, 'ls-files', '--error-unmatch', file]); return true } catch { return false }
 }
 
+function clearSkipWorktree(proj: string, file: string): void {
+  if (!isTracked(proj, file)) return
+  try { git(['-C', proj, 'update-index', '--no-skip-worktree', file]) } catch { /* best-effort teardown */ }
+}
+
 function registeredTrees(proj: string): string[] {
   const rows = git(['-C', mainCheckout(proj), 'worktree', 'list', '--porcelain', '-z']).split('\0')
   return rows.filter((row) => row.startsWith('worktree ')).map((row) => row.slice('worktree '.length))
-}
-
-const TREE_IGNORE_RECEIPT = 'tree-ignore-v1'
-
-function hasLegacyTreeIgnore(proj: string): boolean {
-  return registeredTrees(proj).some((tree) => {
-    const slot = join(runtimeRoot(proj), 'trees', encodeProject(tree))
-    return existsSync(join(slot, 'content-hash')) && !existsSync(join(slot, TREE_IGNORE_RECEIPT))
-  })
-}
-
-function managedExcludeEntries(file: string): string[] {
-  if (!existsSync(file)) return []
-  const lines = readFileSync(file, 'utf8').split('\n')
-  const start = lines.indexOf('# spexcode:start')
-  const end = lines.indexOf('# spexcode:end', start + 1)
-  return start >= 0 && end > start ? lines.slice(start + 1, end).filter(Boolean) : []
 }
 
 function selectionBody(selected: typeof HARNESSES, plugin = false): string {
@@ -108,13 +96,6 @@ function hostContentOf(file: string): string {
   if (!existsSync(file)) return ''
   return stripSpexcodeBlock(readFileSync(file, 'utf8'))
 }
-// clear a legacy skip-worktree bit (the retired private-overlay mechanism; erase-only now — nothing asserts
-// it). Best-effort: an index race or a non-repo must not fail the materialize.
-function clearSkipWorktree(proj: string, file: string): void {
-  if (!isTracked(proj, file)) return
-  try { git(['-C', proj, 'update-index', '--no-skip-worktree', file]) } catch { /* best-effort */ }
-}
-
 // the identity stamp on every generated skill/agent file — what lets the erase phase forget a product whose
 // NODE was renamed or deleted (the name-scoped sweep can only reconstruct paths the LIVE config still names).
 export const GENERATED_MARK = '<!-- spexcode:generated -->'
@@ -135,19 +116,19 @@ function sweepGeneratedAgents(dir: string | null): void {
   }
 }
 
-function eraseTree(proj: string, arts: HarnessArtifacts, preserveProject: boolean): void {
+function eraseTree(proj: string, arts: HarnessArtifacts, preserveProject: boolean, clearRetired = false): void {
   for (const h of HARNESSES) {
     // h.clean = the adapter's surgical inverse: contract block (sentinels, deleteIfEmpty), the dispatch.sh-
     // stamped shim + worktree anchor, the trust block, and the arts-named skill/agent files.
     h.clean(proj, arts, preserveProject)
-    for (const f of h.contractFiles(proj)) clearSkipWorktree(proj, f)   // legacy private-overlay bit — erase-only
+    if (clearRetired) for (const f of h.contractFiles(proj)) clearSkipWorktree(proj, f)
     sweepGeneratedSkills(h.skillDir(proj))
     sweepGeneratedAgents(h.agentDir(proj))
   }
   // same authorship rule as the contract files: deleteIfEmpty only when .gitignore is UNTRACKED (wholly-ours
   // generated file); a HOST-TRACKED .gitignore that carried nothing but our block is stripped, never deleted.
   removeManagedBlock(join(proj, '.gitignore'), ['# ', ''], !isTracked(proj, '.gitignore'))
-  removeContractFilter(proj, [...HARNESSES.flatMap((h) => h.contractFiles(proj)), join(proj, '.gitignore')])
+  clearContractFilterPayload(proj, [...HARNESSES.flatMap((h) => h.contractFiles(proj)), join(proj, '.gitignore')])
   // the block-strip left tracked contract files stat-dirty (under a filter git NEVER content-verifies them,
   // and even unfiltered the phantom-`M` lingers) — settle the index stat, content-guarded so a user's real
   // unstaged edit is never staged ([[content-filter]] edge 2).
@@ -177,9 +158,9 @@ export function dematerialize(proj = process.cwd(), arts: HarnessArtifacts = { s
     git(['-C', tree, 'rev-parse', '--show-toplevel'])
   }
   for (const tree of trees) {
-    // Only the caller's live spec may widen the legacy name sweep. Siblings are identity-stamp-only: the
+    // Only the caller's live spec may widen the name sweep. Siblings are identity-stamp-only: the
     // same name there may be user-owned or may not exist in this tree's divergent spec at all.
-    eraseTree(tree, tree === current ? arts : { skills: [], agents: [] }, false)
+    eraseTree(tree, tree === current ? arts : { skills: [], agents: [] }, false, true)
   }
   try { removeManagedBlock(infoExcludePath(proj), ['# ', ''], false) } catch { /* not a git repo */ }
   removeContractFilter(proj, [...HARNESSES.flatMap((h) => h.contractFiles(proj)), join(proj, '.gitignore')], true)
@@ -215,8 +196,8 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   const commandNodes = loadConfig()
   const arts: HarnessArtifacts = { skills: skillNodes.map((s) => s.name), agents: agentNodes.map((a) => a.name) }
 
-  // ---- ERASE (the forgetting law): every landing point cleared by identity stamp, whatever policy — or
-  // legacy mode — wrote it last. Unselected harnesses need no separate prune branch: the erase already
+  // ---- ERASE (the forgetting law): every landing point cleared by identity stamp, whatever policy wrote it
+  // last. Unselected harnesses need no separate prune branch: the erase already
   // forgot them, and only the selected ones are asserted below.
   eraseTree(proj, arts, true)
 
@@ -294,11 +275,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   //     global store records the folders emitted last run; any prev folder absent from the current set is
   //     clean()ed, then the current folders are emitted and the ledger rewritten.
   const ledger = join(rt, 'plugin-folders')
-  // migration: a tree last materialized pre-slot left its ledger as the project-global file — read it once as
-  // the prev set so a deselected folder is still pruned; every write lands in the slot from here on.
-  const legacyLedger = join(runtimeRoot(proj), 'plugin-folders')
-  const ledgerSrc = existsSync(ledger) ? ledger : legacyLedger
-  const prevFolders = existsSync(ledgerSrc) ? readFileSync(ledgerSrc, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []
+  const prevFolders = existsSync(ledger) ? readFileSync(ledger, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean) : []
   const curFolders = plugins.map((p) => p.folder)
   for (const f of prevFolders) if (!curFolders.includes(f)) cleanPlugin(proj, f)
   if (plugins.length) {
@@ -327,8 +304,6 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     'spexcode.local.json', '.worktrees/', '.session',
   ]
   const entries = (list: string[]) => [...new Set(list)].sort().join('\n')
-  const priorCommonEntries = managedExcludeEntries(infoExcludePath(proj))
-
   // Contract residence stays a live fact. Selection-dependent untracked products are ignored by this tree's
   // working .gitignore, whose own managed block is filtered when the host tracks/owns that file.
   const filterContracts: string[] = []
@@ -350,20 +325,17 @@ export function materialize(proj = process.cwd()): MaterializeResult {
   if (ignoreTracked || ignoreHost.trim()) payloads.push({ file: '.gitignore', content: ignoreBody })
   const bindings: ContractFilterBinding[] = [
     ...[...new Set(HARNESSES.flatMap((h) => h.contractFiles(proj).map((file) => relative(proj, file))))]
-      .map((file) => ({ file, start: '<!-- spexcode:start -->', end: '<!-- spexcode:end -->', legacy: true })),
+      .map((file) => ({ file, start: '<!-- spexcode:start -->', end: '<!-- spexcode:end -->' })),
     { file: '.gitignore', start: '# spexcode:start', end: '# spexcode:end' },
   ]
   if (payloads.length) plantContractFilter(proj, payloads, bindings)
-  // (5) finish diagnostics/migration, then atomically publish the allowlist LAST. Dispatch consumes only that
+  else if (contractFilterPlanted(proj)) removeContractFilter(proj, [...HARNESSES.flatMap((h) => h.contractFiles(proj)), join(proj, '.gitignore')])
+  // (5) finish diagnostics, then atomically publish the allowlist LAST. Dispatch consumes only that
   // final receipt; a killed writer leaves the preceding successful selection intact.
   const h = contentHash(proj)
   writeFileSync(join(rt, 'content-hash'), h)
-  writeFileSync(join(rt, 'contract-filter-v2'), '')
-  writeFileSync(join(rt, TREE_IGNORE_RECEIPT), '')
   writeFileSync(join(runtimeRoot(proj), 'harness-selection-v1'), '')
-  retireLegacyContractBlock(proj)
-  const legacyEntries = hasLegacyTreeIgnore(proj) ? priorCommonEntries : []
-  writeManagedBlock(infoExcludePath(proj), entries([...commonEntries, ...legacyEntries]), ['# ', ''])
+  writeManagedBlock(infoExcludePath(proj), entries(commonEntries), ['# ', ''])
   publishSelection(join(rt, 'harnesses'), selectionBody(selected, plugins.length > 0))
   return { contentHash: h, planted }
 }

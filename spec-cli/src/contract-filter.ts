@@ -20,20 +20,13 @@ function commonDirOf(proj: string): string {
 }
 const filterDir = (common: string) => join(common, 'spexcode')
 const shimPath = (common: string) => join(filterDir(common), 'contract-filter.sh')
-const blockPath = (common: string) => join(filterDir(common), 'contract-block.md')
 const rootPath = (common: string) => join(filterDir(common), 'contract-filter-root')
 const bindingsPath = (common: string) => join(filterDir(common), 'contract-filter-bindings')
 const treeFilterDir = (proj: string) => join(treeSlotDir(proj), 'contract-filter')
 const attributesPath = (common: string) => join(common, 'info', 'attributes')
 
-const registeredSlots = (proj: string) => git(['-C', proj, 'worktree', 'list', '--porcelain', '-z']).split('\0')
-  .filter((row) => row.startsWith('worktree ')).map((row) =>
-    join(runtimeRoot(proj), 'trees', encodeProject(row.slice('worktree '.length))))
-const legacyFilterTree = (proj: string) => registeredSlots(proj)
-  .some((slot) => existsSync(join(slot, 'content-hash')) && !existsSync(join(slot, 'contract-filter-v2')))
-
 export type ContractFilterPayload = { file: string; content: string }
-export type ContractFilterBinding = { file: string; start: string; end: string; legacy?: boolean }
+export type ContractFilterBinding = { file: string; start: string; end: string }
 
 // The common shim both filter directions run through. Pure shell/awk (no node boot on git's hot path), it
 // resolves the invoking checkout to that tree's payload before mirroring managed-block normalization:
@@ -48,19 +41,15 @@ set -u
 mode="\${1:?usage: contract-filter.sh smudge|clean <path>}"
 path="\${2:?usage: contract-filter.sh smudge|clean <path>}"
 here="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-binding="$(awk -F '\t' -v p="$path" '$1 == p { print $2 "\t" $3 "\t" $4; exit }' "$here/contract-filter-bindings" 2>/dev/null)"
+binding="$(awk -F '\t' -v p="$path" '$1 == p { print $2 "\t" $3; exit }' "$here/contract-filter-bindings" 2>/dev/null)"
 [ -n "$binding" ] || { cat; exit 0; }
 start="\${binding%%$'\t'*}"; rest="\${binding#*$'\t'}"
-end="\${rest%%$'\t'*}"; legacy="\${rest#*$'\t'}"
+end="$rest"
 top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 root="$(cat "$here/contract-filter-root" 2>/dev/null || true)"
 key="$(printf '%s' "$top" | sed 's#[/.]#-#g')"
 manifest="$root/trees/$key/contract-filter/manifest"
 payload="$(awk -F '\t' -v p="$path" '$1 == p { print $2; exit }' "$manifest" 2>/dev/null)"
-# A pre-v2 tree has only the old common payload. Once that tree materializes, its marker makes a missing
-# per-file payload mean identity (for example, AGENTS.md in a Claude-only tree), never global fallback.
-marker="$root/trees/$key/contract-filter-v2"
-if [ ! -r "$payload" ] && [ ! -f "$marker" ] && [ "$legacy" = 1 ] && [ -r "$here/contract-block.md" ]; then payload="$here/contract-block.md"; fi
 strip() {
   awk -v sline="$start" -v eline="$end" 'BEGIN { n = 0 }
     { lines[n++] = $0 }
@@ -114,7 +103,7 @@ export function plantContractFilter(proj: string, payloads: ContractFilterPayloa
   chmodSync(shimPath(common), 0o755)
   git(['-C', proj, 'config', 'filter.spexcode.smudge', filterCmd(shimPath(common), 'smudge')])
   git(['-C', proj, 'config', 'filter.spexcode.clean', filterCmd(shimPath(common), 'clean')])
-  writeFileSync(bindingsPath(common), bindings.map((b) => `${b.file}\t${b.start}\t${b.end}\t${b.legacy ? 1 : 0}`).join('\n') + '\n')
+  writeFileSync(bindingsPath(common), bindings.map((b) => `${b.file}\t${b.start}\t${b.end}`).join('\n') + '\n')
   const dir = treeFilterDir(proj)
   rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true })
   const manifest: string[] = []
@@ -160,24 +149,29 @@ export function settleIndexStat(proj: string, files: string[]): void {
 // the full inverse (edge ③ — call AFTER the managed blocks left the working files): attribute lines out,
 // config keys unset, shim + block content removed. `<common>/spexcode/` may host other spexcode data
 // (evidence blobs), so only OUR two files go, never the dir.
+export function clearContractFilterPayload(proj: string, files: string[] = []): void {
+  try { rmSync(treeFilterDir(proj), { recursive: true, force: true }) } catch { /* inaccessible tree */ }
+  settleIndexStat(proj, files)
+}
+
 export function removeContractFilter(proj: string, files: string[] = [], final = false): void {
   let common: string
   try { common = commonDirOf(proj) } catch { return }   // not a git repo → nothing was ever planted
-  try { rmSync(treeFilterDir(proj), { recursive: true, force: true }) } catch { /* inaccessible tree */ }
-  settleIndexStat(proj, files)
-  const anotherPayload = registeredSlots(proj).some((slot) => existsSync(join(slot, 'contract-filter', 'manifest')))
-  const legacyTree = legacyFilterTree(proj)
-  if (!legacyTree) rmSync(blockPath(common), { force: true })
-  if (!final && (anotherPayload || legacyTree)) return
+  clearContractFilterPayload(proj, files)
+  const anotherPayload = final ? false : (() => {
+    const rows = git(['-C', proj, 'worktree', 'list', '--porcelain', '-z']).split('\0')
+    const root = runtimeRoot(proj)
+    return rows
+      .filter((row) => row.startsWith('worktree '))
+      .map((row) => row.slice('worktree '.length))
+      .some((tree) => existsSync(join(root, 'trees', encodeProject(tree), 'contract-filter', 'manifest')))
+  })()
+  if (!final && anotherPayload) return
   removeManagedBlock(attributesPath(common), ['# ', ''], true)
   for (const key of ['filter.spexcode.smudge', 'filter.spexcode.clean']) {
     try { git(['-C', proj, 'config', '--unset-all', key]) } catch { /* not set — already clean */ }
   }
-  for (const path of [shimPath(common), blockPath(common), rootPath(common), bindingsPath(common)]) rmSync(path, { force: true })
-}
-
-export function retireLegacyContractBlock(proj: string): void {
-  if (!legacyFilterTree(proj)) rmSync(blockPath(commonDirOf(proj)), { force: true })
+  for (const path of [shimPath(common), rootPath(common), bindingsPath(common)]) rmSync(path, { force: true })
 }
 
 // is the filter currently planted? (the assert-side probe tests use; cheap: one config read)

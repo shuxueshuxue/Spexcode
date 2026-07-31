@@ -113,12 +113,11 @@ trees never overwrite one another's bytes and user global ignore configuration i
 hash remains global and project-scoped, and is removed by project-wide dematerialize/uninstall rather than a
 sibling's selection change.
 
-Migration cannot expose a registered tree that still depends on the old common ignore projection. Until every
-previously materialized registered tree publishes its per-tree ignore receipt, common `.git/info/exclude`
-retains its prior managed entries. The upgrading tree has no authority to add its local paths to that common
-set. The last receipt removes the retained entries; from then on only checkout-invariant residue and shared
-transport remain common. Receipt lookup is derived from registered path identity, so a deleted-but-not-yet-
-pruned worktree keeps protection without making sibling filesystem access a materialize prerequisite.
+Materialize reads and writes only the current tree slot and current per-tree filter payload. It does not import
+pre-slot ledgers, common ignore projections, or other retired-format receipts, and a normal pass never enumerates
+registered sibling worktrees. Shared filter transport is refreshed in place; project-wide teardown may still inspect
+registered trees when it is explicitly removing that shared transport. Older runtime state is not a supported
+materialize input and must be removed through an explicit reinstall/uninstall operation.
 
 The net ideal path: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`, zero
 further operation, no global pollution beyond the scoped Codex trust. The contract files are SpexCode-owned

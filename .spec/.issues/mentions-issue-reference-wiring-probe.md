@@ -1,7 +1,7 @@
 ---
 concern: mentions issue-reference wiring probe
 by: f95eaa7d-45d9-4c84-a7c2-d0d1c06786b1
-status: open
+status: landed
 nodes: mentions
 created: 2026-07-31T09:06:17.320Z
 ---

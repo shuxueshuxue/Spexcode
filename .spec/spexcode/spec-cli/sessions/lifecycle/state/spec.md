@@ -271,11 +271,18 @@ cwd in a project with no sessions, a store found here that lacks the id, or no s
 at all), and routes the fix for each — cd back into the session's worktree and re-declare, or pass/correct
 `--session <id>`. The diagnosis changes only the message; nothing is written either way. A **propose-close** declaration additionally carries a plain reminder to reclaim
 the ephemeral things the agent started to test this change — a stray process, a dev/preview server, a bound port,
-a scratch session — before the worktree is discarded and they orphan (the leak the shared tmux socket made
+a throwaway session it spawned — before the worktree is discarded and they orphan (the leak the shared tmux socket made
 visible: a torn-down worktree's own backend outliving it). It is **advisory, a nudge and never a gate** (the agent
 checks, then carries on; the next tool call re-flips it to `active`), and **project-agnostic**: the criterion is
 whether a resource should outlive the task, never who started it — a deliberately long-running service or a
-production build is started-by-you yet left alone, and anything you are unsure about is left running. Beside that
+production build is started-by-you yet left alone, and anything you are unsure about is left running.
+The sweep's scope is **stated, not implied**, and it **excludes THIS session by name**. `close` is human-only
+(above), so the declaration has proposed a close, not performed one — while `spex session close` accepts `.` and a
+bare own id like any other selector, so a session reading "shut down a session you started" at the exact moment it
+is contemplating its own close can read it as permission to close itself, which deletes the worktree it is running
+in mid-turn. Every surface that teaches `close` therefore says which side of the manager/worker split it is on:
+`session close <SEL>` retires ANOTHER session and its selector is never `.` nor the caller's own id, while
+`done --propose close` only proposes and names the human as the one who performs it. Beside that
 resource reminder the same declaration appends a **data-driven issue closeout** line, owned by [[local-issues]]
 (the store owns the query and the wording): the still-open local threads this session opened or replied to,
 listed by id, with the ask to resolve each or say why it outlives the session — silent when the session owes

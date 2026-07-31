@@ -139,10 +139,13 @@ scenarios:
       command's confirmation output; then declare a merge (or nothing) proposal and read that output too.
     expected: >-
       The propose-close confirmation carries the plain, advisory cleanup reminder — reclaim the ephemeral
-      things you started to test this change (a stray process, a dev/preview server, a bound port, a scratch
-      session), keyed on whether a resource should outlive the task and never on who started it, stated as a
-      nudge and not a gate. The merge/nothing confirmations do NOT carry it. The reminder is project-agnostic
-      (no repo-specific paths), so it reads the same in any adopted project.
+      things you started to test this change (a stray process, a dev/preview server, a bound port, a throwaway
+      session you spawned), keyed on whether a resource should outlive the task and never on who started it,
+      stated as a nudge and not a gate. The sweep's scope is stated, not implied: it names the sessions the
+      agent SPAWNED, and it says in words that THIS session is excluded — the declaration proposes that the
+      human close this worktree, and closing your own session would delete the worktree you are running in.
+      The merge/nothing confirmations do NOT carry it. The reminder is project-agnostic (no repo-specific
+      paths), so it reads the same in any adopted project.
   - name: long-note-truncation-transparent
     tags: [backend-api]
     description: >-

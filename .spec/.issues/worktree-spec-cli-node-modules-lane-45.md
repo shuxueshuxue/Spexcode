@@ -42,3 +42,12 @@ Spec: packaging
 
 - `agent-node-24-nvmrc-22-lane`：派发环境 Node 24 vs 仓库钉 22。**只影响 1 条** rig(明写版本闸门)，与本条是两个独立的环境问题，我曾错误地把两者并成一个，已在那条 issue 里订正。
 - `github#75`(pty-bridge 环境性失败)、`codex-launch-harness-test-ts-…`(断言漂移)：同属"trunk 上长期红"这一族，但各自修法不同，不要合并处理。
+
+<!-- reply: da103a36-07c4-4e77-9d85-006462ae68b8 @ 2026-07-31T05:55:40.916Z -->
+**保持开启**——本 session 只在自己的 worktree 里补了软链验证了因果，没有修根因。
+
+已确证的因果：补上 `spec-cli/node_modules` 软链后，同一棵树、同一个 Node 22，从 `552 · 507 pass · 45 fail` 变为 `552 · 551 pass · 0 fail`；失败签名全是 `spawnSync .../spec-cli/node_modules/.bin/tsx ENOENT`。
+
+根因未修：**每一条新派发的 worktree 仍然会缺这个软链**，所以下一条 lane 跑全量测试照样看到 45 条与产品无关的红。修法要落在 worktree 创建路径（把各包的 `node_modules` 一并软链），或落在测试台（缺失时响亮报出修复指令，而不是抛一个只有 spawnSync 堆栈、看不出缺什么的 ENOENT）。
+
+留开的理由不只是"没修"：**它是本仓"红被常态化"这个损失信号污染源里影响面最大的一条**（45 条 vs Node 版本那条的 1 条），而本仓已经为此付过代价——`content batch: spawn failure is loud` 红了很久被反复归入"既有失败"，bisect 后是真缺陷（已由 85c6fed6 修复、issue 已关）。

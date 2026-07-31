@@ -30,6 +30,16 @@ scenarios:
       Switching the folder PRUNES .adopter-a/plugins/spexcode and emits .claude/plugins/spexcode; switching to native
       PRUNES the plugin bundle and writes the native CLAUDE.md block + .claude/settings.json shim. The prune is
       identity-gated on the bundle's own plugin.json, so a foreign plugin sharing the folder is never touched.
+  - name: plugin-bundle-prunes-removed-surface-files
+    tags: [cli]
+    description: >-
+      Emit a SpexCode plugin bundle with one skill, agent and command, then re-emit the same bundle after all
+      three surface entries are removed.
+    expected: >-
+      The removed skill directory and agent/command files are absent while unchanged bundle metadata and hooks
+      remain. Re-emission reconciles the owned bundle to its exact current path set rather than retaining stale
+      surface files or rebuilding unrelated files.
+    test: spec-cli/src/plugin-harness.test.ts
 ---
 # eval.md — plugin-harness
 

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { readConfig, readJsonConfig } from './layout.js'
 import { resolveHarnessTargets, parseHarnessFlag, NATIVE_HARNESS_IDS } from './harness-select.js'
+import { gitBinary } from './git.js'
 
 // this file lives at <pkgRoot>/src/init.ts, so `..` is the package root — the same derivation the
 // launch paths use, never a hardcoded repo path (so a relocated/installed package still finds its data).
@@ -71,7 +72,7 @@ function copyTreeNoClobber(srcDir: string, destDir: string, base: string): strin
 // hooks/ (shared across all worktrees). Returns null (with a loud reason) when <dir> isn't a git repo.
 function resolveHooksDir(dir: string): string | null {
   try {
-    const common = execFileSync('git', ['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
+    const common = execFileSync(gitBinary(process.env), ['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'], // swallow git's own "fatal: not a git repository" — our warning is the signal
     }).trim()
@@ -86,8 +87,8 @@ function resolveHooksDir(dir: string): string | null {
 // turn that feature branch into trunk).
 function adoptionMainBranch(dir: string): string {
   try {
-    const common = execFileSync('git', ['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim()
-    const branch = execFileSync('git', ['-C', dirname(common), 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim()
+    const common = execFileSync(gitBinary(process.env), ['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' }).trim()
+    const branch = execFileSync(gitBinary(process.env), ['-C', dirname(common), 'symbolic-ref', '--short', 'HEAD'], { encoding: 'utf8' }).trim()
     if (branch) return branch
   } catch { /* render the one product-level repair below */ }
   const error = new Error('cannot determine the source-of-truth branch at adoption — check out the trunk in the root checkout, or set "mainBranch" in spexcode.json before re-running `spex init`')
@@ -113,7 +114,7 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   // NOT `git init` for them: creating a repo is a side effect beyond init's remit (a subdir, a dir not
   // meant as a repo root), and `git init` is one deliberate command.
   try {
-    execFileSync('git', ['-C', targetDir, 'rev-parse', '--is-inside-work-tree'], { stdio: ['ignore', 'ignore', 'ignore'] })
+    execFileSync(gitBinary(process.env), ['-C', targetDir, 'rev-parse', '--is-inside-work-tree'], { stdio: ['ignore', 'ignore', 'ignore'] })
   } catch {
     console.error(`spex init: ${targetDir} is not a git repository. SpexCode is git-backed (git is the version database; the hooks live in .git). Run \`git init\` there first, then \`spex init\`.`)
     process.exit(1)

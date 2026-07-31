@@ -176,10 +176,10 @@ scenarios:
       the claude transcript's queue-operation log and count which prompts actually entered claude's input
       pipeline.
     expected: >-
-      Every `sendText` result is `sent` because the timeline append is delivery. A poke that the daemon drops
-      under probe pressure may delay same-turn arrival, but its line remains in the target log and the
-      turn-boundary reader injects it exactly once. The former write→parse race is now a timing concern, not a
-      loss signal: the transport only writes an idempotent reply poke and never needs a parse barrier.
+      Every `sendText` result is `sent` because acceptance is the durable write. An insert the daemon drops
+      under probe pressure may delay same-turn arrival, but the message stays OWED and a later pass hands it
+      over exactly once. The former write→parse race is now a timing concern, not a loss signal: the entry
+      leaves the queue only on a receipt, so a dropped insert is retried and never duplicated.
     code:
       - spec-cli/src/harness.ts#replyViaSocket
       - spec-cli/src/harness.ts#deliverViaRendezvous

@@ -47,7 +47,7 @@ own half plays two roles:
 - **rendezvous daemon** — the runtime's server binds SpexCode's per-session rendezvous socket (the path
   the launch env hands every rendezvous-owning harness) and accepts best-effort reply pokes. The plugin
   supplies the inject (`client.session.prompt` into the root session); an unadopted or failed injection
-  leaves the timeline line unread for the turn-boundary reader. That makes `ownsRendezvous: true` LITERALLY
+  leaves the message owed, for the delivery queue to retry. That makes `ownsRendezvous: true` LITERALLY
   true — the shared Claude-family poke and socket-listener liveness are reused with no opencode-specific
   transport. The server is multi-connection, so a board probe cannot displace another poke.
 

@@ -12,6 +12,7 @@ import { adapterLoadedReferenceState, defaultHarness, HARNESSES, sessionIdentity
 import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
 import { appendSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
+import { drain, enqueue, owesDelivery } from './delivery-queue.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
@@ -1219,6 +1220,28 @@ export function superviseQueue(intervalMs = 3000): void {
   const tick = async () => {
     try { await drainQueue() } catch { /* transient git/tmux hiccup; next tick retries */ }
     setTimeout(tick, intervalMs)
+  }
+  void tick()
+}
+
+let supervisingDelivery = false
+// @@@ superviseDelivery - the RETRY half of [[delivery-queue]]. `sendText` hands over in its own process, which
+// covers the live case; this covers everything that could not be handed over then — a harness mid-restart, a
+// pane in the one state that swallows prompts, a session that was offline when the message arrived. Owned by
+// the serve that serves this project root, so a message owed to a worker is delivered when the worker can take
+// it rather than when it happens to run a tool. A tick with nothing owed is one existsSync per session, and
+// concurrent serves are harmless: the queue's lock, not the process, is what makes a handover exactly-once.
+export function superviseDelivery(intervalMs = 2000): void {
+  if (supervisingDelivery) return
+  supervisingDelivery = true
+  const tick = async () => {
+    try {
+      for (const id of listSessionIds()) {
+        if (!owesDelivery(id)) continue
+        try { await drainSession(id) } catch { /* an adapter that refused stays owed; next tick retries */ }
+      }
+    } catch { /* transient store read; next tick retries */ }
+    setTimeout(tick, intervalMs).unref()
   }
   void tick()
 }
@@ -3092,12 +3115,11 @@ export function formatTable(sessions: Session[], color = true): string {
   return [c('1', `SpexCode sessions (${sessions.length})`), header, ...rows, statusLegend(color)].join('\n')
 }
 
-// @@@ sendText - THE APPEND IS THE DELIVERY ([[dispatch]]). The message lands in the target's durable log
-// under its record lock, and success is decided there; only then is the harness adapter poked with the same
-// text, so a live agent sees it in its current turn instead of at its next turn boundary. The poke is
-// best-effort — losing it, having it refused, or replaying it costs nothing, because the line is already the
-// message's copy and the turn-boundary reader picks up whatever the poke did not show. What stays LOUD is only
-// what genuinely cannot be recorded: an unknown session id, or a log that refuses the write.
+// @@@ sendText - THE APPEND ACCEPTS, THE QUEUE OWES ([[dispatch]]). One hold of the record lock records the
+// message in the durable log AND enqueues it ([[delivery-queue]]); success is decided by that write, so a
+// sender learns whether the message was accepted and never whether a socket was reachable. The handover is a
+// separate act: drain the queue into the harness adapter as an ordinary prompt. What stays LOUD is only what
+// genuinely cannot be recorded: an unknown session id, or a log that refuses the write.
 // A RETIRED session (worktree gone) still receives: the record gate governs the lifecycle axis, and a message
 // that cannot reach an agent must at least leave a trace ([[session-timeline]]).
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
@@ -3105,37 +3127,44 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
   const rec = readRecord(id)
   if (!rec) return { ok: false, error: `no session record for ${id} — prompt NOT delivered` }
+  // Composed at ACCEPT time, once: the log keeps the raw conversational text plus the effective reply channel,
+  // the queue keeps the transport form. Composing again at handover would let a later send change the hints on
+  // a message that was already accepted.
   const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
-  let sent: { mid: string }
   try {
-    // The lock covers the append alone. Codex's native turn can synchronously run hooks that write this same
-    // record, so holding it across the adapter poke below would deadlock the app-server's confirmation.
-    sent = await withRecordLock(id, async () => appendSent(id, text, from ?? null, prompt.replyVia))
+    await withRecordLock(id, async () => {
+      const appended = appendSent(id, text, from ?? null, prompt.replyVia)
+      enqueue(id, { mid: appended.mid, text: prompt.text, from: from ?? null })
+    })
   } catch (error) {
     return { ok: false, error: `could not append the message to session ${id}'s log: ${error instanceof Error ? error.message : String(error)} — prompt NOT delivered` }
   }
-  const h = harnessById(rec.harness || defaultHarness.id)
   // Awaited, not fire-and-forget: `spex session send` is a short-lived process that would exit before an
-  // unawaited poke ever reached the socket, costing every CLI send its same-turn arrival. Its result never
-  // advances the inbox: a write cannot prove the target parsed it, so only the target's reader consumes the
-  // durable line.
-  await pokeAdapter(h, rec, prompt.text, sent.mid)
+  // unawaited insert reached the adapter, costing every CLI send its same-turn arrival. This is also why ANY
+  // process drains rather than only the backend — a shell send with no serve running still hands over.
+  await drainSession(id)
   return { ok: true }
 }
 
-// The courtesy kick. Carries `mid` as the adapter's native message marker, so an adapter that replays or
-// duplicates it stays harmless. Never throws and never reports: a poke has no outcome the caller can act on.
-async function pokeAdapter(h: Harness, rec: SessRec, text: string, mid: string): Promise<void> {
-  // the pane guard ([[harness-adapter]] deliveryBlockedBy): the ONE pane state where the harness swallows a
-  // prompt its channel confirms (claude's sessions panel), checkable only from the pane. It no longer refuses
-  // the send — the message is already delivered — it only skips a kick known to be swallowed.
-  if (h.deliveryBlockedBy) {
-    try {
-      if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return
-    } catch { /* no pane to consult — let the poke itself decide */ }
-  }
-  try { await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid }, text) }
-  catch { /* the unread timeline line remains the delivery */ }
+// @@@ drainSession - hand over what this session is owed, as ordinary prompts. Safe to call from anywhere and
+// at any time: the queue's own lock serializes concurrent passes, and an empty queue costs one existsSync.
+// The retry sweep in `serve` calls this for the sessions whose queues an earlier pass could not empty.
+export async function drainSession(id: string): Promise<void> {
+  if (!owesDelivery(id)) return
+  const rec = readRecord(id)
+  if (!rec) return
+  const h = harnessById(rec.harness || defaultHarness.id)
+  await drain(id, async (msg) => {
+    // the pane guard ([[harness-adapter]] deliveryBlockedBy): the ONE pane state where the harness swallows a
+    // prompt its channel confirms (claude's sessions panel), checkable only from the pane. Treated as a REFUSAL
+    // rather than a skip — the message stays owed and the sweep hands it over once the pane leaves that state.
+    if (h.deliveryBlockedBy) {
+      try {
+        if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return false
+      } catch { /* no pane to consult — let the insert itself decide */ }
+    }
+    return (await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.mid }, msg.text)).ok
+  })
 }
 
 // Hard interrupt is adapter-native control, distinct from stop's process teardown. A harness without a

@@ -25,9 +25,9 @@ scenarios:
       been removed. Read each session's timeline.ndjson and its cursors.json afterwards. Then send to an id
       with no record at all.
     expected: |
-      Both sends report success and both messages are in the log: delivery is the append, and the failed
-      poke only decides whether the agent sees it this turn or at its next turn boundary. The unreachable
-      target's inbox cursor does NOT advance, so the line stays unread for the turn-boundary reader. The
+      Both sends report success and both messages are in the log: acceptance is the write, and the failed
+      handover only decides whether the agent sees it this turn or after a retry. The unreachable target
+      still OWES its message — the entry stays on its delivery queue, and no cursor moves anywhere. The
       retired session receives too — the record gate governs the lifecycle axis (it still refuses to be
       marked active), while a message it cannot act on must still leave a trace. Only the unknown id fails,
       loudly, and records nothing.

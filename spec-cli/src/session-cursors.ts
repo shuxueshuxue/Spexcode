@@ -4,10 +4,13 @@ import { sessionArtifactPath, sessionStoreDir } from './layout.js'
 import type { TimelineEvent } from './session-timeline.js'
 
 // @@@ session-cursors - a reader's durable place in a log. One `cursors.json` per session in its global store
-// dir: `inbox` is its place in its OWN timeline, `follows` one entry per followed session. A position is an
-// event INDEX into timeline.ndjson (lines already consumed), so it is also the index of the next unread event.
+// dir: `follows` holds one entry per followed session, including the reader's own id when it watches its own
+// log. A position is an event INDEX into timeline.ndjson (lines already consumed), so it is also the index of
+// the next unread event. A position is NOT a work list: what a session still owes its agent is a debt, and it
+// lives in its own queue ([[delivery-queue]]). Binding both to one counter is what made a session's own status
+// lines get consumed as though they were mail, and made "anything outstanding?" a scan of all history.
 
-export type Cursors = { version: 1; inbox: number; follows: Record<string, number> }
+export type Cursors = { version: 1; follows: Record<string, number> }
 
 const cursorsPath = (id: string): string => sessionArtifactPath(id, 'cursors.json')
 const at = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0)
@@ -16,7 +19,7 @@ const at = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) 
 // message is the honest recovery for a lost position and skipping one is not. Followed entries whose target
 // store dir is gone are dropped here — expiry is this read, and the next write persists it.
 export function readCursors(id: string): Cursors {
-  let raw: { inbox?: unknown; follows?: unknown } | null = null
+  let raw: { follows?: unknown } | null = null
   try { raw = JSON.parse(readFileSync(cursorsPath(id), 'utf8')) } catch { /* no cursors yet */ }
   const follows: Record<string, number> = {}
   const stored = raw?.follows
@@ -26,11 +29,11 @@ export function readCursors(id: string): Cursors {
       follows[target] = at(pos)
     }
   }
-  return { version: 1, inbox: at(raw?.inbox), follows }
+  return { version: 1, follows }
 }
 
-// Written whole and atomically, one field per line — the same shape as the session record, so the mark-active
-// hook can read its inbox position with an exact whole-line match in pure shell.
+// Written whole and atomically, one field per line — the same shape as the session record, so a position stays
+// readable by an exact whole-line match where a value regex would not be.
 function writeCursors(id: string, cursors: Cursors): void {
   const dir = sessionStoreDir(id)
   mkdirSync(dir, { recursive: true })
@@ -39,22 +42,13 @@ function writeCursors(id: string, cursors: Cursors): void {
   renameSync(tmp, cursorsPath(id))
 }
 
-export const inboxCursor = (id: string): number => readCursors(id).inbox
-
-// A reader that has shown everything up to `to`. Monotonic: a stale read can leave the position too low
-// (a message shown twice), never too high (a message lost).
-export function advanceInbox(id: string, to: number): void {
-  const cursors = readCursors(id)
-  if (to <= cursors.inbox) return
-  writeCursors(id, { ...cursors, inbox: to })
-}
-
 export const followCursor = (id: string, target: string): number | null => {
   const stored = readCursors(id).follows[target]
   return stored === undefined ? null : stored
 }
 
 // Start or advance a follow. Following IS this entry existing, so the first call registers the relationship.
+// Monotonic: a stale read can leave a position too low (an event read twice), never too high (one lost).
 export function advanceFollow(id: string, target: string, to: number): void {
   const cursors = readCursors(id)
   const stored = cursors.follows[target]

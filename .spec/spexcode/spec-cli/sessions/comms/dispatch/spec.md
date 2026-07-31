@@ -26,13 +26,14 @@ product launched. Interactive Claude/pi/opencode use the rendezvous protocol, Co
 [[claude-headless]] uses a controller that writes Claude-native stream-json stdin. Multi-line prompts and Enters
 therefore cannot be corrupted the way `tmux send-keys` could.
 
-**Delivery is the append; the channel is a poke.** `sendText` appends one `sent` line to the target's
-durable log under that session's record lock ([[session-timeline]]) and reports success on that append.
-Only then does it poke the resolved adapter with the same text, so a live agent sees the message in its
-current turn instead of at its next turn boundary. The poke is **best-effort and idempotent**: it carries a
-message id the reader already dedupes against, so losing it, retrying it, or having it refused costs
-nothing — the line is still there and the turn-boundary hook injects it. There is no send-keys fallback and
-no PTY prompt typing; a poke that cannot land simply does not land.
+**Acceptance is the append; the handover is the adapter, retried.** `sendText` appends one `sent` line to the
+target's durable log and enqueues the message on that session's delivery queue ([[delivery-queue]]) inside one
+hold of its record lock ([[session-timeline]]), and reports success on that write — a sender learns whether the
+message was accepted, never whether a socket was reachable. It then drains the queue immediately, so a live
+agent sees the message in its current turn; whatever that drain could not hand over stays queued and is
+retried by the serve that owns the project root. The channel is the ONLY way a message enters an agent, so it
+arrives in exactly the shape a human prompt does. There is no send-keys fallback, no PTY prompt typing, and no
+hook-injected copy — a turn-boundary hook reports freshness and never carries conversation.
 
 Locating the truth in the file is what dissolves the hardest failure this mechanism ever had. Claude's
 rendezvous daemon keeps **ONE connection** and destroys the previous socket on every new connect,
@@ -40,11 +41,19 @@ discarding any received-but-unparsed line with it — and our own liveness probe
 probe landing in the write→parse window silently killed a "successfully sent" prompt (the field incident:
 dashboard messages recorded `sent` with no trace in the claude transcript). That single socket write was
 the message's only copy, which is why proving it had been parsed needed an in-order barrier, and why a
-lost proof needed a resend that might duplicate. With the log as the copy, a kicked poke is not a lost
-message and a resent poke is not a duplicate one, so the barrier, its retry classification, and the whole
-`commit-unknown` outcome — a request that crossed the transport but whose confirmation was lost — are
-gone, along with the separate idempotency ledger that existed to make replay safe. **Every delivery now has
-exactly two outcomes: the bytes are in the log, or they are not.**
+lost proof needed a resend that might duplicate. With the record written before any transport runs, a lost
+kick is not a lost message and a retried one is not a duplicate — the queue entry is removed only by an insert
+that landed — so the barrier, its retry classification, and the whole `commit-unknown` outcome — a request
+that crossed the transport but whose confirmation was lost — are gone, along with the separate idempotency
+ledger that existed to make replay safe. **Acceptance now has exactly two outcomes: the bytes are in the log,
+or they are not.**
+
+That separation is also what a later refactor lost by collapsing the two questions back together. Removing the
+adapter's receipt left nothing able to say a message had been handed over, so every message was replayed to the
+agent at its next turn boundary in addition to arriving normally — each one delivered twice, and the duplication
+read as intended behaviour because the contract had been rewritten to match the code. A receipt that decides
+whether a debt is settled is not ceremony; it is the only thing standing between "retry until it lands" and
+"show it again forever".
 
 What remains loud is what genuinely cannot be recorded: an unknown session id, or a record the writer
 refuses. Those still return a `DispatchResult {ok,error}` that propagates — `POST …/input` answers non-2xx,

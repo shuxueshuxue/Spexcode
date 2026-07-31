@@ -20,12 +20,17 @@ related:
 
 A session's record ([[state]]) holds only its CURRENT status. Everything else a session *is* to the outside
 world — what it declared, what was said to it — is a sequence of events, and a sequence belongs in a log.
-`timeline.ndjson`, in the session's global store dir, is that log, and it carries two loads that used to be
-solved separately and worse: it is the **conversation** a terminal-free surface renders, and it is the
-**delivery** itself. A message is delivered when its bytes are in this file; the transport that pokes the
-agent afterwards is a courtesy, not the fact. And because the file is only a file, it is the one thing
-about a session that any process may observe without owning anything — which is how a supervisor, a CI, or
-any external orchestrator watches a fleet without being granted access to it.
+`timeline.ndjson`, in the session's global store dir, is that log: the **record**, and the **conversation** a
+terminal-free surface renders, which are the same sequence read for two purposes. A message is accepted when
+its bytes are in this file — that is what a sender is told and what any later reader can prove. And because
+the file is only a file, it is the one thing about a session that any process may observe without owning
+anything — which is how a supervisor, a CI, or any external orchestrator watches a fleet without being
+granted access to it.
+
+What this log is NOT is a work list. It is never read to decide what a session is still owed; that debt is a
+small ordered queue of its own ([[delivery-queue]]) whose resting state is empty. A record grows forever and a
+debt is consumed, so binding them to one position made a session's own declarations get consumed as if they
+were mail, and made "is anything outstanding?" a scan of everything that ever happened.
 
 ## expanded spec
 
@@ -39,17 +44,12 @@ One JSON line per event, two kinds:
   same message can never be injected twice and never needs a separate idempotency ledger. The recorded
   text is the message BEFORE mechanism inserts — hints are transport, not conversation.
 
-**The append IS the delivery.** `sendText` appends the `sent` line under the session's record lock and
-returns success on that append ([[dispatch]]); only then does it attempt the adapter kick. A kick that
-lands puts the text in the agent's current turn; a kick that fails, is refused, or is lost leaves the line
-simply **unread**, and the reader below picks it up. There is no "delivered but unconfirmed" state to model
-because nothing about the transport decides whether delivery happened.
-
-**The reader is the turn-boundary hook.** On a turn boundary the [[hook-dispatch]] mark-active hook reads
-the lines past this session's own cursor, emits them as injected context, and advances the cursor. So an
-agent finds its unread mail by mechanism, never by remembering to run a command — the same
-materialize→auto-discovery path every other contract reaches it through, and therefore identical for a
-dashboard-launched and a self-launched agent.
+**The append is what ACCEPTS a message; the queue is what owes it.** `sendText` appends the `sent` line and
+enqueues the same message in one hold of the session's record lock ([[dispatch]]), and reports success on that
+write. Acceptance therefore never depends on the transport, which is what dissolved the "delivered but
+unconfirmed" state — but it is not itself the handover. The message reaches the agent when
+[[delivery-queue]]'s drain hands it to the harness adapter as an ordinary prompt, retried until it lands. A
+reader of this log learns what was said; only the queue says what is still owed.
 
 **Append authored state at its write boundary.** A declaration note is conversation content, so it cannot
 depend on a later sample of the mutable current-state record. Every lifecycle write compares the prior

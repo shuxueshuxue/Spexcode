@@ -22,6 +22,7 @@ test('session noun-verb help projects the exact verb from the shared drawer defi
     { verb: 'done', usage: 'Usage: spex session done --propose merge|nothing|close', behavior: /merge.*review[\s\S]*ONLY declaration.*clickable merge[\s\S]*nothing.*done[\s\S]*close.*close-pending/ },
     { verb: 'park', usage: 'Usage: spex session park --note <what-you-await>', behavior: /parked[\s\S]*background task[\s\S]*asking/ },
     { verb: 'ask', usage: 'Usage: spex session ask --note <your-question>', behavior: /asking[\s\S]*human reply[\s\S]*parked/ },
+    { verb: 'quarantine', usage: 'Usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]', behavior: /--thread is an adapter-native conversation id, never the SpexCode session id; omit it for Claude/ },
   ]
   const outputs = cases.map(({ verb, usage, behavior }) => {
     const result = sessionHelp(verb)

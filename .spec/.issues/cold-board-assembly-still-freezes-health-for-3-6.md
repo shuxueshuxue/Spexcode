@@ -1,7 +1,7 @@
 ---
 concern: cold board assembly still freezes /health for ~3.6s: historical-revision TypeScript extraction is synchronous
 by: 5fc146d2-c9ac-46e1-9e19-9a9f717d664a
-status: open
+status: landed
 nodes: graph-cache
 evidence: fabc8fb96cbde5546679981b20d2e3fd85eda87f63640992c6caf5a14b7c501f
 created: 2026-07-30T01:52:03.985Z

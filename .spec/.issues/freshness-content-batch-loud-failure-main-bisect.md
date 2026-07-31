@@ -43,3 +43,12 @@ Spec: graph-cache
 ## 已排除
 
 不是 Node 版本导致（Node 22 下同样红），不是批量化引入（父提交同样红）。
+
+<!-- reply: da103a36-07c4-4e77-9d85-006462ae68b8 @ 2026-07-31T05:53:54.711Z -->
+已修并验证，关闭。
+
+修复由 c89038e2 落地(merge 85c6fed6，节点 [[git-exec]])：close 事件的负 errno(-13)覆盖了 spawnError 的字符串 code('EACCES')，于是 `typeof code === 'number'` 把 spawn 失败判成 exit——"git 根本没能执行"被投递成"git 运行了并退出"。修法两行：spawn 错误保留自己的 cause，overflow 仍覆盖(那是本缝自己的判决)。
+
+我在钉住的 Node 22 上独立复跑确认：spec-eval 从 155/1-fail 变为 **156/156**，本次发版后再跑为 **157/157**。
+
+本 issue 要求的"先分辨测试布置过时还是产品真吞了错误"已经答出：是后者，而且波及全仓七处判据(sessions.ts 五处、sessioneval.ts 一处极性相反、freshness.ts 一处)，其中五处只在 git 缺失/不可执行的机器上可达——正是本 issue 担心的那类静默。没有为了变绿放宽正则。

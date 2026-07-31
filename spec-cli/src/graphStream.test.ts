@@ -10,6 +10,7 @@ import {
   addPendingGraphChange,
   consolidatedRecursiveWatch,
   graphWatcherCensus,
+  isSessionCreateCandidateRegistryEvent,
   sessionWorktreeWatchPaths,
   watchSessionEvalRefs,
   watchSessionEvalRegistry,
@@ -52,6 +53,13 @@ test('one debounce window retains both full and sessions obligations in either a
     addPendingGraphChange(addPendingGraphChange({ full: false, sessions: false }, 'sessions'), 'full'),
     { full: true, sessions: true },
   )
+})
+
+test('candidate registry entries are held until session publication', () => {
+  const candidates = ['/repo/.worktrees/new-session-1234']
+  assert.equal(isSessionCreateCandidateRegistryEvent('new-session-1234', candidates), true)
+  assert.equal(isSessionCreateCandidateRegistryEvent('new-session-1234/gitdir', candidates), true)
+  assert.equal(isSessionCreateCandidateRegistryEvent('other-session-5678', candidates), false)
 })
 
 test('exact-directory transport reconciles directory paths idempotently and closes/reopens cleanly', () => {

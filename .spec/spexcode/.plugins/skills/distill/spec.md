@@ -54,6 +54,11 @@ Only after verifying the salvage is present (or the branch truly merged), retire
 `spex session close <id>`, or remove a bare worktree and then its branch. If proof is incomplete, keep the
 resources and report why.
 
+`<id>` is the OLD session's id — the one you are inheriting, spelled out. It is never `.` and never your own
+id: `.` means THIS session (the rename step below relies on that), and closing yourself deletes the worktree
+you are running in, mid-turn, along with your branch and record. Retiring the source is the only close this
+skill asks for; your own ending stays a declaration.
+
 ## Rename yourself
 
 Last step: mark the inheritance on the board. If you run as a SpexCode session (inside a session

@@ -37,7 +37,12 @@ its own finding classes) and `serve ui` (a different process) are verbs.
 
 The resource surface keeps one lifecycle: `spex session resources [--json]` is the self-categorized, read-only
 host report. It may explain reclaim eligibility but never issues mutation authority; stop and close remain the
-only lifecycle verbs that release session resources.
+only lifecycle verbs that release session resources. Both take a selector naming ANOTHER session, and every
+surface that teaches them says so — the same obligation the raw-key escape hatch carries. `close` is also a
+declaration word (`done --propose close`), and the two differ in who acts: a manager retiring a lane it
+dispatched, versus a worker proposing its own end for the human to perform. Any prose that nudges an agent to
+reclaim what it started — the propose-close cleanup nudge included — scopes its sweep to what the agent
+spawned and excludes the running session by name, because `.` and a bare own id are valid selectors here.
 
 `spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path>
 --branch <absent-branch>` is the separate record-integrity control for an unreadable row. It moves no worktree,

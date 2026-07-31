@@ -35,7 +35,7 @@ The runtime owns five shared contracts:
 - **the rendezvous server** — binds the launch-injected rendezvous socket and accepts reply pokes, so the
   shared Claude-family adapter and socket-listener liveness are reused verbatim. MULTI-connection means a
   board probe cannot displace a concurrent poke. A repeated `mid` is injected once for this live shim; an
-  injection error releases that marker, while an unable host leaves its line for the turn-boundary reader.
+  injection error releases that marker, while an unable host leaves the message owed for the queue to retry.
   It never confirms or rejects an injection: the timeline is the delivery.
 - **the stop-gate loop closure** (`dispatchStop`) — a blocked Stop's continuation is a LOOP, and the loop
   needs a termination bit: claude's native Stop payload carries `stop_hook_active=true` inside a

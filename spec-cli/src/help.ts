@@ -47,7 +47,7 @@ session to that node. --prompt-file <path>|- carries a long prompt without shell
     watch: ['spex session watch [SEL…] [--as NAME] [--idle] [--interval N=1]',
       'Streams lifecycle transitions and blocks until killed; `session wait` is the one-shot alternative.', ['selector']],
     wait: ['spex session wait [SEL…] [--timeout S=1200] [--interval S=1] [--idle]',
-      `EDGE-TRIGGERED wait: follows the selected sessions' logs AND your own inbox, and exits 0 on
+      `EDGE-TRIGGERED wait: follows the selected sessions' logs AND your own log, and exits 0 on
 the FIRST thing worth waking for — a followed session TRANSITIONING from a non-actionable
 status into an actionable one (stdout = the observed path, e.g. working→review; read the LAST
 token as the status reached), or a message arriving for you (stdout = message). The arrival

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { appendSent, lastHumanSendVia, readTimeline, timelineEvents } from './session-timeline.js'
-import { inboxCursor } from './session-cursors.js'
+import { pendingMessages } from './delivery-queue.js'
 import { rvSock } from './harness.js'
 import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
 import { composeSessionPrompt, markState, sendText, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
@@ -269,23 +269,24 @@ test('appendSent stamps a unique mid on each durable line', () => {
   })
 })
 
-test('a send whose poke cannot land still succeeds and still leaves the message in the log', async () => {
+test('a send the adapter cannot take still succeeds, and the message stays OWED', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
   seedSessionRecord(home)
   await withHomeAsync(home, async () => {
-    // no rendezvous socket, no tmux window: every poke this send can attempt fails. Delivery is the append,
-    // so the caller is told the truth — the bytes ARE in the log — and the turn-boundary reader will show it.
-    const r = await sendText(ID, 'the poke will fail')
+    // no rendezvous socket, no tmux window: the handover cannot happen. Acceptance is the write, so the caller
+    // is told the truth — the bytes ARE in the log — and the debt is what carries the retry.
+    const r = await sendText(ID, 'the insert will fail')
     assert.deepEqual(r, { ok: true })
     const evs = timelineEvents(ID).filter((e) => e.kind === 'sent')
     assert.equal(evs.length, 1)
-    assert.equal(evs[0].kind === 'sent' && evs[0].text, 'the poke will fail')
-    // a failed poke showed the agent nothing, so the line stays UNREAD for the turn-boundary reader
-    assert.equal(inboxCursor(ID), 0)
+    assert.equal(evs[0].kind === 'sent' && evs[0].text, 'the insert will fail')
+    assert.equal(pendingMessages(ID).length, 1, 'nothing was handed over, so the session still owes it')
   })
 })
 
-test('an accepted rendezvous poke never consumes the durable line on the sender side', async () => {
+// THE regression this module exists to prevent. A landed handover must SETTLE the debt: when it did not, every
+// message was replayed to the agent at its next turn boundary on top of arriving normally — delivered twice.
+test('an accepted adapter insert settles the debt, so nothing is ever handed over twice', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
   seedSessionRecord(home)
   await withHomeAsync(home, async () => {
@@ -303,10 +304,11 @@ test('an accepted rendezvous poke never consumes the durable line on the sender 
       server.listen(sock, resolve)
     })
     try {
-      assert.deepEqual(await sendText(ID, 'the listener only accepted a poke'), { ok: true })
+      assert.deepEqual(await sendText(ID, 'the listener took the insert'), { ok: true })
       await receivedReply
-      assert.match(received, /the listener only accepted a poke/)
-      assert.equal(inboxCursor(ID), 0, 'only the target turn-boundary reader may consume the line')
+      assert.match(received, /the listener took the insert/)
+      assert.deepEqual(pendingMessages(ID), [], 'a landed insert owes nothing further')
+      assert.equal(timelineEvents(ID).filter((e) => e.kind === 'sent').length, 1, 'and the log still records it once')
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()))
       rmSync(sock, { force: true })

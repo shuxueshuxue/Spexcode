@@ -282,7 +282,7 @@ export interface Harness {
   // write one idempotent rendezvous reply; Codex uses JSON-RPC on the same app-server WebSocket the
   // visible TUI uses — it reads the thread live and either `turn/steer`s the message INTO an in-progress turn
   // (mid-turn, not queued for after the agent stops) or `turn/start`s a fresh turn when the thread is idle.
-  // `ok=false` leaves the durable timeline line for the turn-boundary reader.
+  // `ok=false` leaves the message OWED on the session's delivery queue, for a later pass to hand over.
   deliver(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult>
   // Observe native turn failures that this harness does not expose as a lifecycle hook. The adapter owns the
   // transport subscription; sessions owns observer reconciliation and the active-only lifecycle CAS.

@@ -102,15 +102,16 @@ test('a message arriving for the follower returns it — that is the other thing
   assert.deepEqual(r, { mail: { from: 'someone-else', text: 'the merge landed' } })
 })
 
-// The inbox cursor belongs to the turn-boundary hook, which is the one reader that actually SHOWS the mail.
-// A wait that advanced it would wake on a message the agent is then never given.
-test('waking on mail never advances the inbox cursor', async () => {
+// A wait that STOPS on an event leaves it unread, so the next wait resumes on it rather than skipping past.
+// Watching one's own log is a watch, never a handover — the agent gets the message as a prompt
+// ([[delivery-queue]]), so this position cannot make it miss mail either way.
+test('waking on mail leaves the follower own-log position where it was', async () => {
   freshHome()
   sent(ME, 'unread')
   const r = await followSessions(() => {}, { targets: () => [T], self: ME, take: true, timeoutMs: 1000, intervalMs: 5 })
   assert.ok('mail' in r)
-  const { readCursors } = await import('./session-cursors.js')
-  assert.equal(readCursors(ME).inbox, 0, 'the inbox position is the hook\'s to move')
+  const { followCursor } = await import('./session-cursors.js')
+  assert.equal(followCursor(ME, ME) ?? 0, 0, 'the event it stopped on stays unread')
 })
 
 test('a follow with no session record of its own keeps its cursors in memory and still works', async () => {

@@ -17,17 +17,17 @@ scenarios:
       Measured at N=3: 4 lines per move (and the live store, with 5 observers, showed 6). After: 6 moves,
       6 lines. The read surface therefore returns the log as it is, with no adjacent-duplicate folding to
       hide the defect, and an unknown id still answers 404.
-  - name: append-is-the-delivery
+  - name: the-append-accepts
     tags: [backend-api, cli]
     description: >
       On an ISOLATED store, send to a governed session whose harness adapter CANNOT be reached (no
       rendezvous socket, no tmux window), and separately to a RETIRED session whose worktree directory has
-      been removed. Read each session's timeline.ndjson and its cursors.json afterwards. Then send to an id
+      been removed. Read each session's timeline.ndjson and its delivery queue afterwards. Then send to an id
       with no record at all.
     expected: |
-      Both sends report success and both messages are in the log: delivery is the append, and the failed
-      poke only decides whether the agent sees it this turn or at its next turn boundary. The unreachable
-      target's inbox cursor does NOT advance, so the line stays unread for the turn-boundary reader. The
+      Both sends report success and both messages are in the log: acceptance is the write, and the failed
+      handover only decides whether the agent sees it this turn or after a retry. The unreachable target
+      still OWES its message — the entry stays on its delivery queue, and no cursor moves anywhere. The
       retired session receives too — the record gate governs the lifecycle axis (it still refuses to be
       marked active), while a message it cannot act on must still leave a trace. Only the unknown id fails,
       loudly, and records nothing.

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { git, gitA, gitTry, headSha } from '../../spec-cli/src/git.js'
+import { batchBlobTexts, batchRevisionOids, git, gitA, gitTry, headSha } from '../../spec-cli/src/git.js'
 import { parseScenarios } from './scenarios.js'
 import { rootSlots, touchRoot as touchRootLru } from '../../spec-cli/src/root-lru.js'
 
@@ -184,6 +184,33 @@ async function oidAtAsync(root: string, rev: string, path: string): Promise<stri
   return flight
 }
 
+
+// @@@ the PLURAL prime, mirroring the anchor probe's - a caller hands over every (rev, path) its whole read
+// will ask about and TWO children answer them all: `cat-file --batch-check` for the object ids, then
+// `cat-file --batch` for the blobs. The singular form below is one demand's worth of the same thing, kept
+// for callers that genuinely learn their demand one at a time. Priming one at a time is what this replaces:
+// on adopter-a's 415-node scope it forked 1212 `rev-parse` children plus a `cat-file` each, and the batch
+// answers the identical set — same oids, same blocks, same verdicts, two children.
+export async function primeScenarioBlocks(root: string, demands: readonly { rev: string; path: string }[]): Promise<void> {
+  const wanted = new Map<string, { rev: string; path: string }>()
+  for (const d of demands) {
+    if (!FULL_SHA.test(d.rev) || !d.path) continue   // a symbolic rev is never memoized, so it can't ride a batch
+    const k = `${root}\x1f${d.rev}\x1f${d.path}`
+    if (!oidMemo.has(k) && !wanted.has(k)) wanted.set(k, d)
+  }
+  if (!wanted.size) return
+  const keys = [...wanted.keys()]
+  const rows = [...wanted.values()]
+  const oids = await batchRevisionOids(root, rows.map((d) => `${d.rev}:${d.path}`))
+  oids.forEach((oid, i) => {
+    oidMemo.set(keys[i], oid ?? '')
+    if (oidMemo.size > 4096) oidMemo.delete(oidMemo.keys().next().value!)
+  })
+  const missing = [...new Set(oids.filter((o): o is string => !!o && !blockByOid.has(o)))]
+  if (!missing.length) return
+  const texts = await batchBlobTexts(root, missing)
+  for (const [oid, src] of texts) if (src) blockByOid.set(oid, blockContent(src))
+}
 
 // the blob read needs the same flight as the oid lookup above it: an oid is content, so two primes that
 // resolved the same one must not each read it.

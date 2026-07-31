@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, renameSync, chmodSync, readFileS
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { scenarioIndex, scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt } from './scenariofresh.js'
+import { scenarioIndex, scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, primeScenarioBlocks } from './scenariofresh.js'
 
 // The scenario axis is SEMANTIC: only a scenario's measurement contract (description + expected) stales its
 // readings. Routing/coverage metadata — tags, test, code, related — is outside the projection, so a
@@ -98,6 +98,52 @@ test('off-history probe joins the in-flight child: concurrent primes for one (sh
   const revParse = calls.filter((line) => line.includes('rev-parse'))
   assert.equal(revParse.length, 1, `8 concurrent primes must fork ONE rev-parse, forked ${revParse.length}`)
   assert.ok(calls.filter((line) => line.includes('cat-file')).length <= 1, 'the blob read joins the same flight')
+})
+
+// @@@ the plural prime, pinned by cost - joining an in-flight child removes DUPLICATES; it does nothing
+// about a read that legitimately names many distinct (rev, path) pairs. adopter-a's 415-node scope names 1212
+// of them, and one-at-a-time that is 1212 `rev-parse` children plus a `cat-file` each. Git answers the whole
+// set on two batch children, so the child count must stop tracking the demand count.
+test('scenario blocks prime PLURALLY: child count does not track demand count', async () => {
+  // one scratch repo per N, so neither run can answer from the other's memo
+  const build = (versions: number) => {
+    const dir = repo()
+    const revs = [commitYatsu(dir, V1, 'v1')]
+    for (let i = 2; i <= versions; i++)
+      revs.push(commitYatsu(dir, scenario(`    tags: [cli]\n    description: check the thing\n    expected: it works x${i}\n`), `v${i}`))
+    return { dir, revs }
+  }
+  const census = async (dir: string, demands: { rev: string; path: string }[]) => {
+    const realGit = sh(dir, 'sh', ['-c', 'command -v git'])
+    const shim = mkdtempSync(join(tmpdir(), 'scenariofresh-plural-'))
+    const log = join(shim, 'calls.log')
+    writeFileSync(join(shim, 'git'), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${log}'\nexec '${realGit}' "$@"\n`)
+    chmodSync(join(shim, 'git'), 0o755)
+    const savedPath = process.env.PATH
+    process.env.PATH = `${shim}:${savedPath ?? ''}`
+    try { await primeScenarioBlocks(dir, demands) } finally { process.env.PATH = savedPath }
+    return existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean) : []
+  }
+
+  const small = build(3)
+  const large = build(9)
+  const few = await census(small.dir, small.revs.map((rev) => ({ rev, path: YATSU })))
+  const many = await census(large.dir, large.revs.map((rev) => ({ rev, path: YATSU })))
+
+  assert.equal(many.length, few.length,
+    `9 demands must cost what 3 do — ${few.length} vs ${many.length}: ${many.join(' | ')}`)
+  assert.equal(many.filter((line) => /rev-parse [0-9a-f]{40}:/.test(line)).length, 0,
+    'no per-demand `rev-parse <rev>:<path>` child survives the batch')
+  assert.equal(many.filter((line) => line.includes('cat-file')).length, 2,
+    'exactly two children answer the whole set: --batch-check for the oids, --batch for the blobs')
+
+  // and the batch primed the SAME blocks the singular path resolves — prove it by making the repo
+  // unreadable, exactly as the memo test above does: every answer must come from what the batch left.
+  renameSync(join(large.dir, '.git'), join(large.dir, '.git-gone'))
+  assert.equal(scenarioBlocksAt(large.dir, large.revs[0], YATSU)?.get('s'),
+    JSON.stringify({ d: 'check the thing', e: 'it works' }))
+  assert.equal(scenarioBlocksAt(large.dir, large.revs[8], YATSU)?.get('s'),
+    JSON.stringify({ d: 'check the thing', e: 'it works x9' }))
 })
 
 // @@@ archive-pathspec regression — the yatsu.md→eval.md migration must not false-stale history

@@ -81,6 +81,16 @@ children for ~800 verdicts on this corpus. Verdicts stay keyed by (anchor, path,
 before, so the batch changes only cost: a batched read and a reading-at-a-time read return the same verdicts,
 and that equality is what any faster path owes.
 
+**The scenario-block read is plural on the same terms.** Deciding whether a scenario's semantic block moved
+between an anchor and HEAD needs that eval.md's object id at both revisions and then its bytes — and asking
+per reading is the identical defect one level down: on a 415-node session scope it billed 1212 `rev-parse`
+children plus a blob read each. Git answers an arbitrary set of `rev:path` lookups on one `cat-file
+--batch-check` and their bytes on one `cat-file --batch`, so the whole read's demand costs two children and
+the child count stops tracking the demand count. The content probe therefore RECORDS each block demand as it
+settles an anchor verdict and answers them together when its caller flushes. Flushing is a cost seam, not a
+correctness one: an unflushed demand falls back to the singular lookup and returns the same block, so a
+caller that learns its demands one at a time stays correct while a caller that plans a whole read pays once.
+
 The narrowing exists because **a shared file is not a shared behaviour**, and on this corpus that gap is
 expensive. `harness.ts` is ONE file carrying eight adapters, and its scenarios measure liveness, delivery,
 wake and teardown per adapter — each refreshed only by a REAL dispatched session of that harness

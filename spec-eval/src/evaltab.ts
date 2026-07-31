@@ -130,6 +130,9 @@ export async function evalTimelines(ids: readonly string[], ctx?: EvalContext): 
         .map((row) => probe.prime?.(row.reading.codeSha, row.axis.paths, plan.ynode!.evalPath))
     : []))
   await anchors.prime?.(plans.flatMap((plan) => plan.rows.map((row) => ({ sinceSha: row.reading.codeSha, entries: row.axis.entries }))))
+  // the primes above only RECORDED which eval.md blocks the assemble step will compare; one batched pair of
+  // children answers the whole read's worth, the same shape the anchor prime above already has.
+  await probe.primeBlocks?.()
 
   return plans.map((plan) => assembleTimeline(plan.id, plan.ynode, plan.rows, plan.retractions, plan.oks, {
     idx, scidx, tracks, probe, anchors,

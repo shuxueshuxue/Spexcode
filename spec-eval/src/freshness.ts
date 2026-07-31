@@ -5,7 +5,7 @@ import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ances
 import { anchorHitExists, extOf, extractorFor, extractors, resolveAnchor, resolveSelectors, type AnchorHitQuery, type Extractor, type RelationEntry, type Unit } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
 import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
-import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
+import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocks, type ScenarioIndex } from './scenariofresh.js'
 
 // the CODE axis is touch-based (DriftIndex), so a code-file rename is out of scope — the same blind spot lint's code-drift has
 
@@ -34,6 +34,9 @@ export type ContentProbe = {
   // codeDrift's display detail: commits in anchor..HEAD touching path (floored at 1 — the content differs)
   behind(anchorSha: string, path: string): number
   prime?(anchorSha: string, paths: string[], evalPath: string): Promise<void>
+  // answer every scenario-block demand `prime` recorded, in ONE batched pair of children. Optional and
+  // idempotent: an unflushed demand degrades to the singular sync lookup, never to a wrong block.
+  primeBlocks?(): Promise<void>
 }
 
 // (anchor, HEAD) name two immutable trees, so a settled verdict never invalidates — but "never invalidates"
@@ -57,6 +60,7 @@ type RootScope = {
   anchors: Map<string, AnchorVerdicts>
   behind: Map<string, number>
   behindFlight: Map<string, Promise<number>>   // the single in-flight count per (anchor, path)
+  blockDemands: Set<string>                    // (rev, evalPath) awaiting the one batched scenario-block read
 }
 const rootScopes = new Map<string, RootScope>()
 // Roots come and go (a closed worktree never asks again), so cap how many stay warm — the same bounded-slot
@@ -70,7 +74,7 @@ function scopeFor(rootKey: string, head: string): RootScope {
     rootScopes.set(rootKey, current)
     return current
   }
-  const scope: RootScope = { head, anchors: new Map(), behind: new Map(), behindFlight: new Map() }
+  const scope: RootScope = { head, anchors: new Map(), behind: new Map(), behindFlight: new Map(), blockDemands: new Set() }
   rootScopes.set(rootKey, scope)
   while (rootScopes.size > ROOT_SLOTS) {
     const oldest = rootScopes.keys().next().value
@@ -247,7 +251,23 @@ export function contentProbeFor(root: string): ContentProbe {
         if (entry.verdicts.get(path) !== true) continue
         await behindCount(root, scope, sha, current, path)
       }
-      if (entry.verdicts.get(evalPath) === true) await primeScenarioBlocksAt(root, [sha, current], evalPath)
+      // RECORD the scenario-block demand; primeBlocks() below answers the whole read's worth in two
+      // children. A caller that never flushes still reads correct blocks — scenarioDiffers falls back to
+      // the singular sync lookup — so this is a cost seam, not a correctness one.
+      if (entry.verdicts.get(evalPath) === true) {
+        scope.blockDemands.add(`${sha}\x1f${evalPath}`)
+        scope.blockDemands.add(`${current}\x1f${evalPath}`)
+      }
+    },
+    async primeBlocks() {
+      const scope = currentScope(rootKey, headOf())
+      if (!scope?.blockDemands.size) return
+      const demands = [...scope.blockDemands].map((k) => {
+        const cut = k.indexOf('\x1f')
+        return { rev: k.slice(0, cut), path: k.slice(cut + 1) }
+      })
+      scope.blockDemands.clear()
+      await primeScenarioBlocks(root, demands)
     },
     changed(sha, path) {
       // The async prime owns all I/O. An unprimed path is 'can't testify', never a fresh sync diff: a miss

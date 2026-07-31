@@ -1875,7 +1875,9 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
       const resourceLock = sessionCandidateLockId(path, branch)
       return await withRecordLock(resourceLock, async () => {
         throwIfCreateAborted(signal, phase)
+        traceSessionCreate(id, requestDigest, phase, 'start', 'candidate-state')
         let before = await sessionCandidateState(root, path, branch, signal)
+        traceSessionCreate(id, requestDigest, phase, 'finish', 'candidate-state')
         let storePresent = existsSync(sessionStoreDir(id))
         const durable = readSessionCandidateReceipt(id)
         if (durable.kind === 'invalid') throw new SessionCreateError('session_create_failed', phase, durable.error, 409)
@@ -1907,10 +1909,12 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
         let published = false
         try {
           gitMutationStarted = true
+          traceSessionCreate(id, requestDigest, phase, 'start', 'worktree-add')
           const added = await withGitAbortSignal(signal, () => gitTry(
             ['-C', root, 'worktree', 'add', '-b', branch, path, mainBranch()],
             { extraEnv: DEFER_FOOTPRINT_REFRESH },
           ))
+          traceSessionCreate(id, requestDigest, phase, 'finish', 'worktree-add')
           if (added.ok) Object.assign(owned, { path: true, worktree: true, branch: true })
           if (!added.ok || !existsSync(path)) {
             throw new SessionCreateError('session_create_failed', phase, `git worktree add failed: ${added.stderr.trim() || added.failure || 'worktree missing after success'}`, 500)
@@ -1918,7 +1922,9 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           candidateReceipt = { ...candidateReceipt, stage: 'git-created' }
           writeSessionCandidateReceipt(id, candidateReceipt)
           traceSessionCreate(id, requestDigest, phase, 'finish')
+          traceSessionCreate(id, requestDigest, phase, 'start', 'seed-worktree-host-state')
           seedWorktreeHostState(root, path)
+          traceSessionCreate(id, requestDigest, phase, 'finish', 'seed-worktree-host-state')
 
           let rec: SessRec = {
             session: id, governed: true, worktreePath: path, branch,

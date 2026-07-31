@@ -204,6 +204,8 @@ test('a fresh selected-harness default drives no-choice session creation and pin
 test('post-checkout defers only the session-owned refresh', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, env, spex } = freshRepo()
   spex('init', '.', '--harness', 'codex')
+  assert.match(readFileSync(join(proj, '.git', 'hooks', 'post-checkout'), 'utf8'), /^#!\/usr\/bin\/env bash\n# spexcode-managed-hook-v1\n/,
+    'fresh post-checkout installs a managed snapshot so a later init can refresh it')
   const bin = mkdtempSync(join(tmpdir(), 'spex-post-checkout-bin-'))
   const trace = join(proj, 'post-checkout.trace')
   const fakeSpex = join(bin, 'spex')
@@ -232,12 +234,12 @@ test('a pre-existing retired render field is ignored with a loud notice — init
   assert.ok(readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8').includes('spexcode:start'), 'one residence behavior regardless of the field')
 })
 
-test('real init refreshes exact legacy Spex hooks, preserves a custom commit-msg, and never probes it', { skip: !gitAvailable() && 'git not available' }, () => {
+test('re-init refreshes managed Spex hooks, preserves a custom commit-msg, and never probes it', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex } = freshRepo()
   const hooks = join(proj, '.git', 'hooks')
-  const legacy = (name: string) => execFileSync('git', ['-C', SRC, 'show', `56d93f68^:spec-cli/templates/hooks/${name}`], { encoding: 'utf8' })
-  writeFileSync(join(hooks, 'pre-commit'), legacy('pre-commit'))
-  writeFileSync(join(hooks, 'prepare-commit-msg'), legacy('prepare-commit-msg'))
+  spex('init', '.', '--harness', 'claude')
+  writeFileSync(join(hooks, 'pre-commit'), '#!/usr/bin/env bash\n# spexcode-managed-hook-v1\nexit 0\n')
+  writeFileSync(join(hooks, 'prepare-commit-msg'), '#!/usr/bin/env bash\n# spexcode-managed-hook-v1\nexit 0\n')
   chmodSync(join(hooks, 'pre-commit'), 0o755)
   chmodSync(join(hooks, 'prepare-commit-msg'), 0o755)
   const calls = join(proj, 'custom-commit-msg.calls')

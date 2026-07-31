@@ -22,6 +22,19 @@ scenarios:
       succeeds, proving their walls are independent. A large fake record store does not cause settings or
       layout work on the authority path.
     test: spec-cli/src/session-create-cli.test.ts
+  - name: session-create-materializes-once
+    tags: [backend-api, cli]
+    code: spec-cli/src/sessions.ts
+    description: >
+      In an isolated real Git project with SpexCode's post-checkout hook installed, create a session through
+      the real backend API. Record hook invocations and the child environment at `git worktree add`; also
+      create an ordinary linked worktree without the session-creation marker.
+    expected: >
+      The session-created worktree reaches its post-seed explicit materialize exactly once under the creation
+      transaction: `git worktree add` carries the scoped defer marker and its post-checkout hook performs no
+      competing refresh. An ordinary linked worktree carries no marker and still invokes the normal refresh.
+      Thus local state is present before the sole creation render without globally disabling Git hooks.
+    test: spec-cli/src/session-create-transaction.test.ts
   - name: a-dead-leaf-never-wedges-a-session
     tags: [backend-api, cli]
     code: spec-cli/src/sessions.ts

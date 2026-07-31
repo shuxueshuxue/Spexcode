@@ -42,7 +42,7 @@ test('public session create is bounded, rollback-clean, idempotent, and publishe
   const killAfterGit = join(root, 'kill-after-git'), killAfterStore = join(root, 'kill-after-store')
   const blockReceiptRetire = join(root, 'block-receipt-retire')
   const materializeFailure = join(root, 'materialize-failure')
-  const launcher = join(root, 'stall-launcher'), gitWrapper = join(fakeBin, 'git')
+  const launcher = join(root, 'stall-launcher'), gitWrapper = join(fakeBin, 'git'), fakeSpex = join(fakeBin, 'spex')
   const candidateDir = join(home, 'projects', project.replace(/[/.]/g, '-'), '.session-create-candidates')
   const tmux = `spex-create-${process.pid}-${Date.now()}`, port = await freePort(), base = `http://127.0.0.1:${port}`
   mkdirSync(fakeBin)
@@ -58,10 +58,11 @@ test('public session create is bounded, rollback-clean, idempotent, and publishe
   writeFileSync(join(project, 'README.md'), 'fixture\n')
   writeFileSync(join(project, '.gitignore'), 'host-ignore\n')
   writeFileSync(launcher, '#!/bin/sh\nprintf "%s launcher pid=%s\\n" "$(date -Iseconds)" "$$" >> "$SPEX_CREATE_TRACE"\nsleep 30\n')
+  writeFileSync(fakeSpex, '#!/bin/sh\nprintf "%s hook-spex args=%s\\n" "$(date -Iseconds)" "$*" >> "$SPEX_CREATE_TRACE"\n')
   writeFileSync(gitWrapper, `#!/bin/sh
 case " $* " in
   *" worktree add "*)
-    printf '%s git-start pid=%s args=%s\\n' "$(date -Iseconds)" "$$" "$*" >> "$SPEX_CREATE_TRACE"
+    printf '%s git-start pid=%s defer=%s args=%s\\n' "$(date -Iseconds)" "$$" "\${SPEXCODE_DEFER_FOOTPRINT_REFRESH:-}" "$*" >> "$SPEX_CREATE_TRACE"
     if [ -e "$SPEX_CREATE_STALL_GIT" ]; then sleep 30; else
       ${JSON.stringify(execFileSync('which', ['git'], { encoding: 'utf8' }).trim())} "$@" || exit $?
       if [ -e "$SPEX_CREATE_MISMATCH_GIT" ]; then
@@ -96,13 +97,16 @@ case " $* " in
     exec ${JSON.stringify(execFileSync('which', ['git'], { encoding: 'utf8' }).trim())} "$@" ;;
 esac
 `)
-  chmodSync(launcher, 0o755); chmodSync(gitWrapper, 0o755)
+  chmodSync(launcher, 0o755); chmodSync(gitWrapper, 0o755); chmodSync(fakeSpex, 0o755)
   execFileSync('git', ['init', '-q', '-b', 'staging'], { cwd: project })
   execFileSync('git', ['-c', 'user.name=create-fixture', '-c', 'user.email=create@example.test', 'add', '.'], { cwd: project })
   execFileSync('git', ['-c', 'user.name=create-fixture', '-c', 'user.email=create@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
   execFileSync('git', ['branch', 'backend-host'], { cwd: project })
   execFileSync('git', ['switch', '-q', 'backend-host'], { cwd: project })
   execFileSync('git', ['worktree', 'add', '-q', configuredMain, 'staging'], { cwd: project })
+  const postCheckoutHook = join(project, '.git', 'hooks', 'post-checkout')
+  writeFileSync(postCheckoutHook, readFileSync(join(pkg, 'templates', 'hooks', 'post-checkout')))
+  chmodSync(postCheckoutHook, 0o755)
   writeFileSync(stallGit, 'stall\n')
 
   let logs = ''
@@ -226,6 +230,15 @@ esac
     assert.deepEqual((await rows()).map((row) => row.id), [a.id])
     assert.deepEqual(sessionDirs(), [a.id])
     assert.equal(worktrees(), 3)
+    assert.match(readFileSync(trace, 'utf8'), /git-start .*defer=session-create .*worktree add/, 'session creation defers the post-checkout refresh to its explicit materialize phase')
+    assert.doesNotMatch(readFileSync(trace, 'utf8'), /hook-spex args=/, 'the session-owned post-checkout hook does not compete with the explicit materialize')
+    const ordinaryPath = join(root, 'ordinary-hook-worktree')
+    const ordinaryEnv: Record<string, string | undefined> = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, SPEX_CREATE_TRACE: trace }
+    delete ordinaryEnv.SPEXCODE_DEFER_FOOTPRINT_REFRESH
+    execFileSync('git', ['-C', project, 'worktree', 'add', '-b', 'ordinary-hook', ordinaryPath, 'staging'], { env: ordinaryEnv })
+    assert.match(readFileSync(trace, 'utf8'), /hook-spex args=internal refresh-footprint/, 'an ordinary worktree still invokes the post-checkout refresh')
+    execFileSync('git', ['-C', project, 'worktree', 'remove', '--force', ordinaryPath], { env: ordinaryEnv })
+    execFileSync('git', ['-C', project, 'branch', '-D', 'ordinary-hook'], { env: ordinaryEnv })
 
     const conflict = await post(key, 'different payload')
     const conflictBody = await conflict.json() as any

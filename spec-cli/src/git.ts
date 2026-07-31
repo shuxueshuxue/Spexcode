@@ -826,8 +826,12 @@ async function identityRawEventStream(root: string, tip: string, request: EventS
   return value as IdentityRawRecord[]
 }
 export type GitTryFailure = 'exit' | 'spawn' | 'timeout'
-export async function gitTry(args: string[], options: { indexFile?: string } = {}): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
+export async function gitTry(args: string[], options: { indexFile?: string; extraEnv?: Record<string, string | undefined> } = {}): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
   const env = { ...process.env }
+  for (const [key, value] of Object.entries(options.extraEnv ?? {})) {
+    if (value === undefined) delete env[key]
+    else env[key] = value
+  }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
   if (options.indexFile) env.GIT_INDEX_FILE = options.indexFile
   const context = inheritedContext()

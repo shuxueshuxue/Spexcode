@@ -38,7 +38,9 @@ verbs (`spex init`, `spex materialize`), session-worktree creation, and the plan
 post-checkout / post-merge hooks — pre-commit's materialize is UNCONDITIONAL, so every materialize input
 (`.plugins` content, the persisted `spexcode.json`/`spexcode.local.json`, a contract file's trackedness, a
 toolchain update) is picked up no later than the next commit, and checkout/merge refresh what arrives from
-other branches. A harness event is never a trigger — the old dispatcher content-hash gate is retired, and
+other branches. Session creation is its own one-render transaction: it defers the checkout hook's best-effort
+refresh, copies the local snapshot, then materializes once under the creation failure/recovery boundary. A
+harness event is never a trigger — the old dispatcher content-hash gate is retired, and
 `.plugins` edits are git-transactional (they take effect at the commit/checkout/merge that carries them,
 like any other source). An environment with no planted hooks (CI, a cloud agent's fresh clone) runs
 `spex materialize` in its setup step. It materializes into the harness targets

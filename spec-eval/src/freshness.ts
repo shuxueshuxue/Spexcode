@@ -319,6 +319,18 @@ function entryUnverifiable(root: string, regs: Extractor[], entry: RelationEntry
   return null
 }
 
+// @@@ the verify sweep must reach the MACROTASK queue - resolving every reading's `code:` selectors against
+// the working tree is a doubly-nested SYNCHRONOUS sweep (4,384 demands on this corpus), and nothing in it
+// awaits, so it ran as one uninterruptible stretch: measured, it held the loop for 1,104ms, which is the
+// `/health` p99 this gate is judged by. The bound defended here is a LIVENESS signal, not a latency taste —
+// a probe that cannot answer is indistinguishable from a dead backend, and the CLI allows it 600ms while the
+// supervisor allows 1,000ms before it keeps the old child. `setImmediate` is what actually returns to the
+// loop's I/O phase (awaiting a synchronous-bodied async fn only drains microtasks). A time budget rather
+// than every-iteration keeps the common cheap iteration from paying a turn: the sweep's own longest single
+// step is one file parse, so the worst hold stays near budget + that step.
+const VERIFY_YIELD_BUDGET_MS = Number(process.env.SPEXCODE_VERIFY_YIELD_BUDGET_MS || 50)
+const yieldToEventLoop = (): Promise<void> => new Promise<void>((resolve) => { setImmediate(resolve) })
+
 export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
   const regs = extractors(root)
   const verdicts = new Map<string, boolean>()
@@ -327,7 +339,9 @@ export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
       const keys: string[] = []
       const queries: AnchorHitQuery[] = []
       const queued = new Set<string>()
+      let sinceYield = Date.now()
       for (const { sinceSha, entries } of demands) for (const e of entries) {
+        if (Date.now() - sinceYield >= VERIFY_YIELD_BUDGET_MS) { await yieldToEventLoop(); sinceYield = Date.now() }
         if (!e.selectors.length) continue
         const key = anchorKey(sinceSha, e.path, e.selectors)
         if (verdicts.has(key) || queued.has(key)) continue
@@ -339,6 +353,7 @@ export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
         keys.push(key)
         queries.push({ win, symbols: [...e.selectors] })
       }
+
       if (!queries.length) return
       const results = await anchorHitExists(root, queries, regs)
       results.forEach((hit, index) => verdicts.set(keys[index], hit))

@@ -73,3 +73,44 @@ Spec: packaging
 把派发环境的 Node 与 `.nvmrc` 对齐之后，红重新变成信号。**这条 issue 真正在买的是"红有意义"这件事本身**，而不是那一条 rig 的绿。
 
 （相邻但不同：`github#75` pty-bridge 环境性失败、`codex-launch-harness-test-ts-…` 断言漂移，也在往同一个筐里加噪声。如果要处理"trunk 上长期红"这一类，它们应当被一起看待——但每一条的修法不同，不要合并成一条。）
+
+<!-- reply: da103a36-07c4-4e77-9d85-006462ae68b8 @ 2026-07-31T05:36:23.992Z -->
+**订正：我在这条 issue 里用作论据的「45 条既有失败」归因错了。它们不是 Node 版本造成的。**
+
+## 实测
+
+在一个派发出来的 worktree 里，Node **22**（显式前置钉住版本）下跑 spec-cli 全量：
+
+    552 tests · 507 pass · 45 fail
+
+一条失败的完整错误：
+
+    error: 'spawnSync /home/jeffry/spexcode/.worktrees/<wt>/spec-cli/node_modules/.bin/tsx ENOENT'
+    code:  'ENOENT'
+    stack: Object.spawnSync → execFileSync → spex (init.test.ts:53)
+
+也就是说：测试台会 spawn `spec-cli/node_modules/.bin/tsx` 这个子进程，而**派发出来的 worktree 里根本没有 `spec-cli/node_modules`**（worktree 不带 node_modules，通常只有人手工软链了包根那一层）。补上这一个软链之后，**同一棵树、同一个 Node 22**：
+
+    552 tests · 551 pass · 0 fail
+
+（第二次全量复跑同样 0 fail；曾出现过一次 2 fail，单独跑那个文件 4/4 通过、耗时 15992ms，是并发下的超时抖动，与本条无关。）
+
+## 所以这条 issue 里哪些仍然成立、哪些不成立
+
+**仍然成立（这条 issue 的本体）**：派发环境跑 v24.15.0 而仓库 `.nvmrc` 钉 22，且 `nvm use 22` 在这里不生效。它确实造成**一条**幻影失败——`scoped HTTP session impact is the selector-aware exact projection`，其断言就是明写的版本闸门（`impact API rig must run on repository-pinned Node 22`）。Node 22 下 spec-eval 是 157/156 pass，Node 24 下是 155 pass。
+
+**不成立（我先前的论据）**：我在上一条回帖里写「45 条既有失败……签名是 rig 里 CLI 子进程 spawn failure，就是本条的已知幻影」。**那 45 条与本条无关**，它们是 worktree 缺少 `spec-cli/node_modules` 软链。我把两个不同的环境问题并成了一个，而且是在为本条 issue 加重份量的方向上并的。
+
+## 那条系统性结论本身仍然成立，但要换支撑
+
+我写过：「一条被容忍的红，会让一个守卫失效；而守卫失效的证据，恰好就是它自己那条没人看的红。」这句仍然对，**但支撑它的实例是 `content batch: spawn failure is loud`**——那条在 trunk 上红了很久、bisect 证明是真缺陷（负 errno 覆盖 spawn 错误的字符串 code），已由 `85c6fed6` 修复，波及全仓七处判据、其中五处只在 git 缺失/不可执行的机器上可达。**不是那 45 条。**
+
+## 这里其实藏着第二个、独立的环境缺陷，值得单开
+
+**每一条被派发的 lane，只要跑 spec-cli 全量测试，都会看到 45 条与产品无关的红**，因为它的 worktree 缺一个软链。这比 Node 版本那条影响面更大（45 条 vs 1 条），而且它同样在教每条 lane 把红当常态——本条 issue 真正想说的那件事，其实这个缺陷比 Node 版本更能说明。
+
+修法方向（未实施，属提案）：worktree 创建时把包级 `node_modules` 一并软链，或让测试台在缺失时**响亮报出安装/软链指令**而不是抛一个看不出原因的 ENOENT。**不要**的修法：在测试里 try/catch 掉 spawn 失败——那会把这条环境缺陷变成静默。
+
+## 方法论
+
+我上一条回帖是在**没有单独验证那 45 条签名**的情况下，把它们并进本条 issue 当论据的。真正的签名读一眼就能分辨（`.bin/tsx ENOENT` 与 Node 版本无关）。这与本线程反复出现的失效模式同型：**从不完整的枚举下结论**——我枚举了「红」，没枚举「红的原因」。

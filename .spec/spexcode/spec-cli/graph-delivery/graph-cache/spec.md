@@ -211,8 +211,13 @@ sample fell 1,122ms → 507/530/552ms, and no sample exceeds the 600ms the CLI j
 
 What remains is a floor, not a residue: **the longest indivisible step is one parse of the largest governed
 file, measured at 440ms**, and no yield can subdivide a single `createSourceFile`. So a scenario bound
-stricter than that cannot be met by scheduling alone — only by moving extraction off the event-loop thread,
-which is its own decision with its own costs (a compiler instance and the image bytes per worker).
+stricter than that cannot be met by scheduling alone — only by moving extraction off the event-loop thread.
+That option is now costed too, and it is decided against for the same reason as the durable ledger: not
+because a worker is expensive, but because the floor is paid ONCE. Measured across four consecutive builds in
+one process, the sweep's longest uninterrupted hold is 457ms on the first and 50/55/53ms on the rest — the
+yield budget itself, an order of magnitude under every threshold that acts on this signal. A long-lived
+backend rebuilds on every commit and every issue write and pays only the second number; the first is a
+process-start event. Buying worker infrastructure to shorten one startup does not buy itself back.
 
 **How that equality may be measured is part of the obligation, because the board is NOT byte-reproducible
 run to run on a live corpus.** Two runs of the SAME binary against a checkout that carries worktrees and

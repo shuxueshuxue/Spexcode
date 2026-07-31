@@ -7,6 +7,7 @@ import { runtimeRoot, readConfig, mainCheckout } from './layout.js'
 import { resolveHarnessTargets } from './harness-select.js'
 import { loadSkillConfig, loadAgentConfig } from './specs.js'
 import { dematerialize } from './materialize.js'
+import { gitBinary } from './git.js'
 
 // the standard plugin-host folders a host agent scans (in addition to any named in spexcode.json's `harnesses`).
 const DEFAULT_PLUGIN_HOSTS = ['.claude', '.codex', '.adopter-a'] as const
@@ -71,7 +72,7 @@ function pluginLedgerHosts(store: string): string[] {
 // resolve the repo's shared git hooks dir (the common dir's hooks/), or null when <dir> isn't a git repo.
 function hooksDir(proj: string): string | null {
   try {
-    const common = execFileSync('git', ['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
+    const common = execFileSync(gitBinary(process.env), ['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim()

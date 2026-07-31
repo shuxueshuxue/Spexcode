@@ -5,6 +5,7 @@ hue: 200
 desc: The seam that turns a git invocation into a truthful result — and, when it fails, into a failure that still says WHICH kind it was, so no caller can mistake "git could not run" for "git ran and said no".
 code:
   - spec-cli/src/git.ts#execGit
+  - spec-cli/src/git.ts#gitBinary
 related:
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts
@@ -30,6 +31,14 @@ started still emits `close`, and the code it reports there is the negated errno 
 That number is not an exit status and must never be written over the spawn error's `'EACCES'`/`'ENOENT'`,
 because the classification above this seam is exactly `typeof code === 'number' ? 'exit' : 'spawn'`: overwrite
 it and a failure to RUN git is delivered as a git that ran and exited.
+
+The executable is resolved from the child environment's `PATH` before the first spawn and reused only while
+that exact `PATH` still names an executable at the cached location. All sync and async paths consume this one
+resolved path, so one materialize with many small Git queries does not repeat the shell's whole PATH search for
+every child. The cache key is the PATH itself, not process-global identity: a caller that supplies a Git wrapper
+through a different child environment receives that wrapper, and removing a cached executable makes the next
+call resolve the current PATH again. Resolution failure remains a spawn-class machine failure, never a Git
+negative answer.
 
 The consequence was not theoretical. Callers separating the two read the mislabelled failure as a real git
 answer — the freshness content batch concluded "the anchor commit object is unreadable" and marked the anchor

@@ -1,9 +1,10 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync, existsSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, chmodSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { git } from './git.js'
+import { git, gitBinary } from './git.js'
 import { writeManagedBlock, removeManagedBlock } from './harness.js'
 import { encodeProject, runtimeRoot, treeSlotDir } from './layout.js'
+import { writeFileIfChanged } from './file-write.js'
 
 // the three field-sharpened edges this module owes ([[content-filter]]):
 //   ① the configured command points at a STABLE shim path and degrades to `cat` (identity) when the shim is
@@ -94,33 +95,54 @@ const filterCmd = (shim: string, mode: 'smudge' | 'clean') =>
 
 // plant (or refresh) the filter for the given contract files (tracked, or untracked-with-host-content —
 // pre-armed): the shim + the block content it smudges, the per-clone git config, and the attribute lines
-// binding each file to the filter. Idempotent — every write is a full replace. `contract` is the assembled
-// block body (guide + surface:system). settleIndexStat skips untracked entries (no index blob) by design.
-export function plantContractFilter(proj: string, payloads: ContractFilterPayload[], bindings: ContractFilterBinding[]): void {
+// binding each file to the filter. `contract` is the assembled block body (guide + surface:system).
+// settleIndexStat skips untracked entries (no index blob) by design and only runs after a real filter change.
+export function plantContractFilter(proj: string, payloads: ContractFilterPayload[], bindings: ContractFilterBinding[], changedFiles: readonly string[] = []): boolean {
   const common = commonDirOf(proj)
   mkdirSync(filterDir(common), { recursive: true })
-  writeFileSync(shimPath(common), SHIM)
-  chmodSync(shimPath(common), 0o755)
-  git(['-C', proj, 'config', 'filter.spexcode.smudge', filterCmd(shimPath(common), 'smudge')])
-  git(['-C', proj, 'config', 'filter.spexcode.clean', filterCmd(shimPath(common), 'clean')])
-  writeFileSync(bindingsPath(common), bindings.map((b) => `${b.file}\t${b.start}\t${b.end}`).join('\n') + '\n')
+  let changed = writeFileIfChanged(shimPath(common), SHIM)
+  if (changed || (statSync(shimPath(common)).mode & 0o777) !== 0o755) chmodSync(shimPath(common), 0o755)
+  const commands = new Map([
+    ['filter.spexcode.smudge', filterCmd(shimPath(common), 'smudge')],
+    ['filter.spexcode.clean', filterCmd(shimPath(common), 'clean')],
+  ])
+  const configured = new Map<string, string>()
+  try {
+    for (const row of git(['-C', proj, 'config', '--get-regexp', '^filter\\.spexcode\\.(smudge|clean)$']).trimEnd().split('\n')) {
+      const at = row.indexOf(' ')
+      if (at > 0) configured.set(row.slice(0, at), row.slice(at + 1))
+    }
+  } catch {}
+  for (const [key, command] of commands) {
+    if (configured.get(key) === command) continue
+    git(['-C', proj, 'config', key, command])
+    changed = true
+  }
+  changed = writeFileIfChanged(bindingsPath(common), bindings.map((b) => `${b.file}\t${b.start}\t${b.end}`).join('\n') + '\n') || changed
   const dir = treeFilterDir(proj)
-  rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true })
+  mkdirSync(dir, { recursive: true })
   const manifest: string[] = []
+  const wanted = new Set(['manifest'])
   for (const [i, payload] of payloads.entries()) {
     const target = join(dir, String(i))
-    writeFileSync(target, payload.content.endsWith('\n') ? payload.content : `${payload.content}\n`)
+    wanted.add(String(i))
+    changed = writeFileIfChanged(target, payload.content.endsWith('\n') ? payload.content : `${payload.content}\n`) || changed
     manifest.push(`${payload.file}\t${target}`)
   }
+  for (const entry of readdirSync(dir)) {
+    if (!wanted.has(entry)) { rmSync(join(dir, entry), { recursive: true, force: true }); changed = true }
+  }
   const manifestPath = join(dir, 'manifest')
-  writeFileSync(manifestPath, manifest.join('\n') + (manifest.length ? '\n' : ''))
-  writeFileSync(rootPath(common), `${runtimeRoot(proj)}\n`)
+  changed = writeFileIfChanged(manifestPath, manifest.join('\n') + (manifest.length ? '\n' : '')) || changed
+  changed = writeFileIfChanged(rootPath(common), `${runtimeRoot(proj)}\n`) || changed
   // Attribute patterns are checkout-relative; the stable binding set is safe in the common git dir because
   // the driver selects a payload from the invoking checkout's tree slot.
   const entries = bindings.map((b) => `/${b.file} filter=spexcode`).sort().join('\n')
   mkdirSync(join(common, 'info'), { recursive: true })
-  writeManagedBlock(attributesPath(common), entries, ['# ', ''])
-  settleIndexStat(proj, payloads.map((p) => join(proj, p.file)))
+  changed = writeManagedBlock(attributesPath(common), entries, ['# ', '']) || changed
+  const settle = changed ? payloads.map((p) => join(proj, p.file)) : changedFiles
+  if (settle.length) settleIndexStat(proj, [...new Set(settle)])
+  return changed
 }
 
 // settle the index STAT for each file — the famous filtered-path phantom-`M`: git cannot verify a
@@ -139,7 +161,7 @@ export function settleIndexStat(proj: string, files: string[]): void {
     const rel = relative(proj, f)
     try {
       const indexBlob = git(['-C', proj, 'rev-parse', `:${rel}`]).trim()
-      const filtered = execFileSync('git', ['-C', proj, 'hash-object', '--path', rel, '--stdin'],
+      const filtered = execFileSync(gitBinary(env), ['-C', proj, 'hash-object', '--path', rel, '--stdin'],
         { input: readFileSync(f), env, stdio: ['pipe', 'pipe', 'ignore'] }).toString().trim()
       if (indexBlob === filtered) git(['-C', proj, 'add', '--renormalize', '--', rel])
     } catch { /* best-effort */ }

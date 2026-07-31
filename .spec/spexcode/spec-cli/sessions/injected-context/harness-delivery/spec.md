@@ -8,6 +8,7 @@ code:
   - spec-cli/src/materialize.ts#dematerialize
 related:
   - spec-cli/src/init.ts
+  - spec-cli/src/file-write.ts
 ---
 
 # harness-delivery

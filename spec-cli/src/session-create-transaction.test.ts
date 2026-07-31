@@ -288,6 +288,7 @@ esac
     assert.equal(closed.status, 200, 'close can still prove and retire the record owner')
     assert.equal((await fetch(`${base}/api/sessions/${degraded.id}`)).status, 404)
 
+    git(project, 'config', '--unset-all', 'filter.spexcode.clean')
     const configLock = join(project, '.git', 'config.lock')
     writeFileSync(configLock, 'hold the shared Git config lock\n')
     const [configLockLeft, configLockRight] = await Promise.all([post('concurrent-config-lock'), post('concurrent-config-lock')])

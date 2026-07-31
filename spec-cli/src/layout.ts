@@ -170,9 +170,27 @@ export function readUploadPolicy(root: string): UploadPolicy {
 // the shared git common dir (env-stripped git() so a hook's exported GIT_DIR can't misdirect it). Memoized:
 // it's a process constant, but mainBranch()/mainRoot() resolve it per call (~60 git rev-parse forks per board build without the cache).
 let commonDirCache: string | null = null
+const commonDirsByPath = new Map<string, string>()
+const topsByPath = new Map<string, string>()
 export function gitCommonDir(): string {
   if (commonDirCache === null) commonDirCache = git(['rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
   return commonDirCache
+}
+function commonDirFor(proj: string): string {
+  const key = resolve(proj)
+  const known = commonDirsByPath.get(key)
+  if (known) return known
+  const common = git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
+  commonDirsByPath.set(key, common)
+  return common
+}
+function topFor(proj: string): string {
+  const key = resolve(proj)
+  const known = topsByPath.get(key)
+  if (known) return known
+  const top = git(['-C', proj, 'rev-parse', '--show-toplevel']).trim()
+  topsByPath.set(key, top)
+  return top
 }
 
 export function mainBranch(): string {
@@ -186,9 +204,7 @@ export function mainBranch(): string {
 // `.codex` (codex-rs hooks_config_folder override), NOT the worktree's, so the codex hooks shim + trust
 // materialize here while AGENTS.md/skills stay per-worktree — see [[harness-adapter]] (harness.ts).
 export function mainCheckout(proj?: string): string {
-  const gcd = proj
-    ? git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
-    : gitCommonDir()
+  const gcd = proj ? commonDirFor(proj) : gitCommonDir()
   return dirname(gcd)
 }
 
@@ -222,9 +238,7 @@ export function mainRoot(proj?: string): string {
 // proj-aware for `spex init <dir>` / materialize(proj); cwd-based default for the hooks/board. The shell
 // hooks mirror this as hp_runtime_dir.
 export function runtimeRoot(proj?: string): string {
-  const gcd = proj
-    ? git(['-C', proj, 'rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
-    : gitCommonDir()
+  const gcd = proj ? commonDirFor(proj) : gitCommonDir()
   return projectRuntimeRoot(gcd)
 }
 // the per-WORKTREE materialize slot — <runtime>/trees/<enc(worktree-toplevel)> — holding the materialize
@@ -236,7 +250,7 @@ export function runtimeRoot(proj?: string): string {
 // land on the same slot from the same tree, and only from the same tree. Throws when `wt` is not a live
 // git tree (fail loud); a best-effort caller (the close-time GC) wraps it.
 export function treeSlotDir(wt: string): string {
-  const top = git(['-C', wt, 'rev-parse', '--show-toplevel']).trim()
+  const top = topFor(wt)
   return join(runtimeRoot(wt), 'trees', encodeProject(top || wt))
 }
 // this project's per-session records dir, one session's dir, its structured record, and a sibling artifact —

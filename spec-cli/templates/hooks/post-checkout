@@ -10,6 +10,8 @@
 # args: <prev-HEAD> <new-HEAD> <flag>; flag=1 is a branch checkout, flag=0 a file checkout (git checkout --
 # <path> restores files and moves nothing the materialize depends on — skip those).
 [ "${3:-0}" = "1" ] || exit 0
+# Session creation owns the one post-seed materialize in its transaction.
+[ "${SPEXCODE_DEFER_FOOTPRINT_REFRESH:-}" = "session-create" ] && exit 0
 main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
 if command -v spex >/dev/null 2>&1; then

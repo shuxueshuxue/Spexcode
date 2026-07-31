@@ -201,6 +201,28 @@ test('a fresh selected-harness default drives no-choice session creation and pin
   assert.equal(rec.launch_cmd, 'codex', 'session creation pins the plain command from the named launcher')
 })
 
+test('post-checkout defers only the session-owned refresh', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, env, spex } = freshRepo()
+  spex('init', '.', '--harness', 'codex')
+  const bin = mkdtempSync(join(tmpdir(), 'spex-post-checkout-bin-'))
+  const trace = join(proj, 'post-checkout.trace')
+  const fakeSpex = join(bin, 'spex')
+  writeFileSync(fakeSpex, '#!/bin/sh\nprintf "%s\\n" "$*" >> "$SPEX_POST_CHECKOUT_TRACE"\n')
+  chmodSync(fakeSpex, 0o755)
+  const hookEnv = { ...env, PATH: `${bin}:${process.env.PATH}`, SPEX_POST_CHECKOUT_TRACE: trace }
+  const deferred = join(proj, '.worktrees', 'deferred')
+  execFileSync('git', ['-C', proj, 'worktree', 'add', '-b', 'node/deferred', deferred, 'HEAD'], {
+    env: { ...hookEnv, SPEXCODE_DEFER_FOOTPRINT_REFRESH: 'session-create' },
+  })
+  assert.ok(!existsSync(trace), 'the session-owned checkout must not invoke a competing refresh')
+
+  const ordinary = join(proj, '.worktrees', 'ordinary')
+  execFileSync('git', ['-C', proj, 'worktree', 'add', '-b', 'node/ordinary', ordinary, 'HEAD'], { env: hookEnv })
+  assert.equal(readFileSync(trace, 'utf8'), 'internal refresh-footprint\n', 'an ordinary worktree checkout still refreshes')
+  execFileSync('git', ['-C', proj, 'worktree', 'remove', '--force', deferred], { env })
+  execFileSync('git', ['-C', proj, 'worktree', 'remove', '--force', ordinary], { env })
+})
+
 test('a pre-existing retired render field is ignored with a loud notice — init still succeeds', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, env } = freshRepo()
   writeFileSync(join(proj, 'spexcode.json'), '{"render":"committed","lint":{"governedRoots":["."]}}\n')

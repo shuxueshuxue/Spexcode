@@ -7,6 +7,7 @@ import { loadSystemConfig, loadSkillConfig, loadSpecs } from './specs.js'
 import { runtimeRoot, treeSlotDir, envSessionId, readAliasedRawRecord, mainCheckout, readJsonConfig } from './layout.js'
 import { loadConfig } from './lint.js'
 import { trackedSourceFiles } from './source-files.js'
+import { gitBinary } from './git.js'
 
 // this file lives at <pkgRoot>/src/self.ts, so `..` is the package root — the same derivation init.ts/
 // materialize.ts use (never a hardcoded repo path), so the git-hook template lookup survives a relocated install.
@@ -14,7 +15,7 @@ const PKG_ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 // run a git query in `dir`, swallowing git's own stderr — a non-repo returns null (the absence IS the signal).
 function git(dir: string, args: string[]): string | null {
-  try { return execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() }
+  try { return execFileSync(gitBinary(process.env), ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() }
   catch { return null }
 }
 function repoRoot(dir: string): string | null { return git(dir, ['rev-parse', '--show-toplevel']) }

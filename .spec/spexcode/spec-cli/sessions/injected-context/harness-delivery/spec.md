@@ -8,6 +8,7 @@ code:
   - spec-cli/src/materialize.ts#dematerialize
 related:
   - spec-cli/src/init.ts
+  - spec-cli/src/file-write.ts
 ---
 
 # harness-delivery
@@ -38,7 +39,9 @@ verbs (`spex init`, `spex materialize`), session-worktree creation, and the plan
 post-checkout / post-merge hooks — pre-commit's materialize is UNCONDITIONAL, so every materialize input
 (`.plugins` content, the persisted `spexcode.json`/`spexcode.local.json`, a contract file's trackedness, a
 toolchain update) is picked up no later than the next commit, and checkout/merge refresh what arrives from
-other branches. A harness event is never a trigger — the old dispatcher content-hash gate is retired, and
+other branches. Session creation is its own one-render transaction: it defers the checkout hook's best-effort
+refresh, copies the local snapshot, then materializes once under the creation failure/recovery boundary. A
+harness event is never a trigger — the old dispatcher content-hash gate is retired, and
 `.plugins` edits are git-transactional (they take effect at the commit/checkout/merge that carries them,
 like any other source). An environment with no planted hooks (CI, a cloud agent's fresh clone) runs
 `spex materialize` in its setup step. It materializes into the harness targets
@@ -86,9 +89,10 @@ plugin node. This replaces the launch-time
 - **the dispatch-family allowlist** (same slot), atomically renamed into place LAST. It is the sole success
   receipt consumed by dispatch, so a killed writer leaves the preceding successful selection intact.
 
-The pass obeys a scoped **forgetting law**. One tree's semantic output is exactly its current policy. Local
-landing points are ERASE-THEN-ASSERT by identity stamp, so narrowing one tree removes its
-contract/shim/skills without touching a sibling. Project-scoped hook/trust wiring is installation transport,
+The pass obeys a scoped **forgetting law**. One tree's semantic output is exactly its current policy. The
+current target map reconciles by identity stamp: it removes landing points absent from that map and writes only
+bytes that differ, so narrowing one tree removes its contract/shim/skills without touching a sibling while an
+identical second pass is an operational no-op (no delete/recreate churn or watcher event). Project-scoped hook/trust wiring is installation transport,
 not selection state: once a tree needs it, it may remain dormant until project-wide dematerialize/uninstall.
 The dispatch-family allowlist in each existing tree runtime slot is the single final publication of a
 successful pass, and gates that shared transport before admission or input handling; retaining the transport
@@ -113,12 +117,11 @@ trees never overwrite one another's bytes and user global ignore configuration i
 hash remains global and project-scoped, and is removed by project-wide dematerialize/uninstall rather than a
 sibling's selection change.
 
-Migration cannot expose a registered tree that still depends on the old common ignore projection. Until every
-previously materialized registered tree publishes its per-tree ignore receipt, common `.git/info/exclude`
-retains its prior managed entries. The upgrading tree has no authority to add its local paths to that common
-set. The last receipt removes the retained entries; from then on only checkout-invariant residue and shared
-transport remain common. Receipt lookup is derived from registered path identity, so a deleted-but-not-yet-
-pruned worktree keeps protection without making sibling filesystem access a materialize prerequisite.
+Materialize reads and writes only the current tree slot and current per-tree filter payload. It does not import
+pre-slot ledgers, common ignore projections, or other retired-format receipts, and a normal pass never enumerates
+registered sibling worktrees. Shared filter transport is refreshed in place; project-wide teardown may still inspect
+registered trees when it is explicitly removing that shared transport. Older runtime state is not a supported
+materialize input and must be removed through an explicit reinstall/uninstall operation.
 
 The net ideal path: `npm install spexcode` → `spex init` → the user launches their own `claude`/`codex`, zero
 further operation, no global pollution beyond the scoped Codex trust. The contract files are SpexCode-owned

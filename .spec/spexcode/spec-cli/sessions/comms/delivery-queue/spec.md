@@ -73,3 +73,12 @@ point of arrival, which is the only thing that lets an agent answer it without k
 
 A queue dies with its session's store dir. It is transport state with no evidentiary value — what was actually
 said is in the log, and what an agent was shown is in its own transcript.
+
+**Adopting this costs an ordering, and getting it backwards loses messages.** Two halves move: the sender's
+backend, which learns to enqueue, and each session's materialized hook, which stops replaying. A backend that
+enqueues talking to a session that still replays delivers twice — annoying, visible, harmless. The reverse —
+an OLD backend, which only pokes, aimed at a session whose hook already stopped replaying — has nothing
+holding the message when the poke does not land: it is recorded, reported successful, and never handed over.
+Measured, not theorised. So the backend must be upgraded BEFORE a session's hook is re-materialized, which is
+the opposite of the usual materialize-then-restart order, and the window lasts exactly as long as the gap
+between the two.

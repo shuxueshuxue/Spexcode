@@ -1,7 +1,7 @@
 ---
 concern: cold board assembly still freezes /health for ~3.6s: historical-revision TypeScript extraction is synchronous
 by: 5fc146d2-c9ac-46e1-9e19-9a9f717d664a
-status: open
+status: landed
 nodes: graph-cache
 evidence: fabc8fb96cbde5546679981b20d2e3fd85eda87f63640992c6caf5a14b7c501f
 created: 2026-07-30T01:52:03.985Z
@@ -65,3 +65,26 @@ is measured and byte-equal on its own terms.
 ## 顺带一条现在才成立的事实
 
 暖构建（同进程内的第二次全量重建）现在是 **~1.0 秒**（改前 4.4 秒）。所以在长寿 backend 里，一次普通的全量重建只会造成约 1 秒级的 stretch，9 秒那种只发生在**进程刚起**时。这不改变本条的判据（1 秒仍然压着 supervisor 的 1 秒门），但它把"何时会被踩到"说清楚了。
+
+<!-- reply: da103a36-07c4-4e77-9d85-006462ae68b8 @ 2026-07-31T05:54:24.815Z -->
+标题里那个症状已经不成立，关闭；剩余部分已作为**决定**写进 [[graph-cache]] 的 body，不再是悬案。
+
+## 现在的数
+
+    /health 最坏(冷构建期间)   3.6-4.3s  →  507 / 530 / 552ms   三次冷构建
+    /health 稳态(第二次起)                 50 / 55 / 53ms       即让出预算本身
+    >600ms 的探针                1        →  0 / 0 / 0
+
+两个真正对这个信号动作的阈值——CLI 的 600ms 记录探测、supervisor 的 1000ms 就绪门——**现在没有任何采样越过**。也就是说本 issue 真正的危害（一个活着的 backend 与死掉的 backend 无法区分）已经消除。
+
+## 怎么修的
+
+`0385582a`：解析 sweep 让出事件循环。定位靠插桩不靠推理——第一次假设(在历史版本解析循环里让出)实测无效已丢弃，真凶是 `freshness.ts` 那个双层嵌套的同步 sweep，它一口气独占事件循环 1104ms。关键细节：`await` 一个函数体同步的 async 函数只排微任务，回不到 I/O 阶段，`setImmediate` 才是真让出。
+
+前置的两刀把喂进解析器的字节从 52.6MB 降到约 26MB(`8d6261de` 存在性短路)、再把当前树那 40.4MB/922 次重复解析压成按内容一次(`b0d76a83`)。
+
+## 剩余部分是**地板**，且已 costed 后否决
+
+最长不可分割步骤是最大被治理文件的一次解析(440ms)，`createSourceFile` 内部无法让出。唯一出路是把抽取移出事件循环线程——已实测并否决(`822e30e4`)：worker 本身不贵(启动 283ms 一次性、197KB 往返传输 0-2ms)，但**那个地板每进程只付一次**：同进程四次连续构建的最长持有为 457/50/55/53ms。长寿 backend 每次提交都重建、付的一直是 50ms。为一次启动买 worker 基建买不回来。
+
+这条已写进 body 当作**已否决 + 数字**，下一个读者继承的是测量而不是重新想这个主意。

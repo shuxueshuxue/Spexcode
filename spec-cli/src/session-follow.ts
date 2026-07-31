@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { sessionStoreDir } from './layout.js'
-import { advanceFollow, followCursor, inboxCursor, unreadSince } from './session-cursors.js'
+import { advanceFollow, followCursor, unreadSince } from './session-cursors.js'
 import { timelineDisplay, timelineEvents, timelineStamp } from './session-timeline.js'
 import { sessionLabel, type DisplayStatus, type Session } from './sessions.js'
 
@@ -158,12 +158,12 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
       state.delete(id)
       emit(`${tag}[spex] closed · removed  [id ${id}]`)
     }
-    // THE INBOX — the follower's own log, read past the cursor `cursors.json` already holds and NEVER advanced
-    // here: the turn-boundary mark-active hook is the inbox's one reader ([[session-timeline]]), and advancing
-    // behind its back would wake this process on a message the agent is then never shown. Re-read every tick, so
-    // a line that hook has since injected stops counting as unread and cannot wake a later wait twice.
+    // THE FOLLOWER'S OWN LOG — watched exactly like any other target, on its own entry in `cursors.json`. It is
+    // a WATCH, not a delivery: a message reaches the agent as a prompt through the adapter ([[delivery-queue]]),
+    // so this position only decides what THIS process has already reported and can never make an agent miss
+    // mail. Never advanced here in take mode — the waiter stops on the event and the next wait resumes on it.
     if (self && existsSync(sessionStoreDir(self))) {
-      const mine = unreadSince(timelineEvents(self), inboxCursor(self))
+      const mine = unreadSince(timelineEvents(self), followCursor(self, self) ?? 0)
       for (let k = 0; k < mine.events.length; k++) {
         const e = mine.events[k]
         if (e.kind !== 'sent') continue

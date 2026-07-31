@@ -90,7 +90,7 @@ layer be a brick an external system can drive rather than a service it must be g
 
 A text send takes the session record lock only for the durable timeline append; the adapter poke runs after
 releasing it. A native turn can synchronously invoke lifecycle hooks that re-enter the same record writer, so the
-lock never spans the courtesy poke. The appended `mid` and inbox cursor make replay harmless, while normal
+lock never spans the adapter handover. The delivery queue's own lock is what makes a handover exactly-once, while normal
 adapter/runtime guards remain the authority for concurrent lifecycle operations.
 
 Archive may carry an opaque adapter cold-preflight receipt across its exact leaf/tmux stop, into the same adapter's

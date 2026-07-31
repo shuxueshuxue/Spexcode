@@ -4,14 +4,15 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { advanceFollow, advanceInbox, followCursor, followedSessions, inboxCursor, readCursors, unreadSince } from './session-cursors.js'
+import { advanceFollow, followCursor, followedSessions, readCursors, unreadSince } from './session-cursors.js'
 import { sessionStoreDir } from './layout.js'
 import type { TimelineEvent } from './session-timeline.js'
 
-// A cursor is the ONLY durable state supervision and mail have ([[session-cursors]]). These pin the three
-// claims the rest of the mesh leans on: advancing can never skip, a dead target's entry expires by being
-// READ, and a reader's unread slice reports EDGES — X→X is not a transition, because the log permanently
-// holds duplicate status lines from the retired timeline observer.
+// A cursor is the ONLY durable state supervision has ([[session-cursors]]). These pin the three claims the
+// rest of the mesh leans on: advancing can never skip, a dead target's entry expires by being READ, and a
+// reader's unread slice reports EDGES — X→X is not a transition, because the log permanently holds duplicate
+// status lines from the retired timeline observer. What a session OWES its agent is not here at all — that is
+// a queue ([[delivery-queue]]), not a position.
 
 function withHome<T>(home: string, fn: () => T): T {
   const prev = process.env.SPEXCODE_HOME
@@ -30,30 +31,32 @@ const message = (mid: string): TimelineEvent => ({ ts: '2026-07-16T00:00:00.000Z
 test('a missing or unparseable cursors file reads as nothing-consumed, never as a skip', () => {
   const home = freshHome()
   withHome(home, () => {
-    assert.deepEqual(readCursors(ME), { version: 1, inbox: 0, follows: {} })
+    assert.deepEqual(readCursors(ME), { version: 1, follows: {} })
     mkdirSync(sessionStoreDir(ME), { recursive: true })
     writeFileSync(join(sessionStoreDir(ME), 'cursors.json'), '{ not json at all')
-    assert.equal(inboxCursor(ME), 0, 'a damaged position re-shows a message rather than losing one')
+    assert.equal(followCursor(ME, 'target'), null, 'a damaged file re-reads an event rather than losing one')
   })
 })
 
-test('the file is written one field per line, so the pure-shell hook can read its inbox exactly', () => {
+test('the file is written one field per line, so a position reads by exact whole-line match', () => {
   const home = freshHome()
   withHome(home, () => {
-    advanceInbox(ME, 7)
+    mkdirSync(sessionStoreDir(ME), { recursive: true })
+    advanceFollow(ME, ME, 7)
     const raw = readFileSync(join(sessionStoreDir(ME), 'cursors.json'), 'utf8')
-    assert.ok(raw.split('\n').some((l) => /^\s*"inbox": 7,?$/.test(l)), raw)
+    assert.ok(raw.split('\n').some((l) => new RegExp(`^\\s*"${ME}": 7,?$`).test(l)), raw)
   })
 })
 
-test('advanceInbox is monotonic — a stale writer can leave a position low, never high', () => {
+test('advancing is monotonic — a stale writer can leave a position low, never high', () => {
   const home = freshHome()
   withHome(home, () => {
-    advanceInbox(ME, 5)
-    advanceInbox(ME, 2)
-    assert.equal(inboxCursor(ME), 5)
-    advanceInbox(ME, 6)
-    assert.equal(inboxCursor(ME), 6)
+    mkdirSync(sessionStoreDir(ME), { recursive: true })
+    advanceFollow(ME, ME, 5)
+    advanceFollow(ME, ME, 2)
+    assert.equal(followCursor(ME, ME), 5)
+    advanceFollow(ME, ME, 6)
+    assert.equal(followCursor(ME, ME), 6)
   })
 })
 

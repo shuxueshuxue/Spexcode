@@ -328,7 +328,7 @@ surface:
   proxy` (a dumb byte relay that performs no HTTP upgrade, which the server rejects).
   `deliver(rec, text)` is a **best-effort immediate poke**, never a second delivery decision. The log append
   already made the message durable ([[dispatch]]), so every adapter returns only whether this attempt reached
-  its native input channel; failure leaves the same `mid` unread for the turn-boundary reader. **claude** writes
+  its native input channel; failure leaves the same `mid` OWED, for the delivery queue to retry. **claude** writes
   one `{type:reply,text,mid}` line and retries the write a small fixed number of times. Its single-connection
   daemon may still lose a poke when another connection replaces it, but that cannot lose the message; no
   repaint, receipt, kick classification, or transport outcome state remains. Claude's

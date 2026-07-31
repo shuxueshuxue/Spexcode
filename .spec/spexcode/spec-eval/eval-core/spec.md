@@ -218,7 +218,16 @@ An unrequested path therefore has no verdict and reads as unprovable rather than
 the retained set proportional to governed breadth instead of repository width. Scheduling composes with
 that: concurrent callers on one anchor union their paths into a single child, a path requested after that
 child starts rides the next batch, a settled path is never asked again, and different anchors under one
-root and HEAD still run one at a time. A graph
+root and HEAD still run one at a time.
+
+**Every immutable-key answer under that schedule is joined while it is in flight, not merely reused once it
+settles.** A memo holding only settled values is silent about the window that matters — the whole timeline
+pass primes concurrently, so callers naming one key all miss together and each forks its own child. This
+governs the two per-reading lookups beside the anchor batch as well: the drift COUNT for an (anchor, path)
+and the eval.md object/blob read at a revision. Both keys name immutable Git objects, so a joiner cannot be
+handed another question's answer, and both write their memo once, on settle. This is a cost rule only —
+a joined read and a re-forked one return the same verdict, which is why no verdict assertion can observe
+it and the regression is pinned by counting children. A graph
 abort or timeout rejects both its active and queued work with the existing `AbortError` and caches nothing,
 so a later call retries; an unreadable anchor object is recorded as exactly that — the anchor axis — not as
 a content verdict. Synchronous freshness decisions consume only

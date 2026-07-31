@@ -52,7 +52,12 @@ type AnchorVerdicts = {
   pending: Set<string>             // paths awaiting the next batch child
   flight: Promise<void> | null     // the single in-flight batch for this anchor
 }
-type RootScope = { head: string; anchors: Map<string, AnchorVerdicts>; behind: Map<string, number> }
+type RootScope = {
+  head: string
+  anchors: Map<string, AnchorVerdicts>
+  behind: Map<string, number>
+  behindFlight: Map<string, Promise<number>>   // the single in-flight count per (anchor, path)
+}
 const rootScopes = new Map<string, RootScope>()
 // Roots come and go (a closed worktree never asks again), so cap how many stay warm — the same bounded-slot
 // guard the index caches use, and the only bound needed once per-root cardinality is the corpus, not history.
@@ -65,7 +70,7 @@ function scopeFor(rootKey: string, head: string): RootScope {
     rootScopes.set(rootKey, current)
     return current
   }
-  const scope: RootScope = { head, anchors: new Map(), behind: new Map() }
+  const scope: RootScope = { head, anchors: new Map(), behind: new Map(), behindFlight: new Map() }
   rootScopes.set(rootKey, scope)
   while (rootScopes.size > ROOT_SLOTS) {
     const oldest = rootScopes.keys().next().value
@@ -195,6 +200,28 @@ function startAnchorBatch(root: string, rootKey: string, sha: string, current: s
   return flight
 }
 
+// @@@ join the in-flight count, don't re-fork it - `behind` holds only SETTLED counts, so N concurrent
+// primes naming one (anchor, path) all missed and each forked its own `rev-list --count`. Measured on
+// adopter-a's 415-node session scope: 1532 children for 806 distinct counts. `sha..current` names two
+// immutable commits, so a joiner can never be handed a different question's answer. A rejected flight is
+// cached nowhere and every joiner sees the same failure, matching the anchor batch above.
+function behindCount(root: string, scope: RootScope, sha: string, current: string, path: string): Promise<number> {
+  const key = `${sha}\x1f${path}`
+  const settled = scope.behind.get(key)
+  if (settled !== undefined) return Promise.resolve(settled)
+  const joined = scope.behindFlight.get(key)
+  if (joined) return joined
+  const run = async (): Promise<number> => {
+    const n = Number((await gitA(['-C', root, 'rev-list', '--count', `${sha}..${current}`, '--', path])).trim())
+    const count = Number.isFinite(n) && n > 0 ? n : 1
+    scope.behind.set(key, count)
+    return count
+  }
+  const flight = run().finally(() => { if (scope.behindFlight.get(key) === flight) scope.behindFlight.delete(key) })
+  scope.behindFlight.set(key, flight)
+  return flight
+}
+
 export function contentProbeFor(root: string): ContentProbe {
   const rootKey = resolve(root)
   let head: string | undefined
@@ -218,10 +245,7 @@ export function contentProbeFor(root: string): ContentProbe {
       if (entry.gone) return
       for (const path of new Set(paths)) {
         if (entry.verdicts.get(path) !== true) continue
-        const behindKey = `${sha}\x1f${path}`
-        if (scope.behind.has(behindKey)) continue
-        const n = Number((await gitA(['-C', root, 'rev-list', '--count', `${sha}..${current}`, '--', path])).trim())
-        scope.behind.set(behindKey, Number.isFinite(n) && n > 0 ? n : 1)
+        await behindCount(root, scope, sha, current, path)
       }
       if (entry.verdicts.get(evalPath) === true) await primeScenarioBlocksAt(root, [sha, current], evalPath)
     },

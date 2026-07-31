@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, renameSync, chmodSync, readFileSync, existsSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { scenarioIndex, scenarioChangeCommits, scenarioBlocksAt } from './scenariofresh.js'
+import { scenarioIndex, scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt } from './scenariofresh.js'
 
 // The scenario axis is SEMANTIC: only a scenario's measurement contract (description + expected) stales its
 // readings. Routing/coverage metadata — tags, test, code, related — is outside the projection, so a
@@ -74,6 +74,30 @@ test('off-history probe memoizes per (sha, path): a repeat query forks no git (s
   renameSync(join(dir, '.git'), join(dir, '.git-gone'))
   assert.equal(scenarioBlocksAt(dir, c1, YATSU), first, 'repeat (sha, path) query answers from the memo — no git child')
   assert.equal(scenarioBlocksAt(dir, 'HEAD', YATSU), null, 'a symbolic rev is never cached — it resolves live (and here fails loudly)')
+})
+
+// @@@ the CONCURRENT twin of the memo test above - a memo holding only SETTLED values does nothing for the
+// callers that all miss while the first child is still running, and the whole timeline pass primes
+// concurrently. Measured on adopter-a's 415-node session scope: 2695 `rev-parse` children resolved 1212
+// distinct (rev, path) pairs, ~40s of one page open. Counting children through a PATH shim is the only way
+// to see it — every answer was always CORRECT, only the cost was wrong, so no verdict assertion can catch it.
+test('off-history probe joins the in-flight child: concurrent primes for one (sha, path) fork ONE git', async () => {
+  const dir = repo()
+  const c1 = commitYatsu(dir, V1, 'add scenario')
+  const realGit = sh(dir, 'sh', ['-c', 'command -v git'])
+  const shim = mkdtempSync(join(tmpdir(), 'scenariofresh-gitshim-'))
+  const log = join(shim, 'calls.log')
+  writeFileSync(join(shim, 'git'), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${log}'\nexec '${realGit}' "$@"\n`)
+  chmodSync(join(shim, 'git'), 0o755)
+  const savedPath = process.env.PATH
+  process.env.PATH = `${shim}:${savedPath ?? ''}`
+  try {
+    await Promise.all(Array.from({ length: 8 }, () => primeScenarioBlocksAt(dir, [c1], YATSU)))
+  } finally { process.env.PATH = savedPath }
+  const calls = existsSync(log) ? readFileSync(log, 'utf8').split('\n').filter(Boolean) : []
+  const revParse = calls.filter((line) => line.includes('rev-parse'))
+  assert.equal(revParse.length, 1, `8 concurrent primes must fork ONE rev-parse, forked ${revParse.length}`)
+  assert.ok(calls.filter((line) => line.includes('cat-file')).length <= 1, 'the blob read joins the same flight')
 })
 
 // @@@ archive-pathspec regression — the yatsu.md→eval.md migration must not false-stale history

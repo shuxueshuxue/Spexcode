@@ -61,6 +61,16 @@ extractor, or an extractor that cannot run here — each a lint **error** naming
 extractor cannot run, the error also records that those anchors were skipped and remain unverified;
 the rest of lint continues, but the non-zero result cannot be reported as a pass.
 
+**That verdict is decided in ONE place, for every reader.** Two readers ask it: the gate, judging the
+candidate TIP it is about to admit, and the eval freshness probe, judging the WORKING tree to decide whether
+a reading may still testify. Which text each reads is genuinely its own — a gate that judged a dirty worktree
+would admit a commit it never inspected — but the classification is not, and while each branched on
+dead/ambiguous itself the two had already drifted: the gate warned on a type-only unit, the probe never
+noticed one. So the per-selector verdict comes from one classifier and only the WORDING belongs to each
+caller. The failure this forecloses is the one that would be silent: a selector the gate calls dead while the
+freshness signal still treats its reading as testifiable — a measurement presented as valid for code whose
+anchor the gate has already rejected.
+
 **Scoped govern vs the file.** A scoped governor claims named units, not the whole file: it stays out
 of the too-many-owners bound ([[governed-related]]) though `spex spec owner` still shows it as
 scoped. A scoped file's **miss** keeps the ordinary advisory drift warn by default; the

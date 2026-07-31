@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, resolve } from 'node:path'
 import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent, eventsSince } from '../../spec-cli/src/git.js'
-import { anchorHitExists, extOf, extractorFor, extractors, resolveAnchor, type AnchorHitQuery, type Extractor, type RelationEntry, type Unit } from '../../spec-cli/src/anchors.js'
+import { anchorHitExists, extOf, extractorFor, extractors, resolveAnchor, resolveSelectors, type AnchorHitQuery, type Extractor, type RelationEntry, type Unit } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
 import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
 import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocksAt, type ScenarioIndex } from './scenariofresh.js'
@@ -311,10 +311,11 @@ function entryUnverifiable(root: string, regs: Extractor[], entry: RelationEntry
   let units
   try { units = currentTreeUnits(root, x, entry.path) }
   catch (err: any) { return `\`code\` anchors on ${entry.path} are unverified: ${err?.message ?? String(err)}` }
-  for (const sym of entry.selectors) {
-    const r = resolveAnchor(units, sym)
-    if ('dead' in r) return `\`code\` selector \`${entry.path}#${sym}\` names no unit in that file — follow the rename or drop the selector (evals stay stale until then)`
-    if ('ambiguous' in r) return `\`code\` selector \`${entry.path}#${sym}\` is ambiguous — ${r.ambiguous} units share that name; pin a unique one`
+  // the SAME classifier the gate uses ([[code-anchor]]'s resolveSelectors) — only the wording is ours, so a
+  // selector can never be verifiable to one reader and dead to the other.
+  for (const r of resolveSelectors(units, entry.selectors)) {
+    if ('dead' in r) return `\`code\` selector \`${entry.path}#${r.selector}\` names no unit in that file — follow the rename or drop the selector (evals stay stale until then)`
+    if ('ambiguous' in r) return `\`code\` selector \`${entry.path}#${r.selector}\` is ambiguous — ${r.ambiguous} units share that name; pin a unique one`
   }
   return null
 }

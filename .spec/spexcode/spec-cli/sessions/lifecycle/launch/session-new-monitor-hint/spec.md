@@ -39,6 +39,13 @@ another lifecycle: `done --propose merge` means review and the sole clickable me
 done without merge, `close` means close-pending, while ask/park name asking/parked and their distinct wake-up
 owners.
 
+One word — **close** — sits on both sides of the manager/worker split, so each entry states which side it is
+on in its own text instead of leaning on the drawer's grouping. `session close <SEL>` says it retires ANOTHER
+session and that its selector is never `.` and never the caller's own id; `done --propose close` says it only
+PROPOSES, the human performing the close. The drawer's headings are a layout, and a reader who arrives at one
+entry through `session close --help` never sees them — a help projection that leaves the distinction to
+inference is what lets an agent read the destructive verb as its own ending.
+
 **The successful-create receipt.** After [[launch]] returns the new session record, `spex session new`
 prints the bare, parseable session **JSON to STDOUT** exactly as before, then prints a concise receipt to
 **STDERR**. The receipt carries the real session id and one line for each dependency:

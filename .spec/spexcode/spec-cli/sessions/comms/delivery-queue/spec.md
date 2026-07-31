@@ -58,8 +58,8 @@ in the delivery path takes this one. Holding it across the insert is what makes 
 draining the same session at the same moment cannot both hand over the same message.
 
 **Any process may drain; one process is expected to.** A pass costs nothing when the queue is empty, so
-`sendText` runs one immediately in whatever process called it — that is what keeps a `spex session send` from a
-plain shell working with no backend alive. The retry belongs to the `spex serve` that owns the project root:
+`sendText` runs one immediately in whatever process accepted the message — that is what puts the text in a
+live agent's current turn instead of at the next sweep tick. The retry belongs to the `spex serve` that owns the project root:
 it watches its sessions' queues and drains what an earlier pass could not, so a message owed to an agent whose
 harness was busy, restarting, or gone is delivered when it can be, rather than waiting for that agent to
 happen to take a turn. Neither is privileged — the lock, not the process, is the guarantee.

@@ -382,6 +382,22 @@ export const extOf = (path: string): string => {
 
 // ---- anchor resolution (language-agnostic) ----
 export type AnchorResolution = { ok: Unit } | { dead: true } | { ambiguous: number }
+// @@@ ONE classification for "does this selector resolve here" - the gate (reading the candidate TIP) and the
+// freshness probe (reading the WORKING TREE) both have to answer it, and each used to branch on
+// dead/ambiguous itself. Two copies of a verdict rule drift, and these two already had: the gate warns on a
+// type-only unit, the probe never noticed one. The TEXT each reads stays its own business — a gate must judge
+// the tree it is gating, never a dirty worktree — but the VERDICT is decided once, here, so a new outcome
+// cannot reach one caller and silently miss the other.
+export type SelectorVerdict = { selector: string } & ({ ok: Unit } | { dead: true } | { ambiguous: number })
+export function resolveSelectors(units: Unit[], selectors: readonly string[]): SelectorVerdict[] {
+  return selectors.map((selector) => {
+    const r = resolveAnchor(units, selector)
+    if ('dead' in r) return { selector, dead: true as const }
+    if ('ambiguous' in r) return { selector, ambiguous: r.ambiguous }
+    return { selector, ok: r.ok }
+  })
+}
+
 export function resolveAnchor(units: Unit[], symbol: string): AnchorResolution {
   const hits = units.filter((u) => u.name === symbol)
   if (!hits.length) return { dead: true }

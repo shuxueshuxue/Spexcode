@@ -186,6 +186,18 @@ The per-revision extraction memo is process-local, so a cold process re-parses r
 already settled; making it durable is a persistent-state decision that must argue its own case against
 [[drift-by-ancestry]]'s no-stored-state rule, not ride in as a cost tweak.
 
+That case has now been costed, and it does not close. Correctness is not the obstacle: the memo key already
+names an immutable Git object plus the complete parse identity the extractor contract demands (schema, host
+compiler path AND version, parse options, filename), so content that changes changes the oid and a compiler
+that changes changes the key — a durable entry has no staleness mode. What fails is the trade. Measured on
+this corpus: a fresh process assembles in **8,249ms**, and every subsequent full rebuild in that same process
+takes **1,108/1,007/1,011ms with zero parses**. The whole ~7.2s a durable ledger could recover is therefore
+paid ONCE PER PROCESS, not once per rebuild — while a live backend rebuilds on every commit and every issue
+write, and already pays only the second number. Buying a shared on-disk ledger — concurrent writers from the
+several backends a box runs, corruption handling, bounded growth — to shorten one startup is complexity that
+does not buy itself back. Recorded as decided-against with its measurement, not as an open question, so the
+next reader inherits the number instead of re-deriving the idea.
+
 Extraction is synchronous, and that is a LIVENESS question rather than a latency taste: `/health` computes
 nothing, so its latency measures only whether the loop can turn, and a probe that cannot answer is
 indistinguishable from a dead backend — the CLI allows a recorded backend 600ms and the supervisor allows a

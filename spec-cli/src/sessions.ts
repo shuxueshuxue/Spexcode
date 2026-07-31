@@ -3139,9 +3139,9 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
   } catch (error) {
     return { ok: false, error: `could not append the message to session ${id}'s log: ${error instanceof Error ? error.message : String(error)} — prompt NOT delivered` }
   }
-  // Awaited, not fire-and-forget: `spex session send` is a short-lived process that would exit before an
-  // unawaited insert reached the adapter, costing every CLI send its same-turn arrival. This is also why ANY
-  // process drains rather than only the backend — a shell send with no serve running still hands over.
+  // Awaited, not fire-and-forget: an unawaited insert can lose its race with a short-lived caller's exit,
+  // costing that send its same-turn arrival. Draining HERE rather than leaving it to the sweep is what puts
+  // the text in a live agent's current turn instead of up to one tick later.
   await drainSession(id)
   return { ok: true }
 }

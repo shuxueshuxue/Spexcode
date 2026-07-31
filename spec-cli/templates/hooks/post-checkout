@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# spexcode-managed-hook-v1
 # @@@ footprint refresh (post-checkout) ([[commit-surgery]]) - a branch checkout is one of the three git
 # transitions that can move the materialize's inputs: .spec/.plugins content changes across branches, and a
 # contract file's TRACKEDNESS can flip (switching to a branch that tracks CLAUDE.md checks out the pristine

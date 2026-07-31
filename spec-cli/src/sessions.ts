@@ -1670,6 +1670,23 @@ type SessionCandidateReceiptRead =
 const sessionCandidateReceiptDir = () => join(runtimeRoot(), '.session-create-candidates')
 const sessionCandidateReceiptPath = (id: string) => join(sessionCandidateReceiptDir(), `${id}.json`)
 const sessionCandidateLockId = (path: string, branch: string) => `create-resource-${digest(`${path}\0${branch}`)}`
+// The graph watcher uses this private fence to avoid rebuilding the full board while Git is still
+// registering a session candidate. The receipt is written before `git worktree add` and retired only
+// after publication or bounded cleanup, so the path names exactly the transaction-owned worktree.
+export function pendingSessionCreateWorktreePaths(): Set<string> {
+  const paths = new Set<string>()
+  let entries: import('node:fs').Dirent[]
+  try { entries = readdirSync(sessionCandidateReceiptDir(), { withFileTypes: true }) }
+  catch { return paths }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+    try {
+      const value = JSON.parse(readFileSync(join(sessionCandidateReceiptDir(), entry.name), 'utf8')) as Partial<SessionCandidateReceipt>
+      if (typeof value.path === 'string' && value.path && typeof value.stage === 'string') paths.add(resolve(value.path))
+    } catch { /* an in-flight atomic replace is not a candidate path */ }
+  }
+  return paths
+}
 function readSessionCandidateReceipt(id: string): SessionCandidateReceiptRead {
   const path = sessionCandidateReceiptPath(id)
   if (!existsSync(path)) return { kind: 'absent' }
@@ -1858,7 +1875,9 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
       const resourceLock = sessionCandidateLockId(path, branch)
       return await withRecordLock(resourceLock, async () => {
         throwIfCreateAborted(signal, phase)
+        traceSessionCreate(id, requestDigest, phase, 'start', 'candidate-state')
         let before = await sessionCandidateState(root, path, branch, signal)
+        traceSessionCreate(id, requestDigest, phase, 'finish', 'candidate-state')
         let storePresent = existsSync(sessionStoreDir(id))
         const durable = readSessionCandidateReceipt(id)
         if (durable.kind === 'invalid') throw new SessionCreateError('session_create_failed', phase, durable.error, 409)
@@ -1890,10 +1909,12 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
         let published = false
         try {
           gitMutationStarted = true
+          traceSessionCreate(id, requestDigest, phase, 'start', 'worktree-add')
           const added = await withGitAbortSignal(signal, () => gitTry(
             ['-C', root, 'worktree', 'add', '-b', branch, path, mainBranch()],
             { extraEnv: DEFER_FOOTPRINT_REFRESH },
           ))
+          traceSessionCreate(id, requestDigest, phase, 'finish', 'worktree-add')
           if (added.ok) Object.assign(owned, { path: true, worktree: true, branch: true })
           if (!added.ok || !existsSync(path)) {
             throw new SessionCreateError('session_create_failed', phase, `git worktree add failed: ${added.stderr.trim() || added.failure || 'worktree missing after success'}`, 500)
@@ -1901,7 +1922,9 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           candidateReceipt = { ...candidateReceipt, stage: 'git-created' }
           writeSessionCandidateReceipt(id, candidateReceipt)
           traceSessionCreate(id, requestDigest, phase, 'finish')
+          traceSessionCreate(id, requestDigest, phase, 'start', 'seed-worktree-host-state')
           seedWorktreeHostState(root, path)
+          traceSessionCreate(id, requestDigest, phase, 'finish', 'seed-worktree-host-state')
 
           let rec: SessRec = {
             session: id, governed: true, worktreePath: path, branch,

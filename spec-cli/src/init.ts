@@ -1,5 +1,4 @@
 import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync, renameSync, rmSync, statSync, chmodSync, writeFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
 import { join, resolve, relative, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
@@ -12,19 +11,10 @@ import { gitBinary } from './git.js'
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const TEMPLATES = join(pkgRoot, 'templates')
 const MANAGED_HOOK_HEADER = '# spexcode-managed-hook-v1'
-const LEGACY_MANAGED_HOOKS: Record<string, Set<string>> = {
-  'pre-commit': new Set(['fc33a6ff2b444fa47210a2594b6a714613d9c62fd8ec77a9a13aec81143de8a7']),
-  'prepare-commit-msg': new Set(['08b26ad8ffb305a64b7cddc868231854c84d539b8e5e9324702bd2c293044183']),
-}
 
-function hookDigest(path: string): string {
-  return createHash('sha256').update(readFileSync(path)).digest('hex')
-}
-
-function isManagedHook(path: string, name: string): boolean {
+function isManagedHook(path: string): boolean {
   const source = readFileSync(path, 'utf8')
   return source.split('\n').slice(0, 4).includes(MANAGED_HOOK_HEADER)
-    || LEGACY_MANAGED_HOOKS[name]?.has(createHash('sha256').update(source).digest('hex')) === true
 }
 
 function replaceHook(source: string, dest: string): void {
@@ -211,8 +201,8 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
       const source = join(hooksSrc, e.name)
       const dest = join(hooksDir, e.name)
       if (existsSync(dest)) {
-        if (hookDigest(dest) === hookDigest(source)) continue
-        if (isManagedHook(dest, e.name)) {
+        if (readFileSync(dest).equals(readFileSync(source))) continue
+        if (isManagedHook(dest)) {
           replaceHook(source, dest)
           refreshed.push(e.name)
         } else {

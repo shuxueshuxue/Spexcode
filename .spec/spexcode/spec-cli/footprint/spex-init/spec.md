@@ -99,8 +99,8 @@ repeating PATH resolution.
 
 **Adoption is additive and preserves user ownership.** An existing `<dir>/.spec` aborts the spec phase with
 a warning. A user-owned hook is never executed as a probe and never overwritten. SpexCode-owned hook
-snapshots are different: a managed header, or an exact digest from a known shipped pre-header template,
-proves ownership, so re-init atomically refreshes that snapshot to the current protocol. This is necessary
+snapshots carry a managed header that proves ownership, so re-init atomically refreshes that snapshot to the
+current protocol. This is necessary
 when a protocol moves work between hooks: leaving an old SpexCode pre-commit beside new arm/consume hooks
 would keep judging `HEAD` first and block the repair before the candidate gate can see it. A modified or
 unknown hook remains the user's and is left byte-for-byte untouched; the canonical pre-commit detects that

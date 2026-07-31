@@ -1,5 +1,53 @@
 ---
 scenarios:
+  - name: undeclared-stop
+    tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "claude+codex / undeclared-stop" }
+    description: >-
+      Through a real interactive Claude or Codex launcher, answer one short line and stop without declaring
+      any session state, then observe the settled record from outside the worker.
+    expected: >-
+      The stop gate reaches the worker and the record leaves active into a declared status; it never remains
+      active with a dropped rejection.
+  - name: pretooluse-block
+    tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "claude+codex / pretooluse-block" }
+    description: >-
+      Plant a transient PreToolUse guard for one marked file in a real interactive worker, then ask the
+      worker to modify that file and observe the tool result and file content.
+    expected: >-
+      The guarded tool call is blocked, the file stays untouched, and the handler's reason reaches the worker
+      without ending the session.
+  - name: ask-note
+    tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "claude+codex / ask-note" }
+    description: Run `spex session ask --note` from a real worker with a unique marker in the note.
+    expected: The record reads asking and carries the marker verbatim on the public session board.
+  - name: deliver-steer
+    tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "claude+codex / deliver-steer" }
+    description: Send one task to an idle real worker and a second message while its turn is in flight.
+    expected: Both sends are accepted, the idle message appears once, and the second message steers the same live turn.
+  - name: resume
+    tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "claude+codex / resume" }
+    description: Seed a token in a real conversation, stop it, resume it, and ask for the token without repeating it.
+    expected: Resume continues the same conversation and the worker recalls the token after relaunch.
+  - name: liveness
+    tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "claude+codex / liveness" }
+    description: Kill an established worker process tree while its tmux home and stale socket file remain, then resume it.
+    expected: The record reads offline within seconds despite the stale socket and reads online after relaunch.
+  - name: commit-gate
+    tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "claude+codex / commit-gate" }
+    description: Plant an uncommitted file, propose a merge from a real worker, then commit and re-propose.
+    expected: The dirty proposal is rejected with its reason delivered in-session; the clean proposal is accepted and stamped.
+  - name: close-residue
+    tags: [backend-api]
+    test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "claude+codex / close-residue" }
+    description: Close a real worker and inspect its tmux, processes, worktree, branch, sockets, and session store.
+    expected: The close leaves zero session-owned residue.
   - name: headless-explicit-stop-resume-liveness
     tags: [backend-api, cli]
     code:

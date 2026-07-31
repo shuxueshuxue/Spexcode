@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { listSessions } from './sessions.js'
 import { getBoard, getBoardForForgeRevision } from './graphCache.js'
-import { buildSessionEvals, type SessionEvals } from '../../spec-eval/src/sessioneval.js'
+import { type SessionEvalOrderRow, buildSessionEvals, type SessionEvals } from '../../spec-eval/src/sessioneval.js'
 import { evalTimeline } from '../../spec-eval/src/evaltab.js'
 import { issuesEnabled as issuesEnabledForReview } from './localIssues.js'
 import { issueStores as issueStoresForReview } from './issues.js'
@@ -217,15 +217,26 @@ export function scopedEvalReviewItems(model: SessionEvals): ReviewItem[] {
 
 const evalItemKey = (item: any): string => `${String(item?.node ?? '')}\0${String(item?.scenario ?? '')}`
 
-function evalNeighbor(item: any): EvalNeighbor {
+function evalNeighbor(item: any, stateOf: (row: { node: string; scenario: string }) => string): EvalNeighbor {
   return {
     node: String(item.node),
     scenario: String(item.scenario),
-    state: String(item.state ?? evalReviewState(item)),
+    state: stateOf(item),
   }
 }
 
-export function boundedEvalNeighbors(items: ReviewItem[], node: string, scenario: string, want = 5) {
+// `sequence` is the whole measured population in list order; `stateOf` answers only for rows whose freshness
+// was actually computed. On a focused build those are two different sets — the sequence spans the scope, the
+// states cover the selected row and its window — which is exactly why the state is looked up rather than
+// carried: a row this response does not render contributes its POSITION and nothing else.
+export function boundedEvalNeighbors(
+  sequence: { node: string; scenario: string }[],
+  node: string,
+  scenario: string,
+  stateOf: (row: { node: string; scenario: string }) => string,
+  want = 5,
+) {
+  const items = sequence
   const key = `${node}\0${scenario}`
   const index = items.findIndex((item) => evalItemKey(item) === key)
   if (index < 0) return { prev: [], next: [], total: items.length, index: null, order: 'default' as const }
@@ -235,8 +246,8 @@ export function boundedEvalNeighbors(items: ReviewItem[], node: string, scenario
   const nextN = Math.min(after, Math.max(Math.ceil(take / 2), take - before))
   const prevN = Math.min(before, take - nextN)
   return {
-    prev: items.slice(index - prevN, index).reverse().map(evalNeighbor),
-    next: items.slice(index + 1, index + 1 + nextN).map(evalNeighbor),
+    prev: items.slice(index - prevN, index).reverse().map((item) => evalNeighbor(item, stateOf)),
+    next: items.slice(index + 1, index + 1 + nextN).map((item) => evalNeighbor(item, stateOf)),
     total: items.length,
     index,
     order: 'default' as const,
@@ -248,12 +259,22 @@ export function projectEvalDetail(
   historySource: ReviewItem[],
   node: string,
   scenario: string,
-  metadata: { scope?: string | null; summary?: SessionEvals['summary']; evalRevision?: SessionEvals['evalRevision'] } = {},
+  metadata: {
+    scope?: string | null
+    summary?: SessionEvals['summary']
+    evalRevision?: SessionEvals['evalRevision']
+    // the scope's whole measured sequence, when `items` deliberately holds only the rendered window
+    sequence?: { node: string; scenario: string }[]
+  } = {},
 ): EvalDetailReview {
   const results = items.filter((item: any) => item.filterKind === EVAL_FILTER_KIND.RESULT)
   const selected = results.find((item) => evalItemKey(item) === `${node}\0${scenario}`) ?? null
   const history = historySource.filter((reading: any) => String(reading.scenario) === scenario)
-  const neighbors = boundedEvalNeighbors(results, node, scenario)
+  const stateByKey = new Map(results.map((item: any) => [evalItemKey(item), String(item.state ?? evalReviewState(item))]))
+  const sequence = metadata.sequence
+    ?? results.map((item: any) => ({ node: String(item.node), scenario: String(item.scenario) }))
+  const neighbors = boundedEvalNeighbors(sequence, node, scenario,
+    (row) => stateByKey.get(evalItemKey(row)) ?? 'empty')
   const scope = metadata.scope ?? null
   return {
     scope,
@@ -266,15 +287,38 @@ export function projectEvalDetail(
   }
 }
 
+// the measured population in list order, from the freshness-free rows: a filed reading leads (newest first),
+// and the tie-breaks are the identity ones — the SAME comparison `byNewest` applies, over the only fields it
+// actually reads. Blind rows never enter, exactly as the detail's own `results` filter excludes them.
+export function measuredSequence(order: SessionEvalOrderRow[]): { node: string; scenario: string }[] {
+  return order.filter((row) => row.ts)
+    .sort((a, b) => String(b.ts ?? '').localeCompare(String(a.ts ?? ''))
+      || a.node.localeCompare(b.node) || a.scenario.localeCompare(b.scenario))
+    .map((row) => ({ node: row.node, scenario: row.scenario }))
+}
+
+// the nodes whose verdicts the response will publish: the selected row's, plus a window wide enough to
+// contain any neighbour boundedEvalNeighbors can choose (it takes at most five, split around the index).
+function focusNodes(order: SessionEvalOrderRow[], node: string, scenario: string): string[] {
+  const sequence = measuredSequence(order)
+  const index = sequence.findIndex((row) => row.node === node && row.scenario === scenario)
+  if (index < 0) return [node]
+  return [...new Set([node, ...sequence.slice(Math.max(0, index - 6), index + 7).map((row) => row.node)])]
+}
+
 export async function evalDetailReview(node: string, scenario: string, scope?: string | null): Promise<EvalDetailReview | null> {
   if (scope) {
-    const model = await buildSessionEvals(scope)
+    // A detail renders ONE row plus at most five neighbours, but owes the whole population's index/total.
+    // So name the window from the freshness-free sequence and let only those nodes pay the freshness pass;
+    // a build that finds a full cached model ignores the pick and answers from it instead.
+    const model = await buildSessionEvals(scope, (order) => focusNodes(order, node, scenario))
     if (!model) return null
     const sourceNode = model.nodes.find((candidate) => candidate.id === node)
     return projectEvalDetail(scopedEvalReviewItems(model), sourceNode?.evals ?? [], node, scenario, {
       scope,
       summary: model.summary,
       evalRevision: model.evalRevision,
+      ...(model.order ? { sequence: measuredSequence(model.order) } : {}),
     })
   }
   await getBoard()

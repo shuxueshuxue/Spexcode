@@ -64,7 +64,16 @@ order. Neighbor groups preserve the source's stable list order, nearest to the s
 forward side taking the odd slot and boundary capacity refilling from the other side. No other scenario's
 history or reconstructable row rides the response. Trunk detail reads the server-only atomic review snapshot;
 scoped detail projects the worktree engine and also returns its summary and
-`evalRevision {epoch,generation,content}`. A browser that has observed a newer graph projection discards and
+`evalRevision {epoch,generation,content}`.
+
+A detail response is bounded in COST the same way it is bounded in bytes. Sequence — which scenarios are in
+play, in what order, and therefore the selected row's `index` and the source `total` — is derived from
+identity and filed time alone, never from freshness, so it is read for the whole population without a single
+freshness probe. Verdicts are then measured only for the rows the response actually publishes: the selected
+one and a window guaranteed to contain every neighbor the projection may choose. The two are separate reads
+over one population and MUST order it identically, or Back and Continue Reviewing would disagree with the
+list this detail was opened from; nothing else in the response can expose a divergence, so that equality is
+pinned directly. A row whose freshness was never computed may order a list and may never state a verdict. A browser that has observed a newer graph projection discards and
 retries the old response; equal generations require equal content revisions. The session HTML export is the
 only full-model transport exception. Issue detail remains a separate single-object `/api/issues/:id` read and
 never falls back to graph or list rows.

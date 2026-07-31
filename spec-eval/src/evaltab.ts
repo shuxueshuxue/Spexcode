@@ -38,6 +38,10 @@ export type EvalEntry = {
   ts: string
   fresh: boolean
   staleAxes: StaleAxis[]
+  // set by an order-only read, whose `fresh`/`staleAxes` are placeholders it never computed. A consumer
+  // that ignores the flag reads the CONSERVATIVE direction (stale), and evalReviewState refuses the row
+  // outright — so a deferred verdict can neither be published as fresh nor pass silently.
+  freshnessDeferred?: true
   blobState: 'present' | 'miss' | 'none'
   codeDrift?: { file: string; behind: number }[]
   remarks?: RemarkView[]
@@ -98,7 +102,12 @@ export async function evalContext(
 // per read rather than once per reading. evalTimelines is the plural the graph build actually wants: it
 // plans every node's rows first (pure fs + in-memory projection), primes the content and anchor probes with
 // the WHOLE demand set, then assembles. Singular evalTimeline is the one-id case of the same path.
-export async function evalTimelines(ids: readonly string[], ctx?: EvalContext): Promise<EvalTimeline[]> {
+// @@@ `order` skips the FRESHNESS pass, not the rows - a caller that only needs to know WHICH scenarios are
+// in play and in what sequence (identity, filed time, measured-or-blind) pays for none of the probes: on a
+// 415-node scope the freshness pass is 25s and 1476 git children, the rows themselves are milliseconds.
+// Rows returned this way carry `freshnessDeferred` INSTEAD of `fresh`/`staleAxes`, and evalReviewState
+// refuses them loudly — an order row can never be mistaken for a measured verdict.
+export async function evalTimelines(ids: readonly string[], ctx?: EvalContext, opts: { order?: boolean } = {}): Promise<EvalTimeline[]> {
   const root = ctx?.root ?? repoRoot()
   const ynodes = ctx?.ynodes ?? evalNodes(root)
   const specs = ctx?.specs ?? await loadSpecs()
@@ -123,6 +132,12 @@ export async function evalTimelines(ids: readonly string[], ctx?: EvalContext): 
     return { id, ynode, codeEntries, rows, retractions, oks }
   })
 
+  // an order-only read stops HERE, before a single probe: the rows above are already the whole answer.
+  if (opts.order)
+    return plans.map((plan) => assembleTimeline(plan.id, plan.ynode, plan.rows, plan.retractions, plan.oks, {
+      idx, scidx, tracks, probe, anchors, order: true,
+    }))
+
   // An off-history anchor is the only reading that needs a content verdict; those primes serialize inside the
   // probe per anchor, so issuing them together lets one anchor's paths union into one child instead of N.
   await Promise.all(plans.flatMap((plan) => plan.ynode
@@ -146,6 +161,7 @@ export async function evalTimeline(id: string, ctx?: EvalContext): Promise<EvalT
 type AssembleDeps = {
   idx: DriftIndex; scidx: ScenarioIndex; tracks: Map<string, RemarkTrack>
   probe: ReturnType<typeof contentProbeFor>; anchors: ReturnType<typeof anchorProbeFor>
+  order?: boolean   // identity/sequence only — emit no freshness claim
 }
 function assembleTimeline(
   id: string,
@@ -153,7 +169,7 @@ function assembleTimeline(
   rows: { reading: Reading; axis: ReturnType<typeof scenarioCodeAxis> }[],
   retractions: Retraction[],
   oks: HumanOk[],
-  { idx, scidx, tracks, probe, anchors }: AssembleDeps,
+  { idx, scidx, tracks, probe, anchors, order }: AssembleDeps,
 ): EvalTimeline {
   if (!ynode) return { node: id, hasEvalFile: false, scenarios: [], readings: [], retractions: [], dangling: [] }
   const byName = new Map(ynode.scenarios.map((s) => [s.name, s]))
@@ -167,9 +183,9 @@ function assembleTimeline(
   const readings: EvalEntry[] = []
   for (const { reading: r, axis } of rows) {
     const sc = byName.get(r.scenario)
-    const axes = staleAxes(r, axis.entries, ynode.evalPath, idx, scidx,
+    const axes = order ? [] : staleAxes(r, axis.entries, ynode.evalPath, idx, scidx,
       remarksFor(r.scenario).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt })), probe, sc, anchors)
-    const drift = axes.includes('code') ? codeDrift(idx, r.codeSha, axis.entries, probe) : []
+    const drift = !order && axes.includes('code') ? codeDrift(idx, r.codeSha, axis.entries, probe) : []
     const evidence: EvidenceView[] = evidenceOf(r).map((e) => ({ hash: e.hash, kind: e.kind, state: hasBlob(e.hash) ? 'present' : 'miss' }))
     const primary = evidence.find((e) => e.kind === 'video') ?? evidence[0]
     const okRow = humanOkFor(oks, r.scenario, r.ts)
@@ -185,8 +201,9 @@ function assembleTimeline(
       ...(r.by ? { by: r.by } : {}),
       ...(r.verdict ? { verdict: r.verdict } : {}),
       ts: r.ts,
-      fresh: axes.length === 0,
+      fresh: !order && axes.length === 0,
       staleAxes: axes,
+      ...(order ? { freshnessDeferred: true as const } : {}),
       ...(drift.length ? { codeDrift: drift } : {}),
       blobState: primary ? primary.state : 'none',
       ...(threadFor(r.scenario) ? { thread: threadFor(r.scenario) } : {}),

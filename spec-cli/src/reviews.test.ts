@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { boundedEvalNeighbors, paginateReview, projectEvalDetail, reviewPageNumber, scopedEvalReviewItems, trunkEvalReviewItems } from './reviews.js'
+import { boundedEvalNeighbors, measuredSequence, paginateReview, projectEvalDetail, reviewPageNumber, scopedEvalReviewItems, trunkEvalReviewItems } from './reviews.js'
+import { orderRowsOf } from '../../spec-eval/src/sessioneval.js'
 // @ts-expect-error The shared browser/server engine is deliberately plain JS — the same module the server
 // folds counts with, so this test measures the real canonical path rather than a re-implementation.
 import { evalFilterModel, tokenFilterState } from '../../spec-dashboard/src/reviewFilters.js'
@@ -115,8 +116,8 @@ test('one detail projection returns only selected history and at most five light
 
 test('detail neighbor budget refills at boundaries and missing selections stay honest', () => {
   const items = Array.from({ length: 8 }, (_, index) => ({ node: 'n', scenario: `s${index}`, state: 'pass', filterKind: 'result' }))
-  assert.deepEqual(boundedEvalNeighbors(items, 'n', 's0').next.map((row) => row.scenario), ['s1', 's2', 's3', 's4', 's5'])
-  assert.deepEqual(boundedEvalNeighbors(items, 'n', 's7').prev.map((row) => row.scenario), ['s6', 's5', 's4', 's3', 's2'])
+  assert.deepEqual(boundedEvalNeighbors(items as any, 'n', 's0', (r: any) => String((items as any[]).find((i: any) => i.node === r.node && i.scenario === r.scenario)?.state ?? 'empty')).next.map((row) => row.scenario), ['s1', 's2', 's3', 's4', 's5'])
+  assert.deepEqual(boundedEvalNeighbors(items as any, 'n', 's7', (r: any) => String((items as any[]).find((i: any) => i.node === r.node && i.scenario === r.scenario)?.state ?? 'empty')).prev.map((row) => row.scenario), ['s6', 's5', 's4', 's3', 's2'])
   const missing = projectEvalDetail(items, [{ scenario: 'absent' }], 'n', 'absent', {
     scope: 'scope-1',
     summary: { measured: 8, total: 8, pass: 8, fail: 0, review: 0, blind: 0, unknown: 0 },
@@ -163,4 +164,41 @@ test('eval verdict counts split freshness ONCE on the server, over the whole pop
   assert.deepEqual(fresh.counts, { fail: { fresh: 1, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0 })
   assert.equal(fresh.total, 2)
   assert.deepEqual(page('is:eval freshness:stale').counts, { fail: { fresh: 0, stale: 1 }, pass: { fresh: 0, stale: 2 }, unmeasured: 0 })
+})
+
+// @@@ the focused detail's one real hazard, pinned - a detail open derives its index/total/neighbours from
+// the freshness-free sequence while its states come from the few nodes it actually measured. Those are two
+// code paths over the same population, so they must order it IDENTICALLY or Back and "up next" would point
+// somewhere the list page does not. Nothing else in the response can reveal a divergence.
+test('the freshness-free sequence orders the population exactly as the full model does', () => {
+  const at = (scenario: string, ts: string) => ({
+    scenario, ts, codeSha: 'c', blob: null, blobState: 'none' as const, fresh: true, staleAxes: [],
+    expected: '', verdict: { status: 'pass' as const }, inSession: false,
+  })
+  const nodes: any[] = [
+    {
+      id: 'beta', title: 'beta', hue: 1, desc: '', hasEvalFile: true, uncoveredFrontend: false,
+      unknownCoverage: [], causes: [],
+      scenarios: [{ name: 'same-ts', expected: '' }, { name: 'newest', expected: '' }, { name: 'never-run', expected: '' }],
+      evals: [at('newest', '2026-03-01'), at('same-ts', '2026-01-01')],
+    },
+    {
+      id: 'alpha', title: 'alpha', hue: 2, desc: '', hasEvalFile: true, uncoveredFrontend: false,
+      unknownCoverage: [], causes: [],
+      scenarios: [{ name: 'same-ts', expected: '' }, { name: 'middle', expected: '' }],
+      evals: [at('middle', '2026-02-01'), at('same-ts', '2026-01-01')],
+    },
+  ]
+  const model: any = {
+    id: 's', node: null, branch: null, title: 's', ahead: 0, dirtyNonRuntime: 0, gates: [], nodes,
+    impact: { base: 'b', head: 'h', revision: 'r', nodes: [] },
+    summary: { measured: 4, total: 5, pass: 4, fail: 0, review: 0, blind: 1, unknown: 0 },
+    evalRevision: { epoch: 'e', generation: 1, content: 'c' },
+  }
+  const full = scopedEvalReviewItems(model)
+    .filter((item: any) => item.filterKind === 'result')
+    .map((item: any) => ({ node: String(item.node), scenario: String(item.scenario) }))
+  assert.deepEqual(measuredSequence(orderRowsOf(nodes)), full,
+    'the cheap sequence and the full model must agree row for row, ties included')
+  assert.ok(full.length === 4, 'the blind row stays out of the measured sequence, as the detail projection expects')
 })

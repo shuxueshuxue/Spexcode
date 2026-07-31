@@ -273,6 +273,21 @@ scenarios:
       selector and its repair, EVEN WHEN the changed-path set is empty — a cheap open that silently certifies
       zero impact over a selector it declined to resolve fails this scenario harder than a slow one, and no
       changed-path gate may turn a dead selector into a vacuous no-hit answer.
+  - name: detail-open-measures-what-it-renders
+    tags: [backend-api]
+    code: [spec-eval/src/sessioneval.ts, spec-cli/src/reviews.ts]
+    description: >-
+      On a real adopter session whose scope is large (adopter-a: 840 commits from merge-base, 454 nodes in the
+      impact set, 1336 measured scenarios), call the scoped detail projection for one scenario from a cold
+      process, with every `git` child counted through a PATH shim. Run the shipped tree and the changed tree
+      the same way and compare BOTH the cost and every field of the response.
+    expected: >-
+      The response is identical field for field — selected verdict, complete A/B history, neighbors.total,
+      neighbors.index, and the prev/next rows with their states — because a detail open changes only WHICH
+      rows it measures, never what it answers. Cost does not track the scope: freshness is computed for the
+      selected row and its neighbour window, while the sequence that fixes index and total is read for the
+      whole population without probes. A run whose response moves is the defect, however fast; so is a run
+      whose child count still scales with the node closure.
 ---
 # session-eval loss
 

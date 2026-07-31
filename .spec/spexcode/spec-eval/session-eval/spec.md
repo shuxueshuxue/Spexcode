@@ -241,7 +241,18 @@ real product, not by a language-specific checker; a session with no worktree/dif
 state.
 
 Interactive full rows are not a transport. A scoped list receives one 25-row page; a scoped detail receives
-only its selected row, that scenario's complete history, and at most five lightweight neighbors. Each response
+only its selected row, that scenario's complete history, and at most five lightweight neighbors.
+
+**A detail open measures what it renders, not what is in scope.** The scope's expense is the freshness pass,
+and it grows with the node closure — but a detail publishes one verdict and at most five neighboring states
+while still owing the population's `index` and `total`. So the engine reads that population's sequence with
+no probes at all (identity and filed time answer it), lets the caller name the few nodes whose verdicts will
+be published, and runs the freshness pass over only those. The model this returns is deliberately PARTIAL —
+its nodes are the rendered window, not the scope — and a partial model may never enter the content-addressed
+cut, because the list page and the graph read that cut as the session's whole evaluation. It still prefers a
+cached FULL model when one exists: a complete answer already paid for beats a cheap incomplete one. Rows from
+the sequence pass carry no freshness claim and are refused outright if asked for a verdict, so the saving can
+never be spent on a guess. Each response
 carries the same generation, content revision, and `sessionEvalSummary` projection as the graph field. If the client has already observed a
 newer graph generation, it rejects the old response and reloads; equal generations must have equal content
 revisions. This fence keeps a slow demand read from repainting newer loss while preserving the tier split: summary

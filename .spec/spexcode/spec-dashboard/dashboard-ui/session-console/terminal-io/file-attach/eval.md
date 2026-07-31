@@ -53,6 +53,17 @@ scenarios:
       rather than restarting, then completes and splices one absolute final path. The completed file's bytes
       and declared length match exactly; no partial path ever enters the draft. A cancelled transfer removes
       its staging state and leaves the draft unchanged.
+  - name: completed-row-fades-after-path-splice
+    tags: [frontend-e2e, backend-api]
+    test: spec-dashboard/test/attachment-complete.e2e.mjs
+    description: >
+      Through the running dashboard in a real browser, pick a small non-empty file from the New Session
+      paperclip. Observe the completed attachment row after its returned backend path appears in the prompt,
+      then keep observing the same queue without clicking its dismiss control.
+    expected: |
+      The row briefly reports `attached` after its absolute path is spliced into the prompt, then fades out and
+      is removed without a human action. Failed and cancelled rows are not auto-removed: their recovery or
+      dismiss controls remain available.
 ---
 
 # file-attach — eval

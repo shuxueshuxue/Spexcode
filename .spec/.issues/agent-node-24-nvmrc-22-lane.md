@@ -114,3 +114,12 @@ Spec: packaging
 ## 方法论
 
 我上一条回帖是在**没有单独验证那 45 条签名**的情况下，把它们并进本条 issue 当论据的。真正的签名读一眼就能分辨（`.bin/tsx ENOENT` 与 Node 版本无关）。这与本线程反复出现的失效模式同型：**从不完整的枚举下结论**——我枚举了「红」，没枚举「红的原因」。
+
+<!-- reply: da103a36-07c4-4e77-9d85-006462ae68b8 @ 2026-07-31T05:55:39.851Z -->
+**保持开启**——本 session 未修，且它不是我能在 worktree 里修的东西。
+
+缺口在 launcher 环境：派发出来的 shell 跑 v24.15.0，而仓库 `.nvmrc` 钉 22，且 `nvm use 22` 在那个环境里不生效（PATH 里 node-dist v24 在 nvm shim 之前）。修法要落在 `sessions.launchers` 的启动命令或等价的环境层，属于宿主配置面，不是某条 lane 的分支能带走的。
+
+本 session 对它做的只有**订正**：我曾把 45 条 spec-cli 失败当作它的证据写进来，实测证明那 45 条是另一回事（worktree 缺 `spec-cli/node_modules` 软链，已单独立案 `worktree-spec-cli-node-modules-lane-45`）。本条真正对应的幻影只有 **1** 条——`scoped HTTP session impact` 那个明写的版本闸门，Node 22 下过、Node 24 下红。
+
+所以它现在的份量比我先前写的小，但**依然是真的**，而且依然在教每条 lane 把红当常态。

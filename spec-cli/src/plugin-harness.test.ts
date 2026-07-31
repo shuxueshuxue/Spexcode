@@ -63,6 +63,17 @@ test('emitPlugin is idempotent — re-emitting overwrites in place', () => {
   assert.equal(manifest.version, '1.2.3')
 })
 
+test('emitPlugin prunes removed surface files', () => {
+  const proj = mkdtempSync(join(tmpdir(), 'spex-plug-prune-'))
+  emitPlugin(proj, '.claude', BUNDLE)
+  const bundle = pluginBundleDir(proj, '.claude')
+  emitPlugin(proj, '.claude', { ...BUNDLE, skills: [], agents: [], commands: [] })
+  assert.ok(!existsSync(join(bundle, 'skills', 'taste')), 'a removed skill directory does not survive re-emission')
+  assert.ok(!existsSync(join(bundle, 'agents', 'sample-agent.md')), 'a removed agent does not survive re-emission')
+  assert.ok(!existsSync(join(bundle, 'commands', 'tidy.md')), 'a removed command does not survive re-emission')
+  assert.ok(existsSync(join(bundle, 'hooks', 'hooks.json')), 'unrelated bundle products remain in place')
+})
+
 test('cleanPlugin removes OUR bundle only — identity-gated on plugin.json name', () => {
   const proj = mkdtempSync(join(tmpdir(), 'spex-plug3-'))
   emitPlugin(proj, '.adopter-a', BUNDLE)

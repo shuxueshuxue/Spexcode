@@ -35,6 +35,32 @@ scenarios:
       queued in the order they were said — a later message is never handed over ahead of an earlier one,
       because order is a property of a conversation. Once the condition clears, the remaining two arrive in
       that same order, each exactly once.
+  - name: exactly-once-across-backends
+    tags: [cli]
+    description: >-
+      Two `spex serve` processes over ONE project store, both sweeping. Create a session through the first,
+      send to it through the second, then stop its runtime, queue three messages sent alternately through
+      both backends, and resume — so both sweeps race to drain the same queue. Count arrivals in the
+      receiving agent's transcript and check their order.
+    expected: >-
+      Every message arrives EXACTLY ONCE and in the order it was said, however many backends are draining:
+      the queue's lock, not process ownership, is what makes a handover exactly-once, so a second serve is
+      redundancy rather than duplication. Neither backend needs to be the one that launched the session. A
+      send made through either reaches the same queue, because delivery state lives in the store, not in a
+      process.
+  - name: rollout-window-old-sender-new-hook
+    tags: [cli]
+    description: >-
+      The mixed-version window a fleet passes through. Point an OLD-code backend (one whose sendText only
+      pokes, without enqueueing) at a session whose worktree has ALREADY materialized the mail-free hook.
+      Stop that session's runtime, send one message from the old backend and one from a new one, then resume
+      and count arrivals.
+    expected: >-
+      The new backend's message is queued and handed over exactly once on resume. The old backend's is
+      recorded in the log, reports success, and NEVER ARRIVES — nothing enqueued it and the hook that used
+      to replay it is gone. This is a real loss window, not a theoretical one, and it names the required
+      rollout order: the backend must be upgraded BEFORE a session's hook is re-materialized, never after.
+      A deployment that materializes first and restarts second opens exactly this gap.
   - name: old-session-owes-nothing
     tags: [cli]
     description: >-

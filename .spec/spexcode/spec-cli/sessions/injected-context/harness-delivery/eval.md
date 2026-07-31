@@ -40,6 +40,18 @@ scenarios:
       checkout rather than dropping it). A re-run from
       either checkout leaves the shared exclude byte-stable — materialize never churns the common file the
       two checkouts share.
+  - name: same-input-materialize-is-an-operational-noop
+    tags: [backend-api, cli]
+    code: spec-cli/src/materialize.ts
+    description: >-
+      In an adopted repository with tracked host CLAUDE.md, AGENTS.md and .gitignore, materialize once,
+      record the filesystem identity timestamps of every selected contract, shim and managed ignore target,
+      then materialize again without changing the source tree or config.
+    expected: >-
+      The second pass preserves every recorded timestamp while all artifacts and Git's clean index remain
+      correct. A same-input render reconciles against its current target map; it never deletes and recreates
+      correct materialized files merely to arrive at the same bytes.
+    test: spec-cli/src/materialize.test.ts
   - name: codex-trust-is-scoped-and-additive
     tags: [backend-api]
     description: >-

@@ -88,9 +88,10 @@ plugin node. This replaces the launch-time
 - **the dispatch-family allowlist** (same slot), atomically renamed into place LAST. It is the sole success
   receipt consumed by dispatch, so a killed writer leaves the preceding successful selection intact.
 
-The pass obeys a scoped **forgetting law**. One tree's semantic output is exactly its current policy. Local
-landing points are ERASE-THEN-ASSERT by identity stamp, so narrowing one tree removes its
-contract/shim/skills without touching a sibling. Project-scoped hook/trust wiring is installation transport,
+The pass obeys a scoped **forgetting law**. One tree's semantic output is exactly its current policy. The
+current target map reconciles by identity stamp: it removes landing points absent from that map and writes only
+bytes that differ, so narrowing one tree removes its contract/shim/skills without touching a sibling while an
+identical second pass is an operational no-op (no delete/recreate churn or watcher event). Project-scoped hook/trust wiring is installation transport,
 not selection state: once a tree needs it, it may remain dormant until project-wide dematerialize/uninstall.
 The dispatch-family allowlist in each existing tree runtime slot is the single final publication of a
 successful pass, and gates that shared transport before admission or input handling; retaining the transport

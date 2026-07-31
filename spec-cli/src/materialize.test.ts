@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, lstatSync, rmSync, readdirSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, lstatSync, statSync, rmSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -80,6 +80,16 @@ test('one residence behavior: tracked host text keeps pristine index bytes while
   const once = snap()
   spex('materialize')
   assert.equal(snap(), once, 'idempotence: a second materialize changes nothing')
+})
+
+test('same-input materialize is an operational no-op', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, spex } = makeHost()
+  const outputs = ['CLAUDE.md', 'AGENTS.md', '.gitignore', '.claude/settings.json', '.codex/hooks.json']
+    .map((path) => join(proj, path))
+  const before = outputs.map((path) => statSync(path, { bigint: true }).ctimeNs)
+  spex('materialize')
+  assert.deepEqual(outputs.map((path) => statSync(path, { bigint: true }).ctimeNs), before,
+    'an unchanged target map must not rewrite already-correct materialized outputs')
 })
 
 test('retired axis: any render/private value is IGNORED with a loud notice — behavior identical, no fail', { skip: !gitAvailable() && 'git not available' }, () => {

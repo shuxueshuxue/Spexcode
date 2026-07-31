@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { relative } from 'node:path'
 import { materialize, stripSpexcodeBlock, GENERATED_MARK } from './materialize.js'
 import { HARNESSES } from './harness.js'
+import { gitBinary } from './git.js'
 
 // GIT ENV, deliberately INVERTED from git.ts's git(): every call here PRESERVES the hook's environment —
 // GIT_INDEX_FILE must be honored so the surgery reads/writes the EXACT index this commit is being built
@@ -9,7 +10,7 @@ import { HARNESSES } from './harness.js'
 // operating on the real one would silently miss them). git.ts strips that env for repo DISCOVERY reasons;
 // index surgery is the one place the env is the point.
 const raw = (args: string[], input?: string): string =>
-  execFileSync('git', args, { input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
+  execFileSync(gitBinary(process.env), args, { input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
 
 function inHead(p: string): boolean {
   try { raw(['cat-file', '-e', `HEAD:${p}`]); return true } catch { return false }

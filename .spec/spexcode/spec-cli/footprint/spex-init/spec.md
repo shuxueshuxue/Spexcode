@@ -93,6 +93,9 @@ with one actionable error pointing at `git init`. It deliberately does **not** r
 creating a repo is a side effect beyond init's remit (a subdir, a dir not meant as a repo root), and the
 repair is one command. When `mainBranch` is not already explicit, the root checkout must name a branch;
 detached adoption fails loud with the repair instead of silently stamping a guessed trunk.
+All of those adoption Git queries use [[git-exec]]'s resolved executable for their inherited PATH, so the
+same selected Git binary serves the precondition, common-hooks lookup and branch read without each child
+repeating PATH resolution.
 
 **Adoption is additive and preserves user ownership.** An existing `<dir>/.spec` aborts the spec phase with
 a warning. A user-owned hook is never executed as a probe and never overwritten. SpexCode-owned hook

@@ -1,7 +1,7 @@
 import { execFileSync, execFile, spawn } from 'node:child_process'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { readFileSync, readdirSync, statSync, existsSync, writeFileSync, mkdirSync, rmSync, renameSync, openSync, closeSync } from 'node:fs'
-import { join, isAbsolute, resolve } from 'node:path'
+import { readFileSync, readdirSync, statSync, existsSync, writeFileSync, mkdirSync, rmSync, renameSync, openSync, closeSync, accessSync, constants } from 'node:fs'
+import { join, isAbsolute, resolve, delimiter } from 'node:path'
 import { createHash, randomBytes } from 'node:crypto'
 import { projectRuntimeRoot } from './project-store.js'
 import { rootSlots, touchRoot as touchRootLru } from './root-lru.js'
@@ -15,6 +15,24 @@ const US = '\x1f', RS = '\x1e'
 // than materializing one process per worktree/eval. Calls outside that build context remain unconstrained.
 const GIT_TIMEOUT_MS = Number(process.env.SPEXCODE_GIT_TIMEOUT_MS || 120000)
 export const BOARD_GIT_CONCURRENCY = 4
+const gitByPath = new Map<string, string>()
+
+export function gitBinary(env: NodeJS.ProcessEnv = process.env): string {
+  const path = env.PATH || ''
+  const known = gitByPath.get(path)
+  if (known) {
+    try { accessSync(known, constants.X_OK); return known } catch {}
+  }
+  for (const dir of path.split(delimiter)) {
+    const candidate = resolve(dir || '.', 'git')
+    try {
+      accessSync(candidate, constants.X_OK)
+      gitByPath.set(path, candidate)
+      return candidate
+    } catch {}
+  }
+  throw new Error('git executable not found on PATH')
+}
 type GitPermitPool = { acquire: (signal: AbortSignal) => Promise<() => void> }
 type GitBuildContext = { signal: AbortSignal; permits: GitPermitPool }
 const gitBuild = new AsyncLocalStorage<GitBuildContext>()
@@ -115,7 +133,7 @@ export function git(args: string[]): string {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
   try {
-    return execFileSync('git', withBuildLimits(args), { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
+    return execFileSync(gitBinary(env), withBuildLimits(args), { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
   } catch (e: any) { warnIfTimedOut(e, args); throw e }
 }
 
@@ -123,7 +141,7 @@ function gitBuffer(args: string[], input?: string): Buffer {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
   try {
-    return execFileSync('git', withBuildLimits(args), {
+    return execFileSync(gitBinary(env), withBuildLimits(args), {
       input,
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -267,7 +285,7 @@ const GIT_MAX_BUFFER = 1 << 24
 function execGit(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, maxBuffer = GIT_MAX_BUFFER, input?: string): Promise<GitExec> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(gitAbortError()); return }
-    const child = spawn('git', args, { env, detached: true, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] })
+    const child = spawn(gitBinary(env), args, { env, detached: true, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] })
     const stdout: Buffer[] = [], stderr: Buffer[] = []
     let stdoutBytes = 0, stderrBytes = 0, aborted = false, timedOut = false, overflow = false
     let spawnError: Error | null = null
@@ -338,7 +356,7 @@ async function execGitForCaller(args: string[], env: NodeJS.ProcessEnv, maxBuffe
 function execGitStream(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<GitExec> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(gitAbortError()); return }
-    const child = spawn('git', args, { env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(gitBinary(env), args, { env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
     const stdout: Buffer[] = [], stderr: Buffer[] = []
     let settled = false, aborted = false, timedOut = false
     const killTree = () => {
@@ -826,8 +844,12 @@ async function identityRawEventStream(root: string, tip: string, request: EventS
   return value as IdentityRawRecord[]
 }
 export type GitTryFailure = 'exit' | 'spawn' | 'timeout'
-export async function gitTry(args: string[], options: { indexFile?: string } = {}): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
+export async function gitTry(args: string[], options: { indexFile?: string; extraEnv?: Record<string, string | undefined> } = {}): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
   const env = { ...process.env }
+  for (const [key, value] of Object.entries(options.extraEnv ?? {})) {
+    if (value === undefined) delete env[key]
+    else env[key] = value
+  }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
   if (options.indexFile) env.GIT_INDEX_FILE = options.indexFile
   const context = inheritedContext()
@@ -2091,7 +2113,7 @@ export function mergeConflicts(wtPath: string, mainRef = 'main'): Promise<boolea
   return new Promise((resolve) => {
     const env = { ...process.env }
     delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
-    execFile('git', ['-C', wtPath, 'merge-tree', '--write-tree', '--no-messages', mainRef, 'HEAD'],
+    execFile(gitBinary(env), ['-C', wtPath, 'merge-tree', '--write-tree', '--no-messages', mainRef, 'HEAD'],
       { encoding: 'utf8', env, maxBuffer: 1 << 24 },
       // execFile sets err.code to the numeric EXIT code on a non-zero exit (1 = conflicts), or a string
       // errno (e.g. 'ENOENT') if git can't be spawned — only the exit-1 case is a real conflict verdict.

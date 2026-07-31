@@ -21,6 +21,7 @@ import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGener
 
 const pexec = promisify(execFile)
 export const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
+const DEFER_FOOTPRINT_REFRESH = { SPEXCODE_DEFER_FOOTPRINT_REFRESH: 'session-create' }
 const HARNESS = defaultHarness
 const COLS = 120, ROWS = 32
 const DEFAULT_MAX_ACTIVE = 8
@@ -1889,7 +1890,10 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
         let published = false
         try {
           gitMutationStarted = true
-          const added = await withGitAbortSignal(signal, () => gitTry(['-C', root, 'worktree', 'add', '-b', branch, path, mainBranch()]))
+          const added = await withGitAbortSignal(signal, () => gitTry(
+            ['-C', root, 'worktree', 'add', '-b', branch, path, mainBranch()],
+            { extraEnv: DEFER_FOOTPRINT_REFRESH },
+          ))
           if (added.ok) Object.assign(owned, { path: true, worktree: true, branch: true })
           if (!added.ok || !existsSync(path)) {
             throw new SessionCreateError('session_create_failed', phase, `git worktree add failed: ${added.stderr.trim() || added.failure || 'worktree missing after success'}`, 500)

@@ -41,7 +41,9 @@ The pieces map from the same [[surface]] nodes the native path materializes, but
   [[commit-surgery]] — never on a harness event).
 - **skills / commands / agents** ship as files in the Claude-plugin layout, reusing the same materialized
   skill and agent contents the native path uses plus a command build. Commands become real host slash-menu
-  entries here — the
+  entries here — the bundle is reconciled as the exact current path set, so a deleted surface node removes
+  its obsolete generated plugin file without replacing unchanged siblings. Reconciliation enumerates only each
+  owned dynamic directory's immediate entries and removes names absent from the current surface set — the
   plugin counterpart of the native path serving its command presets through the dashboard.
 
 `clean()` is the bundle's surgical inverse, identity-gated on the bundle's own `plugin.json` name so it removes

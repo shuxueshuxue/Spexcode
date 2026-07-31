@@ -18,6 +18,7 @@ import { git } from './git.js'
 import { shQuote } from './sh.js'
 import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from './process-identity.js'
 import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
+import { writeFileIfChanged } from './file-write.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -1797,17 +1798,16 @@ async function deliverViaCodexAppServer(rec: HarnessDeliveryRecord, text: string
 // idempotent replace of the content between sentinels; the user's own content above/below is preserved. The
 // comment STYLE is a parameter so ONE primitive serves every managed file — HTML for the md contracts
 // (CLAUDE.md/AGENTS.md), `#` for .gitignore — instead of a per-file-type writer. Default = HTML (the md case).
-export function writeManagedBlock(file: string, body: string, comment: readonly [string, string] = ['<!-- ', ' -->']): void {
+export function writeManagedBlock(file: string, body: string, comment: readonly [string, string] = ['<!-- ', ' -->']): boolean {
   const [open, close] = comment
   const START = `${open}spexcode:start${close}`
   const END = `${open}spexcode:end${close}`
   const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const block = `${START}\n${body}\n${END}`
-  let cur = existsSync(file) ? readFileSync(file, 'utf8') : ''
+  const cur = existsSync(file) ? readFileSync(file, 'utf8') : ''
   const re = new RegExp(`${esc(START)}[\\s\\S]*?${esc(END)}`)
-  if (re.test(cur)) cur = cur.replace(re, block)
-  else cur = cur.trim() ? `${cur.replace(/\n*$/, '')}\n\n${block}\n` : `${block}\n`
-  writeFileSync(file, cur)
+  const next = re.test(cur) ? cur.replace(re, block) : cur.trim() ? `${cur.replace(/\n*$/, '')}\n\n${block}\n` : `${block}\n`
+  return writeFileIfChanged(file, next)
 }
 
 // the INVERSE of writeManagedBlock: strip the spexcode sentinel block (with the blank space around it),
@@ -1916,7 +1916,7 @@ export function writeCodexTrust(proj: string, events: readonly string[], cmdFor:
   const blk = `# spexcode:trust:${proj} (managed — do not edit)\n${lines.join('\n')}\n# spexcode:trust:end:${proj}`
   const cleaned = stripCodexTrustFor(existsSync(file) ? readFileSync(file, 'utf8') : '', proj, hooksJson)
   if (!existsSync(home)) mkdirSync(home, { recursive: true })
-  writeFileSync(file, cleaned ? `${cleaned}\n\n${blk}\n` : `${blk}\n`)
+  writeFileIfChanged(file, cleaned ? `${cleaned}\n\n${blk}\n` : `${blk}\n`)
   return file
 }
 

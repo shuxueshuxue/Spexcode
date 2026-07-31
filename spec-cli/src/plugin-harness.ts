@@ -1,6 +1,7 @@
-import { writeFileSync, mkdirSync, readFileSync, existsSync, rmSync, copyFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { copyFileIfChanged, writeFileIfChanged } from './file-write.js'
 
 // @@@ plugin-harness - the PLUGIN BUNDLE emitter: materialize the whole SpexCode system into ONE self-contained
 // Claude-plugin bundle dropped into the host-agent-scanned folder [[harness-select]] resolved (e.g. `.adopter-a` /
@@ -103,23 +104,33 @@ export function emitPlugin(proj: string, folder: string, r: PluginBundle): void 
   const hooksDir = join(bundle, 'hooks')
   mkdirSync(meta, { recursive: true })
   mkdirSync(hooksDir, { recursive: true })
-  writeFileSync(join(meta, 'plugin.json'), pluginManifest(r.version))
+  writeFileIfChanged(join(meta, 'plugin.json'), pluginManifest(r.version))
   // hooks: the SHARED dispatcher + its shell mirror (copied verbatim — the exact native wiring), the contract
   // injector + its pre-encoded payload, and the event→dispatch binding.
-  copyFileSync(join(HOOKS_SRC, 'dispatch.sh'), join(hooksDir, 'dispatch.sh'))
-  copyFileSync(join(HOOKS_SRC, 'harness.sh'), join(hooksDir, 'harness.sh'))
-  writeFileSync(join(hooksDir, 'inject-contract.sh'), INJECT_SH)
-  writeFileSync(join(hooksDir, 'contract-context.json'), contractContextJson(r.contract))
-  writeFileSync(join(hooksDir, 'hooks.json'), pluginHooksJson(r.spex))
+  copyFileIfChanged(join(HOOKS_SRC, 'dispatch.sh'), join(hooksDir, 'dispatch.sh'))
+  copyFileIfChanged(join(HOOKS_SRC, 'harness.sh'), join(hooksDir, 'harness.sh'))
+  writeFileIfChanged(join(hooksDir, 'inject-contract.sh'), INJECT_SH)
+  writeFileIfChanged(join(hooksDir, 'contract-context.json'), contractContextJson(r.contract))
+  writeFileIfChanged(join(hooksDir, 'hooks.json'), pluginHooksJson(r.spex))
   // skills / agents / commands — the Claude-plugin layout, the SAME materialized contents as the native dirs.
+  reconcileBundleDirectory(join(bundle, 'skills'), new Set(r.skills.map((s) => s.name)))
+  reconcileBundleDirectory(join(bundle, 'agents'), new Set(r.agents.map((a) => `${a.name}.md`)))
+  reconcileBundleDirectory(join(bundle, 'commands'), new Set(r.commands.map((c) => `${c.name}.md`)))
   for (const s of r.skills) writeBundleFile(join(bundle, 'skills', s.name, 'SKILL.md'), s.content)
   for (const a of r.agents) writeBundleFile(join(bundle, 'agents', `${a.name}.md`), a.content)
   for (const c of r.commands) writeBundleFile(join(bundle, 'commands', `${c.name}.md`), c.content)
 }
 
+function reconcileBundleDirectory(dir: string, expectedNames: ReadonlySet<string>): void {
+  if (!existsSync(dir)) return
+  for (const entry of readdirSync(dir)) {
+    if (!expectedNames.has(entry)) rmSync(join(dir, entry), { recursive: true, force: true })
+  }
+}
+
 function writeBundleFile(f: string, content: string): void {
   mkdirSync(dirname(f), { recursive: true })
-  writeFileSync(f, content)
+  writeFileIfChanged(f, content)
 }
 
 // the INVERSE of emitPlugin — prune the bundle when its folder is DESELECTED ([[harness-delivery]] tracks the

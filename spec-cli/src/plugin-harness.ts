@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, existsSync, rmSync } from 'node:fs'
+import { mkdirSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { copyFileIfChanged, writeFileIfChanged } from './file-write.js'
@@ -113,9 +113,19 @@ export function emitPlugin(proj: string, folder: string, r: PluginBundle): void 
   writeFileIfChanged(join(hooksDir, 'contract-context.json'), contractContextJson(r.contract))
   writeFileIfChanged(join(hooksDir, 'hooks.json'), pluginHooksJson(r.spex))
   // skills / agents / commands — the Claude-plugin layout, the SAME materialized contents as the native dirs.
+  reconcileBundleDirectory(join(bundle, 'skills'), new Set(r.skills.map((s) => s.name)))
+  reconcileBundleDirectory(join(bundle, 'agents'), new Set(r.agents.map((a) => `${a.name}.md`)))
+  reconcileBundleDirectory(join(bundle, 'commands'), new Set(r.commands.map((c) => `${c.name}.md`)))
   for (const s of r.skills) writeBundleFile(join(bundle, 'skills', s.name, 'SKILL.md'), s.content)
   for (const a of r.agents) writeBundleFile(join(bundle, 'agents', `${a.name}.md`), a.content)
   for (const c of r.commands) writeBundleFile(join(bundle, 'commands', `${c.name}.md`), c.content)
+}
+
+function reconcileBundleDirectory(dir: string, expectedNames: ReadonlySet<string>): void {
+  if (!existsSync(dir)) return
+  for (const entry of readdirSync(dir)) {
+    if (!expectedNames.has(entry)) rmSync(join(dir, entry), { recursive: true, force: true })
+  }
 }
 
 function writeBundleFile(f: string, content: string): void {

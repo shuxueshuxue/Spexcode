@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# spexcode-managed-hook-v1
 # @@@ issue nudge (post-merge) - the taste store ([[local-issues]]) fires AFTER the work lands, not while the
 # agent is finishing it: the agent's own task comes first. Merge is dispatched to the session's OWN agent
 # (see [[dispatch]]), so this hook runs in that live merge turn and its stdout reaches the agent as the merge

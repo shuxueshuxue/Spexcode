@@ -184,10 +184,23 @@ break — and digesting costs about a tenth of parsing, so the read remains and 
 Two costs this build still pays are named here rather than folded in, because each needs its own argument.
 The per-revision extraction memo is process-local, so a cold process re-parses revisions a previous one
 already settled; making it durable is a persistent-state decision that must argue its own case against
-[[drift-by-ancestry]]'s no-stored-state rule, not ride in as a cost tweak. And extraction is synchronous, so
-a cold build's remaining parse volume is still an uninterruptible stretch — the reason `/health` can freeze
-during one. Reducing HOW MUCH is parsed shortens that stretch proportionally; it does not make the parse
-yield, which is a separate repair.
+[[drift-by-ancestry]]'s no-stored-state rule, not ride in as a cost tweak.
+
+Extraction is synchronous, and that is a LIVENESS question rather than a latency taste: `/health` computes
+nothing, so its latency measures only whether the loop can turn, and a probe that cannot answer is
+indistinguishable from a dead backend — the CLI allows a recorded backend 600ms and the supervisor allows a
+booting child 1000ms before it keeps the old one. Reducing how much is parsed shortens the stretch
+proportionally but never makes it yield, so the two repairs are separate and both are owed. The sweep that
+resolves every reading's selectors against the working tree was the dominant offender: nothing in that
+doubly-nested loop awaited, so it held the loop 1,104ms in one uninterrupted stretch. It now yields on a time
+budget, and `setImmediate` is the yield that matters — awaiting a synchronous-bodied `async` function only
+drains microtasks and never returns to the I/O phase. Measured across three cold builds, the worst `/health`
+sample fell 1,122ms → 507/530/552ms, and no sample exceeds the 600ms the CLI judges by.
+
+What remains is a floor, not a residue: **the longest indivisible step is one parse of the largest governed
+file, measured at 440ms**, and no yield can subdivide a single `createSourceFile`. So a scenario bound
+stricter than that cannot be met by scheduling alone — only by moving extraction off the event-loop thread,
+which is its own decision with its own costs (a compiler instance and the image bytes per worker).
 
 **How that equality may be measured is part of the obligation, because the board is NOT byte-reproducible
 run to run on a live corpus.** Two runs of the SAME binary against a checkout that carries worktrees and

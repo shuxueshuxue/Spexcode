@@ -703,10 +703,12 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     // thread/start bypass, so the worktree's hooks stay untrusted and NO lifecycle hooks fire.
     `export SPEXCODE_CODEX_CMD=${shQuote(codexCmd)}`,
     // The runtime command is the single generation-ledger boundary. A new turn receives canonical `current`;
-    // resume resolves its existing session/thread binding and therefore cannot jump an old conversation to a
-    // replacement root. It prints only shell assignments for the exact proven endpoint.
+    // resume resolves its existing session/thread binding, so a LIVE root never has its conversation moved to a
+    // replacement. Both spellings carry the server command because either may be the launch that has to start a
+    // root: after a host restart the bound generation is a corpse, and resume rebuilds one to load the same
+    // on-disk rollout. It prints only shell assignments for the exact proven endpoint.
     'if [ "$1" = "--resume" ]; then',
-    `  eval "$( ${SPEX} internal codex-generation-session "$dir" "$SPEXCODE_SESSION_ID" "$2" )" || exit 1`,
+    `  eval "$( ${SPEX} internal codex-generation-session "$dir" "$SPEXCODE_SESSION_ID" "$2" ${shQuote(server)} )" || exit 1`,
     'else',
     `  eval "$( ${SPEX} internal codex-generation-current "$dir" ${shQuote(server)} )" || exit 1`,
     'fi',

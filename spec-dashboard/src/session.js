@@ -88,7 +88,11 @@ export const sessionHandle = (s) =>
   s?.label || s?.name || s?.node || s?.title || s?.branch || s?.id
 
 export const sessionHeadline = (s) =>
-  s?.headline || s?.name || s?.activity || s?.promptPreview || s?.node || s?.title || s?.branch || s?.id
+  s?.title || s?.headline || s?.name || s?.activity || s?.note || s?.promptPreview || s?.node || s?.raw?.title || s?.branch || s?.id
+
+// The visible session name is a single derived `title` on current backends. Keep the old
+// accessor as a compatibility alias while mixed-version clients roll forward.
+export const sessionTitle = sessionHeadline
 
 export function nestSessions(sessions) {
   const present = new Set(sessions.map((s) => s?.id))

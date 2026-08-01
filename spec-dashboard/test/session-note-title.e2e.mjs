@@ -21,6 +21,7 @@ const out = resolve(process.env.OUT || '/tmp/session-note-title-e2e')
 const id = 'session-note-title-target'
 const title = 'Session title must survive lifecycle notes'
 const note = 'This is a lifecycle note. It belongs in the timeline and must not rename this session.'
+const derivedTitle = `${note.slice(0, 59)}…`
 
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' })
 
@@ -123,7 +124,7 @@ try {
     if (!response.ok) return null
     return (await response.json()).sessions.find((session) => session.id === id) || null
   }, 'fixture session projection')
-  assert.equal(graph.headline, title, 'the API headline must use the title, not note')
+  assert.equal(graph.title, derivedTitle, 'the API title falls through to the note when no live summary exists')
   assert.equal(graph.note, note, 'the note remains separately available on the wire')
 
   const { chromium } = await import(pathToFileURL(playwrightPath).href)
@@ -133,8 +134,7 @@ try {
   await page.goto(`${base}/#/sessions/${id}`, { waitUntil: 'domcontentloaded' })
   const rowTitle = page.locator(`.si-item[data-sid="${id}"] .sess-id`)
   await rowTitle.waitFor({ state: 'visible', timeout: 10_000 })
-  assert.equal((await rowTitle.textContent())?.trim(), title, 'the dashboard row must keep the title')
-  assert.notEqual((await rowTitle.textContent())?.trim(), note, 'the dashboard row must not show the note as its title')
+  assert.equal((await rowTitle.textContent())?.trim(), derivedTitle, 'the dashboard row uses the note fallback')
   await page.screenshot({ path: join(out, 'note-does-not-replace-title.png'), fullPage: true })
 
   const video = page.video()
@@ -143,7 +143,7 @@ try {
   await browser.close()
   browser = null
   context = null
-  writeFileSync(join(out, 'result.json'), JSON.stringify({ id, title, note, headline: graph.headline, video: videoPath }, null, 2))
+  writeFileSync(join(out, 'result.json'), JSON.stringify({ id, title, note, derivedTitle: graph.title, video: videoPath }, null, 2))
   console.log(JSON.stringify({ ok: true, out, video: videoPath }))
 } finally {
   if (context) await context.close().catch(() => {})

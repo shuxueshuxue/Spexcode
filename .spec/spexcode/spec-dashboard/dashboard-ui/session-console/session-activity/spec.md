@@ -2,7 +2,7 @@
 title: session-activity
 status: active
 hue: 260
-desc: Each session row's headline IS the worker's own live one-line self-summary (its tmux pane title), overriding the launch-prompt placeholder; every list surface — the map-side window, the console sidebar, and the phone — renders the ONE compact one-line face (status folded to an inline colour-coded glyph, the word on hover); the map-side window alone keeps the avatar.
+desc: Each session row's title is one shared derived line, preferring the worker's live self-summary (its tmux pane title) and falling through note and prompt prose; every list surface renders that ONE compact face.
 code:
   - spec-cli/src/selfSummary.test.ts
 related:
@@ -33,9 +33,9 @@ harness declares its pane title to BE a self-summary**, hangs a cleaned summary 
 `Session.activity`. Whether a pane title is a self-summary is a **harness capability**
 (`paneTitleIsSelfSummary`, on the harness adapter — the one branch, data not a scattered `if`): Claude Code
 continuously writes its task summary into the title, so it qualifies; **Codex does not** — it sets the pane
-title to a spinner glyph + the **cwd basename** (the worktree FOLDER name), so deriving a headline from it
+title to a spinner glyph + the **cwd basename** (the worktree FOLDER name), so deriving a session title from it
 would name the folder, not the task. For a non-self-summarizing harness `activity` stays `null` and the
-headline falls through to the launch-prompt preview (below) — its task, never its folder. A genuine Claude
+title falls through to the launch-prompt preview (below) — its task, never its folder. A genuine Claude
 Code self-summary always **leads with a status glyph** (`✳` idle, a
 braille spinner frame while working); that glyph is the **proof** the title is the agent's own OSC summary
 and not tmux's default — which, from pane birth until the agent first speaks, is the **host name** (e.g.
@@ -53,29 +53,28 @@ so a dead or booting row never shows a stale line. A tmux hiccup drops the line 
 session.
 
 **Render (one shared face, two variants).** The shared session face ([[session-console]]'s `SessionRow`)
-centres on the **headline** — the one best description of what this session is *about*, single-line with an
-ellipsis. The headline prefers the worker's own live self-summary: once the pane title
-exists, the agent-generated `activity` line **is** the headline — it tracks what the agent is doing *now*,
-sharper than any launch-time label. Before it exists (booting / queued / offline) the headline shows the
-first words of the launch prompt (`promptPreview`) as a **placeholder** that the smart label overrides the
-moment it arrives, so the human's initial wording disappears once the agent has named its own task. A human
-**rename (`name`) still wins** over both — the [[session-rename]] override stays authoritative everywhere.
+centres on the **title** — the one best description of what this session is *about*, single-line with an
+ellipsis. The title prefers the worker's own live self-summary: once the pane title exists, the agent-generated
+`activity` line tracks what the agent is doing *now*. Before it exists (booting / queued / offline), a
+meaningful line from the declaration `note` or launch prompt (`promptPreview`) fills the title. A bare URL
+prompt is skipped when a later prose line exists. A human **rename (`name`) still wins** over all of these —
+the [[session-rename]] override stays authoritative everywhere.
 
 The self-summary holds the line only while the agent is still *producing* it. A pane title is a byproduct, so
 the liveness gate removes it once the worker is no longer up; then the launch prompt becomes the fallback.
-A declaration's `note` is lifecycle prose, not a title, and stays readable in Timeline instead of displacing
-the row's identity ([[session-label]] owns that separation). `activity` remains captured and rides the wire for
-every live working session.
+A declaration's complete `note` stays readable in Timeline and review; its first meaningful line is only the
+fallback title when no rename or live activity exists ([[session-label]] owns the derivation). `activity` remains
+captured and rides the wire for every live working session.
 
 There is ONE row face, and one thing flexes by surface: `showAvatar`. Every list surface — the two desktop
-lists and the phone's ([[mobile-ui]]) — renders the **compact one-line** face: the headline followed by a
+lists and the phone's ([[mobile-ui]]) — renders the **compact one-line** face: the title followed by a
 single colour-coded status **glyph** (`STATUS_GLYPH`, painted by `STATUS_COLOR`) rather than the word — the
 exact word kept on the hover title for a11y — grouped into the three triage zones ([[session-console]]).
 The **map-side** board window (SessionWindow) **keeps** the avatar, the
 fixed spatial anchor that lets a session be **cross-referenced against the avatars on the very nodes it
-edits**; the **console sidebar and the phone drop it** (`showAvatar={false}`, redundant beside the headline).
+edits**; the **console sidebar and the phone drop it** (`showAvatar={false}`, redundant beside the title).
 Where the avatar is gone the fixed anchor is simply the row's **slot** in the ordered
-list, so the headline still renarrates each turn without the row losing its place. (An older **two-row**
+list, so the title still renarrates each turn without the row losing its place. (An older **two-row**
 variant — status word + op tally on a second line — lived on as the mobile list's face long after both
 desktop lists folded it into the glyph; it is retired, deleted with its `compact` prop rather than kept as
 a dead second implementation.)
@@ -86,16 +85,16 @@ caption token: the list is a dense index, and the saved user-resized width still
 explicit 18px line box with 5px vertical padding, yielding a consistent 28px content height whether or not a
 row has a nesting rail. A selected row reveals more context in
 place, but the expansion is **capped at three lines**. Three lines make the current task recognizable without
-letting one generated headline turn the remaining sessions into a moving target; the row's tooltip and
+letting one generated title turn the remaining sessions into a moving target; the row's tooltip and
 accessible name retain the complete text. Reveal is tied to selection, never hover. The small **markers**
-(status glyph, op tally) stay pinned to the selected headline's first-line top-right while later lines use the
+(status glyph, op tally) stay pinned to the selected title's first-line top-right while later lines use the
 available width. That wrapped-reveal float is the only remaining job of `.sess-meta`'s full-width base rule;
 the meta line stays the parking spot for any further at-a-glance metadata added later.
 When the selected row belongs to the nesting forest, its leading connector/fold pod keeps the same natural
-gap before the headline after the row changes from flex to block flow; revealing a title never glues the
+gap before the title after the row changes from flex to block flow; revealing a title never glues the
 subtree count to its first word.
 
-**One name, every surface.** The `sessionHeadline` is a session's display name *everywhere a human reads
+**One name, every surface.** The `sessionTitle`/`sessionHeadline` accessor is a session's display name *everywhere a human reads
 which session this is* — rows, window, the console sidebar, **the search palette, the
 lock-hint banner, and the [[node-menu]] overlay list** (right-clicking a node lists its live sessions —
 the same live line the board rows show, never the stable label beside it) all show the identical line, so
@@ -104,7 +103,7 @@ the ordered slot, and the avatar where it's shown, are the fixed anchor and a re
 cost a surface that named a session differently from its own board.) The stable
 `sessionHandle` survives ONLY as a fixed-identity *reveal*, never a one-line title: the avatar/hover
 **tooltips** and mobile's handle-line. Even
-the [[session-rename]] prompt — where you edit the `name` override — titles itself with the headline the row
+the [[session-rename]] prompt — where you edit the `name` override — titles itself with the title the row
 shows, not this handle, so it never names the session differently from the row it was opened from; its input
 still prefills with the raw `name` override. Search *matches* the handle even when it no longer *shows*
 it — and on a current backend the handle IS the server-derived label (a rename name or the prompt
@@ -125,7 +124,7 @@ terminal-lane guard; double-clicking it clears the saved override and restores t
 
 This node's slice of the shared `styles.css` is the status line (`.sess-meta`, the full-width dimmer wrap)
 and its compact-variant collapse (the `.si-item` one-line overrides that fold `.sess-meta` inline and drop
-the status word for the `.sess-glyph` mark), and the Row-1 headline ellipsis; classes other
+the status word for the `.sess-glyph` mark), and the Row-1 title ellipsis; classes other
 surfaces add there — like the eval tab's `.eval-*` verdict/transcript rules from the measure-and-score
 reframe, or the console list's own compact-face overrides ([[session-console]]) — are those features' churn,
 not session-activity's drift.

@@ -379,13 +379,13 @@ export async function evalsReview(query: string | undefined, requestedPage: unkn
     const filtered = evalFilterModel(items, tokenFilterState(text, 'eval'), { sessions, defaultKind: 'all', defaultSection: '' })
     return {
       scope,
-      gates: model.gates,
+      gates: model.gates ?? [],
       unknown: model.nodes.reduce((count, node) => count + (node.unknownCoverage?.length ?? 0), 0),
       summary: model.summary,
       evalRevision: model.evalRevision,
       impact: model.impact,
       ...paginateReview(items, filtered.shown, filtered, requestedPage, {
-        domain: 'evals', scope, items, gates: model.gates, summary: model.summary,
+        domain: 'evals', scope, items, gates: model.gates ?? [], summary: model.summary,
         evalRevision: model.evalRevision, impact: model.impact, sessions: sessions.map((session) => session.id),
       }),
     }

@@ -252,7 +252,14 @@ its nodes are the rendered window, not the scope — and a partial model may nev
 cut, because the list page and the graph read that cut as the session's whole evaluation. It still prefers a
 cached FULL model when one exists: a complete answer already paid for beats a cheap incomplete one. Rows from
 the sequence pass carry no freshness claim and are refused outright if asked for a verdict, so the saving can
-never be spent on a guess. Each response
+never be spent on a guess.
+
+It does not buy the LIST page's chrome either. The gates strip — does this branch conflict with the base, how
+far ahead is it, is anything uncommitted — is a question about the branch, not about the scenario being read,
+and answering it costs a merge probe and a whole-worktree dirty scan. A detail renders none of it, so a
+focused build reads the session's IDENTITY from its record (free) rather than its review payload, and the
+model simply carries no gates. This is the same rule as the freshness scope, applied one layer out: a
+response buys the questions it answers. Each response
 carries the same generation, content revision, and `sessionEvalSummary` projection as the graph field. If the client has already observed a
 newer graph generation, it rejects the old response and reloads; equal generations must have equal content
 revisions. This fence keeps a slow demand read from repainting newer loss while preserving the tier split: summary

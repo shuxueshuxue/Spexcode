@@ -19,7 +19,7 @@ import {
 } from '../../spec-cli/src/git.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { mainBranch } from '../../spec-cli/src/layout.js'
-import { reviewPayload } from '../../spec-cli/src/sessions.js'
+import { reviewIdentity, reviewPayload, type ReviewIdentity } from '../../spec-cli/src/sessions.js'
 import { loadEvalRemarkTracks } from '../../spec-cli/src/issues.js'
 import {
   anchorHitCommits,
@@ -1383,12 +1383,14 @@ export type SessionEvals = {
   node: string | null
   branch: string | null
   title: string
-  ahead: number
-  dirtyNonRuntime: number
-  gates: ExportGate[]
   nodes: SessionEvalNode[]
   impact: SessionImpactProjection
   summary: SessionEvalSummary
+  // the LIST page's chrome, and only its. A focused build renders no gates strip and no branch counters, so
+  // it does not buy them — see `order` below for what marks such a model partial.
+  gates?: ExportGate[]
+  ahead?: number
+  dirtyNonRuntime?: number
   evalRevision: SessionEvalRevision
   // present ONLY on a focused build: the whole population's identity+sequence facts, because `nodes` then
   // holds just the few the response will render. Its presence is exactly what marks a model as PARTIAL —
@@ -1577,7 +1579,7 @@ type SessionEvalModel = Omit<SessionEvals, 'summary' | 'evalRevision'>
 
 async function buildSessionEvalModel(
   id: string,
-  payload: ReviewPayloadValue,
+  payload: ReviewPayloadValue | ReviewIdentity,
   wtPath: string | null,
   pick?: SessionEvalFocus,
 ): Promise<SessionEvalModel> {
@@ -1607,14 +1609,13 @@ async function buildSessionEvalModel(
     || (b.scenarios.length - a.scenarios.length) || (b.unknownCoverage.length - a.unknownCoverage.length))
 
   const primary = payload.node && specById.has(payload.node) ? specById.get(payload.node)!.title : null
+  const full = 'gates' in payload ? payload : null
   return {
     id,
     node: payload.node,
     branch: payload.branch,
     title: primary || payload.node || payload.branch || id.slice(0, 8),
-    ahead: payload.ahead,
-    dirtyNonRuntime: payload.dirtyNonRuntime,
-    gates: gateRows(payload),
+    ...(full ? { ahead: full.ahead, dirtyNonRuntime: full.dirtyNonRuntime, gates: gateRows(full) } : {}),
     nodes,
     impact,
     ...(order ? { order } : {}),
@@ -2127,7 +2128,9 @@ export async function buildSessionEvals(id: string, pick?: SessionEvalFocus): Pr
   // priority over unrelated queued summaries without opening a second git/build lane.
   for (;;) {
     const attempt = await projectionCache.demand(id, '', async () => {
-      const payload = await reviewPayload(id)
+      // a focused open renders no gates strip, so it reads the session's IDENTITY (a free store read)
+      // instead of its review payload (ahead count + dirty scan + merge-tree conflict probe).
+      const payload = pick ? reviewIdentity(id) : await reviewPayload(id)
       if (!payload) return { kind: 'missing' as const }
       const wtPath = worktreePathForBranch(payload.branch)
       const ctxPath = wtPath ?? repoRoot()

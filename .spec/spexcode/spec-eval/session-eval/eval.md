@@ -287,7 +287,9 @@ scenarios:
       rows it measures, never what it answers. Cost does not track the scope: freshness is computed for the
       selected row and its neighbour window, while the sequence that fixes index and total is read for the
       whole population without probes. A run whose response moves is the defect, however fast; so is a run
-      whose child count still scales with the node closure.
+      whose child count still scales with the node closure. The same rule covers the list page's chrome: a
+      detail renders no gates strip, so a warm open must not pay the branch's merge probe or dirty scan
+      either — measure a second open against the warm cut and it stays under a second.
 ---
 # session-eval loss
 

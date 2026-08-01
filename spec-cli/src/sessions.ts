@@ -73,7 +73,7 @@ const PROPOSAL_STATUS: Record<Proposal, DisplayStatus> = { merge: 'review', noth
 
 export type Session = {
   id: string; node: string | null; branch: string | null; path: string
-  label: string; headline: string   // the DERIVED display strings ([[session-label]]) — the only names surfaces read
+  label: string; title: string   // `label` remains the stable search handle; `title` is the one visible session name
   raw: { name: string | null; title: string | null }   // the bare parts, for explicit consumers only (rename prefill)
   parent: string | null   // the SPAWNING session's id ([[session-nesting]]) — set once at creation when `spex session new` ran inside another session, else null; the frontend folds a child under it at read time
   harness: string   // which harness (claude|codex) runs this session — carried so liveness/occupancy route through its adapter
@@ -112,18 +112,26 @@ function removeLaunchFile(id: string): void {
 
 // One line, bounded — the launch prompt's shape when it enters a compact headline.
 export const HEADLINE_PREVIEW_COLUMNS = 60
+function isBareUrl(text: string): boolean {
+  return /^(?:https?|git|ssh):\/\/\S+$/i.test(text)
+}
 function oneLinePreview(text: string, n = HEADLINE_PREVIEW_COLUMNS): string {
-  const first = text.split('\n').map((l) => l.trim()).find(Boolean) || ''
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
+  const first = lines.find((line) => !isBareUrl(line)) || lines[0] || ''
   return first.length > n ? first.slice(0, n - 1) + '…' : first
 }
 
 export const deriveLabel = (r: { name?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
   r.name || r.node || r.title || r.branch || r.id
-export const deriveHeadline = (r: { name?: string | null; activity?: string | null; promptPreview?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
-  r.name || r.activity || r.promptPreview || r.node || r.title || r.branch || r.id
+export const deriveTitle = (r: { name?: string | null; activity?: string | null; note?: string | null; promptPreview?: string | null; node?: string | null; title?: string | null; branch?: string | null; id: string }): string =>
+  r.name || r.activity || (r.note ? oneLinePreview(r.note) : '') || (r.promptPreview ? oneLinePreview(r.promptPreview) : '') || r.node || r.title || r.branch || r.id
+// Compatibility for package consumers that still import the old name.
+export const deriveHeadline = deriveTitle
 
 export const sessionLabel = (s: Session): string => s.label
-export const sessionHeadline = (s: Session): string => s.headline
+export const sessionTitle = (s: Session): string => s.title
+// Compatibility for older callers; all visible surfaces now resolve through `title`.
+export const sessionHeadline = sessionTitle
 
 // @@@ tmux probe timeout - under load (the incident: load ~30 + swap thrash) a bare `tmux list-sessions` can
 // HANG, and with no bound the whole board assembly hung behind it — the dashboard froze / dropped rows, which
@@ -683,7 +691,7 @@ export function reviewIdentity(id: string): ReviewIdentity | null {
 function corruptSession(id: string, entry: { path: string; error: string }): Session {
   const label = `${id.slice(0, 8)} (unreadable record)`
   return {
-    id, node: null, branch: null, path: '', label, headline: label, raw: { name: null, title: null },
+    id, node: null, branch: null, path: '', label, title: label, raw: { name: null, title: null },
     parent: null, harness: defaultHarness.id, capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
     note: corruptReason(entry), archived: false, prompt: null, promptPreview: null, created: 0,
@@ -698,9 +706,9 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const showActivity = lv === 'online'
   const act = showActivity ? activity : null
   const pp = prompt ? oneLinePreview(prompt) : null
-  const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, promptPreview: pp }
+  const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), headline: deriveHeadline(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
 }
 
 export async function renameSession(id: string, name: string): Promise<boolean> {

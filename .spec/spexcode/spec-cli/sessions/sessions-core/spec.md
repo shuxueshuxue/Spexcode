@@ -51,7 +51,7 @@ to [[residence]];
 here it is followed by the ONE creation-owned materialize). `git worktree add` still fires Git's normal
 post-checkout hook, but the create command passes a child-only defer marker so that hook does not render before
 the local snapshot exists; the explicit post-seed materialize is the transaction's sole render owner. The
-session objects it assembles carry their display strings pre-derived (`label`/`headline`) and hide the
+session objects it assembles carry their display strings pre-derived (`label`/`title`) and hide the
 bare name parts under `raw` — that naming seam's contract (chains, wire shape, enforcement) is
 [[session-label]]'s. Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature

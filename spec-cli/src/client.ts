@@ -41,7 +41,7 @@ function cachedStatus(rec: ReturnType<typeof fromRaw>): DisplayStatus {
 function corruptCachedSession(id: string, reason: string): Session {
   const label = `${id.slice(0, 8)} (unreadable record)`
   return {
-    id, node: null, branch: null, path: '', label, headline: label, raw: { name: null, title: null },
+    id, node: null, branch: null, path: '', label, title: label, raw: { name: null, title: null },
     parent: null, harness: 'unknown', capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
     note: `session record is unreadable: ${reason}`, archived: false, archiveHazard: null,

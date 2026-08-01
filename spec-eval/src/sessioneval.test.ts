@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
+  projectSessionImpactUncached,
   completeExportNodeIds,
   declaredLatest,
   nodeScore,
@@ -957,4 +958,54 @@ test('git-exec classification survives into session impact: a git that never ran
     rmSync(shimDir, { recursive: true, force: true })
   }
   rmSync(root, { recursive: true, force: true })
+})
+
+// @@@ the memo is held to BYTE-EQUALITY against the recompute it replaces ([[taste]] 19) - the projection is
+// the permanent half (what two immutable trees differ by), so reuse is sound only if every input that can
+// move the result is in the key. The failure mode is silent: a stale projection quietly puts the wrong
+// scenarios in a session's scope and nothing in the response says so. So this pins three things at once —
+// a hit equals the recompute field for field, a hit forks no git at all, and a moved input misses.
+test('the impact memo answers the identical projection, costs only its selector resolutions, and misses when an input moves', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-impact-memo-'))
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim()
+  git('init', '-q', '-b', 'main'); git('config', 'user.email', 't@t'); git('config', 'user.name', 't')
+  mkdirSync(join(root, '.spec/project/n'), { recursive: true })
+  mkdirSync(join(root, 'src'), { recursive: true })
+  writeFileSync(join(root, '.spec/project/n/spec.md'),
+    '---\ntitle: n\nhue: 1\ndesc: d\ncode:\n  - src/a.py\n---\n# n\nbody\n')
+  writeFileSync(join(root, '.spec/project/n/eval.md'),
+    '---\nscenarios:\n  - name: s\n    tags: [cli]\n    description: d\n    expected: e\n---\nbody\n')
+  writeFileSync(join(root, 'src/a.py'), 'def a():\n    return 1\n')
+  git('add', '-A'); git('commit', '-q', '-m', 'base')
+  const base = git('rev-parse', 'HEAD')
+  writeFileSync(join(root, 'src/a.py'), 'def a():\n    return 2\n')
+  git('add', '-A'); git('commit', '-q', '-m', 'head')
+  const head = git('rev-parse', 'HEAD')
+
+  const first = await projectSessionImpact(root, { base, head })
+  const spec = await projectSessionImpactUncached(root, { base, head }, base, head)
+  assert.deepEqual(first, spec, 'the cached path must equal the recompute it replaces, field for field')
+
+  // A hit still RESOLVES both selectors — the contract is that a projection verifies its selectors still
+  // name the same objects, and that verification is what makes the key trustworthy in the first place. So
+  // the bar is not "no git": it is "nothing beyond the two resolutions".
+  const shim = mkdtempSync(join(tmpdir(), 'spex-impact-memo-shim-'))
+  const shimLog = join(shim, 'calls.log')
+  const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim()
+  writeFileSync(join(shim, 'git'), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${shimLog}'\nexec '${realGit}' "$@"\n`)
+  chmodSync(join(shim, 'git'), 0o755)
+  const savedPath = process.env.PATH
+  process.env.PATH = `${shim}:${savedPath ?? ''}`
+  let hit
+  try { hit = await projectSessionImpact(root, { base, head }) } finally { process.env.PATH = savedPath }
+  assert.deepEqual(hit, first, 'a repeat projection answers from the memo — identical result')
+  const calls = readFileSync(shimLog, 'utf8').split('\n').filter(Boolean)
+  assert.equal(calls.length, 2, `a hit costs the two selector resolutions and nothing more, cost ${calls.length}: ${calls.join(' | ')}`)
+  assert.ok(calls.every((line) => line.includes('rev-parse')), 'and both are exactly those resolutions')
+
+  // the measurement axis is part of the identity: moving it must MISS, not replay
+  const moved = await projectSessionImpact(root, { base, head, measurements: { n: ['s'] } })
+  assert.notDeepEqual(moved, first, 'a moved measurement axis is a different question and must be recomputed')
+  assert.deepEqual(moved, await projectSessionImpactUncached(root, { base, head, measurements: { n: ['s'] } }, base, head),
+    'and its answer is the recompute too')
 })

@@ -142,6 +142,19 @@ export function verifyDetachedRuntime(pid: number, receiptFile: string, adapter:
   return live
 }
 
+// The inverse question of verifyDetachedRuntime: not "is the recorded process running right now" but "is it
+// provably GONE". The two are not complements — a missing receipt, an unreadable identity, or a PID we never
+// recorded answers neither, and a caller that treats "unproven" as "dead" would retire a live runtime it can
+// simply no longer address. Only a recorded start identity that the live PID no longer matches (including a
+// PID that is not running at all) is proof of death.
+export function detachedRuntimeIsGone(pid: number, receiptFile: string, adapter: ProcessAdapter = hostProcessAdapter): boolean {
+  let receipt: DetachedLaunchReceiptV4 | null
+  try { receipt = parseDetachedLaunchReceipt(readFileSync(receiptFile, 'utf8'), adapter.platform) }
+  catch { return false }
+  if (!receipt || receipt.pid !== pid) return false
+  return adapter.startToken(pid) !== receipt.startToken
+}
+
 // A v3 scope is only a migration witness when every recorded and live Linux identity agrees. Readers never
 // call this: minting a v4 receipt belongs to the write admission path that needs the shared runtime.
 export function migrateLegacyDetachedRuntimeReceipt(

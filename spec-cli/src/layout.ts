@@ -462,6 +462,20 @@ export function listSessionIds(): string[] {
   return ents.filter((d) => d.isDirectory()).map((d) => d.name)
 }
 
+// @@@ branch -> session, so a moved ref can DERIVE its invalidation scope - a session's evaluation depends
+// on its own branch tip, the base branch tip and their merge-base; no other ref participates. Without this
+// map a ref watcher knows only that "something under refs/ moved" and the honest fallback is to invalidate
+// every session ([[taste]] 19). One record read per session, and only when the session store itself moved.
+export function sessionBranchIndex(): Map<string, string> {
+  const index = new Map<string, string>()
+  for (const id of listSessionIds()) {
+    let branch: unknown
+    try { branch = readRawRecord(id)?.branch } catch { continue }   // a corrupt record narrows nothing
+    if (typeof branch === 'string' && branch) index.set(branch, id)
+  }
+  return index
+}
+
 // memo the overlay (4 git diffs/worktree, all .spec-scoped) keyed on fork-point merge-base + HEAD + spec
 // sig + MAIN'S TIP ([[worktree-linker]]): the main-tip component is what lets a merge landing identical
 // content dissolve a worktree's now-moot ops — the recompute it triggers is cheap because every diff is

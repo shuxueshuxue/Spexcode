@@ -664,6 +664,22 @@ async function findWorktree(id: string): Promise<{ path: string; branch: string 
   return { path: rec.worktreePath, branch: rec.branch, rec }
 }
 
+// @@@ identity WITHOUT the gates - reviewPayload answers two different questions at once: who is this
+// session (a store read, free) and how does its branch stand against main (ahead count, dirty scan, a
+// merge-tree conflict probe — 646 ms and 8 git children on a far-diverged branch). A consumer that renders
+// no gates strip should not buy the second one. The record already holds the identity half.
+export type ReviewIdentity = { id: string; node: string | null; branch: string | null; label: string }
+export function reviewIdentity(id: string): ReviewIdentity | null {
+  const rec = readRecord(id)
+  if (!rec) return null
+  return {
+    id,
+    node: rec.node,
+    branch: rec.branch,
+    label: deriveLabel({ id, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch }),
+  }
+}
+
 function corruptSession(id: string, entry: { path: string; error: string }): Session {
   const label = `${id.slice(0, 8)} (unreadable record)`
   return {

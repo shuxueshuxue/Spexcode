@@ -81,6 +81,16 @@ children for ~800 verdicts on this corpus. Verdicts stay keyed by (anchor, path,
 before, so the batch changes only cost: a batched read and a reading-at-a-time read return the same verdicts,
 and that equality is what any faster path owes.
 
+**The scenario-block read is plural on the same terms.** Deciding whether a scenario's semantic block moved
+between an anchor and HEAD needs that eval.md's object id at both revisions and then its bytes — and asking
+per reading is the identical defect one level down: on a 415-node session scope it billed 1212 `rev-parse`
+children plus a blob read each. Git answers an arbitrary set of `rev:path` lookups on one `cat-file
+--batch-check` and their bytes on one `cat-file --batch`, so the whole read's demand costs two children and
+the child count stops tracking the demand count. The content probe therefore RECORDS each block demand as it
+settles an anchor verdict and answers them together when its caller flushes. Flushing is a cost seam, not a
+correctness one: an unflushed demand falls back to the singular lookup and returns the same block, so a
+caller that learns its demands one at a time stays correct while a caller that plans a whole read pays once.
+
 The narrowing exists because **a shared file is not a shared behaviour**, and on this corpus that gap is
 expensive. `harness.ts` is ONE file carrying eight adapters, and its scenarios measure liveness, delivery,
 wake and teardown per adapter — each refreshed only by a REAL dispatched session of that harness
@@ -218,7 +228,16 @@ An unrequested path therefore has no verdict and reads as unprovable rather than
 the retained set proportional to governed breadth instead of repository width. Scheduling composes with
 that: concurrent callers on one anchor union their paths into a single child, a path requested after that
 child starts rides the next batch, a settled path is never asked again, and different anchors under one
-root and HEAD still run one at a time. A graph
+root and HEAD still run one at a time.
+
+**Every immutable-key answer under that schedule is joined while it is in flight, not merely reused once it
+settles.** A memo holding only settled values is silent about the window that matters — the whole timeline
+pass primes concurrently, so callers naming one key all miss together and each forks its own child. This
+governs the two per-reading lookups beside the anchor batch as well: the drift COUNT for an (anchor, path)
+and the eval.md object/blob read at a revision. Both keys name immutable Git objects, so a joiner cannot be
+handed another question's answer, and both write their memo once, on settle. This is a cost rule only —
+a joined read and a re-forked one return the same verdict, which is why no verdict assertion can observe
+it and the regression is pinned by counting children. A graph
 abort or timeout rejects both its active and queued work with the existing `AbortError` and caches nothing,
 so a later call retries; an unreadable anchor object is recorded as exactly that — the anchor axis — not as
 a content verdict. Synchronous freshness decisions consume only

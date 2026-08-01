@@ -1460,8 +1460,10 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   const cmd = codexLaunchCommand('sess-1', 'codex --yolo', 'codex', '/tmp/spex-project')
   // The detached-v3 ledger owns the mutex, exact receipt proof, and switch. A new turn resolves canonical
   // current; resume resolves the bound session/thread generation and cannot jump to current by accident.
-  assert.match(cmd, /internal codex-generation-current "\$dir"/)
-  assert.match(cmd, /internal codex-generation-session "\$dir" "\$SPEXCODE_SESSION_ID" "\$2"/)
+  assert.match(cmd, /internal codex-generation-current "\$dir" [^)]*codex/)
+  // Resume carries the server command too: after a host restart the bound root is a corpse, and the endpoint
+  // resume prints has to be one a client can connect to — so this launch may be the one that rebuilds it.
+  assert.match(cmd, /internal codex-generation-session "\$dir" "\$SPEXCODE_SESSION_ID" "\$2" [^)]*codex/)
   assert.match(cmd, /export SPEXCODE_CODEX_CMD/)
   // design C: the BACKEND owns the thread — codex-launch does thread/start { cwd } + first turn, prints the id,
   // and the visible TUI resumes THAT thread on the same project socket.

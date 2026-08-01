@@ -126,14 +126,20 @@ freshness. A build reads the revision before and after the fold; a mismatch is d
 summary and a demand projection bearing the same revision are the same evaluation cut, not two coincidentally similar
 reads.
 
-That same content-addressed cut carries the **derived full model**, not only the summary. A demand build
+That same content-addressed cut carries the **derived full model**, not only the summary. Every build
 deposits its model beside the summary under the one `session + content revision` key, so a repeat open at an
 unmoved revision replays it instead of re-deriving it from Git — the observable difference between opening a
 session's evaluation once and opening it again is a read, not a rebuild. It is the same cache owner, key and
 invalidation: a moved input yields a different key, only the newest key per session is retained, and summary
-and model are dropped together so they can never describe different revisions. The two builders do not share
-a model — the summary fold keeps only the latest reading per scenario while a demand needs the complete
-history — so only a demand deposits a model and only a demand consumes one. A replay still passes the
+and model are dropped together so they can never describe different revisions.
+
+**There is ONE builder, and the graph's fold IS the demand's fold.** These were two: the graph's kept only
+the latest reading per scenario and deposited counts alone, so opening the page re-derived the whole model to
+recover history the graph fold had held one line earlier and discarded. The trim never made that fold
+cheaper — the cost is the freshness pass over every node in scope, and it ran identically either way — and it
+never mattered to the counts, because the summary reduction folds latest-per-scenario itself. So the second
+build bought nothing. Its price is paid in MEMORY instead: a cut retains complete A/B history rather than
+latest-per-scenario, bounded by the same one-cut-per-session rule. A replay still passes the
 stability, observer and generation fences, and it never weakens the validity contract: an unavailable
 projection deposits nothing, so a dead or unextractable selector re-derives and raises again rather than
 being masked by an earlier successful model. No TTL, patrol, second generation, extra gate, or client-side
@@ -179,8 +185,17 @@ already running joins that generation's completion rather than enqueueing a dupl
 A cancelled queued summary remains suppressed for that generation through a rejected demand and repeated
 snapshots; only a later input generation is eager-eligible again.
 
-**Freshness is event-driven.** The one graph stream owns invalidation: refs cover session/main HEAD and merge-base
-moves (including CLI remark commits); server remark/eval writes nudge it atomically; each linked worktree is
+**Freshness is event-driven, and an event NAMES its scope.** The one graph stream owns invalidation: refs
+cover session/main HEAD and merge-base moves (including CLI remark commits). A session's fingerprint reads
+exactly three refs — its own tip, the base tip, and their merge-base — so the ref that moved decides which
+projections it can possibly have moved: the base branch invalidates every session, a session's own branch
+invalidates that session, and a tag, a remote-tracking ref, or a branch no session owns invalidates none.
+A `packed-refs` rewrite or a HEAD flip names nothing, since one event there can carry many refs, so it stays
+broad. Discarding the ref name and invalidating everything is what makes a busy repository permanently cold —
+observed on an adopter as an input generation of 1208 against a last-known 254, i.e. no session ever reaching
+`ready`. Narrowing this scope is a correctness change wearing performance clothes ([[taste]] 19): its failure
+mode is a stale answer that says nothing about being stale, so the derivation is pinned ref shape by ref
+shape rather than trusted to inspection; server remark/eval writes nudge it atomically; each linked worktree is
 watched recursively for dirty source, rename, scenario and sidecar edits, and its gitdir index is watched for
 stage/reset-only changes. Watch failure or a pathless/overflow-like event increments the generation and places a
 keyed observer hold on the affected projection: it stays `updating(lastKnown)` and no compute or demand read may
@@ -235,8 +250,30 @@ real product, not by a language-specific checker; a session with no worktree/dif
 state.
 
 Interactive full rows are not a transport. A scoped list receives one 25-row page; a scoped detail receives
-only its selected row, that scenario's complete history, and at most five lightweight neighbors. Each response
-carries the same generation, content revision, and `sessionEvalSummary` projection as the graph field. If the client has already observed a
+only its selected row, that scenario's complete history, and at most five lightweight neighbors.
+
+**A detail open measures what it renders, not what is in scope.** The scope's expense is the freshness pass,
+and it grows with the node closure — but a detail publishes one verdict and at most five neighboring states
+while still owing the population's `index` and `total`. So the engine reads that population's sequence with
+no probes at all (identity and filed time answer it), lets the caller name the few nodes whose verdicts will
+be published, and runs the freshness pass over only those. The model this returns is deliberately PARTIAL —
+its nodes are the rendered window, not the scope — and a partial model may never enter the content-addressed
+cut, because the list page and the graph read that cut as the session's whole evaluation. It still prefers a
+cached FULL model when one exists: a complete answer already paid for beats a cheap incomplete one. Rows from
+the sequence pass carry no freshness claim and are refused outright if asked for a verdict, so the saving can
+never be spent on a guess.
+
+It does not buy the LIST page's chrome either. The gates strip — does this branch conflict with the base, how
+far ahead is it, is anything uncommitted — is a question about the branch, not about the scenario being read,
+and answering it costs a merge probe and a whole-worktree dirty scan. A detail renders none of it, so a
+focused build reads the session's IDENTITY from its record (free) rather than its review payload, and the
+model simply carries no gates. This is the same rule as the freshness scope, applied one layer out: a
+response buys the questions it answers. Each response
+carries the same generation and content revision as the graph field. It carries the `sessionEvalSummary`
+projection too WHEN it has one honestly: a focused detail measured the rows it renders, not the scope, so it
+omits the counts rather than publishing a fold over its window — a fold that would report a 1336-scenario
+session as a 17-scenario one. Nothing is lost by the omission, because an equal content revision already IS
+the same evaluation cut; the counts were a redundant confirmation of an identity the revision had proven. If the client has already observed a
 newer graph generation, it rejects the old response and reloads; equal generations must have equal content
 revisions. This fence keeps a slow demand read from repainting newer loss while preserving the tier split: summary
 on graph, scenarios/readings on Evals open, evidence bytes on detail expansion.

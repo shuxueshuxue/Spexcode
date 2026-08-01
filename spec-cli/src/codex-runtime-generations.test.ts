@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { spawn } from 'node:child_process'
@@ -14,6 +14,7 @@ import {
   prepareCodexGenerationRegistration,
   readCodexGenerationLedger,
   reclaimDrainingCodexGeneration,
+  resolveCodexGenerationForResume,
   resolveCodexGenerationForSession,
   type CodexGenerationEndpoint,
 } from './codex-runtime-generations.js'
@@ -145,6 +146,74 @@ test('detached-v3 switch preserves a populated legacy generation while new traff
     for (const id of governed) bindCodexGeneration(root, id, `thread-${id}`, null)
     const reclaimed = await reclaimDrainingCodexGeneration(root, legacy.id, async () => ({ healthy: true, referenceIds: [], peerCount: 0 }))
     assert.equal(reclaimed.reclaimed, true, 'unrecorded registration and close transactions cannot pin a drained root forever')
+  } finally {
+    for (const endpoint of Object.values(readCodexGenerationLedger(root).generations).map((generation) => generation.endpoint)) {
+      const pid = Number(requirePid(endpoint.pidFile, '0'))
+      if (pid > 0 && processStartToken(pid)) {
+        try { process.kill(pid, 'SIGTERM') } catch { /* reclaimed or already gone */ }
+      }
+    }
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+function recordSession(root: string, sessionId: string, threadId: string): void {
+  const dir = join(root, 'sessions', sessionId)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'session.json'), `${JSON.stringify({
+    session_id: sessionId, governed: true, harness: 'codex', harness_session_id: threadId,
+  })}\n`)
+}
+
+test('a host restart retires the gone root and re-pins its sessions, while an unaddressable live root stays a refusal', { concurrency: false }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-codex-generation-restart-'))
+  try {
+    mkdirSync(join(root, 'sessions'), { recursive: true })
+    recordSession(root, 'restarted', 'thread-restarted')
+    recordSession(root, 'closing', 'thread-closing')
+    let starts = 0
+    const start = async (endpoint: CodexGenerationEndpoint) => { starts++; await startEndpoint(endpoint) }
+
+    const before = await ensureCodexCurrentGeneration(root, start)
+    bindCodexGeneration(root, 'restarted', 'thread-restarted', before.id)
+    bindCodexGeneration(root, 'closing', 'thread-closing', before.id)
+    assert.equal((await resolveCodexGenerationForResume(root, 'restarted', 'thread-restarted', start))?.id, before.id)
+    assert.equal(starts, 1, 'a live bound root serves its own session; resume never moves a loaded conversation')
+
+    // The restart itself: the app-server process is gone and /tmp took its socket with it, while the ledger and
+    // every binding still name that root — the exact state a reboot leaves behind.
+    process.kill(Number(requirePid(before.pidFile)), 'SIGKILL')
+    for (let attempt = 0; attempt < 100 && processStartToken(Number(requirePid(before.pidFile))); attempt++) await sleep(20)
+    rmSync(before.socketPath, { force: true })
+
+    const after = await resolveCodexGenerationForResume(root, 'restarted', 'thread-restarted', start)
+    assert.ok(after && after.id !== before.id, 'resume rebuilds a root instead of handing out the dead one')
+    assert.ok(existsSync(after.socketPath), 'the endpoint resume prints is one a client can actually connect to')
+    assert.equal(starts, 2)
+    const healed = readCodexGenerationLedger(root)
+    assert.equal(healed.generations[before.id]?.state, 'reclaimed')
+    assert.equal(healed.current, after.id)
+    assert.equal(healed.bindings.restarted?.generationId, after.id, 'the stale pointer is re-pinned to the live root')
+    assert.equal(healed.bindings.restarted?.threadId, 'thread-restarted', 'the thread it owns is unchanged')
+    assert.equal((await ensureCodexCurrentGeneration(root, start)).id, after.id)
+    assert.equal(starts, 2, 'a new launch after the restart routes to the rebuilt root instead of refusing forever')
+
+    // A session still bound to the retired root can close: that binding can neither route nor pin anything.
+    prepareCodexGenerationClose(root, 'closing', 'thread-closing')
+    assert.equal(readCodexGenerationLedger(root).bindings.closing, undefined)
+
+    // Ambiguity is the OTHER failure: the process is alive but we can no longer prove which root it is. Nothing
+    // is retired, nothing is re-pinned, and both the launch and resume boundaries refuse loudly.
+    recordSession(root, 'ambiguous', 'thread-ambiguous')
+    bindCodexGeneration(root, 'ambiguous', 'thread-ambiguous', after.id)
+    const receipt = readFileSync(after.receiptFile, 'utf8')
+    writeFileSync(after.receiptFile, 'ambiguous replacement receipt\n')
+    rmSync(after.socketPath, { force: true })
+    assert.equal(await resolveCodexGenerationForResume(root, 'ambiguous', 'thread-ambiguous', start), null)
+    await assert.rejects(ensureCodexCurrentGeneration(root, start), /missing, replaced, or unproven/)
+    assert.equal(starts, 2, 'an unproven root is never replaced behind its own back')
+    assert.equal(readCodexGenerationLedger(root).generations[after.id]?.state, 'current')
+    writeFileSync(after.receiptFile, receipt)
   } finally {
     for (const endpoint of Object.values(readCodexGenerationLedger(root).generations).map((generation) => generation.endpoint)) {
       const pid = Number(requirePid(endpoint.pidFile, '0'))

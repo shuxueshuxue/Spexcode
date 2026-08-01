@@ -455,6 +455,9 @@ app.post('/api/sessions', async (c) => {
   try {
     const body = await c.req.json().catch(() => null)
     const result = await sessionCreateRequest(body, { requestKey, signal: controller.signal })
+    // The durable row is now public. Nudge the cheap session projection explicitly so a dashboard does not
+    // wait for the best-effort store watcher; any held candidate worktree event remains a separate full claim.
+    if (result.status === 201) notifyBoardChanged('sessions')
     // A candidate registry event is intentionally held while Git creates the private worktree. Once the
     // transaction has published or cleaned up its record, release the one deferred full refresh.
     flushDeferredWorktreeRegistryChange()

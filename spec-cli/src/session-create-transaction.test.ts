@@ -166,7 +166,7 @@ esac
   const worktrees = () => git(project, 'worktree', 'list', '--porcelain').match(/^worktree /gm)?.length ?? 0
   const close = (id: string) => fetch(`${base}/api/sessions/${id}/close`, { method: 'POST' })
   const graphAbort = new AbortController()
-  const graphEvents: string[] = []
+  const graphEvents: Array<{ event: string, data: string }> = []
   let graphRead: Promise<void> | null = null
   let graphEventsBeforeCreate = 0
   const noCreateArtifacts = async () => {
@@ -221,7 +221,7 @@ esac
     await noCreateArtifacts()
     unlinkSync(mismatchGit)
 
-    const graph = await fetch(`${base}/api/graph/stream`, { signal: graphAbort.signal })
+    const graph = await fetch(`${base}/api/graph/stream?mode=delta`, { signal: graphAbort.signal })
     assert.equal(graph.status, 200)
     assert.ok(graph.body)
     graphRead = (async () => {
@@ -237,11 +237,13 @@ esac
           const block = buffered.slice(0, boundary)
           buffered = buffered.slice(boundary + 2)
           const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
-          if (event) graphEvents.push(event)
+          const data = block.split('\n').find((line) => line.startsWith('data: '))?.slice(6)
+          if (event && data !== undefined) graphEvents.push({ event, data })
         }
       }
     })().catch(() => {})
-    await waitFor(() => graphEvents.includes('ready'), 'plain graph stream ready')
+    await waitFor(() => graphEvents.some(({ event }) => event === 'ready'), 'delta graph stream ready')
+    await waitFor(() => graphEvents.some(({ event }) => event === 'graph-full'), 'initial delta graph frame')
     graphEventsBeforeCreate = graphEvents.length
 
     const key = 'collision-112'
@@ -258,8 +260,12 @@ esac
     assert.equal(git(a.path, 'symbolic-ref', '--short', 'HEAD'), a.branch)
     assert.ok(git(project, 'show-ref', '--verify', `refs/heads/${a.branch}`))
     assert.deepEqual((await rows()).map((row) => row.id), [a.id])
-    await waitFor(() => graphEvents.slice(graphEventsBeforeCreate).includes('graph-changed'),
-      'successful public create must explicitly nudge the sessions graph projection')
+    await waitFor(() => graphEvents.slice(graphEventsBeforeCreate).some(({ event, data }) => {
+      if (event === 'graph-full') return data.includes(a.id)
+      if (event !== 'graph-delta') return false
+      const frame = JSON.parse(data) as { set?: Record<string, unknown> }
+      return Object.hasOwn(frame.set ?? {}, `sess:${a.id}`)
+    }), 'successful public create must explicitly push its session unit to the delta graph stream')
     assert.deepEqual(sessionDirs(), [a.id])
     assert.equal(worktrees(), 3)
     assert.match(readFileSync(trace, 'utf8'), /git-start .*defer=session-create .*worktree add/, 'session creation defers the post-checkout refresh to its explicit materialize phase')

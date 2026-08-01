@@ -291,8 +291,9 @@ The surface mirrors the code-drift report:
   `--json` is a different, complete declaration projection for external measurement hands: it never reads or
   folds `evals.ndjson`, verdicts, evidence, remarks, or freshness, and therefore cannot accept the
   reading-dependent `--unmeasured` filter (that combination fails loud). The JSON envelope carries a
-  projection id and schema version, fixed-tree Git provenance (`head` and `treeSha`), and rows sorted by
-  canonical node id then scenario name. Each row has two stable blocks:
+  projection id and schema version, fixed-tree Git provenance (`head` and `treeSha`), the normalized
+  node-level `code`/`related` relations for every measurable node, and scenario rows sorted by canonical
+  node id then scenario name. Each scenario row has two stable blocks:
 
   - `semantic`: `{node, name, description, expected, scenarioHash, code, related, tags}` — the living
     declaration contract. `scenarioHash` remains exactly the description+expected contract hash defined
@@ -301,13 +302,16 @@ The surface mirrors the code-drift report:
   - `measurement`: `{test}` — the normalized test mapping or `null`; it is metadata for the measuring hand,
     not part of `scenarioHash`.
 
-  The envelope exposes `semanticIndexHash` over the canonical semantic row bytes and `fullIndexHash` over
+  The envelope exposes `semanticIndexHash` over the canonical semantic row bytes, `fullIndexHash` over
   the canonical full (semantic + measurement) row bytes. A test-link-only edit therefore changes only the
   full index hash; a description/expected/code/related/tags edit changes both; add/remove/rename changes
   the sorted row bytes. A Git mode/type-only change never changes either scenario index hash because rows are
-  content projections; the outer `treeSha` is the provenance signal that catches it. All fields, including
-  empty relation/tag arrays and a missing test, have one stable JSON shape. The projection is the only
-  canonical `--json` output; no second parser or cache exists.
+  content projections; the outer `treeSha` is the provenance signal that catches it. `planningIndexHash`
+  covers the node relations together with the full scenario rows, so a planning consumer can bind the exact
+  governed/related impact closure and its test links without loading the review/session graph. Node relations
+  reuse the spec loader's frontmatter parser and the same `parseRelation` grammar; they are not a second spec
+  parser. All fields, including empty relation/tag arrays and a missing test, have one stable JSON shape. The
+  projection is the only canonical `--json` output; no second projection or cache exists.
 
   The declaration identity also has ONE small **write seam over fixed-tree bytes** for external measurement
   guards that need to propose metadata back into eval.md. A mutation names exactly one scenario and exactly

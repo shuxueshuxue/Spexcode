@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, relative, resolve as resolvePath } from 'node:path'
 import {
   batchBlobTexts,
   batchRevisionOids,
@@ -17,6 +17,7 @@ import {
   type DriftPathEvent,
   type ReviewDiffFile,
 } from '../../spec-cli/src/git.js'
+import { touchRoot } from '../../spec-cli/src/root-lru.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { mainBranch } from '../../spec-cli/src/layout.js'
 import { reviewIdentity, reviewPayload, type ReviewIdentity } from '../../spec-cli/src/sessions.js'
@@ -400,11 +401,45 @@ function parsedRelation(raw: readonly string[], relation: 'code' | 'related', ow
 // Public, exact-revision impact projection. It reads both spec trees and all scenario declarations from
 // immutable Git objects, reuses the canonical relation/anchor engine, then re-resolves the caller's selectors
 // before publication. Callers may pass branch names, but never receive a projection spanning two ref states.
+// @@@ the projection is the PERMANENT half ([[taste]] 19) - what commits between two immutable trees changed
+// which paths, and what each side declared, are facts about those commits: they cannot change, so a repeat
+// projection over the same inputs is pure recomputation. It used to be deliberately build-local, which was
+// right while it was cheap; on a branch 840 commits from its base it is 2.4s, and a detail open pays it
+// EVERY time because a focused build deposits no cut. Every input that can move the result is in the key —
+// the two resolved commit oids, the live overlay's own content revision, and the measurement axis — so a hit
+// answers the identical question. The promise is cached, not the value, so concurrent openers join one
+// projection; a rejection is never retained, keeping an unavailable selector loud on every read.
+const impactSlots = Math.max(4, Number(process.env.SPEXCODE_IMPACT_SLOTS || 32))
+const impactRoots = new Map<string, string>()
+const impactMemo = new Map<string, Promise<SessionImpactProjection>>()
+function impactKey(root: string, base: string, head: string, options: SessionImpactOptions): string {
+  const measurements = Object.entries(options.measurements ?? {})
+    .map(([node, names]) => `${node}:${[...names].sort().join(',')}`).sort().join('\u001f')
+  return [resolvePath(root), base, head, options.overlay?.revision ?? '', createHash('sha256').update(measurements).digest('hex')].join('\0')
+}
+
 export async function projectSessionImpact(root: string, options: SessionImpactOptions): Promise<SessionImpactProjection> {
   const [base, head] = await Promise.all([
     impactCommit(root, options.base),
     impactCommit(root, options.head),
   ])
+  const memoKey = impactKey(root, base, head, options)
+  const memoHit = impactMemo.get(memoKey)
+  if (memoHit) return memoHit
+  const flight = projectSessionImpactUncached(root, options, base, head)
+  impactMemo.set(memoKey, flight)
+  flight.catch(() => { if (impactMemo.get(memoKey) === flight) impactMemo.delete(memoKey) })
+  touchRoot(impactRoots, impactMemo, resolvePath(root), memoKey, impactSlots)
+  return flight
+}
+
+// the slow, obviously-correct recompute — kept whole as the specification the cached path must equal
+export async function projectSessionImpactUncached(
+  root: string,
+  options: SessionImpactOptions,
+  base: string,
+  head: string,
+): Promise<SessionImpactProjection> {
   const ancestry = await gitTry(['-C', root, 'merge-base', '--is-ancestor', base, head])
   if (!ancestry.ok) {
     if (ancestry.failure === 'exit') {
@@ -413,7 +448,7 @@ export async function projectSessionImpact(root: string, options: SessionImpactO
     throw new SessionImpactUnavailableError(`session impact cannot verify base/head ancestry: ${ancestry.stderr.trim() || ancestry.failure}`)
   }
   // One immutable .spec tree read per distinct revision supplies BOTH spec relations and eval declarations.
-  // This is deliberately build-local: exact projections do not need another resident cache or generation.
+  // Build-local by design: the memo above owns reuse ACROSS builds, this map owns it within one.
   const treeByRevision = new Map<string, ReadonlyMap<string, string>>()
   const readTree = (revision: string): ReadonlyMap<string, string> => {
     const cached = treeByRevision.get(revision)

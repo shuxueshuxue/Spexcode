@@ -138,6 +138,14 @@ test('Command Box floats lower-middle and grows above a fixed footer', () => {
   assert.match(composer, /export function composingKey/)
 })
 
+test('completed attachment rows fade and remove themselves while failures stay actionable', () => {
+  assert.match(css, /\.si-attach-row\.complete\s*\{[^}]*animation:\s*si-attach-complete-out\s+1\.4s\s+ease\s+forwards;/)
+  assert.match(css, /@keyframes\s+si-attach-complete-out\s*\{[\s\S]*opacity:\s*0;[\s\S]*pointer-events:\s*none;/)
+  assert.match(sessionInterface, /onAnimationEnd=\{\(event\) => \{[\s\S]*event\.animationName === 'si-attach-complete-out'[\s\S]*dismissAttachment\(item\.id\)/)
+  assert.match(sessionInterface, /item\.phase === 'failed' && <IconButton[\s\S]*attachRetry/)
+  assert.match(sessionInterface, /item\.phase === 'complete' \|\| item\.phase === 'cancelled'/)
+})
+
 test('terminal viewport clips — tmux owns all scrolling', () => {
   // scrollback:0 means the pane viewport can never hold real history; an `auto` overflow lets a fractional
   // DPR/geometry overshoot render a phantom themed browser scrollbar over the terminal's right edge.

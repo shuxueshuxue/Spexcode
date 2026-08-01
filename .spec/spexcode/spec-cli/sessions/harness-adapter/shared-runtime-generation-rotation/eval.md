@@ -13,6 +13,18 @@ scenarios:
       unowned/native references remain loaded. Archive and close affect only the exact governed target and
       leave every protected legacy reference and active governed sibling intact.
     tags: [backend-api, cli]
+  - name: host-restart-heals-dead-root
+    test: spec-cli/src/codex-runtime-generations.test.ts
+    description: >
+      Take a project whose governed Codex sessions are bound to a running app-server root, then remove that root
+      the way a host restart does — its process gone and its socket with it — while the ledger still names it.
+      Resume a bound session through the real launch surface and start a new one.
+    expected: >
+      Resume brings the session's own thread back on a root a client can actually connect to: the dead root is
+      retired, a replacement is started, and the binding is re-pinned to it with its thread unchanged. A new
+      launch routes to that same replacement instead of refusing. No client is ever handed a socket that cannot
+      be connected, and a root that is merely unaddressable is still refused rather than replaced.
+    tags: [backend-api, cli]
   - name: restart-retry-and-ambiguity-retain-roots
     test: spec-cli/src/codex-runtime-generations.test.ts
     description: >

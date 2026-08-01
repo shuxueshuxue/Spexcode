@@ -3,7 +3,7 @@ import { createConnection, type Socket } from 'node:net'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { processStartToken, verifyDetachedRuntime } from './process-identity.js'
+import { detachedRuntimeIsGone, processStartToken, verifyDetachedRuntime } from './process-identity.js'
 
 export type CodexGenerationEndpoint = Readonly<{
   id: string
@@ -271,6 +271,32 @@ function hasLegacyResidue(root: string): boolean {
   return [endpoint.pidFile, endpoint.receiptFile, endpoint.socketPath].some(existsSync)
 }
 
+// A generation whose recorded process is provably gone — the host restarted, the OOM killer fired, a /tmp sweep
+// took the socket with it. Death is a POSITIVE fact, not the absence of proof: such a root holds no threads, no
+// peers, and no protective references, so nothing it once carried can be lost by retiring it. Everything else
+// that fails `endpointIdentity` is AMBIGUOUS — a live process we can no longer address — and keeps its root.
+function goneGeneration(endpoint: CodexGenerationEndpoint): boolean {
+  if (endpointIdentity(endpoint)) return false
+  let pid: number
+  try { pid = Number(readFileSync(endpoint.pidFile, 'utf8').trim()) }
+  catch { return false }
+  return Number.isInteger(pid) && pid > 0 && detachedRuntimeIsGone(pid, endpoint.receiptFile)
+}
+
+// Retire a gone generation inside the caller's ledger lock, returning the published ledger (null when the
+// generation is still there to serve or merely unaddressable). Its bindings deliberately survive: a session's
+// conversation lives in Codex's on-disk rollout, so those rows are stale pointers to re-pin, not lost threads.
+function retireGoneGenerationLocked(root: string, previous: CodexGenerationLedger, id: string): CodexGenerationLedger | null {
+  const generation = previous.generations[id]
+  if (!generation || generation.state === 'reclaimed' || !goneGeneration(generation.endpoint)) return null
+  return writeLedger(root, previous, {
+    current: previous.current === id ? null : previous.current,
+    pending: previous.pending === id ? null : previous.pending,
+    generations: { ...previous.generations, [id]: { state: 'reclaimed', endpoint: generation.endpoint } },
+    bindings: previous.bindings,
+  })
+}
+
 function bootstrapBindings(root: string, generationId: string): Record<string, CodexGenerationBinding> {
   const result: Record<string, CodexGenerationBinding> = {}
   const sessions = join(root, 'sessions')
@@ -305,13 +331,18 @@ function bindingProtectsGeneration(root: string, sessionId: string, binding: Cod
 function bootstrapLedger(root: string): CodexGenerationLedger {
   const legacy = legacyCodexGenerationEndpoint(root)
   if (!hasLegacyResidue(root)) return emptyLedger()
-  if (!endpointIdentity(legacy)) throw new Error('legacy Codex root is present but its exact detached PID/start/receipt/socket identity is unproven')
+  // Residue left by a legacy root that has since died enters the ledger already reclaimed rather than blocking
+  // the bootstrap: it has nothing to drain. Its governed bindings are still recorded so those sessions resolve
+  // to a stale pointer they can re-pin, instead of losing the thread they own.
+  const gone = goneGeneration(legacy)
+  if (!gone && !endpointIdentity(legacy))
+    throw new Error('legacy Codex root is present but its exact detached PID/start/receipt/socket identity is unproven')
   return {
     version: 3,
     revision: 0,
     current: null,
     pending: null,
-    generations: { [legacy.id]: { state: 'draining', endpoint: legacy } },
+    generations: { [legacy.id]: { state: gone ? 'reclaimed' : 'draining', endpoint: legacy } },
     bindings: bootstrapBindings(root, legacy.id),
   }
 }
@@ -373,9 +404,13 @@ export async function ensureCodexCurrentGeneration(root: string, start: (endpoin
       }
       if (previous.current) {
         const generation = previous.generations[previous.current]
-        if (!generation || generation.state !== 'current' || !endpointIdentity(generation.endpoint))
-          throw new Error('canonical Codex generation is missing, replaced, or unproven; refusing to route new traffic')
-        return { kind: 'current', endpoint: generation.endpoint }
+        if (generation && generation.state === 'current' && endpointIdentity(generation.endpoint))
+          return { kind: 'current', endpoint: generation.endpoint }
+        // A canonical root that is provably gone is retired here and replaced by the rest of this same call:
+        // refusing forever would make one host restart permanently un-routable. Anything else stays a refusal.
+        const healed = retireGoneGenerationLocked(root, previous, previous.current)
+        if (!healed) throw new Error('canonical Codex generation is missing, replaced, or unproven; refusing to route new traffic')
+        previous = healed
       }
       if (previous.pending) {
         const pending = previous.generations[previous.pending]
@@ -491,10 +526,65 @@ export function prepareCodexGenerationClose(root: string, sessionId: string, thr
     if (!binding || binding.threadId !== threadId) throw new Error(`Codex session ${sessionId} has no exact generation binding to close`)
     if (binding.phase === 'record-removing') return
     const generation = previous.generations[binding.generationId]
-    if (!generation || generation.state === 'reclaimed') throw new Error(`Codex session ${sessionId} binding names an absent or reclaimed generation`)
+    // A retired root can neither route this thread nor be pinned by it, so there is nothing for the removal
+    // marker to protect: drop the binding outright and let close proceed. An ABSENT generation is corruption.
+    if (!generation) throw new Error(`Codex session ${sessionId} binding names an absent generation`)
+    if (generation.state === 'reclaimed') {
+      const remaining = { ...previous.bindings }
+      delete remaining[sessionId]
+      writeLedger(root, previous, { current: previous.current, pending: previous.pending, generations: previous.generations, bindings: remaining })
+      return
+    }
     const bindings = { ...previous.bindings, [sessionId]: { ...binding, phase: 'record-removing' as const } }
     writeLedger(root, previous, { current: previous.current, pending: previous.pending, generations: previous.generations, bindings })
   })
+}
+
+// Re-pin an existing exact binding onto another live generation. The transaction phase is carried over, so a
+// registration or close that is mid-flight keeps its crash boundary while its route is corrected.
+export function repinCodexGeneration(root: string, sessionId: string, threadId: string, generationId: string): void {
+  withLedgerLockSync(root, () => {
+    const previous = readCodexGenerationLedger(root)
+    const binding = previous.bindings[sessionId]
+    if (!binding || binding.threadId !== threadId) throw new Error(`Codex session ${sessionId} has no exact binding to re-pin`)
+    const generation = previous.generations[generationId]
+    if (!generation || generation.state === 'reclaimed') throw new Error(`Codex generation ${generationId} is absent or reclaimed`)
+    if (binding.generationId === generationId) return
+    const bindings = { ...previous.bindings, [sessionId]: { ...binding, generationId } }
+    writeLedger(root, previous, { current: previous.current, pending: previous.pending, generations: previous.generations, bindings })
+  })
+}
+
+// The resume boundary. A binding to a LIVE generation still routes only there — an existing conversation is
+// never moved out from under the client that holds it. But a binding whose root is gone names a process, not a
+// conversation: the thread's durable home is its on-disk rollout, which any generation can load. So the gone
+// root is retired and the session is re-pinned to the canonical one, which loads that same rollout. Missing,
+// mismatched, ambiguous, or unprotected bindings remain refusals — resume never invents a route.
+export async function resolveCodexGenerationForResume(
+  root: string,
+  sessionId: string,
+  threadId: string,
+  start: (endpoint: CodexGenerationEndpoint) => Promise<void>,
+): Promise<CodexGenerationEndpoint | null> {
+  const ledger = readCodexGenerationLedger(root)
+  const binding = ledger.bindings[sessionId]
+  if (!binding || binding.threadId !== threadId || !bindingProtectsGeneration(root, sessionId, binding)) return null
+  const generation = ledger.generations[binding.generationId]
+  if (!generation) return null
+  if (generation.state !== 'reclaimed') {
+    if (endpointIdentity(generation.endpoint)) return generation.endpoint
+    const retired = await withLedgerLock(root, async () => {
+      const previous = readCodexGenerationLedger(root)
+      if (previous.bindings[sessionId]?.generationId !== binding.generationId) return false
+      const observed = previous.generations[binding.generationId]
+      if (!observed) return false
+      return observed.state === 'reclaimed' || !!retireGoneGenerationLocked(root, previous, binding.generationId)
+    })
+    if (!retired) return null
+  }
+  const current = await ensureCodexCurrentGeneration(root, start)
+  repinCodexGeneration(root, sessionId, threadId, current.id)
+  return current
 }
 
 export function resolveCodexGenerationForSession(root: string, sessionId: string, threadId: string): CodexGenerationEndpoint | null {

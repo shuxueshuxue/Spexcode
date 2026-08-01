@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { boundedEvalNeighbors, paginateReview, projectEvalDetail, reviewPageNumber, scopedEvalReviewItems, trunkEvalReviewItems } from './reviews.js'
+import { boundedEvalNeighbors, focusNodes, measuredSequence, paginateReview, projectEvalDetail, reviewPageNumber, scopedEvalReviewItems, trunkEvalReviewItems } from './reviews.js'
+import { orderRowsOf } from '../../spec-eval/src/sessioneval.js'
 // @ts-expect-error The shared browser/server engine is deliberately plain JS — the same module the server
 // folds counts with, so this test measures the real canonical path rather than a re-implementation.
 import { evalFilterModel, tokenFilterState } from '../../spec-dashboard/src/reviewFilters.js'
@@ -115,8 +116,8 @@ test('one detail projection returns only selected history and at most five light
 
 test('detail neighbor budget refills at boundaries and missing selections stay honest', () => {
   const items = Array.from({ length: 8 }, (_, index) => ({ node: 'n', scenario: `s${index}`, state: 'pass', filterKind: 'result' }))
-  assert.deepEqual(boundedEvalNeighbors(items, 'n', 's0').next.map((row) => row.scenario), ['s1', 's2', 's3', 's4', 's5'])
-  assert.deepEqual(boundedEvalNeighbors(items, 'n', 's7').prev.map((row) => row.scenario), ['s6', 's5', 's4', 's3', 's2'])
+  assert.deepEqual(boundedEvalNeighbors(items as any, 'n', 's0', (r: any) => String((items as any[]).find((i: any) => i.node === r.node && i.scenario === r.scenario)?.state ?? 'empty')).next.map((row) => row.scenario), ['s1', 's2', 's3', 's4', 's5'])
+  assert.deepEqual(boundedEvalNeighbors(items as any, 'n', 's7', (r: any) => String((items as any[]).find((i: any) => i.node === r.node && i.scenario === r.scenario)?.state ?? 'empty')).prev.map((row) => row.scenario), ['s6', 's5', 's4', 's3', 's2'])
   const missing = projectEvalDetail(items, [{ scenario: 'absent' }], 'n', 'absent', {
     scope: 'scope-1',
     summary: { measured: 8, total: 8, pass: 8, fail: 0, review: 0, blind: 0, unknown: 0 },
@@ -163,4 +164,74 @@ test('eval verdict counts split freshness ONCE on the server, over the whole pop
   assert.deepEqual(fresh.counts, { fail: { fresh: 1, stale: 0 }, pass: { fresh: 1, stale: 0 }, unmeasured: 0 })
   assert.equal(fresh.total, 2)
   assert.deepEqual(page('is:eval freshness:stale').counts, { fail: { fresh: 0, stale: 1 }, pass: { fresh: 0, stale: 2 }, unmeasured: 0 })
+})
+
+// @@@ the focused detail's one real hazard, pinned - a detail open derives its index/total/neighbours from
+// the freshness-free sequence while its states come from the few nodes it actually measured. Those are two
+// code paths over the same population, so they must order it IDENTICALLY or Back and "up next" would point
+// somewhere the list page does not. Nothing else in the response can reveal a divergence.
+test('the freshness-free sequence orders the population exactly as the full model does', () => {
+  const at = (scenario: string, ts: string) => ({
+    scenario, ts, codeSha: 'c', blob: null, blobState: 'none' as const, fresh: true, staleAxes: [],
+    expected: '', verdict: { status: 'pass' as const }, inSession: false,
+  })
+  const nodes: any[] = [
+    {
+      id: 'beta', title: 'beta', hue: 1, desc: '', hasEvalFile: true, uncoveredFrontend: false,
+      unknownCoverage: [], causes: [],
+      scenarios: [{ name: 'same-ts', expected: '' }, { name: 'newest', expected: '' }, { name: 'never-run', expected: '' }],
+      evals: [at('newest', '2026-03-01'), at('same-ts', '2026-01-01')],
+    },
+    {
+      id: 'alpha', title: 'alpha', hue: 2, desc: '', hasEvalFile: true, uncoveredFrontend: false,
+      unknownCoverage: [], causes: [],
+      scenarios: [{ name: 'same-ts', expected: '' }, { name: 'middle', expected: '' }],
+      evals: [at('middle', '2026-02-01'), at('same-ts', '2026-01-01')],
+    },
+  ]
+  const model: any = {
+    id: 's', node: null, branch: null, title: 's', ahead: 0, dirtyNonRuntime: 0, gates: [], nodes,
+    impact: { base: 'b', head: 'h', revision: 'r', nodes: [] },
+    summary: { measured: 4, total: 5, pass: 4, fail: 0, review: 0, blind: 1, unknown: 0 },
+    evalRevision: { epoch: 'e', generation: 1, content: 'c' },
+  }
+  const full = scopedEvalReviewItems(model)
+    .filter((item: any) => item.filterKind === 'result')
+    .map((item: any) => ({ node: String(item.node), scenario: String(item.scenario) }))
+  assert.deepEqual(measuredSequence(orderRowsOf(nodes)), full,
+    'the cheap sequence and the full model must agree row for row, ties included')
+  assert.ok(full.length === 4, 'the blind row stays out of the measured sequence, as the detail projection expects')
+})
+
+// @@@ the window must hold at EVERY position, not just the one that was measured - the focused build names a
+// node window from the sequence and only those nodes get freshness, while boundedEvalNeighbors picks the rows
+// independently. If a pick ever falls outside the window its state is looked up and missing, and the page
+// quietly shows 'empty' for a real verdict. The split is asymmetric at the ends (the forward side takes the
+// odd slot, a boundary refills from the other side), so the ends are exactly where a hand-checked index lies.
+test('the focus window contains every neighbour the projection can choose, at every position', () => {
+  const order = Array.from({ length: 41 }, (_, i) => ({
+    node: `n${i % 7}`,
+    scenario: `s${String(i).padStart(2, '0')}`,
+    ts: `2026-02-${String(41 - i).padStart(2, '0')}T00:00:00Z`,
+  }))
+  const sequence = measuredSequence(order)
+  assert.equal(sequence.length, 41, 'every row here is measured, so the sequence is the whole set')
+  for (let i = 0; i < sequence.length; i++) {
+    const { node, scenario } = sequence[i]
+    const focus = new Set(focusNodes(order, node, scenario))
+    assert.ok(focus.has(node), `index ${i}: the selected row's own node must be measured`)
+    const neighbours = boundedEvalNeighbors(sequence, node, scenario, () => 'pass')
+    assert.equal(neighbours.index, i, `index ${i}: the projection and the window must agree on position`)
+    assert.equal(neighbours.total, 41)
+    for (const row of [...neighbours.prev, ...neighbours.next])
+      assert.ok(focus.has(row.node),
+        `index ${i}: neighbour ${row.node}/${row.scenario} falls OUTSIDE the focus window — its verdict would read empty`)
+  }
+})
+
+// a scenario absent from the sequence (never filed) still has to resolve to something measurable
+test('an unmeasured selection still focuses its own node', () => {
+  const order = [{ node: 'a', scenario: 'filed', ts: '2026-01-01T00:00:00Z' }, { node: 'b', scenario: 'blind', ts: null }]
+  assert.deepEqual(focusNodes(order, 'b', 'blind'), ['b'], 'a blind row is not in the measured sequence, so it focuses itself')
+  assert.deepEqual(measuredSequence(order), [{ node: 'a', scenario: 'filed' }], 'and blind rows never enter the sequence')
 })

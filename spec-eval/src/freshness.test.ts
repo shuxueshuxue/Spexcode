@@ -341,6 +341,32 @@ test('content batch: concurrent probes asking DISJOINT paths union into one chil
   }
 })
 
+// @@@ the drift COUNT needs the same flight the diff batch already has - the anchor batch unions concurrent
+// callers into one child, but each of them then walked the `behind` loop, and that map holds only SETTLED
+// counts. So the callers the batch just merged immediately re-split, one `rev-list --count` child each.
+// Measured on adopter-a's 415-node session scope: 1532 children for 806 distinct counts.
+test('content batch: concurrent probes asking the SAME (anchor, path) fork ONE drift count, not one each', async () => {
+  const { root, hashes } = schedulerRepo(2)
+  const bin = mkdtempSync(join(tmpdir(), 'freshness-revlist-bin-'))
+  const log = join(bin, 'calls.log')
+  writeFileSync(log, '')
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\ncase " $* " in\n  *" rev-list --count "*) printf '%s\\n' "$*" >> '${log}' ;;\nesac\nexec '${REAL_GIT}' "$@"\n`)
+  chmodSync(join(bin, 'git'), 0o755)
+  const savedPath = process.env.PATH
+  process.env.PATH = `${bin}:${savedPath ?? ''}`
+  try {
+    const first = contentProbeFor(root)
+    const second = contentProbeFor(root)
+    await Promise.all([
+      first.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md'),
+      second.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md'),
+    ])
+    const counts = readFileSync(log, 'utf8').split('\n').filter(Boolean)
+    assert.equal(counts.length, 1, `both probes must join one drift count, forked ${counts.length}`)
+    assert.equal(first.behind(hashes[0], 'tracked.txt'), 1, 'the joined count is the real answer, not a default')
+  } finally { process.env.PATH = savedPath }
+})
+
 test('content batch: a path requested mid-flight rides the NEXT batch, never the running child', async () => {
   const { root, hashes } = schedulerRepo(2)
   const trace = diffTrace('0.3')

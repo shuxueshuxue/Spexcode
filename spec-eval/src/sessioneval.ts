@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, relative, resolve as resolvePath } from 'node:path'
 import {
   batchBlobTexts,
   batchRevisionOids,
@@ -17,9 +17,10 @@ import {
   type DriftPathEvent,
   type ReviewDiffFile,
 } from '../../spec-cli/src/git.js'
+import { touchRoot } from '../../spec-cli/src/root-lru.js'
 import { loadSpecs } from '../../spec-cli/src/specs.js'
 import { mainBranch } from '../../spec-cli/src/layout.js'
-import { reviewPayload } from '../../spec-cli/src/sessions.js'
+import { reviewIdentity, reviewPayload, type ReviewIdentity } from '../../spec-cli/src/sessions.js'
 import { loadEvalRemarkTracks } from '../../spec-cli/src/issues.js'
 import {
   anchorHitCommits,
@@ -400,11 +401,45 @@ function parsedRelation(raw: readonly string[], relation: 'code' | 'related', ow
 // Public, exact-revision impact projection. It reads both spec trees and all scenario declarations from
 // immutable Git objects, reuses the canonical relation/anchor engine, then re-resolves the caller's selectors
 // before publication. Callers may pass branch names, but never receive a projection spanning two ref states.
+// @@@ the projection is the PERMANENT half ([[taste]] 19) - what commits between two immutable trees changed
+// which paths, and what each side declared, are facts about those commits: they cannot change, so a repeat
+// projection over the same inputs is pure recomputation. It used to be deliberately build-local, which was
+// right while it was cheap; on a branch 840 commits from its base it is 2.4s, and a detail open pays it
+// EVERY time because a focused build deposits no cut. Every input that can move the result is in the key —
+// the two resolved commit oids, the live overlay's own content revision, and the measurement axis — so a hit
+// answers the identical question. The promise is cached, not the value, so concurrent openers join one
+// projection; a rejection is never retained, keeping an unavailable selector loud on every read.
+const impactSlots = Math.max(4, Number(process.env.SPEXCODE_IMPACT_SLOTS || 32))
+const impactRoots = new Map<string, string>()
+const impactMemo = new Map<string, Promise<SessionImpactProjection>>()
+function impactKey(root: string, base: string, head: string, options: SessionImpactOptions): string {
+  const measurements = Object.entries(options.measurements ?? {})
+    .map(([node, names]) => `${node}:${[...names].sort().join(',')}`).sort().join('\u001f')
+  return [resolvePath(root), base, head, options.overlay?.revision ?? '', createHash('sha256').update(measurements).digest('hex')].join('\0')
+}
+
 export async function projectSessionImpact(root: string, options: SessionImpactOptions): Promise<SessionImpactProjection> {
   const [base, head] = await Promise.all([
     impactCommit(root, options.base),
     impactCommit(root, options.head),
   ])
+  const memoKey = impactKey(root, base, head, options)
+  const memoHit = impactMemo.get(memoKey)
+  if (memoHit) return memoHit
+  const flight = projectSessionImpactUncached(root, options, base, head)
+  impactMemo.set(memoKey, flight)
+  flight.catch(() => { if (impactMemo.get(memoKey) === flight) impactMemo.delete(memoKey) })
+  touchRoot(impactRoots, impactMemo, resolvePath(root), memoKey, impactSlots)
+  return flight
+}
+
+// the slow, obviously-correct recompute — kept whole as the specification the cached path must equal
+export async function projectSessionImpactUncached(
+  root: string,
+  options: SessionImpactOptions,
+  base: string,
+  head: string,
+): Promise<SessionImpactProjection> {
   const ancestry = await gitTry(['-C', root, 'merge-base', '--is-ancestor', base, head])
   if (!ancestry.ok) {
     if (ancestry.failure === 'exit') {
@@ -413,7 +448,7 @@ export async function projectSessionImpact(root: string, options: SessionImpactO
     throw new SessionImpactUnavailableError(`session impact cannot verify base/head ancestry: ${ancestry.stderr.trim() || ancestry.failure}`)
   }
   // One immutable .spec tree read per distinct revision supplies BOTH spec relations and eval declarations.
-  // This is deliberately build-local: exact projections do not need another resident cache or generation.
+  // Build-local by design: the memo above owns reuse ACROSS builds, this map owns it within one.
   const treeByRevision = new Map<string, ReadonlyMap<string, string>>()
   const readTree = (revision: string): ReadonlyMap<string, string> => {
     const cached = treeByRevision.get(revision)
@@ -1383,13 +1418,23 @@ export type SessionEvals = {
   node: string | null
   branch: string | null
   title: string
-  ahead: number
-  dirtyNonRuntime: number
-  gates: ExportGate[]
   nodes: SessionEvalNode[]
   impact: SessionImpactProjection
-  summary: SessionEvalSummary
+  // the whole scope's seven counts. A FOCUSED build cannot honestly produce them — it measured six rows,
+  // not the scope — so it carries the summary only when the cut already holds one, and otherwise omits it
+  // rather than publishing a fold over the window. `evalRevision.content` is the stronger identity anyway:
+  // equal content revision IS the same evaluation cut, so a consumer fencing on it needs no counts.
+  summary?: SessionEvalSummary
+  // the LIST page's chrome, and only its. A focused build renders no gates strip and no branch counters, so
+  // it does not buy them — see `order` below for what marks such a model partial.
+  gates?: ExportGate[]
+  ahead?: number
+  dirtyNonRuntime?: number
   evalRevision: SessionEvalRevision
+  // present ONLY on a focused build: the whole population's identity+sequence facts, because `nodes` then
+  // holds just the few the response will render. Its presence is exactly what marks a model as PARTIAL —
+  // such a model may never enter the shared cut, or the list page would read the scope as those few nodes.
+  order?: SessionEvalOrderRow[]
 }
 
 export type SessionEvalSummary = {
@@ -1449,7 +1494,7 @@ async function sessionScopeNodes(
   ctx: Awaited<ReturnType<typeof evalContext>>,
   impact: SessionImpactProjection,
   shas: ReadonlySet<string>,
-  latestOnly = false,
+  freshness: { order?: boolean; only?: ReadonlySet<string> } = {},
 ): Promise<SessionEvalNode[]> {
   const evalById = new Map(ctx.ynodes.map((node) => [node.id, node]))
   const specById = new Map(ctx.specs.map((spec) => [spec.id, spec]))
@@ -1460,10 +1505,13 @@ async function sessionScopeNodes(
   // instead of one per node. Reading the timelines inside the loop instead cost 74% of a warm open.
   const timelineIds = impact.nodes
     .filter((projected) => specById.has(projected.id) && evalById.has(projected.id))
+    .filter((projected) => !freshness.only || freshness.only.has(projected.id))
     .map((projected) => projected.id)
-  const timelineById = new Map((await evalTimelines(timelineIds, ctx)).map((timeline, i) => [timelineIds[i], timeline]))
+  const timelineById = new Map((await evalTimelines(timelineIds, ctx, { order: freshness.order }))
+    .map((timeline, i) => [timelineIds[i], timeline]))
 
   for (const projected of impact.nodes) {
+    if (freshness.only && !freshness.only.has(projected.id)) continue
     const spec = specById.get(projected.id)
     if (!spec) continue // removed nodes remain fully explained by impact.nodes; they have no live eval rows.
     const evalNode = evalById.get(spec.id)
@@ -1507,7 +1555,7 @@ async function sessionScopeNodes(
       scenarios: scoped.scenarios,
       // Preserve the whole A/B history for selected scenarios. Fresh, stale, legacy and missing remain
       // honest downstream states; impact selection never removes a row because its reading is stale.
-      evals: latestOnly ? latestPerScenario(scoped.evals) as (EvalEntry & { inSession: boolean })[] : scoped.evals,
+      evals: scoped.evals,
     })
   }
 
@@ -1570,9 +1618,9 @@ type SessionEvalModel = Omit<SessionEvals, 'summary' | 'evalRevision'>
 
 async function buildSessionEvalModel(
   id: string,
-  payload: ReviewPayloadValue,
+  payload: ReviewPayloadValue | ReviewIdentity,
   wtPath: string | null,
-  latestOnly: boolean,
+  pick?: SessionEvalFocus,
 ): Promise<SessionEvalModel> {
   // spec tree from the session worktree, same root as readings/indexes — a branch-NEW node must exist
   // in this model or the Eval tab/deep link can never reach its readings (see buildExportModel above).
@@ -1582,23 +1630,51 @@ async function buildSessionEvalModel(
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
   const ctx = await evalContext(ctxRoot, specs, didx, hidx)
   const { impact, shas } = await sessionImpactForContext(id, ctx, wtPath)
-  const nodes = await sessionScopeNodes(id, ctx, impact, shas, latestOnly)
+  // @@@ TWO passes, ONE context - a detail open renders one scenario and at most five neighbours, but it
+  // still owes the full population's sequence (its `index` and `total`). Sequence is freshness-free, so the
+  // first pass reads every node's rows with no probes at all (~0.4s of the 25s), the caller names the few
+  // nodes whose verdicts will actually be published, and only those pay the freshness pass. The context and
+  // the impact projection are built once and shared, so the cheap pass adds no second projection.
+  let order: SessionEvalOrderRow[] | undefined
+  let only: ReadonlySet<string> | undefined
+  if (pick) {
+    const draft = await sessionScopeNodes(id, ctx, impact, shas, { order: true })
+    order = orderRowsOf(draft)
+    only = new Set(pick(order))
+  }
+  const nodes = await sessionScopeNodes(id, ctx, impact, shas, only ? { only } : {})
   // nodes with in-session measurements lead, then the most-measured — the session's own evidence first.
   nodes.sort((a, b) => (b.evals.filter((e) => e.inSession).length - a.evals.filter((e) => e.inSession).length)
     || (b.scenarios.length - a.scenarios.length) || (b.unknownCoverage.length - a.unknownCoverage.length))
 
   const primary = payload.node && specById.has(payload.node) ? specById.get(payload.node)!.title : null
+  const full = 'gates' in payload ? payload : null
   return {
     id,
     node: payload.node,
     branch: payload.branch,
     title: primary || payload.node || payload.branch || id.slice(0, 8),
-    ahead: payload.ahead,
-    dirtyNonRuntime: payload.dirtyNonRuntime,
-    gates: gateRows(payload),
+    ...(full ? { ahead: full.ahead, dirtyNonRuntime: full.dirtyNonRuntime, gates: gateRows(full) } : {}),
     nodes,
     impact,
+    ...(order ? { order } : {}),
   }
+}
+
+// the identity+sequence facts a detail open needs about scenarios it will NOT render: which exist, whether
+// they carry a filed reading, and when. Deliberately not an EvalEntry — there is no verdict here to leak.
+export type SessionEvalOrderRow = { node: string; scenario: string; ts: string | null }
+export type SessionEvalFocus = (order: SessionEvalOrderRow[]) => readonly string[]
+
+export function orderRowsOf(nodes: SessionEvalNode[]): SessionEvalOrderRow[] {
+  const rows: SessionEvalOrderRow[] = []
+  for (const node of nodes) {
+    const latest = new Map<string, string>()
+    for (const reading of node.evals) if (!latest.has(reading.scenario)) latest.set(reading.scenario, reading.ts)
+    for (const scenario of node.scenarios)
+      rows.push({ node: node.id, scenario: scenario.name, ts: latest.get(scenario.name) ?? null })
+  }
+  return rows
 }
 
 function untrackedPaths(status: string): string[] {
@@ -2017,22 +2093,26 @@ async function buildSummaryAttempt(id: string, _path: string): Promise<SummaryBu
       ? { kind: 'stable', revision: after, summary: cached.summary }
       : { kind: 'unstable' }
   }
-  const model = await buildSessionEvalModel(id, payload, wtPath, true)
+  const model = await buildSessionEvalModel(id, payload, wtPath)
   const after = await sessionEvalContentRevision(ctxPath)
   if (before !== after) return { kind: 'unstable' }
   const summary = sessionEvalSummary(model.nodes)
-  // Keep one content-addressed stable value per session. Revisions, not elapsed time, decide reuse. This
-  // fold is latestOnly, so it deposits no model — it only carries any model an earlier demand left here.
-  depositStableCut(id, after, { summary })
+  // Keep one content-addressed stable value per session. Revisions, not elapsed time, decide reuse.
+  // This fold IS the demand's fold, so it deposits the model too and a later open replays it.
+  depositStableCut(id, after, { summary, model })
   return { kind: 'stable', revision: after, summary }
 }
 
-// ONE content-addressed cut per session, keyed by id + content revision. It carries the summary the graph
-// reads and — only when the demand path built it — the derived full model a repeat open replays.
-// @@@the two builders do not produce the same model - buildSummaryAttempt folds latestOnly=true (latest
-// reading per scenario, enough for counts) while the demand path needs the complete A/B history. Only the
-// demand path may deposit `model`, and only a demand read may consume it; serving the summary path's fold
-// to a demand would silently truncate every scenario's history.
+// ONE content-addressed cut per session, keyed by id + content revision, carrying the summary the graph
+// reads and the full model a repeat open replays.
+// @@@one builder, not two - these used to be separate folds: the graph's built latestOnly (latest reading
+// per scenario) and deposited counts alone, so the demand path re-derived the WHOLE thing to get history
+// the graph fold had held one line earlier and thrown away. The trim never made the fold cheaper — the
+// expensive part is the freshness pass over every node in scope, and it ran identically either way — and
+// it never mattered to the counts, because sessionEvalSummary folds latestPerScenario itself. So the trim
+// bought nothing and cost a second full build per session per revision. The price of dropping it is
+// MEMORY: a cut now retains complete A/B history rather than latest-per-scenario, bounded by the one-cut-
+// per-session rule below.
 type StableCut = { summary: SessionEvalSummary; model?: SessionEvalModel }
 const summaryByContent = new Map<string, StableCut>()
 
@@ -2078,12 +2158,18 @@ export function releaseSessionEvalProjectionObserver(observer: string): boolean 
 }
 export async function awaitSessionEvalProjectionIdle(): Promise<void> { await projectionCache.idle() }
 
-export async function buildSessionEvals(id: string): Promise<SessionEvals | null> {
+// `pick` makes this a FOCUSED build: the caller names, from the population's sequence, the few nodes whose
+// verdicts its response will publish, and only those pay the freshness pass. A focused build is PARTIAL, so
+// it never deposits — but it still prefers a cached FULL model when one exists, because a complete answer
+// already paid for beats a cheap incomplete one.
+export async function buildSessionEvals(id: string, pick?: SessionEvalFocus): Promise<SessionEvals | null> {
   // A full model is demand-only, but it still runs through the projection queue. This gives a selected session
   // priority over unrelated queued summaries without opening a second git/build lane.
   for (;;) {
     const attempt = await projectionCache.demand(id, '', async () => {
-      const payload = await reviewPayload(id)
+      // a focused open renders no gates strip, so it reads the session's IDENTITY (a free store read)
+      // instead of its review payload (ahead count + dirty scan + merge-tree conflict probe).
+      const payload = pick ? reviewIdentity(id) : await reviewPayload(id)
       if (!payload) return { kind: 'missing' as const }
       const wtPath = worktreePathForBranch(payload.branch)
       const ctxPath = wtPath ?? repoRoot()
@@ -2108,7 +2194,7 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
         if (before !== settled) projectionCache.invalidate({ id })
         return { kind: 'retry' as const }
       }
-      const model = await buildSessionEvalModel(id, payload, wtPath, false)
+      const model = await buildSessionEvalModel(id, payload, wtPath, pick)
       const after = await sessionEvalContentRevision(ctxPath)
       const current = projectionCache.get(id)
       if (before !== after || projectionCache.isObserverHeld(id, ctxPath)
@@ -2116,6 +2202,11 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
         if (before !== after) projectionCache.invalidate({ id })
         return { kind: 'retry' as const }
       }
+      // A focused model holds only the nodes it was asked to publish, so its counts are NOT the scope's and
+      // its nodes are NOT the scope's. Neither may be deposited or accepted: doing so would tell the list
+      // page and the graph that the session's whole evaluation is those few nodes.
+      if (model.order)
+        return { kind: 'ready' as const, model, summary: known?.value, generation, revision: after }
       const summary = sessionEvalSummary(model.nodes)
       // Only a settled fold deposits, and only here does a model enter the cut — a thrown build reaches
       // neither line, so a failure can never poison the entry.
@@ -2127,7 +2218,8 @@ export async function buildSessionEvals(id: string): Promise<SessionEvals | null
     if (attempt.kind === 'retry') continue
     return {
       ...attempt.model,
-      summary: attempt.summary,
+      // absent on a focused build whose cut holds no summary — never a fold over the rendered window
+      ...(attempt.summary ? { summary: attempt.summary } : {}),
       evalRevision: { epoch: projectionCache.epoch, generation: attempt.generation, content: attempt.revision },
     }
   }

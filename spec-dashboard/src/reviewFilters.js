@@ -169,6 +169,11 @@ const reviewStateOf = (entry) => (evalIsResult(entry) && entry.fresh && entry.hu
 const evalFresh = (entry) => entry.fresh === true
 const freshnessOf = (entry) => (evalIsResult(entry) ? (evalFresh(entry) ? 'fresh' : 'stale') : null)
 export const evalReviewState = (reading) => {
+  // an order-only row never had its freshness computed, so it has no verdict to report. Refuse it here
+  // rather than let its conservative placeholder be published as a measured `stalePass`/`staleFail`: the
+  // whole point of the deferred pass is that these rows exist only to establish sequence.
+  if (reading?.freshnessDeferred)
+    throw new Error(`eval row ${reading.scenario ?? '?'} has deferred freshness — it can order a list, never state a verdict`)
   const status = reading?.verdict?.status
   if (status !== 'pass' && status !== 'fail') return 'empty'
   if (reading.fresh) return status

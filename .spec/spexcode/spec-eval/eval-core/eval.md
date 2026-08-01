@@ -233,6 +233,21 @@ scenarios:
       reconstructs the authoritative input bytes exactly, including comments, scalar style, blank lines, final
       newline, and CRLF. Every ambiguous, malformed, unknown, absent, or multi-target request fails loudly and
       emits no proposed bytes; callers never provide byte offsets, line numbers, or text anchors.
+  - name: probe-joins-in-flight-child
+    tags: [backend-api]
+    code: [spec-eval/src/freshness.ts, spec-eval/src/scenariofresh.ts]
+    description: >-
+      On a real adopter session scope large enough that the timeline pass primes concurrently (adopter-a:
+      415 eval-bearing nodes in one session's affected set), build that session's eval model with every
+      `git` child counted through a PATH shim, then census the log: total children, and how many distinct
+      command lines they represent.
+    expected: >-
+      Total children equals distinct children for the two per-reading immutable-key lookups — the drift
+      count for an (anchor, path) and the eval.md object/blob read at a revision. A memo that holds only
+      settled values does not satisfy this: concurrent primes naming one key must join the in-flight child
+      rather than each forking their own. Verdicts are identical either way, so the census is the only
+      observation that can fail — a run whose `rev-parse` or `rev-list --count` totals exceed their distinct
+      counts is the defect, however correct its answers.
 ---
 # eval.md — eval-core
 

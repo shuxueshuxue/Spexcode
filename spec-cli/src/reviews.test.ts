@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { boundedEvalNeighbors, measuredSequence, paginateReview, projectEvalDetail, reviewPageNumber, scopedEvalReviewItems, trunkEvalReviewItems } from './reviews.js'
+import { boundedEvalNeighbors, focusNodes, measuredSequence, paginateReview, projectEvalDetail, reviewPageNumber, scopedEvalReviewItems, trunkEvalReviewItems } from './reviews.js'
 import { orderRowsOf } from '../../spec-eval/src/sessioneval.js'
 // @ts-expect-error The shared browser/server engine is deliberately plain JS — the same module the server
 // folds counts with, so this test measures the real canonical path rather than a re-implementation.
@@ -201,4 +201,37 @@ test('the freshness-free sequence orders the population exactly as the full mode
   assert.deepEqual(measuredSequence(orderRowsOf(nodes)), full,
     'the cheap sequence and the full model must agree row for row, ties included')
   assert.ok(full.length === 4, 'the blind row stays out of the measured sequence, as the detail projection expects')
+})
+
+// @@@ the window must hold at EVERY position, not just the one that was measured - the focused build names a
+// node window from the sequence and only those nodes get freshness, while boundedEvalNeighbors picks the rows
+// independently. If a pick ever falls outside the window its state is looked up and missing, and the page
+// quietly shows 'empty' for a real verdict. The split is asymmetric at the ends (the forward side takes the
+// odd slot, a boundary refills from the other side), so the ends are exactly where a hand-checked index lies.
+test('the focus window contains every neighbour the projection can choose, at every position', () => {
+  const order = Array.from({ length: 41 }, (_, i) => ({
+    node: `n${i % 7}`,
+    scenario: `s${String(i).padStart(2, '0')}`,
+    ts: `2026-02-${String(41 - i).padStart(2, '0')}T00:00:00Z`,
+  }))
+  const sequence = measuredSequence(order)
+  assert.equal(sequence.length, 41, 'every row here is measured, so the sequence is the whole set')
+  for (let i = 0; i < sequence.length; i++) {
+    const { node, scenario } = sequence[i]
+    const focus = new Set(focusNodes(order, node, scenario))
+    assert.ok(focus.has(node), `index ${i}: the selected row's own node must be measured`)
+    const neighbours = boundedEvalNeighbors(sequence, node, scenario, () => 'pass')
+    assert.equal(neighbours.index, i, `index ${i}: the projection and the window must agree on position`)
+    assert.equal(neighbours.total, 41)
+    for (const row of [...neighbours.prev, ...neighbours.next])
+      assert.ok(focus.has(row.node),
+        `index ${i}: neighbour ${row.node}/${row.scenario} falls OUTSIDE the focus window — its verdict would read empty`)
+  }
+})
+
+// a scenario absent from the sequence (never filed) still has to resolve to something measurable
+test('an unmeasured selection still focuses its own node', () => {
+  const order = [{ node: 'a', scenario: 'filed', ts: '2026-01-01T00:00:00Z' }, { node: 'b', scenario: 'blind', ts: null }]
+  assert.deepEqual(focusNodes(order, 'b', 'blind'), ['b'], 'a blind row is not in the measured sequence, so it focuses itself')
+  assert.deepEqual(measuredSequence(order), [{ node: 'a', scenario: 'filed' }], 'and blind rows never enter the sequence')
 })

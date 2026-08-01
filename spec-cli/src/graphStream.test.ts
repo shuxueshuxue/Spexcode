@@ -374,3 +374,41 @@ test('evalTargetForRef derives the invalidation scope from the ref that moved', 
   assert.deepEqual(at('heads\\node\\cr-pipeline-3030'), { id: 'sess-3030' },
     'a Windows watcher reports backslashes; normalise before matching so the scope still narrows there')
 })
+
+// @@@ the POSITIVE control the narrowing needs - "an unrelated ref no longer invalidates" is indistinguishable
+// from "the watcher is dead and nothing ever invalidates" unless the delivery itself is pinned. So this asserts
+// the watcher hands the ref PATH through (it used to be discarded), and that the path it hands over is the one
+// the derivation reads. Real atomic ref replacement, the way git writes one.
+test('the refs watcher delivers the ref path, so a relevant ref still invalidates its session', async () => {
+  const common = mkdtempSync(join(tmpdir(), 'spex-refs-scope-'))
+  const seen: (string | undefined)[] = []
+  try {
+    mkdirSync(join(common, 'refs', 'heads', 'node'), { recursive: true })
+    const watchers = watchSessionEvalRefs(common, (ref) => { seen.push(ref) }, () => {})
+    const replace = (rel: string) => {
+      writeFileSync(join(common, 'refs', rel + '.lock'), 'a'.repeat(40) + '\n')
+      renameSync(join(common, 'refs', rel + '.lock'), join(common, 'refs', rel))
+    }
+    replace('heads/node/cr-pipeline-3030')
+    await waitFor(() => seen.length > 0, 'the refs watcher observed no ref replacement')
+    const branches = new Map([['node/cr-pipeline-3030', 'sess-3030']])
+    const delivered = seen.filter((r): r is string => typeof r === 'string')
+    assert.ok(delivered.length > 0, 'the watcher must hand the ref path over, not discard it')
+    assert.ok(
+      delivered.some((ref) => JSON.stringify(evalTargetForRef(ref, 'adopter-a-spec', branches)) === JSON.stringify({ id: 'sess-3030' })),
+      `a session's own branch must still invalidate that session; delivered ${JSON.stringify(delivered)}`,
+    )
+
+    // and the base branch, through the same delivery, still invalidates everything
+    seen.length = 0
+    replace('heads/adopter-a-spec')
+    await waitFor(() => seen.length > 0, 'the refs watcher observed no base-branch replacement')
+    assert.ok(
+      seen.filter((r): r is string => typeof r === 'string').some((ref) => evalTargetForRef(ref, 'adopter-a-spec', branches) === 'all'),
+      'the base branch must still invalidate every session',
+    )
+    watchers.close()
+  } finally {
+    rmSync(common, { recursive: true, force: true })
+  }
+})

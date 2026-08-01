@@ -299,7 +299,7 @@ export function measuredSequence(order: SessionEvalOrderRow[]): { node: string; 
 
 // the nodes whose verdicts the response will publish: the selected row's, plus a window wide enough to
 // contain any neighbour boundedEvalNeighbors can choose (it takes at most five, split around the index).
-function focusNodes(order: SessionEvalOrderRow[], node: string, scenario: string): string[] {
+export function focusNodes(order: SessionEvalOrderRow[], node: string, scenario: string): string[] {
   const sequence = measuredSequence(order)
   const index = sequence.findIndex((row) => row.node === node && row.scenario === scenario)
   if (index < 0) return [node]

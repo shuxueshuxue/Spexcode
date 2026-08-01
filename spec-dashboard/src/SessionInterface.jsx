@@ -769,7 +769,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             : item.phase === 'uploading' ? `${formatUploadBytes(item.offset)} / ${formatUploadBytes(item.file.size)}`
               : item.phase === 'complete' ? t('session.attachDone') : item.phase === 'cancelled' ? t('session.attachCancelled') : item.error
           return (
-            <div key={item.id} className={`si-attach-row ${item.phase}`}>
+            <div key={item.id} className={`si-attach-row ${item.phase}`}
+              onAnimationEnd={(event) => {
+                if (event.target === event.currentTarget && event.animationName === 'si-attach-complete-out') dismissAttachment(item.id)
+              }}>
               <span className="si-attach-name" title={item.file.name}><Icon name="paperclip" size={12} />{item.file.name}</span>
               <progress className="si-attach-progress" value={item.offset} max={item.file.size} aria-label={`${item.file.name}: ${status}`} />
               <span className="si-attach-status" role={item.phase === 'failed' ? 'alert' : 'status'}>{status}</span>

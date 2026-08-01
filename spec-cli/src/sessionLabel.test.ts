@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { toSession, deriveLabel, deriveHeadline, sessionLabel, sessionHeadline } from './sessions.js'
+import { toSession, deriveLabel, deriveTitle, sessionLabel, sessionTitle } from './sessions.js'
 import type { SessRec } from './sessions.js'
 
 // Pins the session-label contract ([[session-label]]): display strings are DERIVED in exactly one place
@@ -16,14 +16,14 @@ const rec = (over: Partial<SessRec> = {}): SessRec => ({
   ...over,
 })
 
-test('wire shape: no top-level title/name — only label/headline + raw parts', () => {
+test('wire shape: one derived title plus stable handle; raw parts stay nested', () => {
   const s = toSession(rec({ name: 'My Rename' }), 'working', 'online', '✳ ignored-here')
-  assert.equal('title' in s, false, 'bare title must not ride the wire')
+  assert.equal(s.title, 'My Rename')
   assert.equal('name' in s, false, 'bare name must not ride the wire')
   assert.equal(s.raw.name, 'My Rename')
   assert.equal(s.raw.title, 'seven word prompt truncation title here')
   assert.equal(typeof s.label, 'string')
-  assert.equal(typeof s.headline, 'string')
+  assert.equal('headline' in s, false, 'headline must not ride the wire')
   assert.deepEqual(s.capabilities, { headless: false })
 })
 
@@ -40,46 +40,53 @@ test('label precedence: name > node > title > branch > id', () => {
   assert.equal(deriveLabel({ id: 'i', name: null, node: null, title: null, branch: null }), 'i')
 })
 
-test('headline precedence: name > activity > promptPreview > node > …', () => {
+test('title precedence: name > activity > note > promptPreview > node > …', () => {
   const parts = { id: 'i', name: null, node: 'nd', title: 't', branch: 'b', activity: 'doing X', promptPreview: 'the ask' }
-  assert.equal(deriveHeadline(parts), 'doing X')
-  assert.equal(deriveHeadline({ ...parts, activity: null }), 'the ask')
-  assert.equal(deriveHeadline({ ...parts, name: 'N' }), 'N', 'a user rename wins over the live activity')
-  assert.equal(deriveHeadline({ ...parts, activity: null, promptPreview: null }), 'nd')
+  assert.equal(deriveTitle(parts), 'doing X')
+  assert.equal(deriveTitle({ ...parts, activity: null, note: 'waiting for review' }), 'waiting for review')
+  assert.equal(deriveTitle({ ...parts, activity: null, note: null }), 'the ask')
+  assert.equal(deriveTitle({ ...parts, name: 'N' }), 'N', 'a user rename wins over the live activity')
+  assert.equal(deriveTitle({ ...parts, activity: null, note: null, promptPreview: null }), 'nd')
 })
 
-test('a lifecycle note never replaces the title chain', () => {
+test('title skips a bare URL prompt when the next line carries the task', () => {
+  assert.equal(deriveTitle({
+    id: 'i', name: null, activity: null, note: null, node: null, title: null, branch: null,
+    promptPreview: 'https://github.com/nmhjklnm/gugu/issues/2702\n这里我们要做的一个重大的修改',
+  }), '这里我们要做的一个重大的修改')
+})
+
+test('a lifecycle note supplies the title when no live summary exists', () => {
   const url = 'http://127.0.0.1:9/p/session-label-repro'
   const declared = {
     id: 'i', name: null, note: 'M4b-A landed; next is M4b-B — waiting for a human go', activity: 'debugging the launch failure',
     promptPreview: url, node: null, title: url, branch: `node/${url.replace(/\W+/g, '-')}`,
   }
-  assert.equal(deriveHeadline(declared), 'debugging the launch failure')
-  assert.equal(deriveHeadline({ ...declared, name: 'my-rename' }), 'my-rename', 'the human rename still wins')
-  assert.equal(deriveHeadline({ ...declared, activity: null }), url, 'without activity the launch ask remains the title')
+  assert.equal(deriveTitle(declared), 'debugging the launch failure')
+  assert.equal(deriveTitle({ ...declared, name: 'my-rename' }), 'my-rename', 'the human rename still wins')
+  assert.equal(deriveTitle({ ...declared, activity: null }), 'M4b-A landed; next is M4b-B — waiting for a human go')
 })
 
-test('a long note cannot affect a headline', () => {
+test('a long note is compacted into a bounded title', () => {
   const note = `${'declared: '.padEnd(80, 'x')}\nsecond line`
-  const withLongNote = { id: 'i', note, activity: 'stale title' }
+  const withLongNote = { id: 'i', note, activity: null }
   const withBlankNote = { id: 'i', note: '   \n  ', activity: 'stale title' }
-  const headline = deriveHeadline(withLongNote)
-  assert.equal(headline, 'stale title')
-  assert.equal(deriveHeadline(withBlankNote), 'stale title')
+  assert.equal(deriveTitle(withLongNote), withLongNote.note.slice(0, 59) + '…')
+  assert.equal(deriveTitle(withBlankNote), 'stale title')
 })
 
-test('toSession keeps a record note separate from the live headline', () => {
+test('toSession derives one title while retaining the full record note', () => {
   const s = toSession(rec({ status: 'awaiting', proposal: 'nothing', note: 'parked on the human: which of the two shapes do you want?' }), 'done', 'online', 'debugging the launch failure')
-  assert.equal(s.headline, 'debugging the launch failure')
+  assert.equal(s.title, 'debugging the launch failure')
   assert.equal(s.note, 'parked on the human: which of the two shapes do you want?')
   assert.equal(s.label, 'x', 'the stable handle is untouched by a declaration')
 })
 
 test('toSession derives with liveness-gated activity; accessors are the precomputed fields', () => {
   const on = toSession(rec(), 'working', 'online', 'live summary')
-  assert.equal(on.headline, 'live summary')
+  assert.equal(on.title, 'live summary')
   const off = toSession(rec(), 'offline', 'offline', 'stale summary')
-  assert.notEqual(off.headline, 'stale summary', 'a dead session never headlines a stale pane title')
+  assert.notEqual(off.title, 'stale summary', 'a dead session never titles from a stale pane title')
   assert.equal(sessionLabel(on), on.label)
-  assert.equal(sessionHeadline(on), on.headline)
+  assert.equal(sessionTitle(on), on.title)
 })

@@ -39,22 +39,26 @@ export function matchSpecs(specs, query, focusId) {
   return scored.slice(0, 8).map((x) => x.s)
 }
 
-// The session twin of matchSpecs: rank retained board sessions for a partial `@query`. A row
-// reads as the SAME headline every other surface shows ([[session-label]] — sessionHeadline, never a bare
-// title/name, which no longer ride the wire); `sub` is a hint (its node or status). Exact/prefix on
-// id-or-handle leads, then most-recent (`created` desc) within a band. Returns up to 8 `{id, label, sub}`.
+// The session twin of matchSpecs: rank retained board sessions for a partial `@query`. A row reads as the
+// same derived title every other surface shows; matching also searches the retained raw/name/prompt/note
+// candidates so a pane-title change or rename does not strand a session under text the human already saw.
+// `sub` is a hint (its node or status). Exact/prefix on id-or-candidate leads, then most-recent (`created`
+// desc) within a band. Returns up to 8 `{id, label, sub}`.
 export function matchSessions(sessions, query) {
   const q = query.toLowerCase()
   const handle = (s) => sessionHeadline(s) || (s.id || '').slice(0, 8)
+  const candidates = (s) => [s?.title, s?.label, s?.raw?.name, s?.raw?.title, s?.activity, s?.promptPreview, s?.note]
+    .filter((value) => typeof value === 'string' && value.trim())
+    .map((value) => value.toLowerCase())
   const scored = []
   for (const s of sessions || []) {
     const id = (s.id || '').toLowerCase()
-    const h = handle(s).toLowerCase()
+    const names = candidates(s)
     let score
     if (!q) score = 3
-    else if (id === q || h === q) score = 0
-    else if (id.startsWith(q) || h.startsWith(q)) score = 1
-    else if (id.includes(q) || h.includes(q)) score = 2
+    else if (id === q || names.some((name) => name === q)) score = 0
+    else if (id.startsWith(q) || names.some((name) => name.startsWith(q))) score = 1
+    else if (id.includes(q) || names.some((name) => name.includes(q))) score = 2
     else continue
     scored.push({ s, score })
   }

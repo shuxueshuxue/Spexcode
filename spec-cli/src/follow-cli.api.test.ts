@@ -16,7 +16,7 @@ const ID = 'wwww2222-2222-4222-8222-222222222222'
 
 function row(status: string, archived = false): Record<string, unknown> {
   return {
-    id: ID, node: null, branch: 'node/watch-cli', label: ID, headline: ID,
+    id: ID, node: null, branch: 'node/watch-cli', label: ID, title: ID,
     raw: { name: null, title: null }, path: `/wt/${ID}`, parent: null, harness: 'claude',
     capabilities: { headless: false }, launcher: null, lifecycle: 'active', proposal: null, merges: 0,
     status, liveness: status === 'offline' ? 'offline' : 'online', note: null, archived, archiveHazard: null,

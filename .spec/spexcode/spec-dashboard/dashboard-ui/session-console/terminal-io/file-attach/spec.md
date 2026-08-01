@@ -13,6 +13,7 @@ related:
   - spec-cli/src/uploads.api.test.ts
   - spec-dashboard/src/SessionInterface.jsx
   - spec-dashboard/src/styles.css
+  - spec-dashboard/test/attachment-complete.e2e.mjs
   - spec-cli/src/index.ts
   - spec-cli/src/layout.ts
   - spec-cli/src/guide.ts
@@ -82,6 +83,14 @@ completed row splices only its returned path into its original composer; a faile
 changes the draft. The paperclip shows queue activity without collapsing all file state into one generic
 spinner. A crafted filename can't escape the upload dir — the name is reduced to a bare, sanitised basename
 first.
+
+## completion feedback
+
+After the final response is accepted, the row briefly shows the localized **attached** status so the handoff
+is observable, then fades out and removes itself. A successful path is already in the draft before that
+feedback leaves, so no dismiss click is required and the queue does not retain completed rows indefinitely.
+Failed and cancelled rows remain visible with their retry/cancel or dismiss controls until the human clears
+them; only a successful row has automatic cleanup.
 
 ## where it lives
 

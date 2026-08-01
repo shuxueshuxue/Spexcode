@@ -104,6 +104,9 @@ recovers the receipt. The published record is already a normal durable `queued` 
 launch payload present, so backend restart and the ordinary queue supervisor can recover it. Queue draining is
 requested only after publication and is not awaited by the HTTP receipt; a slow, stopped, or broken launcher
 therefore cannot hold session creation open. This is the existing queue mechanism, not a second create worker.
+The successful HTTP route also nudges the graph's `sessions` projection after publication, so dashboard row
+delivery does not depend on the session-store watcher; any candidate worktree registry refresh remains its own
+asynchronous full convergence.
 
 Target resolution on this write path reads the live filesystem-only spec projection. It needs only a node id
 and `spec.md` path; it must not build history, drift, graph, or eval projections before publication. The

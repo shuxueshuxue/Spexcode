@@ -129,6 +129,9 @@ esac
         SPEX_CREATE_BLOCK_RECEIPT_RETIRE: blockReceiptRetire,
         SPEX_CREATE_MATERIALIZE_FAILURE: materializeFailure,
         SPEX_CREATE_CANDIDATE_DIR: candidateDir,
+        // The create route's explicit sessions nudge must be the only graph signal in this control;
+        // otherwise a filesystem watcher could make the regression pass without testing the route.
+        SPEXCODE_DISABLE_WATCHERS: 'store,worktrees,refs',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -162,6 +165,10 @@ esac
   const nodeRefs = () => git(project, 'for-each-ref', 'refs/heads/task', '--format=%(refname)')
   const worktrees = () => git(project, 'worktree', 'list', '--porcelain').match(/^worktree /gm)?.length ?? 0
   const close = (id: string) => fetch(`${base}/api/sessions/${id}/close`, { method: 'POST' })
+  const graphAbort = new AbortController()
+  const graphEvents: Array<{ event: string, data: string }> = []
+  let graphRead: Promise<void> | null = null
+  let graphEventsBeforeCreate = 0
   const noCreateArtifacts = async () => {
     assert.deepEqual(await rows(), [], 'public state has no phantom-running row')
     assert.deepEqual(sessionDirs(), [], 'global store has no candidate session')
@@ -214,6 +221,31 @@ esac
     await noCreateArtifacts()
     unlinkSync(mismatchGit)
 
+    const graph = await fetch(`${base}/api/graph/stream?mode=delta`, { signal: graphAbort.signal })
+    assert.equal(graph.status, 200)
+    assert.ok(graph.body)
+    graphRead = (async () => {
+      const reader = graph.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffered = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) return
+        buffered += decoder.decode(value, { stream: true })
+        let boundary: number
+        while ((boundary = buffered.indexOf('\n\n')) >= 0) {
+          const block = buffered.slice(0, boundary)
+          buffered = buffered.slice(boundary + 2)
+          const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
+          const data = block.split('\n').find((line) => line.startsWith('data: '))?.slice(6)
+          if (event && data !== undefined) graphEvents.push({ event, data })
+        }
+      }
+    })().catch(() => {})
+    await waitFor(() => graphEvents.some(({ event }) => event === 'ready'), 'delta graph stream ready')
+    await waitFor(() => graphEvents.some(({ event }) => event === 'graph-full'), 'initial delta graph frame')
+    graphEventsBeforeCreate = graphEvents.length
+
     const key = 'collision-112'
     const started = Date.now()
     const [left, right] = await Promise.all([post(key), post(key)])
@@ -228,6 +260,12 @@ esac
     assert.equal(git(a.path, 'symbolic-ref', '--short', 'HEAD'), a.branch)
     assert.ok(git(project, 'show-ref', '--verify', `refs/heads/${a.branch}`))
     assert.deepEqual((await rows()).map((row) => row.id), [a.id])
+    await waitFor(() => graphEvents.slice(graphEventsBeforeCreate).some(({ event, data }) => {
+      if (event === 'graph-full') return data.includes(a.id)
+      if (event !== 'graph-delta') return false
+      const frame = JSON.parse(data) as { set?: Record<string, unknown> }
+      return Object.hasOwn(frame.set ?? {}, `sess:${a.id}`)
+    }), 'successful public create must explicitly push its session unit to the delta graph stream')
     assert.deepEqual(sessionDirs(), [a.id])
     assert.equal(worktrees(), 3)
     assert.match(readFileSync(trace, 'utf8'), /git-start .*defer=session-create .*worktree add/, 'session creation defers the post-checkout refresh to its explicit materialize phase')
@@ -393,6 +431,8 @@ esac
     )
 
   } finally {
+    graphAbort.abort()
+    await graphRead?.catch(() => {})
     child.kill('SIGTERM')
     try { execFileSync('tmux', ['-L', tmux, 'kill-server'], { stdio: 'ignore' }) } catch { /* no server */ }
     if (child.exitCode === null && child.signalCode === null) await new Promise<void>((resolve) => child.once('close', () => resolve()))

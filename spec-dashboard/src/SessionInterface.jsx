@@ -33,6 +33,9 @@ const KIBIBYTES_PER_MEBIBYTE = 1024
 const MEBIBYTES_PER_GIBIBYTE = 1024
 const BYTES_PER_MEBIBYTE = BYTES_PER_KIBIBYTE * KIBIBYTES_PER_MEBIBYTE
 const BYTES_PER_GIBIBYTE = BYTES_PER_MEBIBYTE * MEBIBYTES_PER_GIBIBYTE
+let nextAttachmentKey = 0
+
+const attachmentKey = () => globalThis.crypto?.randomUUID?.() || `attachment-${Date.now()}-${++nextAttachmentKey}`
 
 const HERO_WORDMARK = [
   '███████╗██████╗ ███████╗██╗  ██╗ ██████╗ ██████╗ ██████╗ ███████╗',
@@ -748,7 +751,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const attachFiles = async (fileList, target) => {
     const files = [...(fileList || [])]
     if (!files.length || uploadQueueBusyRef.current) return
-    const added = files.map((file) => ({ id: crypto.randomUUID(), target, file, phase: 'queued', offset: 0, transferId: null, error: null }))
+    const added = files.map((file) => ({ id: attachmentKey(), target, file, phase: 'queued', offset: 0, transferId: null, error: null }))
     replaceAttachments([...attachmentsRef.current, ...added])
     await runQueuedAttachments(added.map((item) => item.id))
   }

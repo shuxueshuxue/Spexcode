@@ -29,7 +29,7 @@ test('scenario-list JSON preserves a normalized concrete test reference', () => 
 })
 
 test('canonical scenario projection separates semantic, measurement, and planning identity', () => {
-  const node = (scenario: EvalNode['scenarios'][number], specSource = '---\ncode: [src/node.ts#run]\nrelated: [docs/node.md]\n---\n'): EvalNode & { specSource: string } => ({
+  const node = (scenario: EvalNode['scenarios'][number], specSource = '---\ncode:\n  - src/node.ts#run\nrelated:\n  - docs/node.md\n---\n'): EvalNode & { specSource: string } => ({
     id: 'z-node', dir: '/tmp/z-node', evalPath: '.spec/z-node/eval.md', sidecarPath: '/tmp/z-node/evals.ndjson', scenarios: [scenario], specSource,
   })
   const base = {
@@ -62,7 +62,7 @@ test('canonical scenario projection separates semantic, measurement, and plannin
   assert.notEqual(testOnly.fullIndexHash, a.fullIndexHash)
   assert.notEqual((testOnly as any).planningIndexHash, (a as any).planningIndexHash)
 
-  const nodeRelationOnly = scenarioProjection([node(base, '---\ncode: [src/other-node.ts]\nrelated: [docs/other-node.md]\n---\n')], { head: 'head-a', treeSha: 'tree-a' })
+  const nodeRelationOnly = scenarioProjection([node(base, '---\ncode:\n  - src/other-node.ts\nrelated:\n  - docs/other-node.md\n---\n')], { head: 'head-a', treeSha: 'tree-a' })
   assert.equal(nodeRelationOnly.semanticIndexHash, a.semanticIndexHash)
   assert.equal(nodeRelationOnly.fullIndexHash, a.fullIndexHash)
   assert.notEqual((nodeRelationOnly as any).planningIndexHash, (a as any).planningIndexHash)

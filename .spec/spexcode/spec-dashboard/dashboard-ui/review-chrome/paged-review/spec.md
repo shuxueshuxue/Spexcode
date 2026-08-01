@@ -63,8 +63,11 @@ lightweight `{node,scenario,state}` neighbors plus source `total`, zero-based `i
 order. Neighbor groups preserve the source's stable list order, nearest to the selected row first, with the
 forward side taking the odd slot and boundary capacity refilling from the other side. No other scenario's
 history or reconstructable row rides the response. Trunk detail reads the server-only atomic review snapshot;
-scoped detail projects the worktree engine and also returns its summary and
-`evalRevision {epoch,generation,content}`.
+scoped detail projects the worktree engine and returns
+`evalRevision {epoch,generation,content}`, plus its summary when it holds one that describes the whole scope.
+A focused detail has measured only what it renders, so it omits the counts instead of folding its window; a
+browser therefore fences on the content revision, which is the stronger identity, and compares counts only
+when they are present.
 
 A detail response is bounded in COST the same way it is bounded in bytes. Sequence — which scenarios are in
 play, in what order, and therefore the selected row's `index` and the source `total` — is derived from

@@ -133,3 +133,26 @@ test('the A/B strip is bounded: a recent window, the current pip always visible,
   // widest old-index state can never push the strip past the viewport
   assert.match(cssText, /@media \(max-width: 760px\) \{\s*\n\s*\.an-ab-pos \{ display: none; \}\s*\n\}/)
 })
+
+// @@@ a focused detail carries no counts, and that must NOT read as stale - the counts were only ever a
+// redundant confirmation of an already-equal content revision. When the detail omits them (it measured the
+// rows it renders, not the scope), requiring them would reject a correct answer on every read and the page
+// would loop forever on 'stale session eval detail'.
+test('a detail with no summary is accepted once its content revision matches', () => {
+  const page = readFileSync(new URL('./EvalsPage.jsx', import.meta.url), 'utf8')
+  const src = page.match(/export function detailMatchesProjection[\s\S]*?\n\}/)[0].replace('export ', '')
+  const matches = new Function(`${src}; return detailMatchesProjection`)()
+  const projection = {
+    epoch: 'e', generation: 7, revision: 'content-abc',
+    value: { measured: 1336, total: 2437, pass: 116, fail: 13, review: 1207, blind: 1101, unknown: 0 },
+  }
+  const revision = { epoch: 'e', generation: 7, content: 'content-abc' }
+  assert.equal(matches({ evalRevision: revision }, projection), true,
+    'no summary + equal content revision is the same cut, so the answer stands')
+  assert.equal(matches({ evalRevision: revision, summary: projection.value }, projection), true,
+    'a summary that agrees still passes')
+  assert.equal(matches({ evalRevision: revision, summary: { ...projection.value, measured: 17 } }, projection), false,
+    'a summary that DISAGREES at an equal revision is a real contradiction and is still rejected')
+  assert.equal(matches({ evalRevision: { ...revision, content: 'other' } }, projection), false,
+    'and the content revision remains the actual fence')
+})

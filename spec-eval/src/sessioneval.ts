@@ -1420,7 +1420,11 @@ export type SessionEvals = {
   title: string
   nodes: SessionEvalNode[]
   impact: SessionImpactProjection
-  summary: SessionEvalSummary
+  // the whole scope's seven counts. A FOCUSED build cannot honestly produce them — it measured six rows,
+  // not the scope — so it carries the summary only when the cut already holds one, and otherwise omits it
+  // rather than publishing a fold over the window. `evalRevision.content` is the stronger identity anyway:
+  // equal content revision IS the same evaluation cut, so a consumer fencing on it needs no counts.
+  summary?: SessionEvalSummary
   // the LIST page's chrome, and only its. A focused build renders no gates strip and no branch counters, so
   // it does not buy them — see `order` below for what marks such a model partial.
   gates?: ExportGate[]
@@ -2202,7 +2206,7 @@ export async function buildSessionEvals(id: string, pick?: SessionEvalFocus): Pr
       // its nodes are NOT the scope's. Neither may be deposited or accepted: doing so would tell the list
       // page and the graph that the session's whole evaluation is those few nodes.
       if (model.order)
-        return { kind: 'ready' as const, model, summary: known?.value ?? sessionEvalSummary(model.nodes), generation, revision: after }
+        return { kind: 'ready' as const, model, summary: known?.value, generation, revision: after }
       const summary = sessionEvalSummary(model.nodes)
       // Only a settled fold deposits, and only here does a model enter the cut — a thrown build reaches
       // neither line, so a failure can never poison the entry.
@@ -2214,7 +2218,8 @@ export async function buildSessionEvals(id: string, pick?: SessionEvalFocus): Pr
     if (attempt.kind === 'retry') continue
     return {
       ...attempt.model,
-      summary: attempt.summary,
+      // absent on a focused build whose cut holds no summary — never a fold over the rendered window
+      ...(attempt.summary ? { summary: attempt.summary } : {}),
       evalRevision: { epoch: projectionCache.epoch, generation: attempt.generation, content: attempt.revision },
     }
   }

@@ -269,7 +269,11 @@ and answering it costs a merge probe and a whole-worktree dirty scan. A detail r
 focused build reads the session's IDENTITY from its record (free) rather than its review payload, and the
 model simply carries no gates. This is the same rule as the freshness scope, applied one layer out: a
 response buys the questions it answers. Each response
-carries the same generation, content revision, and `sessionEvalSummary` projection as the graph field. If the client has already observed a
+carries the same generation and content revision as the graph field. It carries the `sessionEvalSummary`
+projection too WHEN it has one honestly: a focused detail measured the rows it renders, not the scope, so it
+omits the counts rather than publishing a fold over its window — a fold that would report a 1336-scenario
+session as a 17-scenario one. Nothing is lost by the omission, because an equal content revision already IS
+the same evaluation cut; the counts were a redundant confirmation of an identity the revision had proven. If the client has already observed a
 newer graph generation, it rejects the old response and reloads; equal generations must have equal content
 revisions. This fence keeps a slow demand read from repainting newer loss while preserving the tier split: summary
 on graph, scenarios/readings on Evals open, evidence bytes on detail expansion.

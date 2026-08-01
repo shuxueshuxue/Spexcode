@@ -30,6 +30,32 @@ try {
   assert.match(await input.inputValue(), /spexcode-uploads/)
   await page.screenshot({ path: join(OUT, 'completed-row.png'), fullPage: true })
   await complete.waitFor({ state: 'detached', timeout: 2_200 })
+
+  const legacyErrors = []
+  const legacyPage = await browser.newPage({ viewport: { width: 1200, height: 800 } })
+  legacyPage.on('pageerror', (error) => legacyErrors.push(error.message))
+  await legacyPage.addInitScript(() => {
+    Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, writable: true, value: undefined })
+  })
+  await legacyPage.goto(`${BASE}/#/sessions/new`, { waitUntil: 'domcontentloaded' })
+  const legacyInput = legacyPage.locator('.si-input')
+  await legacyInput.waitFor({ state: 'visible', timeout: 30_000 })
+  await legacyInput.fill('paste compatibility')
+  const pasted = await legacyPage.evaluate(() => {
+    const input = document.querySelector('.si-input')
+    const file = new File(['paste compatibility proof'], 'pasted-compatibility.txt', { type: 'text/plain' })
+    const clipboard = new DataTransfer()
+    clipboard.items.add(file)
+    const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard })
+    input.dispatchEvent(event)
+    return event.defaultPrevented
+  })
+  assert.equal(pasted, true, 'a file paste is claimed by the attachment path')
+  const legacyComplete = legacyPage.locator('.si-attach-row.complete')
+  await legacyComplete.waitFor({ state: 'visible', timeout: 30_000 })
+  assert.match(await legacyInput.inputValue(), /spexcode-uploads/, 'a pasted file reaches the backend without crypto.randomUUID')
+  assert.deepEqual(legacyErrors, [], 'the compatibility path leaves no unhandled browser error')
+  await legacyPage.screenshot({ path: join(OUT, 'randomuuid-fallback.png'), fullPage: true })
   writeFileSync(join(OUT, 'result.json'), JSON.stringify({ ok: true, removed: true }))
   console.log(JSON.stringify({ ok: true, screenshot: join(OUT, 'completed-row.png') }))
 } finally {

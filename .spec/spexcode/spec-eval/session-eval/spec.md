@@ -185,8 +185,17 @@ already running joins that generation's completion rather than enqueueing a dupl
 A cancelled queued summary remains suppressed for that generation through a rejected demand and repeated
 snapshots; only a later input generation is eager-eligible again.
 
-**Freshness is event-driven.** The one graph stream owns invalidation: refs cover session/main HEAD and merge-base
-moves (including CLI remark commits); server remark/eval writes nudge it atomically; each linked worktree is
+**Freshness is event-driven, and an event NAMES its scope.** The one graph stream owns invalidation: refs
+cover session/main HEAD and merge-base moves (including CLI remark commits). A session's fingerprint reads
+exactly three refs — its own tip, the base tip, and their merge-base — so the ref that moved decides which
+projections it can possibly have moved: the base branch invalidates every session, a session's own branch
+invalidates that session, and a tag, a remote-tracking ref, or a branch no session owns invalidates none.
+A `packed-refs` rewrite or a HEAD flip names nothing, since one event there can carry many refs, so it stays
+broad. Discarding the ref name and invalidating everything is what makes a busy repository permanently cold —
+observed on an adopter as an input generation of 1208 against a last-known 254, i.e. no session ever reaching
+`ready`. Narrowing this scope is a correctness change wearing performance clothes ([[taste]] 19): its failure
+mode is a stale answer that says nothing about being stale, so the derivation is pinned ref shape by ref
+shape rather than trusted to inspection; server remark/eval writes nudge it atomically; each linked worktree is
 watched recursively for dirty source, rename, scenario and sidecar edits, and its gitdir index is watched for
 stage/reset-only changes. Watch failure or a pathless/overflow-like event increments the generation and places a
 keyed observer hold on the affected projection: it stays `updating(lastKnown)` and no compute or demand read may

@@ -15,6 +15,7 @@ import {
   watchSessionEvalRefs,
   watchSessionEvalRegistry,
   watchSessionEvalWorktree,
+  evalTargetForRef,
 } from './graphStream.js'
 
 class FakeWatcher extends EventEmitter {
@@ -352,4 +353,24 @@ test('worktree registry watcher closes and reopens without duplicate delivery', 
   } finally {
     rmSync(registry, { recursive: true, force: true })
   }
+})
+
+// @@@ the narrowing is a CORRECTNESS change wearing performance clothes ([[taste]] 19) - it must be proven
+// against the scope it replaces, ref shape by ref shape, because the failure mode is silent: a session whose
+// evaluation should have been invalidated simply keeps serving a stale answer, and nothing in the response
+// says so. `packed-refs`/HEAD name nothing and must stay broad; a tag or remote feeds no fingerprint; the
+// base branch moves every merge-base; a session's own branch moves only its own.
+test('evalTargetForRef derives the invalidation scope from the ref that moved', () => {
+  const branches = new Map([['node/cr-pipeline-3030', 'sess-3030'], ['node/other', 'sess-other']])
+  const at = (ref: string | undefined) => evalTargetForRef(ref, 'adopter-a-spec', branches)
+
+  assert.equal(at(undefined), 'all', 'an unnamed movement (packed-refs, HEAD) must assume the worst')
+  assert.equal(at('heads/adopter-a-spec'), 'all', 'the base branch moves every session merge-base')
+  assert.deepEqual(at('heads/node/cr-pipeline-3030'), { id: 'sess-3030' }, 'a session branch moves that session')
+  assert.deepEqual(at('heads/node/other'), { id: 'sess-other' })
+  assert.equal(at('heads/somebody-elses-branch'), undefined, 'a branch no session owns moves no evaluation')
+  assert.equal(at('tags/v1.0.0'), undefined, 'a tag feeds no session fingerprint')
+  assert.equal(at('remotes/origin/adopter-a-spec'), undefined, 'a remote-tracking ref is not the local base')
+  assert.deepEqual(at('heads\\node\\cr-pipeline-3030'), { id: 'sess-3030' },
+    'a Windows watcher reports backslashes; normalise before matching so the scope still narrows there')
 })

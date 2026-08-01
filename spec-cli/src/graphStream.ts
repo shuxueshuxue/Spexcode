@@ -2,7 +2,7 @@ import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { watch, mkdirSync, readdirSync, readFileSync, type FSWatcher } from 'node:fs'
 import { join, dirname, relative, resolve, basename } from 'node:path'
-import { sessionsRoot, gitCommonDir } from './layout.js'
+import { sessionsRoot, gitCommonDir, sessionBranchIndex, mainBranch } from './layout.js'
 import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
 import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard } from './graphCache.js'
 import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
@@ -476,7 +476,7 @@ function ensureWatcher(root: string): void {
     root,
     source: 'store',
     scope: 'sessions',
-    onInput: () => fireChanged('sessions'),
+    onInput: () => { dropBranchIndex(); fireChanged('sessions') },   // a created/renamed session may own a new branch
     onFailure: (error) => {
       if (storeWatcher === registry) storeWatcher = null
       noteSourceFailure('store', error)
@@ -502,9 +502,34 @@ type RegistryGroup = {
 let refsWatchers: RegistryGroup | null = null
 const REFS_OBSERVER = 'graph:refs'
 
+// @@@ the moved ref NAMES its scope - the watcher has always known which ref moved and threw it away, so
+// every ref movement anywhere invalidated every session's evaluation. On a host carrying dozens of branches
+// and a bot that commits continuously that means nothing is ever warm: observed on adopter-a as an input
+// generation of 1208 against a last-known 254. A session's fingerprint reads exactly three refs — its own
+// tip, the base tip, and their merge-base — so a ref that is neither cannot move it. `packed-refs` and
+// `HEAD` stay broad on purpose: a packed update rewrites many refs behind ONE event, so it names nothing.
+// the index is read from the session store, so it is only ever stale when that store moved — and the store
+// has its own watcher, which drops it. A ref burst therefore costs one map lookup, not 76 record reads.
+let branchIndexMemo: Map<string, string> | null = null
+function branchIndex(): Map<string, string> {
+  return (branchIndexMemo ??= sessionBranchIndex())
+}
+function dropBranchIndex(): void { branchIndexMemo = null }
+
+export function evalTargetForRef(ref: string | undefined, base: string, branches: Map<string, string>): EvalTarget | undefined {
+  if (ref === undefined) return 'all'          // an unnamed movement must assume the worst
+  const rel = ref.replace(/\\/g, '/')
+  if (!rel.startsWith('heads/')) return undefined   // tags and remotes feed no session fingerprint
+  const branch = rel.slice('heads/'.length)
+  if (!branch) return 'all'
+  if (branch === base) return 'all'            // every merge-base may have moved
+  const id = branches.get(branch)
+  return id ? { id } : undefined               // a branch no session owns moves no session's evaluation
+}
+
 export function watchSessionEvalRefs(
   common: string,
-  onInput: () => void,
+  onInput: (ref?: string) => void,
   onFailure: (error: Error) => void,
 ): RegistryGroup {
   let attached: TreeWatcherRegistry[] = []
@@ -527,7 +552,7 @@ export function watchSessionEvalRefs(
     root: join(common, 'refs'),
     source: 'refs',
     scope: 'full',
-    onInput: () => onInput(),
+    onInput: (_event, rel) => onInput(rel),
     onFailure: fail,
   })
   attached.push(refs)
@@ -538,7 +563,7 @@ export function watchSessionEvalRefs(
     source: 'refs-common',
     scope: 'full',
     recursive: false,
-    onInput: (_event, file) => { if (file === 'packed-refs' || file === 'HEAD') onInput() },
+    onInput: (_event, file) => { if (file === 'packed-refs' || file === 'HEAD') onInput() },   // names nothing -> 'all'
     onFailure: fail,
   })
   attached.push(commonFiles)
@@ -563,7 +588,7 @@ function ensureRefsWatcher(common = activeCommonRoot): void {
   }
   if (!mayAttach('refs')) return
   try {
-    refsWatchers = watchSessionEvalRefs(common, () => fireChanged('full', 'all'), refsWatcherFailed)
+    refsWatchers = watchSessionEvalRefs(common, (ref) => fireChanged('full', evalTargetForRef(ref, mainBranch(), branchIndex())), refsWatcherFailed)
     noteSourceHealthy('refs')
     if (releaseSessionEvalProjectionObserver(REFS_OBSERVER)) fireChanged('full')
   } catch (error) {

@@ -205,19 +205,23 @@ scenarios:
     description: >-
       In two real temporary Git repositories, declare the same eval.md scenario and run the real
       `spex eval scenario ls --json` twice on each fixed tree. Compare the parsed semantic and measurement
-      row blocks plus the projection/schema envelope and hashes while applying one change at a time:
-      move description/expected, change code/related/tags, replace only the test mapping, change file mode,
-      rename the scenario, and add/remove a scenario.
+      row blocks, measurable-node code/related rows, plus the projection/schema envelope and hashes while
+      applying one change at a time: move description/expected, change scenario code/related/tags, change the
+      node-level code/related declarations, replace only the test mapping, change file mode, rename the
+      scenario, and add/remove a scenario.
     expected: >-
-      The JSON is a declaration-only canonical projection: every row has stable semantic
+      The JSON is a declaration-only canonical projection: every measurable node has normalized node-level
+      code/related relations, and every scenario row has stable semantic
       `{node,name,description,expected,scenarioHash,code,related,tags}` and measurement `{test}` blocks,
       no verdict/reading/evidence/freshness. The same fixed tree prints byte-for-byte identically twice.
       Description/expected moves change scenarioHash, semanticIndexHash and fullIndexHash; code/related/tags
       are preserved normalized relation/tag metadata in the semantic block and change both index hashes;
       a test-only change keeps semantic rows and semanticIndexHash byte-identical while changing only the
-      measurement block and fullIndexHash. A mode/type-only change leaves both scenario index hashes unchanged
-      but changes the outer Git treeSha provenance. Scenario rename and add/remove are visible in sorted row
-      bytes and both hashes. No evals.ndjson, verdict, evidence, freshness, GitLab, CR, or AGS data is read.
+      measurement block and fullIndexHash. Node-level relation or test-link changes move planningIndexHash;
+      node-level relation changes do not rewrite either scenario index hash. A mode/type-only change leaves
+      every content index hash unchanged but changes the outer Git treeSha provenance. Scenario rename and
+      add/remove are visible in sorted row bytes and all applicable hashes. No evals.ndjson, verdict, evidence,
+      freshness, GitLab, CR, or AGS data is read.
   - name: canonical-measurement-metadata-writer
     tags: [cli]
     description: >-

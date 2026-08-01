@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { join, relative, basename } from 'node:path'
-import { mintIds } from '../../spec-cli/src/specs.js'
+import { mintIds, parseFrontmatter } from '../../spec-cli/src/specs.js'
 import { parseRelation, type RelationEntry } from '../../spec-cli/src/anchors.js'
 import { treeTextFiles } from '../../spec-cli/src/git.js'
 
@@ -41,13 +41,20 @@ export type ScenarioProjectionRow = {
   semantic: ScenarioSemanticRow
   measurement: ScenarioMeasurementRow
 }
+export type ScenarioProjectionNode = {
+  id: string
+  code: RelationEntry[]
+  related: RelationEntry[]
+}
 export type ScenarioProjectionProvenance = { head: string | null; treeSha: string | null }
 export type ScenarioProjection = {
   projection: typeof SCENARIO_PROJECTION
   schemaVersion: typeof SCENARIO_SCHEMA_VERSION
   provenance: ScenarioProjectionProvenance
+  nodes: ScenarioProjectionNode[]
   semanticIndexHash: string
   fullIndexHash: string
+  planningIndexHash: string
   rows: ScenarioProjectionRow[]
 }
 
@@ -58,6 +65,7 @@ export type EvalNode = {
   sidecarPath: string
   scenarios: Scenario[]
   evalSource?: string
+  specSource?: string
 }
 
 const SCENARIO_KEYS = ['name', 'description', 'expected', 'tags', 'test', 'code', 'related'] as const
@@ -349,11 +357,29 @@ const hashProjection = (value: unknown): string =>
   createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex')
 
 const semanticOnly = (row: ScenarioProjectionRow): ScenarioSemanticRow => row.semantic
+const frontmatterList = (value: string | string[] | undefined): string[] =>
+  Array.isArray(value) ? value : value ? [value] : []
+
+function projectionNode(node: Pick<EvalNode, 'id' | 'specSource'>): ScenarioProjectionNode {
+  const fm = node.specSource ? parseFrontmatter(node.specSource).fm : {}
+  const code = parseRelation(frontmatterList(fm.code), 'code')
+  const related = parseRelation(frontmatterList(fm.related), 'related')
+  const problems = [...code.problems, ...related.problems]
+  if (problems.length) {
+    throw new Error(`node '${node.id}' has malformed spec relations:\n${problems.map((e) => `  - ${e}`).join('\n')}`)
+  }
+  return {
+    id: node.id,
+    code: code.entries.map((entry) => ({ path: entry.path, selectors: [...entry.selectors] })),
+    related: related.entries.map((entry) => ({ path: entry.path, selectors: [...entry.selectors] })),
+  }
+}
 
 export function scenarioProjection(
-  nodes: readonly Pick<EvalNode, 'id' | 'scenarios' | 'evalSource'>[],
+  nodes: readonly Pick<EvalNode, 'id' | 'scenarios' | 'evalSource' | 'specSource'>[],
   provenance: Partial<ScenarioProjectionProvenance> = {},
 ): ScenarioProjection {
+  const nodeRows = nodes.map(projectionNode).sort((a, b) => compareStable(a.id, b.id))
   const rows: ScenarioProjectionRow[] = []
   for (const node of nodes) {
     if ('evalSource' in node && node.evalSource !== undefined) {
@@ -388,8 +414,10 @@ export function scenarioProjection(
     projection: SCENARIO_PROJECTION,
     schemaVersion: SCENARIO_SCHEMA_VERSION,
     provenance: { head: provenance.head ?? null, treeSha: provenance.treeSha ?? null },
+    nodes: nodeRows,
     semanticIndexHash: hashProjection(semanticRows),
     fullIndexHash: hashProjection(rows),
+    planningIndexHash: hashProjection({ nodes: nodeRows, rows }),
     rows,
   }
 }
@@ -543,18 +571,19 @@ export function writeScenarioMeasurementMetadata(source: string, request: unknow
   return proposed
 }
 
-function assembleNodes(root: string, specDirs: string[], hits: { dir: string; src: string }[]): EvalNode[] {
+function assembleNodes(root: string, specDirs: string[], hits: { dir: string; src: string; specSource?: string }[]): EvalNode[] {
   const specBase = join(root, '.spec')
   const ids = mintIds(specDirs.map((d) => relative(specBase, d).split(/[/\\]/)))
   const idByDir = new Map(specDirs.map((d, i) => [d, ids[i]]))
   return hits
-    .map(({ dir, src }) => ({
+    .map(({ dir, src, specSource }) => ({
       id: idByDir.get(dir) ?? basename(dir),
       dir,
       evalPath: relative(root, join(dir, EVAL_FILE)),
       sidecarPath: join(dir, SIDECAR_FILE),
       scenarios: parseScenarios(src),
       evalSource: src,
+      ...(specSource !== undefined ? { specSource } : {}),
     }))
     .sort((a, b) => a.id.localeCompare(b.id))
 }
@@ -562,14 +591,21 @@ function assembleNodes(root: string, specDirs: string[], hits: { dir: string; sr
 export function evalNodes(root: string): EvalNode[] {
   const specDir = join(root, '.spec')
   const specDirs: string[] = []
-  const hits: { dir: string; src: string }[] = []
+  const hits: { dir: string; src: string; specSource?: string }[] = []
   const stack = existsSync(specDir) ? [specDir] : []
   while (stack.length) {
     const dir = stack.pop()!
     let ents
     try { ents = readdirSync(dir, { withFileTypes: true }) } catch { continue }
     if (existsSync(join(dir, 'spec.md'))) specDirs.push(dir)
-    if (existsSync(join(dir, EVAL_FILE))) hits.push({ dir, src: readFileSync(join(dir, EVAL_FILE), 'utf8') })
+    if (existsSync(join(dir, EVAL_FILE))) {
+      const specPath = join(dir, 'spec.md')
+      hits.push({
+        dir,
+        src: readFileSync(join(dir, EVAL_FILE), 'utf8'),
+        ...(existsSync(specPath) ? { specSource: readFileSync(specPath, 'utf8') } : {}),
+      })
+    }
     for (const e of ents) if (e.isDirectory()) stack.push(join(dir, e.name))
   }
   return assembleNodes(root, specDirs, hits)
@@ -583,10 +619,15 @@ export function evalNodesAt(root: string, tip: string): EvalNode[] {
     .map((path) => join(root, path.slice(0, -'/spec.md'.length)))
   const hits = paths
     .filter((path) => path.endsWith(`/${EVAL_FILE}`))
-    .map((path) => ({
-      dir: join(root, path.slice(0, -`/${EVAL_FILE}`.length)),
-      src: files.get(path)!,
-    }))
+    .map((path) => {
+      const relDir = path.slice(0, -`/${EVAL_FILE}`.length)
+      const specSource = files.get(`${relDir}/spec.md`)
+      return {
+        dir: join(root, relDir),
+        src: files.get(path)!,
+        ...(specSource !== undefined ? { specSource } : {}),
+      }
+    })
   return assembleNodes(root, specDirs, hits)
 }
 
@@ -597,14 +638,21 @@ export function evalNodesAt(root: string, tip: string): EvalNode[] {
 export async function evalNodesAsync(root: string): Promise<EvalNode[]> {
   const specDir = join(root, '.spec')
   const specDirs: string[] = []
-  const hits: { dir: string; src: string }[] = []
+  const hits: { dir: string; src: string; specSource?: string }[] = []
   const stack = existsSync(specDir) ? [specDir] : []
   while (stack.length) {
     const dir = stack.pop()!
     let ents
     try { ents = await readdir(dir, { withFileTypes: true }) } catch { continue }
     if (existsSync(join(dir, 'spec.md'))) specDirs.push(dir)
-    if (existsSync(join(dir, EVAL_FILE))) hits.push({ dir, src: await readFile(join(dir, EVAL_FILE), 'utf8') })
+    if (existsSync(join(dir, EVAL_FILE))) {
+      const specPath = join(dir, 'spec.md')
+      hits.push({
+        dir,
+        src: await readFile(join(dir, EVAL_FILE), 'utf8'),
+        ...(existsSync(specPath) ? { specSource: await readFile(specPath, 'utf8') } : {}),
+      })
+    }
     for (const e of ents) if (e.isDirectory()) stack.push(join(dir, e.name))
   }
   return assembleNodes(root, specDirs, hits)

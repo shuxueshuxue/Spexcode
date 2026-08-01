@@ -28,9 +28,9 @@ test('scenario-list JSON preserves a normalized concrete test reference', () => 
   }])
 })
 
-test('canonical scenario projection separates semantic and measurement identity', () => {
-  const node = (scenario: EvalNode['scenarios'][number]): EvalNode => ({
-    id: 'z-node', dir: '/tmp/z-node', evalPath: '.spec/z-node/eval.md', sidecarPath: '/tmp/z-node/evals.ndjson', scenarios: [scenario],
+test('canonical scenario projection separates semantic, measurement, and planning identity', () => {
+  const node = (scenario: EvalNode['scenarios'][number], specSource = '---\ncode:\n  - src/node.ts#run\nrelated:\n  - docs/node.md\n---\n'): EvalNode & { specSource: string } => ({
+    id: 'z-node', dir: '/tmp/z-node', evalPath: '.spec/z-node/eval.md', sidecarPath: '/tmp/z-node/evals.ndjson', scenarios: [scenario], specSource,
   })
   const base = {
     name: 'loop', description: 'measure the loop', expected: 'it converges',
@@ -50,10 +50,22 @@ test('canonical scenario projection separates semantic and measurement identity'
     measurement: { test: { path: 'tests/loop.spec.ts', name: 'full loop' } },
   }])
   assert.deepEqual(a.provenance, { head: 'head-a', treeSha: 'tree-a' })
+  assert.deepEqual((a as any).nodes, [{
+    id: 'z-node',
+    code: [{ path: 'src/node.ts', selectors: ['run'] }],
+    related: [{ path: 'docs/node.md', selectors: [] }],
+  }])
+  assert.equal(typeof (a as any).planningIndexHash, 'string')
 
   const testOnly = scenarioProjection([node({ ...base, test: { path: 'tests/loop.spec.ts', name: 'smoke' } })], { head: 'head-a', treeSha: 'tree-a' })
   assert.equal(testOnly.semanticIndexHash, a.semanticIndexHash)
   assert.notEqual(testOnly.fullIndexHash, a.fullIndexHash)
+  assert.notEqual((testOnly as any).planningIndexHash, (a as any).planningIndexHash)
+
+  const nodeRelationOnly = scenarioProjection([node(base, '---\ncode:\n  - src/other-node.ts\nrelated:\n  - docs/other-node.md\n---\n')], { head: 'head-a', treeSha: 'tree-a' })
+  assert.equal(nodeRelationOnly.semanticIndexHash, a.semanticIndexHash)
+  assert.equal(nodeRelationOnly.fullIndexHash, a.fullIndexHash)
+  assert.notEqual((nodeRelationOnly as any).planningIndexHash, (a as any).planningIndexHash)
 
   const metadata = scenarioProjection([node({ ...base, tags: ['desktop', 'cli'], related: ['docs/other.md'], code: ['src/other.ts'] })], { head: 'head-a', treeSha: 'tree-a' })
   assert.notEqual(metadata.semanticIndexHash, a.semanticIndexHash)
@@ -68,6 +80,7 @@ test('canonical scenario projection separates semantic and measurement identity'
   const modeOnly = scenarioProjection([node({ ...base })], { head: 'head-b', treeSha: 'tree-b' })
   assert.equal(modeOnly.semanticIndexHash, a.semanticIndexHash)
   assert.equal(modeOnly.fullIndexHash, a.fullIndexHash)
+  assert.equal((modeOnly as any).planningIndexHash, (a as any).planningIndexHash)
   assert.notDeepEqual(modeOnly.provenance, a.provenance)
 })
 

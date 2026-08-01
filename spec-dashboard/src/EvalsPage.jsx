@@ -32,8 +32,11 @@ export function detailMatchesProjection(detail, projection) {
   if (revision.generation < projection.generation) return false
   if (revision.generation !== projection.generation) return true
   if (projection.revision && revision.content !== projection.revision) return false
-  if (projection.value) {
-    if (!detail.summary) return false
+  // The counts are a REDUNDANT confirmation, not the fence: an equal content revision already IS the same
+  // evaluation cut ([[session-eval]]), so a response that carries no summary has already proven itself by
+  // the line above. A focused detail measures the rows it renders, not the scope, so it honestly omits the
+  // counts rather than folding its window — requiring them here would reject a correct answer forever.
+  if (projection.value && detail.summary) {
     const keys = ['measured', 'total', 'pass', 'fail', 'review', 'blind', 'unknown']
     if (keys.some((key) => detail.summary[key] !== projection.value[key])) return false
   }

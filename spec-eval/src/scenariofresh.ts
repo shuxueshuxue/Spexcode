@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { git, gitA, gitTry, headSha } from '../../spec-cli/src/git.js'
+import { batchBlobTexts, batchRevisionOids, git, gitA, gitTry, headSha } from '../../spec-cli/src/git.js'
 import { parseScenarios } from './scenarios.js'
 import { rootSlots, touchRoot as touchRootLru } from '../../spec-cli/src/root-lru.js'
 
@@ -159,25 +159,75 @@ function oidAt(root: string, rev: string, path: string): string {
   return v
 }
 
+// @@@ the memo holds SETTLED oids, so concurrent askers need a flight to join - primes run concurrently
+// across the whole scope, and every one of them missed the memo while the first child was still running:
+// measured on adopter-a's 415-node scope, 2695 `rev-parse` children resolved 1212 distinct (rev, path) pairs.
+// `rev:path` under a full sha names an immutable object, so joining answers the same question; the LRU
+// write still happens once, on settle, exactly as the sync path does it.
+const oidFlight = new Map<string, Promise<string>>()
 async function oidAtAsync(root: string, rev: string, path: string): Promise<string> {
   if (!FULL_SHA.test(rev)) return (await gitTry(['-C', root, 'rev-parse', `${rev}:${path}`])).stdout.trim()
   const k = `${root}\x1f${rev}\x1f${path}`
   const hit = oidMemo.get(k)
   if (hit !== undefined) { oidMemo.delete(k); oidMemo.set(k, hit); return hit }
-  const result = await gitTry(['-C', root, 'rev-parse', `${rev}:${path}`])
-  const oid = result.ok ? result.stdout.trim() : ''
-  oidMemo.set(k, oid)
-  if (oidMemo.size > 4096) oidMemo.delete(oidMemo.keys().next().value!)
-  return oid
+  const joined = oidFlight.get(k)
+  if (joined) return joined
+  const run = async (): Promise<string> => {
+    const result = await gitTry(['-C', root, 'rev-parse', `${rev}:${path}`])
+    const oid = result.ok ? result.stdout.trim() : ''
+    oidMemo.set(k, oid)
+    if (oidMemo.size > 4096) oidMemo.delete(oidMemo.keys().next().value!)
+    return oid
+  }
+  const flight = run().finally(() => { if (oidFlight.get(k) === flight) oidFlight.delete(k) })
+  oidFlight.set(k, flight)
+  return flight
 }
 
 
+// @@@ the PLURAL prime, mirroring the anchor probe's - a caller hands over every (rev, path) its whole read
+// will ask about and TWO children answer them all: `cat-file --batch-check` for the object ids, then
+// `cat-file --batch` for the blobs. The singular form below is one demand's worth of the same thing, kept
+// for callers that genuinely learn their demand one at a time. Priming one at a time is what this replaces:
+// on adopter-a's 415-node scope it forked 1212 `rev-parse` children plus a `cat-file` each, and the batch
+// answers the identical set — same oids, same blocks, same verdicts, two children.
+export async function primeScenarioBlocks(root: string, demands: readonly { rev: string; path: string }[]): Promise<void> {
+  const wanted = new Map<string, { rev: string; path: string }>()
+  for (const d of demands) {
+    if (!FULL_SHA.test(d.rev) || !d.path) continue   // a symbolic rev is never memoized, so it can't ride a batch
+    const k = `${root}\x1f${d.rev}\x1f${d.path}`
+    if (!oidMemo.has(k) && !wanted.has(k)) wanted.set(k, d)
+  }
+  if (!wanted.size) return
+  const keys = [...wanted.keys()]
+  const rows = [...wanted.values()]
+  const oids = await batchRevisionOids(root, rows.map((d) => `${d.rev}:${d.path}`))
+  oids.forEach((oid, i) => {
+    oidMemo.set(keys[i], oid ?? '')
+    if (oidMemo.size > 4096) oidMemo.delete(oidMemo.keys().next().value!)
+  })
+  const missing = [...new Set(oids.filter((o): o is string => !!o && !blockByOid.has(o)))]
+  if (!missing.length) return
+  const texts = await batchBlobTexts(root, missing)
+  for (const [oid, src] of texts) if (src) blockByOid.set(oid, blockContent(src))
+}
+
+// the blob read needs the same flight as the oid lookup above it: an oid is content, so two primes that
+// resolved the same one must not each read it.
+const blockFlight = new Map<string, Promise<void>>()
 export async function primeScenarioBlocksAt(root: string, revs: string[], path: string): Promise<void> {
   for (const rev of revs) {
     const oid = await oidAtAsync(root, rev, path)
     if (!oid || blockByOid.has(oid)) continue
-    const src = await gitA(['-C', root, 'cat-file', 'blob', oid]) // dead-words-ok: git plumbing
-    if (src) blockByOid.set(oid, blockContent(src))
+    const joined = blockFlight.get(oid)
+    if (joined) { await joined; continue }
+    const run = async (): Promise<void> => {
+      const src = await gitA(['-C', root, 'cat-file', 'blob', oid]) // dead-words-ok: git plumbing
+      if (src) blockByOid.set(oid, blockContent(src))
+    }
+    const flight = run().finally(() => { if (blockFlight.get(oid) === flight) blockFlight.delete(oid) })
+    blockFlight.set(oid, flight)
+    await flight
   }
 }
 

@@ -213,7 +213,12 @@ async function scan(args: string[] = []): Promise<number> {
         }
         if (!driftSelected) continue
         const remSignals = (remarkTracks.get(trackKey(s.id, sc.name))?.remarks ?? []).map((rm) => ({ resolved: !!rm.resolved, resolvedAt: rm.resolvedAt }))
-        if (!commitReachable(idx, r.codeSha)) await probe.prime?.(r.codeSha, codeFiles, y.evalPath)
+        if (!commitReachable(idx, r.codeSha)) {
+          await probe.prime?.(r.codeSha, codeFiles, y.evalPath)
+          // lint decides this reading before moving on, so its demand is flushed here rather than pooled;
+          // the batched pair still beats the per-revision lookups it replaces.
+          await probe.primeBlocks?.()
+        }
         await anchors.prime?.([{ sinceSha: r.codeSha, entries: axis.entries }])
         const axes = staleAxes(r, axis.entries, y.evalPath, idx, scidx, remSignals, probe, sc, anchors)
         if (axes.length) {

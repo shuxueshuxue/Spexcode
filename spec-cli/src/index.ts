@@ -27,7 +27,7 @@ import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
 import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
-import { buildExportModel, renderExportHtml, SessionEvalUnavailableError } from '../../spec-eval/src/sessioneval.js'
+import { buildExportModel, renderExportHtml, buildSessionEvals, SessionEvalUnavailableError } from '../../spec-eval/src/sessioneval.js'
 import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBytes, startUploadReaper, UploadError, uploadStatus } from './uploads.js'
 import { listSessionFiles, openSessionFile, SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilePreviewKind, SessionFileError } from './session-files.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
@@ -232,6 +232,17 @@ app.get('/api/evals', etag(), async (c) => {
   await ensureBoardFileWatchers(scope)
   const page = await evalsReview(c.req.query('q'), c.req.query('page'), { view: c.req.query('view') })
   return page ? c.json(page) : c.json({ error: 'no such review source' }, 404)
+})
+// The exact impact graph proves a scope's membership and selector decisions. It is deliberately a named
+// read: paged Evals rows retain their own reasons but never transport this scope-sized projection.
+app.get('/api/evals/impact', etag(), async (c) => {
+  const scope = c.req.query('scope')?.trim()
+  if (!scope) return c.json({ error: 'scope is required' }, 400)
+  await ensureBoardFileWatchers(scope)
+  const model = await buildSessionEvals(scope)
+  return model
+    ? c.json({ scope, impact: model.impact, evalRevision: model.evalRevision })
+    : c.json({ error: 'no such review source' }, 404)
 })
 // ONE bounded detail response for both source roots: the selected scenario's complete A/B history and at
 // most five lightweight neighbors. It never serializes another scenario's history or the scoped model.

@@ -75,11 +75,12 @@ scenarios:
       during one public read. As an auxiliary exact-projector control against the same copied product, advance
       a symbolic head before publication.
     expected: >
-      The public scoped response and its session rows consume one exact-revision impact result. It outputs the
+      The public scoped list and its session rows consume one exact-revision impact result. The explicit
+      `/api/evals/impact?scope=<id>` response outputs the
       resolved base/head object ids and revision, node review causes, scenario code|contract|measurement impact,
       selector hit commits/symbols, base/head scenarioHash, and semantic versus metadata delta. Beta-only does
       not select alpha; alpha-only selects alpha, including a scenario inheriting the node's complete code
-      relation. An effective owned reading enters solely as measurement and its measured row retains that impact;
+      relation. The paged list carries only its rendered rows' reasons, never the full impact graph. An effective owned reading enters solely as measurement and its measured row retains that impact;
       a retracted reading does not. Related paths remain node context. Description/expected movement is semantic
       and moves scenarioHash; test/code/tags movement is metadata-only and leaves the hash equal; declaration and
       dirty code renames are remove+add with old/new selector hits. Dead, ambiguous, unavailable, or unextractable
@@ -266,7 +267,9 @@ scenarios:
       is attributable to its own scope.
       Opening the same unchanged session again serves the published projection: the second and third opens do
       not re-spawn the first open's children, because a stable build at an unmoved generation and content
-      revision is exactly what the projection cache exists to publish. Repeat opens that re-pay full price are
+      revision is exactly what the projection cache exists to publish. The 25-row list never serializes the
+      full impact graph; the named exact-impact read remains available to callers that need selector/delta
+      proof. Repeat opens that re-pay full price are
       a failure of this scenario even when each individual response is correct.
       Proportionality never buys itself with a weaker guarantee. A structurally invalid, dead, ambiguous,
       unavailable, or unextractable selector still makes the projection explicitly unavailable, naming the

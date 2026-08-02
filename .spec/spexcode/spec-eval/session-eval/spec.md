@@ -76,7 +76,9 @@ semantic versus metadata movement. A scenario rename is one removed declaration 
 description/expected movement is semantic and moves the hash, while test/code/related/tags are metadata and do
 not. A scenario's effective code is its own `code` relation when present, otherwise the node's complete
 `code` relation including selectors. Node/scenario `related` movement remains node review context only and
-never spreads impact to every scenario.
+never spreads impact to every scenario. Its full graph is the explicit `GET /api/evals/impact?scope=<id>`
+read; a paged list item keeps its own canonical reason, but the list never carries the scope-sized graph as
+metadata.
 
 The range contract is ancestry, not an arbitrary two-tree comparison: `base` must be an ancestor of `head`,
 normally the session merge-base and its exact HEAD. A divergent pair is explicitly unavailable; the engine

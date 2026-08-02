@@ -29,7 +29,9 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
   blanking the graph. Desktop selects and expands the node's drill-down; phone restores its ancestor
   breadcrumb and opens that node's screen. The incoming node parameter is applied when the graph route
   changes, not enforced on every render: after a direct open, mouse/keyboard/programmatic focus moves remain
-  usable and replace the graph address with the current node without adding history entries.
+  usable as local, transient graph navigation and leave the address unchanged. A new explicit address
+  navigation or a copy action names the target node; high-frequency board movement never makes the address
+  bar flicker.
 - `session` opens `#/sessions/<id>`.
 - `session-eval` opens the scoped default list `#/evals?q=is:eval scope:<id>` — or, with
   a node + scenario, `#/evals/<node>/<scenario>?q=scope:<id>` — the session-SCOPED Evals pages ([[session-eval]] /

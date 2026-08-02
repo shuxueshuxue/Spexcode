@@ -119,8 +119,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
   const focusNode = useCallback((id) => {
     if (!id) return
     setFocusId(id)
-    if (page === 'graph') navigate('graph', id, { replace: true })
-  }, [page])
+  }, [])
   const focusRaw = rawById[focusId] || specs.find((s) => !s.parent) || specs[0]
   const expanded = useMemo(() => {
     const set = new Set()

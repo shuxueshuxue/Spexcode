@@ -5,6 +5,7 @@ hue: 320
 desc: A transient overlay returns the focus it took — never leaves it on <body>.
 code:
   - spec-dashboard/src/focus.js#returnFocus
+  - spec-dashboard/src/focus.js#inertChromePress
 related:
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/Modal.jsx
@@ -37,7 +38,9 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
   each caller wiring it.
 - **Inert chrome.** The acquisition-side twin: a pointer-down on anything that is not itself an input surface
   (an editable field, the xterm screen, or a scrollbar gutter) is **prevented from moving focus at all** — the
-  click still lands and acts. Selectable conversation text is interaction content, but not an exception to
+  click still lands and acts. A posted-file preview explicitly marks only its rendered document body as native
+  selectable: its non-focusable content may create a browser Selection and receive Ctrl/Cmd+C without moving
+  focus from the current sink. Selectable conversation text is interaction content, but not an exception to
   this rule: its surface keeps the sink continuously focused and translates pointer coordinates into a CSS Custom
   Highlight Range, never a document Selection. That driver ports xterm.js `SelectionService`'s mousedown
   `MouseEvent.detail` modes rather than layering late click handlers over a drag: NORMAL extends by character,

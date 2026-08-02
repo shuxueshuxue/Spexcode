@@ -1353,8 +1353,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </div>
           )}
           {/* the session pane stays LAID OUT under the New tab so warm terminals keep their final geometry;
-              visibility hides it without a 0x0 renderer. The compact toolbar carries one real Terminal tab,
-              one native Eval door, and registry-filtered icon tools. Identity/state already lives in the
+              visibility hides it without a 0x0 renderer. The compact toolbar carries terminal/resource/Eval tabs
+              and registry-filtered icon tools. Identity/state already lives in the
               selected sidebar row and is deliberately not repeated here. */}
           <div
             className="si-session-wrap"
@@ -1397,6 +1397,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       </div>
                     ))}
                   </div>
+                  <a
+                    className="si-eval-tab sc-cyan"
+                    href={active !== 'new' ? addressHash(sessionEvalAddress(active)) : null}
+                    data-tip={evalDoorTitle}
+                    aria-label={evalDoorTitle}
+                  >
+                    <Icon name="evals" size={14} />
+                    <span className="si-eval-label">{t('session.tabEval')}</span>
+                    <SessionEvalStats summary={evalSummary} />
+                    <Icon name="chevron-right" size={12} className="si-eval-arrow" />
+                  </a>
+
                   <div ref={resourcePickerRef} className="si-resource-picker">
                     <IconButton icon="plus" size={14} className="si-tab-add" label={t('session.addResourceTab')}
                       aria-expanded={resourceMenu} disabled={active === 'new'} onClick={() => setResourceMenu((open) => !open)} />
@@ -1412,18 +1424,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     )}
                   </div>
                 </div>
-
-                <a
-                  className="si-eval-door si-tab-door sc-cyan"
-                  href={active !== 'new' ? addressHash(sessionEvalAddress(active)) : null}
-                  data-tip={evalDoorTitle}
-                  aria-label={evalDoorTitle}
-                >
-                  <Icon name="evals" size={14} />
-                  <span className="si-eval-label">{t('session.tabEval')}</span>
-                  <SessionEvalStats summary={evalSummary} />
-                  <Icon name="chevron-right" size={12} className="si-eval-arrow" />
-                </a>
 
                 <div className="si-actions" role="group" aria-label={t('session.commandsLabel')}>
                   {uiCmds.filter((c) => c.button)
@@ -1451,7 +1451,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
                 <SessionFiles session={selSession} onFailure={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })} />
               </header>
-              {/* The live terminal stays mounted when the Eval door routes the app away (warm-terminals
+              {/* The live terminal stays mounted when the Eval tab routes the app away (warm-terminals
                   contract); the routed session page is display-hidden, so socket + scroll survive. */}
               <div
                 className={`si-term-body${terminalFree ? ' is-conversation' : ''}${activeResource ? ' is-resource' : ''}`}

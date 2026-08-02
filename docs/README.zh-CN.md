@@ -20,16 +20,16 @@
 
 面向 coding agent 的 spec 驱动编排。SpexCode 在你的 git 仓库里维护一棵带版本的 spec 树,把每个
 spec 和它管辖的代码链接起来,并运行一个会话管理器,把 coding agent 派进相互隔离的 worktree。你负责
-review 和 merge,工具负责让意图和实现不分家。
+review 和 merge,工具负责让意图和实现不漂移。
 
 [English](../README.md) | 中文 · 文档:[spexcode.net](https://spexcode.net) · License: MIT
 
 | 特性 | 说明 |
 |---|---|
 | **可计算的 spec–code drift** | 每个 spec 钉住它管辖的文件,可以细到函数。代码是否脱开 spec 单独动了,由 commit 和行区间算出来,在任何机器上结果一致:文件级是提醒,钉住的函数被改则直接阻断。 |
-| **session 与 worktree 管理** | 每个任务派发进自己的 worktree 和分支,由同一个状态机分层监管:`working → review → merged`。worker 只提议,你只在合并时 review 一次。互不相干的任务并行跑。 |
+| **session 与 worktree 管理** | 每个任务在自己的 worktree 和分支里跑,互不相干的任务并行。session 有层级结构:一个 session 可以派发并监管自己的 worker,worker 之上有主管,主管之上还可以有主管。worker 只提议,你只在合并时 review 一次。 |
 | **可分享的 URL** | spec 节点、session、eval、live 终端,dashboard 上每个视图都有稳定地址,发给同事就能看。两个人可以盯着同一块 session 看板。 |
-| **模块化分层** | 三个可拆的层:spec↔code 数据资产(L0)、session 基座(L1)、dashboard(L2)。按需取用,下面两层就是为你自己的软件工厂准备的积木。 |
+| **模块化分层** | 三个可拆的层:spec↔code 数据资产(L0)、session 基座(L1)、dashboard(L2)。按需取用,L0 和 L1 就是为你自己的软件工厂准备的积木。 |
 | **跨 harness 支持** | Claude Code、Codex、OpenCode、pi,交互式或 headless 都行。一份物化出来的工作流契约服务所有 harness,新增一个 harness 只是一条配置。 |
 
 ## 模型
@@ -76,7 +76,7 @@ spex init --harness claude,codex,opencode,pi,claude-headless,opencode-headless,p
 采纳到此为止。示例列出了全部内建 harness,不用的删掉就行,`--harness` 必填,接受任意一个 id 或
 逗号分隔的子集。`spex init` 是增量的:在任何现有 git 仓库上都能跑,绝不覆盖你的文件,只做三件事。
 它播种根节点 `.spec/project/spec.md` 和一份起步的 `spexcode.json`,安装 git 钩子,再把工作流规则
-**物化**进你的 agent 本来就会读的文件(`CLAUDE.md`、`AGENTS.md`):先读所辖 spec 再碰代码,spec 和
+**物化**进你的 agent 本来就会读的文件(`CLAUDE.md`、`AGENTS.md`):动代码之前先读管辖它的 spec,spec 和
 代码一个 commit 落地,只提议合并不执行合并。任何打开这个仓库的 agent 都会自己发现这套工作流。
 
 想要活的看板(图谱、session、eval)再起运行时:
@@ -110,10 +110,10 @@ spex session new "[[uploader]] 失败的分块要带退避地重传"
 ```
 
 会在独立 worktree、分支 `node/uploader-…` 上启动一个 worker 会话。prompt 里第一个 `[[uploader]]`
-提及决定分支名和看板归属;worker 会先找到并读完所辖 spec 再碰代码。它完成修改,把 spec 正文改写到
+提及决定分支名和看板归属;worker 会先找到管辖那段代码的 spec,读完才动手。它完成修改,把 spec 正文改写到
 与代码一致,把两者一起 commit,然后提议合并、停下:
 
-<img src="readme-worker-flow.zh.svg" alt="worker 的八步循环:派发、读 spec、干活、跑 eval、消解 drift、提议合并、人审、关闭">
+<img src="readme-worker-flow.zh.svg" alt="worker 的八步循环:派发、读 spec、干活、跑 eval、消解 drift、提议合并、由人审核、关闭">
 
 worker 从不自己合并。合并留在你手里:你点下去时,由那个 session 自己的 agent 执行真正的
 `git merge`,冲突落在最了解这份工作的人身上。同样的派发在 dashboard 上是一个按钮,命令形式则是
@@ -142,7 +142,7 @@ spex session close uploader      # 退役 worktree、分支和记录
 *整个仓库一张地图,图中是 SpexCode 自己的看板。每个节点带着它的版本号和 eval 状态,正在被编辑的
 节点上悬浮着那个 agent 的头像,左上角是活的 session 栏。*
 
-<img src="readme-node.png" alt="在看板上打开一个节点:raw source 高亮块、expanded spec 正文、所辖文件、drift 徽标,以及 history、issues、eval 各 tab">
+<img src="readme-node.png" alt="在看板上打开一个节点:raw source 高亮块、expanded spec 正文、管辖的文件、drift 徽标,以及 history、issues、eval 各 tab">
 
 *点开一个节点:上面是 raw source,下面是 expanded spec,还有它管辖的文件、当前的 drift 状态,以及
 git 本来就记着的版本历史、issue、eval 各自的 tab。*

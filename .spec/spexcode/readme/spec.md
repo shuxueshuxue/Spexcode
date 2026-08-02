@@ -2,13 +2,15 @@
 title: readme
 status: active
 hue: 25
-desc: The repo's front door — README.md sells the model in one scroll (feature table → model → why prose → learning loop → quick start → L0/L1/L2 → agents → dashboard), with self-grounded brand-palette SVG diagrams; docs/README.zh-CN.md mirrors it section for section.
+desc: The repo's front door — README.md sells the model in one scroll (feature table → model → learning loop → quick start → L0/L1/L2 → agents → dashboard), with self-grounded brand-palette SVG diagrams; docs/README.zh-CN.md mirrors it section for section.
 code:
   - README.md
 related:
   - docs/README.zh-CN.md
   - docs/readme-model.svg
   - docs/readme-drift-flow.svg
+  - docs/readme-loop.svg
+  - docs/readme-loop.zh.svg
   - docs/readme-layers.svg
   - docs/readme-worker-flow.svg
   - docs/readme-worker-flow.zh.svg
@@ -19,12 +21,12 @@ related:
 
 README.md is the front door: a reader who scrolls once should leave knowing what the tool is, why it
 is shaped this way, and how to start. Its narrative arc is fixed — hook (intro + five-row feature
-table) → **The model** (spec↔code, diagrams) → **Why prose** → **Software as a learning loop** →
-**Quick start** → **How it's put together** (L0/L1/L2) → **Working with agents (L1)** → **The
-dashboard (L2)** → contributing/credit/license. Sections earn their place by answering a reader
-question, not by enumerating features; the deep dives (eval discipline, every lint rule,
-configuration fields) deliberately live in `spex guide` and spexcode.net, not here — the README
-states each once, in passing, where the narrative needs it.
+table) → **The model** (spec↔code, diagrams) → **Software as a learning loop** → **Quick start** →
+**How it's put together** (L0/L1/L2) → **Working with agents (L1)** → **The dashboard (L2)** →
+contributing/credit/license. Sections earn their place by answering a reader question, not by
+enumerating features; the deep dives (eval discipline, every lint rule, configuration fields)
+deliberately live in `spex guide` and spexcode.net, not here — the README states each once, in
+passing, where the narrative needs it.
 
 Hard invariants:
 
@@ -33,7 +35,7 @@ Hard invariants:
   value is EXACTLY the built-in harness registry in registry order. Never hand-edit that line's id
   list; it follows `harness-select.ts`.
 - **The zh README mirrors section for section.** Same arc, same assets (its image paths are relative
-  to `docs/`; it uses `readme-loop.zh.png` and `readme-worker-flow.zh.svg` where a translated asset
+  to `docs/`; it uses `readme-loop.zh.svg` and `readme-worker-flow.zh.svg` where a translated asset
   exists). A change to one README is not done until the other carries it.
 - **Diagrams carry their own ground.** GitHub renders a README on light and dark themes and serves
   SVGs as `<img>` (no `prefers-color-scheme`), so every diagram has a solid background in the brand

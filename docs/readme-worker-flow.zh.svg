@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 460" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', -apple-system, sans-serif">
-  <rect width="1400" height="460" fill="#F4EEE0"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 396" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', -apple-system, sans-serif">
+  <rect width="1400" height="396" fill="#F4EEE0"/>
   <defs>
     <marker id="zarr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#16495A"/>
@@ -70,5 +70,4 @@
     <text x="66" y="340" font-size="15" fill="#5C5647">session 退役，worktree 删除</text>
   </g>
 
-  <text x="40" y="424" font-size="15" fill="#5C5647">01–06 属于 worker；07 是唯一的人工闸门。互不相干的任务并行走这个循环，一个任务一个 worktree。</text>
 </svg>

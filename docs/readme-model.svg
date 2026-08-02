@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 780" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 680" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <!-- self-carried ground: GitHub renders README on light AND dark themes; an <img> SVG cannot query them -->
-  <rect width="1400" height="780" fill="#F4EEE0"/>
+  <rect width="1400" height="680" fill="#F4EEE0"/>
 
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
@@ -81,10 +81,4 @@
   <text x="660" y="520" font-size="16" fill="#5C5647">references</text>
   <text x="660" y="540" font-size="14" fill="#8A8272" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">related: — many</text>
 
-  <!-- ============ bottom strip: git is the database ============ -->
-  <rect x="48" y="684" width="1304" height="64" rx="10" fill="#171A20"/>
-  <text x="76" y="724" font-size="18" fill="#EFE8D8">
-    <tspan font-weight="700" fill="#5FA8BE">git is the database</tspan>
-    <tspan fill="#8A8272">  ·  </tspan>a node’s versions = the commits that touched its spec.md<tspan fill="#8A8272">  ·  </tspan>each version attributed to an agent via a <tspan font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" fill="#5FA8BE">Session:</tspan> trailer
-  </text>
 </svg>

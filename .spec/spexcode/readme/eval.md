@@ -18,6 +18,8 @@ scenarios:
       - docs/README.zh-CN.md
       - docs/readme-model.svg
       - docs/readme-drift-flow.svg
+      - docs/readme-loop.svg
+      - docs/readme-loop.zh.svg
       - docs/readme-layers.svg
       - docs/readme-worker-flow.svg
       - docs/readme-worker-flow.zh.svg

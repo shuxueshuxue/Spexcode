@@ -42,7 +42,8 @@ restores the list.
   (where, as a menu trigger, it would swallow the node popup's keys). Keyboard Tab still reaches
   every entry, and a Tab-focused control keeps its native Enter/Space activation.
 - **The URL is the page state — query string included.** Routes are hash paths — `#/graph` (home; any
-  unknown hash lands here), `#/sessions` (+ `#/sessions/<sel>` deep-linking a tab), `#/evals` (+
+  unknown hash lands here) or `#/graph/<node>` (a shareable spec-node focus), `#/sessions` (+
+  `#/sessions/<sel>` deep-linking a tab), `#/evals` (+
   `#/evals/<node>/<scenario>`, the canonical eval DETAIL address — each segment encoded on its own so the
   path shape survives), `#/issues` (+ `#/issues/<id>`), `#/settings`. A LIST page's filter state rides a
   query string INSIDE the hash — for the review lists, ONE `?q=<raw token text>` param ([[review-query]];

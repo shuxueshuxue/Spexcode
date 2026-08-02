@@ -12,6 +12,7 @@ related:
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/test/graph-node-address.e2e.mjs
+  - spec-dashboard/test/node-menu-copy-url.e2e.mjs
 ---
 # address-routing
 
@@ -53,6 +54,10 @@ hand-rolled string assembly in components. `navigateAddress(address, callbacks)`
 the same projection; graph-node focus is applied by the graph route itself, while the warm session page may
 take its immediate selection callback. This makes a direct open, a review-node reference, and a palette pick
 the same transaction instead of giving graph focus a second state channel.
+`addressUrl(address)` is the clipboard side: it resolves that canonical hash against the browser's current
+document URL, preserving its origin and project pathname (`/p/<id>/`) without a public-host setting. A copy
+action therefore hands over a URL a recipient can open in the same deployment, not a bare hash or a local-only
+address.
 `detailBackHash(page, scopeId)` is the review details' **return gate** — the compact back anchor's href
 ([[review-chrome]]'s DetailShell), derived ONLY from the detail's own canonical address: `#/issues` from
 an issue detail, the bare `#/evals` from a TRUNK eval detail, and the scoped DEFAULT list (the same

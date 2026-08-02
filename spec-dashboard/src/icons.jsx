@@ -30,6 +30,7 @@ const ICONS = {
   // the composer's Send — a plain up arrow (Lucide arrow-up), the icon-only send affordance.
   send: { node: <><path d="m5 12 7-7 7 7" /><path d="M12 19V5" /></>, sw: 2 },
   download: { node: <><path d="M12 15V3" /><path d="m7 10 5 5 5-5" /><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></> },
+  copy: { node: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></> },
   'folder-open': { node: <><path d="M6 14.5 8.5 6H21l-2.5 8.5a2 2 0 0 1-1.9 1.5H7.9A2 2 0 0 1 6 14.5Z" /><path d="M3 6h5l2-2h4" /><path d="M3 6v12a2 2 0 0 0 2 2h12" /></> },
   eye: { node: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></> },
   clock: { node: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></> },

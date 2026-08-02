@@ -511,6 +511,9 @@ export default {
   nodeMenu: {
     menuLabel: 'node actions',
     info: 'node info',
+    copyUrl: 'copy node URL',
+    copied: 'copied',
+    failed: 'copy failed',
     newSession: 'new session',
     newChild: 'new child node…',
     del: 'delete node…',

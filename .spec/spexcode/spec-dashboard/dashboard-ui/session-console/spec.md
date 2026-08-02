@@ -139,8 +139,11 @@ xterm; its fixed footer and upward growth belong to that temporary control surfa
 genuinely single-line **session toolbar** contains the current surface, its local resource tabs, evaluation, and
 available commands. A pane-backed session exposes its one **Terminal** tab; a headless session exposes its one
 TimelineChat **Conversation** surface. The visual tab sequence is its current surface, resource tabs, the
-**Eval** navigation tab, then the plus button immediately beside Eval: this is one compact tab rail, with any
-remaining toolbar space separating it from command tools. The plus lists the selected session's posted
+**Eval** navigation tab, then the resource picker: this is one compact tab rail, with any remaining toolbar space
+separating it from command tools. A one-pixel divider and short gutter separate the picker from Eval; there is no
+matching divider after the plus. The picker itself is a compact circular plus control, so it reads as an add/open
+action rather than an extension of Eval.
+The plus lists the selected session's posted
 files and loopback web services ([[files]] / [[web]]) that are not already open. Selecting one creates one
 browser-local tab for that exact session/reference; closing it removes only that view and permits reopening from
 the plus menu, never a duplicate. A newly observed posted web service creates its one tab automatically, becoming

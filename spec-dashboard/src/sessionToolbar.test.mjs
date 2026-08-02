@@ -9,6 +9,7 @@ const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 
 const contextMenu = readFileSync(new URL('./SessionContextMenu.jsx', import.meta.url), 'utf8')
 const sessionWindow = readFileSync(new URL('./SessionWindow.jsx', import.meta.url), 'utf8')
 const timelineChat = readFileSync(new URL('./TimelineChat.jsx', import.meta.url), 'utf8')
+const focus = readFileSync(new URL('./focus.js', import.meta.url), 'utf8')
 const feed = readFileSync(new URL('./EvalsFeed.jsx', import.meta.url), 'utf8')
 const reviewShell = readFileSync(new URL('./ReviewShell.jsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
@@ -51,6 +52,20 @@ test('file rows keep host paths off the label and reserve that detail for the co
   assert.match(source, /className="si-files-copy" role="menuitem" label=\{path\}/)
   assert.match(css, /\.si-files-menu\s*\{[^}]*width:\s*fit-content;/s)
   assert.match(css, /\.si-files-name\s*\{[^}]*max-width:\s*min\(280px, calc\(100vw - 130px\)\);/s)
+})
+
+test('file previews are selectable, render Markdown safely, start at their scroll origin, and menus stay quiet', () => {
+  assert.match(source, /function FileTextPreview\(\{ path, text \}\) \{[\s\S]*?<RichText className="si-file-markdown">\{text\}<\/RichText>/)
+  assert.match(source, /className=\{`si-file-preview-body \$\{preview\.phase\}`\} data-selectable/)
+  assert.match(source, /className=\{`si-resource-file \$\{preview\.phase\}`\} data-selectable/)
+  assert.match(focus, /const SELECTABLE_PRESS_TARGETS = '\[data-selectable\]'/)
+  assert.match(focus, /if \(el\.closest\(SELECTABLE_PRESS_TARGETS\)\) return/)
+  assert.match(css, /\.si-file-preview-body\s*\{[^}]*user-select:\s*text;/s)
+  assert.match(css, /\.si-resource-file\s*\{[^}]*user-select:\s*text;/s)
+  assert.match(css, /\.si-resource-file\.loading, \.si-resource-file\.error, \.si-resource-file\.image\s*\{[^}]*place-items:\s*center;/s)
+  assert.match(css, /\.si-resource-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)
+  assert.match(css, /\.si-files-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)
+  assert.match(css, /\.sess-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)
 })
 
 test('a headless console has one TimelineChat conversation surface', () => {

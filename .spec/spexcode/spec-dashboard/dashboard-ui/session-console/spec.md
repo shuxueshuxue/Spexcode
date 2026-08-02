@@ -200,7 +200,10 @@ continues through [[live-view]]'s explicit tmux-client control path.
 The desktop right pane has **one console slot with three truthful surfaces**. A pane-backed adapter mounts the
 warm, input-enabled `SessionTerm` described here. A headless adapter mounts the same `TimelineChat` used by the
 phone, with no terminal placeholder, tmux socket, or [[message-stream]] alternate view. A selected resource tab
-replaces either console with a bounded file preview or same-origin web frame; the inactive terminal layer is hidden
+replaces either console with a bounded, top-anchored selectable file preview or same-origin web frame; Markdown
+uses the same restricted renderer as other dashboard prose while raw HTML remains text. File text is the explicit
+native-selection exception to the panel's pointer-inert chrome, so drag and Ctrl/Cmd+C work while its non-focusable
+surface leaves the current terminal/composer sink alone. The inactive terminal layer is hidden
 and pointer-inert, preserving its warm transport. TimelineChat's
 message composer is the shared [[composer]] textarea and auto-growth path, with the same Enter / Shift+Enter /
 IME-send boundary as Command Box; its docked mobile and desktop hosts do not invent a second textarea
@@ -265,6 +268,8 @@ A **right-click on a session row** opens its context menu — **lock on graph**,
 coexisting with the context-menu suppression. Lock on graph locks the board to that session and navigates to
 `#/graph`; it has no pending-ops precondition, so an ops-less session still lands on the graph with the lock
 banner explaining the empty grip. The shared `sessionName` puts a rename first in the label precedence.
+Context menus and anchored dropdowns use their border with shallow ambient depth only; they do not cast a bright
+halo around the menu edge.
 The row order is **automatic** — the two-zone grouping below, newest-first within a zone — with no manual
 drag-to-reorder gesture. Both authored composers accept an **attached file** (paste, drop, or the paperclip picker — a monochrome inline-SVG
 glyph in the dashboard's own icon vocabulary, swapping to a spinning ring while uploading, **never a colour

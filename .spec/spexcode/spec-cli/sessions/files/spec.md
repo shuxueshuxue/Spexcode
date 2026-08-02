@@ -55,9 +55,12 @@ the route into an existence oracle for arbitrary backend paths.
 ## preview is safe and bounded
 
 Clicking a posted path opens a pop-out preview; its neighbouring download tool retains the direct download.
-Preview renders only text extensions as escaped plain text and raster PNG, JPEG, GIF, or WebP images. Text is
-served as `text/plain` and rendered as text by the dashboard; images arrive as a response blob in an image
-element. SVG, HTML, PDF, archives, binaries, and unknown extensions have no preview and answer a named
+Preview renders raster PNG, JPEG, GIF, or WebP images, and text extensions as text. `.md` and `.markdown`
+use the dashboard's existing restricted Markdown renderer in both the pop-out and a resource tab; every other
+text extension stays verbatim. The renderer treats raw HTML as text rather than executable dashboard markup.
+Text is served as `text/plain`; both text surfaces are selectable/copyable and are top-anchored scroll owners,
+so a newly opened long file begins at byte zero rather than centring and clipping its first lines. Images arrive
+as a response blob in an image element. SVG, HTML, PDF, archives, binaries, and unknown extensions have no preview and answer a named
 `415` directing the human to download them. That restricted set costs convenient PDF/SVG viewing, but keeps
 untrusted content out of the dashboard document rather than gambling on a safe renderer.
 
@@ -73,7 +76,8 @@ the file name; the full absolute path is exposed only on its copy-path icon's to
 host-local detail without turning a toolbar menu into a path dump. Long names clip at a viewport-safe bound,
 but a short name does not inherit a fixed empty menu width. The name is inert: its eye icon is the preview button,
 its adjacent download icon starts the download, and its copy icon writes the absolute path. Preview opens in a centred overlay pop-out, separate from
-the dropdown's original position. No browser fetch happens merely because the dropdown opened. The control
+the dropdown's original position. File and resource dropdowns share the app's restrained context-menu chrome:
+a real border plus shallow ambient depth, never a glowing halo. No browser fetch happens merely because the dropdown opened. The control
 uses the shared icon vocabulary and carries its accessible label/tooltip. A failed download is shown as a
 concrete session action error, while a preview refusal is shown inside its pop-out, never mistaken for file
 content. Both surfaces are transient: clicking outside the open dropdown dismisses it, and clicking the

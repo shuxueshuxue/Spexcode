@@ -38,6 +38,16 @@ scenarios:
       Unsupported extensions receive a named 415 directing the human to download, and files over 2 MiB receive
       a named 413 stating the preview ceiling and actual size. No unsupported markup enters the dashboard DOM,
       and neither response silently truncates or downloads the file.
+  - name: markdown-previews-select-and-start-at-the-top
+    tags: [frontend-e2e, backend-api]
+    test: spec-dashboard/test/session-web.e2e.mjs
+    description: >-
+      Publish a real `.md` file through the CLI, then open it in both the files pop-out and a resource tab in
+      Chromium. Inspect its first heading, raw-markup treatment, scroll origin, and browser text selection.
+    expected: >-
+      Both surfaces render restricted Markdown, not a raw preformatted source dump; raw HTML remains inert
+      text. The first rendered content is visible at scroll position zero, and the human can select and copy
+      document text without the hidden terminal or overlay consuming the gesture.
   - name: download-is-authorized-and-missing-paths-fail-loud
     tags: [backend-api]
     test: spec-cli/src/session-files.api.test.ts

@@ -42,8 +42,9 @@
   <!-- spec-version dashed line -->
   <line x1="370" y1="340" x2="1180" y2="340" stroke="#16495A" stroke-width="2" stroke-dasharray="8 6"/>
   <text x="480" y="330" font-size="13.5" fill="#16495A">the spec version in effect — unchanged since v1</text>
-  <rect x="950" y="324" width="164" height="32" rx="16" fill="#FFFDF6" stroke="#A03123" stroke-width="1.8" stroke-dasharray="6 4"/>
-  <text x="1032" y="345" font-size="14" font-weight="700" fill="#A03123" text-anchor="middle">spec not updated ✗</text>
+  <rect x="858" y="324" width="164" height="32" rx="16" fill="#FFFDF6" stroke="#A03123" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text x="940" y="345" font-size="14" font-weight="700" fill="#A03123" text-anchor="middle">spec not updated ✗</text>
+  <path d="M 1026 324 C 1032 296, 1030 272, 1038 250" fill="none" stroke="#A03123" stroke-width="2" marker-end="url(#fa)"/>
 
   <!-- timeline -->
   <line x1="70" y1="400" x2="1340" y2="400" stroke="#B9B19E" stroke-width="3"/>
@@ -64,7 +65,7 @@
 
   <!-- the code-only commit -->
   <circle cx="940" cy="400" r="13" fill="#C4622D"/>
-  <path d="M 956 388 C 1000 368, 1010 352, 1036 336" fill="none" stroke="#A03123" stroke-width="2" marker-end="url(#fa)"/>
+  <line x1="940" y1="386" x2="940" y2="358" stroke="#A03123" stroke-width="2"/>
   <text x="940" y="432" font-size="14" fill="#5C5647" text-anchor="middle"><tspan font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">dc7e5449</tspan> · Jul 12 — code only</text>
   <rect x="810" y="444" width="260" height="28" rx="14" fill="#FBF0E8" stroke="#C4622D" stroke-width="1.8"/>
   <text x="940" y="463" font-size="13.5" fill="#C4622D" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">attach.ts · attachSession()</text>

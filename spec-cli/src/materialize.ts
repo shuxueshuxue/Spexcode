@@ -85,14 +85,19 @@ function publishSelection(path: string, body: string): void {
   renameSync(prepared, path)
 }
 
-const SENTINEL_RE = /\n*<!-- spexcode:start -->[\s\S]*?<!-- spexcode:end -->\n*/
-export function stripSpexcodeBlock(text: string): string {
-  const m = SENTINEL_RE.exec(text)
+function managedBlockPattern(comment: readonly [string, string]): RegExp {
+  const [open, close] = comment
+  const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`\\n*${escape(`${open}spexcode:start${close}`)}[\\s\\S]*?${escape(`${open}spexcode:end${close}`)}\\n*`)
+}
+export function stripSpexcodeBlock(text: string, comment: readonly [string, string] = ['<!-- ', ' -->']): string {
+  const sentinel = managedBlockPattern(comment)
+  const m = sentinel.exec(text)
   if (!m) return text
   // mirror removeManagedBlock exactly: our block + its surrounding blanks collapse to one '\n', and only a
   // block sitting at the TOP of the file drops the leading newline (a host file beginning with its own
   // blank lines keeps them — clean(smudge(x)) == x).
-  const replaced = text.replace(SENTINEL_RE, '\n')
+  const replaced = text.replace(sentinel, '\n')
   return m.index === 0 ? replaced.replace(/^\n+/, '') : replaced
 }
 function hostContentOf(file: string): string {
@@ -387,7 +392,7 @@ export function materialize(proj = process.cwd()): MaterializeResult {
     .map((p) => relative(proj, p)).filter((p) => !p.startsWith('..'))
   const ignoreFile = join(proj, '.gitignore')
   const ignoreTracked = isTrackedHere(ignoreFile)
-  const ignoreHost = existsSync(ignoreFile) ? readFileSync(ignoreFile, 'utf8') : ''
+  const ignoreHost = existsSync(ignoreFile) ? stripSpexcodeBlock(readFileSync(ignoreFile, 'utf8'), ['# ', '']) : ''
   if (!ignoreTracked && !ignoreHost.trim()) localEntries.push('.gitignore')
   const ignoreBody = entries(localEntries)
   if (writeManagedBlock(ignoreFile, ignoreBody, ['# ', ''])) changedMaterialized.add(ignoreFile)

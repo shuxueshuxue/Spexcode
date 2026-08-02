@@ -146,10 +146,10 @@ spex session close uploader      # 退役 worktree、分支和记录
 *整个仓库一张地图,图中是 SpexCode 自己的看板。每个节点带着它的版本号和 eval 状态,正在被编辑的
 节点上悬浮着那个 agent 的头像,左上角是活的 session 栏。*
 
-<img src="readme-node.png" alt="在看板上打开一个节点:raw source 和 expanded spec、版本历史、所辖文件">
+<img src="readme-node.png" alt="在看板上打开一个节点:raw source 高亮块、expanded spec 正文、所辖文件、drift 徽标,以及 history、issues、eval 各 tab">
 
-*点开一个节点:它的 raw source 和 expanded spec、git 本来就记着的版本历史、它管辖的文件、它的
-issue。*
+*点开一个节点:上面是 raw source,下面是 expanded spec,还有它管辖的文件、当前的 drift 状态,以及
+git 本来就记着的版本历史、issue、eval 各自的 tab。*
 
 <img src="readme-eval.png" alt="一条正在审阅的 eval:判定横幅、场景的期望结果、agent 的说明、录屏证据,以及右侧的待审队列">
 

@@ -1617,11 +1617,11 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-session-wrap { container-type: inline-size; }
 .si-tabbar {
   flex: none; min-width: 0; height: 32px; box-sizing: border-box;
-  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; align-items: stretch;
+  display: flex; align-items: stretch;
   overflow: visible; background: color-mix(in srgb, var(--panel) 94%, var(--ink) 6%); border-bottom: 1px solid var(--line);
 }
-.si-surface { display: flex; align-items: stretch; min-width: 0; border-right: 1px solid var(--line); }
-.si-tabs { min-width: 0; flex: 1; display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; }
+.si-surface { flex: 0 1 auto; display: flex; align-items: stretch; min-width: 0; border-right: 1px solid var(--line); }
+.si-tabs { min-width: 0; flex: 0 1 auto; display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; }
 .si-tabs::-webkit-scrollbar { display: none; }
 .si-tab {
   appearance: none; min-width: 0; height: 32px; display: inline-flex; align-items: center; gap: 6px;
@@ -1646,16 +1646,16 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-resource-menu-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-resource-menu-empty { display: block; padding: 7px; color: var(--muted); font-family: var(--mono); font-size: var(--type-control); }
 
-/* Eval is navigation, never a tab: one real anchor carrying the canonical scoped href and a compact glance
+/* Eval is a navigation tab: one real anchor carrying the canonical scoped href and a compact glance
    over the session's lean eval model. ReviewState supplies every pass/fail/blind symbol and tone. */
-.si-eval-door {
+.si-eval-tab {
   min-width: 0; display: inline-flex; align-items: center; gap: 5px; padding: 0 7px;
-  border-right: 1px solid var(--line); color: var(--ink2); text-decoration: none; white-space: nowrap;
+  color: var(--ink2); text-decoration: none; white-space: nowrap;
   font-family: var(--mono); font-size: var(--type-meta);
 }
-.si-eval-door:hover { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 7%, transparent); }
-.si-eval-door:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
-.si-eval-door > svg { flex: none; color: var(--cyan); }
+.si-eval-tab:hover { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 7%, transparent); }
+.si-eval-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.si-eval-tab > svg { flex: none; color: var(--cyan); }
 .si-eval-label { color: var(--ink); font-size: var(--type-control); }
 .si-eval-arrow { opacity: .55; }
 .si-eval-stats { display: inline-flex; align-items: center; gap: 4px; }
@@ -1668,7 +1668,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-eval-spinner { animation: si-attach-spin .8s linear infinite; }
 .si-eval-phase { flex: 0 0 auto; color: var(--muted); }
 
-.si-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 4px; }
+.si-actions { flex: 0 0 auto; min-width: 0; margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 4px; }
 .si-files { position: relative; display: flex; align-items: center; padding: 0 4px; border-left: 1px solid var(--line); }
 .si-files-menu { position: absolute; top: calc(100% + 4px); right: 4px; z-index: 20; width: fit-content; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 10px 30px color-mix(in srgb, var(--ink) 20%, transparent); }
 .si-files-row { display: flex; align-items: center; gap: 2px; }
@@ -1694,11 +1694,11 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-resource-web { background: #fff; }
 
 @container (max-width: 720px) {
-  .si-eval-door { padding-inline: 6px; }
+  .si-eval-tab { padding-inline: 6px; }
 }
 @container (max-width: 540px) {
   .si-eval-label, .si-eval-stats .secondary { display: none; }
-  .si-eval-door { gap: 4px; padding-inline: 6px; }
+  .si-eval-tab { gap: 4px; padding-inline: 6px; }
   .si-actions { gap: 2px; padding-inline: 4px; }
   .si-files { padding-inline: 3px; }
   .si-resource-tab-main { max-width: 110px; }
@@ -1706,7 +1706,7 @@ a.scenario-count:hover { background: var(--panel2); }
 @container (max-width: 390px) {
   .si-tab-label, .si-eval-arrow { display: none; }
   .si-tab { width: 34px; padding-inline: 10px; }
-  .si-eval-door { padding-inline: 5px; }
+  .si-eval-tab { padding-inline: 5px; }
 }
 /* The TUI now owns the full remaining pane. Command Box suspends over it without changing xterm geometry. */
 /* clip, not hidden: the terminal chrome must not be a scroll container the caret-reveal can drag (see .st-host). */

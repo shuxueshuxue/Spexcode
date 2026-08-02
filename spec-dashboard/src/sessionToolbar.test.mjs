@@ -16,7 +16,7 @@ const icons = readFileSync(new URL('./icons.jsx', import.meta.url), 'utf8')
 const en = readFileSync(new URL('./i18n/en.js', import.meta.url), 'utf8')
 const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 
-test('session toolbar keeps the Terminal tab, adds local resource tabs, and keeps Eval as an anchor', () => {
+test('session toolbar keeps the Terminal tab, adds resource tabs, then Eval and its adjacent picker', () => {
   assert.match(source, /className="si-tabs" role="tablist"/)
   assert.match(source, /role="tab"[\s\S]{0,180}aria-selected=\{!activeResource\}/)
   assert.match(source, /resourceTabs\.filter\(\(tab\) => tab\.sessionId === active\)/)
@@ -26,15 +26,20 @@ test('session toolbar keeps the Terminal tab, adds local resource tabs, and keep
   assert.match(source, /<SessionResourcePanel tab=\{activeResource\}/)
   assert.match(source, /icon="rotate-ccw"[\s\S]{0,160}refreshResource\(tab\)/)
   assert.match(source, /icon="x"[\s\S]{0,160}closeResource\(tab\)/)
-  assert.match(source, /className="si-eval-door si-tab-door sc-cyan"/)
+  assert.match(source, /className="si-eval-tab sc-cyan"/)
   assert.doesNotMatch(source, /si-identity|si-th-name|identitySummary/)
   assert.doesNotMatch(source, /sessionHeadline/)
   assert.match(source, /href=\{active !== 'new' \? addressHash\(sessionEvalAddress\(active\)\) : null\}/)
   assert.doesNotMatch(source, /<EvalScopeDoor/)
 
-  const tablistEnd = source.indexOf('</div>', source.indexOf('className="si-tabs" role="tablist"'))
-  const door = source.indexOf('className="si-eval-door')
-  assert.ok(tablistEnd > 0 && door > tablistEnd, 'the navigation door must stay outside the tablist')
+  const tabs = source.indexOf('className="si-tabs" role="tablist"')
+  const evalTab = source.indexOf('className="si-eval-tab')
+  const picker = source.indexOf('className="si-resource-picker"')
+  const actions = source.indexOf('className="si-actions"')
+  assert.ok(tabs > 0 && tabs < evalTab && evalTab < picker && picker < actions, 'Eval and the picker must stay adjacent after the resource tab strip')
+  assert.match(css, /\.si-tabbar\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*stretch;/s)
+  assert.match(css, /\.si-surface\s*\{[^}]*flex:\s*0 1 auto;/s)
+  assert.match(css, /\.si-actions\s*\{[^}]*margin-left:\s*auto;/s)
 })
 
 test('file rows keep host paths off the label and reserve that detail for the copy tool', () => {
@@ -180,7 +185,7 @@ test('Command Box orders board, preset, then harness commands and deduplicates b
 
 test('toolbar is a fixed compact row with no identity track and stable tool geometry', () => {
   assert.match(css, /\.si-session-wrap\s*\{\s*container-type:\s*inline-size;/)
-  assert.match(css, /\.si-tabbar\s*\{[^}]*height:\s*32px;[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\) auto/s)
+  assert.match(css, /\.si-tabbar\s*\{[^}]*height:\s*32px;[^}]*display:\s*flex;[^}]*align-items:\s*stretch;/s)
   assert.match(css, /\.si-tabs\s*\{[^}]*overflow-x:\s*auto;/s)
   assert.match(css, /\.si-resource-tab-main\s*\{[^}]*max-width:\s*180px;/s)
   assert.doesNotMatch(css, /\.si-identity|\.si-th-name|\.si-session-status|\.si-session-live/)

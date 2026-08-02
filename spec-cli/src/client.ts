@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { platform } from 'node:os'
 import { repoRoot } from './git.js'
 import { resourceBudgets, type ResourceReport } from './host-resources.js'
-import { listSessionIds, readPublicRecordEntry } from './layout.js'
+import { envSessionId, listSessionIds, readPublicRecordEntry } from './layout.js'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
 import { apiBase, apiBaseInfo, assertProjectMatch, fromRaw, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 
@@ -245,10 +245,11 @@ export async function clientInterrupt(id: string): Promise<DispatchResult> {
   return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` })) as DispatchResult
 }
 
-// POST /api/sessions/:id/close — the human-only worktree removal. {ok:false} = no such session.
+// POST /api/sessions/:id/close — terminal worktree removal. A client-side session id is only an unverified claim.
 export async function clientClose(id: string): Promise<boolean> {
   await guarded('session close')
-  const r = await apiFetch(`/api/sessions/${seg(id)}/close`, post({}))
+  const source = envSessionId()
+  const r = await apiFetch(`/api/sessions/${seg(id)}/close`, post({ source: source ? { kind: 'unverified-session-claim', id: source } : { kind: 'user' } }))
   if (!r.ok) throw new BackendError(`backend refused to close ${id}: ${await r.text()}`, r.status)
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }

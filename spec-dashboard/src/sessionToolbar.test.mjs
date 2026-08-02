@@ -55,7 +55,7 @@ test('file rows keep host paths off the label and reserve that detail for the co
   assert.match(source, /className="si-files-copy" role="menuitem" label=\{path\}/)
   assert.match(source, /className="si-files-preview" role="menuitem" label=\{t\('session\.previewFile'\)\}/)
   assert.match(source, /className="si-files-download" role="menuitem" label=\{t\('session\.downloadFile'\)\}/)
-  assert.match(source, /aria-label=\{t\('session\.filePreviewTitle'\)\}/)
+  assert.match(source, /onClick=\{\(\) => \{ setOpen\(false\); onPreview\(path\) \}\}/)
   assert.doesNotMatch(source, /session\.(?:previewFile|downloadFile|filePreviewTitle)', \{ path/)
   assert.match(en, /previewFile: 'preview file'/)
   assert.match(en, /downloadFile: 'download file'/)
@@ -65,13 +65,12 @@ test('file rows keep host paths off the label and reserve that detail for the co
   assert.match(css, /\.si-files-name\s*\{[^}]*max-width:\s*min\(280px, calc\(100vw - 130px\)\);/s)
 })
 
-test('file previews are selectable, render Markdown safely, start at their scroll origin, and menus stay quiet', () => {
+test('file previews use the one selectable resource tab, render Markdown safely, and menus stay quiet', () => {
   assert.match(source, /function FileTextPreview\(\{ path, text \}\) \{[\s\S]*?<RichText className="si-file-markdown">\{text\}<\/RichText>/)
-  assert.match(source, /className=\{`si-file-preview-body \$\{preview\.phase\}`\} data-selectable/)
   assert.match(source, /className=\{`si-resource-file \$\{preview\.phase\}`\} data-selectable/)
+  assert.doesNotMatch(source, /si-file-preview-(?:backdrop|body|head)/)
   assert.match(focus, /const SELECTABLE_PRESS_TARGETS = '\[data-selectable\]'/)
   assert.match(focus, /if \(el\.closest\(SELECTABLE_PRESS_TARGETS\)\) return/)
-  assert.match(css, /\.si-file-preview-body\s*\{[^}]*user-select:\s*text;/s)
   assert.match(css, /\.si-resource-file\s*\{[^}]*user-select:\s*text;/s)
   assert.match(css, /\.si-resource-file\.loading, \.si-resource-file\.error, \.si-resource-file\.image\s*\{[^}]*place-items:\s*center;/s)
   assert.match(css, /\.si-resource-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)

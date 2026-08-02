@@ -2,13 +2,15 @@
 title: readme
 status: active
 hue: 25
-desc: The repo's front door — README.md sells the model in one scroll (feature table → model → why prose → learning loop → quick start → L0/L1/L2 → agents → dashboard), with self-grounded brand-palette SVG diagrams; docs/README.zh-CN.md mirrors it section for section.
+desc: The repo's front door — README.md sells the model in one scroll (feature table → model → learning loop → quick start → L0/L1/L2 → agents → dashboard), with self-grounded brand-palette SVG diagrams; docs/README.zh-CN.md mirrors it section for section.
 code:
   - README.md
 related:
   - docs/README.zh-CN.md
   - docs/readme-model.svg
   - docs/readme-drift-flow.svg
+  - docs/readme-loop.svg
+  - docs/readme-loop.zh.svg
   - docs/readme-layers.svg
   - docs/readme-worker-flow.svg
   - docs/readme-worker-flow.zh.svg
@@ -19,12 +21,14 @@ related:
 
 README.md is the front door: a reader who scrolls once should leave knowing what the tool is, why it
 is shaped this way, and how to start. Its narrative arc is fixed — hook (intro + five-row feature
-table) → **The model** (spec↔code, diagrams) → **Why prose** → **Software as a learning loop** →
-**Quick start** → **How it's put together** (L0/L1/L2) → **Working with agents (L1)** → **The
-dashboard (L2)** → contributing/credit/license. Sections earn their place by answering a reader
-question, not by enumerating features; the deep dives (eval discipline, every lint rule,
-configuration fields) deliberately live in `spex guide` and spexcode.net, not here — the README
-states each once, in passing, where the narrative needs it.
+table) → **The model** (spec↔code, diagrams) → **Software as a learning loop** → **Quick start** →
+**How it's put together** (L0/L1/L2) → **Working with agents (L1)** → **The dashboard (L2)** →
+contributing/credit/license. Sections earn their place by answering a reader question, not by
+enumerating features; the deep dives (eval discipline, every lint rule, configuration fields) and
+internal mechanism trivia (`spex materialize`, the `Session:` attribution trailer) deliberately live
+in `spex guide` and spexcode.net, not here. The Quick start's runtime story is the host gateway:
+one `spex dashboard` per machine fronting every project backend, `/projects` as the browser-side
+management surface.
 
 Hard invariants:
 
@@ -49,5 +53,13 @@ Hard invariants:
   states guarantees positively — rhetorical negation chains ("no X, no Y") are banned across the
   READMEs and the diagram text; a single factual negative ("workers never merge themselves") is
   fine.
+- **One drift story, told from a real commit.** The drift diagram narrates the actual
+  session-attach incident (spec v1 promises `reopen` at d6ffe17f; dc7e5449 renames it to `resume`
+  in code only; the anchor check names and blocks the commit) — a single timeline with one verdict,
+  simplified from the research-deck original. Abstract warn/error taxonomy stays out of the
+  diagram.
+- **The loop diagrams say `spex eval`.** `readme-loop.svg` / `readme-loop.zh.svg` (which replaced
+  the retired-vocabulary PNGs) label the measuring arc with the current verb; retired concept names
+  (yatsu) must never reappear in README assets.
 - Worker-lifecycle facts in the flow diagrams state the product ritual: workers propose and never
   merge; the human fires the merge and the session's own agent lands it.

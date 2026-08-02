@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { invalidReviewPageHash, parseRoute, routeHash, legacyEvalHash, legacyReviewHash, queryString } from './route.js'
-import { addressHash, evalAddress, sessionEvalAddress } from './address.js'
+import { addressHash, addressUrl, evalAddress, graphNodeAddress, sessionEvalAddress } from './address.js'
 
 // The URL layer's two axes ([[side-nav]]): the PATH names the object, the QUERY carries view state — one
 // ?q=<raw token text> for the review lists ([[review-query]]) — and every legacy shape (session-eval
@@ -85,8 +85,10 @@ test('legacy and object session-eval addresses converge on the canonical evals h
 })
 
 test('graph node addresses carry the focused node in the graph path', () => {
-  assert.equal(addressHash({ kind: 'graph-node', nodeId: 'keyboard-nav' }), '#/graph/keyboard-nav')
-  assert.equal(addressHash({ kind: 'graph-node', nodeId: 'node with space' }), '#/graph/node%20with%20space')
+  assert.equal(addressHash(graphNodeAddress('keyboard-nav')), '#/graph/keyboard-nav')
+  assert.equal(addressHash(graphNodeAddress('node with space')), '#/graph/node%20with%20space')
+  assert.equal(addressUrl(graphNodeAddress('keyboard-nav'), 'https://example.test/p/spexcode/'),
+    'https://example.test/p/spexcode/#/graph/keyboard-nav')
 })
 
 test('detailBackHash: each review detail returns to the list on its own data-source axis', async () => {

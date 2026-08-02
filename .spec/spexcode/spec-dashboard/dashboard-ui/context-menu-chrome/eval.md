@@ -16,7 +16,7 @@ scenarios:
     tags: [frontend-e2e, desktop]
     description: >
       On the running graph, right-click a spec node with a session overlay and screenshot the complete menu.
-      Inspect the four fixed verbs, destructive boundary, overlay-session group, icons, typography, hover,
+      Inspect the five fixed verbs, destructive boundary, overlay-session group, icons, typography, hover,
       focus, and viewport bounds; then repeat on a node without an overlay.
     expected: |
       The node menu uses the exact same compact icon-led row geometry as the session menu. Fixed verbs carry

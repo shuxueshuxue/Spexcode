@@ -138,7 +138,9 @@ pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle witho
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
 genuinely single-line **session toolbar** contains the current surface, its local resource tabs, evaluation, and
 available commands. A pane-backed session exposes its one **Terminal** tab; a headless session exposes its one
-TimelineChat **Conversation** surface. The tab group's trailing plus button lists the selected session's posted
+TimelineChat **Conversation** surface. The visual tab sequence is its current surface, resource tabs, the
+**Eval** navigation tab, then the plus button immediately beside Eval: this is one compact tab rail, with any
+remaining toolbar space separating it from command tools. The plus lists the selected session's posted
 files and loopback web services ([[files]] / [[web]]) that are not already open. Selecting one creates one
 browser-local tab for that exact session/reference; closing it removes only that view and permits reopening from
 the plus menu, never a duplicate. A newly observed posted web service creates its one tab automatically, becoming
@@ -147,10 +149,9 @@ the current file preview response or recreates the same-origin webpage frame. Re
 its resource tab. Neither console adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
-height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval entry is a **DOOR, not a tab** —
-a REAL anchor whose href is
+height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval tab is a REAL anchor whose href is
 the canonical session-scoped Evals list address (the scoped default query, minted by [[address-routing]];
-copy-link/middle-click work for free), and it sits outside the tablist, so clicking it (or the typed
+copy-link/middle-click work for free), so clicking it (or the typed
 `/eval`) is one ordinary hash push onto that list ([[session-eval]] /
 [[evals-view]] — the one canonical home of a session's measured evaluation; the console mounts no
 eval pane of its own, so the console width is stable and a warm pane is never reflowed;
@@ -177,7 +178,7 @@ The toolbar wears the app-chrome background with a bottom separator, so it reads
 into that dark edge — the complaint this replaces). Its exact height follows the real tab text, icon tools, and
 focus rings rather than clipping them, targeting a compact ~32px instead of the former ~40px identity bar. At a
 narrow pane the same one-line hierarchy progressively drops secondary Eval tallies while keeping the current surface, resource
-tab strip, Eval door, and every currently available icon tool inside the pane. Resource tab labels clip and their
+tab strip, Eval tab, adjacent plus picker, and every currently available icon tool inside the pane. Resource tab labels clip and their
 strip scrolls horizontally rather than growing a second toolbar line. The bar never grows or
 overflows for a long prompt/headline because no session headline enters it at all. Geometry stays stable across
 all app themes, English/Chinese, lifecycle and liveness combinations, and Command Box visibility; a persisted wide session list
@@ -311,7 +312,7 @@ label, or toolbar-local icon/action mapping. The registry remains the single row
 colour, typed twin, localized tooltip/`aria-label`, pressed state, and execution. Command Box exposes
 `aria-pressed` plus a stable selected treatment; an `offline` liveness (any lifecycle) also exposes the same
 primitive's relaunch action, and review is **agent-proposed** at the stop-gate. **The evaluation is no longer one of these buttons** — it is the
-permanent **Eval door**, always available for any selected session (see [[session-eval]]): the toolbar entry
+permanent **Eval navigation tab**, always available for any selected session (see [[session-eval]]): the toolbar entry
 or Command Box `/eval`, each navigating to the session-scoped Evals page. The reserved Command Box chord is
 consumed but inert for offline/queued sessions, using the same registry judgment as the button. There is
 **no close/exit button** here (neither has a button twin — a strip "close" misreads as "close the panel"

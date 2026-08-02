@@ -166,21 +166,31 @@ scenarios:
       contexts without moving the glyph grid. Hover emits nothing. The wheel follows tmux's native
       routing (copy-mode or the mouse-owning application), and keyboard input remains live through
       xterm.
-  - name: terminal-toolbar-and-eval-door
+  - name: terminal-toolbar-and-eval-tab
     tags: [frontend-e2e, desktop]
     description: >-
       Switch between a live pane-backed session and a real `claude-headless` session, then route through the
-      permanent Eval door at wide and narrow desktop widths across themes, locales, long headlines, Command Box
+      permanent Eval tab at wide and narrow desktop widths across themes, locales, long headlines, Command Box
       visibility, and eval loading/error/zero states. Let the headless session settle with timeline events and
       inspect the right pane and toolbar.
     expected: >-
       The pane-backed session keeps its warm Terminal pane. The headless session has no terminal or tmux socket:
       its main console is the shared TimelineChat (timeline + declaration notes + fixed `replyVia:"note"`
-      composer). Eval is a real canonical anchor outside the tablist and no inline eval pane mounts. The compact
+      composer). Eval is a real canonical navigation tab, followed immediately by the resource picker, and no inline eval pane mounts. The compact
       toolbar stays one line, visually separate from either console, with honest eval summary states and all
       available icon tools visible. Its fixed merge slot turns green only for the live `done --propose merge`
       review proposal; all other proposal/lifecycle/liveness cases stay muted and disabled without shifting the
       toolbar. The warm terminal survives navigation and browser Back.
+  - name: eval-tab-and-resource-picker-order
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-toolbar.e2e.mjs
+    description: >-
+      Open a real session console in Chromium and measure the session toolbar while its current surface is visible.
+      Follow keyboard focus from the current surface through the right edge of the tab rail.
+    expected: >-
+      The visual and keyboard sequence is current surface/resource tabs, the real Eval navigation tab, its
+      immediately adjacent resource-picker plus button, then command tools. This tab sequence is compact;
+      there is no flexible spacer or separate Eval control between the resource tabs, Eval, and plus.
   - name: posted-resources-are-singleton-tabs
     tags: [frontend-e2e, desktop, cli, backend-api]
     test: spec-dashboard/test/session-web.e2e.mjs

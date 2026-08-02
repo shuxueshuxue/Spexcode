@@ -1620,7 +1620,7 @@ a.scenario-count:hover { background: var(--panel2); }
   display: flex; align-items: stretch;
   overflow: visible; background: color-mix(in srgb, var(--panel) 94%, var(--ink) 6%); border-bottom: 1px solid var(--line);
 }
-.si-surface { flex: 0 1 auto; display: flex; align-items: stretch; min-width: 0; border-right: 1px solid var(--line); }
+.si-surface { flex: 0 1 auto; display: flex; align-items: stretch; min-width: 0; }
 .si-tabs { min-width: 0; flex: 0 1 auto; display: flex; align-items: stretch; overflow-x: auto; scrollbar-width: none; }
 .si-tabs::-webkit-scrollbar { display: none; }
 .si-tab {
@@ -1636,10 +1636,12 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-resource-tab-main { min-width: 0; max-width: 180px; display: inline-flex; align-items: center; gap: 5px; padding: 0 5px 0 8px; color: inherit; background: transparent; border: 0; font-family: var(--mono); font-size: var(--type-control); cursor: pointer; }
 .si-resource-tab-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-resource-tab-main svg { flex: none; }
-.si-resource-tab-action, .si-tab-add { flex: none; width: 25px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
-.si-resource-tab-action:hover, .si-resource-tab-action:focus-visible, .si-tab-add:hover, .si-tab-add:focus-visible { color: var(--blue); background: var(--panel2); }
+.si-resource-tab-action { flex: none; width: 25px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
+.si-resource-tab-action:hover, .si-resource-tab-action:focus-visible { color: var(--blue); background: var(--panel2); }
 .si-resource-tab-action:focus-visible, .si-tab-add:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
-.si-resource-picker { position: relative; flex: none; display: flex; align-items: stretch; }
+.si-resource-picker { position: relative; flex: none; display: flex; align-items: center; padding: 0 4px; border-left: 1px solid var(--line); }
+.si-tab-add { flex: none; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 1px solid color-mix(in srgb, var(--line) 90%, var(--muted)); border-radius: 50%; cursor: pointer; }
+.si-tab-add:hover, .si-tab-add:focus-visible { color: var(--blue); background: var(--panel2); border-color: var(--blue); }
 .si-resource-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 210px; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 10px 30px color-mix(in srgb, var(--ink) 20%, transparent); }
 .si-resource-menu-row { width: 100%; min-width: 0; display: flex; align-items: center; gap: 7px; padding: 6px 7px; color: var(--ink2); background: transparent; border: 0; border-radius: 4px; font-family: var(--mono); font-size: var(--type-control); text-align: left; cursor: pointer; }
 .si-resource-menu-row:hover, .si-resource-menu-row:focus-visible { color: var(--blue); background: var(--panel2); }

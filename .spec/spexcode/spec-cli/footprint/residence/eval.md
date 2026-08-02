@@ -44,6 +44,21 @@ scenarios:
     tags: [backend-api, cli]
     code: spec-cli/src/materialize.ts
     related: [spec-cli/src/materialize.test.ts]
+  - name: generated-ignore-stays-hidden-across-rematerialize
+    description: >
+      In a fresh Git repository with no host .gitignore, adopt through the real `spex init`, commit only
+      the planted source of truth, then run `spex materialize` again and read the generated ignore plus
+      Git's own check-ignore/status verdicts.
+    expected: >
+      The wholly generated .gitignore keeps its own `.gitignore` entry after every same-input materialize,
+      remains ignored and absent from status, and is never reclassified as host prose merely because its
+      previous managed block exists. No generated contract, shim, or machine file becomes visible.
+    tags: [backend-api, cli]
+    code: spec-cli/src/materialize.ts
+    related: [spec-cli/src/init.test.ts]
+    test:
+      path: spec-cli/src/init.test.ts
+      name: a wholly generated ignore stays self-hidden after repeated materialize
   - name: retired-axis-compat
     description: >
       On an adopted host, set every legacy footprint field a real deployment might still carry —

@@ -2608,6 +2608,9 @@ async function inspectSessionLeafIdentity(id: string, rec: SessRec): Promise<Lea
   try { argv = (await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' })).stdout.trim() }
   catch { return { state: 'unknown', pid, reason: `leaf PID ${pid} argv identity is unreadable` } }
   if (!argv) return { state: 'unknown', pid, reason: `leaf PID ${pid} argv identity is empty` }
+  const endToken = processStartToken(pid)
+  if (!endToken || endToken !== startToken)
+    return { state: 'unknown', pid, reason: `leaf PID ${pid} process-start identity changed during ownership read` }
   if (argv.includes(ownerNeedle)) return { state: 'owned', identity: { pid, startToken, ownerNeedle } }
   return { state: 'unrelated', pid, startToken }
 }

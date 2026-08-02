@@ -20,70 +20,32 @@
 
 Spec-driven orchestration for your coding agents. SpexCode keeps a versioned tree of specs inside
 your git repo, links every spec to the code it governs, and runs a session manager that dispatches
-coding agents into isolated worktrees. You review and merge; the tool keeps intent and
-implementation from drifting apart.
-
-[![Watch: this repo's spec tree grow from its git history](docs/spec-tree-poster.jpg)](https://spexcode.net/assets/spec-tree-growth.mp4)
-
-<sub>▶ This repo's own spec tree, replayed from its git history — 160 spec nodes growing over three weeks. Click for the [full video](https://spexcode.net/assets/spec-tree-growth.mp4).</sub>
+coding agents into isolated worktrees.
 
 English | [中文](./docs/README.zh-CN.md) · Docs: [spexcode.net](https://spexcode.net) · License: MIT
 
-Quick links: [the model](#the-model) · [quick start](#quick-start) ·
-[agents](#working-with-agents) · [eval](#measuring-behavior-eval) · [config](#configuration)
+==here display a table that has two columns, the first column is the name of the features, the second is the description for them.==
+==feature list(you should expand them properly): computable spec-code drifting mechanism, sessions/worktrees management(layered supervision structure), full shareable url (spec nodes, evals, sessions...), modularized(suitable, customizable as building bricks for your own software factory), cross-harnesses support==
 
 ## The model
 
-<div align="center"><img src="docs/sdd-tuxedo-pooh.png" alt="spec-driven development meme" width="260"></div>
+use a graph here to describe the spec-code relationship clearly (and the function tracking, a little explanation of the algorithm used here), raw spec vs expanded spec etc.
 
-A spec node is a directory under `.spec/` containing a `spec.md`: frontmatter (title, status, a
-`code:` pointer to the file it governs, a `related:` list for files it references) plus a prose
-body stating what that part of the system is supposed to do, right now. Nodes nest, so the tree
-mirrors how you think about the project rather than the file layout. The body can split into two
-labelled parts. The short **raw source** states the intent; changing it takes explicit
-human approval (an agent can draft it, a human signs off). The **expanded spec** is the agent's
-detailed reading of that intent; it iterates freely but must always match the raw source.
+then a graph to describe the situation when the spec go stale
 
-<img src="docs/readme-node.png" alt="spec node popup">
-
-Two rules make this workable:
-
-1. **Git is the database.** There is no separate store. A node's version count is the number of
-   commits that changed its `spec.md`, its history view is `git log` on that file, and each version
-   is attributed to an agent session through a `Session:` commit trailer. This is also why a spec
-   body always describes present intent and gets rewritten in place: changelog headings inside the
-   body are banned (the linter enforces it), because git already keeps the history.
-2. **Spec and code land together.** A change is one commit that updates both the `spec.md` and the
-   code it justifies. When code moves without its spec, the linter flags it,
-
-   ```
-   drift: spec-cli/src/graph.ts is 1 commit(s) ahead of spec 'graph-lean' (v12) — may be stale
-   ```
-
-   and keeps flagging until the spec catches up.
-
-<img src="docs/readme-drift.png" alt="drift: a spec promising `reopen`, and a later commit renaming it to `resume` without touching the spec">
-
-The check is mechanical — it compares the commit that last changed a spec against the commits that
-touched the symbol that spec anchors to. It never reads the meaning of a change, so it cannot tell you
-whether the new behavior is better; it can only tell you that the spec no longer describes it. That is
-also why it is worth running: the commit above was not careless, it updated seven other specs in the
-same rename and missed one.
-
-## The optimization loop
+## a heuristic learning perspective for softwares
 
 Specs, commits, and evals compose into one loop. The spec is the loss function: it states what you
-want, and it's the half a human signs off on. Commits are the optimizer. **eval**, the measurement
-subsystem, scores how far live behavior currently sits from the spec, and the
-score's history lives in git like everything else.
+want. Commits are the optimizer. **eval**, the measurement
+subsystem, scores how far live behavior currently sits from the spec.
 
-<img src="docs/readme-loop.png" alt="the spec/code optimization loop">
+<img src="docs/readme-loop.png" alt="the spec/code optimization loop"> ==adjust this image to be smaller in size==
 
-It also settles where the human stands day to day: nobody reads a neural net by staring at its
-weights, and between merge gates you don't have to stare at agent diffs either. Attention goes to
-the spec and the evals; the diff gets read once, at merge time.
+When vibe coding, you don't look at the details like reads a neural net by staring at its weights. Attention goes to the spec and the evals; the begins and the ends.
 
 ## Quick start
+
+==this part might need update, or perhaps explain the materialize mechanism==
 
 Requires Node ≥ 22 and git. This part is plain tooling — no AI involved yet.
 
@@ -92,6 +54,7 @@ npm i -g spexcode                              # installs the `spex` command
 cd your-repo
 spex init --harness claude,codex,opencode,pi,claude-headless,opencode-headless,pi-headless,codex-headless   # seeds .spec/, installs hooks, materializes the agent contracts
 ```
+==see and actually test if this command sequence needs any update==
 
 That's the whole adoption. The example lists all the built-in harnesses — remove the ones you don't
 use: `--harness` is required, has no default, and takes any one id or comma-separated subset.
@@ -107,54 +70,26 @@ spex serve       # this project's backend — prints its URL, registers itself f
 spex dashboard   # once per user, any directory: the one dashboard — open the URL it prints
 ```
 
-Run `spex serve` from each project you want online. Every backend registers itself, and the single
-`spex dashboard` finds them all — backends already running and ones you start later, in any order.
-`/projects` switches and manages projects; each project's board lives under `/p/:id/`. There is no
-per-project dashboard process and no port pairing to remember: if a port is taken, give that
-backend its own with `spex serve --port <n>`, and trust the URL each command prints.
+## How does this system work
 
-Those are installed-user commands. Contributors working from this source checkout use `npm run api`
-for the reloadable backend and `npm run web` for the Vite/HMR frontend; see
-[Contributing](#contributing).
+==now explain our L0, L1, L2 structure with a polished graph here==
 
-Then grow the tree:
+## Working with agents (L1)
 
-1. Edit `.spec/project/spec.md` to describe the project.
-2. Add child nodes for the parts you want governed, each with a `code:` entry pointing at an
-   existing file (`related:` for the files it touches but doesn't own).
-3. Run `spex spec lint`. Coverage warnings list the source files no spec claims yet; that list is your
-   adoption TODO.
+==use terminal recording tools here to show the spex session ls result or some other beautiful demonstrations, a dynamic gif is required)==
 
-You are not expected to hand-author all of this. The intended workflow is to have an agent do most
-of the spec writing; `spex guide spec` prints the exact file format it needs.
-[Getting started](https://spexcode.net/getting-started/) on the docs site walks the setup end to
-end.
-
-<img src="docs/readme-graph.png" alt="dashboard screenshot">
-
-*SpexCode's own repo on its own board; the sessions top-left are agents building the tool.*
-
-## Working with agents
-
-This part needs tmux and a logged-in [Claude Code](https://www.anthropic.com/claude-code) or Codex
-on the machine.
+This part needs tmux on the machine. You should use wls2 on Windows machine.
 
 ```sh
 spex session new "[[settings]] make the settings page remember the last tab"
 ```
 
-launches a worker session in its own worktree on branch `node/settings-…`. The prompt's first
-`[[settings]]` mention sets the branch name and board attribution; the
-worker still finds and reads the governing spec itself before touching code. It makes the change,
-rewrites the spec body to match, commits
-both (a hook stamps the `Session:` trailer), then proposes a merge and stops. Workers never merge
-themselves. The merge stays with the manager: when you fire it, the session's own agent runs the
-actual `git merge`, so conflicts land on the one who knows the work. The same dispatch is a
-button on the dashboard (the new-session box on the board); the command form is what agents
-themselves use when they delegate.
+==an image similar to this, has both English and Chinese version, but more polished for readme usecase==
+<img width="2040" height="600" alt="image" src="https://github.com/user-attachments/assets/cd01d5a3-e5cd-4485-a8b0-474e08330b22" />
 
-You supervise from outside — on the board, or with the same commands your agent uses:
+You supervise on the dashboard, or with the same commands your agent uses:
 
+==check if these commands still work! and one problem, the name `settings` might be too "keyword-like", might change it to use a different example to avoid confusion==
 ```sh
 spex session watch              # stream session transitions: launched / review / done / needs-input ...
 spex session review settings    # commits ahead of trunk, merge-base diff, merge-conflict/lint gates
@@ -167,70 +102,21 @@ merges, and a pre-commit guard blocks direct commits on the trunk, so everything
 reviewable node branches.
 
 The process is enforced by mechanism, not prompt engineering: the backend creates the branch and a
-hook stamps the attribution; the materialized contract block carries the rest, so your dispatch
-prompt stays task-only. More on this mode of working:
-[working with agents](https://spexcode.net/working-with-agents/).
+hook stamps the attribution; the materialized ==contract block(what is contract block?? a strange name, should use more plain words)== carries the rest, so your dispatch prompt stays task-only. More on this mode of working:
+[working with agents](https://spexcode.net/working-with-agents/). ==this documentation website might also go stale now, check it and update it==
 
-## Measuring behavior: eval
+==please remove the eval,linter and configuration part completely, wayyy too verbose==
 
-eval is the measuring half of
-[the loop](#the-optimization-loop), built on the YATU discipline (**You As The User**): you measure
-behavior from the product's real surface, the way a real end user would touch it, not through an
-internal helper or shortcut that makes the
-proof easy. A spec says what a part should do; an
-`eval.md` beside it says how to check. Each scenario is a plain description plus an expected
-result. eval itself runs nothing (no DSL, no runner). An agent runs the scenario however it can:
-a test file, a real browser, or just clicking through by hand and screenshotting. It compares
-actual to expected and files the eval with evidence:
+## Dashboard functionality (L2)
 
-```sh
-spex eval add settings --scenario remembers-tab --pass --image evidence.png
-```
+(features come along with their screenshots)
 
-Evals live in a git-tracked ndjson next to the spec, so measurements get the same attribution
-and history as spec versions. Bug fixes are expected to bracket: file a failing eval that
-reproduces the bug, fix, then file a passing eval on the same scenario.
+spec map of your whole repo, agent avatar displaying on the map when edits are applying, dedicated eval page for a session for easy review
 
-<img src="docs/readme-eval.png" alt="eval view screenshot">
+realtime supervision of your agent status
 
-*The eval view: scenario evals on the left; the selected eval's expected result, staleness,
-and recorded video evidence in the middle.*
-
-## What's in the repo
-
-| Package | Role |
-|---|---|
-| `spec-cli` | The `spex` CLI and the HTTP backend (Hono, runs via tsx, no build step). Reads `.spec` and git live; owns the session state machine and the linter. |
-| `spec-dashboard` | React board: the node graph, per-node spec/history/issues panes, and a real terminal onto each live agent session. |
-| `spec-eval` | Scenario definitions, evals, evidence. |
-| `spec-forge` | Read-only tracer that resolves a forge's open issues and PRs to the spec nodes they serve (GitHub and GitLab drivers today). An issue links itself with a `Spec: <node-id>` line in its body; a PR from a `node/<id>` branch links for free. |
-
-## The linter
-
-`spex spec lint` checks the spec↔code graph and is the real gate (the git hook is fast local feedback):
-
-- **integrity** (error): a `code:` or `related:` path that doesn't exist
-- **living** (error): a changelog heading in a spec body
-- **coverage** (warn): unclaimed source files
-- **drift** (warn): governed code changed after its spec's last version, derived live from git
-
-plus naming and ownership rules (`one-govern`, `id-format`, `mention` as errors;
-`related-drift`, `owners`, `confusable-id` as warns) — `spex guide spec` lists them all.
-
-`spex doctor` is the opt-in, read-only health diagnosis. Its altitude and breadth checks report bodies that
-look like implementation dumps and nodes with wide child fan-out, with per-node evidence and repair, without
-putting heuristic judgment in the lint or commit gate.
-
-## Configuration
-
-`spexcode.json` (committed, portable: layout, lint policy, doctor health budgets, project dashboard identity, launcher names) and
-`spexcode.local.json` (gitignored, host-specific: absolute launcher paths, cert paths) cover every
-setting. There is no imperative settings verb: you edit the two files by hand (or ask your agent
-to), and `spex guide settings` documents every field. The Projects admin UI writes a project's icon back
-to that same `dashboard.icon` field; the global gateway icon is the one separate host fact at
-`$SPEXCODE_HOME/config.json` `gateway.icon`, never copied into a repo. The other
-manuals are `spex guide` (the workflow), `spex guide spec`, `spex guide eval`, and
-`spex guide footprint`; `spex help` maps the commands.
+runs on web, so any part of the system is a trackable url and can share with your colleagues, you can even use the same session board together
+can copy tmux command and open in your terminal, etc.
 
 ## Contributing
 

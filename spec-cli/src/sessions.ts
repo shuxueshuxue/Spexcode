@@ -90,6 +90,38 @@ export type Session = {
   web?: SessionWeb[]       // live posted loopback services ([[web]]), read from the session store with the rest of the projection
 }
 
+// HTTP carries no authenticated session identity. A CLI may report its environment id, but that remains
+// evidence supplied by the caller rather than authority over the target or a fact about who performed close.
+export type CloseSource = { kind: 'unverified-session-claim'; id: string } | { kind: 'user' }
+
+function normalizeCloseSource(raw: unknown): CloseSource {
+  if (raw == null) return { kind: 'user' }
+  if (!raw || typeof raw !== 'object') throw new ResourceConflict('refusing session close: source must be user or an unverified session claim')
+  const source = raw as { kind?: unknown; id?: unknown }
+  if (source.kind === 'user') return { kind: 'user' }
+  if (source.kind === 'unverified-session-claim' && typeof source.id === 'string' && source.id.trim())
+    return { kind: 'unverified-session-claim', id: source.id.trim() }
+  throw new ResourceConflict('refusing session close: source must be user or an unverified session claim')
+}
+
+function appendCloseLedger(id: string, rec: SessRec, source: CloseSource): void {
+  const path = join(runtimeRoot(), 'session-close-ledger.ndjson')
+  const event = {
+    version: 1,
+    action: 'close-authorized',
+    at: new Date().toISOString(),
+    source,
+    target: {
+      id,
+      harness: rec.harness,
+      thread: rec.harnessSessionId,
+      worktree: rec.worktreePath,
+      branch: rec.branch,
+    },
+  }
+  appendFileSync(path, `${JSON.stringify(event)}\n`)
+}
+
 function storeDir(id: string): string { const d = sessionStoreDir(id); mkdirSync(d, { recursive: true }); return d }
 
 function writePromptFile(id: string, prompt: string): void {
@@ -2883,15 +2915,17 @@ async function assertQueuedRetirementSafe(id: string, rec: SessRec, path: string
   }
 }
 
-async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch: string | null; rec: SessRec }): Promise<boolean> {
+async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch: string | null; rec: SessRec }, source: CloseSource): Promise<boolean> {
   const root = mainRoot()
   const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(wt.rec, root)
   if (receiptFailure) throw new ResourceConflict(`refusing destructive close for ${id}: ${receiptFailure}; public record and resources remain the authority fence`)
   const closesCodexBinding = (wt.rec.harness === 'codex' || wt.rec.harness === 'codex-headless') && !!wt.rec.harnessSessionId
-  if (closesCodexBinding) prepareCodexGenerationClose(runtimeRoot(), id, wt.rec.harnessSessionId!)
   if (wt.rec.archived) await assertColdRetirementSafe(id, wt.rec)
   else if (wt.rec.status === 'queued') await assertQueuedRetirementSafe(id, wt.rec, wt.path, wt.branch)
-  else await stopAgentProcess(id, wt.rec)
+  else throw new ResourceConflict(`refusing to close ${id}: target runtime was not cold-retired first`)
+  // The marker protects only the destructive half. A failed cold proof must leave a normal, resumable binding.
+  if (closesCodexBinding) prepareCodexGenerationClose(runtimeRoot(), id, wt.rec.harnessSessionId!)
+  appendCloseLedger(id, wt.rec, source)
   let slot: string | null = null
   try { slot = treeSlotDir(wt.path) } catch { /* tree already unresolvable — nothing to key the slot by */ }
   // a retired session's worktree/branch are already gone; removing them is a no-op to skip, not a failure.
@@ -2922,7 +2956,7 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   requestQueueDrain()   // a close frees a slot — start the next queued session if any
   return true
 }
-async function closeSessionUnlocked(id: string): Promise<boolean> {
+async function closeSessionUnlocked(id: string, source: CloseSource): Promise<boolean> {
   let wt: { path: string; branch: string | null; rec: SessRec } | null = null
   try { wt = await findWorktree(id) }
   catch (e) {
@@ -2939,13 +2973,21 @@ async function closeSessionUnlocked(id: string): Promise<boolean> {
       `refusing destructive close for ${id}: the unreadable record proves no adapter, leaf, worktree, or branch owner (${guard}). ${evidence}. Runtime remains at ${runtime}; worktree and branch ownership is unknown and was not touched; no process signal or deletion was attempted.`)
   }
   if (!wt) return false
+  if (!wt.rec.archived && wt.rec.status !== 'queued') {
+    const archived = await archiveSessionUnlocked(id)
+    if (!archived) return false
+    wt = await findWorktree(id)
+    if (!wt) return false
+  }
   const target = wt
   return target.branch
-    ? withRecordLock(sessionCandidateLockId(target.path, target.branch), () => closeOwnedSessionUnlocked(id, target))
-    : closeOwnedSessionUnlocked(id, target)
+    ? withRecordLock(sessionCandidateLockId(target.path, target.branch), () => closeOwnedSessionUnlocked(id, target, source))
+    : closeOwnedSessionUnlocked(id, target, source)
 }
-export const closeSession = (id: string): Promise<boolean> =>
-  withSessionTransition(id, () => withRecordLock(id, () => closeSessionUnlocked(id)))
+export const closeSession = (id: string, rawSource?: unknown): Promise<boolean> => {
+  const source = normalizeCloseSource(rawSource)
+  return withSessionTransition(id, () => withRecordLock(id, () => closeSessionUnlocked(id, source)))
+}
 
 export type CorruptRecordQuarantineWitness = {
   adapter: string

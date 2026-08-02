@@ -43,7 +43,7 @@
     <text x="210" y="498" font-size="14" fill="#8A8272" text-anchor="middle">data asset</text>
     <text x="300" y="452" font-size="22" font-weight="700" fill="#171A20">the spec↔code graph — a data asset in plain git</text>
     <text x="300" y="486" font-size="17" fill="#171A20">versioned spec tree · function-level anchors · drift detection · <tspan font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">spex spec lint</tspan></text>
-    <text x="300" y="518" font-size="15" font-style="italic" fill="#5C5647">the thing an organisation adopts and never throws away — no daemon, no lock-in, works offline</text>
+    <text x="300" y="518" font-size="15" font-style="italic" fill="#5C5647">the thing an organisation adopts and keeps — plain files in plain git, works offline</text>
   </g>
 
   <text x="150" y="592" font-size="16" fill="#5C5647">each layer is worth having without the ones above it: take L0 alone, add L1 for the army, add L2 for the workspace.</text>

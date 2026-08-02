@@ -25,13 +25,13 @@ implementation from drifting apart.
 
 English | [中文](./docs/README.zh-CN.md) · Docs: [spexcode.net](https://spexcode.net) · License: MIT
 
-| | |
+| Feature | Description |
 |---|---|
-| **Drift you can compute** | Every spec pins the file — down to the function — it governs. A mechanical git check flags code that moved without its spec: advisory for the file, blocking when an anchored function changes. No embeddings, no guesswork; just commits and line ranges. |
-| **An agent army, one human gate** | Each task dispatches into its own worktree and branch under one supervision state machine: `working → review → merged`. Workers propose; you review once, at merge time. Independent tasks run in parallel. |
-| **Everything is a URL** | Spec nodes, sessions, evals, live terminals — every dashboard view has a stable address you can send to a colleague. Two people can watch the same session board. |
-| **Building bricks, not a monolith** | Three separable layers: the spec↔code data asset (L0), the session substrate (L1), the dashboard (L2). Take what you need — the lower layers are designed as bricks for your own software factory. |
-| **Your harness, not ours** | Claude Code, Codex, OpenCode, pi — interactive or headless. One materialized workflow contract serves them all; adding a harness is config, not a rewrite. |
+| **Spec–code drift detection** | Every spec pins the file — down to the function — it governs. A mechanical git check flags code that moved without its spec: advisory for the file, blocking when an anchored function changes. Judged from commits and line ranges alone. |
+| **Session & worktree management** | Each task dispatches into its own worktree and branch under one supervision state machine: `working → review → merged`. Workers propose; you review once, at merge time. Independent tasks run in parallel. |
+| **Shareable URLs** | Spec nodes, sessions, evals, live terminals — every dashboard view has a stable address you can send to a colleague. Two people can watch the same session board. |
+| **Modular layers** | Three separable layers: the spec↔code data asset (L0), the session substrate (L1), the dashboard (L2). Take what you need — the lower layers are building bricks for your own software factory. |
+| **Cross-harness support** | Claude Code, Codex, OpenCode, pi — interactive or headless. One materialized workflow contract serves them all; adding a harness is a config entry. |
 
 ## The model
 
@@ -44,7 +44,7 @@ an **expanded spec** the agent iterates freely — as long as it keeps matching 
 
 <img src="docs/readme-model.svg" alt="a spec node governs one file, anchored at function level; related files are referenced; git is the only database">
 
-There is no second store to sync or corrupt: a node's versions are the commits that touched its
+Git is the only database: a node's versions are the commits that touched its
 `spec.md`, and each version is attributed to an agent session through a `Session:` commit trailer.
 A change is one commit that updates both the spec and the code it justifies. When code moves alone,
 the linter notices:
@@ -105,8 +105,7 @@ use: `--harness` is required, has no default, and takes any one id or comma-sepa
 three things — seeds a root `.spec/project/spec.md` plus a starter `spexcode.json`, installs the git
 hooks, and **materializes** the workflow rules into the files your agent already reads (`CLAUDE.md`,
 `AGENTS.md`): read the governing spec before the code, land spec and code in one commit, propose
-merges instead of performing them. Any agent that opens the repo discovers the workflow on its own —
-no special dispatch prompt, no per-agent setup. `spex materialize` re-runs that last step whenever
+merges instead of performing them. Any agent that opens the repo discovers the workflow on its own. `spex materialize` re-runs that last step whenever
 the contracts need refreshing.
 
 When you want the live board — the graph, sessions, evals — start the runtime:
@@ -129,8 +128,7 @@ Three stacked layers, and each is worth having without the ones above it:
 
 <img src="docs/readme-layers.svg" alt="L0 the spec-code data asset, L1 the agent session substrate, L2 the dashboard workspace — an adoption ladder">
 
-L0 is the asset an organisation adopts and never throws away — plain files in plain git, useful
-offline, with no daemon in the loop. ([Watch this repo's own L0 grow from its git
+L0 is the asset an organisation adopts and keeps — plain files in plain git, useful offline. ([Watch this repo's own L0 grow from its git
 history](https://spexcode.net/assets/spec-tree-growth.mp4) — 160 spec nodes over three weeks.)
 L1 turns that asset into labor: the session state machine below. L2 is the workspace you watch it
 all from — and because it is only a consumer of L1, anything the dashboard does, your scripts and
@@ -167,7 +165,7 @@ spex session close uploader      # retire the worktree, branch, and record
 
 <img src="docs/readme-sessions.svg" alt="animated terminal: spex session ls listing five sessions across working, review, asking and done states">
 
-The process is enforced by mechanism, not prompt engineering: the backend creates the branch, a git
+The process is enforced by mechanism: the backend creates the branch, a git
 hook stamps the attribution, a pre-commit guard blocks direct commits on the trunk, and the
 materialized workflow rules in `CLAUDE.md`/`AGENTS.md` carry the rest — so your dispatch prompt
 stays task-only. More on this mode of working:

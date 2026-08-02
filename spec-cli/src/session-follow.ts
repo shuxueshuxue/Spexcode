@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { sessionStoreDir } from './layout.js'
 import { advanceFollow, followCursor, unreadSince } from './session-cursors.js'
 import { timelineDisplay, timelineEvents, timelineStamp } from './session-timeline.js'
-import { sessionLabel, type DisplayStatus, type Session } from './sessions.js'
+import { sessionTitle, type DisplayStatus, type Session } from './sessions.js'
 
 // @@@ session-follow - supervision is FOLLOWING a log past a cursor, never polling a derived board. One tick
 // costs ONE stat per target: if timeline.ndjson has not grown, nothing is opened and nothing is parsed. No
@@ -28,7 +28,7 @@ const trunc = (s: string, n: number): string => (s.length <= n ? s : `${s.slice(
 export function sessionEvent(s: Session): string {
   const note = s.note ? ` — note: ${s.note}` : ''
   const asked = s.promptPreview ? ` · asked: ${s.promptPreview}` : ''
-  return `[spex] ${s.status} · ${sessionLabel(s)} — act: ${NEXT[s.status] || '—'}${note}${asked}  [id ${s.id}]`
+  return `[spex] ${s.status} · ${sessionTitle(s)} — act: ${NEXT[s.status] || '—'}${note}${asked}  [id ${s.id}]`
 }
 // @@@ launchEvent - a session's FIRST sighting, emitted once per id whatever its status, so the stream is a
 // complete lifecycle feed: launched → [transitions] → closed. A launch's own first line is `active` (not
@@ -36,7 +36,7 @@ export function sessionEvent(s: Session): string {
 export function launchEvent(s: Session): string {
   const note = s.note ? ` — note: ${s.note}` : ''
   const asked = s.promptPreview ? ` · asked: ${s.promptPreview}` : ''
-  return `[spex] launched · ${sessionLabel(s)} — act: capture | send "<msg>"${note}${asked}  [id ${s.id}]`
+  return `[spex] launched · ${sessionTitle(s)} — act: capture | send "<msg>"${note}${asked}  [id ${s.id}]`
 }
 
 // `targets` is re-read every tick so a BROAD follow picks up sessions that launch while it runs; an explicit
@@ -131,7 +131,7 @@ export async function followSessions(emit: (line: string) => void, opts: FollowO
         const e = slice.events[k]
         if (e.kind === 'sent') {
           const s = row?.(id, f.prev ?? 'unknown', null)
-          if (s) emit(`${tag}[spex] message · ${sessionLabel(s)} — from ${e.from ?? 'human'}: ${trunc(e.text, 120)}  [id ${id}]`)
+          if (s) emit(`${tag}[spex] message · ${sessionTitle(s)} — from ${e.from ?? 'human'}: ${trunc(e.text, 120)}  [id ${id}]`)
           continue
         }
         const st = timelineDisplay(e)

@@ -34,6 +34,33 @@ export function addressHash(address) {
   return routeHash('graph')
 }
 
+export const addressUrl = (address, base = window.location.href) => new URL(addressHash(address), base).href
+
+function copyFallback(text) {
+  const active = document.activeElement
+  const field = document.createElement('textarea')
+  field.value = text
+  field.style.cssText = 'position:fixed;left:-9999px;top:0'
+  document.body.append(field)
+  field.select()
+  let copied = false
+  try { copied = document.execCommand('copy') } catch { /* the caller displays the failed copy state */ }
+  field.remove()
+  active?.focus?.()
+  return copied
+}
+
+export async function copyAddress(address) {
+  const text = addressUrl(address)
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch { /* insecure or denied Clipboard API falls through to the browser copy path */ }
+  return copyFallback(text)
+}
+
 // The review details' RETURN GATE ([[review-chrome]]'s compact back anchor): the href derives ONLY from
 // the detail's own canonical address — never history.back, a referrer sniff, or originator presence —
 // so a pushed visit, a direct open, and a reload share one destination by construction. An issue detail

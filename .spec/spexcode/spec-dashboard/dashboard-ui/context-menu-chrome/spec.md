@@ -37,3 +37,5 @@ emoji, and no component-local SVG. Keyboard focus is visibly equivalent to hover
 activation and accessible menu roles while [[esc-layers]] continues to own dismissal order. The menu is
 **inert chrome for pointer focus** ([[focus-return]]): pressing or picking an item acts but never moves focus,
 so whichever input surface owned typing before the right-click still owns it after the pick.
+Ordinary actions close before they run. A copy action may keep its own row visible briefly only to report
+copied/failed, then dismisses through the same menu close path; it never grows a separate toast vocabulary.

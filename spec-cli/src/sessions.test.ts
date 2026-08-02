@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, restoreMissingSessionRecord, resumeSession, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -106,6 +106,29 @@ test('Codex registration does not persist an unbound thread when exact generatio
     else process.env.SPEXCODE_HOME = previousHome
     if (previousGeneration === undefined) delete process.env.SPEXCODE_CODEX_GENERATION
     else process.env.SPEXCODE_CODEX_GENERATION = previousGeneration
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('operator recovery writes only a missing complete governed record', () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-session-recovery-'))
+  const id = `recovered-session-${process.pid}`
+  process.env.SPEXCODE_HOME = home
+  const rec: SessRec = {
+    session: id, governed: true, worktreePath: join(home, 'recovered-worktree'), branch: 'node/recovered-session',
+    node: null, title: 'Recovered session', name: null, parent: null, status: 'awaiting', proposal: 'nothing',
+    merges: 0, note: 'Recovered from retained external evidence.', sortKey: null, createdAt: Date.now(), harness: 'claude',
+    harnessSessionId: null, stopped: true, archived: false, coldProof: null, adapterRecovery: null, launcher: 'claude',
+    launchCmd: 'claude', launchOwner: null, createRequestId: null, createPayloadHash: null, launchReadinessPending: null,
+  }
+  try {
+    restoreMissingSessionRecord(rec)
+    assert.deepEqual(fromRaw(JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))), rec)
+    assert.throws(() => restoreMissingSessionRecord({ ...rec, title: 'must not overwrite' }), /active record already exists/)
+  } finally {
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
     rmSync(home, { recursive: true, force: true })
   }
 })
@@ -573,16 +596,38 @@ test('closing a proven-cold archive classifies stale leaf identity before retire
     const safeId = `cold-close-safe-${process.pid}`
     const safeThread = `target-safe-${process.pid}`
     writeColdRecord(safeId, safeThread)
-    assert.equal(await closeSession(safeId), true)
+    assert.equal(await closeSession(safeId, { kind: 'session', id: 'closing-operator' }), true)
     assert.equal(existsSync(sessionStoreDir(safeId)), false, 'proven-cold target is permanently retired')
     assert.equal(coldPreflightCalls, 1, 'target collection is checked without the full shared-root guard')
+    const ledger = readFileSync(join(runtimeRoot(), 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    assert.equal(ledger.at(-1)?.action, 'close-authorized', 'the durable close event records that deletion was authorized')
+    assert.deepEqual(ledger.at(-1)?.source, { kind: 'session', id: 'closing-operator' }, 'terminal close keeps its caller after removing the target record')
+    assert.equal(ledger.at(-1)?.target?.id, safeId, 'terminal close ledger names the retired target')
 
     const loadedId = `cold-close-loaded-${process.pid}`
     const loadedThread = `target-loaded-${process.pid}`
     writeColdRecord(loadedId, loadedThread)
     residentIds = ['unrelated-unowned-thread', loadedThread]
+    writeFileSync(join(runtimeRoot(), 'codex-app-server-generations.json'), `${JSON.stringify({
+      version: 3, revision: 1, current: 'fixture-generation', pending: null,
+      generations: {
+        'fixture-generation': {
+          state: 'current',
+          endpoint: {
+            id: 'fixture-generation', pidFile: join(home, 'fixture.pid'), receiptFile: join(home, 'fixture.receipt'),
+            logFile: join(home, 'fixture.log'), socketPath: join(home, 'fixture.sock'),
+          },
+        },
+      },
+      bindings: { [loadedId]: { generationId: 'fixture-generation', threadId: loadedThread } },
+    }, null, 2)}\n`)
     await assert.rejects(closeSession(loadedId), /target adapter thread .* is loaded/)
     assert.equal(existsSync(sessionRecordPath(loadedId)), true, 'loaded target ambiguity preserves the shelf record')
+    assert.equal(readCodexGenerationLedger(runtimeRoot()).bindings[loadedId]?.phase, undefined,
+      'a rejected close does not strand an online target in the record-removing generation phase')
+    assert.equal(readFileSync(join(runtimeRoot(), 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').length, 1,
+      'a rejected close never writes a terminal-close audit event')
+    rmSync(join(runtimeRoot(), 'codex-app-server-generations.json'), { force: true })
 
     const pidId = `cold-close-pid-${process.pid}`
     const pidThread = `target-pid-${process.pid}`

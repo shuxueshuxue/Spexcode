@@ -682,7 +682,8 @@ app.post('/api/sessions/:id/interrupt', async (c) => {
 })
 app.post('/api/sessions/:id/close', async (c) => {
   const sessionId = c.req.param('id')
-  const ok = await closeSession(sessionId)
+  const body = await c.req.json().catch(() => ({}))
+  const ok = await closeSession(sessionId, body?.source)
   // The close route owns its write's visible boundary: filesystem watchers can be unavailable, so cache
   // invalidation must happen before the success response rather than leaving the confirming board to patrol.
   if (ok) notifyBoardChanged('sessions')

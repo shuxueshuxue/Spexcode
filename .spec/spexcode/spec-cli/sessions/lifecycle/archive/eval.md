@@ -43,6 +43,17 @@ scenarios:
       descendant created after preflight but before archive settlement is caught by the post-mutation census,
       fails loud, and is compensated rather than filed as cold.
     tags: [backend-api, cli]
+  - name: terminal-close-retains-attribution-and-refuses-live-runtime
+    test: spec-cli/src/session-archive-cold-close.api.test.ts
+    description: >
+      Exercise the public close path for both a proven-cold record and a record whose exact runtime remains
+      loaded. Read the append-only project close ledger after each call; the Codex phase regression is covered
+      alongside it by the close unit fixture.
+    expected: >
+      A proven-cold close removes its owned record/worktree/branch only after writing a close-authorized ledger
+      event with the initiating session id or user source. A live or unproven target returns 409 with no deletion,
+      no close-authorized ledger event, and no record-removing generation phase.
+    tags: [backend-api, cli]
   - name: archive-guard-failure-visible
     test:
       path: spec-cli/src/session-archive-cold-close.api.test.ts

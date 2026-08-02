@@ -117,6 +117,11 @@ land through the same call, and a note round-trips byte-for-byte on every surfac
 cheap half: the one-field-per-line shape lets them READ ("already active, nothing stale to clear?") with
 exact-line greps and no jq, and every WRITE goes back through the CLI to this writer ([[state]]).
 
+An absent record stays absent to every ordinary lifecycle writer. The one operator-recovery seam accepts a
+complete typed governed record only while that id has no active record, then publishes it through this same
+writer and lock; it exists for a proven external recovery, not as a lifecycle transition or an alternate launch
+path. It never infers a worktree, adapter, native thread, or parent from an id.
+
 A published create record is also the durable fence for any private pre-publication candidate receipt whose
 best-effort retirement failed after the atomic record write. Terminal close holds the session record lock and
 the exact recorded branch/path resource lock, retires a valid matching receipt, and proves it absent before

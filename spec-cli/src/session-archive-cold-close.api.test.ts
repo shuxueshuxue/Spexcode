@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -76,6 +76,7 @@ test('public HTTP and CLI cold close ignore only proven-unrelated PID reuse', { 
     chmodSync(join(bin, 'tmux'), 0o755)
 
     const sessions = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions')
+    const closeLedger = join(home, 'projects', project.replace(/[/.]/g, '-'), 'session-close-ledger.ndjson')
     const writeColdRecord = (id: string, pid: number) => {
       const dir = join(sessions, id)
       mkdirSync(dir, { recursive: true })
@@ -119,6 +120,25 @@ test('public HTTP and CLI cold close ignore only proven-unrelated PID reuse', { 
     assert.deepEqual(await closed.json(), { ok: true })
     assert.equal(existsSync(reusedRecord), false)
     assert.equal(processAlive(unrelated), true, 'HTTP cold close never signals the unrelated PID')
+    let closeEvents = readFileSync(closeLedger, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    assert.equal(closeEvents.length, 1)
+    assert.equal(closeEvents[0]?.action, 'close-authorized')
+    assert.deepEqual(closeEvents[0]?.source, { kind: 'user' }, 'an HTTP/dashboard close identifies its human source')
+    assert.equal(closeEvents[0]?.target?.id, reusedId)
+
+    const cliId = 'cold-close-cli-public'
+    const cliRecord = writeColdRecord(cliId, unrelated.pid)
+    const cliSuccess = spawnSync(process.execPath, [
+      join(here, '..', 'bin', 'spex.mjs'), 'session', 'close', cliId, '--api', base,
+    ], { cwd: project, env: { ...env, SPEXCODE_SESSION_ID: 'closing-cli-session' }, encoding: 'utf8' })
+    assert.equal(cliSuccess.status, 0, `${cliSuccess.stdout}\n${cliSuccess.stderr}`)
+    assert.equal(existsSync(cliRecord), false)
+    assert.equal(processAlive(unrelated), true, 'CLI cold close never signals the unrelated PID')
+    closeEvents = readFileSync(closeLedger, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    assert.equal(closeEvents.length, 2)
+    assert.deepEqual(closeEvents[1]?.source, { kind: 'session', id: 'closing-cli-session' },
+      'a governed CLI close identifies its initiating session after the target record is gone')
+    assert.equal(closeEvents[1]?.target?.id, cliId)
 
     const ownedId = 'cold-close-owned-public'
     owned = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', ownedId], { stdio: 'ignore' })
@@ -131,6 +151,8 @@ test('public HTTP and CLI cold close ignore only proven-unrelated PID reuse', { 
     assert.match(`${cli.stdout}\n${cli.stderr}`, /target leaf PID .* live or recycled/u)
     assert.equal(existsSync(ownedRecord), true)
     assert.equal(processAlive(owned), true, 'CLI refusal never signals the owned PID')
+    assert.equal(readFileSync(closeLedger, 'utf8').trim().split('\n').length, closeEvents.length,
+      'a refused live close does not create a terminal-close audit event')
   } finally {
     await stopChild(backend)
     await stopChild(unrelated)

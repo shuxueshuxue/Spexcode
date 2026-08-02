@@ -82,8 +82,17 @@ Ordinary later resume carries no receipt and restores only the parent conversati
 
 - `stop` is the **resource** verb — give the process back. Reversible by `resume`.
 - `archive` is the **cold-storage attention** verb — first perform the same exact stop, then file the record.
-  Reversible only through `resume`, which unarchives before recreating the runtime.
-- `close` is the **terminal** verb — give the disk back, destroying the work. Not reversible.
+- `close` is terminal destruction, but it first completes that same exact cold-runtime transition for every
+  launched session. It never deletes the worktree, record, branch, or Codex generation binding while the
+  target native runtime is still live or unproven; a failed cold transition leaves the session visible.
+
+After all cold/queued ownership proof passes and before resource deletion, close writes an append-only
+`close-authorized` project runtime ledger entry. The entry names the exact target record and its source: a caller
+session id when a governed CLI session initiated the request, otherwise `user` for a dashboard or plain-shell
+operation. The ledger outlives the target session directory, so the actor remains inspectable after a successful
+terminal close. A refused close writes no entry and never changes a Codex generation binding into its
+record-removing phase. Archive remains reversible only through `resume`, which unarchives before recreating the
+runtime. Close is not reversible.
 
 Close has three ownership-proof entries into that one terminal result. A live row first uses the ordinary exact
 stop proof, then removes its record, worktree, and branch. A proven-cold archived row must not pretend to be

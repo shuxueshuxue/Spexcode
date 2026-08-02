@@ -43,5 +43,11 @@ Hard invariants:
   hand-authored animated SVG modeled on real `spex session ls` output (glyphs, columns, status
   colours match the CLI); its session rows are curated demo content. It must never be captioned as a
   screenshot, and if the CLI's table format changes it is redrawn to match.
+- **Plain voice.** Feature-table names are plain capability names (drift detection, session &
+  worktree management, shareable URLs, modular layers, cross-harness support), never slogans; the
+  table has a real header row (an empty `| | |` header renders as a blank band on GitHub). Copy
+  states guarantees positively — rhetorical negation chains ("no X, no Y") are banned across the
+  READMEs and the diagram text; a single factual negative ("workers never merge themselves") is
+  fine.
 - Worker-lifecycle facts in the flow diagrams state the product ritual: workers propose and never
   merge; the human fires the merge and the session's own agent lands it.

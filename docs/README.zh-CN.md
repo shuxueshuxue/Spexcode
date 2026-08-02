@@ -24,13 +24,13 @@ review 和 merge;工具负责让意图和实现不分家。
 
 [English](../README.md) | 中文 · 文档:[spexcode.net](https://spexcode.net) · License: MIT
 
-| | |
+| 特性 | 说明 |
 |---|---|
-| **可计算的 drift** | 每个 spec 钉住它管辖的文件——可以细到函数。一次纯 git 的机械检查就能标出"代码动了、spec 没跟上":文件级是提醒,钉住的函数被改则直接阻断。没有 embedding、不靠猜,只看 commit 和行区间。 |
-| **agent 军团,一道人工闸门** | 每个任务派发进自己的 worktree 和分支,由同一个状态机监管:`working → review → merged`。worker 只提议,你只在合并时 review 一次。互不相干的任务并行跑。 |
-| **一切皆 URL** | spec 节点、session、eval、live 终端——dashboard 上每个视图都有稳定地址,发给同事就能看;两个人可以盯着同一块 session 看板。 |
-| **积木,不是铁板** | 三个可拆的层:spec↔code 数据资产(L0)、session 基座(L1)、dashboard(L2)。按需取用——下面两层就是为你自己的软件工厂准备的积木。 |
-| **用你的 harness** | Claude Code、Codex、OpenCode、pi——交互式或 headless 都行。一份物化出来的工作流契约服务所有 harness;新增一个 harness 是改配置,不是改产品。 |
+| **spec–code drift 检测** | 每个 spec 钉住它管辖的文件——可以细到函数。一次纯 git 的机械检查就能标出"代码动了、spec 没跟上":文件级是提醒,钉住的函数被改则直接阻断。判据只有 commit 和行区间。 |
+| **session 与 worktree 管理** | 每个任务派发进自己的 worktree 和分支,由同一个状态机分层监管:`working → review → merged`。worker 只提议,你只在合并时 review 一次。互不相干的任务并行跑。 |
+| **可分享的 URL** | spec 节点、session、eval、live 终端——dashboard 上每个视图都有稳定地址,发给同事就能看;两个人可以盯着同一块 session 看板。 |
+| **模块化分层** | 三个可拆的层:spec↔code 数据资产(L0)、session 基座(L1)、dashboard(L2)。按需取用——下面两层就是为你自己的软件工厂准备的积木。 |
+| **跨 harness 支持** | Claude Code、Codex、OpenCode、pi——交互式或 headless 都行。一份物化出来的工作流契约服务所有 harness;新增一个 harness 只是一条配置。 |
 
 ## 模型
 
@@ -42,7 +42,7 @@ review 和 merge;工具负责让意图和实现不分家。
 
 <img src="readme-model.svg" alt="一个 spec 节点管辖一个文件,锚定到函数级;引用的文件走 related;git 是唯一的数据库">
 
-没有第二份需要同步、会烂掉的存储:节点的版本就是碰过它 `spec.md` 的那些 commit,每一版通过
+git 是唯一的数据库:节点的版本就是碰过它 `spec.md` 的那些 commit,每一版通过
 `Session:` commit trailer 归属到写它的 agent 会话。一次改动就是一个 commit,同时更新 spec 和它所
 解释的代码。代码要是单独动了,linter 会看见:
 
@@ -91,8 +91,8 @@ spex init --harness claude,codex,opencode,pi,claude-headless,opencode-headless,p
 id 或逗号分隔的子集。`spex init` 是增量的:在任何现有 git 仓库上都能跑,绝不覆盖你的文件,只做三件
 事——播种根节点 `.spec/project/spec.md` 和一份起步的 `spexcode.json`;安装 git 钩子;把工作流规则
 **物化**进你的 agent 本来就会读的文件(`CLAUDE.md`、`AGENTS.md`):先读所辖 spec 再碰代码、spec 和
-代码一个 commit 落地、只提议合并不执行合并。任何打开这个仓库的 agent 都会自己发现这套工作流——不需要
-特制的派发 prompt,也不需要逐个 agent 配置。契约需要刷新时,`spex materialize` 单独重跑这一步。
+代码一个 commit 落地、只提议合并不执行合并。任何打开这个仓库的 agent 都会自己发现这套工作流。
+契约需要刷新时,`spex materialize` 单独重跑这一步。
 
 想要活的看板——图谱、session、eval——再起运行时:
 
@@ -113,7 +113,7 @@ spex dashboard   # 每用户一次,任意目录:唯一的 dashboard——打开�
 
 <img src="readme-layers.svg" alt="L0 spec-code 数据资产,L1 agent session 基座,L2 dashboard 工作台——一架采纳阶梯">
 
-L0 是组织采纳后永远不会扔掉的资产——纯文件、纯 git,离线可用,回路里没有守护进程。
+L0 是组织采纳后长期持有的资产——纯文件、纯 git,离线可用。
 ([看这个仓库自己的 L0 从 git 历史里长出来](https://spexcode.net/assets/spec-tree-growth.mp4)——
 三周 160 个 spec 节点。)L1 把资产变成劳动力:就是下面这台 session 状态机。L2 是你旁观这一切的工作
 台——而且它只是 L1 的消费者,dashboard 能做的任何事,你的脚本和 agent 走同一套 CLI 都能做。
@@ -147,7 +147,7 @@ spex session close uploader      # 退役 worktree、分支和记录
 
 <img src="readme-sessions.svg" alt="动画终端:spex session ls 列出 working、review、asking、done 各状态的五个会话">
 
-流程靠机制保证,不靠 prompt 工程:后端建分支、git 钩子盖归属、pre-commit 守卫拦下直接落主干的
+流程靠机制保证:后端建分支、git 钩子盖归属、pre-commit 守卫拦下直接落主干的
 commit,物化进 `CLAUDE.md`/`AGENTS.md` 的工作流规则承担其余——你的派发 prompt 只需要写任务本身。
 这种工作方式的更多内容:[working with agents](https://spexcode.net/working-with-agents/)。
 

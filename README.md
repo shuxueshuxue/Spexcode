@@ -98,14 +98,9 @@ spex serve       # this project's backend — prints its URL
 spex dashboard   # the machine's one gateway — every project behind one URL
 ```
 
-One gateway per machine: `spex dashboard` serves the UI once and routes to every project backend
-under its own path, so a single browser tab covers all your repos. Its `/projects` page is the
-management surface: browse to a folder, adopt it, start or revive its backend, set access
-passwords, all from the browser. Backends stay independent of the gateway, in any start order. Then
-grow the tree: describe the project in `.spec/project/spec.md`, add child nodes for the parts you
-want governed, and let `spex spec lint`'s coverage warnings be your adoption TODO. An agent does
-most of the spec writing; `spex guide spec` prints the exact format it needs.
-[Getting started](https://spexcode.net/getting-started/) walks the setup end to end.
+One `spex dashboard` per machine is enough: every project you serve shows up behind it, and its
+`/projects` page manages them from the browser.
+[Getting started](https://spexcode.net/getting-started/) walks the rest of the setup.
 
 ## How it's put together
 

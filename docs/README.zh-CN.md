@@ -86,12 +86,8 @@ spex serve       # 本项目的后端,打印它的 URL
 spex dashboard   # 本机唯一的 gateway,所有项目共用一个 URL
 ```
 
-一台机器一个 gateway:`spex dashboard` 只起一份 UI,把每个项目的后端各自路由在自己的路径下,一个
-浏览器标签页管全部仓库。它的 `/projects` 页是管理面,可以在浏览器里浏览到一个目录、就地采纳、启动
-或唤醒它的后端、设置访问密码。后端不依赖 gateway 存活,先后顺序无所谓。然后开始长树:在
-`.spec/project/spec.md` 里描述项目,为想管辖的部分加子节点,把 `spex spec lint` 的 coverage 警告
-当作采纳 TODO 清单。spec 大部分由 agent 来写,`spex guide spec` 会打印它需要的确切格式。文档站的
-[Getting started](https://spexcode.net/getting-started/) 有端到端的过程。
+一台机器起一个 `spex dashboard` 就够了:所有在跑的项目都会出现在它下面,`/projects` 页面直接在
+浏览器里管理它们。剩下的步骤见 [Getting started](https://spexcode.net/getting-started/)。
 
 ## 系统是怎么搭的
 

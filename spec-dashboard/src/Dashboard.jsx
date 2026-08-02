@@ -11,7 +11,7 @@ import GraphStats from './GraphStats.jsx'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import { useRoute, navigate } from './route.js'
-import { navigateAddress } from './address.js'
+import { graphNodeAddress, navigateAddress } from './address.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
@@ -69,7 +69,7 @@ function PagePane({ active, warm = false, className, children }) {
 
 function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, boardLive }) {
   const project = identity?.title || ''
-  // the URL is the page switch ([[side-nav]]): #/graph | #/sessions[/<sel>] | #/issues | #/settings.
+  // the URL is the page switch ([[side-nav]]): #/graph[/<node>] | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
   const { page, param } = useRoute()
@@ -108,6 +108,11 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
 
   // resolve focus on the RAW tree first (resilient to a polled-away merged/closed node), then expand.
   const rawById = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
+  // A graph-node address is a shareable focus target. Apply it before paint so direct opens and Back/Forward
+  // render that node's drill-down; a vanished id retains the ordinary saved/root fallback.
+  useLayoutEffect(() => {
+    if (page === 'graph' && param && rawById[param] && param !== focusId) setFocusId(param)
+  }, [page, param, rawById, focusId])
   const focusRaw = rawById[focusId] || specs.find((s) => !s.parent) || specs[0]
   const expanded = useMemo(() => {
     const set = new Set()
@@ -149,7 +154,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
   const openSession = useCallback((id) => { setSessionSel(id); navigate('sessions', id) }, [])
   const startNew = useCallback((text) => { setSessionSel('new'); setSeed(text); navigate('sessions', 'new') }, [])
   const onNavigateAddress = useCallback((address) => {
-    navigateAddress(address, { onFocusNode: setFocusId, onOpenSession: openSession })
+    navigateAddress(address, { onOpenSession: openSession })
   }, [openSession])
 
   // sessions overlaying the right-clicked node — its live worktrees (overlay.source === session.source).
@@ -651,11 +656,11 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
       </PagePane>
       {/* the Evals page ([[evals-view]]) — its own top-level route; the feed rides the app's board poll */}
       <PagePane active={page === 'evals'} className="page-evals">
-        <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
+        <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} onFocusNode={(id) => onNavigateAddress(graphNodeAddress(id))} />
       </PagePane>
       {/* the Issues page ([[issues-view]]) — its own route; its paged reads follow the board's issue stamp */}
       <PagePane active={page === 'issues'} className="page-issues">
-        <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} onFocusNode={(id) => { setFocusId(id); navigate('graph') }} />
+        <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} onFocusNode={(id) => onNavigateAddress(graphNodeAddress(id))} />
       </PagePane>
       {/* the settings page ([[settings]]) — same sections as ever, now a routed page instead of a popup */}
       <PagePane active={page === 'settings'} className="page-settings">

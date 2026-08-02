@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/IssueCard.jsx
+  - spec-dashboard/test/graph-node-address.e2e.mjs
 ---
 # address-routing
 
@@ -20,7 +21,12 @@ small **app address** shape, then let the shared address layer project it to the
 
 The vocabulary is intentionally closed and mirrors the top-level pages [[side-nav]] already owns:
 
-- `graph-node` focuses a node on `#/graph`; the focused id is shell view state, not a hash segment.
+- `graph-node` focuses a node on `#/graph/<node-id>`; the node id is one independently encoded path
+  segment, so an address copied from any node reference can be opened, reloaded, and history-walked without
+  relying on the tab's remembered focus. Bare `#/graph` remains the graph home and keeps its tab-local
+  remembered/root fallback; an id no longer present in the current board also falls back safely rather than
+  blanking the graph. Desktop selects and expands the node's drill-down; phone restores its ancestor
+  breadcrumb and opens that node's screen.
 - `session` opens `#/sessions/<id>`.
 - `session-eval` opens the scoped default list `#/evals?q=is:eval scope:<id>` — or, with
   a node + scenario, `#/evals/<node>/<scenario>?q=scope:<id>` — the session-SCOPED Evals pages ([[session-eval]] /
@@ -44,7 +50,9 @@ The vocabulary is intentionally closed and mirrors the top-level pages [[side-na
 
 `addressHash(address)` is the href side: real anchors and copyable links get the canonical hash without
 hand-rolled string assembly in components. `navigateAddress(address, callbacks)` is the SPA side: it follows
-the same projection, with callbacks only for shell-owned state (`graph-node` focus and session tab selection).
+the same projection; graph-node focus is applied by the graph route itself, while the warm session page may
+take its immediate selection callback. This makes a direct open, a review-node reference, and a palette pick
+the same transaction instead of giving graph focus a second state channel.
 `detailBackHash(page, scopeId)` is the review details' **return gate** — the compact back anchor's href
 ([[review-chrome]]'s DetailShell), derived ONLY from the detail's own canonical address: `#/issues` from
 an issue detail, the bare `#/evals` from a TRUNK eval detail, and the scoped DEFAULT list (the same

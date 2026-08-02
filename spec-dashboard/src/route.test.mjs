@@ -9,6 +9,7 @@ import { addressHash, evalAddress, sessionEvalAddress } from './address.js'
 
 test('parseRoute splits path and query inside the hash', () => {
   assert.deepEqual(parseRoute('#/evals'), { page: 'evals', param: null, query: {} })
+  assert.deepEqual(parseRoute('#/graph/node-a'), { page: 'graph', param: 'node-a', query: {} })
   assert.deepEqual(parseRoute('#/evals?q=is%3Aeval+state%3Areviewed'), { page: 'evals', param: null, query: { q: 'is:eval state:reviewed' } })
   assert.deepEqual(parseRoute('#/evals/my-node/my%20scenario?q=scope%3Aabc'),
     { page: 'evals', param: 'my-node/my scenario', query: { q: 'scope:abc' } })
@@ -81,6 +82,11 @@ test('legacy and object session-eval addresses converge on the canonical evals h
   assert.equal(legacyEvalHash('#/sessions/abc/eval/shell-layout/tab%20switch'), canonical)
   assert.equal(addressHash(sessionEvalAddress('abc', 'shell-layout', 'tab switch')), canonical)
   assert.equal(addressHash(sessionEvalAddress('abc', null, null)), '#/evals?q=is%3Aeval%20scope%3Aabc')
+})
+
+test('graph node addresses carry the focused node in the graph path', () => {
+  assert.equal(addressHash({ kind: 'graph-node', nodeId: 'keyboard-nav' }), '#/graph/keyboard-nav')
+  assert.equal(addressHash({ kind: 'graph-node', nodeId: 'node with space' }), '#/graph/node%20with%20space')
 })
 
 test('detailBackHash: each review detail returns to the list on its own data-source axis', async () => {

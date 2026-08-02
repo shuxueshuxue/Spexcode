@@ -18,7 +18,7 @@ export const sessionEvalAddress = (sessionId, nodeId, scenario) => ({ kind: 'ses
 
 export function addressHash(address) {
   if (!address) return routeHash('graph')
-  if (address.kind === 'graph-node') return routeHash('graph')
+  if (address.kind === 'graph-node') return routeHash('graph', address.nodeId)
   if (address.kind === 'session') return routeHash('sessions', address.sessionId)
   if (address.kind === 'session-eval') {
     const param = address.nodeId && address.scenario ? `${address.nodeId}/${address.scenario}` : null
@@ -46,13 +46,11 @@ export function detailBackHash(page, scopeId = null) {
   return scopeId ? addressHash(sessionEvalAddress(scopeId)) : routeHash('evals')
 }
 
-// Graph focus and session tab selection are shell-owned view state; hash-only targets can navigate directly.
-export function navigateAddress(address, { onFocusNode, onOpenSession } = {}) {
+// The address is the route authority. Session selection has a warm-page callback for immediate local application;
+// graph focus comes from the graph route itself, so direct opens and in-app references share one path.
+export function navigateAddress(address, { onOpenSession } = {}) {
   if (!address) return
-  if (address.kind === 'graph-node') {
-    onFocusNode?.(address.nodeId)
-    navigate('graph')
-  } else if (address.kind === 'session') {
+  if (address.kind === 'session') {
     if (onOpenSession) onOpenSession(address.sessionId)
     else navigate('sessions', address.sessionId)
   } else {

@@ -58,7 +58,8 @@ const toolbarProbe = (page) => page.evaluate(() => {
     sidebarHeadline: document.querySelector('.si-item.on .sess-id')?.textContent || null,
     evalTab: { tag: evalTab.tagName, href: evalTab.getAttribute('href'), label: evalTab.getAttribute('aria-label'), iconColor: getComputedStyle(evalTab.querySelector(':scope > svg')).color, box: rect(evalTab) },
     tabs: rect(tabs),
-    picker: rect(picker),
+    picker: { ...rect(picker), borderLeft: getComputedStyle(picker).borderLeftWidth, borderRight: getComputedStyle(picker).borderRightWidth },
+    add: { ...rect(document.querySelector('.si-tab-add')), borderRadius: getComputedStyle(document.querySelector('.si-tab-add')).borderRadius },
     roles: {
       tablists: toolbar.querySelectorAll('[role=tablist]').length,
       tabs: toolbar.querySelectorAll('[role=tab]').length,
@@ -174,7 +175,9 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   check('toolbar omits duplicate identity and headline payload', result.wide.identityCount === 0 && !result.wide.text.includes(result.wide.sidebarHeadline) && !result.wide.html.includes(result.wide.sidebarHeadline), { identityCount: result.wide.identityCount, toolbar: result.wide.text, sidebar: result.wide.sidebarHeadline })
   check('Eval is a canonical real navigation tab', result.wide.evalTab.tag === 'A' && decodeURIComponent(result.wide.evalTab.href).includes(`scope:${SESSION}`), result.wide.evalTab)
   check('Eval directly follows the current resource-tab strip', Math.abs(result.wide.tabs.right - result.wide.evalTab.box.x) <= 1, { tabs: result.wide.tabs, evalTab: result.wide.evalTab.box })
-  check('resource picker directly follows the Eval tab', Math.abs(result.wide.evalTab.box.right - result.wide.picker.x) <= 1, { evalTab: result.wide.evalTab.box, picker: result.wide.picker })
+  check('resource picker is divided from Eval and its plus is circular', Math.abs(result.wide.evalTab.box.right - result.wide.picker.x) <= 1
+    && result.wide.picker.borderLeft === '1px' && result.wide.picker.borderRight === '0px' && result.wide.add.x > result.wide.picker.x && result.wide.add.width === 24 && result.wide.add.height === 24 && result.wide.add.borderRadius === '50%',
+  { evalTab: result.wide.evalTab.box, picker: result.wide.picker, add: result.wide.add })
   check('toolbar chrome is distinct from terminal', result.wide.toolbarBackground !== result.wide.terminalBackground, { toolbar: result.wide.toolbarBackground, terminal: result.wide.terminalBackground })
   check('toolbar commands are uniform localized icon tools', result.wide.actionDetails.length > 0 && result.wide.actionDetails.every((tool) => !tool.text && tool.icon && tool.label && tool.label === tool.tip && tool.box.width === 24 && tool.box.height === 24), result.wide.actionDetails)
   await page.screenshot({ path: join(OUT, 'B-wide-1440.png'), fullPage: true })

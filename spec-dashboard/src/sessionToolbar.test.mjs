@@ -40,6 +40,9 @@ test('session toolbar keeps the Terminal tab, adds resource tabs, then Eval and 
   assert.match(css, /\.si-tabbar\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*stretch;/s)
   assert.match(css, /\.si-surface\s*\{[^}]*flex:\s*0 1 auto;/s)
   assert.match(css, /\.si-actions\s*\{[^}]*margin-left:\s*auto;/s)
+  assert.doesNotMatch(css, /\.si-surface\s*\{[^}]*border-right:/s)
+  assert.match(css, /\.si-resource-picker\s*\{[^}]*border-left:\s*1px solid var\(--line\);/s)
+  assert.match(css, /\.si-tab-add\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*border-radius:\s*50%;/s)
 })
 
 test('file rows keep host paths off the label and reserve that detail for the copy tool', () => {

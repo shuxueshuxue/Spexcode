@@ -159,11 +159,11 @@ stays task-only. More on this mode of working:
 
 Everything above has a live face. `spex serve` + `spex dashboard`, then:
 
-<img src="docs/readme-graph.png" alt="the spec map: SpexCode's own repo on its own board — per-node version and eval chips, live session rail top-left">
+<img src="docs/readme-graph.png" alt="the spec map: SpexCode's own repo on its own board — per-node version and eval chips, an agent avatar hovering on the node it is editing">
 
 *Your whole repo as one map — SpexCode's own board shown. Each node carries its version and eval
-state; the rail top-left is the live session console (the RUNNING entry is the agent writing this
-README).*
+state, an agent's avatar hovers on the node it is editing right now, and the rail top-left is the
+live session console.*
 
 <img src="docs/readme-node.png" alt="a node opened on the board: raw source and expanded spec, version history, governed file">
 

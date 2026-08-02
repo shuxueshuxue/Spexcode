@@ -141,10 +141,10 @@ commit,物化进 `CLAUDE.md`/`AGENTS.md` 的工作流规则承担其余——你
 
 上面的一切都有活的界面。`spex serve` + `spex dashboard`,然后:
 
-<img src="readme-graph.png" alt="spec 地图:SpexCode 自己的仓库在自己的看板上——每个节点带版本与 eval 徽标,左上是活的 session 栏">
+<img src="readme-graph.png" alt="spec 地图:SpexCode 自己的仓库在自己的看板上——每个节点带版本与 eval 徽标,正在被编辑的节点上悬浮着 agent 头像">
 
-*整个仓库一张地图——图中是 SpexCode 自己的看板。每个节点带着它的版本号和 eval 状态;左上角是活的
-session 栏(RUNNING 里那条,就是正在写这份 README 的 agent)。*
+*整个仓库一张地图——图中是 SpexCode 自己的看板。每个节点带着它的版本号和 eval 状态,正在被编辑的
+节点上悬浮着那个 agent 的头像;左上角是活的 session 栏。*
 
 <img src="readme-node.png" alt="在看板上打开一个节点:raw source 和 expanded spec、版本历史、所辖文件">
 

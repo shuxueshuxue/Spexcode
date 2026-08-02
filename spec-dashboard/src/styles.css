@@ -1657,10 +1657,10 @@ a.scenario-count:hover { background: var(--panel2); }
 
 .si-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 4px; }
 .si-files { position: relative; display: flex; align-items: center; padding: 0 4px; border-left: 1px solid var(--line); }
-.si-files-menu { position: absolute; top: calc(100% + 4px); right: 4px; z-index: 20; width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 10px 30px color-mix(in srgb, var(--ink) 20%, transparent); }
-.si-files-row { display: grid; grid-template-columns: minmax(0, 1fr) 26px 26px; align-items: center; gap: 2px; }
-.si-files-name { min-width: 0; overflow: hidden; padding: 6px 7px; color: var(--ink2); font-family: var(--mono); font-size: var(--type-control); text-overflow: ellipsis; white-space: nowrap; }
-.si-files-preview, .si-files-download { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
+.si-files-menu { position: absolute; top: calc(100% + 4px); right: 4px; z-index: 20; width: fit-content; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 10px 30px color-mix(in srgb, var(--ink) 20%, transparent); }
+.si-files-row { display: flex; align-items: center; gap: 2px; }
+.si-files-name { flex: 0 1 auto; min-width: 0; max-width: min(280px, calc(100vw - 104px)); overflow: hidden; padding: 6px 7px; color: var(--ink2); font-family: var(--mono); font-size: var(--type-control); text-overflow: ellipsis; white-space: nowrap; }
+.si-files-preview, .si-files-download { flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
 .si-files-preview:hover, .si-files-preview:focus-visible, .si-files-download:hover, .si-files-download:focus-visible { color: var(--blue); background: var(--panel2); }
 .si-files-preview:focus-visible, .si-files-download:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .si-file-preview-backdrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 12px; background: rgba(101,123,131,.25); backdrop-filter: blur(2px); }

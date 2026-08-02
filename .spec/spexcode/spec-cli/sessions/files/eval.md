@@ -22,11 +22,12 @@ scenarios:
       its preview and use the adjacent download tool to read the browser download.
     expected: >-
       The empty session control is visibly disabled; after publication it is active and lists the absolute
-      file name, whose full absolute path is available in its hover tooltip. Opening the menu transfers no
-      file bytes. Clicking the eye button opens a separate pop-out with the current escaped text or raster
-      image without a disk download; its adjacent download tool downloads the bytes currently at that path,
-      including the post-publication edit, proving that the list is a live reference rather than a snapshot.
-      Clicking outside either transient surface dismisses it.
+      file name, whose full absolute path is available in its hover tooltip. The compact menu fits that visible
+      name plus its two fixed icon tools rather than inheriting an arbitrary empty width. Opening the menu
+      transfers no file bytes. Clicking the eye button opens a separate pop-out with the current escaped text
+      or raster image without a disk download; its adjacent download tool downloads the bytes currently at
+      that path, including the post-publication edit, proving that the list is a live reference rather than a
+      snapshot. Clicking outside either transient surface dismisses it.
   - name: preview-refuses-untrusted-or-oversized-files-loudly
     tags: [frontend-e2e, backend-api]
     test: spec-dashboard/test/session-files.e2e.mjs

@@ -62,6 +62,14 @@ Two rules make this workable:
 
    and keeps flagging until the spec catches up.
 
+<img src="docs/readme-drift.png" alt="drift: a spec promising `reopen`, and a later commit renaming it to `resume` without touching the spec">
+
+The check is mechanical — it compares the commit that last changed a spec against the commits that
+touched the symbol that spec anchors to. It never reads the meaning of a change, so it cannot tell you
+whether the new behavior is better; it can only tell you that the spec no longer describes it. That is
+also why it is worth running: the commit above was not careless, it updated seven other specs in the
+same rename and missed one.
+
 ## The optimization loop
 
 Specs, commits, and evals compose into one loop. The spec is the loss function: it states what you

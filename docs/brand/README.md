@@ -6,11 +6,17 @@ accent `#16495A` (`#5FA8BE` on dark ground, where the darker teal loses contrast
 
 | file | what it is |
 | --- | --- |
-| `banner-dark.svg` | the lockup. `../banner.png` is this file rasterised at 2×. |
+| `banner-dark.svg` | the lockup, 1280×221. `../banner.png` is this file rasterised at 2×. |
 | `banner-light.svg` | the same lockup for a light ground |
 | `social.svg` / `social.png` | GitHub's social preview card, 1280×640 |
 | `mark.svg`, `mark-dark.svg`, `mark-mono.svg` | the mark alone, tiled, 512×512 |
 | `mark-bare.svg` | the mark with no field, for a page that supplies its own ground |
+
+The banner is cropped to the artwork, not to the icon's tile. The tile is 200 units square but is
+dropped here (on paper it renders as a ghost rectangle rather than a container), so the visible mark is
+only the bracket paths — 96..416 of the icon's 512 viewBox, 125 units. Padding measured from the tile
+gave a banner that was 40% ink and 60% air; it is now 48 units of clearance around the 125 the eye
+actually sees.
 
 Each file carries its own background. That is deliberate rather than lazy: GitHub renders a README on
 both a light and a dark theme and serves these as `<img>`, which cannot answer a `prefers-color-scheme`

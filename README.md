@@ -56,7 +56,7 @@ that the spec stopped describing it. The commit in the diagram updated seven oth
 same rename and missed this one; that kind of miss is normal work, and it is what a mechanical
 check catches.
 
-## Software as a learning loop
+## Software as heuristic learning
 
 Specs, commits, and evals compose into one optimization loop. The spec is the loss function: it
 states what you want, and it is the half a human signs off on. Commits are the optimizer. **eval**,
@@ -74,7 +74,7 @@ once, at merge time.
 
 ## Quick start
 
-Requires Node ≥ 22 and git. No agent is involved in this part yet.
+Requires Node ≥ 22 and git.
 
 ```sh
 npm i -g spexcode                              # installs the `spex` command
@@ -102,7 +102,7 @@ One `spex dashboard` per machine is enough: every project you serve shows up beh
 `/projects` page manages them from the browser.
 [Getting started](https://spexcode.net/getting-started/) walks the rest of the setup.
 
-## How it's put together
+## How does this system work
 
 Three stacked layers, and each is worth having without the ones above it:
 
@@ -117,8 +117,7 @@ scripts and agents can do through the same CLI.
 
 ## Working with agents (L1)
 
-This part needs tmux and a logged-in [Claude Code](https://www.anthropic.com/claude-code) or Codex
-on the machine (on Windows, run inside WSL2).
+This part needs tmux on the machine (on Windows, run inside WSL2).
 
 ```sh
 spex session new "[[uploader]] retry failed chunks with backoff"
@@ -130,11 +129,6 @@ the governing spec before touching code. It makes the change, rewrites the spec 
 match, commits both, then proposes a merge and stops:
 
 <img src="docs/readme-worker-flow.svg" alt="the eight-step worker loop: dispatch, read the spec, do the work, run evals, clear drift, propose a merge, human review, close">
-
-Workers never merge themselves. The merge stays with you, and when you fire it, the session's own
-agent runs the actual `git merge`, so conflicts land on the one who knows the work. The same
-dispatch is a button on the dashboard; the command form is what agents themselves use when they
-delegate. You supervise from either side:
 
 ```sh
 spex session ls                  # the living table below

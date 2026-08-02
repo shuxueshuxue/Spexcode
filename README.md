@@ -130,11 +130,6 @@ match, commits both, then proposes a merge and stops:
 
 <img src="docs/readme-worker-flow.svg" alt="the eight-step worker loop: dispatch, read the spec, do the work, run evals, clear drift, propose a merge, human review, close">
 
-Workers never merge themselves. The merge stays with you, and when you fire it, the session's own
-agent runs the actual `git merge`, so conflicts land on the one who knows the work. The same
-dispatch is a button on the dashboard; the command form is what agents themselves use when they
-delegate. You supervise from either side:
-
 ```sh
 spex session ls                  # the living table below
 spex session watch stream        # follow transitions: working → review → done …

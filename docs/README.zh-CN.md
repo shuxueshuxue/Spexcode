@@ -114,10 +114,6 @@ spex session new "[[uploader]] 失败的分块要带退避地重传"
 
 <img src="readme-worker-flow.zh.svg" alt="worker 的八步循环:派发、读 spec、干活、跑 eval、消解 drift、提议合并、由人审核、关闭">
 
-worker 从不自己合并。合并留在你手里:你点下去时,由那个 session 自己的 agent 执行真正的
-`git merge`,冲突落在最了解这份工作的人身上。同样的派发在 dashboard 上是一个按钮,命令形式则是
-agent 们自己委派任务时用的。两边都能监工:
-
 ```sh
 spex session ls                  # 下面这张活表
 spex session watch stream        # 跟踪状态流转:working → review → done …

@@ -31,7 +31,9 @@ derivation over the complete population, then slices exactly once. The response 
 `{items,page,perPage,total,sourceTotal,pageCount,prev,next,revision,counts,facets,section}` shape plus
 bounded domain metadata (issue enablement/write stores; scoped eval gates/unknown coverage). `sourceTotal`
 distinguishes a vacant source from a filtered-zero view. `items.length <= 25`; neither a hidden full
-collection nor a second full-list field rides beside it.
+collection nor a second full-list field rides beside it. The exact scoped impact graph is a separate named
+read, `GET /api/evals/impact?scope=<id>`: it preserves the selector/delta proof for a caller that asks for
+it, while the paged list keeps only each rendered row's own impact reasons.
 
 A `counts` entry is one number, or the named buckets of a section the adapter SPLIT — Evals' measured
 verdicts arrive as `counts.pass`/`counts.fail` = `{fresh,stale}` while `counts.unmeasured` stays a number.

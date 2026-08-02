@@ -4,9 +4,10 @@ import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { followSessions, type FollowOutcome } from './session-follow.js'
+import { followSessions, launchEvent, sessionEvent, type FollowOutcome } from './session-follow.js'
 import { advanceFollow, followCursor } from './session-cursors.js'
 import { sessionStoreDir } from './layout.js'
+import type { Session } from './sessions.js'
 
 // Following is reading a LOG past a cursor ([[session-follow]]). Everything below is driven by appending lines
 // to timeline.ndjson and by nothing else: no board, no backend, no process. That is the point — if any of this
@@ -33,6 +34,34 @@ const sent = (id: string, text: string, from: string | null = null): void => {
 const later = (ms: number, fn: () => void): void => { setTimeout(fn, ms).unref() }
 const take = (opts: Partial<Parameters<typeof followSessions>[1]> = {}): Promise<FollowOutcome> =>
   followSessions(() => {}, { targets: () => [T], self: ME, take: true, timeoutMs: 1000, intervalMs: 5, ...opts })
+
+const titled = (): Session => ({
+  id: T, node: 'legacy-node-handle', branch: 'node/legacy-node-handle', path: '/wt/title',
+  label: 'legacy-node-handle', title: 'current work summary', raw: { name: null, title: 'stored title' },
+  parent: null, harness: 'claude', capabilities: { headless: false }, launcher: null,
+  lifecycle: 'active', proposal: null, merges: 0, status: 'working', liveness: 'online', note: null,
+  archived: false, archiveHazard: null, prompt: null, promptPreview: null, created: 0, activity: 'current work summary', sortKey: null, files: [],
+})
+
+test('follow notifications render the derived title, never the selector label', async () => {
+  freshHome()
+  const s = titled()
+  assert.match(sessionEvent(s), /current work summary/)
+  assert.match(launchEvent(s), /current work summary/)
+  assert.doesNotMatch(sessionEvent(s), /legacy-node-handle/)
+  assert.doesNotMatch(launchEvent(s), /legacy-node-handle/)
+
+  status(T, 'active')
+  const lines: string[] = []
+  later(30, () => sent(T, 'check this', 'human'))
+  later(60, () => status(T, 'awaiting', 'merge'))
+  await followSessions((line) => lines.push(line), {
+    targets: () => [T], self: ME, take: true, timeoutMs: 1000, intervalMs: 5, row: () => s,
+  })
+  const message = lines.find((line) => line.includes('[spex] message')) || ''
+  assert.match(message, /current work summary/)
+  assert.doesNotMatch(message, /legacy-node-handle/)
+})
 
 test('an already-actionable arrival is not an edge; the rise out of non-actionable is', async () => {
   freshHome()

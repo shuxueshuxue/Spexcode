@@ -64,7 +64,10 @@ The two planes, made native to touch:
 
 - **Specs** — the graph becomes a drill-down. A breadcrumb names where you are; tapping a row
   descends into that node. Each node screen is a compact header over the SAME reading panes the
-  desktop popup renders. A branch opens to its children first; a leaf opens to its spec.
+  desktop popup renders. A branch opens to its children first; a leaf opens to its spec. The shared
+  `#/graph/<node>` address ([[address-routing]]) is a direct door here too: it restores the target's
+  full ancestor breadcrumb, selects that node's screen, and switches from a routed review page back to
+  Specs without a phone-only URL grammar.
 - **Sessions** — the list IS the desktop console's list: the same zone partition, the same nesting
   forest with fold rails/pods, and the ONE shared avatar-less SessionRow face (colour-coded status
   glyph + live headline) — no mobile-only variant, no second implementation; only the wrapper row

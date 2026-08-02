@@ -43,12 +43,12 @@ scoped page talks to `/p/<id>/api/*` while an unscoped serve stays byte-identica
 face pick extends the same way (a scoped 401 raises the shared credential gate instead of the error panel,
 and the root address with no board but a live `/projects` surface boots the hub face instead of the
 classic dashboard). Route params that belong to a feature
-(`#/issues/<id>`, `#/evals/<node>/<scenario>`) pass through this shell unchanged; the destination feature
+(`#/graph/<node>`, `#/issues/<id>`, `#/evals/<node>/<scenario>`) pass through this shell unchanged; the destination feature
 owns their meaning. The shell holds no app-resident Issues/Evals row collection beside the board: both
 faces mount the same routed review pages, and those pages request only their current server slice through
 [[paged-review]]. The board itself stays [[graph-lean]] summary data, never a back door that preloads either
 review list. The shell applies an incoming routed selection before it echoes a page's local selection
-back into the hash, so an external door to `#/sessions/<id>` or another detail route is never overwritten by
+back into the hash, so an external door to `#/graph/<node>`, `#/sessions/<id>`, or another detail route is never overwritten by
 the previously-selected tab during the page switch. Likewise, feature-level shared widgets may add compact
 global style vocabulary here when the rule is genuinely reused across shell surfaces. **Each face is its own lazy chunk**, and
 the desktop root lazy-loads its heavy leaves (the session console with xterm, the evals/issues pages with

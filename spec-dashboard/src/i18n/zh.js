@@ -503,6 +503,9 @@ export default {
   nodeMenu: {
     menuLabel: '节点操作',
     info: '查看详情',
+    copyUrl: '复制节点 URL',
+    copied: '已复制',
+    failed: '复制失败',
     newSession: '新建会话',
     newChild: '新建子节点…',
     del: '删除节点…',

@@ -130,7 +130,7 @@ test('session new from a governed parent establishes its child watch before prin
   })
   server.listen(0, '127.0.0.1'); await once(server, 'listening')
   const address = server.address(); assert.ok(address && typeof address === 'object')
-  const env = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: WATCH_PARENT, SPEXCODE_API_URL: '' }
+  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: WATCH_PARENT, SPEXCODE_API_URL: '' }
   for (const key of ['CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
   const child = spawn(process.execPath, [tsxCli, cli, 'session', 'new', 'watch me', '--api', `http://127.0.0.1:${address.port}`], {
     cwd: pkgRoot, env, stdio: ['ignore', 'pipe', 'pipe'],

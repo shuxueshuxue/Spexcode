@@ -286,7 +286,9 @@ key handling deliberately **falls through unhandled** so the window-level handle
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
 can actually own.) The **toolbar's command
-group** renders the same board-command registry. **Command Box** is present whenever live; each selected
+group** renders the same board-command registry. The independent top-right [[files]] icon is grey when the
+selected session's projected path list is empty; otherwise it opens that list and delegates click-time preview
+or the adjacent download tool to the authorized backend route. **Command Box** is present whenever live; each selected
 session also keeps the same 24px **merge** tool slot. It is green and dispatchable only for the
 persisted `awaiting` + `proposal:merge` + `review` projection while liveness is `online`; `nothing`/done,
 close-pending, working, asking, and every non-online reading keep the tool muted and disabled, with a

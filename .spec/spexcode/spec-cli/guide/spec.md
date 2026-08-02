@@ -2,7 +2,7 @@
 title: guide
 status: active
 hue: 200
-desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec`/`eval` print the file-format manual, `settings` the runtime-settings manual, `footprint` the residence-model manual.
+desc: `spex guide` is the reference surface as a command — no topic prints the setup workflow; `spec`/`eval` print the file-format manual, `settings` the runtime-settings manual, `footprint` the residence-model manual, and `files` the agent-to-human path handoff.
 code:
   - spec-cli/src/guide.ts
 related:
@@ -74,6 +74,10 @@ the agent from one verb, picked by an optional topic:
   recipe for a legacy untracked spec tree (`git add .spec spexcode.json` with the pushed-history WARN),
   how the [[content-filter]] behaves on a host-tracked contract file, and the forgetting-law guarantees
   (any-order switching, `spex uninstall` as the empty policy).
+- **`files` → the agent-to-human PATH handoff.** The three `session files` verbs, the live and host-local
+  meaning of a posted absolute path, and the dashboard's click-time preview/download. It states the safe
+  preview types and 2 MiB refusal ceiling rather than implying every file can render, and distinguishes this
+  from [[file-attach]] so an agent does not upload an artifact merely to hand it back.
 
 Every page describes the PRESENT model. A retired knob is absent from the active field list; when silently
 ignoring a stale authored field would leave its owner ambiguous, one concise migration note names the live

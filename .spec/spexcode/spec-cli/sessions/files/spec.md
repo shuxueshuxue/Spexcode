@@ -48,7 +48,9 @@ same route; it is not a second reader or a cached copy. Both modes are `no-store
 current target bytes. The route never accepts an arbitrary filesystem path, and it does not turn a path into
 an uploaded artifact. A list entry that has since been deleted, moved, or become unreadable remains visible
 as the honest published reference, but its preview or download returns a named `404 file no longer exists`
-error. A path absent from the current list is a named `403`, even if it exists on the backend host.
+error. A path absent from the current list is a named `403` before the backend asks the filesystem about it,
+whether or not it exists on the host. Membership therefore remains the authorization boundary without turning
+the route into an existence oracle for arbitrary backend paths.
 
 ## preview is safe and bounded
 
@@ -66,11 +68,15 @@ human may still download any posted file regardless of its previewability or siz
 ## dashboard handoff
 
 The selected session's top-right file icon is disabled grey when its projected list is empty. Once at least
-one path is posted, the same icon is live and opens a compact dropdown of the published paths. Selecting a
-path starts its authorized preview; the adjacent download icon starts the download. No browser fetch happens
-merely because the dropdown opened. The control uses the shared icon vocabulary and carries its accessible
-label/tooltip. A failed download is shown as a concrete session action error, while a preview refusal is
-shown inside its pop-out, never mistaken for file content.
+one path is posted, the same icon is live and opens a compact dropdown. Each row shows only the file name;
+the full absolute path is available only through its hover tooltip, preserving the useful host-local detail
+without turning a toolbar menu into a path dump. The name is inert: its eye icon is the preview button and
+its adjacent download icon starts the download. Preview opens in a centred overlay pop-out, separate from
+the dropdown's original position. No browser fetch happens merely because the dropdown opened. The control
+uses the shared icon vocabulary and carries its accessible label/tooltip. A failed download is shown as a
+concrete session action error, while a preview refusal is shown inside its pop-out, never mistaken for file
+content. Both surfaces are transient: clicking outside the open dropdown dismisses it, and clicking the
+preview backdrop dismisses the pop-out.
 
 ## agent awareness
 

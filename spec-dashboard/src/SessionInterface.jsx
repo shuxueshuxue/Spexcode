@@ -18,7 +18,7 @@ import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl } from './project.js'
-import { inertChromePress } from './focus.js'
+import { inertChromePress, returnFocus } from './focus.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
@@ -55,17 +55,26 @@ function ActionOutcome({ outcome }) {
   return <div className={`si-action-outcome ${outcome.phase}`} role={role}>{outcome.message}</div>
 }
 
+const fileName = (path) => path.split('/').filter(Boolean).pop() || path
+
 function SessionFiles({ session, onFailure }) {
   const t = useT()
   const [open, setOpen] = useState(false)
   const [preview, setPreview] = useState(null)
   const previewRequest = useRef(0)
+  const filesRef = useRef(null)
+  const previewRef = useRef(null)
   const files = Array.isArray(session?.files) ? session.files : []
   const ready = files.length > 0
 
   useEffect(() => { setOpen(false); setPreview(null); previewRequest.current++ }, [session?.id])
   useEffect(() => () => { if (preview?.url) URL.revokeObjectURL(preview.url) }, [preview?.url])
-  if (!session) return null
+  useEffect(() => {
+    if (!open) return
+    const closeOutside = (event) => { if (!filesRef.current?.contains(event.target)) setOpen(false) }
+    window.addEventListener('pointerdown', closeOutside)
+    return () => window.removeEventListener('pointerdown', closeOutside)
+  }, [open])
 
   const urlFor = (path, preview = false) => apiUrl(`/api/sessions/${encodeURIComponent(session.id)}/files/download?path=${encodeURIComponent(path)}${preview ? '&preview=1' : ''}`)
   const download = async (path) => {
@@ -78,7 +87,7 @@ function SessionFiles({ session, onFailure }) {
       }
       const link = document.createElement('a')
       link.href = url
-      link.download = path.split('/').pop() || 'download'
+      link.download = fileName(path)
       link.style.display = 'none'
       document.body.appendChild(link)
       link.click()
@@ -112,11 +121,21 @@ function SessionFiles({ session, onFailure }) {
     }
   }
 
-  const closePreview = () => { previewRequest.current++; setPreview(null) }
+  const closePreview = useCallback(() => { previewRequest.current++; setPreview(null) }, [])
+  const previewOpen = Boolean(preview)
+  useEffect(() => {
+    if (!previewOpen) return
+    const closeOnEscape = (event) => { if (event.key === 'Escape') closePreview() }
+    window.addEventListener('keydown', closeOnEscape)
+    const frame = requestAnimationFrame(() => previewRef.current?.focus())
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('keydown', closeOnEscape); returnFocus() }
+  }, [previewOpen, closePreview])
+
+  if (!session) return null
 
   const label = ready ? t('session.filesTitle') : t('session.filesEmptyTitle')
   return (
-    <div className="si-files">
+    <div ref={filesRef} className="si-files">
       <IconButton icon="folder-open" size={14} label={label}
         className={`si-tool sc-${ready ? 'blue' : 'muted'} files`}
         aria-expanded={ready ? open : undefined}
@@ -125,20 +144,19 @@ function SessionFiles({ session, onFailure }) {
       {open && (
         <div className="si-files-menu" role="menu" aria-label={t('session.filesListLabel')}>
           {files.map((path) => <div key={path} className="si-files-row" role="none">
-            <button type="button" className="si-files-item" role="menuitem"
-              aria-label={t('session.previewFile', { path })} onClick={() => openPreview(path)}>
-              <Icon name="eye" size={14} />
-              <span title={path}>{path}</span>
-            </button>
-            <IconButton icon="download" size={14} className="si-files-download" label={t('session.downloadFile', { path })}
+            <span className="si-files-name" data-tip={path}>{fileName(path)}</span>
+            <IconButton icon="eye" size={14} className="si-files-preview" role="menuitem" label={t('session.previewFile', { path })}
+              onClick={() => openPreview(path)} />
+            <IconButton icon="download" size={14} className="si-files-download" role="menuitem" label={t('session.downloadFile', { path })}
               onClick={() => download(path)} />
           </div>)}
         </div>
       )}
       {preview && (
-        <section className="si-file-preview" role="dialog" aria-label={t('session.filePreviewTitle', { path: preview.path })}>
+        <div className="si-file-preview-backdrop" data-focus-overlay onMouseDown={closePreview}>
+        <section ref={previewRef} tabIndex={-1} className="si-file-preview" role="dialog" aria-modal="true" aria-label={t('session.filePreviewTitle', { path: preview.path })} onMouseDown={(event) => event.stopPropagation()}>
           <header className="si-file-preview-head">
-            <span title={preview.path}>{preview.path}</span>
+            <span data-tip={preview.path}>{fileName(preview.path)}</span>
             <IconButton icon="download" size={14} label={t('session.downloadFile', { path: preview.path })} onClick={() => download(preview.path)} />
             <IconButton icon="x" size={14} label={t('session.closeFilePreview')} onClick={closePreview} />
           </header>
@@ -146,9 +164,10 @@ function SessionFiles({ session, onFailure }) {
             {preview.phase === 'loading' && <Icon name="loader" size={18} className="si-attach-busy" />}
             {preview.phase === 'error' && <p className="si-file-preview-error" role="alert">{preview.message}</p>}
             {preview.phase === 'text' && <pre>{preview.text}</pre>}
-            {preview.phase === 'image' && <img src={preview.url} alt={preview.path} />}
+            {preview.phase === 'image' && <img src={preview.url} alt={fileName(preview.path)} />}
           </div>
         </section>
+        </div>
       )}
     </div>
   )

@@ -13,6 +13,7 @@ import {
   driftIndex,
   historyIndex,
   treeTextFiles,
+  withEventLedgerBuild,
   type DriftIndex,
   type DriftPathEvent,
   type ReviewDiffFile,

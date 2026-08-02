@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 780" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <!-- self-carried ground: GitHub renders README on light AND dark themes; an <img> SVG cannot query them -->
+  <rect width="1400" height="780" fill="#F4EEE0"/>
+
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16495A"/>
+    </marker>
+    <marker id="arrdim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8A8272"/>
+    </marker>
+  </defs>
+
+  <!-- ============ left: the spec node ============ -->
+  <g>
+    <rect x="48" y="44" width="560" height="608" rx="14" fill="#FFFDF6" stroke="#171A20" stroke-width="2"/>
+    <text x="76" y="88" font-size="26" font-weight="700" fill="#171A20">spec node</text>
+    <text x="76" y="116" font-size="17" fill="#5C5647" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">.spec/project/uploader/spec.md</text>
+
+    <!-- frontmatter -->
+    <rect x="76" y="140" width="504" height="118" rx="8" fill="#171A20"/>
+    <g font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" font-size="17">
+      <text x="96" y="172" fill="#8A8272">---</text>
+      <text x="96" y="198" fill="#EFE8D8">code: <tspan fill="#5FA8BE">src/uploader.ts#retry</tspan></text>
+      <text x="96" y="224" fill="#EFE8D8">related: <tspan fill="#8A8272">[src/queue.ts]</tspan></text>
+      <text x="96" y="248" fill="#8A8272">---</text>
+    </g>
+
+    <!-- raw source -->
+    <rect x="76" y="284" width="504" height="140" rx="8" fill="#F4EEE0" stroke="#16495A" stroke-width="2"/>
+    <text x="96" y="316" font-size="16" font-weight="700" letter-spacing="1.5" fill="#16495A">RAW SOURCE — the intent</text>
+    <text x="96" y="346" font-size="17" fill="#171A20">“Failed chunks retry with backoff;</text>
+    <text x="96" y="370" font-size="17" fill="#171A20">a partial upload is resumable, never restarted.”</text>
+    <text x="96" y="404" font-size="15" font-style="italic" fill="#5C5647">short · an agent drafts it, a human signs off</text>
+
+    <!-- expanded spec -->
+    <rect x="76" y="452" width="504" height="172" rx="8" fill="#FBF7EC" stroke="#171A20" stroke-width="1.5" stroke-dasharray="none"/>
+    <text x="96" y="484" font-size="16" font-weight="700" letter-spacing="1.5" fill="#171A20">EXPANDED SPEC — the agent’s reading</text>
+    <text x="96" y="514" font-size="17" fill="#171A20">Backoff schedule, resume bookkeeping, the error</text>
+    <text x="96" y="538" font-size="17" fill="#171A20">classes that stop a retry, why restarts are unsafe…</text>
+    <text x="96" y="572" font-size="15" font-style="italic" fill="#5C5647">detailed · iterates freely, must always match</text>
+    <text x="96" y="594" font-size="15" font-style="italic" fill="#5C5647">the raw source above</text>
+  </g>
+
+  <!-- ============ right: the governed file ============ -->
+  <g>
+    <rect x="820" y="44" width="532" height="428" rx="14" fill="#FFFDF6" stroke="#171A20" stroke-width="2"/>
+    <text x="848" y="88" font-size="26" font-weight="700" fill="#171A20">governed file</text>
+    <text x="848" y="116" font-size="17" fill="#5C5647" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">src/uploader.ts</text>
+
+    <g font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" font-size="16" fill="#8A8272">
+      <text x="848" y="162">export class Uploader {</text>
+      <text x="848" y="190">  split(file) { … }</text>
+    </g>
+    <!-- anchored unit highlight -->
+    <rect x="836" y="206" width="500" height="120" rx="8" fill="#DCEAF0" stroke="#16495A" stroke-width="2.5"/>
+    <g font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" font-size="16" fill="#171A20">
+      <text x="848" y="238">  <tspan font-weight="700" fill="#16495A">retry(chunk) {</tspan></text>
+      <text x="848" y="266">    const delay = backoff(chunk.tries)</text>
+      <text x="848" y="294">    …</text>
+      <text x="848" y="318">  <tspan font-weight="700" fill="#16495A">}</tspan></text>
+    </g>
+    <g font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" font-size="16" fill="#8A8272">
+      <text x="848" y="358">  finalize() { … }</text>
+      <text x="848" y="386">}</text>
+    </g>
+    <text x="848" y="440" font-size="15" font-style="italic" fill="#16495A">the anchored unit — tracked at function level</text>
+
+    <!-- related file -->
+    <rect x="820" y="512" width="300" height="76" rx="10" fill="#FBF7EC" stroke="#8A8272" stroke-width="1.5" stroke-dasharray="7 5"/>
+    <text x="844" y="544" font-size="17" font-weight="600" fill="#5C5647" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">src/queue.ts</text>
+    <text x="844" y="570" font-size="15" fill="#8A8272">referenced, not owned</text>
+  </g>
+
+  <!-- edges -->
+  <path d="M 610 199 C 700 199, 720 262, 830 262" fill="none" stroke="#16495A" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="655" y="192" font-size="17" font-weight="700" fill="#16495A">governs</text>
+  <text x="640" y="214" font-size="14" fill="#5C5647" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">code: — one file</text>
+
+  <path d="M 610 225 C 700 225, 690 550, 812 550" fill="none" stroke="#8A8272" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrdim)"/>
+  <text x="660" y="520" font-size="16" fill="#5C5647">references</text>
+  <text x="660" y="540" font-size="14" fill="#8A8272" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">related: — many</text>
+
+  <!-- ============ bottom strip: git is the database ============ -->
+  <rect x="48" y="684" width="1304" height="64" rx="10" fill="#171A20"/>
+  <text x="76" y="724" font-size="18" fill="#EFE8D8">
+    <tspan font-weight="700" fill="#5FA8BE">git is the database</tspan>
+    <tspan fill="#8A8272">  ·  </tspan>a node’s versions = the commits that touched its spec.md<tspan fill="#8A8272">  ·  </tspan>each version attributed to an agent via a <tspan font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" fill="#5FA8BE">Session:</tspan> trailer<tspan fill="#8A8272">  ·  </tspan>no second store
+  </text>
+</svg>

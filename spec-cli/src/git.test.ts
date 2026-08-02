@@ -57,6 +57,14 @@ test('one persistent event transaction stays full-history-equivalent across seed
     await sourceIndexes(root)
     assert.equal(readFileSync(cachePath).equals(seeded), true, 'an exact-tip reopen rewrote the ledger')
 
+    const priorGrammarPath = cachePath.replace('history-events-v16-', 'history-events-v15-')
+    assert.notEqual(priorGrammarPath, cachePath, 'a grammar change must name a distinct ledger namespace')
+    renameSync(cachePath, priorGrammarPath)
+    resetHistoryCachesForTests()
+    await sourceIndexes(root)
+    assert.equal(existsSync(cachePath), true, 'the current reader reused a ledger owned by an older grammar')
+    assert.equal(readFileSync(cachePath).equals(seeded), true, 'a current grammar did not seed its own ledger')
+
     appendFileSync(join(root, 'src/a.ts'), 'export const b = 2\n'); run('add', '.'); run('commit', '-qm', 'move governed code')
     resetHistoryCachesForTests()
     const [[advancedHistory, advancedDrift], [advancedFullHistory, advancedFullDrift]] = await Promise.all([

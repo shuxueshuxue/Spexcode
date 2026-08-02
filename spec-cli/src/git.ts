@@ -433,7 +433,9 @@ type EventCache = {
   hunks: Map<string, ImmutableHunkRanges>
 }
 type EventStreamOutput = string | IdentityRawRecord[]
-const EVENT_CACHE_SCHEMA = 'history-events-v15'
+// The schema names both the ledger grammar and its on-disk namespace. A reader that predates a row type
+// must never share a ledger with its writer: it seeds the next namespace from Git instead.
+const EVENT_CACHE_SCHEMA = 'history-events-v16'
 const IMMUTABLE_HUNK_FACT = 'immutable-hunk-v1'
 const EVENT_STREAM_KINDS = ['merge', 'identity-raw'] as const
 type EventStreamKind = typeof EVENT_STREAM_KINDS[number]

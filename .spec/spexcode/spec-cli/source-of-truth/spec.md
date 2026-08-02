@@ -100,7 +100,9 @@ Two principles keep that derivation cheap on a long-running server:
   (blob oid and historical path). A reader asks the ledger for its whole hunk demand once, derives only absent
   facts through Git, then merges those validated ranges through the SAME lock and atomic replacement as event
   rows. A missing fact costs its first derivation; a malformed ledger row is rejected as a whole ledger and
-  rebuilt from Git. Parser units, selector resolution, windows, reachability, and lint verdicts remain
+  rebuilt from Git. The ledger grammar version names both its identity and filename: adding a row type advances
+  that version, so an older process never reads a new row then atomically writes it away; the new namespace
+  seeds from Git. Parser units, selector resolution, windows, reachability, and lint verdicts remain
   process-local/current computations, so the ledger can never certify a changed selector or tree from an old
   answer. Let `H` be reachable commits, `L` the encoded ledger bytes, and `D` the newly
   reachable immutable events. A cold seed necessarily pays one `O(H)` Git extraction and one `O(L)` encode;

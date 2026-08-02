@@ -28,6 +28,8 @@ try {
   await name.waitFor({ state: 'visible' })
   const fullPath = await name.getAttribute('data-tip')
   if (!fullPath || (await name.textContent())?.includes('/')) throw new Error('the compact file row must show only a name and expose its full path as a tooltip')
+  const [menuBox, nameBox] = await Promise.all([page.locator('.si-files-menu').boundingBox(), name.boundingBox()])
+  if (!menuBox || !nameBox || menuBox.width > nameBox.width + 72) throw new Error('the file dropdown must fit its visible file name and fixed icon tools')
   await page.mouse.click(12, 840)
   await page.locator('.si-files-menu').waitFor({ state: 'hidden' })
   await button.click()

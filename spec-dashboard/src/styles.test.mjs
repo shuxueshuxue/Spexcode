@@ -94,11 +94,11 @@ test('browser page visibility reuses the terminal viewer lifecycle', () => {
   assert.match(terminal, /if \(!viewerIsVisible\(\)\)\s*\{\s*hideRef\.current\?\.\(\)/)
   assert.match(terminal, /lastSizeRef\.current\s*=\s*\{ cols: 0, rows: 0 \}\s*measureAndRequest\(\)/)
   // the pane's `active` follows whether its layer is actually SHOWN, not merely selected: a selected session
-  // still yields the surface to whichever panel owns it — the relaunch panel, or the archive card
+  // still yields the surface to whichever panel owns it — a resource tab, relaunch panel, or archive card
   // ([[archive]]) — and a pane hidden behind either must stand down exactly like an unselected one rather than
   // keep driving a viewer nobody can see. BOTH conditions belong here: the relaunch and archive cases were
   // found independently, each as a live xterm eating its panel's own button, so dropping either re-opens it.
-  assert.match(sessionInterface, /const shown = id === active && !showRelaunch && !shelvedSel/)
+  assert.match(sessionInterface, /const shown = id === active && !activeResource && !showRelaunch && !shelvedSel/)
   assert.match(sessionInterface, /<SessionTerm sessionId=\{id\} active=\{open && shown\}/)
   // and it must be hidden AND pointer-inert, or a live xterm silently swallows the card's own button
   assert.match(sessionInterface, /visibility: shown \? 'visible' : 'hidden',\s*\n\s*pointerEvents: shown \? 'auto' : 'none',/)

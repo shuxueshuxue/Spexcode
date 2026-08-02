@@ -17,6 +17,7 @@ related:
   - spec-dashboard/src/sessionToolbar.test.mjs
   - spec-dashboard/src/textarea.test.mjs
   - spec-dashboard/test/session-toolbar.e2e.mjs
+  - spec-dashboard/test/session-web.e2e.mjs
   - spec-dashboard/test/session-command-preset.e2e.mjs
   - spec-dashboard/test/session-tree-disclosure.e2e.mjs
   - spec-dashboard/test/session-sidebar-scroll.e2e.mjs
@@ -135,10 +136,15 @@ looks perfectly correct. That was found twice, independently, once per panel. Th
 no nested levels, and no permanently reserved second-input strip. Its own prompt and status line reach the
 pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
-genuinely single-line **session toolbar**
-contains only three things: the current surface, evaluation, and available commands. A pane-backed session exposes
-its one **Terminal** tab; a headless session exposes its one TimelineChat **Conversation** surface. Neither console
-adds a second native-event view. Session identity, lifecycle,
+genuinely single-line **session toolbar** contains the current surface, its local resource tabs, evaluation, and
+available commands. A pane-backed session exposes its one **Terminal** tab; a headless session exposes its one
+TimelineChat **Conversation** surface. The tab group's trailing plus button lists the selected session's posted
+files and loopback web services ([[files]] / [[web]]) that are not already open. Selecting one creates one
+browser-local tab for that exact session/reference; closing it removes only that view and permits reopening from
+the plus menu, never a duplicate. A newly observed posted web service creates its one tab automatically, becoming
+selected only when its session already is. Each resource tab exposes refresh and close icon tools: refresh rereads
+the current file preview response or recreates the same-origin webpage frame. Removing a published reference closes
+its resource tab. Neither console adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
 height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval entry is a **DOOR, not a tab** —
@@ -170,8 +176,9 @@ The toolbar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the console** below it in both light and dark themes (the old flat strip blended
 into that dark edge — the complaint this replaces). Its exact height follows the real tab text, icon tools, and
 focus rings rather than clipping them, targeting a compact ~32px instead of the former ~40px identity bar. At a
-narrow pane the same one-line hierarchy progressively drops secondary Eval tallies while keeping the current surface, the
-Eval door, and every currently available icon tool inside the pane. The bar never grows or
+narrow pane the same one-line hierarchy progressively drops secondary Eval tallies while keeping the current surface, resource
+tab strip, Eval door, and every currently available icon tool inside the pane. Resource tab labels clip and their
+strip scrolls horizontally rather than growing a second toolbar line. The bar never grows or
 overflows for a long prompt/headline because no session headline enters it at all. Geometry stays stable across
 all app themes, English/Chinese, lifecycle and liveness combinations, and Command Box visibility; a persisted wide session list
 yields at the desktop/mobile boundary rather than crushing the terminal lane until toolbar controls clip.
@@ -186,9 +193,11 @@ the public terminal parser consumes those mode toggles at the adapter boundary. 
 one uninterrupted local selection even when a TUI redundantly reasserts its mouse modes, while wheel navigation
 continues through [[live-view]]'s explicit tmux-client control path.
 
-The desktop right pane has **one console slot with two truthful transports**. A pane-backed adapter mounts the
+The desktop right pane has **one console slot with three truthful surfaces**. A pane-backed adapter mounts the
 warm, input-enabled `SessionTerm` described here. A headless adapter mounts the same `TimelineChat` used by the
-phone, with no terminal placeholder, tmux socket, or [[message-stream]] alternate view. TimelineChat's
+phone, with no terminal placeholder, tmux socket, or [[message-stream]] alternate view. A selected resource tab
+replaces either console with a bounded file preview or same-origin web frame; the inactive terminal layer is hidden
+and pointer-inert, preserving its warm transport. TimelineChat's
 message composer is the shared [[composer]] textarea and auto-growth path, with the same Enter / Shift+Enter /
 IME-send boundary as Command Box; its docked mobile and desktop hosts do not invent a second textarea
 mechanism. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed

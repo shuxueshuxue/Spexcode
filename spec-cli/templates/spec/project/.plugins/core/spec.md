@@ -9,8 +9,7 @@ code:
 The CLI is noun-first: `spex <noun> <verb> [object] [flags]`; `spex help` is the authoritative command map. Ordinary Git,
 shell, editor, branch, and worktree tools remain available; SpexCode manages only its own state.
 
-Publish human-facing artifacts with `spex session files add <path>`; it records a live path, not copied bytes,
-and the dashboard downloads on demand.
+Publish live references: `spex session files add <path>` or `spex session web add <url>`; never copy bytes.
 
 Four disciplines, non-negotiable:
 

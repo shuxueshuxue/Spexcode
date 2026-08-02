@@ -55,7 +55,7 @@ test('document pages consume PageScroll while Graph and Sessions keep their own 
   assert.doesNotMatch(css, /\.page-projects\s*\{[^}]*overflow-[xy]:/s)
   assert.match(evalsPage, /className="page-detail-stack"/)
   assert.match(css, /\.page-detail-stack\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s)
-  assert.match(css, /\.si-term-body\s*\{[^}]*overflow:\s*hidden;/s)
+  assert.match(css, /\.si-term-body\s*\{[^}]*overflow:\s*clip;/s)
   assert.match(css, /\.graph\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s)
 })
 

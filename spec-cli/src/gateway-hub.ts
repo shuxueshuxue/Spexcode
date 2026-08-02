@@ -30,7 +30,7 @@ import { installConnectionReaper } from './reaper.js'
 import { spexcodeHome, encodeProject } from './layout.js'
 import { readEndpointRecord } from './host.js'
 import { readGatewayIdentity, type ResolvedIdentity } from './project-identity.js'
-import { proxyHttp } from './gateway.js'
+import { proxyHttp, proxySessionWeb, proxySessionWebUpgrade } from './gateway.js'
 
 export type HubProject = { id: string; identity: ResolvedIdentity; url: string; port: number; gated: boolean }
 // @@@ extension seam - the hub stays the ONE routing+authorization server; a host-level caller
@@ -58,7 +58,7 @@ export type HubOpts = { port: number; host?: string; tls?: { cert: string; key: 
 // honored — the hub proxies into this machine's trust boundary, never out to an arbitrary host a crafted
 // record names.
 
-function upstreamOf(id: string): { url: string; port: number; identity: ResolvedIdentity } | null {
+function upstreamOf(id: string): { url: string; port: number; root: string; identity: ResolvedIdentity } | null {
   const rec = readEndpointRecord(join(spexcodeHome(), 'projects', id, 'backend.json'))
   if (!rec || encodeProject(rec.root) !== id) return null
   let u: URL
@@ -69,7 +69,7 @@ function upstreamOf(id: string): { url: string; port: number; identity: Resolved
   }
   const port = Number(u.port || 80)
   if (!Number.isInteger(port) || port <= 0) return null
-  return { url: rec.url, port, identity: rec.identity }
+  return { url: rec.url, port, root: rec.root, identity: rec.identity }
 }
 
 // a projectId arrives as ONE url path segment; reject anything that could re-shape the registry path.
@@ -272,6 +272,7 @@ export function startHubGateway(opts: HubOpts): http.Server {
         if (sub.startsWith('/api')) return sendJson(res, 401, { error: 'authentication required', login: `${base}/login` })
         return redirect(res, `${base}/login`)
       }
+      if (proxySessionWeb(req, res, sub + query, up.root)) return
       return proxyTo(req, res, up.port, sub + query)
     }
 
@@ -309,6 +310,7 @@ export function startHubGateway(opts: HubOpts): http.Server {
     const d = authorize(store, { kind: 'project', projectId: id }, req.headers.cookie, req.socket.remoteAddress, port)
     if (!d.ok) return socket.destroy()
     const sub = (pm[2] || '/') + (q >= 0 ? rawUrl.slice(q) : '')
+    if (proxySessionWebUpgrade(req, socket, head, sub, up.root)) return
     const upstream = net.connect(up.port, '127.0.0.1', () => {
       upstream.write(`${req.method} ${sub} HTTP/1.1\r\n` + filteredRawHeaders(req))
       if (head && head.length) upstream.write(head)

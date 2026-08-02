@@ -20,7 +20,7 @@ test('session noun-verb help projects the exact verb from the shared drawer defi
     { verb: 'wait', usage: 'Usage: spex session wait [SEL…]', behavior: /EDGE-TRIGGERED[\s\S]*non-actionable\s+status into an actionable one[\s\S]*SEL = session id/ },
     { verb: 'new', usage: 'Usage: spex session new "<prompt>"', behavior: /--prompt-file[\s\S]*successful receipt/ },
     { verb: 'done', usage: 'Usage: spex session done --propose merge|nothing|close', behavior: /merge.*review[\s\S]*ONLY declaration.*clickable merge[\s\S]*nothing.*done[\s\S]*close.*close-pending/ },
-    { verb: 'park', usage: 'Usage: spex session park --note <what-you-await>', behavior: /parked[\s\S]*background task[\s\S]*asking/ },
+    { verb: 'park', usage: 'Usage: spex session park --note <what-you-await>', behavior: /parked[\s\S]*managed watch delivery[\s\S]*background task[\s\S]*asking/ },
     { verb: 'ask', usage: 'Usage: spex session ask --note <your-question>', behavior: /asking[\s\S]*human reply[\s\S]*parked/ },
     { verb: 'quarantine', usage: 'Usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]', behavior: /--thread is an adapter-native conversation id, never the SpexCode session id; omit it for Claude/ },
   ]
@@ -54,6 +54,6 @@ test('Stop teaching names every declaration face without changing the gate', () 
   assert.match(stopGate, /done --propose nothing.*DONE.*never a merge/)
   assert.match(stopGate, /done --propose close.*CLOSE-PENDING.*not merge/)
   assert.match(stopGate, /ask --note.*ASKING.*human/)
-  assert.match(stopGate, /park --note.*BACKGROUND TASK.*PARKED/)
-  assert.match(stopGate, /done --propose merge \(review; ONLY clickable merge\).*nothing \(done; no merge\).*close \(close-pending\).*park \(parked; real background wake-up\).*ask \(asking; human reply\)/)
+  assert.match(stopGate, /park --note.*managed spex session watch subscription.*backgrounded.*PARKED/)
+  assert.match(stopGate, /done --propose merge \(review; ONLY clickable merge\).*nothing \(done; no merge\).*close \(close-pending\).*park \(parked; managed watch delivery or real background wake-up\).*ask \(asking; human reply\)/)
 })

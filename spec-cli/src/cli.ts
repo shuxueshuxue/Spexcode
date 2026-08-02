@@ -161,28 +161,13 @@ async function followKit(selectors: string[], verb: string): Promise<{
   return { watcher, follow: (emit, opts) => followSessions(emit, { ...opts, targets, self: watcher, row }) }
 }
 
-const greeted = new Set<string>()
-// Starting a STREAM follow on named live sessions announces itself ([[session-follow]]): one appended line per
-// target per process, so a stream never re-nags and a one-shot `wait` never announces at all. The append is the
-// delivery, taken locally, so the announce needs no backend either.
-async function greetWatchTargets(watcher: string, selectors: string[]): Promise<void> {
-  try {
-    const real = selectors.filter((sel) => sel && sel !== '@all')
-    if (!real.length) return
-    const { localCachedSessions } = await import('./client.js')
-    const { selectSessions, sendText, sessionHeadline } = await import('./sessions.js')
-    const board = localCachedSessions(true)
-    // name the watcher by its board HEADLINE (same as the reply-channel footer), delimited as a session title.
-    const mine = board.find((s) => s.id === watcher)
-    const me = mine ? sessionHeadline(mine) : watcher
-    const meWho = me && me !== watcher ? `session "${me}" (${watcher})` : `session ${watcher}`
-    for (const target of selectSessions(board, real).map((s) => s.id)) {
-      if (target === watcher || greeted.has(target)) continue
-      greeted.add(target)
-      const text = `🔭 ${meWho} is now supervising you — they started \`spex session watch\` over this session. To reach them directly, run: spex session send ${watcher} "<your message>". (One-time heads-up; reply only if you need to.)`
-      void sendText(target, text)   // no sender id → the connection notice is not double-counted as comms
-    }
-  } catch { /* greeting is best-effort — it must never disturb the watch */ }
+async function localWatchTargetsOrExit(selectors: string[], verb: string): Promise<string[]> {
+  if (!selectors.length) { console.error(`usage: ${verb} <SEL...>`); process.exit(2) }
+  const { localCachedSessions } = await import('./client.js')
+  const { selectSessions } = await import('./sessions.js')
+  const targets = selectSessions(localCachedSessions(true), selectors).map((session) => session.id)
+  if (!targets.length) { console.error(`${verb}: no such local session: ${selectors.join(' ')}`); process.exit(2) }
+  return targets
 }
 
 async function resolveSelectorOrExit(selector: string): Promise<string> {
@@ -626,8 +611,18 @@ if (cmd === 'serve') {
       if (!prompt.trim()) { console.error(`spex session new: --prompt-file ${promptFile === '-' ? 'stdin' : promptFile} is empty — refusing a promptless launch`); process.exit(2) }
     }
     const created = await createSession(prompt, flag('launcher') ?? undefined)
+    const { ownSessionId, subscribeSessionWatch } = await import('./sessions.js')
+    let watchEstablished = false
+    if (created.parent && created.parent === ownSessionId()) {
+      try {
+        await subscribeSessionWatch(created.parent, [created.id])
+        watchEstablished = true
+      } catch (error) {
+        console.error(`spex session new: child ${created.id} was created, but its managed watch was not established: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
     console.log(JSON.stringify(created, null, 2))
-    console.error((await import('./help.js')).sessionLaunchReceipt(created.id))
+    console.error((await import('./help.js')).sessionLaunchReceipt(created.id, watchEstablished))
   } else if (sub === 'ls') {
     // pretty list of living sessions + states. `spex session ls [SEL...] [--status a,b] [--json]`
     // the board comes from the backend (so it shows the sessions of whatever SPEXCODE_API_URL points at,
@@ -648,15 +643,35 @@ if (cmd === 'serve') {
     if (has('json')) console.log(JSON.stringify(report, null, 2))
     else console.log((await import('./host-resources.js')).formatResourceReport(report))
   } else if (sub === 'watch') {
-    const selectors = positionals(4)
-    const kit = await followKit(selectors, 'spex session watch')
-    if (kit.watcher) void greetWatchTargets(kit.watcher, selectors)
-    await kit.follow((line) => console.log(line), {
-      statuses: flag('status')?.split(','),
-      includeIdle: has('idle'),
-      as: flag('as'),
-      intervalMs: (Number(flag('interval')) || 1) * 1000,
-    })
+    const [verb, ...rest] = positionals(4)
+    const { ownSessionId, subscribeSessionWatch, listSessionWatches, cancelSessionWatch } = await import('./sessions.js')
+    const watcher = ownSessionId()
+    if (verb === 'stream') {
+      const kit = await followKit(rest, 'spex session watch stream')
+      await kit.follow((line) => console.log(line), {
+        statuses: flag('status')?.split(','),
+        includeIdle: has('idle'),
+        as: flag('as'),
+        intervalMs: (Number(flag('interval')) || 1) * 1000,
+      })
+    } else if (verb === 'list') {
+      if (!watcher) { console.error('spex session watch list: no governed caller session — this caller has no durable watch relation'); process.exit(2) }
+      for (const watch of listSessionWatches(watcher)) console.log(`${watch.target}\t${watch.createdAt}`)
+    } else if (verb === 'cancel') {
+      if (!watcher) { console.error(`spex session watch cancel: no governed caller session — run \`spex session wait ${rest.join(' ')}\` in the background instead`); process.exit(2) }
+      const targets = await localWatchTargetsOrExit(rest, 'spex session watch cancel')
+      console.log(`cancelled ${cancelSessionWatch(watcher, targets)} watch${targets.length === 1 ? '' : 'es'}`)
+    } else {
+      const selectors = [verb, ...rest].filter(Boolean)
+      if (!watcher) {
+        if (!selectors.length) { console.error('usage: spex session watch <SEL...>'); process.exit(2) }
+        console.error(`spex session watch: no governed caller session — run \`spex session wait ${selectors.join(' ')}\` in the BACKGROUND to receive the next actionable transition`)
+      } else {
+        const targets = await localWatchTargetsOrExit(selectors, 'spex session watch')
+        const result = await subscribeSessionWatch(watcher, targets)
+        console.log(`watching ${result.watched.join(' ')}`)
+      }
+    }
   } else if (sub === 'wait') {
     const selectors = positionals(4)
     const kit = await followKit(selectors, 'spex session wait')

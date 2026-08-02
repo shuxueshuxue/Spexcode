@@ -26,12 +26,15 @@ glance still answers "whose turn is it?" off the PARENT alone, never a muddled a
 
 ## expanded spec
 
-**Provenance is captured once, at creation.** When `spex new` runs from inside another session,
+**Provenance is captured once, then supervised through the ordinary watch command.** When `spex new` runs from inside another session,
 `createSession` resolves its OWN session id through the same `ownSessionId` env read the [[agent-reply-channel]]
 reply-hint uses (in the CLI's own process) and passes it as `parent` in the `POST /api/sessions` body;
 `newSession` writes it into the child's `session.json` ([[runtime]]) as a durable field, and it rides onto the
 public `Session` type and `/api/graph`. A human running `spex new` from a plain shell has no session id →
 `parent` stays null, so no phantom nesting — the same no-sender rule [[agent-reply-channel]] already uses.
+After a successful child create, the parent performs the thin `spex session watch <child>` call. The nesting
+field remains provenance and layout only; the ordinary watch relation owns status delivery and is independently
+visible/cancellable through `watch list` and `watch cancel`.
 
 **Nesting is DERIVED at read time, never a stored mutation on children.** Each session points only at its
 DIRECT parent; the tree is rebuilt on every board read. A child nests under its parent ONLY IF that parent is
@@ -74,10 +77,12 @@ attention (the needs-you zone — asking/review/done/close-pending, error folded
 subtree is all idle/offline. Yellow does NOT mean "needs the human" — it may just be an actionable transition
 the supervisor chain will handle, a passive hint kept out of the zone/sort, never an escalation.
 
-**Behavioural contract.** The honesty of "parent status = group status" rides existing
-parked / `spex wait` / [[agent-reply-channel]] machinery, not new mechanism: after spawning children an agent
-supervises them (background `spex wait <child>`) and stays `parked` while they run, only becoming `asking` when
-it genuinely needs the human. Strengthened in the `supervisor` config plugin.
+**Behavioural contract.** The honesty of "parent status = group status" rides the ordinary managed
+[[session-follow]] relation: once the thin watch call has succeeded, child transitions arrive in the parent's
+normal terminal prompt queue and wake it exactly like an ordinary send. A caller without that managed address
+backgrounds `spex session wait <child>` and stays `parked` while it runs, only becoming `asking` when it
+genuinely needs the human. Strengthened in the `supervisor` config plugin.
 
-Out of scope: any child mutation or stored tree (read-time only); the supervision relation ([[session-follow]]) — nesting is a
-LIST fold over spawn provenance, orthogonal to who is following whom.
+Out of scope: any child mutation or stored tree (read-time only). Nesting is a LIST fold over spawn
+provenance; its one thin watch call uses the independent supervision mechanism and can later be cancelled or
+replaced without rewriting the child.

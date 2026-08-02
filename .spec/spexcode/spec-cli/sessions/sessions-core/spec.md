@@ -29,9 +29,12 @@ sessions-core owns `sessions.ts` — the common session layer: the global per-se
 assembly (the rendezvous env + the harness's own command + the spec-pointer/prompt tail — carrying NO
 `--append-system-prompt`/`--settings` flag, since the contract and hooks reach the agent by worktree
 auto-discovery, see [[harness-delivery]]), the shared resolution of a raw `surface: command` invocation into
-the prompt that [[launch]] or [[dispatch]] delivers, and the launch queue's drain loop. Supervision keeps no
-loop here: `wait`/`watch` read a followed session's own log past a durable cursor ([[session-follow]]), so the
-only thing they take from this module is a display string.
+the prompt that [[launch]] or [[dispatch]] delivers, and the launch queue's drain loop. [[session-follow]]'s
+durable watch relation is stored once as a target-owned `watchers.json` here because a target's record writer
+is the only hot path that must find its watchers. After a state record commits, it snapshots that small list
+and uses the existing send queue to notify each watcher only after releasing the target's lock; no monitor
+loop, second transport, or bidirectional index enters the shared layer. `wait` remains the cursor-backed
+reader fallback for callers with no governed delivery address.
 A launch record carries the selected launcher name, its resolved harness, and the exact pinned
 `launch_cmd`; session lifecycle and comms call that one interactive adapter directly rather than routing on a
 second product dimension. The session's node is derived only from the raw prompt's first `[[id]]` topic

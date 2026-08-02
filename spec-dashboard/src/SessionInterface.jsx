@@ -17,7 +17,7 @@ import { inboxCommands, uiCommandsFor } from './sessionCommands.js'
 import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
-import { apiUrl } from './project.js'
+import { apiUrl, PROJECT_BASE } from './project.js'
 import { inertChromePress, returnFocus } from './focus.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
@@ -56,6 +56,14 @@ function ActionOutcome({ outcome }) {
 }
 
 const fileName = (path) => path.split('/').filter(Boolean).pop() || path
+const webName = (url) => {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.hostname.replace(/^\[|\]$/g, '')}:${parsed.port}${parsed.pathname === '/' ? '' : parsed.pathname}`
+  } catch { return url }
+}
+const resourceTabKey = (sessionId, kind, value) => `${sessionId}:${kind}:${value}`
+const webProxyUrl = (sessionId, key) => `${PROJECT_BASE}/web/${encodeURIComponent(sessionId)}/${encodeURIComponent(key)}/`
 
 function SessionFiles({ session, onFailure }) {
   const t = useT()
@@ -92,6 +100,15 @@ function SessionFiles({ session, onFailure }) {
       document.body.appendChild(link)
       link.click()
       link.remove()
+    } catch (error) {
+      onFailure(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const copyPath = async (path) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error(t('session.fileCopyUnavailable'))
+      await navigator.clipboard.writeText(path)
     } catch (error) {
       onFailure(error instanceof Error ? error.message : String(error))
     }
@@ -144,11 +161,13 @@ function SessionFiles({ session, onFailure }) {
       {open && (
         <div className="si-files-menu" role="menu" aria-label={t('session.filesListLabel')}>
           {files.map((path) => <div key={path} className="si-files-row" role="none">
-            <span className="si-files-name" data-tip={path}>{fileName(path)}</span>
+            <span className="si-files-name">{fileName(path)}</span>
             <IconButton icon="eye" size={14} className="si-files-preview" role="menuitem" label={t('session.previewFile', { path })}
               onClick={() => openPreview(path)} />
             <IconButton icon="download" size={14} className="si-files-download" role="menuitem" label={t('session.downloadFile', { path })}
               onClick={() => download(path)} />
+            <IconButton icon="copy" size={14} className="si-files-copy" role="menuitem" label={path}
+              onClick={() => copyPath(path)} />
           </div>)}
         </div>
       )}
@@ -156,7 +175,7 @@ function SessionFiles({ session, onFailure }) {
         <div className="si-file-preview-backdrop" data-focus-overlay onMouseDown={closePreview}>
         <section ref={previewRef} tabIndex={-1} className="si-file-preview" role="dialog" aria-modal="true" aria-label={t('session.filePreviewTitle', { path: preview.path })} onMouseDown={(event) => event.stopPropagation()}>
           <header className="si-file-preview-head">
-            <span data-tip={preview.path}>{fileName(preview.path)}</span>
+            <span>{fileName(preview.path)}</span>
             <IconButton icon="download" size={14} label={t('session.downloadFile', { path: preview.path })} onClick={() => download(preview.path)} />
             <IconButton icon="x" size={14} label={t('session.closeFilePreview')} onClick={closePreview} />
           </header>
@@ -169,6 +188,47 @@ function SessionFiles({ session, onFailure }) {
         </section>
         </div>
       )}
+    </div>
+  )
+}
+
+function SessionResourcePanel({ tab }) {
+  const t = useT()
+  const [preview, setPreview] = useState({ phase: 'loading' })
+
+  useEffect(() => {
+    if (tab.kind !== 'file') return
+    let cancelled = false
+    let imageUrl = null
+    const url = apiUrl(`/api/sessions/${encodeURIComponent(tab.sessionId)}/files/download?path=${encodeURIComponent(tab.value)}&preview=1`)
+    setPreview({ phase: 'loading' })
+    fetch(url).then(async (response) => {
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(body?.error || t('session.filePreviewFailed', { status: response.status }))
+      }
+      if (response.headers.get('X-Spexcode-Preview-Kind') === 'image') {
+        imageUrl = URL.createObjectURL(await response.blob())
+        if (!cancelled) setPreview({ phase: 'image', url: imageUrl })
+      } else {
+        const text = await response.text()
+        if (!cancelled) setPreview({ phase: 'text', text })
+      }
+    }).catch((error) => {
+      if (!cancelled) setPreview({ phase: 'error', message: error instanceof Error ? error.message : String(error) })
+    })
+    return () => { cancelled = true; if (imageUrl) URL.revokeObjectURL(imageUrl) }
+  }, [tab.kind, tab.sessionId, tab.value, tab.revision, t])
+
+  if (tab.kind === 'web') {
+    return <iframe key={tab.revision} className="si-resource-web" src={webProxyUrl(tab.sessionId, tab.key)} title={tab.label} />
+  }
+  return (
+    <div className="si-resource-file">
+      {preview.phase === 'loading' && <Icon name="loader" size={18} className="si-attach-busy" />}
+      {preview.phase === 'error' && <p className="si-file-preview-error" role="alert">{preview.message}</p>}
+      {preview.phase === 'text' && <pre>{preview.text}</pre>}
+      {preview.phase === 'image' && <img src={preview.url} alt={fileName(tab.value)} />}
     </div>
   )
 }
@@ -316,11 +376,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
   const [dragTarget, setDragTarget] = useState(null)
   const [attachments, setAttachments] = useState([])
+  const [resourceTabs, setResourceTabs] = useState([])
+  const [resourceSurface, setResourceSurface] = useState({})
+  const [resourceMenu, setResourceMenu] = useState(false)
   const taRef = useRef(null)
   const msgRef = useRef(null)
   const panelRef = useRef(null)
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
+  const resourcePickerRef = useRef(null)
+  const knownWebsRef = useRef(null)
   const listRef = useRef(null)
   const outcomeTimerRef = useRef(null)
   const attachmentsRef = useRef([])
@@ -424,6 +489,65 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   const shelvedSel = !!selSession?.archived
   const showRelaunch = !shelvedSel && noLivePane && selSession?.status !== 'queued'
+  const activeResourceId = active === 'new' ? null : resourceSurface[active] || null
+  const activeResource = resourceTabs.find((tab) => tab.id === activeResourceId) || null
+  const resourceOptions = selSession ? [
+    ...(selSession.files || []).map((path) => ({
+      id: resourceTabKey(active, 'file', path), sessionId: active, kind: 'file', value: path, label: fileName(path), revision: 0,
+    })),
+    ...(selSession.web || []).map((web) => ({
+      id: resourceTabKey(active, 'web', web.key), sessionId: active, kind: 'web', key: web.key, value: web.url, label: webName(web.url), revision: 0,
+    })),
+  ].filter((option) => !resourceTabs.some((tab) => tab.id === option.id)) : []
+
+  const openResource = useCallback((tab, select = true) => {
+    setResourceTabs((tabs) => tabs.some((current) => current.id === tab.id) ? tabs : [...tabs, tab])
+    if (select) setResourceSurface((surfaces) => ({ ...surfaces, [tab.sessionId]: tab.id }))
+    setResourceMenu(false)
+    closeCommandBox()
+  }, [])
+  const closeResource = (tab) => {
+    setResourceTabs((tabs) => tabs.filter((current) => current.id !== tab.id))
+    setResourceSurface((surfaces) => surfaces[tab.sessionId] === tab.id ? { ...surfaces, [tab.sessionId]: null } : surfaces)
+  }
+  const refreshResource = (tab) => setResourceTabs((tabs) => tabs.map((current) =>
+    current.id === tab.id ? { ...current, revision: current.revision + 1 } : current,
+  ))
+
+  useEffect(() => {
+    const published = new Map()
+    for (const session of sessions) for (const web of session.web || []) {
+      const tab = { id: resourceTabKey(session.id, 'web', web.key), sessionId: session.id, kind: 'web', key: web.key, value: web.url, label: webName(web.url), revision: 0 }
+      published.set(tab.id, tab)
+    }
+    const previous = knownWebsRef.current
+    knownWebsRef.current = published
+    if (!previous) return
+    const added = [...published].filter(([id]) => !previous.has(id)).map(([, tab]) => tab)
+    if (!added.length) return
+    setResourceTabs((tabs) => [...tabs, ...added.filter((tab) => !tabs.some((current) => current.id === tab.id))])
+    const selected = added.find((tab) => tab.sessionId === active)
+    if (selected) setResourceSurface((surfaces) => ({ ...surfaces, [active]: selected.id }))
+  }, [sessions, active])
+
+  useEffect(() => {
+    const published = new Set()
+    for (const session of sessions) {
+      for (const path of session.files || []) published.add(resourceTabKey(session.id, 'file', path))
+      for (const web of session.web || []) published.add(resourceTabKey(session.id, 'web', web.key))
+    }
+    setResourceTabs((tabs) => tabs.filter((tab) => published.has(tab.id)))
+    setResourceSurface((surfaces) => Object.fromEntries(Object.entries(surfaces).filter(([, id]) => !id || published.has(id))))
+  }, [sessions])
+
+  useEffect(() => {
+    if (!resourceMenu) return
+    const closeOutside = (event) => { if (!resourcePickerRef.current?.contains(event.target)) setResourceMenu(false) }
+    const closeEscape = (event) => { if (event.key === 'Escape') setResourceMenu(false) }
+    window.addEventListener('pointerdown', closeOutside)
+    window.addEventListener('keydown', closeEscape)
+    return () => { window.removeEventListener('pointerdown', closeOutside); window.removeEventListener('keydown', closeEscape) }
+  }, [resourceMenu])
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
   const setMsg = (value) => setDrafts((draft) => ({
@@ -436,6 +560,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (id === 'new') return
     closeCommandBox()
     setMenu(null)
+    setResourceSurface((surfaces) => ({ ...surfaces, [id]: null }))
     setOpened((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
     setSel(id)
     setTerminalFocusRequest((request) => request + 1)
@@ -1249,14 +1374,42 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       type="button"
                       id={surfaceTabId}
                       role="tab"
-                      aria-selected="true"
+                      aria-selected={!activeResource}
                       aria-controls={`${surfacePanelId}-${active}`}
-                      className="si-tab on"
+                      className={`si-tab${activeResource ? '' : ' on'}`}
                       onClick={() => activateTerminal(active)}
                     >
                       <Icon name={terminalFree ? 'message-square' : 'terminal'} size={13} />
                       <span className="si-tab-label">{t(terminalFree ? 'session.tabConversation' : 'session.tabTerminal')}</span>
                     </button>
+                    {resourceTabs.filter((tab) => tab.sessionId === active).map((tab) => (
+                      <div key={tab.id} className={`si-resource-tab${activeResource?.id === tab.id ? ' on' : ''}`}>
+                        <button type="button" id={`si-resource-tab-${tab.id}`} role="tab" aria-selected={activeResource?.id === tab.id}
+                          aria-controls={`si-resource-panel-${tab.id}`} className="si-resource-tab-main"
+                          onClick={() => setResourceSurface((surfaces) => ({ ...surfaces, [active]: tab.id }))}>
+                          <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
+                          <span>{tab.label}</span>
+                        </button>
+                        <IconButton icon="rotate-ccw" size={12} className="si-resource-tab-action" label={t('session.refreshResourceTab', { name: tab.label })}
+                          onClick={() => refreshResource(tab)} />
+                        <IconButton icon="x" size={12} className="si-resource-tab-action" label={t('session.closeResourceTab', { name: tab.label })}
+                          onClick={() => closeResource(tab)} />
+                      </div>
+                    ))}
+                  </div>
+                  <div ref={resourcePickerRef} className="si-resource-picker">
+                    <IconButton icon="plus" size={14} className="si-tab-add" label={t('session.addResourceTab')}
+                      aria-expanded={resourceMenu} disabled={active === 'new'} onClick={() => setResourceMenu((open) => !open)} />
+                    {resourceMenu && (
+                      <div className="si-resource-menu" role="menu" aria-label={t('session.resourceMenuLabel')}>
+                        {resourceOptions.length ? resourceOptions.map((tab) => (
+                          <button key={tab.id} type="button" className="si-resource-menu-row" role="menuitem" onClick={() => openResource(tab)}>
+                            <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
+                            <span>{tab.label}</span>
+                          </button>
+                        )) : <span className="si-resource-menu-empty">{t('session.resourceMenuEmpty')}</span>}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1301,10 +1454,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               {/* The live terminal stays mounted when the Eval door routes the app away (warm-terminals
                   contract); the routed session page is display-hidden, so socket + scroll survive. */}
               <div
-                className={`si-term-body${terminalFree ? ' is-conversation' : ''}`}
-                id={`${surfacePanelId}-${active}`}
+                className={`si-term-body${terminalFree ? ' is-conversation' : ''}${activeResource ? ' is-resource' : ''}`}
+                id={activeResource ? `si-resource-panel-${activeResource.id}` : `${surfacePanelId}-${active}`}
                 role="tabpanel"
-                aria-labelledby={surfaceTabId}
+                aria-labelledby={activeResource ? `si-resource-tab-${activeResource.id}` : surfaceTabId}
                 style={{ position: 'relative' }}
               >
                 {/* live panes remain mounted for working sessions; a cold archive has no resident pane and yields
@@ -1313,7 +1466,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   const session = sessions.find((candidate) => candidate.id === id)
                   const headless = isHeadlessSession(session)
                   // the pane yields to whichever panel owns the surface — resume or the archive card.
-                  const shown = id === active && !showRelaunch && !shelvedSel
+                  const shown = id === active && !activeResource && !showRelaunch && !shelvedSel
                   return (
                     <div key={id} className="si-term-layer" style={{
                       position: 'absolute', inset: 0,
@@ -1328,10 +1481,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     </div>
                   )
                 })}
-                {actionOutcome?.owner === 'panel' && !showRelaunch && !shelvedSel && (
+                {activeResource && <SessionResourcePanel tab={activeResource} />}
+                {actionOutcome?.owner === 'panel' && !activeResource && !showRelaunch && !shelvedSel && (
                   <div className="si-action-outcome-float"><ActionOutcome outcome={actionOutcome} /></div>
                 )}
-                {showRelaunch && (
+                {showRelaunch && !activeResource && (
                   <div className="si-offline">
                     <div className="si-offline-msg">{t('session.offlineMsg')}</div>
                     <div className="si-offline-sub">{t('session.offlineSubBefore')}<code>{active.slice(0, 8)}…</code>{t('session.offlineSubAfter')}</div>

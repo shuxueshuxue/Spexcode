@@ -12,6 +12,7 @@ import { adapterLoadedReferenceState, defaultHarness, HARNESSES, sessionIdentity
 import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
 import { listSessionFiles } from './session-files.js'
+import { listSessionWebs, type SessionWeb } from './session-web.js'
 import { appendSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { drain, enqueue, owesDelivery } from './delivery-queue.js'
 import { stripRefSigil } from './mentions.js'
@@ -86,6 +87,7 @@ export type Session = {
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
   files?: string[]         // live posted paths ([[files]]), read from the session store with the rest of the projection
+  web?: SessionWeb[]       // live posted loopback services ([[web]]), read from the session store with the rest of the projection
 }
 
 // HTTP carries no authenticated session identity. A CLI may report its environment id, but that remains
@@ -836,7 +838,7 @@ function corruptSession(id: string, entry: { path: string; error: string }): Ses
     parent: null, harness: defaultHarness.id, capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
     note: corruptReason(entry), archived: false, prompt: null, promptPreview: null, created: 0,
-    activity: null, sortKey: null, archiveHazard: null, files: [],
+    activity: null, sortKey: null, archiveHazard: null, files: [], web: [],
   }
 }
 
@@ -849,7 +851,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const pp = prompt ? oneLinePreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: listSessionFiles(rec.session) }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: listSessionFiles(rec.session), web: listSessionWebs(rec.session) }
 }
 
 export async function renameSession(id: string, name: string): Promise<boolean> {

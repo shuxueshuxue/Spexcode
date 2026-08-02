@@ -673,6 +673,33 @@ if (cmd === 'serve') {
       console.error(`spex session files: unknown verb '${verb}' — add | ls | retract  (spex help session)`)
       process.exit(2)
     }
+  } else if (sub === 'web') {
+    rejectUnknownFlags('spex session web', 4, [])
+    const [verb, url, extra] = positionals(4)
+    if (extra || !verb || (verb !== 'ls' && !url) || (verb === 'ls' && url)) {
+      console.error('usage: spex session web add <url> | ls | retract <url>')
+      process.exit(2)
+    }
+    const { ownSessionId, withSessionRecordLockSync } = await import('./sessions.js')
+    const id = ownSessionId()
+    if (!id) {
+      console.error('spex session web: no governed caller session — run this from the agent session that started the local service')
+      process.exit(2)
+    }
+    const web = await import('./session-web.js')
+    if (verb === 'ls') {
+      for (const entry of web.listSessionWebs(id)) console.log(entry.url)
+    } else if (verb === 'add') {
+      const result = web.addSessionWeb(id, url!, withSessionRecordLockSync)
+      console.log(result.added ? `posted ${result.url}` : `already posted ${result.url}`)
+    } else if (verb === 'retract') {
+      const result = web.retractSessionWeb(id, url!, withSessionRecordLockSync)
+      if (!result.removed) { console.error(`spex session web retract: URL is not posted: ${result.url}`); process.exit(2) }
+      console.log(`retracted ${result.url}`)
+    } else {
+      console.error(`spex session web: unknown verb '${verb}' — add | ls | retract  (spex help session)`)
+      process.exit(2)
+    }
   } else if (sub === 'watch') {
     const [verb, ...rest] = positionals(4)
     const { ownSessionId, subscribeSessionWatch, listSessionWatches, cancelSessionWatch } = await import('./sessions.js')
@@ -932,7 +959,7 @@ if (cmd === 'serve') {
       await assertLocalBackend()
       process.exit(await attachSession(await resolveSelectorOrExit(id)))
     } else {
-      console.error(`spex session: unknown verb '${sub}' — new | ls | files | show | watch | wait | review | merge | send | interrupt | rename | resume | stop | close | attach | done | park | ask  (spex help session)`)
+      console.error(`spex session: unknown verb '${sub}' — new | ls | files | web | show | watch | wait | review | merge | send | interrupt | rename | resume | stop | close | attach | done | park | ask  (spex help session)`)
       process.exit(2)
     }
   }

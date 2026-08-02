@@ -69,10 +69,10 @@ human may still download any posted file regardless of its previewability or siz
 
 The selected session's top-right file icon is disabled grey when its projected list is empty. Once at least
 one path is posted, the same icon is live and opens a compact, content-sized dropdown. Each row shows only
-the file name; the full absolute path is available only through its hover tooltip, preserving the useful
+the file name; the full absolute path is exposed only on its copy-path icon's tooltip, preserving the useful
 host-local detail without turning a toolbar menu into a path dump. Long names clip at a viewport-safe bound,
-but a short name does not inherit a fixed empty menu width. The name is inert: its eye icon is the preview button and
-its adjacent download icon starts the download. Preview opens in a centred overlay pop-out, separate from
+but a short name does not inherit a fixed empty menu width. The name is inert: its eye icon is the preview button,
+its adjacent download icon starts the download, and its copy icon writes the absolute path. Preview opens in a centred overlay pop-out, separate from
 the dropdown's original position. No browser fetch happens merely because the dropdown opened. The control
 uses the shared icon vocabulary and carries its accessible label/tooltip. A failed download is shown as a
 concrete session action error, while a preview refusal is shown inside its pop-out, never mistaken for file

@@ -1,6 +1,7 @@
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
+import type { Duplex } from 'node:stream'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { readFileSync, existsSync, mkdirSync, writeFileSync, statSync } from 'node:fs'
@@ -11,6 +12,7 @@ import { homedir } from 'node:os'
 import { loginPage } from './login-page.js'
 import { listenOrExit } from './listen.js'
 import { installConnectionReaper } from './reaper.js'
+import { postedSessionWeb, SessionWebError } from './session-web.js'
 
 export type PublicConfig = { password: string; tls: { cert: string; key: string } | null }
 function argFlag(name: string): string | undefined {
@@ -107,7 +109,7 @@ export function resolveDistDir(): string {
   return join(pkgRoot, '..', 'spec-dashboard', 'dist')
 }
 
-export type GatewayOpts = { publicPort: number; upstreamPort: number; password: string; tls: { cert: string; key: string } | null; distDir: string; host?: string; label?: string; onBindFail?: () => void }
+export type GatewayOpts = { publicPort: number; upstreamPort: number; password: string; tls: { cert: string; key: string } | null; distDir: string; host?: string; label?: string; onBindFail?: () => void; projectRoot?: string }
 
 export function startGateway(opts: GatewayOpts): void {
   // gated ONLY when a password is set; otherwise the login layer doesn't exist and the dashboard is served open.
@@ -133,6 +135,7 @@ export function startGateway(opts: GatewayOpts): void {
         res.writeHead(302, { Location: '/login' }); return res.end()
       }
     }
+    if (proxySessionWeb(req, res, req.url || '/', opts.projectRoot)) return
     if (url.startsWith('/api')) return proxyHttp(req, res, opts.upstreamPort)
     return serveStatic(req, res, opts.distDir, url)
   }
@@ -144,6 +147,7 @@ export function startGateway(opts: GatewayOpts): void {
 
   server.on('upgrade', (req, socket, head) => {
     if (gated && !isAuthed(req, token, cookieName)) { socket.destroy(); return }
+    if (proxySessionWebUpgrade(req, socket, head, req.url || '/', opts.projectRoot)) return
     const up = net.connect(opts.upstreamPort, '127.0.0.1', () => {
       up.write(`${req.method} ${req.url} HTTP/1.1\r\n` + rawHeaders(req))
       if (head && head.length) up.write(head)
@@ -207,7 +211,7 @@ const wantsGzip = (req: http.IncomingMessage) => /\bgzip\b/.test(String(req.head
 // stream-gzipping compressible bodies (measured: the board JSON rides down at under a third).
 // `path` and `headers` optionally override routing inputs (the host gateway strips its /p/:projectId
 // prefix and gateway cookies); transport ownership stays here once. Defaults pass the request through.
-export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string, headers: http.OutgoingHttpHeaders = req.headers) {
+export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, upstreamPort: number, path?: string, headers: http.OutgoingHttpHeaders = req.headers, unavailableMessage = 'upstream unreachable', upstreamHost = '127.0.0.1') {
   let upstreamResponse: http.IncomingMessage | null = null
   let transform: ReturnType<typeof createGzip> | null = null
   let settled = false
@@ -270,11 +274,11 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
     removeDownstreamListeners()
     destroyUpstream()
     if (res.destroyed) return
-    if (!res.headersSent) { res.writeHead(502); res.end('upstream unreachable') }
+    if (!res.headersSent) { res.writeHead(502); res.end(unavailableMessage) }
     else res.destroy()
   }
 
-  const up = http.request({ host: '127.0.0.1', port: upstreamPort, path: path ?? req.url, method: req.method, headers }, (received) => {
+  const up = http.request({ host: upstreamHost, port: upstreamPort, path: path ?? req.url, method: req.method, headers }, (received) => {
     if (settled || res.destroyed) { received.destroy(); up.destroy(); return }
     upstreamResponse = received
     received.once('aborted', failFromUpstream)
@@ -304,6 +308,95 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
   res.once('close', onResponseClose)
   res.once('finish', onResponseFinish)
   req.pipe(up)
+}
+
+type WebRoute = { sessionId: string; key: string; tail: string; query: string }
+
+function webRoute(raw: string): WebRoute | null {
+  const q = raw.indexOf('?')
+  const path = q >= 0 ? raw.slice(0, q) : raw
+  const match = path.match(/^\/web\/([^/]+)\/([A-Za-z0-9_-]+)(\/.*)?$/)
+  if (!match) return null
+  return { sessionId: decodeURIComponent(match[1]), key: match[2], tail: match[3] || '/', query: q >= 0 ? raw.slice(q) : '' }
+}
+
+function sessionWebTarget(route: WebRoute, projectRoot?: string): { port: number; host: string; connectHost: string; path: string } {
+  const endpoint = postedSessionWeb(route.sessionId, route.key, projectRoot)
+  const base = endpoint.pathname.endsWith('/') ? endpoint.pathname : `${endpoint.pathname}/`
+  const path = route.tail === '/' ? endpoint.pathname : `${base}${route.tail.slice(1)}`
+  return { port: Number(endpoint.port), host: endpoint.host, connectHost: endpoint.hostname.replace(/^\[|\]$/g, ''), path: `${path}${route.query}` }
+}
+
+function withoutGatewayCookies(cookie: string | undefined): string {
+  return (cookie ?? '').split(';').map((part) => part.trim())
+    .filter((part) => part && !/^spex_(admin|proj|auth)_/i.test(part.slice(0, Math.max(part.indexOf('='), 0))))
+    .join('; ')
+}
+
+function webHeaders(req: http.IncomingMessage, host: string): http.OutgoingHttpHeaders {
+  const headers: http.OutgoingHttpHeaders = { ...req.headers, host }
+  const kept = withoutGatewayCookies(req.headers.cookie)
+  if (kept) headers.cookie = kept; else delete headers.cookie
+  return headers
+}
+
+function webRawHeaders(req: http.IncomingMessage, host: string): string {
+  let out = ''
+  let wroteHost = false
+  for (let i = 0; i < req.rawHeaders.length; i += 2) {
+    const name = req.rawHeaders[i]
+    const value = req.rawHeaders[i + 1]
+    if (name.toLowerCase() === 'host') { out += `Host: ${host}\r\n`; wroteHost = true; continue }
+    if (name.toLowerCase() === 'cookie') {
+      const kept = withoutGatewayCookies(value)
+      if (kept) out += `Cookie: ${kept}\r\n`
+      continue
+    }
+    out += `${name}: ${value}\r\n`
+  }
+  return `${out}${wroteHost ? '' : `Host: ${host}\r\n`}\r\n`
+}
+
+function sessionWebFailure(res: http.ServerResponse, error: unknown): void {
+  if (error instanceof SessionWebError) {
+    res.writeHead(error.status, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })
+    res.end(error.message)
+    return
+  }
+  console.error(`[web] route failed: ${error instanceof Error ? error.message : String(error)}`)
+  res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' })
+  res.end('web preview failed')
+}
+
+// A posted URL selects a loopback service; the gateway owns only the prefix and transport. It never opens
+// an endpoint until a browser asks for this route, so each request observes the service's current bytes.
+export function proxySessionWeb(req: http.IncomingMessage, res: http.ServerResponse, raw = req.url || '/', projectRoot?: string): boolean {
+  const route = webRoute(raw)
+  if (!route) return false
+  try {
+    const target = sessionWebTarget(route, projectRoot)
+    proxyHttp(req, res, target.port, target.path, webHeaders(req, target.host), 'posted web service is unavailable', target.connectHost)
+  } catch (error) { sessionWebFailure(res, error) }
+  return true
+}
+
+export function proxySessionWebUpgrade(req: http.IncomingMessage, socket: Duplex, head: Buffer, raw = req.url || '/', projectRoot?: string): boolean {
+  const route = webRoute(raw)
+  if (!route) return false
+  let target: { port: number; host: string; connectHost: string; path: string }
+  try { target = sessionWebTarget(route, projectRoot) }
+  catch { socket.destroy(); return true }
+  const upstream = net.connect(target.port, target.connectHost, () => {
+    upstream.write(`${req.method} ${target.path} HTTP/1.1\r\n` + webRawHeaders(req, target.host))
+    if (head.length) upstream.write(head)
+    socket.pipe(upstream); upstream.pipe(socket)
+  })
+  const bail = () => { socket.destroy(); upstream.destroy() }
+  socket.on('error', bail); upstream.on('error', bail)
+  socket.on('end', bail); upstream.on('end', bail)
+  socket.once('close', () => upstream.destroy())
+  upstream.once('close', () => socket.destroy())
+  return true
 }
 
 // serve the built dashboard (vite dist). Unknown non-file paths fall back to index.html (SPA). Path
@@ -359,10 +452,10 @@ export function ensureDashboardBuilt(repoRoot: string, distDir: string): void {
 // It serves the bundled dist and proxies /api + the terminal socket to a separately-run `spex serve`.
 // This is the post-install replacement for the dogfood-only `npm run web` (a vite dev server an
 // installed user has no source tree for). See [[packaging]].
-export function serveDashboardLocal(opts: { port: number; apiPort: number; host?: string }): void {
+export function serveDashboardLocal(opts: { port: number; apiPort: number; host?: string; projectRoot?: string }): void {
   const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
   const distDir = resolveDistDir()
   ensureDashboardBuilt(join(pkgRoot, '..'), distDir) // bundled dist already has index.html → returns at once
   console.log(`[dashboard] serving ${distDir.endsWith('dashboard-dist') ? 'bundled' : 'monorepo'} build, /api → backend :${opts.apiPort}`)
-  startGateway({ host: opts.host ?? '127.0.0.1', publicPort: opts.port, upstreamPort: opts.apiPort, password: '', tls: null, distDir, label: 'dashboard' })
+  startGateway({ host: opts.host ?? '127.0.0.1', publicPort: opts.port, upstreamPort: opts.apiPort, password: '', tls: null, distDir, label: 'dashboard', projectRoot: opts.projectRoot })
 }

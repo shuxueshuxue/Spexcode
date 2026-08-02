@@ -426,9 +426,15 @@ export async function gitA(args: string[], input?: string): Promise<string> {
 type TextEventRecord = { hash: string; raw: string }
 type IdentityEventRecord = { hash: string; identity: IdentityRawRecord }
 type EventRecord = TextEventRecord | IdentityEventRecord
-type EventCache = { streams: Map<EventStreamKind, Map<string, EventRecord>>; streamTips: Map<EventStreamKind, string[]> }
+export type ImmutableHunkRanges = { after: DiffLineRange[]; before: DiffLineRange[][] }
+type EventCache = {
+  streams: Map<EventStreamKind, Map<string, EventRecord>>
+  streamTips: Map<EventStreamKind, string[]>
+  hunks: Map<string, ImmutableHunkRanges>
+}
 type EventStreamOutput = string | IdentityRawRecord[]
 const EVENT_CACHE_SCHEMA = 'history-events-v15'
+const IMMUTABLE_HUNK_FACT = 'immutable-hunk-v1'
 const EVENT_STREAM_KINDS = ['merge', 'identity-raw'] as const
 type EventStreamKind = typeof EVENT_STREAM_KINDS[number]
 type EventCacheLocation = { path: string; identity: string; objectFormat: GitObjectFormat }
@@ -500,7 +506,7 @@ function eventCacheLocation(root: string): EventCacheLocation {
   return { path, identity, objectFormat }
 }
 function emptyEventCache(): EventCache {
-  return { streams: new Map(), streamTips: new Map() }
+  return { streams: new Map(), streamTips: new Map(), hunks: new Map() }
 }
 function exactKeys(value: Record<string, unknown>, expected: string[]): boolean {
   const actual = Object.keys(value).sort()
@@ -525,6 +531,28 @@ function eventStreamKind(value: unknown): EventStreamKind | null {
     ? value as EventStreamKind
     : null
 }
+function decodeHunkRanges(value: unknown): DiffLineRange[] | null {
+  if (!Array.isArray(value)) return null
+  const ranges: DiffLineRange[] = []
+  for (const row of value) {
+    if (!Array.isArray(row) || row.length !== 2 || !Number.isSafeInteger(row[0]) || !Number.isSafeInteger(row[1])
+      || row[0] <= 0 || row[1] < row[0]) return null
+    ranges.push([row[0], row[1]])
+  }
+  return ranges
+}
+function decodeImmutableHunkFact(row: Record<string, unknown>): { key: string; ranges: ImmutableHunkRanges } | null {
+  if (!exactKeys(row, ['a', 'b', 'i', 'k']) || row.k !== IMMUTABLE_HUNK_FACT || typeof row.i !== 'string' || !row.i) return null
+  const after = decodeHunkRanges(row.a)
+  if (!after || !Array.isArray(row.b)) return null
+  const before: DiffLineRange[][] = []
+  for (const parent of row.b) {
+    const ranges = decodeHunkRanges(parent)
+    if (!ranges) return null
+    before.push(ranges)
+  }
+  return { key: row.i, ranges: { after, before } }
+}
 function decodeEventPayload(payload: Buffer, location: EventCacheLocation): EventCache | null {
   const state = emptyEventCache()
   const text = payload.toString('utf8')
@@ -538,6 +566,12 @@ function decodeEventPayload(payload: Buffer, location: EventCacheLocation): Even
     try { value = JSON.parse(line) } catch { return null }
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null
     const row = value as Record<string, unknown>
+    if (row.k === IMMUTABLE_HUNK_FACT) {
+      const fact = decodeImmutableHunkFact(row)
+      if (!fact || state.hunks.has(fact.key)) return null
+      state.hunks.set(fact.key, fact.ranges)
+      continue
+    }
     if (exactKeys(row, ['k', 'tip'])) {
       const kind = typeof row.k === 'string' && row.k.startsWith('tip:') ? eventStreamKind(row.k.slice(4)) : null
       if (!kind || typeof row.tip !== 'string' || !isGitObjectIdForFormat(location.objectFormat, row.tip)) return null
@@ -738,6 +772,16 @@ function appendEventTip(state: EventCache, kind: EventStreamKind, tip: string, a
   state.streamTips.set(kind, tips)
   additions.push(JSON.stringify({ k: `tip:${kind}`, tip }) + '\n')
 }
+function appendImmutableHunkFact(state: EventCache, key: string, ranges: ImmutableHunkRanges, additions: string[]): void {
+  const existing = state.hunks.get(key)
+  if (existing) {
+    if (JSON.stringify(existing) !== JSON.stringify(ranges))
+      throw new Error(`immutable hunk ledger fact disagrees for image identity ${JSON.stringify(key)}`)
+    return
+  }
+  state.hunks.set(key, ranges)
+  additions.push(JSON.stringify({ k: IMMUTABLE_HUNK_FACT, i: key, a: ranges.after, b: ranges.before }) + '\n')
+}
 function parseEventRecords(out: string, kind: EventStreamKind, location: EventCacheLocation): EventRecord[] {
   if (kind === 'identity-raw') return parseIdentityRawEventRecords(out, location)
   const records: EventRecord[] = []
@@ -831,6 +875,46 @@ async function deriveEventStreams(
   }
   throw new Error(`history event cache identity changed repeatedly while deriving ${tip}`)
 }
+
+// Immutable hunk ranges are a ledger fact, not a second anchor cache: callers name their whole image-key
+// demand, receive only facts the shared ledger already certified, and derive/persist misses in their own read.
+export function readImmutableHunkFacts(root: string, keys: Iterable<string>): Map<string, ImmutableHunkRanges> {
+  const wanted = new Set(keys)
+  if (!wanted.size) return new Map()
+  // A cache lookup must not pre-empt the caller's Git failure classification. If this process cannot even
+  // discover the ledger location, derive the miss through the authoritative adapter below instead.
+  let snapshot: EventLedgerSnapshot
+  try { snapshot = loadEventLedger(eventCacheLocation(root)) }
+  catch { return new Map() }
+  const found = new Map<string, ImmutableHunkRanges>()
+  for (const key of wanted) {
+    const ranges = snapshot.state.hunks.get(key)
+    if (ranges) found.set(key, ranges)
+  }
+  return found
+}
+
+export async function persistImmutableHunkFacts(root: string, facts: ReadonlyMap<string, ImmutableHunkRanges>): Promise<void> {
+  if (!facts.size) return
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const location = eventCacheLocation(root)
+    const written = await withEventCacheLock(location.path, () => {
+      const snapshot = loadEventLedger(location)
+      if (eventCacheLocation(root).identity !== location.identity) return false
+      const additions: string[] = []
+      for (const [key, ranges] of facts) appendImmutableHunkFact(snapshot.state, key, ranges, additions)
+      if (additions.length) {
+        removeEventTemps(location.path)
+        mkdirSync(join(location.path, '..'), { recursive: true })
+        replaceEventLedger(location.path, snapshot.payload, additions)
+      }
+      return true
+    })
+    if (written) return
+  }
+  throw new Error('history event cache identity changed repeatedly while persisting immutable hunk facts')
+}
+
 async function eventStream(
   root: string,
   tip: string,

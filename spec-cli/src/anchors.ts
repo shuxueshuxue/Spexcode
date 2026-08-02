@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, type DiffLineRange, type DriftIndex, type DriftPathEvent } from './git.js'
+import { git, gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, readImmutableHunkFacts, persistImmutableHunkFacts, type DiffLineRange, type DriftIndex, type DriftPathEvent, type ImmutableHunkRanges } from './git.js'
 
 const RS = '\x1e'
 
@@ -484,7 +484,8 @@ const hunkMemo = new Map<string, HunkRanges>()
 // historical path. Keying on those makes the key move exactly when an input does, and the oids are already
 // resolved by this read's one `cat-file --batch-check`, so completeness costs no extra child and no new state.
 const ABSENT_IMAGE = '-'
-const hunkMemoKey = (images: string[]) => images.join('\0')
+const HUNK_FACT_SCHEMA = 'anchor-range-histogram-v1'
+const hunkMemoKey = (images: string[]) => `${HUNK_FACT_SCHEMA}\0${images.join('\0')}`
 function rememberHunks(key: string, ranges: HunkRanges): HunkRanges {
   if (hunkMemo.size >= MEMO_MAX) hunkMemo.clear()
   hunkMemo.set(key, ranges)
@@ -604,14 +605,28 @@ async function runAnchorQueries(root: string, queries: AnchorHitQuery[], regs: E
     imageOf(event.commit, event.historicalPath),
     ...event.parents.map(({ commit, historicalPath }) => imageOf(commit, historicalPath)),
   ])
+  const hunkKeys = new Set<string>()
   const ordinaryByPath = new Map<string, Map<string, string>>()
   for (const { path, commit, event } of ordinaryEvents) {
     const entries = ordinaryByPath.get(path) ?? new Map<string, string>()
-    entries.set(commit, imageIdentity(event))
+    const key = imageIdentity(event)
+    hunkKeys.add(key)
+    entries.set(commit, key)
     ordinaryByPath.set(path, entries)
   }
+  for (const { win } of queries) for (const event of win) hunkKeys.add(imageIdentity(event))
+  const durableHunks = readImmutableHunkFacts(root, hunkKeys)
+  for (const [key, ranges] of durableHunks) rememberHunks(key, ranges)
+  const newHunks = new Map<string, ImmutableHunkRanges>()
   const ordinaryHunks = new Map<string, Map<string, HunkRanges>>()
-  for (const [path, entries] of ordinaryByPath) ordinaryHunks.set(path, await hunksAtMany(root, path, entries))
+  for (const [path, entries] of ordinaryByPath) {
+    const rangesByCommit = await hunksAtMany(root, path, entries)
+    ordinaryHunks.set(path, rangesByCommit)
+    for (const [commit, key] of entries) {
+      const ranges = rangesByCommit.get(commit)
+      if (ranges && !durableHunks.has(key)) newHunks.set(key, ranges)
+    }
+  }
   // The image's own memo answers before any bytes move, so the read asks git only for the revisions this
   // process has not parsed yet — the retention half of the same rule the hunk demand set follows.
   const units = new Map<string, FileRevisionUnits>()
@@ -665,8 +680,10 @@ async function runAnchorQueries(root: string, queries: AnchorHitQuery[], regs: E
         run.cursor++
         const after = units.get(anchorRevisionKey({ commit: event.commit, path: event.historicalPath }))!
         const before = event.parents.map(({ commit, historicalPath }) => units.get(anchorRevisionKey({ commit, path: historicalPath }))!)
+        const key = imageIdentity(event)
         const ranges = ordinaryHunks.get(event.historicalPath)?.get(event.commit)
-          ?? await hunksAt(root, event, imageIdentity(event))
+          ?? await hunksAt(root, event, key)
+        if (!durableHunks.has(key)) newHunks.set(key, ranges)
         if (event.parents.length && ranges.before.length !== before.length)
           throw new Error(`anchor diff for ${event.commit}:${event.historicalPath} has ${ranges.before.length} parent ranges for ${before.length} parents`)
         const hit = run.hits.get(event.commit) ?? { selectors: new Set<string>() }
@@ -688,6 +705,7 @@ async function runAnchorQueries(root: string, queries: AnchorHitQuery[], regs: E
       }
     }
   }
+  await persistImmutableHunkFacts(root, newHunks)
   return runs.map((run) => [...run.hits].map(([commit, hit]) => ({ commit, selectors: [...hit.selectors], ...(hit.unparseable ? { unparseable: hit.unparseable } : {}) })))
 }
 

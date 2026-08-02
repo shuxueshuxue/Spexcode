@@ -314,14 +314,18 @@ is that node's contract to change and deliberately untouched here; the alternati
 the persisted stream without moving its schema — would leave old rows eligible under new semantics, which is
 worse than the split being written down.
 
-Under that identity the demand set a batch sends Git is its MISSES, and a second READ in the same process asks
-only about images it has not read — work proportional to what MOVED, not to the corpus. The waste that removes:
+Under that identity and this seam's pinned range-semantics schema, the demand set a batch sends Git is its
+MISSES. The source-of-truth event ledger retains those immutable ranges across backend processes under the
+same key: one batch reads its whole demand once, fills only absent facts, and merges them through the ledger's
+existing atomic writer. A hunk fact carries no selector, unit, window, reachability, or verdict, so a changed
+declaration still resolves and validates normally; an absent or invalid fact is recomputed loudly. The
+process-local memo remains the fast path within that read. The waste that removes:
 a re-lint after a single trunk commit or one dirty edit re-forked one `log --patch` per anchored path (22 on
 this tree, argv byte-identical to the previous run) and re-streamed every window blob, so a consumer that
 re-verdicts per tree state — [[manager-cockpit]]'s review gate — paid the whole corpus per movement. The batch
-ends with that invocation; the memo it fills is per-image and holds no window, verdict or reachability, so it
-is neither a resident cache of results nor a second history truth, and an image set Git was never asked about
-is always asked. Git access stays batch/short-lived; no resident
+ends with that invocation; its durable range fact and local memo are per-image and hold no window, verdict or
+reachability, so neither is a resident cache of results nor a second history truth, and an image set Git was
+never asked about is always asked. Git access stays batch/short-lived; no resident
 process. The READ is the unit deliberately: a consumer that batches something narrower — one node, one
 reading — re-forks the whole batch per unit and inverts the flag's purpose, so both the spec-drift and the
 eval-freshness consumers hand the engine their entire demand set at once. Batch width lengthens a queue

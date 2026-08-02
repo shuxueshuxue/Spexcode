@@ -121,7 +121,7 @@ type LoadedSpec = Awaited<ReturnType<typeof loadSpecs>>[number]
 async function impactGit(root: string, args: string[], operation: string): Promise<string> {
   const result = await gitTry(['-C', root, ...args])
   if (!result.ok) {
-    const detail = result.stderr.trim() || `${result.failure ?? 'git'} failure`
+    const detail = result.failure ? `${result.failure} failure${result.stderr.trim() ? `: ${result.stderr.trim()}` : ''}` : result.stderr.trim() || 'git failure'
     throw new SessionImpactUnavailableError(`session impact cannot ${operation}: ${detail}`)
   }
   return result.stdout
@@ -130,7 +130,7 @@ async function impactGit(root: string, args: string[], operation: string): Promi
 async function impactIndexGit(root: string, indexFile: string, args: string[], operation: string): Promise<string> {
   const result = await gitTry(['-C', root, ...args], { indexFile })
   if (!result.ok) {
-    const detail = result.stderr.trim() || `${result.failure ?? 'git'} failure`
+    const detail = result.failure ? `${result.failure} failure${result.stderr.trim() ? `: ${result.stderr.trim()}` : ''}` : result.stderr.trim() || 'git failure'
     throw new SessionImpactUnavailableError(`session impact cannot ${operation}: ${detail}`)
   }
   return result.stdout

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
 import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, tsAstExtractor } from './anchors.js'
+import { historyEventCachePathForTests } from './git.js'
 
 // [[code-anchor]] — the structured relation grammar (ONE parser for code: and related:) and the
 // multi-selector hit engine: selectors on one base file are OR'd, a commit counts ONCE, and each hit
@@ -14,6 +15,10 @@ import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, sele
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(SRC, '..', '..')
+
+function removeFixtureLedger(root: string): void {
+  try { rmSync(dirname(historyEventCachePathForTests(root)), { recursive: true, force: true }) } catch {}
+}
 
 test('ordinary hunk ranges preserve old-side deletions below line one', () => {
   const patch = '@@ -4,2 +3,0 @@ removed beta\n'
@@ -136,6 +141,8 @@ test('multi-selector hits across file revisions: a commit counts ONCE and unpars
     { commit: c3, selectors: ['f', 'g'], unparseable: false }, // both units in one commit — one row
     { commit: c5, selectors: ['f', 'g'], unparseable: true },  // c4 (outside both units) is absent
   ])
+  removeFixtureLedger(root)
+  rmSync(root, { recursive: true, force: true })
 })
 
 test('anchor query batch reads one shared immutable window for distinct selectors', { skip: !gitAvailable() && 'git not available' }, async () => {
@@ -149,6 +156,7 @@ test('anchor query batch reads one shared immutable window for distinct selector
     g('add', '-A'); g('commit', '-qm', 'v1')
     writeFileSync(join(root, 'src/x.ts'), 'export function f() { return 10 }\nexport function g() { return 20 }\n')
     g('add', '-A'); g('commit', '-qm', 'change both'); const change = g('rev-parse', 'HEAD')
+    historyEventCachePathForTests(root) // production reaches anchors after the shared ledger path is known
     const bin = mkdtempSync(join(tmpdir(), 'spex-git-count-'))
     const count = join(bin, 'count')
     writeFileSync(join(bin, 'git'), `#!/bin/sh\nprintf x >> ${count}\nexec /usr/bin/git \"$@\"\n`)
@@ -158,10 +166,11 @@ test('anchor query batch reads one shared immutable window for distinct selector
     const win = [{ commit: change, historicalPath: 'src/x.ts', parents: [] }]
     const hits = await anchorHitQueries(root, [{ win, symbols: ['f'] }, { win, symbols: ['g'] }], [x])
     assert.deepEqual(hits.map((rows) => rows.map((row) => row.selectors)), [[['f']], [['g']]])
-    assert.equal(readFileSync(count, 'utf8').length, 4, 'one format probe, two object batches, and one shared hunk batch')
+    assert.equal(readFileSync(count, 'utf8').length, 3, 'two object batches and one shared hunk batch after ledger discovery')
     rmSync(bin, { recursive: true, force: true })
   } finally {
     process.env.PATH = oldPath
+    removeFixtureLedger(root)
     rmSync(root, { recursive: true, force: true })
   }
 })
@@ -172,6 +181,7 @@ test('a repeated read costs the MOVEMENT, and a commit git was never asked about
   const oldPath = process.env.PATH
   const bin = mkdtempSync(join(tmpdir(), 'spex-git-argv-'))
   const argv = join(bin, 'argv')
+  let ledgerPath = ''
   const unit = (name: string, body: string) => `export function ${name}() {\n  return ${body}\n}\n`
   const calls = () => readFileSync(argv, 'utf8').split('\n').filter(Boolean)
   const hunkQueries = () => calls().filter((line) => line.includes(' log ')).length
@@ -188,11 +198,21 @@ test('a repeated read costs the MOVEMENT, and a commit git was never asked about
     process.env.PATH = `${bin}:${oldPath}`
     const x = tsAstExtractor(ROOT)
     const event = (commit: string) => ({ commit, historicalPath: 'src/repeat.ts', parents: [] })
+    ledgerPath = historyEventCachePathForTests(root)
 
     writeFileSync(argv, '')
     const cold = await anchorHitQueries(root, [{ win: [event(first)], symbols: ['f', 'g'] }], [x])
     assert.deepEqual(cold[0].map((row) => row.selectors), [['f']])
     assert.equal(hunkQueries(), 1, 'the cold read asks for the window it has not read')
+
+    // A fresh module has no process hunk memo. It must replay the same immutable fact from the existing
+    // source-of-truth ledger, not re-run the historical patch query after a backend replacement.
+    writeFileSync(argv, '')
+    const fresh = await (await import(`./anchors.js?durable-hunks=${first}`)).anchorHitQueries(
+      root, [{ win: [event(first)], symbols: ['f', 'g'] }], [x],
+    )
+    assert.deepEqual(fresh, cold, 'a durable image fact preserves the exact selector result')
+    assert.equal(hunkQueries(), 0, 'a fresh process replays the hunk fact without another historical patch query')
 
     // Same window, same process: every image and ordinary hunk is a permanent property of that commit.
     writeFileSync(argv, '')
@@ -215,6 +235,7 @@ test('a repeated read costs the MOVEMENT, and a commit git was never asked about
     process.env.PATH = oldPath
     rmSync(bin, { recursive: true, force: true })
     rmSync(root, { recursive: true, force: true })
+    if (ledgerPath) rmSync(dirname(ledgerPath), { recursive: true, force: true })
   }
 })
 

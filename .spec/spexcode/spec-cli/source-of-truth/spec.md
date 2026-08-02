@@ -95,7 +95,14 @@ Two principles keep that derivation cheap on a long-running server:
   in-flight build.
 
   The persistent event ledger has one **build-local transaction** across the history, drift, and
-  merge-authorship streams. Let `H` be reachable commits, `L` the encoded ledger bytes, and `D` the newly
+  merge-authorship streams. It also holds immutable anchor hunk facts, not selector verdicts: each fact is
+  keyed by the anchor engine's pinned range-semantics schema plus the ordered result/parent image identity
+  (blob oid and historical path). A reader asks the ledger for its whole hunk demand once, derives only absent
+  facts through Git, then merges those validated ranges through the SAME lock and atomic replacement as event
+  rows. A missing fact costs its first derivation; a malformed ledger row is rejected as a whole ledger and
+  rebuilt from Git. Parser units, selector resolution, windows, reachability, and lint verdicts remain
+  process-local/current computations, so the ledger can never certify a changed selector or tree from an old
+  answer. Let `H` be reachable commits, `L` the encoded ledger bytes, and `D` the newly
   reachable immutable events. A cold seed necessarily pays one `O(H)` Git extraction and one `O(L)` encode;
   an exact-tip hit pays one `O(L)` read, integrity pass, and decode with no event Git walk; an advancing tip
   pays one `O(L)` snapshot plus `O(D)` event extraction and at most one atomic `O(L + D)` replacement. The
@@ -135,7 +142,7 @@ Two principles keep that derivation cheap on a long-running server:
   stores compact typed records and both projectors receive those records directly, so a
   pathname containing the human-facing record-separator byte can never reframe history.
 
-  The expected peak-memory shape is one encoded ledger payload plus one decoded event state plus the current
+  The expected peak-memory shape is one encoded ledger payload (events plus immutable hunk facts) plus one decoded event state plus the current
   projection, not one copy of those per stream or per optimistic-lock retry. The slow full-history derivation
   remains the correctness oracle. Release evidence compares the two implementations in separate processes
   and homes on a fixed current tree, proves a known finding first, and reports cold, exact-tip, and advancing-tip

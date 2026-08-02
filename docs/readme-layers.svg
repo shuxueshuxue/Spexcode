@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 620" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="1400" height="620" fill="#F4EEE0"/>
+  <defs>
+    <marker id="larr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16495A"/>
+    </marker>
+  </defs>
+
+  <!-- adoption ladder, left -->
+  <line x1="96" y1="500" x2="96" y2="120" stroke="#16495A" stroke-width="3" marker-end="url(#larr)"/>
+  <text x="60" y="320" font-size="17" font-weight="700" fill="#16495A" transform="rotate(-90 60 320)" text-anchor="middle">the adoption ladder</text>
+
+  <!-- L2 -->
+  <g>
+    <rect x="150" y="72" width="1200" height="140" rx="14" fill="#FFFDF6" stroke="#171A20" stroke-width="2"/>
+    <rect x="150" y="72" width="120" height="140" rx="14" fill="#DCEAF0"/>
+    <rect x="252" y="72" width="18" height="140" fill="#FFFDF6"/>
+    <text x="210" y="132" font-size="34" font-weight="800" fill="#16495A" text-anchor="middle">L2</text>
+    <text x="210" y="162" font-size="14" fill="#16495A" text-anchor="middle">workspace</text>
+    <text x="300" y="116" font-size="22" font-weight="700" fill="#171A20">the dashboard — a reference workspace</text>
+    <text x="300" y="150" font-size="17" fill="#171A20">spec map of the whole repo · live agent supervision · every view is a shareable URL</text>
+    <text x="300" y="182" font-size="15" font-style="italic" fill="#5C5647">a consumer of L1, never its gatekeeper — everything it shows, the CLI can do</text>
+  </g>
+
+  <!-- L1 -->
+  <g>
+    <rect x="150" y="240" width="1200" height="140" rx="14" fill="#FFFDF6" stroke="#171A20" stroke-width="2"/>
+    <rect x="150" y="240" width="120" height="140" rx="14" fill="#16495A"/>
+    <rect x="252" y="240" width="18" height="140" fill="#FFFDF6"/>
+    <text x="210" y="300" font-size="34" font-weight="800" fill="#F4EEE0" text-anchor="middle">L1</text>
+    <text x="210" y="330" font-size="14" fill="#DCEAF0" text-anchor="middle">agents</text>
+    <text x="300" y="284" font-size="22" font-weight="700" fill="#171A20">the session substrate — an agent army</text>
+    <text x="300" y="318" font-size="17" fill="#171A20">dispatch into isolated worktrees · one state machine: launched → working → review → merged</text>
+    <text x="300" y="350" font-size="15" font-style="italic" fill="#5C5647">building bricks for a CI, a review pipeline, your own software factory — judged by scale and composability</text>
+  </g>
+
+  <!-- L0 -->
+  <g>
+    <rect x="150" y="408" width="1200" height="140" rx="14" fill="#FFFDF6" stroke="#171A20" stroke-width="2"/>
+    <rect x="150" y="408" width="120" height="140" rx="14" fill="#171A20"/>
+    <rect x="252" y="408" width="18" height="140" fill="#FFFDF6"/>
+    <text x="210" y="468" font-size="34" font-weight="800" fill="#F4EEE0" text-anchor="middle">L0</text>
+    <text x="210" y="498" font-size="14" fill="#8A8272" text-anchor="middle">data asset</text>
+    <text x="300" y="452" font-size="22" font-weight="700" fill="#171A20">the spec↔code graph — a data asset in plain git</text>
+    <text x="300" y="486" font-size="17" fill="#171A20">versioned spec tree · function-level anchors · drift detection · <tspan font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">spex spec lint</tspan></text>
+    <text x="300" y="518" font-size="15" font-style="italic" fill="#5C5647">the thing an organisation adopts and never throws away — no daemon, no lock-in, works offline</text>
+  </g>
+
+  <text x="150" y="592" font-size="16" fill="#5C5647">each layer is worth having without the ones above it: take L0 alone, add L1 for the army, add L2 for the workspace.</text>
+</svg>

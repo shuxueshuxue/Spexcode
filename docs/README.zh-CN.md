@@ -22,201 +22,165 @@
 spec 和它管辖的代码链接起来,并运行一个会话管理器,把 coding agent 派进相互隔离的 worktree。你负责
 review 和 merge;工具负责让意图和实现不分家。
 
-[![点击播放:这个仓库的 spec 树从 git 历史里生长出来](spec-tree-poster.jpg)](https://spexcode.net/assets/spec-tree-growth.mp4)
-
-<sub>▶ 这个仓库自己的 spec 树,从它的 git 历史里回放出来:三周里长出 160 个 spec 节点。点击看[完整视频](https://spexcode.net/assets/spec-tree-growth.mp4)。</sub>
-
 [English](../README.md) | 中文 · 文档:[spexcode.net](https://spexcode.net) · License: MIT
 
-快捷入口:[模型](#模型) · [为什么是自然语言](#为什么正文是自然语言) · [快速开始](#快速开始) · [agent](#和-agent-一起工作) ·
-[eval](#测量行为eval) · [配置](#配置)
+| | |
+|---|---|
+| **可计算的 drift** | 每个 spec 钉住它管辖的文件——可以细到函数。一次纯 git 的机械检查就能标出"代码动了、spec 没跟上":文件级是提醒,钉住的函数被改则直接阻断。没有 embedding、不靠猜,只看 commit 和行区间。 |
+| **agent 军团,一道人工闸门** | 每个任务派发进自己的 worktree 和分支,由同一个状态机监管:`working → review → merged`。worker 只提议,你只在合并时 review 一次。互不相干的任务并行跑。 |
+| **一切皆 URL** | spec 节点、session、eval、live 终端——dashboard 上每个视图都有稳定地址,发给同事就能看;两个人可以盯着同一块 session 看板。 |
+| **积木,不是铁板** | 三个可拆的层:spec↔code 数据资产(L0)、session 基座(L1)、dashboard(L2)。按需取用——下面两层就是为你自己的软件工厂准备的积木。 |
+| **用你的 harness** | Claude Code、Codex、OpenCode、pi——交互式或 headless 都行。一份物化出来的工作流契约服务所有 harness;新增一个 harness 是改配置,不是改产品。 |
 
 ## 模型
 
-<div align="center"><img src="sdd-tuxedo-pooh.png" alt="spec 驱动开发梗图" width="260"></div>
+一个 spec 节点就是 `.spec/` 下的一个目录,里面有一个 `spec.md`:frontmatter 写明它管辖的那一个文件
+(`code:`——还可以用 `path#symbol` 钉到具体函数)和它引用的文件(`related:`),然后是一段正文,描述
+系统这一部分当前应该做什么。节点可以嵌套,所以这棵树对应你对项目的理解方式,而不是文件布局。正文可以
+分成两个部分:很短的 **raw source**,由人签字认可;**expanded spec** 是 agent 对这个意图的详细展开,
+自由迭代,但必须始终和 raw source 一致。
 
-一个 spec 节点就是 `.spec/` 下的一个目录,里面有一个 `spec.md`:frontmatter(title、status、
-指向它管辖文件的 `code:`,以及列出它引用文件的 `related:` 清单)加一段正文,描述系统这一部分当前应该做什么。节点可以嵌套,所以这棵树
-对应你对项目的理解方式,而不是文件布局。正文可以分成两个带标题的部分。很短的 **raw source** 写意图,改它需要
-人的明确认可(agent 可以起草,由人确认);**expanded spec** 是 agent 对这个意图的详细展开,自由
-迭代,但必须始终和 raw source 一致。
+<img src="readme-model.svg" alt="一个 spec 节点管辖一个文件,锚定到函数级;引用的文件走 related;git 是唯一的数据库">
 
-<img src="readme-node.png" alt="节点弹窗">
+没有第二份需要同步、会烂掉的存储:节点的版本就是碰过它 `spec.md` 的那些 commit,每一版通过
+`Session:` commit trailer 归属到写它的 agent 会话。一次改动就是一个 commit,同时更新 spec 和它所
+解释的代码。代码要是单独动了,linter 会看见:
 
-两条规则让这套东西成立:
+<img src="readme-drift-flow.svg" alt="drift 时间线:漏掉锚定函数的纯代码 commit 是提醒;改到锚定函数的直接报 anchor-drift 错误,出路是更新 spec 或带理由 ack">
 
-1. **git 就是数据库。** 没有第二份存储。节点的版本号是碰过它 `spec.md` 的 commit 数,历史视图就是
-   这个文件的 `git log`,每一版通过 `Session:` commit trailer 归属到写它的 agent 会话。也因为这样,
-   spec 正文永远只描述当前意图、原地重写:正文里禁止出现 changelog 标题(linter 强制),因为历史
-   git 已经记了。
-2. **spec 和代码一起落地。** 一次改动就是一个 commit,同时更新 `spec.md` 和它所解释的代码。代码
-   要是脱开 spec 单独动了,linter 会标出来,
-
-   ```
-   drift: spec-cli/src/graph.ts is 1 commit(s) ahead of spec 'graph-lean' (v12) — may be stale
-   ```
-
-   一直标到 spec 跟上为止。
+这个检查只比对 git 的朴素事实——spec 上一版之后来了哪些 commit,有没有碰到锚定单元的行区间。它说不出
+新行为是好是坏,只能说 spec 已经描述不了代码了。而这恰恰是它值得跑的原因:一次重命名改了八个 spec、
+漏掉一个,不是粗心,是常态。
 
 ## 为什么正文是自然语言
 
-agent 是用文本推理的:它的思维链就是一串自然语言 token。所以在动你的代码之前,它先把这段代码复述成
-意图——而这个复述会补进代码里本来没有的信息。补上去的那部分是猜的,依据是同类代码通常在干什么。于是
-它在你代码写得常规的地方猜得准,在不常规的地方猜错,而值得记下来的决定恰恰都在不常规的地方。猜错了
-也不会报错,只会产出一份基于误读、看上去毫无问题的代码。每一种编程语言最后都长出了注释语法,因为
-形式化的那部分从来说不出为什么要这么写。
+agent 用文本推理:它的思维链就是一串自然语言 token。所以在改你的代码之前,它得先把代码复述成意图——
+而复述会添进代码本身没有的信息。添进去的那部分是猜的,猜的依据是"长这样的代码通常怎么表现"。你的代码
+越常规,它猜得越准;越不常规,它错得越狠——而值得留下来的决策恰恰住在不常规的那部分。猜错了不会自己
+报警,只会产出一段建立在误读上的、非常自信的代码。历史上每一门编程语言都长出了注释语法,因为形式化的
+那一半从来装不下 why。
 
-所以 spec 存不存在不由你选。每一次有人读你的代码库,都会重建出一份 spec;你能选的只是它被写下来过
-一次、被 review 过,还是每次读的时候由一个不在场的人重猜一遍。这也顺带定死了正文该写什么:约束、
-被否决的方案、产品政策、那条看着能删其实不能删的不变量——读代码复原不出来的那部分。一段只是在复述
-代码正在做什么的正文,价值是零,因为读者自己就能生成它。
+所以"要不要 spec"根本不由你选。每次读你的代码库都会重建出一份 spec;你只能选它是被写下来、被 review
+过一次,还是每次阅读都由一个不在场的人重新猜一遍。这也定了正文里该写什么:约束、被否掉的备选方案、
+策略、看着能删其实不能删的不变量——读者从代码里恢复不出来的那部分。复述代码字面行为的正文一文不值,
+因为读者自己就能生成它。
 
-## 优化循环
+## 把软件当学习系统
 
-spec、commit、eval,这几样合起来是一个循环。spec 是损失函数:定义你要什么,这一半由人来定。commit 是优化器。
-**eval** 是测量子系统:量出当前行为离 spec 还有多远,分数的历史照样存在 git 里。
+spec、commit、eval 组成一个优化循环。spec 是损失函数:写下你要什么,也是由人签字的那一半。commit 是
+优化器。**eval** 是测量子系统,给"当前真实行为离 spec 有多远"打分——agent 在产品的真实表面上跑每个
+场景,像真实用户那样操作,然后连证据(截图、录屏)一起归档。分数的历史和其它一切一样存在 git 里;修
+bug 要求成对:先归档一条复现 bug 的失败 eval,修好后在同一场景归档一条通过的。
 
-<img src="readme-loop.zh.png" alt="优化循环示意">
+<div align="center"><img src="readme-loop.zh.png" alt="spec/code 优化循环" width="560"></div>
 
-它也决定了人平时站在哪:没有人靠盯权重去读神经网络,两次 merge 之间同样不必盯着 agent 的 diff。
-注意力放在 spec 和 eval 上;diff 只在 merge 的时候读一次。
+没有人靠盯着权重读神经网络;在两次合并闸门之间,你也不用盯着 agent 的 diff。注意力放在两端——spec 和
+eval;diff 只在合并时读一次。
 
 ## 快速开始
 
-需要 Node ≥ 22 和 git。这一步是普通工具,还不涉及 AI。
+需要 Node ≥ 22 和 git。这一步是纯工具,还不涉及 AI。
 
 ```sh
-npm i -g spexcode                              # 安装 spex 命令
+npm i -g spexcode                              # 安装 `spex` 命令
 cd your-repo
-spex init --harness claude,codex,opencode,pi,claude-headless,opencode-headless,pi-headless,codex-headless   # 生成 .spec/、安装 hooks、写入 agent 契约
+spex init --harness claude,codex,opencode,pi,claude-headless,opencode-headless,pi-headless,codex-headless   # 播种 .spec/、装 git 钩子、物化 agent 契约
 ```
 
-接入到这里就完成了。示例列出了全部内置 harness——把你不用的删掉即可:`--harness` 是必填项,
-没有默认值,接受任意一个 id 或逗号分隔的子集。
-`spex init` 是增量式的,在任何已有 git 仓库上可用,不会覆盖你的文件:生成根节点
-`.spec/project/spec.md`、一份起始 `spexcode.json`,安装 git hooks,并写入所选 harness 的托管契约,
-让任何在这个仓库里工作的 agent 自己发现这套工作流。
+采纳到此为止。示例列出了全部内建 harness——不用的删掉就行:`--harness` 必填、没有默认值,接受任意一个
+id 或逗号分隔的子集。`spex init` 是增量的:在任何现有 git 仓库上都能跑,绝不覆盖你的文件,只做三件
+事——播种根节点 `.spec/project/spec.md` 和一份起步的 `spexcode.json`;安装 git 钩子;把工作流规则
+**物化**进你的 agent 本来就会读的文件(`CLAUDE.md`、`AGENTS.md`):先读所辖 spec 再碰代码、spec 和
+代码一个 commit 落地、只提议合并不执行合并。任何打开这个仓库的 agent 都会自己发现这套工作流——不需要
+特制的派发 prompt,也不需要逐个 agent 配置。契约需要刷新时,`spex materialize` 单独重跑这一步。
 
-想看到实时看板(节点图、会话、eval)时,再启动运行时:
+想要活的看板——图谱、session、eval——再起运行时:
 
 ```sh
-spex serve       # 当前项目的后端——打印自己的 URL,并自动注册到当前用户
-spex dashboard   # 每个用户只运行一次,任意目录:唯一的看板——打开它打印的 URL
+spex serve       # 本项目的后端——打印它的 URL,并注册到你的用户名下
+spex dashboard   # 每用户一次,任意目录:唯一的 dashboard——打开它打印的 URL
 ```
 
-每个要上线的项目都在自己的仓库里运行 `spex serve`。每个后端都会自行注册,唯一的
-`spex dashboard` 会把它们全部找到——已经在跑的和之后才启动的都算,先后顺序无所谓。
-`/projects` 负责项目切换和管理,每个项目的看板在 `/p/:id/` 下。不再有每个项目单独的看板进程,
-也没有需要记住的端口配对:端口被占用时,用 `spex serve --port <n>` 给那个后端换一个,
-以每条命令打印出来的 URL 为准。
+想上线哪个项目,就在那个项目里跑 `spex serve`;一个 `spex dashboard` 能找到它们全部,先后顺序无所谓。
+端口被占就 `spex serve --port <n>`,认准命令打印的 URL。然后开始长树:在 `.spec/project/spec.md` 里
+描述项目,为想管辖的部分加子节点,把 `spex spec lint` 的 coverage 警告当作采纳 TODO 清单。这些不需要
+你手写——spec 大部分由 agent 来写,`spex guide spec` 会打印它需要的确切格式。文档站的
+[Getting started](https://spexcode.net/getting-started/) 有端到端的过程。
 
-上面是安装后用户使用的命令。在这个源码 checkout 里做贡献时,用 `npm run api` 启动可热重载的
-后端,用 `npm run web` 启动带 Vite/HMR 的前端;详见[参与开发](#参与开发)。
+## 系统是怎么搭的
 
-然后把树长起来:
+三层堆叠,每一层在没有上层的情况下都独立成立:
 
-1. 编辑 `.spec/project/spec.md`,描述项目。
-2. 给想管辖的部分加子节点,每个带一个指向现有文件的 `code:` 清单。
-3. 跑 `spex spec lint`。coverage 警告列出还没有 spec 认领的源文件,那就是你的接入 TODO。
+<img src="readme-layers.svg" alt="L0 spec-code 数据资产,L1 agent session 基座,L2 dashboard 工作台——一架采纳阶梯">
 
-这些不需要你全部手写。预期的用法是让 agent 完成大部分 spec 写作;`spex guide spec` 会打印它需要的
-确切文件格式。完整的安装过程见文档站的
-[getting started](https://spexcode.net/getting-started/)。
+L0 是组织采纳后永远不会扔掉的资产——纯文件、纯 git,离线可用,回路里没有守护进程。
+([看这个仓库自己的 L0 从 git 历史里长出来](https://spexcode.net/assets/spec-tree-growth.mp4)——
+三周 160 个 spec 节点。)L1 把资产变成劳动力:就是下面这台 session 状态机。L2 是你旁观这一切的工作
+台——而且它只是 L1 的消费者,dashboard 能做的任何事,你的脚本和 agent 走同一套 CLI 都能做。
 
-<img src="readme-graph.png" alt="看板截图">
+## 和 agent 一起工作(L1)
 
-*SpexCode 自己的仓库跑在自己的看板上;左上角那些会话就是正在造它的 agent。*
-
-## 和 agent 一起工作
-
-这一步需要 tmux 和本机已登录的 [Claude Code](https://www.anthropic.com/claude-code) 或 Codex。
+这一步需要机器上有 tmux,和登录好的 [Claude Code](https://www.anthropic.com/claude-code) 或
+Codex(Windows 上请在 WSL2 里跑)。
 
 ```sh
-spex session new "[[settings]] 让设置页记住上次打开的标签"
+spex session new "[[uploader]] 失败的分块要带退避地重传"
 ```
 
-会在独立 worktree 里启动一个 worker 会话,分支名 `node/settings-…`。prompt 里的第一个
-`[[settings]]` mention 决定分支名和看板归属;worker 仍然自己找到并读完管辖 spec 再动代码,
-做出改动,把 spec 正文改写到和实现一致,把两者一起 commit(hook 自动盖 `Session:` 戳),然后提出
-merge 并停下。worker 不自己 merge。合并留在管理者手里:你按下 merge 时,实际的 git merge 由这个
-会话自己的 agent 执行,冲突落在最懂这份活的人手里。同样的派工在看板上就是一个按钮(新建会话的
-输入框);命令行形态是 agent 之间互相委派时用的。
+会在独立 worktree、分支 `node/uploader-…` 上启动一个 worker 会话。prompt 里第一个 `[[uploader]]`
+提及决定分支名和看板归属;worker 仍会自己找到并读完所辖 spec 再碰代码。它完成修改、把 spec 正文改写
+到与代码一致、把两者一起 commit(钩子盖上 `Session:` trailer),然后提议合并、停下:
 
-你在外面督工,用看板,或者用 agent 也在用的这几条命令:
+<img src="readme-worker-flow.zh.svg" alt="worker 的八步循环:派发、读 spec、干活、跑 eval、消解 drift、提议合并、人审、关闭">
+
+worker 从不自己合并。合并留在你手里——你点下去时,由那个 session 自己的 agent 执行真正的
+`git merge`,冲突落在最了解这份工作的人身上。同样的派发在 dashboard 上是一个按钮;命令形式则是 agent
+们自己委派任务时用的。两边都能监工:
 
 ```sh
-spex session watch              # 实时输出会话状态变化:launched / review / done / asking ...
-spex session review settings    # 领先 trunk 的 commit、merge-base diff、合并冲突预检和 lint 门
-spex session merge settings     # 有门禁的 merge 入 trunk
-spex session close settings
+spex session ls                  # 下面这张活表
+spex session watch stream        # 跟踪状态流转:working → review → done …
+spex session review uploader     # 领先主干的 commit、merge-base diff、合并/lint 闸门
+spex session merge uploader      # 把带闸门的合并交给该 session 自己的 agent
+spex session close uploader      # 退役 worktree、分支和记录
 ```
 
-相互独立的任务并行跑。每个 worker 隔离在自己的 worktree 里,merge 由 git 序列化,pre-commit 守卫
-拦截对 trunk 的直接提交,所以一切都从可 review 的 node 分支流过。
+<img src="readme-sessions.svg" alt="动画终端:spex session ls 列出 working、review、asking、done 各状态的五个会话">
 
-流程靠机制强制,不靠提示词工程:后端建分支、hook 盖归属戳,其余规则由 materialize 出的契约块承载,
-所以派工提示词只需要写任务本身。关于这种工作方式的更多内容:
-[working with agents](https://spexcode.net/working-with-agents/)。
+流程靠机制保证,不靠 prompt 工程:后端建分支、git 钩子盖归属、pre-commit 守卫拦下直接落主干的
+commit,物化进 `CLAUDE.md`/`AGENTS.md` 的工作流规则承担其余——你的派发 prompt 只需要写任务本身。
+这种工作方式的更多内容:[working with agents](https://spexcode.net/working-with-agents/)。
 
-## 测量行为:eval
+## dashboard(L2)
 
-eval 是[优化循环](#优化循环)里负责测量的那一半,遵循 YATU 纪律(**You As The User**,
-把你当成真实用户):像一个啥都不懂的真实终端用户那样,从产品的真实表面去量行为,而不是走内部 helper
-或图省事的捷径。spec 说这部分应该做什么;旁边的 `eval.md` 说怎么验。每条
-scenario 就是一段普通描述加一个期望结果。eval 自己什么都不跑(没有 DSL,也没有 runner)。agent
-用顺手的方式执行场景:测试文件、真实浏览器,或者干脆手点一遍截个图。把实际结果和期望对比,连证据
-一起记档:
+上面的一切都有活的界面。`spex serve` + `spex dashboard`,然后:
 
-```sh
-spex eval add settings --scenario remembers-tab --pass --image evidence.png
-```
+<img src="readme-graph.png" alt="spec 地图:SpexCode 自己的仓库在自己的看板上,agent 会话挂在它们正在做的节点上">
 
-eval 存在 spec 旁边一个 git 跟踪的 ndjson 里,所以测量和 spec 版本享有同样的归属和历史。修 bug 要求
-成对:先记一条复现 bug 的 fail,修掉,再在同一条 scenario 上记一条 pass。
+*整个仓库一张地图——图中是 SpexCode 自己的看板。agent 出现在它正在做的节点上;左上角的面板是活的
+session 台。*
 
-<img src="readme-eval.png" alt="eval 视图截图">
+<img src="readme-node.png" alt="在看板上打开一个节点:raw source 和 expanded spec、版本历史、所辖文件">
 
-*eval 视图:左侧是各 scenario 的 eval;中间是选中那条的期望结果、过期原因和录屏证据。*
+*点开一个节点:它的 raw source 和 expanded spec、git 本来就记着的版本历史、它管辖的文件、它的
+issue。*
 
-## 仓库里有什么
+<img src="readme-eval.png" alt="eval 视图:左侧场景列表,中间是选中 eval 的期望结果和录屏证据">
 
-| 包 | 职责 |
-|---|---|
-| `spec-cli` | `spex` CLI 和 HTTP 后端(Hono,tsx 直跑,无构建步骤)。实时读 `.spec` 和 git;会话状态机和 linter 都在这里。 |
-| `spec-dashboard` | React 看板:节点图、每个节点的 spec/history/issues 面板,以及连到每个活跃 agent 会话的真终端。 |
-| `spec-eval` | scenario 定义、eval、证据文件。 |
-| `spec-forge` | 只读追踪器,把 forge 上的 open issue 和 PR 解析到它们服务的 spec 节点(支持 GitHub 和 GitLab)。issue 在正文里写一行 `Spec: <node-id>` 即完成链接;从 `node/<id>` 分支开的 PR 自动链接。 |
+*每个 session 的 eval 集中审:期望结果、新鲜度、agent 归档的证据(录屏、截图)。*
 
-## linter
+而且整个工作台走 HTTP:每个视图——spec 节点、session、eval、live 终端——都是稳定 URL,发给同事就能
+一起坐在同一块看板前。终端面板是真 tmux 会话:浏览器不顺手时,复制它打印的命令、从你自己的终端 attach
+上去。
 
-`spex spec lint` 检查 spec↔code 图,它才是真正的门(git hook 只是快速的本地反馈)。核心规则:
+## 参与贡献
 
-- **integrity**(error):`code:` 或 `related:` 指向不存在的路径
-- **living**(error):spec 正文里出现 changelog 标题
-- **coverage**(warn):没被认领的源文件
-- **drift**(warn):被管辖的代码在 spec 最后一版之后又改了,实时从 git 推导
-
-完整的规则清单在 `spex guide spec`。
-
-`spex doctor` 是需要主动调用的只读健康诊断。它的 altitude 和 breadth 检查会报告像实现细节堆的正文与子节点过宽的节点,
-并给出逐节点依据和修复方向; 这类启发式判断不进入 lint 或提交门禁。
-
-## 配置
-
-`spexcode.json`(提交进仓库,可移植:布局、lint 策略、doctor 健康诊断预算、看板标识、launcher 名字)和
-`spexcode.local.json`(gitignore,单机:launcher 的绝对路径、证书路径这类本机事实)承载全部设置。
-没有专门的设置命令:两个文件直接手改(或让 agent 改),每个字段的文档在
-`spex guide settings`。其他手册:`spex guide`(工作流)、`spex guide spec`、
-`spex guide eval`、`spex guide footprint`;`spex help` 列出全部命令。
-
-## 参与开发
-
-[`docs/CONTRIBUTING.md`](./CONTRIBUTING.md) 带你从 clone 到第一个合入的改动。
+[`docs/CONTRIBUTING.md`](CONTRIBUTING.md) 带你从 clone 走到第一个被合并的改动。
 [spexcode.net](https://spexcode.net) 有节点模型和反身插件系统的完整机制。
 
 ## 致谢
 
-首次公开介绍发在 [LINUX DO](https://linux.do) 社区,感谢佬友们的第一轮讨论。
+最早发布在 [LINUX DO](https://linux.do) 社区——感谢那里的第一轮讨论。
 
 ## License
 

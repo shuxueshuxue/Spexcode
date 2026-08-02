@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { Avatar } from './avatar.jsx'
 import { STATUS } from './specMeta.js'
 import { SpecPane, HistoryPane, IssuesPane, EditPane, EvalPane, useHistory, panesFor } from './NodeView.jsx'
@@ -248,6 +248,17 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard })
   useEffect(() => {
     if (page === 'sessions' && param) { setTab('sessions'); setOpenSessionId(param) }
   }, [page, param])
+  useLayoutEffect(() => {
+    if (page !== 'graph' || !param) return
+    setTab('specs')
+    if (!byId[param]) {
+      setPath(root ? [root.id] : [])
+      return
+    }
+    const targetPath = []
+    for (let node = byId[param]; node; node = node.parent ? byId[node.parent] : null) targetPath.unshift(node.id)
+    setPath(targetPath)
+  }, [page, param, byId, root])
   const pickPlane = (p) => {
     if (p === 'evals' || p === 'issues') { navigate(p); return }
     setTab(p)
@@ -275,8 +286,8 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard })
               {plane === 'settings'
                 ? <Settings />
                 : plane === 'evals'
-                ? <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reloadBoard} onOpenSession={openSession} onFocusNode={(id) => { setTab('specs'); setPath([root.id, id].filter((x) => byId[x])); navigate('graph') }} />
-                : <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} onFocusNode={(id) => { setTab('specs'); setPath([root.id, id].filter((x) => byId[x])); navigate('graph') }} />}
+                ? <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reloadBoard} onOpenSession={openSession} onFocusNode={(id) => navigate('graph', id)} />
+                : <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} onFocusNode={(id) => navigate('graph', id)} />}
             </Suspense>
           </div>
         ) : plane === 'specs' ? (

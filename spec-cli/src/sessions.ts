@@ -11,6 +11,7 @@ import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite 
 import { adapterLoadedReferenceState, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
+import { listSessionFiles } from './session-files.js'
 import { appendSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { drain, enqueue, owesDelivery } from './delivery-queue.js'
 import { stripRefSigil } from './mentions.js'
@@ -84,6 +85,7 @@ export type Session = {
   archiveHazard?: string | null // explicit legacy/invariant violation; never hidden as a clean archive
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
+  files?: string[]         // live posted paths ([[files]]), read from the session store with the rest of the projection
 }
 
 function storeDir(id: string): string { const d = sessionStoreDir(id); mkdirSync(d, { recursive: true }); return d }
@@ -299,10 +301,11 @@ async function withRecordLock<T>(id: string, body: () => Promise<T>, signal?: Ab
   const release = await acquireRecordLock(id, 30_000, signal)
   try { return await body() } finally { release() }
 }
-function withRecordLockSync<T>(id: string, body: () => T): T {
+export function withSessionRecordLockSync<T>(id: string, body: () => T): T {
   const release = acquireRecordLockSync(id)
   try { return body() } finally { release() }
 }
+const withRecordLockSync = withSessionRecordLockSync
 function tryRecordLockSync(id: string): (() => void) | null {
   mkdirSync(recordLockRoot(), { recursive: true })
   const path = recordLockPath(id)
@@ -458,7 +461,113 @@ function writeRecord(rec: SessRec): void {
   if (rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
     || previousPublic.proposal !== nextPublic.proposal || previousPublic.note !== nextPublic.note)) {
     recordStatus(rec.session, nextPublic.status, nextPublic.proposal, nextPublic.note)
+    scheduleWatchNotifications(rec)
   }
+}
+
+type WatchEntry = { watcher: string; createdAt: string }
+export type SessionWatch = { target: string; createdAt: string }
+const watchPath = (target: string) => sessionArtifactPath(target, 'watchers.json')
+
+function readWatchEntries(target: string): WatchEntry[] {
+  try {
+    const raw = JSON.parse(readFileSync(watchPath(target), 'utf8')) as unknown
+    if (!Array.isArray(raw)) return []
+    const seen = new Set<string>()
+    return raw.flatMap((entry): WatchEntry[] => {
+      if (!entry || typeof entry !== 'object') return []
+      const watcher = (entry as WatchEntry).watcher
+      const createdAt = (entry as WatchEntry).createdAt
+      if (!watcher || typeof watcher !== 'string' || typeof createdAt !== 'string' || seen.has(watcher)) return []
+      seen.add(watcher)
+      return [{ watcher, createdAt }]
+    })
+  } catch { return [] }
+}
+
+function writeWatchEntries(target: string, entries: WatchEntry[]): void {
+  const path = watchPath(target)
+  if (!entries.length) { try { unlinkSync(path) } catch { /* already absent */ }; return }
+  const dir = sessionStoreDir(target)
+  mkdirSync(dir, { recursive: true })
+  const tmp = join(dir, `.watchers.json.${process.pid}.tmp`)
+  writeFileSync(tmp, JSON.stringify(entries, null, 2) + '\n')
+  renameSync(tmp, path)
+}
+
+function managedWatchRecord(id: string): SessRec {
+  const rec = readRecord(id)
+  if (!rec?.governed) throw new ResourceConflict(`session ${id} is not a governed session and cannot participate in a durable watch`)
+  return rec
+}
+
+function watchMessage(target: SessRec): string {
+  const status = target.status === 'awaiting'
+    ? PROPOSAL_STATUS[target.proposal ?? 'nothing']
+    : target.status === 'active' ? 'working' : target.status
+  const note = target.note ? ` — ${target.note}` : ''
+  return `[spex watch] ${target.session} is ${status}${note}`
+}
+
+function scheduleWatchNotifications(target: SessRec): void {
+  const watchers = readWatchEntries(target.session).map((entry) => entry.watcher)
+  if (!watchers.length) return
+  queueMicrotask(() => {
+    for (const watcher of watchers) {
+      void sendText(watcher, watchMessage(target), target.session).then((result) => {
+        if (!result.ok) console.error(`spex session watch: could not deliver ${target.session} state to ${watcher}: ${result.error}`)
+      })
+    }
+  })
+}
+
+export async function subscribeSessionWatch(watcher: string, targets: string[]): Promise<{ watched: string[] }> {
+  managedWatchRecord(watcher)
+  const watched: string[] = []
+  for (const target of [...new Set(targets)]) {
+    if (target === watcher) throw new ResourceConflict('a session cannot watch itself')
+    const targetRecord = managedWatchRecord(target)
+    withRecordLockSync(target, () => {
+      const entries = readWatchEntries(target)
+      if (!entries.some((entry) => entry.watcher === watcher)) {
+        writeWatchEntries(target, [...entries, { watcher, createdAt: new Date().toISOString() }])
+      }
+    })
+    const delivered = await sendText(watcher, watchMessage(targetRecord), target)
+    if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
+    watched.push(target)
+  }
+  return { watched }
+}
+
+export function listSessionWatches(watcher: string): SessionWatch[] {
+  managedWatchRecord(watcher)
+  const watches: SessionWatch[] = []
+  for (const target of listSessionIds()) {
+    const entries = readWatchEntries(target)
+    const active = entries.filter((entry) => {
+      try { return !!readRecord(entry.watcher)?.governed } catch { return false }
+    })
+    if (active.length !== entries.length) writeWatchEntries(target, active)
+    for (const entry of active) if (entry.watcher === watcher) watches.push({ target, createdAt: entry.createdAt })
+  }
+  return watches.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.target.localeCompare(b.target))
+}
+
+export function cancelSessionWatch(watcher: string, targets: string[]): number {
+  managedWatchRecord(watcher)
+  let cancelled = 0
+  for (const target of [...new Set(targets)]) {
+    withRecordLockSync(target, () => {
+      const entries = readWatchEntries(target)
+      const kept = entries.filter((entry) => entry.watcher !== watcher)
+      if (kept.length !== entries.length) {
+        writeWatchEntries(target, kept)
+        cancelled++
+      }
+    })
+  }
+  return cancelled
 }
 
 // Share one liveness snapshot rather than spawning tmux for every displayed session.
@@ -695,7 +804,7 @@ function corruptSession(id: string, entry: { path: string; error: string }): Ses
     parent: null, harness: defaultHarness.id, capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
     note: corruptReason(entry), archived: false, prompt: null, promptPreview: null, created: 0,
-    activity: null, sortKey: null, archiveHazard: null,
+    activity: null, sortKey: null, archiveHazard: null, files: [],
   }
 }
 
@@ -708,7 +817,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const pp = prompt ? oneLinePreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: listSessionFiles(rec.session) }
 }
 
 export async function renameSession(id: string, name: string): Promise<boolean> {
@@ -2419,6 +2528,12 @@ export const mergeSession = (id: string): Promise<{ dispatched: boolean; reason?
 // adapter's proof-of-death rule leave the transport alone; never a blind kill on a stale number.
 const AGENT_EXIT_GRACE_MS = 3000
 type LeafIdentity = { pid: number; startToken: string; ownerNeedle: string }
+type LeafIdentityObservation =
+  | { state: 'missing' }
+  | { state: 'dead'; pid: number }
+  | { state: 'owned'; identity: LeafIdentity }
+  | { state: 'unrelated'; pid: number; startToken: string }
+  | { state: 'unknown'; pid?: number; reason: string }
 async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, leaf: LeafIdentity): Promise<void> {
   const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
   if (pid !== leaf.pid)
@@ -2473,28 +2588,48 @@ const leafAlive = (pid: number): boolean => {
   catch (error) { return (error as NodeJS.ErrnoException)?.code !== 'ESRCH' }
 }
 
+// One identity seam serves both signal teardown and cold retirement. A PID is only a locator: a live process
+// becomes target-owned when its immutable start identity is readable AND its argv carries the harness-owned
+// native identity. A live PID with a proven different argv is a stale artifact, while malformed/unreadable
+// evidence remains unknown and therefore blocks every destructive path.
+async function inspectSessionLeafIdentity(id: string, rec: SessRec): Promise<LeafIdentityObservation> {
+  if (harnessById(rec.harness || defaultHarness.id).runtimeOwnership === 'adapter') return { state: 'missing' }
+  const path = sessionArtifactPath(id, 'agent.pid')
+  let raw: string
+  try { raw = readFileSync(path, 'utf8') }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return { state: 'missing' }
+    return { state: 'unknown', reason: `leaf PID artifact is unreadable (${error instanceof Error ? error.message : String(error)})` }
+  }
+  const pid = Number(raw.trim())
+  if (!Number.isSafeInteger(pid) || pid <= 0) return { state: 'unknown', reason: 'leaf PID artifact is malformed' }
+  const startToken = processStartToken(pid)
+  if (!startToken) return leafAlive(pid) ? { state: 'unknown', pid, reason: `leaf PID ${pid} is alive but its process-start identity is unreadable` } : { state: 'dead', pid }
+  const ownerNeedle = harnessById(rec.harness || defaultHarness.id).leafOwnerNeedle?.(rec)
+  if (!ownerNeedle) return { state: 'unknown', pid, reason: `no exact harness identity is registered for leaf PID ${pid}` }
+  let argv: string
+  try { argv = (await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' })).stdout.trim() }
+  catch { return { state: 'unknown', pid, reason: `leaf PID ${pid} argv identity is unreadable` } }
+  if (!argv) return { state: 'unknown', pid, reason: `leaf PID ${pid} argv identity is empty` }
+  const endToken = processStartToken(pid)
+  if (!endToken || endToken !== startToken)
+    return { state: 'unknown', pid, reason: `leaf PID ${pid} process-start identity changed during ownership read` }
+  if (argv.includes(ownerNeedle)) return { state: 'owned', identity: { pid, startToken, ownerNeedle } }
+  return { state: 'unrelated', pid, startToken }
+}
+
 async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIdentity | null> {
-  const harness = harnessById(rec.harness || defaultHarness.id)
-  if (harness.runtimeOwnership === 'adapter') return null
-  // Prove the exact per-session leaf before the first tmux signal. Missing identity is acceptable only for a
-  // record-only/queued runtime; a live leaf without a matching pid/start/argv stays visible.
-  const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
-  if (!Number.isFinite(pid) || pid <= 0) {
+  if (harnessById(rec.harness || defaultHarness.id).runtimeOwnership === 'adapter') return null
+  const observed = await inspectSessionLeafIdentity(id, rec)
+  if (observed.state === 'missing') {
     if (rec.stopped || rec.status === 'queued') return null
     throw new ResourceConflict(`refusing to stop ${id}: no readable session-owned leaf PID`)
   }
-  const startToken = processStartToken(pid)
-  if (!startToken) {
-    if (rec.stopped || !leafAlive(pid)) return null
-    throw new ResourceConflict(`refusing to stop ${id}: session-owned leaf PID ${pid} is alive but will not prove its start identity`)
-  }
-  const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
-  const ownerNeedle = harness.leafOwnerNeedle?.(rec)
-  if (!ownerNeedle)
-    throw new ResourceConflict(`refusing to stop ${id}: no exact harness identity is registered for leaf PID ${pid}`)
-  if (!argv.includes(ownerNeedle) || processStartToken(pid) !== startToken)
-    throw new ResourceConflict(`refusing to stop ${id}: leaf PID ${pid}@${startToken} does not prove argv ownership`)
-  return { pid, startToken, ownerNeedle }
+  if (observed.state === 'dead') return null
+  if (observed.state === 'owned') return observed.identity
+  if (observed.state === 'unrelated')
+    throw new ResourceConflict(`refusing to stop ${id}: leaf PID ${observed.pid}@${observed.startToken} does not prove argv ownership`)
+  throw new ResourceConflict(`refusing to stop ${id}: ${observed.reason}`)
 }
 
 async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = false, coldReceipt?: unknown): Promise<void> {
@@ -2673,9 +2808,11 @@ async function assertColdRetirementSafe(id: string, rec: SessRec): Promise<void>
   if (snap.windows.has(id)) throw new ResourceConflict(`refusing to close archived session ${id}: target tmux window has reappeared`)
   if (socket === 'live') throw new ResourceConflict(`refusing to close archived session ${id}: target rendezvous transport has reappeared`)
   if (socket === 'unproven') throw new ResourceConflict(`refusing to close archived session ${id}: target rendezvous state is ambiguous`)
-  const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
-  if (Number.isFinite(pid) && pid > 0 && processStartToken(pid))
-    throw new ResourceConflict(`refusing to close archived session ${id}: target leaf PID ${pid} is live or recycled; ownership is ambiguous`)
+  const leaf = await inspectSessionLeafIdentity(id, rec)
+  if (leaf.state === 'owned')
+    throw new ResourceConflict(`refusing to close archived session ${id}: target leaf PID ${leaf.identity.pid} is live or recycled; ownership is ambiguous`)
+  if (leaf.state === 'unknown')
+    throw new ResourceConflict(`refusing to close archived session ${id}: ${leaf.reason}; ownership is ambiguous`)
 
   const harness = harnessById(rec.harness || defaultHarness.id)
   if (harness.coldRetirementPreflight) {
@@ -3147,21 +3284,21 @@ export function statusLegend(color = true): string {
   return c('90', '  key: ') + parts.join('  ')
 }
 
-// human-friendly aligned table: header + (glyph + colour + status + name + id + merges + note) rows +
+// human-friendly aligned table: header + (glyph + colour + status + title + id + merges + note) rows +
 // a status legend, so the table tells the whole story (incl. each agent's note) at a glance.
 export function formatTable(sessions: Session[], color = true): string {
   const c = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t)
   if (!sessions.length) return c('90', '  no living sessions')
-  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'NODE'.padEnd(22)} ${'ID'.padEnd(8)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
+  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'TITLE'.padEnd(22)} ${'ID'.padEnd(8)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
   const rows = sessions.map((s) => {
     const g = STATUS_GLYPH[s.status] ?? '\u00b7'
     const code = ANSI[s.status] ?? '0'
-    const name = padWidth(truncWidth(sessionLabel(s), 22), 22)
+    const title = padWidth(truncWidth(sessionTitle(s), 22), 22)
     const st = s.status.padEnd(13)
     const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
     const prompt = c('90', padWidth(s.promptPreview ? trunc(s.promptPreview, 40) : '', 42))   // what it was asked to do
     const note = s.note ? c('90', trunc(s.note, NOTE_BOARD_LIMIT)) : ''
-    return `  ${c(code, g)} ${c(code, st)} ${name} ${c('90', s.id.slice(0, 8))} ${merges}${prompt}${note}`
+    return `  ${c(code, g)} ${c(code, st)} ${title} ${c('90', s.id.slice(0, 8))} ${merges}${prompt}${note}`
   })
   return [c('1', `SpexCode sessions (${sessions.length})`), header, ...rows, statusLegend(color)].join('\n')
 }

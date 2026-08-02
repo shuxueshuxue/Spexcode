@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryText, sameQuery, scopedEvalQuery } from './reviewQuery.js'
 
 // The app's URL layer ([[side-nav]]): every top-level page has its own address, so a page can be
-// bookmarked, reloaded, and history-navigated like any modern app. HASH routes (#/graph, #/sessions,
+// bookmarked, reloaded, and history-navigated like any modern app. HASH routes (#/graph, #/graph/<node>, #/sessions,
 // #/sessions/<id>, #/evals[?query], #/evals/<node>/<scenario>[?query], #/issues[?query], #/issues/<id>,
 // #/settings) — deliberately not the History API: the dashboard ships as a static dist behind plain file
 // servers/gateways with no index.html fallback, and a hash route needs nothing from the server. No router
@@ -31,7 +31,7 @@ export function queryString(query) {
   return s ? `?${s}` : ''
 }
 
-// '#/sessions/abc' → { page: 'sessions', param: 'abc' }. '#/evals/<node>/<scenario>' → param
+// '#/graph/node-a' → { page: 'graph', param: 'node-a' }. '#/sessions/abc' → { page: 'sessions', param: 'abc' }. '#/evals/<node>/<scenario>' → param
 // 'node/scenario' (the canonical eval DETAIL address — each segment decoded; the page splits on the first
 // '/'). '#/issues/<id>' → the issue detail. Anything after '?' inside the hash is the query axis.
 // Anything unknown lands on graph (the home page).
@@ -42,7 +42,7 @@ export function parseRoute(hash) {
   const query = Object.fromEntries(new URLSearchParams(qi >= 0 ? h.slice(qi + 1) : ''))
   const parts = path.split('/').filter(Boolean)
   const page = PAGES.includes(parts[0]) ? parts[0] : 'graph'
-  const param = page === 'sessions' || page === 'evals' || page === 'issues'
+  const param = page === 'graph' || page === 'sessions' || page === 'evals' || page === 'issues'
     ? (parts.length > 1 ? parts.slice(1).map(decodeURIComponent).join('/') : null)
     : null
   return { page, param, query }

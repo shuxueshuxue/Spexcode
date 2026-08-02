@@ -25,13 +25,14 @@ scenarios:
       Launch a real session with `spex session new`, capturing stdout and stderr separately. Check the stderr
       receipt printed after the create: it must carry the new session id and the three dependency labels
       (current result, next lifecycle change, response channel). The lifecycle line must name background
-      `spex session wait <id>` with its edge-triggered exit and `spex session watch <id>` as a stream that
-      never exits. The response line must name `spex session send <id> "<msg>"` and keep raw keys behind a
+      `spex session wait <id>` with its edge-triggered exit, `spex session watch <id>` as a one-shot managed
+      subscription, and `spex session watch stream <id>` as the stream that never exits. The response line must name `spex session send <id> "<msg>"` and keep raw keys behind a
       plain-send-first last-resort warning. Check stdout in the same run: it must be exactly the parseable
       session JSON, untouched by the receipt.
     expected: |
       Stderr carries one concise, caller-independent dependency model: current result, next lifecycle
-      change, and response channel. It preserves wait's edge-triggered wake-up, watch's never-exit stream,
+      change, and response channel. It preserves wait's edge-triggered wake-up, managed watch registration,
+      watch stream's never-exit behaviour,
       ordinary send, and raw keys as an unstable last resort. Stdout parses as the bare session JSON with
       no receipt text mixed in.
     code: spec-cli/src/help.ts

@@ -44,8 +44,10 @@ session to that node. --prompt-file <path>|- carries a long prompt without shell
     ls: ['spex session ls [SEL…] [--status a,b] [--all] [--json]',
       'One-shot table of living sessions. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
-    watch: ['spex session watch [SEL…] [--as NAME] [--idle] [--interval N=1]',
-      'Streams lifecycle transitions and blocks until killed; `session wait` is the one-shot alternative.', ['selector']],
+    files: [['spex session files add <path>', 'spex session files ls', 'spex session files retract <path>'],
+      'Publish, list, or withdraw YOUR session’s live file paths. Posting stores an absolute path beside the session record without copying bytes; the dashboard downloads it only when the human clicks.'],
+    watch: [['spex session watch <SEL…>', 'spex session watch list', 'spex session watch cancel <SEL…>', 'spex session watch stream [SEL…] [--as NAME] [--idle] [--interval N=1]'],
+      'With a governed caller, watch registers durable send-backed state delivery and exits. list/cancel manage those relations. Without a governed caller it names the background `session wait` fallback. stream is the human-only continuous log view and blocks until killed.', ['selector']],
     wait: ['spex session wait [SEL…] [--timeout S=1200] [--interval S=1] [--idle]',
       `EDGE-TRIGGERED wait: follows the selected sessions' logs AND your own log, and exits 0 on
 the FIRST thing worth waking for — a followed session TRANSITIONING from a non-actionable
@@ -79,7 +81,7 @@ you are running in, mid-turn. Your own ending is a declaration: \`done --propose
     done: ['spex session done --propose merge|nothing|close [--note T]',
       '`merge` declares review: committed work ready for human review, and it is the ONLY declaration that offers a clickable merge. `nothing` declares done: committed work, but no merge proposal. `close` declares close-pending: PROPOSE discarding this worktree — the human closes it. This declaration is how a session ends itself; never run `session close` on your own id.'],
     park: ['spex session park --note <what-you-await>',
-      'Declare parked only when a real background task will wake your own session. It self-resumes; waiting for a human is asking, not parked.'],
+      'Declare parked only when a managed watch delivery or real background task will wake your own session. It self-resumes; waiting for a human is asking, not parked.'],
     ask: ['spex session ask --note <your-question>',
       'Declare asking when the session needs a human reply or direction. It resumes only when the human replies; a background wake-up is parked instead.'],
     attach: ['spex session attach <SEL>', `Attaches the current terminal to the worker's tmux (detach: C-b d) and blocks until detached.
@@ -90,7 +92,7 @@ LOCAL-only (fails loud on a remote backend); show --capture and send are non-int
 const SESSION_HELP_GROUPS = [
   { title: 'Manager verbs (dispatch, monitor, land)', verbs: ['new', 'ls', 'resources', 'watch', 'wait', 'review', 'merge'] },
   { title: 'Control another session', verbs: ['send', 'interrupt', 'rename', 'show', 'resume', 'stop', 'archive', 'unarchive', 'close', 'quarantine'] },
-  { title: 'Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on)', verbs: ['done', 'park', 'ask'] },
+  { title: 'Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on)', verbs: ['done', 'park', 'ask', 'files'] },
   { title: 'Human escape hatch', verbs: ['attach'] },
 ] as const
 
@@ -432,10 +434,12 @@ export function commandHelp(name: string, verb?: string): string | null {
   return `${header}${e.body}${e.see ? `\n\nsee also: ${e.see}` : ''}\n\nmap: spex help · skills: spex guide`
 }
 
-export function sessionLaunchReceipt(id: string): string {
+export function sessionLaunchReceipt(id: string, managedWatch = false): string {
   return `spex: launched session ${id}
   current result: the session JSON is on stdout now; \`spex session ls ${id}\` is the later one-shot snapshot
-  next lifecycle change: background \`spex session wait ${id}\` (edge-triggered; exits on the next non-actionable→actionable transition); \`spex session watch ${id}\` streams and NEVER EXITS
+  next lifecycle change: ${managedWatch
+    ? `managed watch registered — this parent receives ${id}'s state changes through its normal send queue; \`spex session watch cancel ${id}\` ends it`
+    : `background \`spex session wait ${id}\` (edge-triggered; exits on the next non-actionable→actionable transition); \`spex session watch ${id}\` registers send-backed delivery when the caller is governed`}; \`spex session watch stream ${id}\` NEVER EXITS
   response channel: \`spex session send ${id} "<msg>"\`; \`send --keys\` is an UNSTABLE LAST RESORT after a plain send cannot land`
 }
 

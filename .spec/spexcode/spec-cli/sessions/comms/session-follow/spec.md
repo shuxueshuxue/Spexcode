@@ -2,15 +2,18 @@
 title: session-follow
 status: active
 hue: 280
-desc: Supervision is FOLLOWING a log, not polling a board — a durable cursor per followed session, `wait` as the one-shot take-the-next-event, `watch` as the stream, and zero control-plane cost per observer.
+desc: Supervision is a durable watch relation for governed sessions, delivered through the normal send queue; a log cursor remains the zero-control-plane fallback for a caller that must wait itself.
 code:
   - spec-cli/src/session-follow.ts
 related:
+  - spec-cli/src/sessions.ts
   - spec-cli/src/session-cursors.ts
   - spec-cli/src/session-timeline.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/session-follow.test.ts
   - spec-cli/src/follow-cli.api.test.ts
+  - spec-cli/src/session-timeline.test.ts
+  - spec-cli/src/session-create-cli.test.ts
 ---
 
 # session-follow
@@ -28,23 +31,33 @@ which makes it a defect at the orchestration layer's altitude however fast it is
 the harness re-invoking an agent when a background command exits — an unstated capability only some
 harnesses have.
 
-But a session already publishes everything a supervisor needs, unprompted: it appends every transition it
-authors to its own log ([[session-timeline]]). Nobody has to carry anything anywhere. **Follow the log.**
+But a governed supervisor already has a durable address: its ordinary [[dispatch]] queue. Establish that
+relationship once, then a target's authored state transition can enter that queue through the same send path
+as every other agent message. A caller with no governed address cannot pretend to receive such a delivery; it
+waits on the target's log in its own background command instead.
 
 ## expanded spec
 
-**Following is reading a file past a cursor.** A follower keeps `cursors.json` beside its own record in the
-global store: one entry per followed session (plus its own inbox), each naming how far it has read. A
-follow costs the follower one `stat` per tick and costs the followed session, the control plane, and the
-backend **nothing at all** — so N supervisors watching M agents is N cheap readers, not N×M probes. The
-cursor is the only durable state supervision has: a follower that dies and restarts resumes exactly where
-it stopped, losing nothing, and there is no registration, no heartbeat, and no TTL to keep alive.
+**`spex session watch <SEL...>` establishes a relation and exits.** When the caller's own session and every
+selected target are governed records in the same store, the command adds the caller once to each target's
+`watchers.json`. That file, co-located with the target's timeline, is the ONE truth: its authoring path reads
+only that small list when it writes a state transition, appends a normal `sent` event to each watcher's
+timeline, and enqueues the same ordinary prompt for adapter delivery. A busy or offline watcher therefore
+receives the next retry exactly like a normal `spex session send`; an available watcher receives a terminal
+insert in its current turn. Installation also sends the target's current authored state, so a relationship
+created just after a fast child launch has a truthful starting point.
 
-Cursors are also the whole story of *who supervises whom*: A follows B **iff** A's cursors name B. Nothing
-records that relationship separately, and nothing needs to — a projection that wants to draw the
-supervision network derives it at read time from the cursors of live sessions, exactly as session nesting
-derives its tree ([[session-nesting]]). A cursor naming a session whose store dir is gone is dropped the
-next time it is read; expiry is a read-time consequence, never a timer.
+`spex session watch list` scans targets' `watchers.json` files to show the caller's relations, and
+`spex session watch cancel <SEL...>` removes the caller from the selected targets. That scan is a manual
+management read, never a transition hot path. There is no second watcher-to-target index, heartbeat, TTL, or
+background daemon to reconcile. A removed target takes its watchers file with it; a missing watcher record is
+discarded when the target next emits or a list is read.
+
+**The unmanaged fallback is still following.** If the caller has no governed session address, `watch` writes
+no unusable subscription and instead names `spex session wait <SEL...>` as the command the harness must run
+in the background. A wait is reading a file past `cursors.json` beside its own record: one stat per target per
+tick, no tmux, socket, backend, registration, or probe. This is also the explicit escape hatch for a caller
+that wants to decide locally when an event is actionable rather than receive every pushed state message.
 
 **Two consumption policies over one subscription:**
 
@@ -59,8 +72,8 @@ next time it is read; expiry is a read-time consequence, never a timer.
   passed with nothing, `2` a followed session's store is gone. There is no transport outcome, because there
   is no transport: the failure mode that needed its own vocabulary — a backend that could not be reached,
   misread as a session verdict — no longer exists.
-- **`spex session watch [SEL…]`** — *stream forever*, for a human. The same follow, emitting every event
-  instead of consuming one.
+- **`spex session watch stream [SEL…]`** — *stream forever*, for a human. The same follow, emitting every
+  event instead of consuming one. It never creates or renews a durable watch relation.
 
 Selection resolves against the **local store**, and a broad follow re-enumerates it every tick so a session
 launched mid-follow joins the feed. Where a follow starts is the one place history and news are told apart: a
@@ -85,6 +98,11 @@ return.
 watcher), that session is sent a one-shot message naming its new supervisor and how to reply. It is an
 ordinary message — an appended line, like any other ([[session-timeline]]) — fired at most once per target
 per follow process, so a stream never re-nags; a one-shot `wait` does not announce.
+
+**A follow names the session it was handed.** Every human-readable launch, state, and message line renders
+the Session's derived `title`; its stable `label` remains a selector/matching handle and never becomes a
+second visible name. Follow uses that field from its existing record projection and never probes a live pane
+just to refresh a title — its file-only control-plane contract stays intact.
 
 Nothing here observes liveness, and nothing here can. A log carries only what a session authored
 ([[state]]), so a follower learns that a session declared, asked, parked, or errored, and never learns that

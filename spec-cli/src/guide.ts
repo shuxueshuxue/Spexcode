@@ -575,7 +575,30 @@ not a flag flip.
                             elsewhere cannot be recalled.
   back out entirely         \`spex uninstall\` (add --hooks to also remove the spexcode git hooks).`
 
-const TOPICS: Record<string, string> = { spec: SPEC, eval: EVAL, settings: SETTINGS, footprint: FOOTPRINT }
+const FILES = `spex guide files — hand an agent artifact back to the human
+
+Use the session's file list when an artifact belongs in the human's hands:
+
+  spex session files add <path>      publish one current file path
+  spex session files ls              read your published paths
+  spex session files retract <path>  withdraw one path
+
+Posting resolves a relative path from your current directory and records its absolute path beside the global
+session record. It copies, moves, stages, and uploads NOTHING. The path is live: editing the file after
+posting changes what the human downloads. The reference is host-local; opening the session elsewhere cannot
+make its path point at another machine's file.
+
+The session page's top-right files icon is grey while the list is empty. Once live, it opens the posted list;
+choosing a path previews its current text or raster-image bytes in a pop-out, while the adjacent download tool
+downloads it through the backend at that moment. Previews are limited to 2 MiB, text and PNG/JPEG/GIF/WebP;
+other types and larger files say to download instead. A missing, moved, or unreadable target stays listed but
+reports that it no longer exists. The backend refuses a preview or download for any path not on that session's
+list.
+
+This is the reverse of a dashboard attachment: [[file-attach]] sends human bytes to an agent. Files publishes
+an agent-owned path for a human to download.`
+
+const TOPICS: Record<string, string> = { spec: SPEC, eval: EVAL, settings: SETTINGS, footprint: FOOTPRINT, files: FILES }
 
 // every guide page ends by naming the OTHER help layer, so a reader never dead-ends here: guide is
 // the skill layer (workflows · formats · settings); command usage lives in help.ts's two layers.

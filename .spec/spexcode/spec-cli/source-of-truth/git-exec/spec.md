@@ -6,6 +6,9 @@ desc: The seam that turns a git invocation into a truthful result — and, when 
 code:
   - spec-cli/src/git.ts#execGit
   - spec-cli/src/git.ts#gitBinary
+  - spec-cli/src/git.ts#git
+  - spec-cli/src/git.ts#gitBuffer
+  - spec-cli/src/git.ts#warnIfTimedOut
 related:
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts
@@ -51,6 +54,12 @@ reported as broken.
 Overflow is the one case that legitimately replaces the code, because exceeding the buffer is this seam's own
 verdict rather than the child's, and the kill it performs would otherwise surface as an unrelated signal.
 Timeout marks itself separately for the same reason. Everything else keeps whatever cause it arrived with.
+
+The synchronous text and buffer entrances share one explicit output budget large enough for repository-wide
+Git projections. They never inherit Node's smaller default: a valid `ls-tree` or history answer crossing that
+default is still Git truth, not a failed command. Crossing SpexCode's explicit budget remains a loud overflow,
+while only the timeout marker may be described as a timeout; the SIGKILL used to enforce either boundary is
+an implementation detail and cannot collapse the two diagnoses.
 
 ## who reads this classification
 

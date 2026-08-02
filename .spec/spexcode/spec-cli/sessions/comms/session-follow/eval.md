@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: managed-watch-delivers-child-transition
+    tags: [cli]
+    description: >-
+      From a real governed parent session, create a real child, then read `spex session watch list` in the
+      parent's terminal. Have the child declare a state change and inspect the parent's terminal/timeline;
+      finally run `spex session watch cancel <child>` and make one more child declaration.
+    expected: >-
+      Creation performs one successful, one-shot watch registration: list names the child and the command
+      does not remain running. The first child declaration arrives at the parent as an ordinary send-backed
+      terminal message, including the child identity and authored state; a temporarily unavailable parent
+      keeps that message in its normal delivery queue. After cancel, no later child declaration is delivered.
+      A shell with no governed parent records no subscription and is instead given the background
+      `spex session wait <child>` fallback.
   - name: wait-edge-triggered-return
     tags: [backend-api]
     description: >-

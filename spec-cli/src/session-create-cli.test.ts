@@ -13,6 +13,20 @@ import { fileURLToPath } from 'node:url'
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
 const tsxCli = join(dirname(createRequire(import.meta.url).resolve('tsx/package.json')), 'dist', 'cli.mjs')
+const WATCH_PARENT = 'create-watch-parent'
+const WATCH_CHILD = 'create-watch-child'
+
+function writeGovernedSession(home: string, id: string, parent = ''): string {
+  const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: pkgRoot, encoding: 'utf8' }).trim())
+  const dir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'session.json'), JSON.stringify({
+    session_id: id, governed: true, worktree_path: pkgRoot, branch: `node/${id}`, node: 'session-follow',
+    title: id, name: '', parent, status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(),
+    harness: 'opencode', harness_session_id: '', stopped: false, archived: false, launcher: 'fixture', launch_cmd: 'true', launch_owner: '',
+  }, null, 2) + '\n')
+  return dir
+}
 
 async function runCreate(project: string, env: NodeJS.ProcessEnv, api?: string) {
   const child = spawn(process.execPath, [tsxCli, cli, 'session', 'new', 'probe', ...(api ? ['--api', api] : [])], {
@@ -91,10 +105,52 @@ test('session new keeps exact JSON stdout and emits the dependency receipt on st
   assert.equal(stdout, '{\n  "id": "created-1"\n}\n')
   assert.equal(stderr, `spex: launched session created-1
   current result: the session JSON is on stdout now; \`spex session ls created-1\` is the later one-shot snapshot
-  next lifecycle change: background \`spex session wait created-1\` (edge-triggered; exits on the next non-actionable→actionable transition); \`spex session watch created-1\` streams and NEVER EXITS
+  next lifecycle change: background \`spex session wait created-1\` (edge-triggered; exits on the next non-actionable→actionable transition); \`spex session watch created-1\` registers send-backed delivery when the caller is governed; \`spex session watch stream created-1\` NEVER EXITS
   response channel: \`spex session send created-1 "<msg>"\`; \`send --keys\` is an UNSTABLE LAST RESORT after a plain send cannot land
 `)
   assert.doesNotMatch(stdout, /current result|next lifecycle change|response channel/)
+})
+
+test('session new from a governed parent establishes its child watch before printing the receipt', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-create-watch-'))
+  const parentDir = writeGovernedSession(home, WATCH_PARENT)
+  const childDir = writeGovernedSession(home, WATCH_CHILD, WATCH_PARENT)
+  let posted: any = null
+  const server = createServer((req, res) => {
+    if (req.method === 'GET' && (req.url === '/api/instance' || req.url === '/api/settings')) {
+      res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}'); return
+    }
+    const chunks: Buffer[] = []
+    req.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+    req.on('end', () => {
+      posted = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+      res.writeHead(201, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ id: WATCH_CHILD, parent: WATCH_PARENT }))
+    })
+  })
+  server.listen(0, '127.0.0.1'); await once(server, 'listening')
+  const address = server.address(); assert.ok(address && typeof address === 'object')
+  const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: WATCH_PARENT, SPEXCODE_API_URL: '' }
+  for (const key of ['CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
+  const child = spawn(process.execPath, [tsxCli, cli, 'session', 'new', 'watch me', '--api', `http://127.0.0.1:${address.port}`], {
+    cwd: pkgRoot, env, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let stdout = '', stderr = ''
+  child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
+  child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+  const [code] = await once(child, 'close') as [number]
+  server.close(); await once(server, 'close')
+
+  assert.equal(code, 0, stderr)
+  assert.equal(posted.parent, WATCH_PARENT)
+  assert.match(stdout, new RegExp(WATCH_CHILD))
+  assert.match(stderr, /managed watch registered/)
+  const watchers = JSON.parse(readFileSync(join(childDir, 'watchers.json'), 'utf8'))
+  assert.equal(watchers.length, 1)
+  assert.equal(watchers[0].watcher, WATCH_PARENT)
+  assert.equal(typeof watchers[0].createdAt, 'string')
+  const messages = readFileSync(join(parentDir, 'timeline.ndjson'), 'utf8')
+  assert.match(messages, new RegExp(WATCH_CHILD))
 })
 
 test('session new uses lightweight instance authority and falls back only for explicit connection refusal', { timeout: 20_000 }, async () => {

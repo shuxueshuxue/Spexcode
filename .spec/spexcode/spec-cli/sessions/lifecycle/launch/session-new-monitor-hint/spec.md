@@ -53,8 +53,10 @@ prints the bare, parseable session **JSON to STDOUT** exactly as before, then pr
 
 - **current result** — the session JSON is on stdout now, and `spex session ls <id>` is the later one-shot
   snapshot;
-- **next lifecycle change** — background `spex session wait <id>` observes a non-actionable to actionable
-  edge and exits as the wake-up, while `spex session watch <id>` is the continuous stream and never exits;
+- **next lifecycle change** — a governed parent automatically establishes `spex session watch <id>` after
+  creation, which exits after registering durable send-backed status delivery; a caller without a governed
+  session address backgrounds `spex session wait <id>` to observe a non-actionable to actionable edge and
+  exits as the wake-up. `spex session watch stream <id>` is the continuous human stream and never exits;
 - **response channel** — `spex session send <id> "<msg>"` is the ordinary path and succeeds once it appends
   the message to the target timeline; an unavailable adapter may delay the target context but does not undo
   that send. `send --keys` remains an unstable last resort only after plain text cannot reach the needed TUI
@@ -63,3 +65,8 @@ prints the bare, parseable session **JSON to STDOUT** exactly as before, then pr
 The receipt is the same harness-agnostic dependency model for every caller. It does not diagnose
 launcher/provider failures, prescribe a supervisor workflow, require child sessions, change lifecycle
 states, or add a command. Those concerns remain in their existing adapter and product boundaries.
+
+The managed-watch outcome is resolved before that receipt is printed. A child that was created but whose
+parent subscription could not be installed remains a real child session; the command says that failure loudly
+and prints the unmanaged background-`wait` receipt rather than falsely claiming terminal delivery. Retrying
+the ordinary `spex session watch <id>` is the explicit repair, not a second create path.

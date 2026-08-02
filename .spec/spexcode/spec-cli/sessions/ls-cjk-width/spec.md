@@ -2,7 +2,7 @@
 title: ls-cjk-width
 status: active
 hue: 295
-desc: The `spex ls` table aligns by terminal display width — CJK/fullwidth glyphs count two cells, so NODE and PROMPT truncate on cell budget without mid-glyph cuts and every column stays aligned.
+desc: The `spex session ls` table presents the derived TITLE at terminal display width — CJK/fullwidth glyphs count two cells, so TITLE and PROMPT truncate on cell budget without mid-glyph cuts and every column stays aligned.
 code:
   - spec-cli/src/table-width.test.ts
 related:
@@ -13,7 +13,7 @@ related:
 
 ## raw source
 
-A CJK-titled session wrecked the `spex ls` table: the NODE column was cut with `slice(0, 22)` —
+A CJK-titled session wrecked the `spex session ls` table: the TITLE column was cut with `slice(0, 22)` —
 shearing a label mid-word by code units — and padded with `padEnd(22)`, which counts a double-width
 glyph as one cell, so every column to the right of a CJK label (or PROMPT) drifted left and the table
 stopped reading as a table.
@@ -24,9 +24,11 @@ stopped reading as a table.
 three width-aware helpers — `displayWidth` (a small wcwidth-style range check over the wide blocks:
 CJK ideographs, kana, Hangul, fullwidth forms, emoji — deliberately no dependency), `truncWidth`
 (truncate to a cell budget, the ellipsis paying its own cell, never splitting a wide glyph), and
-`padWidth` (pad to a cell budget) — and `formatTable`'s NODE and PROMPT columns (and the NOTE cap)
-cut and pad through them. A pure-ASCII table renders byte-for-byte as the classic `padEnd` output, so
-the fix is invisible until a wide glyph appears.
+`padWidth` (pad to a cell budget) — and `formatTable`'s TITLE and PROMPT columns (and the NOTE cap)
+cut and pad through them. The TITLE field is the session's shared derived `title`, not its stable
+selector `label` or raw `node`: the latter two remain available for matching and JSON consumers but are
+not a second visible identity. A pure-ASCII table renders byte-for-byte as the classic `padEnd` output,
+so the width fix is invisible until a wide glyph appears.
 
 **Out of scope.** Label *derivation* is untouched — a node-agnostic session falling back to its
 prompt-derived title is [[session-label]]'s contract, and this node only owns how any derived string

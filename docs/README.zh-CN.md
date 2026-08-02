@@ -18,7 +18,7 @@
 
 </div>
 
-把 AI agent 纳入回路的 spec 驱动开发。SpexCode 在你的 git 仓库里维护一棵带版本的 spec 树,把每个
+面向 coding agent 的 spec 驱动编排。SpexCode 在你的 git 仓库里维护一棵带版本的 spec 树,把每个
 spec 和它管辖的代码链接起来,并运行一个会话管理器,把 coding agent 派进相互隔离的 worktree。你负责
 review 和 merge;工具负责让意图和实现不分家。
 

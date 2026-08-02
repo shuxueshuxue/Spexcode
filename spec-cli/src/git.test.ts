@@ -885,6 +885,18 @@ function prefixRepo(paths: number, pathLength: number): { root: string; streamBy
   return { root, streamBytes: full.length }
 }
 
+test('the synchronous Git adapter returns a complete repository name stream beyond Node\'s default buffer', () => {
+  const { root, streamBytes } = prefixRepo(5000, 220)
+  try {
+    assert.ok(streamBytes > (1 << 20), `fixture emitted only ${streamBytes} bytes`)
+    const actual = git(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', 'HEAD', '--', '.'])
+    assert.ok(Buffer.byteLength(actual) > (1 << 20), 'adapter truncated the large tree response')
+    assert.equal(actual.split('\0').filter(Boolean).length, 5000)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 // ---- the build context's pack-footprint boundary: bounded inside, git's defaults outside ----
 
 test('a graph build bounds its git children\'s pack footprint, and calls outside the build do not', async () => {

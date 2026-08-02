@@ -31,6 +31,10 @@ deterministically verifiable contract structure. Errors block; warnings advise. 
 rule, its level, its one-line meaning) is printed by `spex help spec` and `spex guide spec` — the manual
 lists ALL lint rules, always:
 
+One lint build opens the [[source-of-truth]] event ledger transaction around both its history indexes and
+anchor-hunk demand. The linter therefore shares one decoded, integrity-checked snapshot and at most one
+locked replacement with its anchor engine; it never causes a hunk lookup to reopen or rewrite that ledger.
+
 Before constructing history indexes, lint checks a worktree's adoption boundary. An untracked `.spec/` file
 or `spexcode.json` is an **integrity error** naming the untracked project source of truth and the ordinary
 `git add .spec spexcode.json` repair. Harness delivery files such as `.codex/`, `.claude/`, and `AGENTS.md`

@@ -94,12 +94,13 @@ Two principles keep that derivation cheap on a long-running server:
   retaining one full index for every historical commit, and concurrent readers of one HEAD share a single
   in-flight build.
 
-  The persistent event ledger has one **build-local transaction** across the history, drift, and
-  merge-authorship streams. It also holds immutable anchor hunk facts, not selector verdicts: each fact is
+  The persistent event ledger has one **build-local transaction** across the history, drift, merge-authorship,
+  and anchor-hunk demands a build actually makes. It also holds immutable anchor hunk facts, not selector verdicts: each fact is
   keyed by the anchor engine's pinned range-semantics schema plus the ordered result/parent image identity
   (blob oid and historical path). A reader asks the ledger for its whole hunk demand once, derives only absent
-  facts through Git, then merges those validated ranges through the SAME lock and atomic replacement as event
-  rows. A missing fact costs its first derivation; a malformed ledger row is rejected as a whole ledger and
+  facts through Git, then joins those validated ranges to the already-open snapshot through the SAME lock and
+  atomic replacement as event rows; the anchor engine never reopens, re-decodes, or independently writes that
+  ledger. A missing fact costs its first derivation; a malformed ledger row is rejected as a whole ledger and
   rebuilt from Git. The ledger grammar version names both its identity and filename: adding a row type advances
   that version, so an older process never reads a new row then atomically writes it away; the new namespace
   seeds from Git. Parser units, selector resolution, windows, reachability, and lint verdicts remain
@@ -125,8 +126,8 @@ Two principles keep that derivation cheap on a long-running server:
   path carries `K` mutually incomparable renames. None of this is a linear-in-history promise: at `K ≈ H` the
   closure term is `O(H(H+G))` — quadratic only where the commit DAG is sparse enough that `G = O(H)` — and the
   unchanged frontier term is cubic when `N`, `K` and `H` grow together.
-  Within one build, stream count must not multiply ledger work: all consumers share one decoded
-  snapshot, one integrity verdict, and one locked merge/write, with no write-then-reload verification pass.
+  Within one build, stream count and anchor demand must not multiply ledger work: all consumers share one decoded
+  snapshot, one integrity verdict, and at most one locked merge/write, with no write-then-reload verification pass.
   The pair projector also parses the current-tip topology and tree-path listing once and passes those
   immutable projections to both history and drift builders; a shared `rev-list --parents` or `ls-tree`
   text must never be split into separate equivalent maps per builder.

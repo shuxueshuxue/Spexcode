@@ -806,6 +806,10 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
   // family's node-existence layer). No worktree → the backend checkout, unchanged.
   const wtPath = worktreePathForBranch(payload.branch)
   const ctxRoot = wtPath ?? repoRoot()
+  return withEventLedgerBuild(ctxRoot, () => buildExportModelInLedger(id, payload, wtPath, ctxRoot))
+}
+
+async function buildExportModelInLedger(id: string, payload: ReviewPayloadValue, wtPath: string | null, ctxRoot: string): Promise<ExportModel> {
   const specs = await loadSpecs(ctxRoot)
   const specById = new Map(specs.map((s) => [s.id, s]))
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
@@ -1625,6 +1629,16 @@ async function buildSessionEvalModel(
   // spec tree from the session worktree, same root as readings/indexes — a branch-NEW node must exist
   // in this model or the Eval tab/deep link can never reach its readings (see buildExportModel above).
   const ctxRoot = wtPath ?? repoRoot()
+  return withEventLedgerBuild(ctxRoot, () => buildSessionEvalModelInLedger(id, payload, wtPath, pick, ctxRoot))
+}
+
+async function buildSessionEvalModelInLedger(
+  id: string,
+  payload: ReviewPayloadValue | ReviewIdentity,
+  wtPath: string | null,
+  pick: SessionEvalFocus | undefined,
+  ctxRoot: string,
+): Promise<SessionEvalModel> {
   const specs = await loadSpecs(ctxRoot)
   const specById = new Map(specs.map((s) => [s.id, s]))
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])

@@ -316,8 +316,8 @@ worse than the split being written down.
 
 Under that identity and this seam's pinned range-semantics schema, the demand set a batch sends Git is its
 MISSES. The source-of-truth event ledger retains those immutable ranges across backend processes under the
-same key: one batch reads its whole demand once, fills only absent facts, and merges them through the ledger's
-existing atomic writer. A hunk fact carries no selector, unit, window, reachability, or verdict, so a changed
+same key: one batch reads its whole demand once, fills only absent facts, and joins them to the source-of-truth
+build's already-open decoded snapshot and single atomic writer. A hunk fact carries no selector, unit, window, reachability, or verdict, so a changed
 declaration still resolves and validates normally; an absent or invalid fact is recomputed loudly. The
 process-local memo remains the fast path within that read. The waste that removes:
 a re-lint after a single trunk commit or one dirty edit re-forked one `log --patch` per anchored path (22 on

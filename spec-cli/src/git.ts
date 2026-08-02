@@ -444,6 +444,14 @@ type EventLedgerSnapshot = {
   payload: Buffer
   state: EventCache
 }
+type EventLedgerBuild = {
+  location: EventCacheLocation
+  snapshot: EventLedgerSnapshot
+  additions: string[]
+}
+type EventLedgerDiagnostics = { reads: number; locks: number; replaces: number }
+const eventLedgerBuild = new AsyncLocalStorage<EventLedgerBuild>()
+const eventLedgerDiagnostics: EventLedgerDiagnostics = { reads: 0, locks: 0, replaces: 0 }
 type EventStreamRequest = {
   kind: EventStreamKind
   argsFor: (base: string) => string[]
@@ -608,6 +616,7 @@ function decodeEventPayload(payload: Buffer, location: EventCacheLocation): Even
   return state
 }
 function loadEventLedger(location: EventCacheLocation): EventLedgerSnapshot {
+  eventLedgerDiagnostics.reads++
   let file: Buffer
   try { file = readFileSync(location.path) }
   catch (error: any) {
@@ -709,6 +718,7 @@ async function withEventCacheLock<T>(path: string, run: () => Promise<T> | T): P
       await new Promise((resolve) => setTimeout(resolve, 5))
     }
   }
+  eventLedgerDiagnostics.locks++
   try { return await run() } finally {
     if (readEventLockOwner(lock)?.token === owner.token) retireLockPath(lock)
   }
@@ -731,11 +741,46 @@ function replaceEventLedger(path: string, payload: Buffer, additions: string[]):
     writeFileSync(fd, eventIntegrityFooter(payload, addition))
     const written = fd; fd = null; closeSync(written)
     renameSync(tmp, path)
+    eventLedgerDiagnostics.replaces++
   } catch (error) {
     if (fd !== null) closeSync(fd)
     rmSync(tmp, { force: true })
     throw error
   }
+}
+const EVENT_LEDGER_RETRY = Symbol('event ledger identity moved')
+
+function activeEventLedger(root: string): EventLedgerBuild | null {
+  const build = eventLedgerBuild.getStore()
+  if (!build) return null
+  return eventCacheLocation(root).path === build.location.path ? build : null
+}
+
+// The event ledger is one build transaction, not one transaction per consumer: stream extraction and
+// immutable hunk derivation share the snapshot, integrity verdict, lock, and final replacement.
+export async function withEventLedgerBuild<T>(root: string, run: () => Promise<T>): Promise<T> {
+  if (activeEventLedger(root)) return run()
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const location = eventCacheLocation(root)
+    const value = await withEventCacheLock(location.path, async () => {
+      const build: EventLedgerBuild = { location, snapshot: loadEventLedger(location), additions: [] }
+      const result = await eventLedgerBuild.run(build, run)
+      if (eventCacheLocation(root).identity !== location.identity) return EVENT_LEDGER_RETRY
+      if (build.additions.length) {
+        removeEventTemps(location.path)
+        mkdirSync(join(location.path, '..'), { recursive: true })
+        replaceEventLedger(location.path, build.snapshot.payload, build.additions)
+      }
+      return result
+    })
+    if (value !== EVENT_LEDGER_RETRY) return value as T
+  }
+  throw new Error('history event cache identity changed repeatedly during one ledger build')
+}
+
+export function eventLedgerDiagnosticsForTests(): EventLedgerDiagnostics { return { ...eventLedgerDiagnostics } }
+export function resetEventLedgerDiagnosticsForTests(): void {
+  eventLedgerDiagnostics.reads = 0; eventLedgerDiagnostics.locks = 0; eventLedgerDiagnostics.replaces = 0
 }
 function sortedEventRecords(records: Iterable<EventRecord>, request: EventStreamRequest): EventRecord[] {
   return [...records].filter((record) => request.reachable.has(record.hash))
@@ -844,38 +889,22 @@ async function deriveEventStreams(
   }
   if (new Set(requests.map((request) => request.kind)).size !== requests.length)
     throw new Error('one event-ledger transaction cannot request the same stream twice')
-
-  const run = async (location: EventCacheLocation): Promise<Map<EventStreamKind, EventStreamOutput> | null> => {
-    const snapshot = loadEventLedger(location)
-    const missing = requests.filter((request) => !(snapshot.state.streamTips.get(request.kind) ?? []).includes(tip))
-    const outputs = await Promise.all(missing.map((request) => {
-      const base = [...(snapshot.state.streamTips.get(request.kind) ?? [])].reverse()
-        .find((candidate) => request.reachable.has(candidate)) ?? ''
-      return strictEventGit(request.argsFor(base))
-    }))
-    if (eventCacheLocation(root).identity !== location.identity) return null
-
-    const additions: string[] = []
-    for (let index = 0; index < missing.length; index++) {
-      const request = missing[index]
-      for (const record of parseEventRecords(outputs[index], request.kind, location))
-        appendEventRecord(snapshot.state, request.kind, record, additions)
-      if (persist) appendEventTip(snapshot.state, request.kind, tip, additions)
-    }
-    if (persist && additions.length) {
-      removeEventTemps(location.path)
-      mkdirSync(join(location.path, '..'), { recursive: true })
-      replaceEventLedger(location.path, snapshot.payload, additions)
-    }
-    return new Map(requests.map((request) => [request.kind, renderEventStream(snapshot.state, request)]))
+  const build = activeEventLedger(root)
+  if (!build) return withEventLedgerBuild(root, () => deriveEventStreams(root, tip, requests, persist, cache))
+  const { location, snapshot, additions } = build
+  const missing = requests.filter((request) => !(snapshot.state.streamTips.get(request.kind) ?? []).includes(tip))
+  const outputs = await Promise.all(missing.map((request) => {
+    const base = [...(snapshot.state.streamTips.get(request.kind) ?? [])].reverse()
+      .find((candidate) => request.reachable.has(candidate)) ?? ''
+    return strictEventGit(request.argsFor(base))
+  }))
+  for (let index = 0; index < missing.length; index++) {
+    const request = missing[index]
+    for (const record of parseEventRecords(outputs[index], request.kind, location))
+      appendEventRecord(snapshot.state, request.kind, record, additions)
+    if (persist) appendEventTip(snapshot.state, request.kind, tip, additions)
   }
-
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const location = eventCacheLocation(root)
-    const result = persist ? await withEventCacheLock(location.path, () => run(location)) : await run(location)
-    if (result) return result
-  }
-  throw new Error(`history event cache identity changed repeatedly while deriving ${tip}`)
+  return new Map(requests.map((request) => [request.kind, renderEventStream(snapshot.state, request)]))
 }
 
 // Immutable hunk ranges are a ledger fact, not a second anchor cache: callers name their whole image-key
@@ -883,14 +912,11 @@ async function deriveEventStreams(
 export function readImmutableHunkFacts(root: string, keys: Iterable<string>): Map<string, ImmutableHunkRanges> {
   const wanted = new Set(keys)
   if (!wanted.size) return new Map()
-  // A cache lookup must not pre-empt the caller's Git failure classification. If this process cannot even
-  // discover the ledger location, derive the miss through the authoritative adapter below instead.
-  let snapshot: EventLedgerSnapshot
-  try { snapshot = loadEventLedger(eventCacheLocation(root)) }
-  catch { return new Map() }
+  const build = activeEventLedger(root)
+  if (!build) return new Map()
   const found = new Map<string, ImmutableHunkRanges>()
   for (const key of wanted) {
-    const ranges = snapshot.state.hunks.get(key)
+    const ranges = build.snapshot.state.hunks.get(key)
     if (ranges) found.set(key, ranges)
   }
   return found
@@ -898,23 +924,9 @@ export function readImmutableHunkFacts(root: string, keys: Iterable<string>): Ma
 
 export async function persistImmutableHunkFacts(root: string, facts: ReadonlyMap<string, ImmutableHunkRanges>): Promise<void> {
   if (!facts.size) return
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const location = eventCacheLocation(root)
-    const written = await withEventCacheLock(location.path, () => {
-      const snapshot = loadEventLedger(location)
-      if (eventCacheLocation(root).identity !== location.identity) return false
-      const additions: string[] = []
-      for (const [key, ranges] of facts) appendImmutableHunkFact(snapshot.state, key, ranges, additions)
-      if (additions.length) {
-        removeEventTemps(location.path)
-        mkdirSync(join(location.path, '..'), { recursive: true })
-        replaceEventLedger(location.path, snapshot.payload, additions)
-      }
-      return true
-    })
-    if (written) return
-  }
-  throw new Error('history event cache identity changed repeatedly while persisting immutable hunk facts')
+  const build = activeEventLedger(root)
+  if (!build) return withEventLedgerBuild(root, () => persistImmutableHunkFacts(root, facts))
+  for (const [key, ranges] of facts) appendImmutableHunkFact(build.snapshot.state, key, ranges, build.additions)
 }
 
 async function eventStream(

@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { git, gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, readImmutableHunkFacts, persistImmutableHunkFacts, type DiffLineRange, type DriftIndex, type DriftPathEvent, type ImmutableHunkRanges } from './git.js'
+import { git, gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, readImmutableHunkFacts, persistImmutableHunkFacts, withEventLedgerBuild, type DiffLineRange, type DriftIndex, type DriftPathEvent, type ImmutableHunkRanges } from './git.js'
 
 const RS = '\x1e'
 
@@ -585,6 +585,10 @@ const anchorRevisionKey = ({ commit, path }: AnchorRevision) => `${commit}\0${pa
 // selector verdict.
 async function runAnchorQueries(root: string, queries: AnchorHitQuery[], regs: Extractor[], stopAtFirstHit: boolean): Promise<AnchorHit[][]> {
   if (!queries.length) return []
+  return withEventLedgerBuild(root, () => runAnchorQueriesInLedger(root, queries, regs, stopAtFirstHit))
+}
+
+async function runAnchorQueriesInLedger(root: string, queries: AnchorHitQuery[], regs: Extractor[], stopAtFirstHit: boolean): Promise<AnchorHit[][]> {
   const objectFormat = gitObjectFormat(root)
   const revisions = new Map<string, AnchorRevision>()
   const ordinaryEvents: { path: string; commit: string; event: DriftPathEvent }[] = []

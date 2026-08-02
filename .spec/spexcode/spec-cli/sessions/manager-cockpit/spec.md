@@ -63,7 +63,8 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   The reusable hunk facts are durable across processes in [[source-of-truth]]'s existing on-disk event ledger,
   keyed by the SAME ordered image identity and pinned range-semantics schema [[code-anchor]] uses in process.
   A fresh backend therefore replays known facts after a restart; an image the ledger has never seen still pays
-  one Git derivation and is atomically merged through the ledger's one writer. This is not a second cache of
+  one Git derivation and joins the gate's existing build-local ledger snapshot, lock, and one writer rather
+  than opening a second ledger transaction. This is not a second cache of
   the lint verdict: a moved fingerprint still recomputes the verdict from its current tree, and no selector
   outcome, window, or reachability judgment is persisted. A trunk commit that replaces the backend child is
   consequently a first gate only for its newly introduced images, not a corpus-wide first touch. Proportionality is

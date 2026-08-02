@@ -581,8 +581,6 @@ export default {
     previewFile: 'preview file',
     downloadFile: 'download file',
     fileDownloadFailed: 'file download failed (HTTP {status})',
-    filePreviewTitle: 'file preview',
-    closeFilePreview: 'close file preview',
     filePreviewFailed: 'file preview failed (HTTP {status})',
     fileCopyUnavailable: 'copying file paths is unavailable in this browser',
     addResourceTab: 'open a posted file or web service',

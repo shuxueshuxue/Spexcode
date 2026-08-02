@@ -146,7 +146,8 @@ action rather than an extension of Eval.
 The plus lists the selected session's posted
 files and loopback web services ([[files]] / [[web]]) that are not already open. Selecting one creates one
 browser-local tab for that exact session/reference; closing it removes only that view and permits reopening from
-the plus menu, never a duplicate. A newly observed posted web service creates its one tab automatically, becoming
+the plus menu, never a duplicate. The top-right files dropdown's eye uses this same open/select operation for its
+file row, so it cannot create a separate preview surface or a duplicate tab. A newly observed posted web service creates its one tab automatically, becoming
 selected only when its session already is. Each resource tab exposes refresh and close icon tools: refresh rereads
 the current file preview response or recreates the same-origin webpage frame. Removing a published reference closes
 its resource tab. The browser remembers each session's selected local surface: switching to another session and

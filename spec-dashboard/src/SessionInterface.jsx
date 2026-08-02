@@ -18,7 +18,7 @@ import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl, PROJECT_BASE } from './project.js'
-import { inertChromePress, returnFocus } from './focus.js'
+import { inertChromePress } from './focus.js'
 import RichText from './RichText.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
@@ -72,18 +72,14 @@ const webName = (url) => {
 const resourceTabKey = (sessionId, kind, value) => `${sessionId}:${kind}:${value}`
 const webProxyUrl = (sessionId, key) => `${PROJECT_BASE}/web/${encodeURIComponent(sessionId)}/${encodeURIComponent(key)}/`
 
-function SessionFiles({ session, onFailure }) {
+function SessionFiles({ session, onFailure, onPreview }) {
   const t = useT()
   const [open, setOpen] = useState(false)
-  const [preview, setPreview] = useState(null)
-  const previewRequest = useRef(0)
   const filesRef = useRef(null)
-  const previewRef = useRef(null)
   const files = Array.isArray(session?.files) ? session.files : []
   const ready = files.length > 0
 
-  useEffect(() => { setOpen(false); setPreview(null); previewRequest.current++ }, [session?.id])
-  useEffect(() => () => { if (preview?.url) URL.revokeObjectURL(preview.url) }, [preview?.url])
+  useEffect(() => { setOpen(false) }, [session?.id])
   useEffect(() => {
     if (!open) return
     const closeOutside = (event) => { if (!filesRef.current?.contains(event.target)) setOpen(false) }
@@ -91,7 +87,7 @@ function SessionFiles({ session, onFailure }) {
     return () => window.removeEventListener('pointerdown', closeOutside)
   }, [open])
 
-  const urlFor = (path, preview = false) => apiUrl(`/api/sessions/${encodeURIComponent(session.id)}/files/download?path=${encodeURIComponent(path)}${preview ? '&preview=1' : ''}`)
+  const urlFor = (path) => apiUrl(`/api/sessions/${encodeURIComponent(session.id)}/files/download?path=${encodeURIComponent(path)}`)
   const download = async (path) => {
     const url = urlFor(path)
     try {
@@ -121,40 +117,6 @@ function SessionFiles({ session, onFailure }) {
     }
   }
 
-  const openPreview = async (path) => {
-    const request = ++previewRequest.current
-    setOpen(false)
-    setPreview({ path, phase: 'loading' })
-    try {
-      const response = await fetch(urlFor(path, true))
-      if (!response.ok) {
-        const body = await response.json().catch(() => null)
-        throw new Error(body?.error || t('session.filePreviewFailed', { status: response.status }))
-      }
-      const kind = response.headers.get('X-Spexcode-Preview-Kind')
-      if (kind === 'image') {
-        const url = URL.createObjectURL(await response.blob())
-        if (request !== previewRequest.current) { URL.revokeObjectURL(url); return }
-        setPreview({ path, phase: 'image', url })
-      } else {
-        const text = await response.text()
-        if (request === previewRequest.current) setPreview({ path, phase: 'text', text })
-      }
-    } catch (error) {
-      if (request === previewRequest.current) setPreview({ path, phase: 'error', message: error instanceof Error ? error.message : String(error) })
-    }
-  }
-
-  const closePreview = useCallback(() => { previewRequest.current++; setPreview(null) }, [])
-  const previewOpen = Boolean(preview)
-  useEffect(() => {
-    if (!previewOpen) return
-    const closeOnEscape = (event) => { if (event.key === 'Escape') closePreview() }
-    window.addEventListener('keydown', closeOnEscape)
-    const frame = requestAnimationFrame(() => previewRef.current?.focus())
-    return () => { cancelAnimationFrame(frame); window.removeEventListener('keydown', closeOnEscape); returnFocus() }
-  }, [previewOpen, closePreview])
-
   if (!session) return null
 
   const label = ready ? t('session.filesTitle') : t('session.filesEmptyTitle')
@@ -170,29 +132,12 @@ function SessionFiles({ session, onFailure }) {
           {files.map((path) => <div key={path} className="si-files-row" role="none">
             <span className="si-files-name">{fileName(path)}</span>
             <IconButton icon="eye" size={14} className="si-files-preview" role="menuitem" label={t('session.previewFile')}
-              onClick={() => openPreview(path)} />
+              onClick={() => { setOpen(false); onPreview(path) }} />
             <IconButton icon="download" size={14} className="si-files-download" role="menuitem" label={t('session.downloadFile')}
               onClick={() => download(path)} />
             <IconButton icon="copy" size={14} className="si-files-copy" role="menuitem" label={path}
               onClick={() => copyPath(path)} />
           </div>)}
-        </div>
-      )}
-      {preview && (
-        <div className="si-file-preview-backdrop" data-focus-overlay onMouseDown={closePreview}>
-        <section ref={previewRef} tabIndex={-1} className="si-file-preview" role="dialog" aria-modal="true" aria-label={t('session.filePreviewTitle')} onMouseDown={(event) => event.stopPropagation()}>
-          <header className="si-file-preview-head">
-            <span>{fileName(preview.path)}</span>
-            <IconButton icon="download" size={14} label={t('session.downloadFile')} onClick={() => download(preview.path)} />
-            <IconButton icon="x" size={14} label={t('session.closeFilePreview')} onClick={closePreview} />
-          </header>
-          <div className={`si-file-preview-body ${preview.phase}`} data-selectable>
-            {preview.phase === 'loading' && <Icon name="loader" size={18} className="si-attach-busy" />}
-            {preview.phase === 'error' && <p className="si-file-preview-error" role="alert">{preview.message}</p>}
-            {preview.phase === 'text' && <FileTextPreview path={preview.path} text={preview.text} />}
-            {preview.phase === 'image' && <img src={preview.url} alt={fileName(preview.path)} />}
-          </div>
-        </section>
         </div>
       )}
     </div>
@@ -1460,7 +1405,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     )
                   })}
                 </div>
-                <SessionFiles session={selSession} onFailure={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })} />
+                <SessionFiles
+                  session={selSession}
+                  onFailure={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })}
+                  onPreview={(path) => openResource({
+                    id: resourceTabKey(active, 'file', path), sessionId: active, kind: 'file', value: path, label: fileName(path), revision: 0,
+                  })}
+                />
               </header>
               {/* The live terminal stays mounted when the Eval tab routes the app away (warm-terminals
                   contract); the routed session page is display-hidden, so socket + scroll survive. */}

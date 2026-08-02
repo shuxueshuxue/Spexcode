@@ -573,8 +573,6 @@ export default {
     previewFile: '预览文件',
     downloadFile: '下载文件',
     fileDownloadFailed: '文件下载失败（HTTP {status}）',
-    filePreviewTitle: '文件预览',
-    closeFilePreview: '关闭文件预览',
     filePreviewFailed: '文件预览失败（HTTP {status}）',
     fileCopyUnavailable: '此浏览器无法复制文件路径',
     addResourceTab: '打开已发布的文件或网页服务',

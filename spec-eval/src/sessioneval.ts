@@ -13,6 +13,7 @@ import {
   driftIndex,
   historyIndex,
   treeTextFiles,
+  withEventLedgerBuild,
   type DriftIndex,
   type DriftPathEvent,
   type ReviewDiffFile,
@@ -121,7 +122,7 @@ type LoadedSpec = Awaited<ReturnType<typeof loadSpecs>>[number]
 async function impactGit(root: string, args: string[], operation: string): Promise<string> {
   const result = await gitTry(['-C', root, ...args])
   if (!result.ok) {
-    const detail = result.stderr.trim() || `${result.failure ?? 'git'} failure`
+    const detail = result.failure ? `${result.failure} failure${result.stderr.trim() ? `: ${result.stderr.trim()}` : ''}` : result.stderr.trim() || 'git failure'
     throw new SessionImpactUnavailableError(`session impact cannot ${operation}: ${detail}`)
   }
   return result.stdout
@@ -130,7 +131,7 @@ async function impactGit(root: string, args: string[], operation: string): Promi
 async function impactIndexGit(root: string, indexFile: string, args: string[], operation: string): Promise<string> {
   const result = await gitTry(['-C', root, ...args], { indexFile })
   if (!result.ok) {
-    const detail = result.stderr.trim() || `${result.failure ?? 'git'} failure`
+    const detail = result.failure ? `${result.failure} failure${result.stderr.trim() ? `: ${result.stderr.trim()}` : ''}` : result.stderr.trim() || 'git failure'
     throw new SessionImpactUnavailableError(`session impact cannot ${operation}: ${detail}`)
   }
   return result.stdout
@@ -806,6 +807,10 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
   // family's node-existence layer). No worktree → the backend checkout, unchanged.
   const wtPath = worktreePathForBranch(payload.branch)
   const ctxRoot = wtPath ?? repoRoot()
+  return withEventLedgerBuild(ctxRoot, () => buildExportModelInLedger(id, payload, wtPath, ctxRoot))
+}
+
+async function buildExportModelInLedger(id: string, payload: ReviewPayloadValue, wtPath: string | null, ctxRoot: string): Promise<ExportModel> {
   const specs = await loadSpecs(ctxRoot)
   const specById = new Map(specs.map((s) => [s.id, s]))
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])
@@ -1625,6 +1630,16 @@ async function buildSessionEvalModel(
   // spec tree from the session worktree, same root as readings/indexes — a branch-NEW node must exist
   // in this model or the Eval tab/deep link can never reach its readings (see buildExportModel above).
   const ctxRoot = wtPath ?? repoRoot()
+  return withEventLedgerBuild(ctxRoot, () => buildSessionEvalModelInLedger(id, payload, wtPath, pick, ctxRoot))
+}
+
+async function buildSessionEvalModelInLedger(
+  id: string,
+  payload: ReviewPayloadValue | ReviewIdentity,
+  wtPath: string | null,
+  pick: SessionEvalFocus | undefined,
+  ctxRoot: string,
+): Promise<SessionEvalModel> {
   const specs = await loadSpecs(ctxRoot)
   const specById = new Map(specs.map((s) => [s.id, s]))
   const [didx, hidx] = await Promise.all([driftIndex(ctxRoot), historyIndex(ctxRoot)])

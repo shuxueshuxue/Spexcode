@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, type DriftPathEvent } from './git.js'
+import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from './git.js'
 import { loadSpecs, parseFrontmatter } from './specs.js'
 import { readJsonConfig } from './layout.js'
 import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, resolveAnchor, resolveSelectors, windowEvents, anchorHitQueries } from './anchors.js'
@@ -126,6 +126,10 @@ export async function pendingTouchesGoverned(root: string, tip: string): Promise
 }
 
 export async function specLint(root = repoRoot(), regs = extractors(root), options: SpecLintOptions = {}): Promise<Finding[]> {
+  return withEventLedgerBuild(root, () => specLintInLedger(root, regs, options))
+}
+
+async function specLintInLedger(root: string, regs: ReturnType<typeof extractors>, options: SpecLintOptions): Promise<Finding[]> {
   const tip = options.tip ?? 'HEAD'
   const pending = tip !== 'HEAD'
   const changed = pending ? pendingChangedPaths(root, tip) : []

@@ -85,7 +85,8 @@ session merge-base" — a confident, actionable, wrong instruction. Telling 1 fr
 this seam currently discards, which is a widening of its result shape rather than a one-line change, so it is
 filed rather than patched here.
 
-Neither branch has a test. That is worth knowing before the next change to this seam: five of the seven sites
-are reached only on a machine where git is missing, unexecutable, or timing out, so ordinary runs never
-exercise the distinction — the guard is the freshness loud-failure test alone, and it had itself been failing
-on trunk long enough to be filed as a known red.
+The session-impact fixture now pins both observable resolution outcomes: an unexecutable Git reports a spawn
+failure before ancestry is considered, while a real non-ancestor retains the actionable merge-base diagnosis.
+The hard-exit-128 distinction remains the unfixed boundary above. Five of the seven sites are reached only on
+a machine where Git is missing, unexecutable, or timing out, so ordinary runs still cannot stand in for this
+failure proof.

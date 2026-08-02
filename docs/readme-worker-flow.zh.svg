@@ -17,7 +17,7 @@
   <g>
     <rect x="384" y="60" width="290" height="120" rx="16" fill="#FFFDF6" stroke="#16495A" stroke-width="2.5"/>
     <text x="410" y="100" font-size="17" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#8A8272">02</text>
-    <text x="410" y="132" font-size="20" font-weight="700" fill="#171A20">读懂所辖 spec</text>
+    <text x="410" y="132" font-size="20" font-weight="700" fill="#171A20">读懂管辖它的 spec</text>
     <text x="410" y="160" font-size="15" fill="#5C5647">先读契约，再碰代码</text>
   </g>
   <path d="M 678 120 L 724 120" stroke="#16495A" stroke-width="3" marker-end="url(#zarr)" fill="none"/>

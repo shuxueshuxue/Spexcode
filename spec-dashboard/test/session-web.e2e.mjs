@@ -65,6 +65,9 @@ try {
   await fileTab.waitFor({ state: 'visible' })
   assert.equal(await fileTab.evaluate((element) => element.classList.contains('on')), true, 'the eye must select the file resource tab')
   assert.equal(await page.locator('.si-file-preview-backdrop').count(), 0, 'the eye must not create a second pop-out preview')
+  assert.equal(await page.locator('.si-actions [data-resource-action="refresh"]').count(), 1, 'a selected file gets one right-side refresh action')
+  assert.equal(await page.locator('.si-actions [data-command="merge"]').count(), 0, 'merge belongs to the terminal surface, not a file')
+  assert.equal(await fileTab.locator('.si-resource-tab-action').count(), 1, 'the file tab keeps close but not refresh')
   const resourceMarkdown = page.locator('.si-resource-file .si-file-markdown')
   await resourceMarkdown.getByRole('heading', { name: 'Preview starts here' }).waitFor({ state: 'visible' })
   assert.equal(await page.locator('.si-resource-file .si-file-text').count(), 0, 'Markdown must not fall back to a raw preformatted dump')
@@ -100,6 +103,8 @@ try {
   postedWeb = true
   const webTab = page.locator('.si-resource-tab').filter({ hasText: webLabel })
   await webTab.waitFor({ state: 'visible', timeout: 20_000 })
+  assert.equal(await page.locator('.si-actions [data-resource-action="refresh"]').count(), 0, 'web resources do not get the file refresh action')
+  assert.equal(await page.locator('.si-actions [data-command="merge"]').count(), 0, 'merge remains hidden while web is selected')
   const frame = page.frameLocator('.si-resource-web')
   const version = frame.locator('#spex-web-proof')
   await version.waitFor({ state: 'visible', timeout: 20_000 })

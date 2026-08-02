@@ -148,9 +148,10 @@ files and loopback web services ([[files]] / [[web]]) that are not already open.
 browser-local tab for that exact session/reference; closing it removes only that view and permits reopening from
 the plus menu, never a duplicate. The top-right files dropdown's eye uses this same open/select operation for its
 file row, so it cannot create a separate preview surface or a duplicate tab. A newly observed posted web service creates its one tab automatically, becoming
-selected only when its session already is. Each resource tab exposes refresh and close icon tools: refresh rereads
-the current file preview response or recreates the same-origin webpage frame. Removing a published reference closes
-its resource tab. The browser remembers each session's selected local surface: switching to another session and
+selected only when its session already is. Each resource tab exposes a close icon. A selected **file** resource
+gets exactly one refresh action in the right-side toolbar action group; it rereads the current file preview
+response. A selected web resource has no refresh action because reopening its same-origin frame is not a file
+read operation. Removing a published reference closes its resource tab. The browser remembers each session's selected local surface: switching to another session and
 back restores its resource tab when one was selected, or its Terminal/Conversation surface when that was selected;
 only an explicit press on Terminal/Conversation changes it back. This is dashboard-local presentation state, never
 session state or a backend write. Neither console adds a second native-event view. Session identity, lifecycle,
@@ -310,14 +311,16 @@ that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, w
 can actually own.) The **toolbar's command
 group** renders the same board-command registry. The independent top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
-hover tooltips. Its eye icon, rather than the inert file name, opens a centred preview pop-out; click-outside
-dismisses each transient surface. The adjacent download tool delegates to the authorized backend route. **Command Box** is present whenever live; each selected
-session also keeps the same 24px **merge** tool slot. It is green and dispatchable only for the
+hover tooltips. Its eye icon, rather than the inert file name, opens or selects the singleton resource tab; the
+adjacent download tool delegates to the authorized backend route. **Command Box** is present whenever live. The
+right-side action group is surface-specific: a selected file shows its one refresh tool, a selected web shows
+neither refresh nor merge, and the Terminal surface alone shows the 24px **merge** tool. Merge is green and dispatchable only for the
 persisted `awaiting` + `proposal:merge` + `review` projection while liveness is `online`; `nothing`/done,
 close-pending, working, asking, and every non-online reading keep the tool muted and disabled, with a
 localized tooltip and accessible reason. Disabled merge never appears as a typed `/merge` command and never
 dispatches. Command Box is the resident tool and always sits at the group's right edge; merge and relaunch
-occupy the fixed tools to its left, so proposal/lifecycle/liveness changes do not move merge. Every visible
+occupy the fixed tools to its left on the Terminal surface, so proposal/lifecycle/liveness changes do not move
+merge. Every visible
 action uses one shared compact icon-toolbutton primitive and a familiar [[icon-system]] / Lucide mark
 (command, git-merge, rotate/relaunch), with its registry identity colour; there is no emoji, visible text
 label, or toolbar-local icon/action mapping. The registry remains the single row that decides availability,

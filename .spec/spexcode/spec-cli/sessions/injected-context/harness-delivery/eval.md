@@ -14,6 +14,20 @@ scenarios:
       surfaces: it reads the governing body, gives independent intent its own node, validates and commits the
       code plus spec, then files a correctly anchored reading. Checkout shape adds no copy/move workaround or
       launch ceremony. The user performed no step after materialize and did not teach that workflow.
+  - name: agent-proactively-publishes-human-handoffs
+    tags: [cli, backend-api, frontend-e2e]
+    description: >-
+      In a fresh isolated git project after `spex init --harness codex`, launch a real Codex worker with only
+      a product task to create a local webpage and a handoff file the human wants to inspect through Spex. Do
+      not name `session files`, `session web`, their spelling, or any publish step in the task. Inspect the
+      materialized contract, the worker's actual command transcript, its projected lists, and its real session
+      page.
+    expected: >-
+      The worker discovers the short always-on handoff cue and, after making the artifacts, independently runs
+      `spex session files add <path>` once for its handoff and `spex session web add <loopback-url>` once for
+      its live service. Both first attempts succeed; it does not copy/upload either artifact or invent another
+      command. The file and service appear in that session's lists, and the dashboard opens the current file
+      preview and same-origin webpage. The service remains live while the human inspects it.
   - name: contract-files-are-untracked-artifacts
     tags: [backend-api]
     description: >-

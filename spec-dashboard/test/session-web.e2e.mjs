@@ -58,6 +58,8 @@ try {
   await row.waitFor({ state: 'visible' })
   assert.equal(await row.locator('.si-files-name').getAttribute('data-tip'), null)
   assert.equal(await row.locator('.si-files-copy').getAttribute('data-tip'), FILE)
+  assert.equal(await row.locator('.si-files-preview').getAttribute('data-tip'), 'preview file')
+  assert.equal(await row.locator('.si-files-download').getAttribute('data-tip'), 'download file')
   await row.locator('.si-files-preview').click()
   await page.locator('.si-file-preview-backdrop').waitFor({ state: 'visible' })
   const popoutMarkdown = page.locator('.si-file-preview .si-file-markdown')

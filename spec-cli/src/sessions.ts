@@ -3284,21 +3284,21 @@ export function statusLegend(color = true): string {
   return c('90', '  key: ') + parts.join('  ')
 }
 
-// human-friendly aligned table: header + (glyph + colour + status + name + id + merges + note) rows +
+// human-friendly aligned table: header + (glyph + colour + status + title + id + merges + note) rows +
 // a status legend, so the table tells the whole story (incl. each agent's note) at a glance.
 export function formatTable(sessions: Session[], color = true): string {
   const c = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t)
   if (!sessions.length) return c('90', '  no living sessions')
-  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'NODE'.padEnd(22)} ${'ID'.padEnd(8)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
+  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'TITLE'.padEnd(22)} ${'ID'.padEnd(8)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
   const rows = sessions.map((s) => {
     const g = STATUS_GLYPH[s.status] ?? '\u00b7'
     const code = ANSI[s.status] ?? '0'
-    const name = padWidth(truncWidth(sessionLabel(s), 22), 22)
+    const title = padWidth(truncWidth(sessionTitle(s), 22), 22)
     const st = s.status.padEnd(13)
     const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
     const prompt = c('90', padWidth(s.promptPreview ? trunc(s.promptPreview, 40) : '', 42))   // what it was asked to do
     const note = s.note ? c('90', trunc(s.note, NOTE_BOARD_LIMIT)) : ''
-    return `  ${c(code, g)} ${c(code, st)} ${name} ${c('90', s.id.slice(0, 8))} ${merges}${prompt}${note}`
+    return `  ${c(code, g)} ${c(code, st)} ${title} ${c('90', s.id.slice(0, 8))} ${merges}${prompt}${note}`
   })
   return [c('1', `SpexCode sessions (${sessions.length})`), header, ...rows, statusLegend(color)].join('\n')
 }

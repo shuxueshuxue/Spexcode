@@ -149,7 +149,10 @@ browser-local tab for that exact session/reference; closing it removes only that
 the plus menu, never a duplicate. A newly observed posted web service creates its one tab automatically, becoming
 selected only when its session already is. Each resource tab exposes refresh and close icon tools: refresh rereads
 the current file preview response or recreates the same-origin webpage frame. Removing a published reference closes
-its resource tab. Neither console adds a second native-event view. Session identity, lifecycle,
+its resource tab. The browser remembers each session's selected local surface: switching to another session and
+back restores its resource tab when one was selected, or its Terminal/Conversation surface when that was selected;
+only an explicit press on Terminal/Conversation changes it back. This is dashboard-local presentation state, never
+session state or a backend write. Neither console adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
 height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval tab is a REAL anchor whose href is

@@ -169,9 +169,9 @@ function SessionFiles({ session, onFailure }) {
         <div className="si-files-menu" role="menu" aria-label={t('session.filesListLabel')}>
           {files.map((path) => <div key={path} className="si-files-row" role="none">
             <span className="si-files-name">{fileName(path)}</span>
-            <IconButton icon="eye" size={14} className="si-files-preview" role="menuitem" label={t('session.previewFile', { path })}
+            <IconButton icon="eye" size={14} className="si-files-preview" role="menuitem" label={t('session.previewFile')}
               onClick={() => openPreview(path)} />
-            <IconButton icon="download" size={14} className="si-files-download" role="menuitem" label={t('session.downloadFile', { path })}
+            <IconButton icon="download" size={14} className="si-files-download" role="menuitem" label={t('session.downloadFile')}
               onClick={() => download(path)} />
             <IconButton icon="copy" size={14} className="si-files-copy" role="menuitem" label={path}
               onClick={() => copyPath(path)} />
@@ -180,10 +180,10 @@ function SessionFiles({ session, onFailure }) {
       )}
       {preview && (
         <div className="si-file-preview-backdrop" data-focus-overlay onMouseDown={closePreview}>
-        <section ref={previewRef} tabIndex={-1} className="si-file-preview" role="dialog" aria-modal="true" aria-label={t('session.filePreviewTitle', { path: preview.path })} onMouseDown={(event) => event.stopPropagation()}>
+        <section ref={previewRef} tabIndex={-1} className="si-file-preview" role="dialog" aria-modal="true" aria-label={t('session.filePreviewTitle')} onMouseDown={(event) => event.stopPropagation()}>
           <header className="si-file-preview-head">
             <span>{fileName(preview.path)}</span>
-            <IconButton icon="download" size={14} label={t('session.downloadFile', { path: preview.path })} onClick={() => download(preview.path)} />
+            <IconButton icon="download" size={14} label={t('session.downloadFile')} onClick={() => download(preview.path)} />
             <IconButton icon="x" size={14} label={t('session.closeFilePreview')} onClick={closePreview} />
           </header>
           <div className={`si-file-preview-body ${preview.phase}`} data-selectable>
@@ -561,15 +561,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     ...draft,
     [active]: typeof value === 'function' ? value(draft[active] || '') : value,
   }))
-  // Selecting a terminal is an action even when its id does not change. The request counter lets an already-
-  // selected row/tab restore native focus without coupling this shell to xterm's hidden textarea.
-  const activateTerminal = (id) => {
+  const selectSession = (id) => {
     if (id === 'new') return
     closeCommandBox()
     setMenu(null)
-    setResourceSurface((surfaces) => ({ ...surfaces, [id]: null }))
     setOpened((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
     setSel(id)
+  }
+  // Selecting a terminal is an action even when its id does not change. The request counter lets an already-
+  // selected tab restore native focus without coupling this shell to xterm's hidden textarea.
+  const activateTerminal = (id) => {
+    if (id === 'new') return
+    selectSession(id)
+    setResourceSurface((surfaces) => ({ ...surfaces, [id]: null }))
     setTerminalFocusRequest((request) => request + 1)
   }
 
@@ -1295,7 +1299,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   style={{ '--ov': labelColor(s.id) }}
                   onClick={() => {
                     if (selecting) return togglePick(s.id)
-                    activateTerminal(s.id)
+                    selectSession(s.id)
                   }}
                   onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
                   data-tip={s.ops?.length ? t('session.opsTitle') : t('session.lockTitle')}

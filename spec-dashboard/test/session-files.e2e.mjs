@@ -30,6 +30,10 @@ try {
   const fullPath = await copy.getAttribute('data-tip')
   if (!fullPath || await name.getAttribute('data-tip') || (await name.textContent())?.includes('/'))
     throw new Error('the compact file row must show only a name; only its copy-path icon may expose the full path')
+  for (const tool of ['.si-files-preview', '.si-files-download']) {
+    const tip = await row.locator(tool).getAttribute('data-tip')
+    if (!tip || tip.includes(fullPath)) throw new Error(`${tool} must name its action without exposing the full path`)
+  }
   const [menuBox, nameBox] = await Promise.all([page.locator('.si-files-menu').boundingBox(), name.boundingBox()])
   if (!menuBox || !nameBox || menuBox.width > nameBox.width + 100) throw new Error('the file dropdown must fit its visible file name and fixed icon tools')
   await page.screenshot({ path: join(OUT, 'files-menu.png'), fullPage: true })

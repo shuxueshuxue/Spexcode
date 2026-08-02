@@ -119,6 +119,22 @@ test('adoption needs no vote: a host-TRACKED contract file goes straight through
   assert.ok(localIgnore.includes('.gitignore'), 'a wholly generated ignore hides itself')
 })
 
+test('a wholly generated ignore stays self-hidden after repeated materialize', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, env, g, spex } = freshRepo()
+  spex('init', '.', '--harness', 'codex')
+  g('add', '.spec', 'spexcode.json')
+  execFileSync('git', ['-C', proj, 'commit', '-qm', 'adopt SpexCode seed'], {
+    env: { ...env, SPEXCODE_ALLOW_MAIN: '1' },
+  })
+
+  spex('materialize')
+
+  const localIgnore = readFileSync(join(proj, '.gitignore'), 'utf8')
+  assert.match(localIgnore, /^\.gitignore$/m, 'the repeated projection keeps its own ignore entry')
+  assert.equal(g('check-ignore', '.gitignore').trim(), '.gitignore', 'Git still classifies the generated file as ignored')
+  assert.ok(!g('status', '--short', '--untracked-files=all').includes('.gitignore'), 'the generated file stays absent from status')
+})
+
 test('init without --harness fails loud BEFORE writing anything — the delivery choice is required, never defaulted', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, env } = freshRepo()
   const all = execFileSync('bash', ['-c', `cd '${proj}' && '${TSX}' '${CLI}' init . 2>&1; echo "exit:$?"`], { encoding: 'utf8', env })

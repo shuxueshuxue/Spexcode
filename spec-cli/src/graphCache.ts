@@ -432,7 +432,7 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
             const moved = Object.keys(before.fullParts).filter((key) => before.fullParts[key] !== anchor.fullParts[key])
             console.warn(`spec-cli: graph refresh revision moved — signalled=${dirty} scope=${owed} inputs=[${moved.join(', ')}]`)
           } else if (DEBUG && dirty !== 'none') {
-            console.warn(`spec-cli: graph refresh discharged a ${dirty} signal — no board input moved`)
+            console.warn(`spec-cli: graph refresh discharged a ${dirty} signal — no graph input moved`)
           }
           if (fullMoved) dirty = 'full'
           else if (sessionOwed || dirty === 'sessions') dirty = 'sessions'

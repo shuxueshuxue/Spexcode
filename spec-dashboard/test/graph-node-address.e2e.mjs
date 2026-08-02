@@ -30,10 +30,21 @@ try {
   await page.screenshot({ path: `${OUT}/desktop-direct.png` })
 
   const parent = page.locator(`.react-flow__node[data-id="${target.parent}"]`)
+  await page.keyboard.press('ArrowLeft')
+  await page.waitForTimeout(150)
+  assert.equal(await page.locator('.react-flow__node.selected').getAttribute('data-id'), target.parent)
+  assert.equal(await page.evaluate(() => location.hash), `#/graph/${encodeURIComponent(target.parent)}`)
+  await page.screenshot({ path: `${OUT}/desktop-keyboard-navigated.png` })
+
+  await page.goto(`${BASE}/${hash}`, { waitUntil: 'domcontentloaded' })
+  await selected.waitFor({ state: 'visible' })
+  await page.mouse.move(0, 0)
+  await page.waitForTimeout(150)
   await parent.click()
   await page.waitForTimeout(150)
   assert.equal(await page.locator('.react-flow__node.selected').getAttribute('data-id'), target.parent)
   assert.equal(await page.evaluate(() => location.hash), `#/graph/${encodeURIComponent(target.parent)}`)
+  await page.screenshot({ path: `${OUT}/desktop-mouse-navigated.png` })
 
   await page.reload({ waitUntil: 'domcontentloaded' })
   await selected.waitFor({ state: 'visible' })

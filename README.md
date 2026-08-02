@@ -29,7 +29,7 @@ implementation from drifting apart.
 
 English | [中文](./docs/README.zh-CN.md) · Docs: [spexcode.net](https://spexcode.net) · License: MIT
 
-Quick links: [the model](#the-model) · [quick start](#quick-start) ·
+Quick links: [the model](#the-model) · [why prose](#why-prose) · [quick start](#quick-start) ·
 [agents](#working-with-agents) · [eval](#measuring-behavior-eval) · [config](#configuration)
 
 ## The model
@@ -61,6 +61,23 @@ Two rules make this workable:
    ```
 
    and keeps flagging until the spec catches up.
+
+## Why prose
+
+An agent reasons in text: its chain of thought is a sequence of natural-language tokens. So before it
+can change your code it restates that code as intent — and the restatement adds information the code
+did not contain. That added part is a guess, drawn from how code shaped like this usually behaves. It
+is accurate exactly where your code is conventional and wrong exactly where it isn't, which is where
+the decisions worth keeping live. A wrong guess doesn't announce itself; it produces confident code
+built on a misread. Every programming language ever designed grew a syntax for comments, because the
+formal part has never been able to carry why.
+
+So you don't get to choose whether a spec exists. Every read of your codebase reconstructs one; you
+only choose whether it was written down once and reviewed, or re-guessed on each read by someone who
+wasn't there. That also settles what belongs in a body: the constraint, the rejected alternative, the
+policy, the invariant that looks removable and isn't — the part no reader could recover from the code.
+A body that narrates what the code plainly does is worth nothing, because the reader can already
+generate it.
 
 ## The optimization loop
 

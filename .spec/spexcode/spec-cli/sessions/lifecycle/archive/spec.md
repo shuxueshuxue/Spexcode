@@ -91,9 +91,12 @@ that every target-owned PID, tmux window, rendezvous transport, and loaded threa
 the record, worktree, and branch directly. That cold retirement path sends no signal and neither probes nor
 requires ownership of unrelated references on the shared project app-server; archive already returned the
 target's runtime. Any target runtime that has reappeared, stale/swapped target identity, unreadable cold proof,
-or ambiguous target ownership fails loudly before deletion and leaves the shelf row intact. Continuing-cold
-proof may list loaded IDs and the target's own native collection/descendants, but it never `thread/read`s or
-waits on an unrelated loaded sibling.
+or ambiguous target ownership fails loudly before deletion and leaves the shelf row intact. A live PID is not
+ownership by number alone: the shared leaf-identity seam requires a readable process-start token and harness
+owner argv. A live PID whose argv proves a different process is a stale artifact and does not block cold
+retirement; malformed or unreadable PID/start/argv evidence remains unknown and fails closed, while an argv
+owner match remains live-owned and fails. Continuing-cold proof may list loaded IDs and the target's own native
+collection/descendants, but it never `thread/read`s or waits on an unrelated loaded sibling.
 
 A prepared `queued` row that has never launched takes the other target-only retirement path. Close serializes
 with the drainer on the same session transition/record lock; if close wins while the record is still queued, it

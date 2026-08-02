@@ -530,7 +530,7 @@ test('stop revalidates the exact leaf after every shared guard before TERM and K
   }
 })
 
-test('closing a proven-cold archive ignores unrelated shared refs but rejects target runtime ambiguity without signaling', serial, async () => {
+test('closing a proven-cold archive classifies stale leaf identity before retirement', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = codexHarness.sharedRuntimes
   const originalColdPreflight = codexHarness.coldPreflight
@@ -541,6 +541,7 @@ test('closing a proven-cold archive ignores unrelated shared refs but rejects ta
   let residentIds: string[] = ['unrelated-unowned-thread']
   let coldPreflightCalls = 0
   let leaf: ReturnType<typeof spawn> | null = null
+  let unrelated: ReturnType<typeof spawn> | null = null
 
   const writeColdRecord = (id: string, thread: string) => {
     const dir = sessionStoreDir(id)
@@ -587,12 +588,27 @@ test('closing a proven-cold archive ignores unrelated shared refs but rejects ta
     const pidThread = `target-pid-${process.pid}`
     residentIds = ['unrelated-unowned-thread']
     writeColdRecord(pidId, pidThread)
-    leaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    leaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', pidThread], { stdio: 'ignore' })
     for (let i = 0; i < 50 && !processStartToken(leaf.pid!); i++) await sleep(20)
     writeFileSync(sessionArtifactPath(pidId, 'agent.pid'), `${leaf.pid}\n`)
     await assert.rejects(closeSession(pidId), /target leaf PID .* live or recycled/)
     assert.ok(processStartToken(leaf.pid!), 'ambiguous target PID is left alive; cold close sends no signal')
     assert.equal(existsSync(sessionRecordPath(pidId)), true, 'PID ambiguity preserves the shelf record')
+
+    const reusedId = `cold-close-reused-${process.pid}`
+    const reusedThread = `target-reused-${process.pid}`
+    writeColdRecord(reusedId, reusedThread)
+    unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    for (let i = 0; i < 50 && !processStartToken(unrelated.pid!); i++) await sleep(20)
+    writeFileSync(sessionArtifactPath(reusedId, 'agent.pid'), `${unrelated.pid}\n`)
+    assert.equal(await closeSession(reusedId), true, 'a live PID with a clearly unrelated argv is stale artifact, not target ownership')
+    assert.equal(existsSync(sessionRecordPath(reusedId)), false, 'proven-unrelated PID does not strand a cold row')
+
+    const unknownId = `cold-close-unknown-${process.pid}`
+    writeColdRecord(unknownId, `target-unknown-${process.pid}`)
+    writeFileSync(sessionArtifactPath(unknownId, 'agent.pid'), 'not-a-pid\n')
+    await assert.rejects(closeSession(unknownId), /leaf PID artifact|identity is unknown/)
+    assert.equal(existsSync(sessionRecordPath(unknownId)), true, 'unknown PID identity preserves the shelf record')
   } finally {
     codexHarness.sharedRuntimes = originalShared
     codexHarness.coldPreflight = originalColdPreflight
@@ -600,6 +616,9 @@ test('closing a proven-cold archive ignores unrelated shared refs but rejects ta
     codexHarness.cleanupRuntime = originalCleanup
     if (leaf?.pid && processStartToken(leaf.pid)) {
       try { process.kill(leaf.pid, 'SIGKILL') } catch { /* already exited */ }
+    }
+    if (unrelated?.pid && processStartToken(unrelated.pid)) {
+      try { process.kill(unrelated.pid, 'SIGKILL') } catch { /* already exited */ }
     }
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome

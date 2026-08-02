@@ -65,3 +65,8 @@ prints the bare, parseable session **JSON to STDOUT** exactly as before, then pr
 The receipt is the same harness-agnostic dependency model for every caller. It does not diagnose
 launcher/provider failures, prescribe a supervisor workflow, require child sessions, change lifecycle
 states, or add a command. Those concerns remain in their existing adapter and product boundaries.
+
+The managed-watch outcome is resolved before that receipt is printed. A child that was created but whose
+parent subscription could not be installed remains a real child session; the command says that failure loudly
+and prints the unmanaged background-`wait` receipt rather than falsely claiming terminal delivery. Retrying
+the ordinary `spex session watch <id>` is the explicit repair, not a second create path.

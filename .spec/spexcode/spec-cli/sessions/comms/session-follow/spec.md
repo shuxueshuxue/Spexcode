@@ -6,11 +6,14 @@ desc: Supervision is a durable watch relation for governed sessions, delivered t
 code:
   - spec-cli/src/session-follow.ts
 related:
+  - spec-cli/src/sessions.ts
   - spec-cli/src/session-cursors.ts
   - spec-cli/src/session-timeline.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/session-follow.test.ts
   - spec-cli/src/follow-cli.api.test.ts
+  - spec-cli/src/session-timeline.test.ts
+  - spec-cli/src/session-create-cli.test.ts
 ---
 
 # session-follow

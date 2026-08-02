@@ -458,7 +458,113 @@ function writeRecord(rec: SessRec): void {
   if (rec.governed && previousPublic && (previousPublic.status !== nextPublic.status
     || previousPublic.proposal !== nextPublic.proposal || previousPublic.note !== nextPublic.note)) {
     recordStatus(rec.session, nextPublic.status, nextPublic.proposal, nextPublic.note)
+    scheduleWatchNotifications(rec)
   }
+}
+
+type WatchEntry = { watcher: string; createdAt: string }
+export type SessionWatch = { target: string; createdAt: string }
+const watchPath = (target: string) => sessionArtifactPath(target, 'watchers.json')
+
+function readWatchEntries(target: string): WatchEntry[] {
+  try {
+    const raw = JSON.parse(readFileSync(watchPath(target), 'utf8')) as unknown
+    if (!Array.isArray(raw)) return []
+    const seen = new Set<string>()
+    return raw.flatMap((entry): WatchEntry[] => {
+      if (!entry || typeof entry !== 'object') return []
+      const watcher = (entry as WatchEntry).watcher
+      const createdAt = (entry as WatchEntry).createdAt
+      if (!watcher || typeof watcher !== 'string' || typeof createdAt !== 'string' || seen.has(watcher)) return []
+      seen.add(watcher)
+      return [{ watcher, createdAt }]
+    })
+  } catch { return [] }
+}
+
+function writeWatchEntries(target: string, entries: WatchEntry[]): void {
+  const path = watchPath(target)
+  if (!entries.length) { try { unlinkSync(path) } catch { /* already absent */ }; return }
+  const dir = sessionStoreDir(target)
+  mkdirSync(dir, { recursive: true })
+  const tmp = join(dir, `.watchers.json.${process.pid}.tmp`)
+  writeFileSync(tmp, JSON.stringify(entries, null, 2) + '\n')
+  renameSync(tmp, path)
+}
+
+function managedWatchRecord(id: string): SessRec {
+  const rec = readRecord(id)
+  if (!rec?.governed) throw new ResourceConflict(`session ${id} is not a governed session and cannot participate in a durable watch`)
+  return rec
+}
+
+function watchMessage(target: SessRec): string {
+  const status = target.status === 'awaiting'
+    ? PROPOSAL_STATUS[target.proposal ?? 'nothing']
+    : target.status === 'active' ? 'working' : target.status
+  const note = target.note ? ` — ${target.note}` : ''
+  return `[spex watch] ${target.session} is ${status}${note}`
+}
+
+function scheduleWatchNotifications(target: SessRec): void {
+  const watchers = readWatchEntries(target.session).map((entry) => entry.watcher)
+  if (!watchers.length) return
+  queueMicrotask(() => {
+    for (const watcher of watchers) {
+      void sendText(watcher, watchMessage(target), target.session).then((result) => {
+        if (!result.ok) console.error(`spex session watch: could not deliver ${target.session} state to ${watcher}: ${result.error}`)
+      })
+    }
+  })
+}
+
+export async function subscribeSessionWatch(watcher: string, targets: string[]): Promise<{ watched: string[] }> {
+  managedWatchRecord(watcher)
+  const watched: string[] = []
+  for (const target of [...new Set(targets)]) {
+    if (target === watcher) throw new ResourceConflict('a session cannot watch itself')
+    const targetRecord = managedWatchRecord(target)
+    withRecordLockSync(target, () => {
+      const entries = readWatchEntries(target)
+      if (!entries.some((entry) => entry.watcher === watcher)) {
+        writeWatchEntries(target, [...entries, { watcher, createdAt: new Date().toISOString() }])
+      }
+    })
+    const delivered = await sendText(watcher, watchMessage(targetRecord), target)
+    if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
+    watched.push(target)
+  }
+  return { watched }
+}
+
+export function listSessionWatches(watcher: string): SessionWatch[] {
+  managedWatchRecord(watcher)
+  const watches: SessionWatch[] = []
+  for (const target of listSessionIds()) {
+    const entries = readWatchEntries(target)
+    const active = entries.filter((entry) => {
+      try { return !!readRecord(entry.watcher)?.governed } catch { return false }
+    })
+    if (active.length !== entries.length) writeWatchEntries(target, active)
+    for (const entry of active) if (entry.watcher === watcher) watches.push({ target, createdAt: entry.createdAt })
+  }
+  return watches.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.target.localeCompare(b.target))
+}
+
+export function cancelSessionWatch(watcher: string, targets: string[]): number {
+  managedWatchRecord(watcher)
+  let cancelled = 0
+  for (const target of [...new Set(targets)]) {
+    withRecordLockSync(target, () => {
+      const entries = readWatchEntries(target)
+      const kept = entries.filter((entry) => entry.watcher !== watcher)
+      if (kept.length !== entries.length) {
+        writeWatchEntries(target, kept)
+        cancelled++
+      }
+    })
+  }
+  return cancelled
 }
 
 // Share one liveness snapshot rather than spawning tmux for every displayed session.

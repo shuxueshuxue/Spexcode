@@ -153,22 +153,26 @@ test('a declaration note remains in the timeline after a later status replaces t
   })
 })
 
-test('a managed watch receives state through send and can be listed and cancelled', () => {
+test('a managed watch receives state through send and can be listed and cancelled', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
   seedSessionRecord(home, PARENT)
   seedSessionRecord(home, ID, PARENT)
-  withHome(home, () => {
-    assert.deepEqual(subscribeSessionWatch(PARENT, [ID]), { watched: [ID] })
+  await withHomeAsync(home, async () => {
+    assert.deepEqual(await subscribeSessionWatch(PARENT, [ID]), { watched: [ID] })
     assert.deepEqual(listSessionWatches(PARENT).map((watch) => watch.target), [ID])
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 1, 'installation queues the current state')
     assert.equal(markState('awaiting', { proposal: 'merge', note: 'ready for review', sessionId: ID }), true)
+    await new Promise((resolve) => setTimeout(resolve, 10))
     const messages = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
-    assert.equal(messages.length, 1, 'the child transition must wake its managed parent through send')
-    assert.equal(messages[0].kind === 'sent' && messages[0].from, ID)
-    assert.match(messages[0].kind === 'sent' ? messages[0].text : '', /review/)
+    assert.equal(messages.length, 2, 'the child transition must wake its managed parent through send')
+    const changed = messages.at(-1)
+    assert.equal(changed?.kind === 'sent' && changed.from, ID)
+    assert.match(changed?.kind === 'sent' ? changed.text : '', /review/)
     assert.equal(cancelSessionWatch(PARENT, [ID]), 1)
     assert.deepEqual(listSessionWatches(PARENT), [])
     assert.equal(markState('asking', { note: 'need input', sessionId: ID }), true)
-    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 1, 'cancel ends later delivery')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 2, 'cancel ends later delivery')
   })
 })
 

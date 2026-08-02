@@ -86,7 +86,7 @@ guide answers "how do I work".** Command usage — the map (`spex help`) and eac
 layers and the help layers name the guide's topics, so neither surface dead-ends. The `--help`
 interception's safety contract is unchanged: it prints and EXITS **before** the verb runs — the flag
 used to be an ignored no-op that fell through to the verb's side effect, so probing a STREAMING verb
-(`spex session watch --help` started a watch that never exits) or a MUTATING one (`spex session new --help`
+(`spex session watch stream --help` started a watch that never exits) or a MUTATING one (`spex session new --help`
 created a stray session) detonated the very command the user was only asking about. A help probe must
 never fire a side effect, and the help it prints must read its own caveats honestly: a verb that blocks
 forever (`watch`) says so and points at the one-shot alternative.

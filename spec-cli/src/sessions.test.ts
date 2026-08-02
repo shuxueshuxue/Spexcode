@@ -603,6 +603,7 @@ test('closing a proven-cold archive classifies stale leaf identity before retire
     writeFileSync(sessionArtifactPath(reusedId, 'agent.pid'), `${unrelated.pid}\n`)
     assert.equal(await closeSession(reusedId), true, 'a live PID with a clearly unrelated argv is stale artifact, not target ownership')
     assert.equal(existsSync(sessionRecordPath(reusedId)), false, 'proven-unrelated PID does not strand a cold row')
+    assert.ok(processStartToken(unrelated.pid!), 'cold retirement never signals the unrelated live process')
 
     const unknownId = `cold-close-unknown-${process.pid}`
     writeColdRecord(unknownId, `target-unknown-${process.pid}`)

@@ -45,8 +45,8 @@ scenarios:
     tags: [backend-api, cli]
   - name: archive-guard-failure-visible
     test:
-      path: spec-cli/src/sessions.test.ts
-      name: closing a proven-cold archive classifies stale leaf identity before retirement
+      path: spec-cli/src/session-archive-cold-close.api.test.ts
+      name: public HTTP and CLI cold close ignore only proven-unrelated PID reuse
     description: >
       Attempt archive through HTTP and CLI with unhealthy/undetached shared-root proof, ambiguous/unowned target
       leaf, stale PID, or an artifact swap while the real resource census is live. Include a live PID whose argv

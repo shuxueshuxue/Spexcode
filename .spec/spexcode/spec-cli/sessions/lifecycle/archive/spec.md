@@ -19,6 +19,7 @@ related:
   - spec-dashboard/src/sessionToolbar.test.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/archive-shelf.e2e.mjs
+  - spec-cli/src/session-archive-cold-close.api.test.ts
 ---
 
 # archive

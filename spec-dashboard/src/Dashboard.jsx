@@ -108,11 +108,19 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
 
   // resolve focus on the RAW tree first (resilient to a polled-away merged/closed node), then expand.
   const rawById = useMemo(() => Object.fromEntries(specs.map((s) => [s.id, s])), [specs])
-  // A graph-node address is a shareable focus target. Apply it before paint so direct opens and Back/Forward
-  // render that node's drill-down; a vanished id retains the ordinary saved/root fallback.
+  // A graph-node address is a shareable focus target. Apply each changed route parameter before paint; an
+  // already-applied parameter must not reassert itself after an ordinary mouse or keyboard focus move.
+  const graphParamRef = useRef(null)
   useLayoutEffect(() => {
-    if (page === 'graph' && param && rawById[param] && param !== focusId) setFocusId(param)
-  }, [page, param, rawById, focusId])
+    if (page !== 'graph' || graphParamRef.current === param) return
+    graphParamRef.current = param
+    if (param && rawById[param]) setFocusId(param)
+  }, [page, param, rawById])
+  const focusNode = useCallback((id) => {
+    if (!id) return
+    setFocusId(id)
+    if (page === 'graph') navigate('graph', id, { replace: true })
+  }, [page])
   const focusRaw = rawById[focusId] || specs.find((s) => !s.parent) || specs[0]
   const expanded = useMemo(() => {
     const set = new Set()
@@ -362,7 +370,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
     const cyclePane = (dir) => setPane((p) => { const i = paneKeys.indexOf(p); return paneKeys[((i < 0 ? 0 : i) + dir + paneKeys.length) % paneKeys.length] })
     // nav just moves focus; the follow-focus effect recenters once the tree has re-plotted around the new
     // focus (passing the stale pre-re-plot node straight to centerOn would aim at its OLD coordinates).
-    const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setKbdMode(true); setFocusId(t.id) } }
+    const go = (t, e) => { if (t) { e.preventDefault(); e.stopPropagation(); setKbdMode(true); focusNode(t.id) } }
     // only one pane is mounted, so the first matching `.ov-body` descendant is the scroller (scroll.js drops a stale target)
     const bumpScroll = (delta) => popupScroll(
       document.querySelector('.ov-body .pane-doc, .ov-body .pane-hist, .ov-body .pane-issues, .ov-body .pane-eval, .ov-body .pane-edit'), delta)
@@ -492,7 +500,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
         if (!cycleNodes.length) return
         setKbdMode(true)
         const next = cycleNext(cycleNodes, focus.id, firesKey('graph.cycleRev', e.key) ? -1 : 1, (n) => n.id)
-        if (next) setFocusId(next.id)
+        if (next) focusNode(next.id)
       }
       // Enter is folded into board.info above — from the graph it opens the node-info popup, the same as `i`;
       // crossing into an existing session is the right-click node-menu's job ([[node-menu]]), not a keystroke.
@@ -504,7 +512,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, page, legend, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openSession, startNew, popupScroll, legendScroll])
+  }, [overlay, page, legend, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openSession, startNew, focusNode, popupScroll, legendScroll])
 
   // wake only on a real coordinate change — a pan under a still cursor can emit a synthetic mousemove with unchanged x/y
   useEffect(() => {
@@ -523,15 +531,15 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
   // recenter so the click expands in place with no pan. It does NOT open a session — Enter crosses into one.
   const onNodeClick = useCallback((_e, n) => {
     if (n.id !== focusRef.current.id) skipCenterRef.current = true
-    setFocusId(n.id)
-  }, [])
+    focusNode(n.id)
+  }, [focusNode])
 
   // double-click is the mouse parallel to the `i` key: focus the node AND open its info popup — still no pan
   // (mouse never moves the camera; only the keyboard does).
   const onNodeDoubleClick = useCallback((_e, n) => {
     if (n.id !== focusRef.current.id) skipCenterRef.current = true
-    setFocusId(n.id); setOverlay(true)
-  }, [])
+    focusNode(n.id); setOverlay(true)
+  }, [focusNode])
 
   // right-click on a node: suppress the browser menu and open the node's own action menu ([[node-menu]]) —
   // focusing the node first (in place, no pan, same as click) so the menu and the board agree on the target.
@@ -540,9 +548,9 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
   const onNodeContextMenu = useCallback((e, n) => {
     e.preventDefault()
     if (n.id !== focusRef.current.id) skipCenterRef.current = true
-    setFocusId(n.id)
+    focusNode(n.id)
     setNodeMenu({ x: e.clientX, y: e.clientY, id: n.id })
-  }, [])
+  }, [focusNode])
 
   // clicking a session in the top-right window toggles the lock on its worktree's overlays (matched by
   // source = worktree path). Locking ON jumps to the first node it's changing, in TREE order so the
@@ -558,8 +566,8 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
     if (releasing) return
     const ids = new Set((s.ops || []).map((op) => op.nodeId))
     const first = specs.find((n) => ids.has(n.id))
-    if (first) setFocusId(first.id)
-  }, [highlightId, specs])
+    if (first) focusNode(first.id)
+  }, [highlightId, specs, focusNode])
 
   return (
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
@@ -593,7 +601,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
 
         <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />
 
-        <GraphStats specs={specs} focusId={focusId} onJump={setFocusId} />
+        <GraphStats specs={specs} focusId={focusId} onJump={focusNode} />
 
         <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}

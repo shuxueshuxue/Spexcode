@@ -56,6 +56,22 @@ scenarios:
       with archived:true and a target-bound cold proof, while the exact pane, PID, and rendezvous listener are
       absent. Only then may close remove record, worktree, and branch.
     tags: [backend-api, cli]
+  - name: terminal-close-retains-attribution-and-refuses-live-runtime
+    test:
+      path: spec-cli/src/session-archive-cold-close.api.test.ts
+      name: public close cold-retires a live owned runtime before deletion and refuses an unowned one
+    description: >
+      Drive public close against a live, owned runtime in an isolated project and intercept the owned worktree
+      removal only to inspect the product state immediately before it happens. Exercise an exact refusal and
+      compensation control in the same fixture. Read the append-only project close ledger after each call; the
+      Codex phase regression is covered alongside it by the close unit fixture.
+    expected: >
+      Direct close first archives/cold-retires the exact live target. At the deletion boundary its runtime is
+      absent and its retained record is archived with a cold witness; only then are record, worktree, and branch
+      removed. A refused or compensated attempt keeps the runtime/record/worktree/branch intact and writes no
+      close-authorized event. Source is either user or an explicitly unverified session claim; forged
+      authoritative-looking or nonexistent identities never become trusted attribution.
+    tags: [backend-api, cli]
   - name: archive-guard-failure-visible
     test:
       path: spec-cli/src/session-archive-cold-close.api.test.ts

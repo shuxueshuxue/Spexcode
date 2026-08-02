@@ -2525,6 +2525,12 @@ export const mergeSession = (id: string): Promise<{ dispatched: boolean; reason?
 // adapter's proof-of-death rule leave the transport alone; never a blind kill on a stale number.
 const AGENT_EXIT_GRACE_MS = 3000
 type LeafIdentity = { pid: number; startToken: string; ownerNeedle: string }
+type LeafIdentityObservation =
+  | { state: 'missing' }
+  | { state: 'dead'; pid: number }
+  | { state: 'owned'; identity: LeafIdentity }
+  | { state: 'unrelated'; pid: number; startToken: string }
+  | { state: 'unknown'; pid?: number; reason: string }
 async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, leaf: LeafIdentity): Promise<void> {
   const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
   if (pid !== leaf.pid)
@@ -2579,28 +2585,48 @@ const leafAlive = (pid: number): boolean => {
   catch (error) { return (error as NodeJS.ErrnoException)?.code !== 'ESRCH' }
 }
 
+// One identity seam serves both signal teardown and cold retirement. A PID is only a locator: a live process
+// becomes target-owned when its immutable start identity is readable AND its argv carries the harness-owned
+// native identity. A live PID with a proven different argv is a stale artifact, while malformed/unreadable
+// evidence remains unknown and therefore blocks every destructive path.
+async function inspectSessionLeafIdentity(id: string, rec: SessRec): Promise<LeafIdentityObservation> {
+  if (harnessById(rec.harness || defaultHarness.id).runtimeOwnership === 'adapter') return { state: 'missing' }
+  const path = sessionArtifactPath(id, 'agent.pid')
+  let raw: string
+  try { raw = readFileSync(path, 'utf8') }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return { state: 'missing' }
+    return { state: 'unknown', reason: `leaf PID artifact is unreadable (${error instanceof Error ? error.message : String(error)})` }
+  }
+  const pid = Number(raw.trim())
+  if (!Number.isSafeInteger(pid) || pid <= 0) return { state: 'unknown', reason: 'leaf PID artifact is malformed' }
+  const startToken = processStartToken(pid)
+  if (!startToken) return leafAlive(pid) ? { state: 'unknown', pid, reason: `leaf PID ${pid} is alive but its process-start identity is unreadable` } : { state: 'dead', pid }
+  const ownerNeedle = harnessById(rec.harness || defaultHarness.id).leafOwnerNeedle?.(rec)
+  if (!ownerNeedle) return { state: 'unknown', pid, reason: `no exact harness identity is registered for leaf PID ${pid}` }
+  let argv: string
+  try { argv = (await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' })).stdout.trim() }
+  catch { return { state: 'unknown', pid, reason: `leaf PID ${pid} argv identity is unreadable` } }
+  if (!argv) return { state: 'unknown', pid, reason: `leaf PID ${pid} argv identity is empty` }
+  const endToken = processStartToken(pid)
+  if (!endToken || endToken !== startToken)
+    return { state: 'unknown', pid, reason: `leaf PID ${pid} process-start identity changed during ownership read` }
+  if (argv.includes(ownerNeedle)) return { state: 'owned', identity: { pid, startToken, ownerNeedle } }
+  return { state: 'unrelated', pid, startToken }
+}
+
 async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIdentity | null> {
-  const harness = harnessById(rec.harness || defaultHarness.id)
-  if (harness.runtimeOwnership === 'adapter') return null
-  // Prove the exact per-session leaf before the first tmux signal. Missing identity is acceptable only for a
-  // record-only/queued runtime; a live leaf without a matching pid/start/argv stays visible.
-  const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
-  if (!Number.isFinite(pid) || pid <= 0) {
+  if (harnessById(rec.harness || defaultHarness.id).runtimeOwnership === 'adapter') return null
+  const observed = await inspectSessionLeafIdentity(id, rec)
+  if (observed.state === 'missing') {
     if (rec.stopped || rec.status === 'queued') return null
     throw new ResourceConflict(`refusing to stop ${id}: no readable session-owned leaf PID`)
   }
-  const startToken = processStartToken(pid)
-  if (!startToken) {
-    if (rec.stopped || !leafAlive(pid)) return null
-    throw new ResourceConflict(`refusing to stop ${id}: session-owned leaf PID ${pid} is alive but will not prove its start identity`)
-  }
-  const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
-  const ownerNeedle = harness.leafOwnerNeedle?.(rec)
-  if (!ownerNeedle)
-    throw new ResourceConflict(`refusing to stop ${id}: no exact harness identity is registered for leaf PID ${pid}`)
-  if (!argv.includes(ownerNeedle) || processStartToken(pid) !== startToken)
-    throw new ResourceConflict(`refusing to stop ${id}: leaf PID ${pid}@${startToken} does not prove argv ownership`)
-  return { pid, startToken, ownerNeedle }
+  if (observed.state === 'dead') return null
+  if (observed.state === 'owned') return observed.identity
+  if (observed.state === 'unrelated')
+    throw new ResourceConflict(`refusing to stop ${id}: leaf PID ${observed.pid}@${observed.startToken} does not prove argv ownership`)
+  throw new ResourceConflict(`refusing to stop ${id}: ${observed.reason}`)
 }
 
 async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = false, coldReceipt?: unknown): Promise<void> {
@@ -2779,9 +2805,11 @@ async function assertColdRetirementSafe(id: string, rec: SessRec): Promise<void>
   if (snap.windows.has(id)) throw new ResourceConflict(`refusing to close archived session ${id}: target tmux window has reappeared`)
   if (socket === 'live') throw new ResourceConflict(`refusing to close archived session ${id}: target rendezvous transport has reappeared`)
   if (socket === 'unproven') throw new ResourceConflict(`refusing to close archived session ${id}: target rendezvous state is ambiguous`)
-  const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
-  if (Number.isFinite(pid) && pid > 0 && processStartToken(pid))
-    throw new ResourceConflict(`refusing to close archived session ${id}: target leaf PID ${pid} is live or recycled; ownership is ambiguous`)
+  const leaf = await inspectSessionLeafIdentity(id, rec)
+  if (leaf.state === 'owned')
+    throw new ResourceConflict(`refusing to close archived session ${id}: target leaf PID ${leaf.identity.pid} is live or recycled; ownership is ambiguous`)
+  if (leaf.state === 'unknown')
+    throw new ResourceConflict(`refusing to close archived session ${id}: ${leaf.reason}; ownership is ambiguous`)
 
   const harness = harnessById(rec.harness || defaultHarness.id)
   if (harness.coldRetirementPreflight) {

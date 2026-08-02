@@ -12,11 +12,20 @@ const CHROMIUM = process.env.CHROMIUM || '/snap/bin/chromium'
 const BASE = process.env.BASE || 'http://127.0.0.1:5177'
 const SESSION = process.env.SESSION
 const WEB_URL = process.env.WEB_URL
-const FILE = resolve(process.env.FILE || join(here, '..', '..', '.spec', 'spexcode', 'spec-cli', 'sessions', 'web', 'spec.md'))
 const CLI = process.env.SPEXCODE_CLI || resolve(here, '..', '..', 'spec-cli', 'bin', 'spex.mjs')
 const OUT = resolve(process.env.OUT || '/tmp/session-web-e2e')
 if (!SESSION || !WEB_URL) throw new Error('SESSION=<live-session-id> WEB_URL=http://127.0.0.1:<port>/ are required')
 mkdirSync(OUT, { recursive: true })
+const FILE = resolve(process.env.FILE || join(OUT, 'posted-preview.md'))
+if (!process.env.FILE) writeFileSync(FILE, [
+  '# Preview starts here',
+  '',
+  'This is selectable Markdown from the current live path.',
+  '',
+  '<div data-untrusted="true">Raw markup must remain visible source.</div>',
+  '',
+  '## Second heading',
+].join('\n'))
 
 const command = (...args) => execFileSync(process.execPath, [CLI, 'session', ...args], {
   cwd: process.cwd(), env: { ...process.env, SPEXCODE_SESSION_ID: SESSION }, encoding: 'utf8',
@@ -39,6 +48,7 @@ try {
   }
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE })
   await page.goto(`${BASE}/#/sessions/${encodeURIComponent(SESSION)}`, { waitUntil: 'domcontentloaded' })
   await page.locator('.si-tab-add').waitFor({ state: 'visible', timeout: 20_000 })
 
@@ -50,6 +60,35 @@ try {
   assert.equal(await row.locator('.si-files-copy').getAttribute('data-tip'), FILE)
   await row.locator('.si-files-preview').click()
   await page.locator('.si-file-preview-backdrop').waitFor({ state: 'visible' })
+  const popoutMarkdown = page.locator('.si-file-preview .si-file-markdown')
+  await popoutMarkdown.getByRole('heading', { name: 'Preview starts here' }).waitFor({ state: 'visible' })
+  assert.equal(await page.locator('.si-file-preview .si-file-text').count(), 0, 'Markdown must not fall back to a raw preformatted dump')
+  const popout = await page.locator('.si-file-preview-body').evaluate((element) => {
+    const first = element.querySelector('.si-file-markdown > :first-child')
+    const box = element.getBoundingClientRect()
+    const firstBox = first?.getBoundingClientRect()
+    const selection = getSelection()
+    const range = document.createRange()
+    range.selectNodeContents(element.querySelector('.si-file-markdown'))
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+    const selected = selection?.toString() || ''
+    selection?.removeAllRanges()
+    return { scrollTop: element.scrollTop, firstTop: firstBox?.top, boxTop: box.top, selected }
+  })
+  assert.equal(popout.scrollTop, 0, 'a pop-out preview must open at its first line')
+  assert.ok(popout.firstTop >= popout.boxTop, 'the first Markdown block must not be clipped above the pop-out viewport')
+  assert.match(popout.selected, /selectable Markdown/, 'pop-out Markdown must be browser-selectable')
+  assert.match(await popoutMarkdown.textContent(), /<div data-untrusted="true">/, 'untrusted markup must stay text, not become a dashboard element')
+  const copyTarget = popoutMarkdown.locator('p').first()
+  const copyBox = await copyTarget.boundingBox()
+  assert.ok(copyBox, 'Markdown copy target must be visible')
+  await page.mouse.move(copyBox.x + 3, copyBox.y + copyBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(copyBox.x + copyBox.width - 3, copyBox.y + copyBox.height / 2, { steps: 4 })
+  await page.mouse.up()
+  await page.keyboard.press('Control+C')
+  assert.match(await page.evaluate(() => navigator.clipboard.readText()), /selectable Markdown/, 'a human drag and Ctrl+C must copy preview text')
   await page.screenshot({ path: join(OUT, 'file-popout.png'), fullPage: true })
   await page.locator('.si-file-preview-backdrop').click({ position: { x: 4, y: 4 } })
   await page.locator('.si-file-preview-backdrop').waitFor({ state: 'hidden' })
@@ -77,7 +116,33 @@ try {
   await picker.getByRole('menuitem', { name: basename(FILE) }).click()
   const fileTab = page.locator('.si-resource-tab').filter({ hasText: basename(FILE) })
   await fileTab.waitFor({ state: 'visible' })
-  await page.locator('.si-resource-file pre').waitFor({ state: 'visible' })
+  const resourceMarkdown = page.locator('.si-resource-file .si-file-markdown')
+  await resourceMarkdown.getByRole('heading', { name: 'Preview starts here' }).waitFor({ state: 'visible' })
+  const resource = await page.locator('.si-resource-file').evaluate((element) => {
+    const first = element.querySelector('.si-file-markdown > :first-child')
+    const box = element.getBoundingClientRect()
+    const firstBox = first?.getBoundingClientRect()
+    const selection = getSelection()
+    const range = document.createRange()
+    range.selectNodeContents(element.querySelector('.si-file-markdown'))
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+    const selected = selection?.toString() || ''
+    selection?.removeAllRanges()
+    return { scrollTop: element.scrollTop, firstTop: firstBox?.top, boxTop: box.top, selected }
+  })
+  assert.equal(resource.scrollTop, 0, 'a resource preview must open at its first line')
+  assert.ok(resource.firstTop >= resource.boxTop, 'the first Markdown block must not be clipped above the resource viewport')
+  assert.match(resource.selected, /selectable Markdown/, 'resource Markdown must be browser-selectable')
+  const resourceCopyTarget = resourceMarkdown.locator('p').first()
+  const resourceCopyBox = await resourceCopyTarget.boundingBox()
+  assert.ok(resourceCopyBox, 'resource Markdown copy target must be visible')
+  await page.mouse.move(resourceCopyBox.x + 3, resourceCopyBox.y + resourceCopyBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(resourceCopyBox.x + resourceCopyBox.width - 3, resourceCopyBox.y + resourceCopyBox.height / 2, { steps: 4 })
+  await page.mouse.up()
+  await page.keyboard.press('Control+C')
+  assert.match(await page.evaluate(() => navigator.clipboard.readText()), /selectable Markdown/, 'a human drag and Ctrl+C must copy resource tab text')
   await page.locator('.si-tab-add').click()
   await page.locator('.si-resource-menu-empty').waitFor({ state: 'visible' })
   await page.screenshot({ path: join(OUT, 'resource-tabs-live.png'), fullPage: true })

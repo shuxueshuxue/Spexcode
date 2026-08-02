@@ -35,9 +35,11 @@ internal services; the hub owns the outside.
   Its posted-session-web subroute (`/web/<session>/<key>/...`) is resolved only after that project gate
   against the current project session list, then streams the selected loopback service through the same
   HTTP/WebSocket transport; it is never a visitor-chosen open proxy ([[web]]).
-  Browser navigation is content-negotiated the same way as `GET /projects` and, like the fallback it
-  rides, pre-authorization — the shell is code, not data, and a direct guest must reach the in-app
-  credential card ([[projects-hub]]), not a dead-end redirect: an explicit text/html GET outside `/api`
+  An authorized posted `/web/...` route is recognized before that fallback, including a browser's
+  `Accept: text/html` iframe request. Browser navigation outside `/api` and `/web` is content-negotiated
+  the same way as `GET /projects` and, like the fallback it rides, pre-authorization — the shell is code,
+  not data, and a direct guest must reach the in-app credential card ([[projects-hub]]), not a dead-end
+  redirect: an explicit text/html GET outside `/api` and `/web`
   serves the SPA shell; api/SSE/health fetches and the WS upgrade keep the auth gate and the backend.
 - `/login`, `/logout` — the admin session, same designed page.
 

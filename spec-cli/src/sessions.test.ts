@@ -573,16 +573,72 @@ test('closing a proven-cold archive classifies stale leaf identity before retire
     const safeId = `cold-close-safe-${process.pid}`
     const safeThread = `target-safe-${process.pid}`
     writeColdRecord(safeId, safeThread)
-    assert.equal(await closeSession(safeId), true)
+    assert.equal(await closeSession(safeId, { kind: 'unverified-session-claim', id: 'closing-operator' }), true)
     assert.equal(existsSync(sessionStoreDir(safeId)), false, 'proven-cold target is permanently retired')
     assert.equal(coldPreflightCalls, 1, 'target collection is checked without the full shared-root guard')
+    const ledger = readFileSync(join(runtimeRoot(), 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    assert.equal(ledger.at(-1)?.action, 'close-authorized', 'the durable close event records that deletion was authorized')
+    assert.deepEqual(ledger.at(-1)?.source, { kind: 'unverified-session-claim', id: 'closing-operator' }, 'terminal close retains only an explicitly unverified caller claim after removing the target record')
+    assert.equal(ledger.at(-1)?.target?.id, safeId, 'terminal close ledger names the retired target')
 
     const loadedId = `cold-close-loaded-${process.pid}`
     const loadedThread = `target-loaded-${process.pid}`
     writeColdRecord(loadedId, loadedThread)
     residentIds = ['unrelated-unowned-thread', loadedThread]
+    writeFileSync(join(runtimeRoot(), 'codex-app-server-generations.json'), `${JSON.stringify({
+      version: 3, revision: 1, current: 'fixture-generation', pending: null,
+      generations: {
+        'fixture-generation': {
+          state: 'current',
+          endpoint: {
+            id: 'fixture-generation', pidFile: join(home, 'fixture.pid'), receiptFile: join(home, 'fixture.receipt'),
+            logFile: join(home, 'fixture.log'), socketPath: join(home, 'fixture.sock'),
+          },
+        },
+      },
+      bindings: { [loadedId]: { generationId: 'fixture-generation', threadId: loadedThread } },
+    }, null, 2)}\n`)
     await assert.rejects(closeSession(loadedId), /target adapter thread .* is loaded/)
     assert.equal(existsSync(sessionRecordPath(loadedId)), true, 'loaded target ambiguity preserves the shelf record')
+    assert.equal(readCodexGenerationLedger(runtimeRoot()).bindings[loadedId]?.phase, undefined,
+      'a rejected close does not strand an online target in the record-removing generation phase')
+    assert.equal(readFileSync(join(runtimeRoot(), 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').length, 1,
+      'a rejected close never writes a terminal-close audit event')
+
+    const writeFixtureGeneration = (bindings: Record<string, { generationId: string; threadId: string }>) => {
+      writeFileSync(join(runtimeRoot(), 'codex-app-server-generations.json'), `${JSON.stringify({
+        version: 3, revision: 1, current: 'fixture-generation', pending: null,
+        generations: {
+          'fixture-generation': {
+            state: 'current',
+            endpoint: {
+              id: 'fixture-generation', pidFile: join(home, 'fixture.pid'), receiptFile: join(home, 'fixture.receipt'),
+              logFile: join(home, 'fixture.log'), socketPath: join(home, 'fixture.sock'),
+            },
+          },
+        },
+        bindings,
+      }, null, 2)}\n`)
+    }
+    residentIds = ['unrelated-unowned-thread']
+    const missingBindingId = `cold-close-missing-binding-${process.pid}`
+    const missingBindingThread = `target-missing-binding-${process.pid}`
+    writeColdRecord(missingBindingId, missingBindingThread)
+    writeFixtureGeneration({})
+    await assert.rejects(closeSession(missingBindingId), /no exact generation binding to close/)
+    assert.equal(existsSync(sessionRecordPath(missingBindingId)), true, 'a missing Codex binding preserves the cold record')
+    assert.equal(readFileSync(join(runtimeRoot(), 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').length, 1,
+      'a missing Codex binding refuses before appending a close-authorized event')
+
+    const mismatchedBindingId = `cold-close-mismatched-binding-${process.pid}`
+    const mismatchedBindingThread = `target-mismatched-binding-${process.pid}`
+    writeColdRecord(mismatchedBindingId, mismatchedBindingThread)
+    writeFixtureGeneration({ [mismatchedBindingId]: { generationId: 'fixture-generation', threadId: 'different-native-thread' } })
+    await assert.rejects(closeSession(mismatchedBindingId), /no exact generation binding to close/)
+    assert.equal(existsSync(sessionRecordPath(mismatchedBindingId)), true, 'a mismatched Codex binding preserves the cold record')
+    assert.equal(readFileSync(join(runtimeRoot(), 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').length, 1,
+      'a mismatched Codex binding refuses before appending a close-authorized event')
+    rmSync(join(runtimeRoot(), 'codex-app-server-generations.json'), { force: true })
 
     const pidId = `cold-close-pid-${process.pid}`
     const pidThread = `target-pid-${process.pid}`

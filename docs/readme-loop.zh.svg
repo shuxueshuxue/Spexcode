@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 620" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', -apple-system, sans-serif">
+  <rect width="1400" height="620" fill="#F4EEE0"/>
+  <defs>
+    <marker id="zt" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16495A"/>
+    </marker>
+    <marker id="zg" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#B08A1E"/>
+    </marker>
+  </defs>
+
+  <rect x="110" y="220" width="380" height="180" rx="14" fill="#FFFDF6" stroke="#E0D8C4" stroke-width="2"/>
+  <text x="300" y="292" font-size="30" font-weight="700" fill="#171A20" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, monospace">spec.md</text>
+  <text x="300" y="330" font-size="18" fill="#5C5647" text-anchor="middle">目标 · 损失函数</text>
+  <text x="300" y="358" font-size="18" fill="#5C5647" text-anchor="middle">由人签字认可</text>
+
+  <rect x="910" y="220" width="380" height="180" rx="14" fill="#FFFDF6" stroke="#E0D8C4" stroke-width="2"/>
+  <text x="1100" y="300" font-size="30" font-weight="700" fill="#171A20" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, monospace">code</text>
+  <text x="1100" y="338" font-size="18" fill="#5C5647" text-anchor="middle">真实行为</text>
+
+  <path d="M 492 238 C 620 140, 780 140, 906 232" fill="none" stroke="#16495A" stroke-width="4" marker-end="url(#zt)"/>
+  <text x="700" y="128" font-size="20" fill="#16495A" text-anchor="middle">agent 提交 · 优化器</text>
+
+  <path d="M 908 384 C 780 482, 620 482, 494 390" fill="none" stroke="#B08A1E" stroke-width="4" marker-end="url(#zg)"/>
+  <text x="700" y="522" font-size="20" fill="#B08A1E" text-anchor="middle"><tspan font-family="ui-monospace, Menlo, Consolas, monospace">spex eval</tspan> · 测得的损失</text>
+</svg>

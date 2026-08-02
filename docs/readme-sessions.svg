@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" font-family="ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">
+  <style>
+    .fg  { fill: #EFE8D8; } .dim { fill: #7A7466; } .teal { fill: #5FA8BE; }
+    .work { fill: #E5C07B; } .rev { fill: #C678DD; } .ask { fill: #EDD26A; } .done { fill: #61AFEF; }
+    .cycle * { }
+    .cover { transform-box: fill-box; transform-origin: 100% 50%; animation: type 12s infinite; }
+    @keyframes type { 0%,4% { transform: scaleX(1); animation-timing-function: steps(15,end); }
+                      16%,92% { transform: scaleX(0); } 93%,100% { transform: scaleX(1); } }
+    .g0 { animation: k18 12s infinite; } @keyframes k18 { 0%,17.9% {opacity:0} 18%,100% {opacity:1} }
+    .g1 { animation: k20 12s infinite; } @keyframes k20 { 0%,19.9% {opacity:0} 20%,100% {opacity:1} }
+    .g2 { animation: k22 12s infinite; } @keyframes k22 { 0%,21.9% {opacity:0} 22%,100% {opacity:1} }
+    .g3 { animation: k24 12s infinite; } @keyframes k24 { 0%,23.9% {opacity:0} 24%,100% {opacity:1} }
+    .g4 { animation: k26 12s infinite; } @keyframes k26 { 0%,25.9% {opacity:0} 26%,100% {opacity:1} }
+    .g5 { animation: k28 12s infinite; } @keyframes k28 { 0%,27.9% {opacity:0} 28%,100% {opacity:1} }
+    .g6 { animation: k30 12s infinite; } @keyframes k30 { 0%,29.9% {opacity:0} 30%,100% {opacity:1} }
+    .g7 { animation: k33 12s infinite; } @keyframes k33 { 0%,32.9% {opacity:0} 33%,100% {opacity:1} }
+    .g8 { animation: k36 12s infinite; } @keyframes k36 { 0%,35.9% {opacity:0} 36%,100% {opacity:1} }
+    .fadeall { animation: gfade 12s infinite; }
+    @keyframes gfade { 0%,93% {opacity:1} 97%,100% {opacity:0} }
+    .cur { animation: blink 1.06s steps(1,end) infinite; }
+    @keyframes blink { 0%,49% {opacity:1} 50%,100% {opacity:0} }
+  </style>
+
+  <!-- window chrome -->
+  <rect width="900" height="400" rx="12" fill="#171A20"/>
+  <rect width="900" height="40" rx="12" fill="#22262E"/>
+  <rect y="24" width="900" height="16" fill="#22262E"/>
+  <circle cx="28" cy="20" r="6.5" fill="#E06C75"/><circle cx="50" cy="20" r="6.5" fill="#E5C07B"/><circle cx="72" cy="20" r="6.5" fill="#98C379"/>
+  <text x="450" y="25" text-anchor="middle" font-size="13" class="dim">your-repo — tmux</text>
+
+  <g class="fadeall" font-size="15">
+    <!-- command -->
+    <text x="28" y="80" class="teal">$ <tspan class="fg">spex session ls</tspan></text>
+    <rect class="cover" x="46" y="64" width="146" height="22" fill="#171A20"/>
+
+    <!-- output -->
+    <text x="28" y="118" class="g0 fg" font-weight="700">SpexCode sessions (5)</text>
+    <g class="g1 dim"><text x="64" y="144">STATUS</text><text x="152" y="144">TITLE</text><text x="392" y="144">ID</text><text x="488" y="144">PROMPT</text></g>
+
+    <g class="g2"><text x="40" y="170" class="work">● working</text><text x="152" y="170" class="fg">web resource tabs</text><text x="392" y="170" class="dim">f00ab252</text><text x="488" y="170" class="dim">Build a files feature — publish live…</text></g>
+    <g class="g3"><text x="40" y="196" class="work">● working</text><text x="152" y="196" class="fg">认真搞搞 README</text><text x="392" y="196" class="dim">a4228d0b</text><text x="488" y="196" class="dim">我们该开始认真搞搞 readme 了…</text></g>
+    <g class="g4"><text x="40" y="222" class="rev">◆ review</text><text x="152" y="222" class="fg">uploader retry</text><text x="392" y="222" class="dim">3fe1c07d</text><text x="488" y="222" class="dim">[[uploader]] retry failed chunks…</text></g>
+    <g class="g5"><text x="40" y="248" class="ask">⍰ asking</text><text x="152" y="248" class="fg">config audit</text><text x="392" y="248" class="dim">4ba3efdc</text><text x="488" y="248" class="dim">audit finished; awaiting your call…</text></g>
+    <g class="g6"><text x="40" y="274" class="done">✓ done</text><text x="152" y="274" class="fg">logo scout</text><text x="392" y="274" class="dim">11a76814</text><text x="488" y="274" class="dim">find open-source logo design agents…</text></g>
+
+    <g class="g7 dim"><text x="28" y="312">key: <tspan class="work">●</tspan> working  <tspan class="rev">◆</tspan> review  <tspan class="ask">⍰</tspan> asking  <tspan class="done">✓</tspan> done  ⧖ parked  ⏻ offline</text></g>
+
+    <!-- next prompt -->
+    <g class="g8"><text x="28" y="352" class="teal">$</text><rect class="cur" x="46" y="338" width="9" height="18" fill="#EFE8D8"/></g>
+  </g>
+</svg>

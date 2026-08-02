@@ -52,7 +52,9 @@ live reference.
 The prefix is stripped before forwarding and the shared HTTP transport streams request and response bytes;
 the matching WebSocket upgrade path uses the same current entry and paired socket lifecycle. The browser sees
 the gateway's own scheme, host, and port, so the preview iframe crosses no CORS or mixed-content boundary.
-The service must be capable of running below its assigned prefix: relative resource URLs work directly, while
+In the host dashboard, this authorized `/web/...` route is recognized before the dashboard's browser-HTML
+fallback, so an iframe receives the posted page rather than the dashboard shell. The service must be capable
+of running below its assigned prefix: relative resource URLs work directly, while
 an application hard-coding root-absolute asset, navigation, or HMR URLs needs its normal base-path
 configuration. This is an explicit framework constraint rather than brittle HTML/JavaScript rewriting by the
 gateway.

@@ -28,8 +28,8 @@ const check = (name, ok, detail = null) => {
 }
 const waitToolbar = async (page) => {
   await page.locator('.si-tabbar').waitFor({ state: 'visible', timeout: 20000 })
-  await page.locator('.si-eval-door').waitFor({ state: 'visible', timeout: 20000 })
-  await page.waitForFunction(() => Boolean(document.querySelector('.si-eval-door')?.getAttribute('aria-label')))
+  await page.locator('.si-eval-tab').waitFor({ state: 'visible', timeout: 20000 })
+  await page.waitForFunction(() => Boolean(document.querySelector('.si-eval-tab')?.getAttribute('aria-label')))
 }
 const toolbarProbe = (page) => page.evaluate(() => {
   const toolbar = document.querySelector('.si-tabbar')
@@ -43,7 +43,9 @@ const toolbarProbe = (page) => page.evaluate(() => {
     const r = element.getBoundingClientRect()
     return r.left < bounds.x - 0.5 || r.right > bounds.right + 0.5
   }).map((element) => element.className || element.tagName)
-  const door = document.querySelector('.si-eval-door')
+  const evalTab = document.querySelector('.si-eval-tab')
+  const picker = document.querySelector('.si-resource-picker')
+  const tabs = document.querySelector('.si-tabs')
   const term = document.querySelector('.si-term-body')
   const style = getComputedStyle(toolbar)
   return {
@@ -54,7 +56,10 @@ const toolbarProbe = (page) => page.evaluate(() => {
     clientWidth: toolbar.clientWidth,
     identityCount: toolbar.querySelectorAll('.si-identity, .si-th-name, .si-session-status, .si-session-live').length,
     sidebarHeadline: document.querySelector('.si-item.on .sess-id')?.textContent || null,
-    door: { tag: door.tagName, href: door.getAttribute('href'), label: door.getAttribute('aria-label'), inTablist: !!door.closest('[role=tablist]'), iconColor: getComputedStyle(door.querySelector(':scope > svg')).color },
+    evalTab: { tag: evalTab.tagName, href: evalTab.getAttribute('href'), label: evalTab.getAttribute('aria-label'), iconColor: getComputedStyle(evalTab.querySelector(':scope > svg')).color, box: rect(evalTab) },
+    tabs: rect(tabs),
+    picker: { ...rect(picker), borderLeft: getComputedStyle(picker).borderLeftWidth, borderRight: getComputedStyle(picker).borderRightWidth },
+    add: { ...rect(document.querySelector('.si-tab-add')), borderRadius: getComputedStyle(document.querySelector('.si-tab-add')).borderRadius },
     roles: {
       tablists: toolbar.querySelectorAll('[role=tablist]').length,
       tabs: toolbar.querySelectorAll('[role=tab]').length,
@@ -107,7 +112,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
       window.__toolbarFrames.push({
         at,
         text: toolbar?.innerText?.replace(/\s+/g, ' ').trim() || '',
-        label: document.querySelector('.si-eval-door')?.getAttribute('aria-label') || '',
+        label: document.querySelector('.si-eval-tab')?.getAttribute('aria-label') || '',
       })
       requestAnimationFrame(sample)
     }
@@ -148,15 +153,15 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   await page.goto(`${BASE}/#/sessions/${SESSION}`, { waitUntil: 'domcontentloaded' })
   await waitToolbar(page)
   step('toolbar loaded')
-  const firstLabel = await page.locator('.si-eval-door').getAttribute('aria-label')
+  const firstLabel = await page.locator('.si-eval-tab').getAttribute('aria-label')
   await page.locator(`.si-item[data-sid="${SWITCH_SESSION}"]`).click()
   await page.locator(`.si-item[data-sid="${SWITCH_SESSION}"].on`).waitFor({ state: 'visible' })
-  await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('3 need review'))
-  const otherLabel = await page.locator('.si-eval-door').getAttribute('aria-label')
+  await page.waitForFunction(() => document.querySelector('.si-eval-tab')?.getAttribute('aria-label')?.includes('3 need review'))
+  const otherLabel = await page.locator('.si-eval-tab').getAttribute('aria-label')
   await page.locator(`.si-item[data-sid="${SESSION}"]`).click()
   await page.locator(`.si-item[data-sid="${SESSION}"].on`).waitFor({ state: 'visible' })
-  await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('8 need review'))
-  const returnedLabel = await page.locator('.si-eval-door').getAttribute('aria-label')
+  await page.waitForFunction(() => document.querySelector('.si-eval-tab')?.getAttribute('aria-label')?.includes('8 need review'))
+  const returnedLabel = await page.locator('.si-eval-tab').getAttribute('aria-label')
   check('A→B→A keeps graph summaries warm with zero full-model reads',
     firstLabel.includes('8 need review') && otherLabel.includes('3 need review') && returnedLabel.includes('8 need review') && evalRequests.length === 0,
     { firstLabel, otherLabel, returnedLabel, requests: evalRequests.length })
@@ -168,7 +173,11 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   check('wide toolbar stays inside its pane', result.wide.overflow.length === 0 && result.wide.scrollWidth === result.wide.clientWidth, result.wide)
   check('one selected Terminal tab', result.wide.roles.tablists === 1 && result.wide.roles.tabs === 1 && result.wide.roles.selected === 'true', result.wide.roles)
   check('toolbar omits duplicate identity and headline payload', result.wide.identityCount === 0 && !result.wide.text.includes(result.wide.sidebarHeadline) && !result.wide.html.includes(result.wide.sidebarHeadline), { identityCount: result.wide.identityCount, toolbar: result.wide.text, sidebar: result.wide.sidebarHeadline })
-  check('Eval is a canonical real anchor outside tablist', result.wide.door.tag === 'A' && !result.wide.door.inTablist && decodeURIComponent(result.wide.door.href).includes(`scope:${SESSION}`), result.wide.door)
+  check('Eval is a canonical real navigation tab', result.wide.evalTab.tag === 'A' && decodeURIComponent(result.wide.evalTab.href).includes(`scope:${SESSION}`), result.wide.evalTab)
+  check('Eval directly follows the current resource-tab strip', Math.abs(result.wide.tabs.right - result.wide.evalTab.box.x) <= 1, { tabs: result.wide.tabs, evalTab: result.wide.evalTab.box })
+  check('resource picker is divided from Eval and its plus is circular', Math.abs(result.wide.evalTab.box.right - result.wide.picker.x) <= 1
+    && result.wide.picker.borderLeft === '1px' && result.wide.picker.borderRight === '0px' && result.wide.add.x > result.wide.picker.x && result.wide.add.width === 24 && result.wide.add.height === 24 && result.wide.add.borderRadius === '50%',
+  { evalTab: result.wide.evalTab.box, picker: result.wide.picker, add: result.wide.add })
   check('toolbar chrome is distinct from terminal', result.wide.toolbarBackground !== result.wide.terminalBackground, { toolbar: result.wide.toolbarBackground, terminal: result.wide.terminalBackground })
   check('toolbar commands are uniform localized icon tools', result.wide.actionDetails.length > 0 && result.wide.actionDetails.every((tool) => !tool.text && tool.icon && tool.label && tool.label === tool.tip && tool.box.width === 24 && tool.box.height === 24), result.wide.actionDetails)
   await page.screenshot({ path: join(OUT, 'B-wide-1440.png'), fullPage: true })
@@ -178,8 +187,10 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   const firstTab = await page.evaluate(() => ({ className: document.activeElement.className, tag: document.activeElement.tagName }))
   await page.keyboard.press('Tab')
   const secondTab = await page.evaluate(() => ({ className: document.activeElement.className, tag: document.activeElement.tagName }))
-  result.wide.keyboardOrder = [firstTab, secondTab]
-  check('focus order reaches Eval then a command', firstTab.tag === 'A' && String(firstTab.className).includes('si-eval-door') && secondTab.tag === 'BUTTON' && String(secondTab.className).includes('si-tool'), result.wide.keyboardOrder)
+  await page.keyboard.press('Tab')
+  const thirdTab = await page.evaluate(() => ({ className: document.activeElement.className, tag: document.activeElement.tagName }))
+  result.wide.keyboardOrder = [firstTab, secondTab, thirdTab]
+  check('focus order reaches Eval, its adjacent picker, then a command', firstTab.tag === 'A' && String(firstTab.className).includes('si-eval-tab') && secondTab.tag === 'BUTTON' && String(secondTab.className).includes('si-tab-add') && thirdTab.tag === 'BUTTON' && String(thirdTab.className).includes('si-tool'), result.wide.keyboardOrder)
 
   await page.locator('.si-tool.command').click()
   const input = page.locator('.si-command-input')
@@ -224,7 +235,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
     && renameRows.length === 1 && renameRows[0].source === '[preset]'
     && toolColors.command === tokenColors.blue && toolColors.merge === tokenColors.green
     && slashColors['/merge'] === toolColors.merge
-    && slashColors['/eval'] === result.wide.door.iconColor && slashColors['/eval'] === tokenColors.cyan
+    && slashColors['/eval'] === result.wide.evalTab.iconColor && slashColors['/eval'] === tokenColors.cyan
     && slashColors['/stop'] === tokenColors.muted && slashColors['/close'] === tokenColors.red
   const activeProbe = await toolbarProbe(page)
   check('slash registry parity and resident Command Box share one registry', slashParity && await page.locator('.si-tool.command.on[aria-pressed="true"]').count() === 1 && activeProbe.bounds.height === 32 && activeProbe.overflow.length === 0, { boardNames, stopRows, exitRows, renameRows, tokenColors, active: { height: activeProbe.bounds.height, overflow: activeProbe.overflow } })
@@ -235,7 +246,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
 
   const warm = `warm-${Date.now()}`
   await page.locator('.si-term-body').evaluate((element, value) => { element.dataset.warmProbe = value }, warm)
-  const doorHref = await page.locator('.si-eval-door').getAttribute('href')
+  const doorHref = await page.locator('.si-eval-tab').getAttribute('href')
   const typedHistoryBefore = await page.evaluate(() => history.length)
   await page.locator('.si-tool.command').click()
   await input.fill('/eval')
@@ -248,7 +259,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   await page.goBack()
   await waitToolbar(page)
   const historyBefore = await page.evaluate(() => history.length)
-  await page.locator('.si-eval-door').focus()
+  await page.locator('.si-eval-tab').focus()
   await page.keyboard.press('Enter')
   await page.waitForFunction(() => location.hash.startsWith('#/evals'))
   await page.locator('.se-gates').waitFor({ state: 'visible', timeout: 30_000 })
@@ -263,7 +274,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   await page.goBack()
   await waitToolbar(page)
   check('Back returns to the same warm terminal DOM', await page.locator('.si-term-body').getAttribute('data-warm-probe') === warm)
-  step('Eval door and warm Back')
+  step('Eval tab and warm Back')
   await page.screenshot({ path: join(OUT, 'B-wide-return.png'), fullPage: true })
   result.requests = evalRequests
   result.frames = await page.evaluate(() => window.__toolbarFrames)
@@ -295,7 +306,7 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
       window.__toolbarFrames.push({
         at,
         text: toolbar?.innerText?.replace(/\s+/g, ' ').trim() || '',
-        label: document.querySelector('.si-eval-door')?.getAttribute('aria-label') || '',
+        label: document.querySelector('.si-eval-tab')?.getAttribute('aria-label') || '',
       })
       requestAnimationFrame(sample)
     }
@@ -339,7 +350,7 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
   check('390px pane has no toolbar overflow', Math.round(result.narrow.bounds.width) === 390 && result.narrow.overflow.length === 0 && result.narrow.scrollWidth === result.narrow.clientWidth, result.narrow)
   check('long and HTML-like headline stays out of toolbar channels', result.narrow.identityCount === 0 && !result.narrow.text.includes('headline-noise') && !result.narrow.html.includes('headline-noise'), { text: result.narrow.text, identityCount: result.narrow.identityCount })
   check('narrow AX contains no repeated identity or liveness noise', !result.narrow.aria || (!result.narrow.aria.includes('headline-noise') && !result.narrow.aria.includes('working, online')), result.narrow.aria)
-  check('mixed eval model is categorical without a repeated aggregate', !result.narrow.door.label.includes('2/3') && result.narrow.door.label.includes('1 fresh pass') && result.narrow.door.label.includes('1 fresh fail') && result.narrow.door.label.includes('1 unmeasured'), result.narrow.door)
+  check('mixed eval model is categorical without a repeated aggregate', !result.narrow.evalTab.label.includes('2/3') && result.narrow.evalTab.label.includes('1 fresh pass') && result.narrow.evalTab.label.includes('1 fresh fail') && result.narrow.evalTab.label.includes('1 unmeasured'), result.narrow.evalTab)
   await page.screenshot({ path: join(OUT, 'B-pane-390.png'), fullPage: true })
   await context.close()
 }
@@ -422,7 +433,7 @@ for (const state of [
 for (const evalMode of ['zero', 'error']) {
   const { context, page } = await fixturePage({ evalMode })
   const probe = await toolbarProbe(page)
-  const row = { evalMode, label: probe.door.label, text: probe.text }
+  const row = { evalMode, label: probe.evalTab.label, text: probe.text }
   result.evalModels.push(row)
   check(evalMode === 'zero' ? 'zero model names zero categories without an aggregate' : 'failed model has no aggregate',
     !row.label.includes('0/0') && (evalMode === 'zero' ? row.label.includes('0 fresh pass') : row.label.includes('no last-known value')), row)
@@ -431,14 +442,14 @@ for (const evalMode of ['zero', 'error']) {
 
 {
   const { context, page, evalReads } = await fixturePage({ evalMode: 'refresh' })
-  const first = await page.locator('.si-eval-door').getAttribute('aria-label')
+  const first = await page.locator('.si-eval-tab').getAttribute('aria-label')
   const refreshedGraph = structuredClone(board)
   refreshedGraph.sessions.find((session) => session.id === SESSION).evalSummary = evalProjection(
     'refresh', 2, { measured: 1, total: 1, pass: 1, fail: 0, review: 0, blind: 0, unknown: 0 },
   )
   await page.evaluate((graph) => window.__boardSource.emit('graph-full', { to: 'fixture-refresh-2', graph }), refreshedGraph)
-  await page.waitForFunction(() => document.querySelector('.si-eval-door')?.getAttribute('aria-label')?.includes('1 fresh pass'), null, { timeout: 20_000 })
-  const refreshed = await page.locator('.si-eval-door').getAttribute('aria-label')
+  await page.waitForFunction(() => document.querySelector('.si-eval-tab')?.getAttribute('aria-label')?.includes('1 fresh pass'), null, { timeout: 20_000 })
+  const refreshed = await page.locator('.si-eval-tab').getAttribute('aria-label')
   const frames = await page.evaluate(() => window.__toolbarFrames)
   const row = { first, refreshed, requests: evalReads(), frames }
   result.evalModels.push({ evalMode: 'refresh', ...row })

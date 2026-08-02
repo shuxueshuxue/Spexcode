@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 660" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="1400" height="660" fill="#F4EEE0"/>
+  <defs>
+    <marker id="fa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#A03123"/>
+    </marker>
+  </defs>
+
+  <!-- spec card: the promise -->
+  <rect x="60" y="36" width="580" height="150" rx="12" fill="#FFFDF6" stroke="#171A20" stroke-width="1.5"/>
+  <text x="84" y="68" font-size="15" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" fill="#5C5647">.spec/…/session-attach/spec.md · v1 (commit d6ffe17f)</text>
+  <line x1="84" y1="82" x2="616" y2="82" stroke="#E7DFCB" stroke-width="1.5"/>
+  <text x="84" y="112" font-size="17" fill="#171A20" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">Offline is loud. A selector that resolves to a</text>
+  <text x="84" y="138" font-size="17" fill="#171A20" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">session with no live tmux errors distinctly —</text>
+  <text x="84" y="164" font-size="17" fill="#171A20" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">naming <tspan fill="#16495A" font-weight="700">reopen</tspan> as the repair.</text>
+
+  <!-- legend -->
+  <g font-size="14" fill="#5C5647">
+    <circle cx="700" cy="52" r="7" fill="#16495A"/><text x="716" y="57">the spec file (the intent)</text>
+    <circle cx="700" cy="80" r="7" fill="#C4622D"/><text x="716" y="85">the governed code, attach.ts</text>
+    <circle cx="700" cy="108" r="6" fill="#FFFDF6" stroke="#8A8272" stroke-width="2"/><text x="716" y="113">other commits in the repo</text>
+  </g>
+
+  <!-- verdict card -->
+  <rect x="1040" y="120" width="320" height="228" rx="12" fill="#FFFDF6" stroke="#A03123" stroke-width="2"/>
+  <text x="1064" y="152" font-size="16" font-weight="700" fill="#A03123">anchor check — dc7e5449</text>
+  <line x1="1064" y1="164" x2="1336" y2="164" stroke="#F0D9D3" stroke-width="1.5"/>
+  <g font-size="14" fill="#171A20">
+    <text x="1064" y="190">① touches the governed file ✓</text>
+    <text x="1084" y="210" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" fill="#5C5647">spec-cli/src/attach.ts</text>
+    <text x="1064" y="236">② hits the anchored symbol ✓</text>
+    <text x="1084" y="256" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" font-size="13" fill="#5C5647">attach.ts#attachSession</text>
+    <text x="1064" y="282">③ spec unchanged · ack absent ✓</text>
+  </g>
+  <rect x="1064" y="298" width="272" height="34" rx="7" fill="#A03123"/>
+  <text x="1200" y="320" font-size="14" font-weight="700" fill="#F4EEE0" text-anchor="middle">→ drift: the commit is named &amp; blocked</text>
+
+  <!-- drift window -->
+  <rect x="370" y="310" width="570" height="140" fill="#F3E0D8"/>
+  <text x="655" y="298" font-size="15" font-weight="700" fill="#A03123" text-anchor="middle">the drift window — spec stays at v1, code keeps moving (6 days)</text>
+
+  <!-- spec-version dashed line -->
+  <line x1="370" y1="340" x2="1180" y2="340" stroke="#16495A" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="480" y="330" font-size="13.5" fill="#16495A">the spec version in effect — unchanged since v1</text>
+  <rect x="858" y="324" width="164" height="32" rx="16" fill="#FFFDF6" stroke="#A03123" stroke-width="1.8" stroke-dasharray="6 4"/>
+  <text x="940" y="345" font-size="14" font-weight="700" fill="#A03123" text-anchor="middle">spec not updated ✗</text>
+  <path d="M 1026 324 C 1032 296, 1030 272, 1038 250" fill="none" stroke="#A03123" stroke-width="2" marker-end="url(#fa)"/>
+
+  <!-- timeline -->
+  <line x1="70" y1="400" x2="1340" y2="400" stroke="#B9B19E" stroke-width="3"/>
+  <g fill="#FFFDF6" stroke="#8A8272" stroke-width="2.5">
+    <circle cx="160" cy="400" r="8"/><circle cx="265" cy="400" r="8"/>
+    <circle cx="500" cy="400" r="8"/><circle cx="610" cy="400" r="8"/><circle cx="720" cy="400" r="8"/><circle cx="830" cy="400" r="8"/>
+    <circle cx="1060" cy="400" r="8"/><circle cx="1170" cy="400" r="8"/><circle cx="1280" cy="400" r="8"/>
+  </g>
+
+  <!-- the spec+code commit -->
+  <circle cx="370" cy="400" r="13" fill="#16495A"/>
+  <line x1="370" y1="190" x2="370" y2="304" stroke="#8A8272" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <rect x="306" y="356" width="128" height="30" rx="15" fill="#FFFDF6" stroke="#16495A" stroke-width="2"/>
+  <text x="370" y="376" font-size="14" font-weight="700" fill="#16495A" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">spec.md · v1</text>
+  <text x="370" y="432" font-size="14" fill="#5C5647" text-anchor="middle"><tspan font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">d6ffe17f</tspan> · Jul 06 — spec + code, one commit</text>
+  <rect x="322" y="444" width="96" height="28" rx="14" fill="#FBF0E8" stroke="#C4622D" stroke-width="1.8"/>
+  <text x="370" y="463" font-size="13.5" fill="#C4622D" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">attach.ts</text>
+
+  <!-- the code-only commit -->
+  <circle cx="940" cy="400" r="13" fill="#C4622D"/>
+  <line x1="940" y1="386" x2="940" y2="358" stroke="#A03123" stroke-width="2"/>
+  <text x="940" y="432" font-size="14" fill="#5C5647" text-anchor="middle"><tspan font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">dc7e5449</tspan> · Jul 12 — code only</text>
+  <rect x="810" y="444" width="260" height="28" rx="14" fill="#FBF0E8" stroke="#C4622D" stroke-width="1.8"/>
+  <text x="940" y="463" font-size="13.5" fill="#C4622D" text-anchor="middle" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace">attach.ts · attachSession()</text>
+
+  <!-- the diff: what actually broke the promise -->
+  <rect x="60" y="500" width="900" height="128" rx="12" fill="#FFFDF6" stroke="#171A20" stroke-width="1.5"/>
+  <text x="84" y="530" font-size="14" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" fill="#5C5647">git show dc7e5449 — spec-cli/src/attach.ts (inside attachSession)</text>
+  <rect x="76" y="542" width="868" height="26" fill="#F8E3DF"/>
+  <text x="92" y="560" font-size="14.5" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" fill="#8C2B20">- Bring it back with `spex session reopen ${id}`</text>
+  <rect x="76" y="570" width="868" height="26" fill="#E2EEDF"/>
+  <text x="92" y="588" font-size="14.5" font-family="ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace" fill="#2E5E33">+ Bring it back with `spex session resume ${id}`</text>
+  <text x="84" y="618" font-size="13.5" font-style="italic" fill="#5C5647">the verb was renamed; the spec's promise of `reopen` stopped being true at this commit.</text>
+</svg>

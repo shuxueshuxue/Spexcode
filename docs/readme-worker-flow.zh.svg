@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 396" font-family="'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', -apple-system, sans-serif">
+  <rect width="1400" height="396" fill="#F4EEE0"/>
+  <defs>
+    <marker id="zarr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16495A"/>
+    </marker>
+  </defs>
+
+  <g>
+    <rect x="40" y="60" width="290" height="120" rx="16" fill="#FFFDF6" stroke="#16495A" stroke-width="2.5"/>
+    <text x="66" y="100" font-size="17" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#8A8272">01</text>
+    <text x="66" y="132" font-size="20" font-weight="700" fill="#171A20">派发</text>
+    <text x="66" y="160" font-size="15" fill="#5C5647">全新 worktree、分支、session</text>
+  </g>
+  <path d="M 334 120 L 380 120" stroke="#16495A" stroke-width="3" marker-end="url(#zarr)" fill="none"/>
+
+  <g>
+    <rect x="384" y="60" width="290" height="120" rx="16" fill="#FFFDF6" stroke="#16495A" stroke-width="2.5"/>
+    <text x="410" y="100" font-size="17" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#8A8272">02</text>
+    <text x="410" y="132" font-size="20" font-weight="700" fill="#171A20">读懂管辖它的 spec</text>
+    <text x="410" y="160" font-size="15" fill="#5C5647">先读契约，再碰代码</text>
+  </g>
+  <path d="M 678 120 L 724 120" stroke="#16495A" stroke-width="3" marker-end="url(#zarr)" fill="none"/>
+
+  <g>
+    <rect x="728" y="60" width="290" height="120" rx="16" fill="#FFFDF6" stroke="#16495A" stroke-width="2.5"/>
+    <text x="754" y="100" font-size="17" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#8A8272">03</text>
+    <text x="754" y="132" font-size="20" font-weight="700" fill="#171A20">干活</text>
+    <text x="754" y="160" font-size="15" fill="#5C5647">代码与 spec 一起改</text>
+  </g>
+  <path d="M 1022 120 L 1068 120" stroke="#16495A" stroke-width="3" marker-end="url(#zarr)" fill="none"/>
+
+  <g>
+    <rect x="1072" y="60" width="290" height="120" rx="16" fill="#FFFDF6" stroke="#16495A" stroke-width="2.5"/>
+    <text x="1098" y="100" font-size="17" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#8A8272">04</text>
+    <text x="1098" y="132" font-size="20" font-weight="700" fill="#171A20">跑 eval 场景</text>
+    <text x="1098" y="160" font-size="15" fill="#5C5647">在真实产品面上测量</text>
+  </g>
+
+  <path d="M 1217 184 L 1217 236" stroke="#16495A" stroke-width="3" marker-end="url(#zarr)" fill="none"/>
+
+  <g>
+    <rect x="1072" y="240" width="290" height="120" rx="16" fill="#FFFDF6" stroke="#16495A" stroke-width="2.5"/>
+    <text x="1098" y="280" font-size="17" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#8A8272">05</text>
+    <text x="1098" y="312" font-size="20" font-weight="700" fill="#171A20">消解 drift、过 lint</text>
+    <text x="1098" y="340" font-size="15" fill="#5C5647">spec 仍然如实描述代码</text>
+  </g>
+  <path d="M 1068 300 L 1022 300" stroke="#16495A" stroke-width="3" marker-end="url(#zarr)" fill="none"/>
+
+  <g>
+    <rect x="728" y="240" width="290" height="120" rx="16" fill="#FFFDF6" stroke="#16495A" stroke-width="2.5"/>
+    <text x="754" y="280" font-size="17" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#8A8272">06</text>
+    <text x="754" y="312" font-size="20" font-weight="700" fill="#171A20">提交、提议合并</text>
+    <text x="754" y="340" font-size="15" fill="#5C5647">worker 从不自己合并</text>
+  </g>
+  <path d="M 724 300 L 678 300" stroke="#16495A" stroke-width="3" marker-end="url(#zarr)" fill="none"/>
+
+  <g>
+    <rect x="384" y="240" width="290" height="120" rx="16" fill="#FFFDF6" stroke="#171A20" stroke-width="2.5"/>
+    <text x="410" y="280" font-size="17" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#8A8272">07</text>
+    <text x="410" y="312" font-size="20" font-weight="700" fill="#171A20">你审核、点合并</text>
+    <text x="410" y="340" font-size="15" fill="#5C5647">由该 session 自己的 agent 落地</text>
+  </g>
+  <path d="M 380 300 L 334 300" stroke="#16495A" stroke-width="3" marker-end="url(#zarr)" fill="none"/>
+
+  <g>
+    <rect x="40" y="240" width="290" height="120" rx="16" fill="#FFFDF6" stroke="#171A20" stroke-width="2.5"/>
+    <text x="66" y="280" font-size="17" font-family="ui-monospace, Menlo, Consolas, monospace" fill="#8A8272">08</text>
+    <text x="66" y="312" font-size="20" font-weight="700" fill="#171A20">关闭</text>
+    <text x="66" y="340" font-size="15" fill="#5C5647">session 退役，worktree 删除</text>
+  </g>
+
+</svg>

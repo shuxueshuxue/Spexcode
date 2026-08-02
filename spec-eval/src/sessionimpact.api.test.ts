@@ -246,11 +246,23 @@ exec "$IMPACT_REAL_GIT" "$@"
     }
     assert.equal(ready, true, `backend failed to start: ${stderr.slice(-1200)}`)
     const scoped = async (id = SESSION_ID) => {
-      const response = await fetch(`${origin}/api/evals?q=${encodeURIComponent(`is:eval scope:${id}`)}`)
-      const raw = await response.text()
-      let body: any = {}
-      try { body = JSON.parse(raw) } catch { /* raw text is retained below */ }
-      return { status: response.status, body, raw, contentType: response.headers.get('content-type') }
+      const listResponse = await fetch(`${origin}/api/evals?q=${encodeURIComponent(`is:eval scope:${id}`)}`)
+      const raw = await listResponse.text()
+      const impactResponse = await fetch(`${origin}/api/evals/impact?scope=${encodeURIComponent(id)}`)
+      const impactRaw = await impactResponse.text()
+      let listBody: any = {}
+      let impactBody: any = {}
+      try { listBody = JSON.parse(raw) } catch { /* raw text is retained below */ }
+      try { impactBody = JSON.parse(impactRaw) } catch { /* raw text is retained below */ }
+      return {
+        status: listResponse.status,
+        impactStatus: impactResponse.status,
+        body: { ...listBody, impact: impactBody.impact },
+        listBody,
+        impactBody,
+        raw,
+        contentType: listResponse.headers.get('content-type'),
+      }
     }
     const rows = (body: any) => (body.items ?? []).filter((item: any) => item.node === 'impact-fixture')
     const row = (body: any, name: string) => rows(body).find((item: any) => item.scenario === name)
@@ -259,11 +271,12 @@ exec "$IMPACT_REAL_GIT" "$@"
     const observations: any[] = []
     const failures: string[] = []
     const check = (condition: unknown, message: string) => { if (!condition) failures.push(message) }
-    const observe = (phase: string, result: { status: number; body: any; raw: string; contentType: string | null }, extra: any = {}) => {
+    const observe = (phase: string, result: { status: number; impactStatus: number; body: any; listBody: any; impactBody: any; raw: string; contentType: string | null }, extra: any = {}) => {
       const rowValues = rows(result.body).map((row: any) => [row.scenario, row.impact])
-      const value = { command: 'GET /api/evals?q=is:eval scope:<session>', origin, runtime: process.version, phase, status: result.status, populated: {
-        impact: !!result.body.impact,
-        nodes: result.body.impact?.nodes?.length ?? 0,
+      const value = { command: 'GET /api/evals?q=is:eval scope:<session> + /api/evals/impact?scope=<session>', origin, runtime: process.version, phase, status: result.status, impactStatus: result.impactStatus, populated: {
+        listImpact: !!result.listBody.impact,
+        impact: !!result.impactBody.impact,
+        nodes: result.impactBody.impact?.nodes?.length ?? 0,
         rows: rowValues.length,
       }, contentType: result.contentType, rows: rowValues,
       error: result.body.error ?? (result.status >= 400 ? result.raw.slice(0, 2_000) : null),
@@ -283,6 +296,8 @@ exec "$IMPACT_REAL_GIT" "$@"
       retractedScenarioImpact: impactScenario(beta.body, 'retracted-scenario')?.impact ?? null,
     })
     check(beta.status === 200, 'beta-only must return 200')
+    check(beta.impactStatus === 200, 'beta-only exact impact read must return 200')
+    check(!beta.listBody.impact, 'the paged list must not transport the full exact impact graph')
     check(beta.body.impact?.base === base && beta.body.impact?.head === betaHead, 'beta-only must expose exact base/head')
     check(JSON.stringify(row(beta.body, 'beta-scenario')?.impact) === JSON.stringify(['code']), 'beta-only code impact must select only beta')
     check(!row(beta.body, 'alpha-scenario'), 'beta-only must not select alpha')

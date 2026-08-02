@@ -113,7 +113,7 @@ export function paginateReview<T extends ReviewItem>(
     pageCount,
     prev: page > 1 ? page - 1 : null,
     next: page < pageCount || overflow ? page + 1 : null,
-    revision: revisionOf(revisionInputs),
+    revision: revisionOf({ page, source: revisionInputs }),
     ...responseModel(model),
   }
 }
@@ -383,10 +383,9 @@ export async function evalsReview(query: string | undefined, requestedPage: unkn
       unknown: model.nodes.reduce((count, node) => count + (node.unknownCoverage?.length ?? 0), 0),
       summary: model.summary,
       evalRevision: model.evalRevision,
-      impact: model.impact,
       ...paginateReview(items, filtered.shown, filtered, requestedPage, {
-        domain: 'evals', scope, items, gates: model.gates ?? [], summary: model.summary,
-        evalRevision: model.evalRevision, impact: model.impact, sessions: sessions.map((session) => session.id),
+        domain: 'evals', scope, query: text, gates: model.gates ?? [], summary: model.summary,
+        evalRevision: model.evalRevision, sessions: sessions.map((session) => session.id),
       }),
     }
   }

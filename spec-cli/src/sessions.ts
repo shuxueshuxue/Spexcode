@@ -88,15 +88,18 @@ export type Session = {
   files?: string[]         // live posted paths ([[files]]), read from the session store with the rest of the projection
 }
 
-export type CloseSource = { kind: 'session'; id: string } | { kind: 'user' }
+// HTTP carries no authenticated session identity. A CLI may report its environment id, but that remains
+// evidence supplied by the caller rather than authority over the target or a fact about who performed close.
+export type CloseSource = { kind: 'unverified-session-claim'; id: string } | { kind: 'user' }
 
 function normalizeCloseSource(raw: unknown): CloseSource {
   if (raw == null) return { kind: 'user' }
-  if (!raw || typeof raw !== 'object') throw new ResourceConflict('refusing session close: source must be a user or session identity')
+  if (!raw || typeof raw !== 'object') throw new ResourceConflict('refusing session close: source must be user or an unverified session claim')
   const source = raw as { kind?: unknown; id?: unknown }
   if (source.kind === 'user') return { kind: 'user' }
-  if (source.kind === 'session' && typeof source.id === 'string' && source.id.trim()) return { kind: 'session', id: source.id.trim() }
-  throw new ResourceConflict('refusing session close: source must be a user or session identity')
+  if (source.kind === 'unverified-session-claim' && typeof source.id === 'string' && source.id.trim())
+    return { kind: 'unverified-session-claim', id: source.id.trim() }
+  throw new ResourceConflict('refusing session close: source must be user or an unverified session claim')
 }
 
 function appendCloseLedger(id: string, rec: SessRec, source: CloseSource): void {
@@ -492,16 +495,6 @@ function writeRecord(rec: SessRec): void {
     recordStatus(rec.session, nextPublic.status, nextPublic.proposal, nextPublic.note)
     scheduleWatchNotifications(rec)
   }
-}
-
-export function restoreMissingSessionRecord(rec: SessRec): void {
-  if (!rec.session.trim() || !rec.governed || !rec.worktreePath || !rec.harness)
-    throw new ResourceConflict('refusing session recovery: a complete governed session record is required')
-  withRecordLockSync(rec.session, () => {
-    if (readRecordEntry(rec.session).kind !== 'absent')
-      throw new ResourceConflict(`refusing session recovery for ${rec.session}: an active record already exists`)
-    writeRecord(rec)
-  })
 }
 
 type WatchEntry = { watcher: string; createdAt: string }
@@ -2928,9 +2921,9 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   if (wt.rec.archived) await assertColdRetirementSafe(id, wt.rec)
   else if (wt.rec.status === 'queued') await assertQueuedRetirementSafe(id, wt.rec, wt.path, wt.branch)
   else throw new ResourceConflict(`refusing to close ${id}: target runtime was not cold-retired first`)
-  appendCloseLedger(id, wt.rec, source)
   // The marker protects only the destructive half. A failed cold proof must leave a normal, resumable binding.
   if (closesCodexBinding) prepareCodexGenerationClose(runtimeRoot(), id, wt.rec.harnessSessionId!)
+  appendCloseLedger(id, wt.rec, source)
   let slot: string | null = null
   try { slot = treeSlotDir(wt.path) } catch { /* tree already unresolvable — nothing to key the slot by */ }
   // a retired session's worktree/branch are already gone; removing them is a no-op to skip, not a failure.

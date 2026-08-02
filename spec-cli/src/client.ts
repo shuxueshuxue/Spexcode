@@ -245,11 +245,11 @@ export async function clientInterrupt(id: string): Promise<DispatchResult> {
   return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` })) as DispatchResult
 }
 
-// POST /api/sessions/:id/close — terminal worktree removal, attributed to this governed caller or the user.
+// POST /api/sessions/:id/close — terminal worktree removal. A client-side session id is only an unverified claim.
 export async function clientClose(id: string): Promise<boolean> {
   await guarded('session close')
   const source = envSessionId()
-  const r = await apiFetch(`/api/sessions/${seg(id)}/close`, post({ source: source ? { kind: 'session', id: source } : { kind: 'user' } }))
+  const r = await apiFetch(`/api/sessions/${seg(id)}/close`, post({ source: source ? { kind: 'unverified-session-claim', id: source } : { kind: 'user' } }))
   if (!r.ok) throw new BackendError(`backend refused to close ${id}: ${await r.text()}`, r.status)
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }

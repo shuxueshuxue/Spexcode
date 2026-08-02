@@ -86,13 +86,15 @@ Ordinary later resume carries no receipt and restores only the parent conversati
   launched session. It never deletes the worktree, record, branch, or Codex generation binding while the
   target native runtime is still live or unproven; a failed cold transition leaves the session visible.
 
-After all cold/queued ownership proof passes and before resource deletion, close writes an append-only
-`close-authorized` project runtime ledger entry. The entry names the exact target record and its source: a caller
-session id when a governed CLI session initiated the request, otherwise `user` for a dashboard or plain-shell
-operation. The ledger outlives the target session directory, so the actor remains inspectable after a successful
-terminal close. A refused close writes no entry and never changes a Codex generation binding into its
-record-removing phase. Archive remains reversible only through `resume`, which unarchives before recreating the
-runtime. Close is not reversible.
+After all cold/queued ownership proof and every refusing Codex generation-binding fence pass, close writes an
+append-only `close-authorized` project runtime ledger entry before resource deletion. The entry names the exact
+target record and a non-authoritative request source: `user` means no session claim was supplied, while
+`unverified-session-claim` preserves a CLI-provided id without asserting that the id exists, owns the target, or
+authenticated the request. The close route rejects the authoritative-looking `session` kind rather than silently
+upgrading a forged value. The ledger outlives the target session directory, so the request context remains
+inspectable after a successful terminal close but never grants deletion authority. A refused close writes no
+entry and never changes a Codex generation binding into its record-removing phase. Archive remains reversible
+only through `resume`, which unarchives before recreating the runtime. Close is not reversible.
 
 Close has three ownership-proof entries into that one terminal result. A live row first uses the ordinary exact
 stop proof, then removes its record, worktree, and branch. A proven-cold archived row must not pretend to be

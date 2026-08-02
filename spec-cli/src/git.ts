@@ -14,6 +14,7 @@ const US = '\x1f', RS = '\x1e'
 // permit pool through AsyncLocalStorage, so corpus-wide Promise.all fanout queues here before spawn rather
 // than materializing one process per worktree/eval. Calls outside that build context remain unconstrained.
 const GIT_TIMEOUT_MS = Number(process.env.SPEXCODE_GIT_TIMEOUT_MS || 120000)
+const GIT_SYNC_MAX_BUFFER = 1 << 27
 export const BOARD_GIT_CONCURRENCY = 4
 const gitByPath = new Map<string, string>()
 
@@ -125,7 +126,8 @@ export function currentGitBuildAbortSignal(): AbortSignal | undefined {
   return inheritedContext()?.signal
 }
 function warnIfTimedOut(e: any, args: string[]): void {
-  if (e?.signal === 'SIGKILL') console.warn(`spec-cli: git ${args.slice(0, 6).join(' ')}… killed after ${GIT_TIMEOUT_MS}ms — child never exited`)
+  if (e?.code === 'ETIMEDOUT' || e?.spexcodeGitTimeout === true)
+    console.warn(`spec-cli: git ${args.slice(0, 6).join(' ')}… killed after ${GIT_TIMEOUT_MS}ms — child never exited`)
 }
 
 // strip git's hook-exported env (GIT_DIR etc.) so every call discovers the repo from the filesystem.
@@ -133,7 +135,14 @@ export function git(args: string[]): string {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
   try {
-    return execFileSync(gitBinary(env), withBuildLimits(args), { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' })
+    return execFileSync(gitBinary(env), withBuildLimits(args), {
+      encoding: 'utf8',
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: GIT_TIMEOUT_MS,
+      killSignal: 'SIGKILL',
+      maxBuffer: GIT_SYNC_MAX_BUFFER,
+    })
   } catch (e: any) { warnIfTimedOut(e, args); throw e }
 }
 
@@ -147,7 +156,7 @@ function gitBuffer(args: string[], input?: string): Buffer {
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: GIT_TIMEOUT_MS,
       killSignal: 'SIGKILL',
-      maxBuffer: 1 << 27,
+      maxBuffer: GIT_SYNC_MAX_BUFFER,
     })
   } catch (e: any) { warnIfTimedOut(e, args); throw e }
 }

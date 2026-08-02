@@ -26,7 +26,7 @@ review 和 merge,工具负责让意图和实现不分家。
 
 | 特性 | 说明 |
 |---|---|
-| **spec–code drift 检测** | 每个 spec 钉住它管辖的文件,可以细到函数。一次纯 git 的机械检查就能标出代码动了而 spec 没跟上的情况:文件级是提醒,钉住的函数被改则直接阻断。判据只有 commit 和行区间。 |
+| **可计算的 spec–code drift** | 每个 spec 钉住它管辖的文件,可以细到函数。代码是否脱开 spec 单独动了,由 commit 和行区间算出来,在任何机器上结果一致:文件级是提醒,钉住的函数被改则直接阻断。 |
 | **session 与 worktree 管理** | 每个任务派发进自己的 worktree 和分支,由同一个状态机分层监管:`working → review → merged`。worker 只提议,你只在合并时 review 一次。互不相干的任务并行跑。 |
 | **可分享的 URL** | spec 节点、session、eval、live 终端,dashboard 上每个视图都有稳定地址,发给同事就能看。两个人可以盯着同一块 session 看板。 |
 | **模块化分层** | 三个可拆的层:spec↔code 数据资产(L0)、session 基座(L1)、dashboard(L2)。按需取用,下面两层就是为你自己的软件工厂准备的积木。 |

@@ -43,6 +43,19 @@ scenarios:
       descendant created after preflight but before archive settlement is caught by the post-mutation census,
       fails loud, and is compensated rather than filed as cold.
     tags: [backend-api, cli]
+  - name: direct-live-close-cold-boundary
+    test:
+      path: spec-cli/src/session-close-live-boundary.api.test.ts
+      name: public direct close reaches deletion only after the live target is cold
+    description: >
+      In an isolated project, start one live, exactly-owned Claude fixture with its real tmux pane, rendezvous
+      listener, PID artifact, worktree, and branch. Drive public HTTP close and capture the retained record plus
+      exact runtime facts at the worktree-removal boundary.
+    expected: >
+      Direct close first creates a cold archive boundary: before worktree deletion the record remains present
+      with archived:true and a target-bound cold proof, while the exact pane, PID, and rendezvous listener are
+      absent. Only then may close remove record, worktree, and branch.
+    tags: [backend-api, cli]
   - name: archive-guard-failure-visible
     test:
       path: spec-cli/src/session-archive-cold-close.api.test.ts

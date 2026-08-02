@@ -167,10 +167,10 @@ Everything above has a live view. Start `spex serve` and `spex dashboard`, then:
 state, an agent's avatar hovers on the node it is editing right now, and the rail top-left is the
 live session console.*
 
-<img src="docs/readme-node.png" alt="a node opened on the board: raw source and expanded spec, version history, governed file">
+<img src="docs/readme-node.png" alt="a node opened on the board: the raw source callout, the expanded spec body, the governed file, a drift badge, and tabs for history, issues, eval">
 
-*Click a node: its raw source and expanded spec, the version history git already kept, the file it
-governs, its issues.*
+*Click a node: the raw source on top, the expanded spec below it, the file it governs, its current
+drift state, and tabs for the version history git already kept, its issues, and its evals.*
 
 <img src="docs/readme-eval.png" alt="an eval reading under review: verdict banner, the scenario's expected result, the agent's note, recorded video evidence, and the review queue">
 

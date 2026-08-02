@@ -40,6 +40,10 @@ another lifecycle: `done --propose merge` means review and the sole clickable me
 done without merge, `close` means close-pending, while ask/park name asking/parked and their distinct wake-up
 owners.
 
+Worker-only live-reference entries keep the same map: `session files add|ls|retract` names live file paths and
+`session web add|ls|retract` names live loopback web URLs ([[files]] / [[web]]). Their own nouns own format and
+gateway policy; this shared drawer tells an agent the capability exists without turning help into another guide.
+
 One word — **close** — sits on both sides of the manager/worker split, so each entry states which side it is
 on in its own text instead of leaning on the drawer's grouping. `session close <SEL>` says it retires ANOTHER
 session and that its selector is never `.` and never the caller's own id; `done --propose close` says it only

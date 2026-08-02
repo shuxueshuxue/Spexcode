@@ -25,7 +25,9 @@ never silent.
 
 `spex serve --public` raises a **gateway** on `0.0.0.0:PORT` — the only thing facing the internet. It
 terminates TLS, serves the built dashboard, reverse-proxies `/api/*` and the terminal WebSocket to the
-loopback supervisor, and, when `--password <pw>` is given, gates every request behind a login. The
+loopback supervisor, and proxies a published session-web reference only after resolving its current posted
+key to that service's loopback host ([[web]]). When `--password <pw>` is given, it gates every request behind
+a login. The
 supervisor and its child stay on `127.0.0.1`: **loopback is the trust boundary, the gateway is the
 internet face.** Locally launched agents reach the loopback supervisor directly and never carry the
 password. Without `--public` nothing changes: dev stays plain
@@ -53,6 +55,8 @@ the downstream and upstream normally; when either side aborts or closes before c
 deterministically tears down the other request, response, socket, and any transform stream. Long-lived SSE
 therefore lives only as long as its browser subscriber, never as an orphaned upstream connection after a tab
 closes. The terminal WebSocket follows the same paired-half rule at its upgrade seam.
+Published-session-web HTTP and WebSocket traffic use that same exchange rather than a second preview server;
+the session list remains the authorization boundary before a loopback connection is opened.
 
 **With a password, the gate is a designed login, not the browser's Basic dialog.** An unauthenticated
 visitor gets a styled login page; the posted password is compared in constant time and, on success, mints

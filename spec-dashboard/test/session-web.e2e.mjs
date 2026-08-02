@@ -1,0 +1,100 @@
+// Real-browser resource-tab evidence for [[web]]. It drives the public CLI only after the dashboard has read
+// its initial graph, so a new published URL must arrive through the live graph update and auto-open one tab.
+import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const here = dirname(fileURLToPath(import.meta.url))
+const PW = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
+const CHROMIUM = process.env.CHROMIUM || '/snap/bin/chromium'
+const BASE = process.env.BASE || 'http://127.0.0.1:5177'
+const SESSION = process.env.SESSION
+const WEB_URL = process.env.WEB_URL
+const FILE = resolve(process.env.FILE || join(here, '..', '..', '.spec', 'spexcode', 'spec-cli', 'sessions', 'web', 'spec.md'))
+const CLI = process.env.SPEXCODE_CLI || resolve(here, '..', '..', 'spec-cli', 'bin', 'spex.mjs')
+const OUT = resolve(process.env.OUT || '/tmp/session-web-e2e')
+if (!SESSION || !WEB_URL) throw new Error('SESSION=<live-session-id> WEB_URL=http://127.0.0.1:<port>/ are required')
+mkdirSync(OUT, { recursive: true })
+
+const command = (...args) => execFileSync(process.execPath, [CLI, 'session', ...args], {
+  cwd: process.cwd(), env: { ...process.env, SPEXCODE_SESSION_ID: SESSION }, encoding: 'utf8',
+}).trim()
+const webLabel = (() => {
+  const url = new URL(WEB_URL)
+  return `${url.hostname.replace(/^\[|\]$/g, '')}:${url.port}${url.pathname === '/' ? '' : url.pathname}`
+})()
+
+const { chromium } = await import(pathToFileURL(PW).href)
+const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true })
+let postedFile = false
+let postedWeb = false
+try {
+  const canonicalWeb = new URL(WEB_URL).href
+  if (command('web', 'ls').split('\n').includes(canonicalWeb)) command('web', 'retract', WEB_URL)
+  if (!command('files', 'ls').split('\n').includes(FILE)) {
+    assert.equal(command('files', 'add', FILE), `posted ${FILE}`)
+    postedFile = true
+  }
+
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  await page.goto(`${BASE}/#/sessions/${encodeURIComponent(SESSION)}`, { waitUntil: 'domcontentloaded' })
+  await page.locator('.si-tab-add').waitFor({ state: 'visible', timeout: 20_000 })
+
+  const files = page.locator('.si-files')
+  await files.locator('.si-tool').click()
+  const row = files.locator('.si-files-row').filter({ hasText: basename(FILE) })
+  await row.waitFor({ state: 'visible' })
+  assert.equal(await row.locator('.si-files-name').getAttribute('data-tip'), null)
+  assert.equal(await row.locator('.si-files-copy').getAttribute('data-tip'), FILE)
+  await row.locator('.si-files-preview').click()
+  await page.locator('.si-file-preview-backdrop').waitFor({ state: 'visible' })
+  await page.screenshot({ path: join(OUT, 'file-popout.png'), fullPage: true })
+  await page.locator('.si-file-preview-backdrop').click({ position: { x: 4, y: 4 } })
+  await page.locator('.si-file-preview-backdrop').waitFor({ state: 'hidden' })
+
+  assert.equal(command('web', 'add', WEB_URL), `posted ${canonicalWeb}`)
+  postedWeb = true
+  const webTab = page.locator('.si-resource-tab').filter({ hasText: webLabel })
+  await webTab.waitFor({ state: 'visible', timeout: 20_000 })
+  const frame = page.frameLocator('.si-resource-web')
+  const version = frame.locator('#spex-web-proof')
+  await version.waitFor({ state: 'visible', timeout: 20_000 })
+  const first = await version.textContent()
+  await webTab.locator('.si-resource-tab-action').first().click()
+  await page.waitForFunction((before) => {
+    const frameEl = document.querySelector('.si-resource-web')
+    return frameEl?.contentDocument?.querySelector('#spex-web-proof')?.textContent !== before
+  }, first)
+  const second = await page.frameLocator('.si-resource-web').locator('#spex-web-proof').textContent()
+  assert.notEqual(second, first, 'refresh must request the live service again')
+
+  await page.locator('.si-tab-add').click()
+  const picker = page.locator('.si-resource-menu')
+  await picker.waitFor({ state: 'visible' })
+  assert.equal(await picker.getByRole('menuitem', { name: webLabel }).count(), 0, 'an open web is not offered twice')
+  await picker.getByRole('menuitem', { name: basename(FILE) }).click()
+  const fileTab = page.locator('.si-resource-tab').filter({ hasText: basename(FILE) })
+  await fileTab.waitFor({ state: 'visible' })
+  await page.locator('.si-resource-file pre').waitFor({ state: 'visible' })
+  await page.locator('.si-tab-add').click()
+  await page.locator('.si-resource-menu-empty').waitFor({ state: 'visible' })
+  await page.screenshot({ path: join(OUT, 'resource-tabs-live.png'), fullPage: true })
+
+  await webTab.locator('.si-resource-tab-action').nth(1).click()
+  await webTab.waitFor({ state: 'detached' })
+  await page.locator('.si-tab-add').click()
+  await page.locator('.si-resource-menu').getByRole('menuitem', { name: webLabel }).click()
+  await page.locator('.si-resource-tab').filter({ hasText: webLabel }).waitFor({ state: 'visible' })
+
+  assert.equal(command('web', 'retract', WEB_URL), `retracted ${canonicalWeb}`)
+  postedWeb = false
+  await page.locator('.si-resource-tab').filter({ hasText: webLabel }).waitFor({ state: 'detached', timeout: 20_000 })
+  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first, second }, null, 2) + '\n')
+  console.log(JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first, second }))
+} finally {
+  if (postedWeb) { try { command('web', 'retract', WEB_URL) } catch {} }
+  if (postedFile) { try { command('files', 'retract', FILE) } catch {} }
+  await browser.close()
+}

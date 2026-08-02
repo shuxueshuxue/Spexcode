@@ -32,6 +32,9 @@ internal services; the hub owns the outside.
 - `/p/:projectId/*` — the project surface: `login`/`logout` are the hub's own (the designed login page,
   parameterized), everything else is reverse-proxied to that project's backend with the `/p/:projectId`
   prefix stripped, WebSocket upgrades included. Admin or matching-project scope, or open when ungated.
+  Its posted-session-web subroute (`/web/<session>/<key>/...`) is resolved only after that project gate
+  against the current project session list, then streams the selected loopback service through the same
+  HTTP/WebSocket transport; it is never a visitor-chosen open proxy ([[web]]).
   Browser navigation is content-negotiated the same way as `GET /projects` and, like the fallback it
   rides, pre-authorization — the shell is code, not data, and a direct guest must reach the in-app
   credential card ([[projects-hub]]), not a dead-end redirect: an explicit text/html GET outside `/api`
@@ -56,7 +59,8 @@ proxied request and upgrade — a visitor's other cookies pass through untouched
 stripping are routing inputs to that shared transport, not reasons to own a second pipe. Ordinary HTTP
 completion releases both halves normally; an abrupt downstream close tears down the upstream request,
 response, socket, and transform, so a scoped SSE subscription cannot survive its visitor as an orphan.
-The raw WebSocket upgrade keeps its existing paired FIN/close/error lifecycle at the upgrade seam.
+The raw WebSocket upgrade, including the posted-web route, keeps its existing paired FIN/close/error lifecycle
+at the upgrade seam.
 
 **Launch seam.** `startHubGateway({port, host, tls})` is the engine, TLS-capable via the same
 resolved-cert posture as [[public-mode]]. The operator verb is `spex dashboard` ([[host-gateway]]), which

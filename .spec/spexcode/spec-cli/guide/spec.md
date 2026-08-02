@@ -78,6 +78,10 @@ the agent from one verb, picked by an optional topic:
   meaning of a posted absolute path, and the dashboard's click-time preview/download. It states the safe
   preview types and 2 MiB refusal ceiling rather than implying every file can render, and distinguishes this
   from [[file-attach]] so an agent does not upload an artifact merely to hand it back.
+- **`web` → the agent-to-human LOOPBACK handoff.** The three `session web` verbs, their explicit-port
+  loopback URL requirement, and the dashboard's click-time same-origin proxy. It makes clear that posting
+  neither starts nor copies the service, so an agent keeps its local server alive and uses relative web asset
+  paths rather than mistaking a live page for an uploaded artifact.
 
 Every page describes the PRESENT model. A retired knob is absent from the active field list; when silently
 ignoring a stale authored field would leave its owner ambiguous, one concise migration note names the live

@@ -6,10 +6,11 @@ hue: 200
 desc: A config plugin — the minimal spec-discipline contract folded into every launched agent.
 code:
 ---
-The CLI is noun-first: `spex <noun> <verb> [object] [flags]`; `spex help` is the authoritative command map. Ordinary Git,
-shell, editor, branch, and worktree tools remain available; SpexCode manages only its own state.
+The CLI is noun-first: `spex <noun> <verb> [object] [flags]`; `spex help` is the authoritative command map. Ordinary
+Git/shell/editor/branch/worktree tools remain available; SpexCode manages only its own state.
 
-Publish live references: `spex session files add <path>` or `spex session web add <url>`; never copy bytes.
+To hand a human an artifact or local webpage, post its live reference: `spex session files add <path>` /
+`spex session web add <url>`; never copy bytes.
 
 Four disciplines, non-negotiable:
 

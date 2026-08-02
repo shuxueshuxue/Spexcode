@@ -44,6 +44,8 @@ session to that node. --prompt-file <path>|- carries a long prompt without shell
     ls: ['spex session ls [SEL…] [--status a,b] [--all] [--json]',
       'One-shot table of living sessions. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
+    files: [['spex session files add <path>', 'spex session files ls', 'spex session files retract <path>'],
+      'Publish, list, or withdraw YOUR session’s live file paths. Posting stores an absolute path beside the session record without copying bytes; the dashboard downloads it only when the human clicks.'],
     watch: [['spex session watch <SEL…>', 'spex session watch list', 'spex session watch cancel <SEL…>', 'spex session watch stream [SEL…] [--as NAME] [--idle] [--interval N=1]'],
       'With a governed caller, watch registers durable send-backed state delivery and exits. list/cancel manage those relations. Without a governed caller it names the background `session wait` fallback. stream is the human-only continuous log view and blocks until killed.', ['selector']],
     wait: ['spex session wait [SEL…] [--timeout S=1200] [--interval S=1] [--idle]',
@@ -90,7 +92,7 @@ LOCAL-only (fails loud on a remote backend); show --capture and send are non-int
 const SESSION_HELP_GROUPS = [
   { title: 'Manager verbs (dispatch, monitor, land)', verbs: ['new', 'ls', 'resources', 'watch', 'wait', 'review', 'merge'] },
   { title: 'Control another session', verbs: ['send', 'interrupt', 'rename', 'show', 'resume', 'stop', 'archive', 'unarchive', 'close', 'quarantine'] },
-  { title: 'Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on)', verbs: ['done', 'park', 'ask'] },
+  { title: 'Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on)', verbs: ['done', 'park', 'ask', 'files'] },
   { title: 'Human escape hatch', verbs: ['attach'] },
 ] as const
 

@@ -10,6 +10,9 @@ The CLI is noun-first: `spex <noun> <verb> [object] [flags]`. `spex help` is the
 use a noun's `--help` for exact usage. Ordinary Git, shell, editor, branch, and worktree tools remain available;
 SpexCode commands manage only SpexCode state.
 
+After producing an artifact the human should receive, publish its live path with `spex session files add <path>`;
+it records the path without copying bytes, and the dashboard downloads it only when the human clicks.
+
 Four disciplines, non-negotiable:
 
 1. SPEC FIRST. Before reading or changing governed code, read the governing spec BODY. Use `spex spec owner

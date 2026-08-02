@@ -56,6 +56,7 @@ export function returnFocus() {
 // scroller's scrollbar gutter keeps its default (cancelling it breaks thumb dragging, and gutter presses
 // never move focus anyway).
 const NATIVE_PRESS_TARGETS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm'
+const SELECTABLE_PRESS_TARGETS = '[data-selectable]'
 
 // scrollbar presses only ever target the scrollable HTMLElement itself — an SVG target (an icon
 // glyph on a button) reports clientWidth/Height 0 and would false-positive as a gutter press.
@@ -70,6 +71,7 @@ export function inertChromePress(e) {
   const el = e.target
   if (!(el instanceof Element)) return
   if (el.closest(NATIVE_PRESS_TARGETS)) return
+  if (el.closest(SELECTABLE_PRESS_TARGETS)) return
   if (inScrollbarGutter(el, e)) return
   e.preventDefault()
 }

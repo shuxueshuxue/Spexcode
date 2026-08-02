@@ -19,6 +19,7 @@ import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl, PROJECT_BASE } from './project.js'
 import { inertChromePress, returnFocus } from './focus.js'
+import RichText from './RichText.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
@@ -56,6 +57,12 @@ function ActionOutcome({ outcome }) {
 }
 
 const fileName = (path) => path.split('/').filter(Boolean).pop() || path
+const isMarkdownFile = (path) => /\.(?:md|markdown)$/i.test(path)
+function FileTextPreview({ path, text }) {
+  return isMarkdownFile(path)
+    ? <RichText className="si-file-markdown">{text}</RichText>
+    : <pre className="si-file-text">{text}</pre>
+}
 const webName = (url) => {
   try {
     const parsed = new URL(url)
@@ -179,10 +186,10 @@ function SessionFiles({ session, onFailure }) {
             <IconButton icon="download" size={14} label={t('session.downloadFile', { path: preview.path })} onClick={() => download(preview.path)} />
             <IconButton icon="x" size={14} label={t('session.closeFilePreview')} onClick={closePreview} />
           </header>
-          <div className="si-file-preview-body">
+          <div className={`si-file-preview-body ${preview.phase}`} data-selectable>
             {preview.phase === 'loading' && <Icon name="loader" size={18} className="si-attach-busy" />}
             {preview.phase === 'error' && <p className="si-file-preview-error" role="alert">{preview.message}</p>}
-            {preview.phase === 'text' && <pre>{preview.text}</pre>}
+            {preview.phase === 'text' && <FileTextPreview path={preview.path} text={preview.text} />}
             {preview.phase === 'image' && <img src={preview.url} alt={fileName(preview.path)} />}
           </div>
         </section>
@@ -224,10 +231,10 @@ function SessionResourcePanel({ tab }) {
     return <iframe key={tab.revision} className="si-resource-web" src={webProxyUrl(tab.sessionId, tab.key)} title={tab.label} />
   }
   return (
-    <div className="si-resource-file">
+    <div className={`si-resource-file ${preview.phase}`} data-selectable>
       {preview.phase === 'loading' && <Icon name="loader" size={18} className="si-attach-busy" />}
       {preview.phase === 'error' && <p className="si-file-preview-error" role="alert">{preview.message}</p>}
-      {preview.phase === 'text' && <pre>{preview.text}</pre>}
+      {preview.phase === 'text' && <FileTextPreview path={tab.value} text={preview.text} />}
       {preview.phase === 'image' && <img src={preview.url} alt={fileName(tab.value)} />}
     </div>
   )

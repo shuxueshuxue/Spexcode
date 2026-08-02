@@ -55,6 +55,105 @@ function ActionOutcome({ outcome }) {
   return <div className={`si-action-outcome ${outcome.phase}`} role={role}>{outcome.message}</div>
 }
 
+function SessionFiles({ session, onFailure }) {
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const [preview, setPreview] = useState(null)
+  const previewRequest = useRef(0)
+  const files = Array.isArray(session?.files) ? session.files : []
+  const ready = files.length > 0
+
+  useEffect(() => { setOpen(false); setPreview(null); previewRequest.current++ }, [session?.id])
+  useEffect(() => () => { if (preview?.url) URL.revokeObjectURL(preview.url) }, [preview?.url])
+  if (!session) return null
+
+  const urlFor = (path, preview = false) => apiUrl(`/api/sessions/${encodeURIComponent(session.id)}/files/download?path=${encodeURIComponent(path)}${preview ? '&preview=1' : ''}`)
+  const download = async (path) => {
+    const url = urlFor(path)
+    try {
+      const response = await fetch(url, { method: 'HEAD' })
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(body?.error || t('session.fileDownloadFailed', { status: response.status }))
+      }
+      const link = document.createElement('a')
+      link.href = url
+      link.download = path.split('/').pop() || 'download'
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    } catch (error) {
+      onFailure(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const openPreview = async (path) => {
+    const request = ++previewRequest.current
+    setOpen(false)
+    setPreview({ path, phase: 'loading' })
+    try {
+      const response = await fetch(urlFor(path, true))
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(body?.error || t('session.filePreviewFailed', { status: response.status }))
+      }
+      const kind = response.headers.get('X-Spexcode-Preview-Kind')
+      if (kind === 'image') {
+        const url = URL.createObjectURL(await response.blob())
+        if (request !== previewRequest.current) { URL.revokeObjectURL(url); return }
+        setPreview({ path, phase: 'image', url })
+      } else {
+        const text = await response.text()
+        if (request === previewRequest.current) setPreview({ path, phase: 'text', text })
+      }
+    } catch (error) {
+      if (request === previewRequest.current) setPreview({ path, phase: 'error', message: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  const closePreview = () => { previewRequest.current++; setPreview(null) }
+
+  const label = ready ? t('session.filesTitle') : t('session.filesEmptyTitle')
+  return (
+    <div className="si-files">
+      <IconButton icon="folder-open" size={14} label={label}
+        className={`si-tool sc-${ready ? 'blue' : 'muted'} files`}
+        aria-expanded={ready ? open : undefined}
+        disabled={!ready}
+        onClick={() => setOpen((value) => !value)} />
+      {open && (
+        <div className="si-files-menu" role="menu" aria-label={t('session.filesListLabel')}>
+          {files.map((path) => <div key={path} className="si-files-row" role="none">
+            <button type="button" className="si-files-item" role="menuitem"
+              aria-label={t('session.previewFile', { path })} onClick={() => openPreview(path)}>
+              <Icon name="eye" size={14} />
+              <span title={path}>{path}</span>
+            </button>
+            <IconButton icon="download" size={14} className="si-files-download" label={t('session.downloadFile', { path })}
+              onClick={() => download(path)} />
+          </div>)}
+        </div>
+      )}
+      {preview && (
+        <section className="si-file-preview" role="dialog" aria-label={t('session.filePreviewTitle', { path: preview.path })}>
+          <header className="si-file-preview-head">
+            <span title={preview.path}>{preview.path}</span>
+            <IconButton icon="download" size={14} label={t('session.downloadFile', { path: preview.path })} onClick={() => download(preview.path)} />
+            <IconButton icon="x" size={14} label={t('session.closeFilePreview')} onClick={closePreview} />
+          </header>
+          <div className="si-file-preview-body">
+            {preview.phase === 'loading' && <Icon name="loader" size={18} className="si-attach-busy" />}
+            {preview.phase === 'error' && <p className="si-file-preview-error" role="alert">{preview.message}</p>}
+            {preview.phase === 'text' && <pre>{preview.text}</pre>}
+            {preview.phase === 'image' && <img src={preview.url} alt={preview.path} />}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
 // The toolbar consumes only the canonical graph session projection. Last-known survives input invalidation,
 // tab switches, remounts and transport loss; only a ready projection on a live graph stream is called current.
 export function sessionEvalDisplay(projection, connected = true) {
@@ -1178,6 +1277,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     )
                   })}
                 </div>
+                <SessionFiles session={selSession} onFailure={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })} />
               </header>
               {/* The live terminal stays mounted when the Eval door routes the app away (warm-terminals
                   contract); the routed session page is display-hidden, so socket + scroll survive. */}

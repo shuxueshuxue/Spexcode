@@ -9,7 +9,7 @@ import { appendSent, lastHumanSendVia, readTimeline, timelineEvents } from './se
 import { pendingMessages } from './delivery-queue.js'
 import { rvSock } from './harness.js'
 import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
-import { composeSessionPrompt, markState, sendText, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
+import { cancelSessionWatch, composeSessionPrompt, listSessionWatches, markState, sendText, subscribeSessionWatch, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
 // The reply-channel signal must be SYMMETRIC (the [[session-timeline]] write surface): the phone's
 // explicit note-sends and every headless target carry the note insert, and the first terminal send after
@@ -49,22 +49,23 @@ function seedTimeline(events: object[]): string {
 }
 
 const ID = 'timeline-via-test'
+const PARENT = 'timeline-parent-test'
 let midSeq = 0
 const sent = (from: string | null, replyVia?: 'note') =>
   ({ ts: '2026-07-16T00:00:00.000Z', kind: 'sent', mid: `mid-${++midSeq}`, text: 'msg', from, ...(replyVia ? { replyVia } : {}) })
 
-function seedSessionRecord(home: string): void {
+function seedSessionRecord(home: string, id = ID, parent = ''): void {
   withHome(home, () => {
-    mkdirSync(sessionStoreDir(ID), { recursive: true })
-    writeFileSync(sessionRecordPath(ID), JSON.stringify({
-      session_id: ID,
+    mkdirSync(sessionStoreDir(id), { recursive: true })
+    writeFileSync(sessionRecordPath(id), JSON.stringify({
+      session_id: id,
       governed: true,
       worktree_path: process.cwd(),
       branch: 'node/timeline-via-test',
       node: 'session-timeline',
       title: 'timeline test',
       name: '',
-      parent: '',
+      parent,
       status: 'active',
       proposal: '',
       merges: 0,
@@ -149,6 +150,25 @@ test('a declaration note remains in the timeline after a later status replaces t
       ['awaiting', 'nothing', 'CELL_note=17'],
       ['active', null, null],
     ])
+  })
+})
+
+test('a managed watch receives state through send and can be listed and cancelled', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home, PARENT)
+  seedSessionRecord(home, ID, PARENT)
+  withHome(home, () => {
+    assert.deepEqual(subscribeSessionWatch(PARENT, [ID]), { watched: [ID] })
+    assert.deepEqual(listSessionWatches(PARENT).map((watch) => watch.target), [ID])
+    assert.equal(markState('awaiting', { proposal: 'merge', note: 'ready for review', sessionId: ID }), true)
+    const messages = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
+    assert.equal(messages.length, 1, 'the child transition must wake its managed parent through send')
+    assert.equal(messages[0].kind === 'sent' && messages[0].from, ID)
+    assert.match(messages[0].kind === 'sent' ? messages[0].text : '', /review/)
+    assert.equal(cancelSessionWatch(PARENT, [ID]), 1)
+    assert.deepEqual(listSessionWatches(PARENT), [])
+    assert.equal(markState('asking', { note: 'need input', sessionId: ID }), true)
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 1, 'cancel ends later delivery')
   })
 })
 

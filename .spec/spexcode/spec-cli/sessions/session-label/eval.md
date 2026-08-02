@@ -31,15 +31,17 @@ scenarios:
   - name: cli-identity-consistency
     tags: [cli]
     description: >
-      Take ONE node-less session (name set from its prompt, empty node, an auto branch like
-      `node/spec-cli-3ec0`) and name it through two different CLI surfaces: `spex session ls` and
-      `spex session review <id>`. Both are "who is this session" displays and must agree.
+      Take ONE live session whose stable selector `label` differs from its derived `title`. Read it through
+      `spex session ls`, `show`, and `review`; provoke a selector ambiguity that includes it; and follow a
+      launched/state/message event for it. Compare each visible session name with the Session's `--json`
+      `title` field.
     expected: >
-      `spex session ls` and `spex session review` show the SAME identity for the session — the derived
-      label (its name),
-      never one showing the name while the other falls back to the raw branch. Zero loss = the review
-      surface reads a `deriveLabel`-produced field, not its own re-inlined `node||branch||id` chain.
-    code: [spec-cli/src/cli.ts, spec-cli/src/sessions.ts]
+      Every human-readable CLI identity — list row, show/review header, ambiguity candidate, and
+      launch/state/message notification — displays the same derived `title` as the Session JSON, never its
+      stable `label`, raw node, or branch. `label` and `node` remain readable only as machine-compatible JSON
+      fields and selector inputs. Zero loss = one current session name across the dashboard and CLI.
+    code: [spec-cli/src/cli.ts, spec-cli/src/session-follow.ts]
+    related: [spec-cli/src/sessions.ts]
 ---
 
 # session-label — measurement
@@ -47,3 +49,8 @@ scenarios:
 YATU: the loss is a session reading as two different names on one screen, or a raw URL obscuring prompt prose.
 Measure the board title surfaces together in a real browser, compare a declaration in Timeline, and
 verify the rename dialog's prefill; the wire-shape and precedence halves are pinned by the unit test.
+
+For the CLI identity scenario, drive the real CLI against one session whose `label` and `title` differ. The
+transcript must show the same wire-derived title in every human-readable command and follow notification;
+the JSON `label`/`node` fields are retained only to prove that selector compatibility did not become a second
+visible-name path.

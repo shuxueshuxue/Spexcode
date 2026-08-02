@@ -99,6 +99,11 @@ watcher), that session is sent a one-shot message naming its new supervisor and 
 ordinary message — an appended line, like any other ([[session-timeline]]) — fired at most once per target
 per follow process, so a stream never re-nags; a one-shot `wait` does not announce.
 
+**A follow names the session it was handed.** Every human-readable launch, state, and message line renders
+the Session's derived `title`; its stable `label` remains a selector/matching handle and never becomes a
+second visible name. Follow uses that field from its existing record projection and never probes a live pane
+just to refresh a title — its file-only control-plane contract stays intact.
+
 Nothing here observes liveness, and nothing here can. A log carries only what a session authored
 ([[state]]), so a follower learns that a session declared, asked, parked, or errored, and never learns that
 it died. `offline` is therefore not among the states a follow can reach, where the old poll counted it

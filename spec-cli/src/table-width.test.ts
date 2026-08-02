@@ -5,7 +5,7 @@ import type { Session } from './sessions.js'
 
 // Pins the display-width contract of `spex session ls` ([[ls-cjk-width]]): the table aligns by terminal CELLS,
 // not code units. CJK glyphs are two cells wide, so unit-counting slice/padEnd sheared labels mid-glyph
-// and misaligned every column after a CJK NODE or PROMPT.
+// and misaligned every column after a CJK TITLE or PROMPT.
 
 const sess = (over: Partial<Session> = {}): Session => ({
   id: 'abcdef1234', node: 'x', branch: 'node/x', path: '/wt/x',
@@ -50,8 +50,8 @@ test('padWidth: pads CJK to the target display width where padEnd under-pads', (
 
 test('formatTable: columns align (equal display width before ID) for mixed ASCII/CJK rows', () => {
   const rows = formatTable([
-    sess({ id: 'aaaa1111', label: 'plain-ascii-label', promptPreview: 'do the thing' }),
-    sess({ id: 'bbbb2222', label: '把最新的 spexcode 装到 macmini 上', promptPreview: '把最新的 spexcode 装到 macmini 上并重启服务和面板' }),
+    sess({ id: 'aaaa1111', title: 'plain-ascii-title', promptPreview: 'do the thing' }),
+    sess({ id: 'bbbb2222', title: '把最新的 spexcode 装到 macmini 上', promptPreview: '把最新的 spexcode 装到 macmini 上并重启服务和面板' }),
   ], false).split('\n')
   const [a, b] = [rows.find((r) => r.includes('aaaa1111'))!, rows.find((r) => r.includes('bbbb2222'))!]
   assert.ok(a && b, 'both rows render')
@@ -59,15 +59,24 @@ test('formatTable: columns align (equal display width before ID) for mixed ASCII
   assert.equal(before(a, 'aaaa1111'), before(b, 'bbbb2222'), 'the ID column starts at the same cell')
   // and the NOTE column after the 42-cell PROMPT field aligns too
   const withNotes = formatTable([
-    sess({ id: 'aaaa1111', label: 'plain-ascii-label', promptPreview: 'do the thing', note: 'NOTE-A' }),
-    sess({ id: 'bbbb2222', label: '把最新的 spexcode 装到 macmini 上', promptPreview: '把最新的 spexcode 装到 macmini 上并重启服务和面板', note: 'NOTE-B' }),
+    sess({ id: 'aaaa1111', title: 'plain-ascii-title', promptPreview: 'do the thing', note: 'NOTE-A' }),
+    sess({ id: 'bbbb2222', title: '把最新的 spexcode 装到 macmini 上', promptPreview: '把最新的 spexcode 装到 macmini 上并重启服务和面板', note: 'NOTE-B' }),
   ], false).split('\n')
   const [na, nb] = [withNotes.find((r) => r.includes('NOTE-A'))!, withNotes.find((r) => r.includes('NOTE-B'))!]
   assert.equal(before(na, 'NOTE-A'), before(nb, 'NOTE-B'), 'the NOTE column starts at the same cell')
 })
 
-test('formatTable: a pure-ASCII row renders exactly as before (padEnd-equivalent field)', () => {
-  const row = formatTable([sess({ label: 'plain-ascii-label' })], false)
+test('formatTable: a pure-ASCII title renders exactly as before (padEnd-equivalent field)', () => {
+  const row = formatTable([sess({ title: 'plain-ascii-title' })], false)
     .split('\n').find((r) => r.includes('abcdef12'))!
-  assert.ok(row.includes(' ' + 'plain-ascii-label'.padEnd(22) + ' abcdef12'), 'ASCII NODE field is the classic padEnd(22)')
+  assert.ok(row.includes(' ' + 'plain-ascii-title'.padEnd(22) + ' abcdef12'), 'ASCII TITLE field is the classic padEnd(22)')
+})
+
+test('formatTable: the TITLE column renders the derived title, never the selector label', () => {
+  const table = formatTable([sess({
+    label: 'legacy-node-handle', title: 'current live summary', node: 'legacy-node-handle',
+  })], false)
+  assert.match(table, /\bTITLE\b/)
+  assert.ok(table.includes('current live summary'))
+  assert.ok(!table.includes('legacy-node-handle'))
 })

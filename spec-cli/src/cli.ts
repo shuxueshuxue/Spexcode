@@ -170,16 +170,20 @@ async function localWatchTargetsOrExit(selectors: string[], verb: string): Promi
   return targets
 }
 
-async function resolveSelectorOrExit(selector: string): Promise<string> {
+async function resolveSessionOrExit(selector: string): Promise<import('./sessions.js').Session> {
   if (!selector) { console.error('spex: missing session selector (id | id-prefix | node | branch | . for self)'); process.exit(2) }
   const { resolveClientSession } = await import('./client.js')
-  const { sessionLabel } = await import('./sessions.js')
+  const { sessionTitle } = await import('./sessions.js')
   const r = await resolveClientSession(selector)
-  if ('ok' in r) return r.ok.id
+  if ('ok' in r) return r.ok
   if ('none' in r) { console.error(`spex: no such session: ${selector}`); process.exit(2) }
   console.error(`spex: ambiguous selector "${selector}" matches ${r.ambiguous.length} sessions — be more specific:`)
-  for (const s of r.ambiguous) console.error(`  ${s.id.slice(0, 8)}  ${sessionLabel(s)}`)
+  for (const s of r.ambiguous) console.error(`  ${s.id.slice(0, 8)}  ${sessionTitle(s)}`)
   process.exit(2)
+}
+
+async function resolveSelectorOrExit(selector: string): Promise<string> {
+  return (await resolveSessionOrExit(selector)).id
 }
 
 // the [[session-eval]] EXPORT artifact behind `spex eval ls --session <SEL> --export`: fetch the
@@ -737,13 +741,13 @@ if (cmd === 'serve') {
     if (first === 'proof') signpost('spex review proof', 'spex eval ls --session <SEL> --export') // dead-words-ok: signpost — one-version tombstone teaching the renamed spelling (0.4.0 removes it)
     const { clientReview } = await import('./client.js')
     if (!first) { console.error('usage: spex session review <SEL>  (id | id-prefix | node | branch)'); process.exit(2) }
-    const id = await resolveSelectorOrExit(first)
-    const r = await clientReview(id)
-    if (!r) { console.error(`no such session ${id}`); process.exit(1) }
+    const session = await resolveSessionOrExit(first)
+    const r = await clientReview(session.id)
+    if (!r) { console.error(`no such session ${session.id}`); process.exit(1) }
     if (has('json')) { console.log(JSON.stringify(r, null, 2)) }
     else {
       const g = r.gates
-      console.log(`review ${r.label}  [${r.id}]`)
+      console.log(`review ${session.title}  [${r.id}]`)
       console.log(`  ahead of main : ${r.ahead} commit(s)`)
       console.log(`  uncommitted   : ${r.dirtyNonRuntime} non-runtime file(s)`)
       console.log(`  proposal      : ${r.proposal.kind ?? '—'}${r.proposal.note ? ` — ${r.proposal.note}` : ''}`)
@@ -899,7 +903,7 @@ if (cmd === 'serve') {
         if (has('json')) { console.log(JSON.stringify(r.session, null, 2)) }
         else {
           const x = r.session
-          console.log(`${x.label}  [${x.id}]`)
+          console.log(`${x.title}  [${x.id}]`)
           console.log(`  status   : ${x.status}  (lifecycle ${x.lifecycle} · liveness ${x.liveness})`)
           console.log(`  node     : ${x.node ?? '—'}`)
           console.log(`  branch   : ${x.branch ?? '—'}`)

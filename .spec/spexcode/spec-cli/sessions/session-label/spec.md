@@ -39,20 +39,19 @@ useful current description without losing the declaration itself. The complete n
 own state surfaces.
 
 The stable `label` is retained only for matching and selector compatibility. It is not a second visible name:
-rows, tabs, lock hints, review headers, dropdowns, and menus all render `title`. Search accepts the stable
-handle, the current title, and retained raw rename/prompt/activity/note candidates so a renamed or re-narrated
-session remains findable under text the human already saw.
+CLI tables, `show` and `review` headers, selector ambiguity candidates, watch/notify lines, tabs, lock hints,
+dropdowns, and menus all render `title`. Search accepts the stable handle, the current title, and retained raw
+rename/prompt/activity/note candidates so a renamed or re-narrated session remains findable under text the human
+already saw.
 
-The narrower payloads that are NOT a full session on the wire carry the derived identity too, from the
-same seam: the review/merge `ReviewPayload` includes a precomputed `label` (`deriveLabel` over the record's
-name/node/title/branch/id), so `spex review` renders THAT — not a re-inlined `node||branch||id` chain that
-would skip the rename and the prompt title. This was a real divergence: a node-less session showed its
-prompt-derived `name` under `spex ls` but its `branch` under `spex review` — two identities for one session.
-The rule is a single seam, not a shared convention: any surface naming who a session is reads a
-`deriveLabel`-produced field; none re-derives from the raw parts. The @-mention `sub` line and the board's
-worktree-overlay attribution are a different concept (a spec-op source badge, not the session's identity),
-and the eval/proof headline is deliberately node-spec-title anchored with no agent-authored claim — those
-stay as they are.
+The review/merge `ReviewPayload` retains its precomputed `label` (`deriveLabel` over the record's
+name/node/title/branch/id) for machine compatibility, but it is not a display identity. `spex session review`
+already resolves its target to a full current Session before it fetches the cockpit payload, so it renders that
+Session's `title` rather than re-deriving or borrowing the payload label. This keeps a review title on the same
+wire-derived path as every other visible surface without an extra liveness probe. The @-mention `sub` line and
+the board's worktree-overlay attribution are a different concept (a spec-op source badge, not the session's
+identity), and the eval/proof headline is deliberately node-spec-title anchored with no agent-authored claim —
+those stay as they are.
 
 **The bare parts don't ride the wire.** There is no top-level `name`; the raw parts remain under
 `raw: { name, title }`, whose only sanctioned consumer is an explicitly raw surface (the rename prefill must

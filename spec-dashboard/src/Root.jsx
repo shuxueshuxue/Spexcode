@@ -11,8 +11,7 @@ const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
 const MobileApp = lazy(() => import('./MobileApp.jsx'))
 
 function focusNode(id) {
-  try { sessionStorage.setItem('spex.focus', id) } catch { /* unavailable storage does not block navigation */ }
-  navigate('graph')
+  navigate('graph', id)
 }
 
 const openSession = (id) => navigate('sessions', id)

@@ -18,7 +18,7 @@
 
 </div>
 
-Spec-driven development with AI agents in the loop. SpexCode keeps a versioned tree of specs inside
+Spec-driven orchestration for your coding agents. SpexCode keeps a versioned tree of specs inside
 your git repo, links every spec to the code it governs, and runs a session manager that dispatches
 coding agents into isolated worktrees. You review and merge; the tool keeps intent and
 implementation from drifting apart.
@@ -61,6 +61,14 @@ Two rules make this workable:
    ```
 
    and keeps flagging until the spec catches up.
+
+<img src="docs/readme-drift.png" alt="drift: a spec promising `reopen`, and a later commit renaming it to `resume` without touching the spec">
+
+The check is mechanical — it compares the commit that last changed a spec against the commits that
+touched the symbol that spec anchors to. It never reads the meaning of a change, so it cannot tell you
+whether the new behavior is better; it can only tell you that the spec no longer describes it. That is
+also why it is worth running: the commit above was not careless, it updated seven other specs in the
+same rename and missed one.
 
 ## The optimization loop
 

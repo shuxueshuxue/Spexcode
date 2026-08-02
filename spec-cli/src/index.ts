@@ -1,6 +1,8 @@
 import { serve } from '@hono/node-server'
 import type { Server as HttpServer, ServerResponse as HttpServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { createReadStream } from 'node:fs'
+import { Readable } from 'node:stream'
 import { installConnectionReaper } from './reaper.js'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -27,6 +29,7 @@ import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
 import { buildExportModel, renderExportHtml, SessionEvalUnavailableError } from '../../spec-eval/src/sessioneval.js'
 import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBytes, startUploadReaper, UploadError, uploadStatus } from './uploads.js'
+import { listSessionFiles, openSessionFile, SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilePreviewKind, SessionFileError } from './session-files.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
 import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
@@ -513,6 +516,39 @@ app.get('/api/sessions/:id', async (c) => {
   if (!row) return c.json({ error: 'no such session' }, 404)
   return c.json({ ...row, prompt: await sessionPrompt(id) })
 })
+app.get('/api/sessions/:id/files', (c) => {
+  try { return c.json({ files: listSessionFiles(c.req.param('id')) }) }
+  catch (error) {
+    if (error instanceof SessionFileError) return c.json({ error: error.message }, error.status)
+    throw error
+  }
+})
+const sessionFileDownload = (c: any) => {
+  try {
+    const requested = c.req.query('path')
+    if (!requested) return c.json({ error: 'download needs a posted path' }, 400)
+    const file = openSessionFile(c.req.param('id'), requested)
+    const preview = c.req.query('preview') === '1'
+    const previewType = preview ? sessionFilePreviewKind(file.path) : null
+    if (preview && !previewType) return c.json({ error: 'no preview for this file type; download it instead' }, 415)
+    if (preview && file.size > SESSION_FILE_PREVIEW_MAX_BYTES)
+      return c.json({ error: `preview is limited to ${SESSION_FILE_PREVIEW_MAX_BYTES / (1024 * 1024)} MiB; download this ${file.size}-byte file instead` }, 413)
+    const headers: Record<string, string> = {
+      'Cache-Control': 'no-store',
+      'Content-Disposition': `${preview ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      'Content-Length': String(file.size),
+      'Content-Type': previewType?.contentType ?? 'application/octet-stream',
+    }
+    if (previewType) headers['X-Spexcode-Preview-Kind'] = previewType.kind
+    if (c.req.method === 'HEAD') return c.body(null, 200, headers)
+    return c.body(Readable.toWeb(createReadStream(file.path)) as ReadableStream, 200, headers)
+  } catch (error) {
+    if (error instanceof SessionFileError) return c.json({ error: error.message }, error.status)
+    throw error
+  }
+}
+app.get('/api/sessions/:id/files/download', sessionFileDownload)
+app.on('HEAD', '/api/sessions/:id/files/download', sessionFileDownload)
 // lifecycle transitions (thin callers of the session state machine)
 // relaunch ONLY if confirmed offline; demotes working→idle, keeps any declaration. The RESUME GUARD refuses
 // (409) when the agent is alive or its liveness is unproven — restore-on-alive was the incident's kill-shot.

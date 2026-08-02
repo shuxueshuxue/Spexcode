@@ -1,5 +1,19 @@
 ---
 scenarios:
+  - name: graph-node-direct-open
+    tags: [frontend-e2e, desktop, mobile]
+    description: >-
+      Through the running dashboard in a real browser, choose a non-root node from the live graph and open
+      `#/graph/<node-id>` directly. On desktop, wait for the graph then inspect React Flow's selected node
+      and the visible drill-down tiles; reload the exact URL and verify the same node is still selected.
+      Narrow the viewport to phone width and reopen the same URL; the breadcrumb must end at that node and
+      its node screen must render. Record desktop and phone screenshots and file with
+      `spex yatsu eval address-routing --scenario graph-node-direct-open --image <png> --pass`.
+    expected: >-
+      The graph-node address is a canonical, encoded `#/graph/<node-id>` URL, not a session-storage hint.
+      Direct opening, reload, and route history focus the named desktop graph node and expand its ancestor
+      spine; the same URL reaches the named node through the phone breadcrumb. A deleted/unknown id never
+      blanks either face and falls back to the ordinary graph home focus.
   - name: review-targets-round-trip
     tags: [frontend-e2e, desktop]
     description: >-

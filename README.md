@@ -125,8 +125,8 @@ spex session new "[[uploader]] retry failed chunks with backoff"
 
 launches a worker session in its own worktree on branch `node/uploader-…`. The prompt's first
 `[[uploader]]` mention sets the branch name and board attribution; the worker finds and reads
-the governing spec before touching code. It makes the change, rewrites the spec body to
-match, commits both, then proposes a merge and stops:
+the governing spec before it changes code. It makes the change, rewrites the spec body to
+match, puts both in one commit, then files a merge proposal and stops:
 
 <img src="docs/readme-worker-flow.svg" alt="the eight-step worker loop: dispatch, read the spec, do the work, run evals, clear drift, propose a merge, human review, close">
 
@@ -140,15 +140,14 @@ spex session close uploader      # retire the worktree, branch, and record
 
 <img src="docs/readme-sessions.svg" alt="animated terminal: spex session ls listing five sessions across working, review, asking and done states">
 
-The process is enforced by mechanism: the backend creates the branch, a git
-hook stamps the attribution, a pre-commit guard blocks direct commits on the trunk, and the
-materialized workflow rules in `CLAUDE.md`/`AGENTS.md` carry the rest, so your dispatch prompt
-stays task-only. More on this mode of working:
-[working with agents](https://spexcode.net/working-with-agents/).
+Each rule has a mechanism enforcing it: the backend creates the branch, a git hook attributes
+every commit to its session, a pre-commit guard rejects direct commits to the trunk, and the
+remaining conventions live in the materialized `CLAUDE.md`/`AGENTS.md`. Your dispatch prompt only
+has to state the task. More: [working with agents](https://spexcode.net/working-with-agents/).
 
 ## The dashboard (L2)
 
-Everything above has a live view. Start `spex serve` and `spex dashboard`, then:
+The spec tree, the sessions, and the evals each have a live page on the dashboard. Start `spex serve` and `spex dashboard`, then:
 
 <img src="docs/readme-graph.png" alt="the spec map: SpexCode's own repo on its own board — per-node version and eval chips, an agent avatar hovering on the node it is editing">
 
@@ -164,8 +163,9 @@ drift state, and tabs for the version history git already kept, its issues, and 
 <img src="docs/readme-eval.png" alt="an eval reading under review: verdict banner, the scenario's expected result, the agent's note, recorded video evidence, and the review queue">
 
 *An eval reading under review: the verdict, the scenario's expected result, the agent's note and
-recorded video evidence. You annotate right on it, and the review queue on the right walks you to
-the next one.*
+recorded video evidence. You can draw a region on the video to annotate it; the annotation is
+matched to its step automatically, and the timestamp and step are sent to the agent with your
+comment. The queue on the right leads to the next reading.*
 
 The whole workspace is served over HTTP, so every view (a spec node, a session, an eval reading, a
 live terminal) is a stable URL you can hand to a colleague; you can sit on the same board together.

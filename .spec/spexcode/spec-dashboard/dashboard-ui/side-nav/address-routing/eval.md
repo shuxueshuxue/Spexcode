@@ -13,7 +13,9 @@ scenarios:
       The graph-node address is a canonical, encoded `#/graph/<node-id>` URL, not a session-storage hint.
       Direct opening, reload, and route history focus the named desktop graph node and expand its ancestor
       spine; the same URL reaches the named node through the phone breadcrumb. A deleted/unknown id never
-      blanks either face and falls back to the ordinary graph home focus.
+      blanks either face and falls back to the ordinary graph home focus. Once open, clicking or keyboard
+      walking to another node changes the selected node and replaces the graph hash with that node; the
+      original deep-link parameter never pins focus back to the first node.
   - name: review-targets-round-trip
     tags: [frontend-e2e, desktop]
     description: >-

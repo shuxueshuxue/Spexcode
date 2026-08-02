@@ -29,10 +29,16 @@ try {
   assert.equal(await selected.getAttribute('data-id'), target.id)
   await page.screenshot({ path: `${OUT}/desktop-direct.png` })
 
+  const parent = page.locator(`.react-flow__node[data-id="${target.parent}"]`)
+  await parent.click()
+  await page.waitForTimeout(150)
+  assert.equal(await page.locator('.react-flow__node.selected').getAttribute('data-id'), target.parent)
+  assert.equal(await page.evaluate(() => location.hash), `#/graph/${encodeURIComponent(target.parent)}`)
+
   await page.reload({ waitUntil: 'domcontentloaded' })
   await selected.waitFor({ state: 'visible' })
-  assert.equal(await page.evaluate(() => location.hash), hash)
-  assert.equal(await selected.getAttribute('data-id'), target.id)
+  assert.equal(await page.evaluate(() => location.hash), `#/graph/${encodeURIComponent(target.parent)}`)
+  assert.equal(await selected.getAttribute('data-id'), target.parent)
   await page.screenshot({ path: `${OUT}/desktop-reload.png` })
   await desktop.close()
 

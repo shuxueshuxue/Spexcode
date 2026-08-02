@@ -48,7 +48,9 @@ same route; it is not a second reader or a cached copy. Both modes are `no-store
 current target bytes. The route never accepts an arbitrary filesystem path, and it does not turn a path into
 an uploaded artifact. A list entry that has since been deleted, moved, or become unreadable remains visible
 as the honest published reference, but its preview or download returns a named `404 file no longer exists`
-error. A path absent from the current list is a named `403`, even if it exists on the backend host.
+error. A path absent from the current list is a named `403` before the backend asks the filesystem about it,
+whether or not it exists on the host. Membership therefore remains the authorization boundary without turning
+the route into an existence oracle for arbitrary backend paths.
 
 ## preview is safe and bounded
 

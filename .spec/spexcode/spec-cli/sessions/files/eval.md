@@ -40,10 +40,11 @@ scenarios:
     tags: [backend-api]
     test: spec-cli/src/session-files.api.test.ts
     description: >-
-      Against the real backend, request a download for a readable path not posted by the selected session,
-      then publish a path and delete its target before requesting it through the same route.
+      Against the real backend, request downloads for readable and nonexistent paths not posted by the selected
+      session, then publish a path and delete its target before requesting it through the same route.
     expected: >-
-      An unposted path is refused with a named 403 and moves no bytes. A posted target that no longer resolves
+      Every unposted path is refused with a named 403 before filesystem lookup and moves no bytes, so the
+      route cannot reveal whether an arbitrary host path exists. A posted target that no longer resolves
       remains listed but its download returns a named 404; neither condition is represented as an empty or
       successful file download.
 ---

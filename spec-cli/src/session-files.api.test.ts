@@ -52,6 +52,7 @@ test('public session files CLI stores a live path and the backend authorizes onl
   const home = join(fixture, 'home')
   const artifact = join(fixture, 'artifact.txt')
   const unposted = join(fixture, 'private.txt')
+  const neverPosted = join(fixture, 'never-posted.txt')
   const unpreviewable = join(fixture, 'diagram.svg')
   const id = 'files-session'
   const port = await freePort()
@@ -118,6 +119,8 @@ test('public session files CLI stores a live path and the backend authorizes onl
     assert.deepEqual({ status: forbidden.status, body: await forbidden.json() }, { status: 403, body: { error: 'that path was not posted by this session' } })
     const forbiddenPreview = await fetch(`${base}/api/sessions/${id}/files/download?path=${encodeURIComponent(unposted)}&preview=1`)
     assert.deepEqual({ status: forbiddenPreview.status, body: await forbiddenPreview.json() }, { status: 403, body: { error: 'that path was not posted by this session' } })
+    const forbiddenMissing = await fetch(`${base}/api/sessions/${id}/files/download?path=${encodeURIComponent(neverPosted)}`)
+    assert.deepEqual({ status: forbiddenMissing.status, body: await forbiddenMissing.json() }, { status: 403, body: { error: 'that path was not posted by this session' } })
 
     writeFileSync(artifact, Buffer.alloc(SESSION_FILE_PREVIEW_MAX_BYTES + 1))
     const oversized = await fetch(`${base}/api/sessions/${id}/files/download?path=${encodeURIComponent(absolute)}&preview=1`)

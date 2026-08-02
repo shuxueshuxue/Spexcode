@@ -51,7 +51,7 @@ spec 和它所解释的代码。代码要是单独动了,linter 会看见:
 不了新行为是好是坏,只能判断 spec 已经描述不了代码。图里那个 commit 在同一次重命名里更新了另外七个
 spec,漏掉了这一个。这类遗漏是正常工作的一部分,机械检查恰好逮得住。
 
-## 把软件当学习系统
+## 软件的 heuristic learning 视角
 
 spec、commit、eval 组成一个优化循环。spec 是损失函数:写下你要什么,也是由人签字的那一半。commit 是
 优化器。**eval** 是测量子系统,给当前真实行为离 spec 有多远打分:agent 在产品的真实表面上跑每个
@@ -65,7 +65,7 @@ eval 这两端,diff 只在合并时读一次。
 
 ## 快速开始
 
-需要 Node ≥ 22 和 git,这一步还不涉及 agent。
+需要 Node ≥ 22 和 git。
 
 ```sh
 npm i -g spexcode                              # 安装 `spex` 命令
@@ -89,7 +89,7 @@ spex dashboard   # 本机唯一的 gateway,所有项目共用一个 URL
 一台机器起一个 `spex dashboard` 就够了:所有在跑的项目都会出现在它下面,`/projects` 页面直接在
 浏览器里管理它们。剩下的步骤见 [Getting started](https://spexcode.net/getting-started/)。
 
-## 系统是怎么搭的
+## 这套系统是怎么工作的
 
 三层堆叠,每一层在没有上层的情况下都独立成立:
 
@@ -102,8 +102,7 @@ L0 是组织采纳后长期持有的资产:纯文件、纯 git,离线可用。
 
 ## 和 agent 一起工作(L1)
 
-这一步需要机器上有 tmux,和登录好的 [Claude Code](https://www.anthropic.com/claude-code) 或
-Codex(Windows 上请在 WSL2 里跑)。
+这一步需要机器上有 tmux(Windows 上请在 WSL2 里跑)。
 
 ```sh
 spex session new "[[uploader]] 失败的分块要带退避地重传"

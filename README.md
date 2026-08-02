@@ -27,7 +27,7 @@ English | [中文](./docs/README.zh-CN.md) · Docs: [spexcode.net](https://spexc
 
 | Feature | Description |
 |---|---|
-| **Spec–code drift detection** | Every spec pins the file it governs, down to the function. A mechanical git check flags code that moved without its spec: advisory for the file, blocking when an anchored function changes. Judged from commits and line ranges alone. |
+| **Computable spec–code drift** | Every spec pins the file it governs, down to the function. Whether code moved without its spec is computed from commits and line ranges, the same way on every machine: advisory for the file, blocking when an anchored function changes. |
 | **Session & worktree management** | Each task dispatches into its own worktree and branch under one supervision state machine: `working → review → merged`. Workers propose; you review once, at merge time. Independent tasks run in parallel. |
 | **Shareable URLs** | Spec nodes, sessions, evals, live terminals: every dashboard view has a stable address you can send to a colleague. Two people can watch the same session board. |
 | **Modular layers** | Three separable layers: the spec↔code data asset (L0), the session substrate (L1), the dashboard (L2). Take what you need; the lower layers are building bricks for your own software factory. |

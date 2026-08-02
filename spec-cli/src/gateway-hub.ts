@@ -257,14 +257,14 @@ export function startHubGateway(opts: HubOpts): http.Server {
         return sendHtml(res, 200, loginPage(false, { action: `${base}/login`, heading: 'Project access', sub: `Enter the password for this project.` }))
       }
       if (sub === '/logout') return redirect(res, `${base}/login`, clearCookie(projectCookieName(port, id)))
-      // browser navigation into the scoped page (`/p/<id>/`, any non-api sub) is content-negotiated
+      // browser navigation into the scoped page (`/p/<id>/`, any non-api/non-web sub) is content-negotiated
       // exactly like GET /projects, and — like the fallback it rides — PRE-authorization: the shell is
       // code, not data ([[projects-hub]]'s one credential card renders in-app off the scoped api's 401,
       // and a direct guest must reach that card, not a dead-end redirect). With a host fallback mounted,
-      // an explicit text/html GET serves the SPA shell (its root-absolute assets resolve outside /p onto
-      // the same fallback); every api/SSE/health fetch (json, */*, event-stream) and the WS upgrade keep
-      // the auth gate and proxy to the backend untouched.
-      if (req.method === 'GET' && !sub.startsWith('/api') && ext.fallback && (req.headers.accept ?? '').includes('text/html')) {
+      // an explicit text/html GET outside /api and /web serves the SPA shell (its root-absolute assets
+      // resolve outside /p onto the same fallback); API/SSE/health fetches, posted-web frames, and WS
+      // upgrades keep the auth gate and proxy to their backend untouched.
+      if (req.method === 'GET' && !sub.startsWith('/api') && !sub.startsWith('/web/') && ext.fallback && (req.headers.accept ?? '').includes('text/html')) {
         return ext.fallback(req, res, '/')
       }
       const d = authorize(store, { kind: 'project', projectId: id }, cookies, remote, port)

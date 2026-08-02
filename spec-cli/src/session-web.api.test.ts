@@ -111,13 +111,24 @@ test('session web CLI records a live loopback URL and the host gateway authorize
       version: 2, url: 'http://127.0.0.1:1', pid: process.pid, instanceId: 'fixture', root: project,
       identity: { title: 'fixture', icon: 'spark' }, startedAt: 'fixture',
     }) + '\n')
-    gateway = startHubGateway({ port: gatewayPort, host: '127.0.0.1' })
+    gateway = startHubGateway({
+      port: gatewayPort,
+      host: '127.0.0.1',
+      extensions: {
+        fallback: (_req, res) => { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end('dashboard shell') },
+      },
+    })
     await new Promise<void>((done) => gateway!.once('listening', done))
 
     const key = sessionWebKey(postedUrl)
     const prefix = `/p/${encodeURIComponent(projectId)}/web/${id}/${key}`
     const first = await fetch(`http://127.0.0.1:${gatewayPort}${prefix}/page?x=1`)
     assert.deepEqual({ status: first.status, body: await first.text() }, { status: 200, body: 'first page:/base/page?x=1' })
+    const browserAccept = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    const browserWeb = await fetch(`http://127.0.0.1:${gatewayPort}${prefix}/page?x=1`, { headers: { accept: browserAccept } })
+    assert.deepEqual({ status: browserWeb.status, body: await browserWeb.text() }, { status: 200, body: 'first page:/base/page?x=1' })
+    const browserPage = await fetch(`http://127.0.0.1:${gatewayPort}/p/${encodeURIComponent(projectId)}/ordinary`, { headers: { accept: browserAccept } })
+    assert.deepEqual({ status: browserPage.status, body: await browserPage.text() }, { status: 200, body: 'dashboard shell' })
     page = 'second page'
     const second = await fetch(`http://127.0.0.1:${gatewayPort}${prefix}/page?x=1`)
     assert.deepEqual({ status: second.status, body: await second.text() }, { status: 200, body: 'second page:/base/page?x=1' })
@@ -135,7 +146,7 @@ test('session web CLI records a live loopback URL and the host gateway authorize
     assert.deepEqual(await runCli(project, env, 'session', 'web', 'retract', ipv6Url), { code: 0, out: `retracted ${ipv6Url}\n`, err: '' })
     const forbidden = await fetch(`http://127.0.0.1:${gatewayPort}/p/${encodeURIComponent(projectId)}/web/${id}/not-posted/`)
     assert.deepEqual({ status: forbidden.status, body: await forbidden.text(), requests }, {
-      status: 403, body: 'that web service was not posted by this session', requests: 2,
+      status: 403, body: 'that web service was not posted by this session', requests: 3,
     })
     const upgraded = await requestUpgrade(gatewayPort, `${prefix}/socket?debug=1`)
     assert.match(upgraded, /^HTTP\/1\.1 101 Switching Protocols/m)

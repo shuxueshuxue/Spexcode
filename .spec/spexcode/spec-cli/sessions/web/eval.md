@@ -23,6 +23,17 @@ scenarios:
       The webpage is rendered in a same-origin iframe without a download or separate tunnel; refresh fetches
       a newer service response. The plus picker creates exactly one tab per posted reference, skips references
       already open, and permits reopening a closed tab. A retraction reaches the graph and removes its web tab.
+  - name: browser-html-web-route-beats-dashboard-fallback
+    tags: [frontend-e2e, backend-api]
+    test: spec-cli/src/session-web.api.test.ts
+    description: >-
+      Run a real host gateway with its dashboard-shell fallback and request a posted web route using the
+      browser's `Accept: text/html` header, then load that same route in an iframe through the public session
+      page.
+    expected: >-
+      A published `/p/<project>/web/<session>/<key>/...` route is authorized and proxied before the SPA
+      fallback, so a browser receives the current posted service page rather than the dashboard document.
+      Ordinary non-web browser navigation continues to receive the dashboard shell.
 ---
 
 # web - eval

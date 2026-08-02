@@ -198,13 +198,14 @@ scenarios:
     test: spec-dashboard/test/session-web.e2e.mjs
     description: >-
       Open a real selected session in the served dashboard, publish a changing loopback webpage from the real
-      CLI, inspect its automatic tab and same-origin frame, then use the trailing plus picker for a posted
-      file and close, reopen, refresh, and retract the resources.
+      CLI, inspect its automatic tab and same-origin frame, then use the top-right file menu's eye and the
+      trailing plus picker to open, close, reopen, refresh, and retract the resources.
     expected: >-
       The toolbar stays single-line while resource labels clip or scroll. A fresh web publication gets one
-      selected tab only for the selected session; the plus picker never duplicates open resources. Refresh
-      reloads the live file/web response, closing permits one later reopen, and retracting removes the tab
-      because its authorization is gone while the warm console remains hidden and pointer-inert underneath.
+      selected tab only for the selected session; neither the file-menu eye nor the plus picker duplicates an
+      open resource or creates an overlay preview. Refresh reloads the live file/web response, closing permits
+      one later reopen, and retracting removes the tab because its authorization is gone while the warm console
+      remains hidden and pointer-inert underneath.
   - name: session-remembers-its-local-surface
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/session-web.e2e.mjs

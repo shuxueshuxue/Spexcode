@@ -18,22 +18,23 @@ scenarios:
     description: >-
       Open a real served dashboard in a browser on a selected session with no posted files and capture the
       disabled grey files control. Publish a real artifact with the public CLI, change its bytes in place,
-      refresh the dashboard state, capture the live control and open its list, then click the path to inspect
-      its preview and use the adjacent download tool to read the browser download.
+      refresh the dashboard state, capture the live control and open its list, then click the eye to inspect
+      the path in its resource tab and use the adjacent download tool to read the browser download.
     expected: >-
       The empty session control is visibly disabled; after publication it is active and lists only the file
       name. The full absolute path appears only on its copy-path icon's tooltip. The compact menu fits that
       visible name plus its three fixed icon tools rather than inheriting an arbitrary empty width. Opening the
-      menu transfers no file bytes. Clicking the eye button opens a separate pop-out with the current escaped
-      text or raster image without a disk download; its adjacent download tool downloads the bytes currently
-      at that path, including the post-publication edit, proving that the list is a live reference rather than
-      a snapshot. Clicking outside either transient surface dismisses it.
+      menu transfers no file bytes. Clicking the eye button opens or selects that path's singleton resource
+      tab with the current escaped text or raster image without a disk download; no pop-out preview exists.
+      Its adjacent download tool downloads the bytes currently at that path, including the post-publication edit,
+      proving that the list is a live reference rather than a snapshot. Clicking outside the transient dropdown
+      dismisses it.
   - name: preview-refuses-untrusted-or-oversized-files-loudly
     tags: [frontend-e2e, backend-api]
     test: spec-dashboard/test/session-files.e2e.mjs
     description: >-
       Publish an SVG, archive, or other unsupported file and a text file larger than 2 MiB. Through the real
-      dashboard pop-out and backend route, attempt each preview without using download.
+      dashboard resource tab and backend route, attempt each preview without using download.
     expected: >-
       Unsupported extensions receive a named 415 directing the human to download, and files over 2 MiB receive
       a named 413 stating the preview ceiling and actual size. No unsupported markup enters the dashboard DOM,
@@ -42,12 +43,12 @@ scenarios:
     tags: [frontend-e2e, backend-api]
     test: spec-dashboard/test/session-web.e2e.mjs
     description: >-
-      Publish a real `.md` file through the CLI, then open it in both the files pop-out and a resource tab in
-      Chromium. Inspect its first heading, raw-markup treatment, scroll origin, and browser text selection.
+      Publish a real `.md` file through the CLI, then open it from the files menu in Chromium. Inspect its first
+      heading, raw-markup treatment, scroll origin, and browser text selection in the resulting resource tab.
     expected: >-
-      Both surfaces render restricted Markdown, not a raw preformatted source dump; raw HTML remains inert
-      text. The first rendered content is visible at scroll position zero, and the human can select and copy
-      document text without the hidden terminal or overlay consuming the gesture.
+      The single resource-tab surface renders restricted Markdown, not a raw preformatted source dump; raw HTML
+      remains inert text. The first rendered content is visible at scroll position zero, and the human can select
+      and copy document text without the hidden terminal consuming the gesture.
   - name: download-is-authorized-and-missing-paths-fail-loud
     tags: [backend-api]
     test: spec-cli/src/session-files.api.test.ts

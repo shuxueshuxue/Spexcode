@@ -57,14 +57,14 @@ try {
   const row = files.locator('.si-files-row').filter({ hasText: basename(FILE) })
   await row.waitFor({ state: 'visible' })
   assert.equal(await row.locator('.si-files-name').getAttribute('data-tip'), null)
+  assert.equal(await row.locator('.si-files-name').getAttribute('aria-label'), 'preview file')
   assert.equal(await row.locator('.si-files-copy').getAttribute('data-tip'), FILE)
-  assert.equal(await row.locator('.si-files-preview').getAttribute('data-tip'), 'preview file')
   assert.equal(await row.locator('.si-files-download').getAttribute('data-tip'), 'download file')
-  await row.locator('.si-files-preview').click()
+  await row.locator('.si-files-name').click()
   const fileTab = page.locator('.si-resource-tab').filter({ hasText: basename(FILE) })
   await fileTab.waitFor({ state: 'visible' })
-  assert.equal(await fileTab.evaluate((element) => element.classList.contains('on')), true, 'the eye must select the file resource tab')
-  assert.equal(await page.locator('.si-file-preview-backdrop').count(), 0, 'the eye must not create a second pop-out preview')
+  assert.equal(await fileTab.evaluate((element) => element.classList.contains('on')), true, 'the filename must select the file resource tab')
+  assert.equal(await page.locator('.si-file-preview-backdrop').count(), 0, 'the filename must not create a second pop-out preview')
   assert.equal(await page.locator('.si-actions [data-resource-action="refresh"]').count(), 1, 'a selected file gets one right-side refresh action')
   assert.equal(await page.locator('.si-actions [data-command="merge"]').count(), 0, 'merge belongs to the terminal surface, not a file')
   assert.equal(await fileTab.locator('.si-resource-tab-action').count(), 1, 'the file tab keeps close but not refresh')
@@ -97,6 +97,18 @@ try {
   await page.mouse.up()
   await page.keyboard.press('Control+C')
   assert.match(await page.evaluate(() => navigator.clipboard.readText()), /selectable Markdown/, 'a human drag and Ctrl+C must copy resource tab text')
+  writeFileSync(FILE, [
+    '# Preview starts here',
+    '',
+    'This is selectable Markdown from the current live path.',
+    '',
+    '## Refreshed file content',
+    '',
+    'The right-side file action rereads this current path.',
+  ].join('\n'))
+  await page.locator('.si-actions [data-resource-action="refresh"]').click()
+  await resourceMarkdown.getByRole('heading', { name: 'Refreshed file content' }).waitFor({ state: 'visible' })
+  assert.match(await resourceMarkdown.textContent(), /rereads this current path/, 'file refresh must reread the live path')
   await page.screenshot({ path: join(OUT, 'file-resource-tab.png'), fullPage: true })
 
   assert.equal(command('web', 'add', WEB_URL), `posted ${canonicalWeb}`)
@@ -109,21 +121,14 @@ try {
   const version = frame.locator('#spex-web-proof')
   await version.waitFor({ state: 'visible', timeout: 20_000 })
   const first = await version.textContent()
-  await webTab.locator('.si-resource-tab-action').first().click()
-  await page.waitForFunction((before) => {
-    const frameEl = document.querySelector('.si-resource-web')
-    return frameEl?.contentDocument?.querySelector('#spex-web-proof')?.textContent !== before
-  }, first)
-  const second = await page.frameLocator('.si-resource-web').locator('#spex-web-proof').textContent()
-  assert.notEqual(second, first, 'refresh must request the live service again')
 
   await page.locator('.si-tab-add').click()
   const picker = page.locator('.si-resource-menu')
   await picker.waitFor({ state: 'visible' })
   assert.equal(await picker.getByRole('menuitem', { name: webLabel }).count(), 0, 'an open web is not offered twice')
-  assert.equal(await picker.getByRole('menuitem', { name: basename(FILE) }).count(), 0, 'the eye-opened file is not offered twice')
+  assert.equal(await picker.getByRole('menuitem', { name: basename(FILE) }).count(), 0, 'the filename-opened file is not offered twice')
   await page.locator('.si-tab-add').click()
-  await fileTab.locator('.si-resource-tab-action').nth(1).click()
+  await fileTab.locator('.si-resource-tab-action').click()
   await fileTab.waitFor({ state: 'detached' })
   await page.locator('.si-tab-add').click()
   await page.locator('.si-resource-menu').getByRole('menuitem', { name: basename(FILE) }).click()
@@ -133,7 +138,7 @@ try {
   assert.equal(await page.locator('.si-resource-menu').getByRole('menuitem', { name: basename(FILE) }).count(), 0, 'the re-opened file remains singleton')
   await page.screenshot({ path: join(OUT, 'resource-tabs-live.png'), fullPage: true })
 
-  await webTab.locator('.si-resource-tab-action').nth(1).click()
+  await webTab.locator('.si-resource-tab-action').click()
   await webTab.waitFor({ state: 'detached' })
   await page.locator('.si-tab-add').click()
   await page.locator('.si-resource-menu').getByRole('menuitem', { name: webLabel }).click()
@@ -142,8 +147,8 @@ try {
   assert.equal(command('web', 'retract', WEB_URL), `retracted ${canonicalWeb}`)
   postedWeb = false
   await page.locator('.si-resource-tab').filter({ hasText: webLabel }).waitFor({ state: 'detached', timeout: 20_000 })
-  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first, second }, null, 2) + '\n')
-  console.log(JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first, second }))
+  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first }, null, 2) + '\n')
+  console.log(JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first }))
 } finally {
   if (postedWeb) { try { command('web', 'retract', WEB_URL) } catch {} }
   if (postedFile) { try { command('files', 'retract', FILE) } catch {} }

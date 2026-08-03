@@ -18,14 +18,14 @@ scenarios:
     description: >-
       Open a real served dashboard in a browser on a selected session with no posted files and capture the
       disabled grey files control. Publish a real artifact with the public CLI, change its bytes in place,
-      refresh the dashboard state, capture the live control and open its list, then click the eye to inspect
+      refresh the dashboard state, capture the live control and open its list, then click the filename to inspect
       the path in its resource tab and use the adjacent download tool to read the browser download.
     expected: >-
       The empty session control is visibly disabled; after publication it is active and lists only the file
       name. The full absolute path appears only on its copy-path icon's tooltip. The compact menu fits the
-      longest visible name plus its three fixed icon tools; those three action columns share one right edge across
+      longest visible name plus its two fixed icon tools; those two action columns share one right edge across
       every row rather than following each filename. Opening the
-      menu transfers no file bytes. Clicking the eye button opens or selects that path's singleton resource
+      menu transfers no file bytes. Clicking the filename opens or selects that path's singleton resource
       tab with the current escaped text or raster image without a disk download; no pop-out preview exists.
       Its adjacent download tool downloads the bytes currently at that path, including the post-publication edit,
       proving that the list is a live reference rather than a snapshot. Clicking outside the transient dropdown

@@ -9,7 +9,7 @@ The desktop reading of the spec tree is one **full-width graph page**, not a han
 The react-flow canvas draws on a **clean `--paper` background** — no grid or dot pattern behind the tree — so the tiles and their edges are the only marks on the page.
 
 - [[node-graph]] — the drill-down tidy-tree itself, the centre of the view; its bottom-left tally HUD ([[graph-stats]]) mounts inside the tree shell.
-- [[work-pane]] — the `i` node popup, the focused node's full reference record, opened over the page.
+- [[node-popup]] — the `i` node popup, the focused node's full reference record, opened over the page.
 - [[keyboard-nav]] — relationship navigation: arrows walk focus by edge, not geometry, the camera following.
 
 This node owns no source of its own — each child keeps its files, `[[links]]`, and drift; the shared shell, polled data, and stylesheet they mount against stay [[dashboard-shell]]'s. The phone's own touch face ([[mobile-ui]]) is deliberately *not* here: it answers the same question a different way, for a surface the pan/zoom/keyboard graph can't serve.

@@ -610,19 +610,26 @@ export function cancelSessionWatch(watcher: string, targets: string[]): number {
 // Share one liveness snapshot rather than spawning tmux for every displayed session.
 export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; titles: Map<string, string>; sockets: Set<string>; unproven: Set<string> }
 
-// First pane per session wins; split only twice so titles may contain tabs.
+// tmux 3.5a replaces literal tabs in a format string with underscores. A record separator is emitted as this
+// printable escape on both supported tmux versions, while titles remain free to contain tabs.
+const TMUX_PANE_SEPARATOR = '\\037'
+const TMUX_PANE_FORMAT = '#{session_name}\x1f#{pane_pid}\x1f#{pane_title}'
+
+// First pane per session wins; split only twice so titles may contain the field separator.
 export function parseLivePanes(out: string): Map<string, { panePid?: number; title?: string }> {
   const m = new Map<string, { panePid?: number; title?: string }>()
   for (const line of out.split('\n')) {
     if (!line) continue
-    const t1 = line.indexOf('\t')
+    // Accept the former tab shape for callers replaying old snapshots; tmux itself emits TMUX_PANE_SEPARATOR.
+    const separator = line.includes(TMUX_PANE_SEPARATOR) ? TMUX_PANE_SEPARATOR : '\t'
+    const t1 = line.indexOf(separator)
     const name = (t1 < 0 ? line : line.slice(0, t1)).trim()
     if (!name || m.has(name)) continue   // first pane per session wins
     if (t1 < 0) { m.set(name, {}); continue }
-    const rest = line.slice(t1 + 1)
-    const t2 = rest.indexOf('\t')
+    const rest = line.slice(t1 + separator.length)
+    const t2 = rest.indexOf(separator)
     const pid = Number((t2 < 0 ? rest : rest.slice(0, t2)).trim())
-    const title = t2 < 0 ? '' : rest.slice(t2 + 1)
+    const title = t2 < 0 ? '' : rest.slice(t2 + separator.length)
     m.set(name, { panePid: Number.isFinite(pid) && pid > 0 ? pid : undefined, title: title || undefined })
   }
   return m
@@ -661,8 +668,8 @@ async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
     // ONE merged spawn replaces the old two (list-sessions + list-panes): window presence + pane pid + title.
     // A target-scoped close probe avoids unrelated panes turning a safe close into a global timeout.
     const args = targetId
-      ? ['list-panes', '-t', targetId, '-F', '#{session_name}\t#{pane_pid}\t#{pane_title}']
-      : ['list-panes', '-a', '-F', '#{session_name}\t#{pane_pid}\t#{pane_title}']
+      ? ['list-panes', '-t', targetId, '-F', TMUX_PANE_FORMAT]
+      : ['list-panes', '-a', '-F', TMUX_PANE_FORMAT]
     out = await tmux(args, targetId ? TARGET_PROBE_TIMEOUT_MS : TMUX_PROBE_TIMEOUT_MS)
   } catch (e) {
     // a TIMEOUT/kill is a probe FAILURE (we can't tell who's alive → unknown, never a false graveyard). A clean
@@ -691,7 +698,12 @@ async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
   // The tri-state matters: 'unproven' (timeout/EAGAIN — a wedged or thrashed but possibly-alive listener) lands
   // in `unproven`, never silently not-live, so liveness() renders `unknown` not a false `offline` (issue #40).
   const ids = [...windows.keys()]
-  const listening = await Promise.all(ids.map((id) => rendezvousListening(id)))
+  // A burst of simultaneous Unix-socket connects can fill a Claude listener's accept backlog on macOS and
+  // turn every healthy socket into `unproven`. Keep the probe bounded while preserving the tri-state result.
+  const listening: Awaited<ReturnType<typeof rendezvousListening>>[] = []
+  for (let start = 0; start < ids.length; start += 2) {
+    listening.push(...await Promise.all(ids.slice(start, start + 2).map((id) => rendezvousListening(id))))
+  }
   const sockets = new Set<string>()
   const unproven = new Set<string>()
   ids.forEach((id, i) => {
@@ -1060,12 +1072,13 @@ export type MsgSender = { id: string; label: string | null }
 export function withSenderHint(text: string, sender: MsgSender | null): string {
   if (!sender) return text
   const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
-  return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
+  return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"${LIVE_ARTIFACT_HANDOFF_HINT}`
 }
+export const LIVE_ARTIFACT_HANDOFF_HINT = '\n\n— LIVE ARTIFACT HANDOFF: when you produce a file or start a local webpage for the human to inspect, publish its live reference with `spex session files add <path>` or `spex session web add <url>`; never paste or copy the bytes.'
 export const withNoteReplyHint = (text: string): string =>
-  `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For a simple answer awaiting the next message, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.`
+  `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For a simple answer awaiting the next message, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.${LIVE_ARTIFACT_HANDOFF_HINT}`
 export const withTerminalReplyHint = (text: string): string =>
-  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).`
+  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).${LIVE_ARTIFACT_HANDOFF_HINT}`
 export const slugify = (s: string | null) =>
   (s || 'session').normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'session'
 
@@ -1629,12 +1642,14 @@ function throwIfCreateAborted(signal: AbortSignal, phase: SessionCreatePhase): v
 export async function sessionCreateRequest(body: unknown, options: SessionCreateRequestOptions = {}): Promise<SessionCreateRequestResult> {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: 400, error: 'body must be a JSON object' }
   const input = body as Record<string, unknown>
-  const unknown = Object.keys(input).filter((key) => !['prompt', 'parent', 'launcher'].includes(key)).sort()
+  const unknown = Object.keys(input).filter((key) => !['prompt', 'parent', 'launcher', 'name'].includes(key)).sort()
   if (unknown.length) return { status: 400, error: `unknown session-create field${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}` }
   const prompt = typeof input.prompt === 'string' ? input.prompt : ''
   if (!prompt.trim()) return { status: 400, error: 'empty prompt' }
   const launcher = typeof input.launcher === 'string' && input.launcher.trim() ? input.launcher.trim() : undefined
   const parent = typeof input.parent === 'string' && input.parent.trim() ? input.parent.trim() : null
+  if (input.name !== undefined && typeof input.name !== 'string') return { status: 400, error: 'session-create name must be a string' }
+  const name = typeof input.name === 'string' && input.name.trim() ? input.name.trim() : null
   let key: string
   try { key = normalizeCreateKey(options.requestKey) }
   catch (error) {
@@ -1643,7 +1658,9 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   }
   const requestDigest = digest(key)
   const id = sessionIdForCreateKey(key)
-  const payloadHash = digest(JSON.stringify({ prompt, parent, launcher: launcher ?? null }))
+  // Keep no-name retries byte-compatible with pre-name receipts; an explicit non-empty name is one more
+  // immutable creation input because it publishes the record's existing display override.
+  const payloadHash = digest(JSON.stringify({ prompt, parent, launcher: launcher ?? null, ...(name ? { name } : {}) }))
   const controller = new AbortController()
   const cancel = () => controller.abort(new SessionCreateError('session_create_cancelled', 'request', 'session creation caller disconnected', 408))
   if (options.signal?.aborted) cancel()
@@ -1653,7 +1670,7 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   traceSessionCreate(id, requestDigest, 'request', 'start')
   try {
     try {
-      const session = await prepareSession(prompt, parent, launcher, { id, requestDigest, payloadHash, signal: controller.signal })
+      const session = await prepareSession(prompt, parent, launcher, name, { id, requestDigest, payloadHash, signal: controller.signal })
       traceSessionCreate(id, requestDigest, 'request', 'finish')
       return { status: 201, session }
     } catch (error) {
@@ -1702,15 +1719,16 @@ async function probeSessionCreateAuthority(target: ApiBaseInfo): Promise<boolean
     return false
   } finally { clearTimeout(timer) }
 }
-export async function createSession(prompt: string, launcher?: string): Promise<Session> {
+export async function createSession(prompt: string, launcher?: string, name?: string): Promise<Session> {
   const parent = ownSessionId()
   const requestKey = randomUUID()
+  const body = { prompt, parent, launcher, ...(name !== undefined ? { name } : {}) }
   const target = await apiBaseInfo()
   const base = target.url
   const refused = await probeSessionCreateAuthority(target)
   if (refused) {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    const fallback = await sessionCreateRequest({ prompt, parent, launcher }, { requestKey })
+    const fallback = await sessionCreateRequest(body, { requestKey })
     if (fallback.status === 201) return fallback.session
     const error = new Error(`${fallback.code || 'session_create_failed'}: ${fallback.error}`)
     error.name = 'BackendError'
@@ -1724,7 +1742,7 @@ export async function createSession(prompt: string, launcher?: string): Promise<
     res = await fetch(`${base}/api/sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Idempotency-Key': requestKey },
-      body: JSON.stringify({ prompt, parent, launcher }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     })
   } catch (error) {
@@ -1988,7 +2006,7 @@ async function proveSessionCandidate(path: string, branch: string, signal: Abort
   return null
 }
 
-async function prepareSession(prompt: string, parent: string | null, launcher: string | undefined, context: SessionCreateContext): Promise<Session> {
+async function prepareSession(prompt: string, parent: string | null, launcher: string | undefined, name: string | null, context: SessionCreateContext): Promise<Session> {
   const { id, requestDigest, payloadHash, signal } = context
   let phase: SessionCreatePhase = 'creation-lock'
   let shouldDrain = false
@@ -2102,7 +2120,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
 
           let rec: SessRec = {
             session: id, governed: true, worktreePath: path, branch,
-            node: ref || null, title, name: null, parent: parent && parent !== id ? parent : null,
+            node: ref || null, title, name, parent: parent && parent !== id ? parent : null,
             status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
             harness: h.id, harnessSessionId: null, stopped: false, archived: false, coldProof: null, adapterRecovery: null, launcher: chosen.name,
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,

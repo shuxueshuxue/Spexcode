@@ -14,6 +14,7 @@ related:
   - spec-cli/src/session-create-transaction.test.ts
   - spec-cli/src/sessions.test.ts
   - spec-dashboard/src/launch.test.mjs
+  - spec-dashboard/test/session-create-name.e2e.mjs
 ---
 
 # session-new
@@ -68,7 +69,7 @@ preserves its record, store, worktree, and branch. An irreversible record public
 rollback, and a stale receipt can never outlive close with authority to consume a later colliding session.
 
 The public request accepts the standard `Idempotency-Key` header. The backend deterministically maps a valid
-key to one candidate session id and binds it to the normalized `{prompt,parent,launcher}` payload. Creation for
+key to one candidate session id and binds it to the normalized `{prompt,parent,launcher,name?}` payload. Creation for
 that id is serialized at the existing per-session lock. A same-key retry, including a concurrent retry or a
 retry after the response connection was lost, either joins the in-flight transaction and receives its one
 published receipt, or starts after a fully rolled-back failure. Reusing the key with another payload fails
@@ -93,6 +94,14 @@ request.
 admission, request identity, deadline/cancellation, and the private prepare/publish function's required context.
 The HTTP route, CLI no-listener fallback, and New Session composer call it. Preparation is not exported and
 cannot mint a never-aborted context for itself, so adding another caller cannot bypass the wall or transaction owner.
+
+`--name` is the CLI's optional human creation input for the existing record display override, not prompt content
+and not another identity. The CLI carries it through the HTTP payload, where it follows `rename`'s normalization
+(trimmed; blank means absent) and writes the new record's one `name` field at publication. Dashboard New Session
+does not author or send a name; it continues to create from its prompt/launcher form and only renders the resulting
+derived title. The branch/worktree slug and prompt-derived stored title remain unchanged. Consequently
+[[session-label]] derives the first public title and compatible label from the same field that a later rename
+replaces or clears.
 
 The record publication is the irreversible boundary. The transaction checks cancellation immediately before
 the synchronous atomic record replace and re-proves that the candidate path is the exact Git top-level, is

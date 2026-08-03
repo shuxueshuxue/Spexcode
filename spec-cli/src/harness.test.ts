@@ -543,6 +543,48 @@ test('Codex archive ignores a non-returning unrelated read when the exact target
   }
 })
 
+test('Codex cold preflight retries a transient app-server census refusal', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-cold-retry-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const root = runtimeRoot()
+  const target = 'cold-retry-target'
+  let loadedCalls = 0
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') {
+      loadedCalls++
+      if (loadedCalls === 1) throw new Error('app-server busy')
+      return { data: [{ id: target }], nextCursor: null }
+    }
+    if (message.method === 'thread/turns/list') return { data: [], nextCursor: null }
+    if (message.method === 'thread/list') {
+      if (message.params.ancestorThreadId) return { data: [], nextCursor: null }
+      return { data: message.params.archived === false ? [{ id: target }] : [], nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const socket = codexAppServerSock(root)
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    owner = startCodexOwner(root)
+    const result = await codexHarness.coldPreflight?.({ session: 'cold-retry-session', harnessSessionId: target })
+    assert.equal(result?.ok, true)
+    assert.ok(loadedCalls >= 2, 'the adapter retries after a transient census refusal')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('Codex archive refuses a shared generation swap during exact target guard before mutation', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR

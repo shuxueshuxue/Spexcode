@@ -8,6 +8,7 @@ code:
 related:
   - spec-cli/src/sessionSlug.test.ts
   - spec-cli/src/session-create-cli.test.ts
+  - spec-cli/src/sessions-hot.test.ts
   - spec-cli/src/layout.ts
   - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/src/session-record-integrity.test.ts
@@ -72,6 +73,10 @@ product protocol: subscription and failure mapping remain adapter work ([[harnes
 failure reaches one record-locked compare-and-set that changes only a live, undeclared `active` record to `error`.
 A declaration that landed first is authoritative, so a late process close, delayed native completion, or
 restart reconciliation cannot overwrite it.
+
+The record's existing `name` is the one human display override: CLI creation may set it once with `--name`, and
+rename later replaces or clears that same field. It affects only the shared label/title projection;
+the prompt-derived node, branch, worktree slug, and stored prompt title retain their own responsibilities.
 
 **Public session creation has one lightweight backend-authority decision before it can use the legacy local
 path.** The CLI asks only `GET /api/instance`, never the board-shaped settings projection: this identity route

@@ -75,9 +75,11 @@ The selected session's top-right file icon is disabled grey when its projected l
 one path is posted, the same icon is live and opens a compact, content-sized dropdown. Each row shows only
 the file name; the full absolute path is exposed only on its copy-path icon's tooltip, preserving the useful
 host-local detail without turning a toolbar menu into a path dump. Long names clip at a viewport-safe bound,
-but a short name does not inherit a fixed empty menu width. The name is inert: its eye icon opens or selects the
-same singleton resource tab that the toolbar's `+` picker opens, its adjacent download icon starts the download,
-and its copy icon writes the absolute path. Preview errors appear inside that tab, not in a second overlay.
+but a short name does not inherit a fixed empty menu width. Every row uses one flexible filename column followed
+by three fixed action columns, so preview, download, and copy stay aligned to the dropdown's right edge across
+all posted paths. The name is inert: its eye icon opens or selects the same singleton resource tab that the
+toolbar's `+` picker opens, its adjacent download icon starts the download, and its copy icon writes the absolute
+path. Preview errors appear inside that tab, not in a second overlay.
 File and resource dropdowns share the app's restrained context-menu chrome:
 a real border plus shallow ambient depth, never a glowing halo. No browser fetch happens merely because the dropdown opened. The control
 uses the shared icon vocabulary and carries its accessible label/tooltip. A failed download is shown as a

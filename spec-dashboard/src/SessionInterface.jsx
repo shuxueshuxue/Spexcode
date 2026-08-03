@@ -1357,7 +1357,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     <Icon name="evals" size={14} />
                     <span className="si-eval-label">{t('session.tabEval')}</span>
                     <SessionEvalStats summary={evalSummary} />
-                    <Icon name="chevron-right" size={12} className="si-eval-arrow" />
                   </a>
 
                   <div ref={resourcePickerRef} className="si-resource-picker">

@@ -80,7 +80,9 @@ but a short name does not inherit a fixed empty menu width. Every row uses one f
 by two fixed action columns, so copy and download stay aligned to the dropdown's right edge across all posted
 paths. The filename itself is the preview target: clicking it opens or selects the same singleton resource tab
 that the toolbar's `+` picker opens. Its adjacent download icon starts the download, and its copy icon writes the
-absolute path. Preview errors appear inside that tab, not in a second overlay.
+absolute path. With that file tab selected, the same download and copy-path actions join its right-side toolbar
+group beside refresh; the menu and tab intentionally call one action path, so their authorization check and
+failure message cannot drift. Preview errors appear inside that tab, not in a second overlay.
 File and resource dropdowns share the app's restrained context-menu chrome:
 a real border plus shallow ambient depth, never a glowing halo. No browser fetch happens merely because the dropdown opened. The control
 uses the shared icon vocabulary and carries its accessible label/tooltip. A failed download is shown as a

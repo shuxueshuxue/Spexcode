@@ -149,9 +149,10 @@ browser-local tab for that exact session/reference; closing it removes only that
 the plus menu, never a duplicate. Clicking a filename in the top-right files dropdown uses this same open/select operation for its
 file row, so it cannot create a separate preview surface or a duplicate tab. A newly observed posted web service creates its one tab automatically, becoming
 selected only when its session already is. Each resource tab exposes a close icon. A selected **file** resource
-gets exactly one refresh action in the right-side toolbar action group; it rereads the current file preview
-response. A selected web resource has no refresh action because reopening its same-origin frame is not a file
-read operation. Removing a published reference closes its resource tab. The browser remembers each session's selected local surface: switching to another session and
+gets a right-side action group for **refresh**, **download**, and **copy path**. Refresh rereads the current file
+preview response; download and copy are the same actions offered by the files dropdown. A selected web resource
+has none of these file actions because reopening its same-origin frame is not a file read operation. Removing a
+published reference closes its resource tab. The browser remembers each session's selected local surface: switching to another session and
 back restores its resource tab when one was selected, or its Terminal/Conversation surface when that was selected;
 only an explicit press on Terminal/Conversation changes it back. This is dashboard-local presentation state, never
 session state or a backend write. Neither console adds a second native-event view. Session identity, lifecycle,

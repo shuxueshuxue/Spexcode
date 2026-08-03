@@ -7,7 +7,7 @@ scenarios:
       name: TimelineChat selection/copy migration gate
     code: spec-dashboard/test/timeline-chat-interaction.e2e.mjs
     related:
-      - .spec/spexcode/spec-dashboard/dashboard-ui/prose-renderer/migration-payload.md
+      - .spec/spexcode/spec-dashboard/dashboard-ui/ui-primitives/prose-renderer/migration-payload.md
       - spec-dashboard/src/TimelineChat.jsx
       - spec-dashboard/src/RichText.js
     description: >-

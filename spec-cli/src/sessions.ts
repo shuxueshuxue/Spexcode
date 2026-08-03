@@ -691,7 +691,12 @@ async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
   // The tri-state matters: 'unproven' (timeout/EAGAIN — a wedged or thrashed but possibly-alive listener) lands
   // in `unproven`, never silently not-live, so liveness() renders `unknown` not a false `offline` (issue #40).
   const ids = [...windows.keys()]
-  const listening = await Promise.all(ids.map((id) => rendezvousListening(id)))
+  // A burst of simultaneous Unix-socket connects can fill a Claude listener's accept backlog on macOS and
+  // turn every healthy socket into `unproven`. Keep the probe bounded while preserving the tri-state result.
+  const listening: Awaited<ReturnType<typeof rendezvousListening>>[] = []
+  for (let start = 0; start < ids.length; start += 2) {
+    listening.push(...await Promise.all(ids.slice(start, start + 2).map((id) => rendezvousListening(id))))
+  }
   const sockets = new Set<string>()
   const unproven = new Set<string>()
   ids.forEach((id, i) => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { createServer } from 'node:http'
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -65,7 +65,14 @@ const append = (dir: string, ev: Record<string, unknown>): void =>
   appendFileSync(join(dir, 'timeline.ndjson'), `${JSON.stringify({ ts: new Date().toISOString(), ...ev })}\n`)
 
 const events = (dir: string): Array<{ kind: string; text?: string; from?: string | null }> => {
-  try { return readFileSync(join(dir, 'timeline.ndjson'), 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line)) }
+  // An unowned observer joins the legacy head and immutable numbered tail — the same logical timeline the
+  // CLI command just caused its writer to append. Its own seeded fixture events deliberately stay legacy.
+  const paths: string[] = []
+  const legacy = join(dir, 'timeline.ndjson')
+  if (existsSync(legacy)) paths.push(legacy)
+  const segments = join(dir, 'timeline')
+  if (existsSync(segments)) paths.push(...readdirSync(segments).filter((name) => /^\d+\.ndjson$/.test(name)).sort().map((name) => join(segments, name)))
+  try { return paths.flatMap((path) => readFileSync(path, 'utf8').trim().split('\n').filter(Boolean).map((line) => JSON.parse(line))) }
   catch { return [] }
 }
 async function waitFor(check: () => boolean, label: string): Promise<void> {

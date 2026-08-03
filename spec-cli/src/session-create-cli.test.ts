@@ -28,6 +28,16 @@ function writeGovernedSession(home: string, id: string, parent = ''): string {
   return dir
 }
 
+function timelineText(dir: string): string {
+  const legacy = join(dir, 'timeline.ndjson')
+  const segments = join(dir, 'timeline')
+  const paths = [
+    ...(existsSync(legacy) ? [legacy] : []),
+    ...(existsSync(segments) ? readdirSync(segments).filter((name) => /^\d+\.ndjson$/.test(name)).sort().map((name) => join(segments, name)) : []),
+  ]
+  return paths.map((path) => readFileSync(path, 'utf8')).join('')
+}
+
 async function runCreate(project: string, env: NodeJS.ProcessEnv, api?: string) {
   const child = spawn(process.execPath, [tsxCli, cli, 'session', 'new', 'probe', ...(api ? ['--api', api] : [])], {
     cwd: project,
@@ -149,7 +159,7 @@ test('session new from a governed parent establishes its child watch before prin
   assert.equal(watchers.length, 1)
   assert.equal(watchers[0].watcher, WATCH_PARENT)
   assert.equal(typeof watchers[0].createdAt, 'string')
-  const messages = readFileSync(join(parentDir, 'timeline.ndjson'), 'utf8')
+  const messages = timelineText(parentDir)
   assert.match(messages, new RegExp(WATCH_CHILD))
 })
 

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 
 import { followSessions, launchEvent, sessionEvent, type FollowOutcome } from './session-follow.js'
 import { advanceFollow, followCursor } from './session-cursors.js'
+import { recordStatus } from './session-timeline.js'
 import { sessionStoreDir } from './layout.js'
 import type { Session } from './sessions.js'
 
@@ -174,4 +175,19 @@ test('a pre-seeded follow cursor replays exactly the lines behind it', async () 
   advanceFollow(ME, T, 1)   // the follower had consumed only the first line before it died
   const r = await take()
   assert.deepEqual(r, { reached: 'review', id: T, path: ['working', 'review'] })
+})
+
+test('a wait crosses a rotation boundary without skipping its actionable edge', async () => {
+  freshHome()
+  const previous = process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
+  process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = '1024'
+  try {
+    recordStatus(T, 'active', null, 'x'.repeat(900))
+    later(30, () => recordStatus(T, 'awaiting', 'merge', 'y'.repeat(900)))
+    assert.deepEqual(await take(), { reached: 'review', id: T, path: ['working', 'review'] })
+    assert.equal(followCursor(ME, T), 2, 'the durable event-index cursor still spans numbered segments')
+  } finally {
+    if (previous === undefined) delete process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
+    else process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = previous
+  }
 })

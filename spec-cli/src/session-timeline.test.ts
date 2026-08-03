@@ -314,6 +314,27 @@ test('new appends rotate immutable numbered segments while the read surface pres
   }
 })
 
+test('tail reads across a large set of sealed segments without losing order', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home)
+  const previous = process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
+  process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = '1024'
+  try {
+    withHome(home, () => {
+      for (let i = 0; i < 128; i++) appendSent(ID, `${String(i).padStart(3, '0')}:${'x'.repeat(900)}`, null)
+      const dir = join(sessionStoreDir(ID), 'timeline')
+      assert.equal(readdirSync(dir).length, 128, 'each oversize event seals its own immutable segment')
+      const tail = readTimeline(ID, 50)?.events ?? []
+      assert.equal(tail.length, 50)
+      assert.deepEqual(tail.map((event) => event.kind === 'sent' ? event.text.slice(0, 3) : '?'),
+        Array.from({ length: 50 }, (_, i) => String(i + 78).padStart(3, '0')))
+    })
+  } finally {
+    if (previous === undefined) delete process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
+    else process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = previous
+  }
+})
+
 test('a send the adapter cannot take still succeeds, and the message stays OWED', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
   seedSessionRecord(home)

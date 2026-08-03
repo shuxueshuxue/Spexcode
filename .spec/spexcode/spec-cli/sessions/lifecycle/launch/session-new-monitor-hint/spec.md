@@ -38,8 +38,7 @@ manual and copied verb manuals. Existing session verbs and spellings keep their 
 projection change only. The declaration entries project [[state]]'s current vocabulary rather than inventing
 another lifecycle: `done --propose merge` means review and the sole clickable merge proposal, `nothing` means
 done without merge, `close` means close-pending, while ask/park name asking/parked and their distinct wake-up
-owners. The done entry also names the supervision rule: a parent with an `active`/`parked` child must park
-until that child settles; the declaration path refuses a premature done/awaiting claim.
+owners.
 
 `spex session new --help` lists its optional `--name <name>` alongside the prompt and launcher inputs. The
 name is the new record's initial display override; it does not enter, replace, or alter the launch prompt.

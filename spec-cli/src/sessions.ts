@@ -256,12 +256,6 @@ export class SessionRecordUnusable extends Error {
     this.name = 'SessionRecordUnusable'
   }
 }
-export class StateDeclarationConflict extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'StateDeclarationConflict'
-  }
-}
 const corruptReason = (e: { path: string; error: string }): string =>
   `session record is unreadable: ${e.path} — ${e.error}. The file is kept as-is; nothing will rewrite it. A close attempt quarantines the bytes and reports the preserved runtime/worktree/branch residue, but cannot signal or delete without an exact owner.`
 function retirementReason(rec: SessRec): string | null {
@@ -274,14 +268,6 @@ function readLiveRecord(id: string): SessRec | null {
   const retired = retirementReason(rec)
   if (retired) throw new SessionRecordUnusable('retired', rec.session, retired)
   return rec
-}
-
-export function runningChildSessions(parentId: string): string[] {
-  return listSessionIds().filter((id) => {
-    if (id === parentId) return false
-    const child = readRecord(id)
-    return !!child && child.parent === parentId && !child.stopped && !child.archived && (child.status === 'active' || child.status === 'parked')
-  })
 }
 
 // Cross-process lifecycle serialization. Hooks and operator commands are separate CLI processes, so the
@@ -2369,18 +2355,12 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
 export const resumeSession = (id: string, opts: ResumeOptions = {}) =>
   withSessionTransition(id, () => withRecordLock(id, () => resumeSessionUnlocked(id, opts)))
 
-export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?: string; sessionId?: string; enforceParentSupervision?: boolean } = {}): boolean {
+export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?: string; sessionId?: string } = {}): boolean {
   const id = opts.sessionId || ownSessionId()
   if (!id) return false
   return withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
     if (!rec) return false
-    if (opts.enforceParentSupervision && status === 'awaiting') {
-      const running = runningChildSessions(id)
-      if (running.length) {
-        throw new StateDeclarationConflict(`session ${id} has running sub-session(s): ${running.join(', ')} — declare \`spex session park --note "waiting for child session(s)"\` while they run; do not declare done/awaiting`)
-      }
-    }
     writeRecord({
       ...rec, status,
       proposal: status === 'awaiting' ? (opts.proposal ?? 'nothing') : null,
@@ -2389,7 +2369,7 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
     return true
   })
 }
-export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId, enforceParentSupervision: true })
+export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId })
 export const markError = (sessionId?: string) => markState('error', { sessionId })
 export function markTurnFailure(sessionId: string | undefined, note: string): boolean {
   if (!sessionId) return false

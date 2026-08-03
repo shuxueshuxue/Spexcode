@@ -68,10 +68,7 @@ terminal/input semantics.
 **The parent row's own status is the group's status — no aggregation.** The folded parent's status glyph and
 which triage zone it sorts into (needs-you vs self-running) are the PARENT'S OWN, full stop; child statuses
 never roll up into them. This is honest only because a supervising parent stays `parked` while its children
-run (below), so its status already reads "the fleet is being handled". A parent with a clearly running child
-(`active` or `parked`) cannot declare `done`/`awaiting`; the lifecycle writer refuses that claim and names
-`spex session park` as the repair. Once every child is settled, the parent may choose its own truthful final
-declaration.
+run (below), so its status already reads "the fleet is being handled".
 
 **The disclosure triangle COLOUR is the one thing that looks downward — and is PURELY informational.** A
 recursive subtree rollup that must NOT affect the group's zone or sort, reusing the `STATUS_COLOR` hues:

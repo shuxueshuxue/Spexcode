@@ -224,15 +224,18 @@ scenarios:
     code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts]
     description: >-
       Start the default-Node supervisor on a throwaway corpus with 30 live session rows. Keep a
-      `/api/graph/stream?mode=delta` subscriber open so the bounded projection queue has queued warmup work,
-      then request one selected `/api/evals?q=is:eval scope:<id>` page while the first summary job is running.
-      Record request latency, the selected-before-remaining execution order, active git/node descendants, and
-      the response after a demand callback failure.
+      `/api/graph/stream?mode=delta` subscriber open so every eligible warmup starts from the same graph
+      event. Hold one unrelated summary while another settles, then request one selected
+      `/api/evals?q=is:eval scope:<id>` page during that work. Record each session's start and publish time,
+      active git/node descendants, and the response after a demand callback failure.
     expected: >-
-      The selected demand runs after only the current job and before unrelated queued summaries, on the same
-      concurrency-1 queue; no second flight or duplicate generation starts. The selected HTTP response does not
-      wait for the queue tail, active git/node descendants stay within the queue bound, and a rejected demand
-      rejects only its own waiter while the ordinary queue resumes and settles.
+      Every eligible session starts its one current-generation summary without waiting for an unrelated session.
+      A stable entry publishes its own ready projection immediately; an unrelated slow, failed, or newer
+      generation must not keep that stable session updating. A selected demand waits at most for its OWN
+      already-running summary, joins duplicate callers, and never starts a second build for that generation.
+      There is no artificial cross-session queue bound: concurrent Git/node descendants may scale with the
+      active session set. A rejected demand rejects only its own waiter; the other independent summaries keep
+      settling.
   - name: open-cost-is-proportional
     tags: [backend-api]
     code:

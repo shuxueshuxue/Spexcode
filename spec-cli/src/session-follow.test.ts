@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -186,6 +186,39 @@ test('a wait crosses a rotation boundary without skipping its actionable edge', 
     later(30, () => recordStatus(T, 'awaiting', 'merge', 'y'.repeat(900)))
     assert.deepEqual(await take(), { reached: 'review', id: T, path: ['working', 'review'] })
     assert.equal(followCursor(ME, T), 2, 'the durable event-index cursor still spans numbered segments')
+  } finally {
+    if (previous === undefined) delete process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
+    else process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = previous
+  }
+})
+
+test('a 13-session fleet follow resumes across 1,664 sealed history events', async () => {
+  freshHome()
+  const previous = process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
+  process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = '1024'
+  const fleet = Array.from({ length: 13 }, (_, index) => `fleet-${String(index).padStart(2, '0')}`)
+  try {
+    for (const id of fleet) {
+      mkdirSync(sessionStoreDir(id), { recursive: true })
+      for (let event = 0; event < 128; event++) recordStatus(id, 'active', null, `${id}:${String(event).padStart(3, '0')}:${'x'.repeat(1200)}`)
+      assert.equal(readdirSync(join(sessionStoreDir(id), 'timeline')).length, 128)
+    }
+
+    let arrivals = 0
+    const result = await followSessions(() => {}, {
+      targets: () => fleet,
+      self: ME,
+      take: true,
+      timeoutMs: 10_000,
+      intervalMs: 5,
+      onObserved: (_id, status, previousStatus) => {
+        if (status !== 'working' || previousStatus !== null || ++arrivals !== fleet.length) return
+        later(50, () => recordStatus(fleet.at(-1)!, 'awaiting', 'merge', `fleet-review:${'y'.repeat(1200)}`))
+      },
+    })
+
+    assert.deepEqual(result, { reached: 'review', id: fleet.at(-1), path: ['working', 'review'] })
+    assert.equal(followCursor(ME, fleet.at(-1)!), 129, 'the event-index cursor resumes across every sealed history segment')
   } finally {
     if (previous === undefined) delete process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
     else process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = previous

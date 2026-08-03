@@ -46,7 +46,7 @@ async function stop(child: ChildProcess): Promise<void> {
   if (child.exitCode === null && child.signalCode === null) signal('SIGKILL')
 }
 
-test('YATU: real session input rotates timeline files and API returns the cross-segment tail', { timeout: 30_000 }, async (t) => {
+test('YATU: 128 real session inputs rotate timeline files and API returns the cross-segment tail', { timeout: 60_000 }, async (t) => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-api-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
@@ -67,28 +67,30 @@ test('YATU: real session input rotates timeline files and API returns the cross-
     backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], { cwd: project, env: { ...process.env, PATH: `${bin}:${process.env.PATH || ''}`, PORT: String(port), SPEXCODE_HOME: home, SPEXCODE_TIMELINE_SEGMENT_BYTES: '1024', SPEXCODE_TMUX: `timeline-api-${port}` }, stdio: 'ignore', detached: true })
     const base = `http://127.0.0.1:${port}`
     await waitFor(() => fetch(`${base}/health`).then((r) => r.ok).catch(() => false), 'backend health')
-    for (const mark of ['a', 'b', 'c']) {
+    const total = 128
+    for (let index = 0; index < total; index++) {
+      const mark = String(index).padStart(3, '0')
       const r = await fetch(`${base}/api/sessions/${id}/input`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'text', text: `${mark}:${'x'.repeat(900)}` }) })
       assert.equal(r.status, 200, await r.text())
     }
-    const timeline = await fetch(`${base}/api/sessions/${id}/timeline?limit=2`)
+    const timeline = await fetch(`${base}/api/sessions/${id}/timeline?limit=50`)
     assert.equal(timeline.status, 200)
     const body = await timeline.json() as { events: Array<{ kind: string; text?: string }> }
-    assert.deepEqual(body.events.map((event) => event.text?.slice(0, 1)), ['b', 'c'])
-    assert.deepEqual(readdirSync(join(dir, 'timeline')).sort(), ['000000000001.ndjson', '000000000002.ndjson', '000000000003.ndjson'])
+    assert.deepEqual(body.events.map((event) => event.text?.slice(0, 3)), Array.from({ length: 50 }, (_, index) => String(index + 78).padStart(3, '0')))
+    assert.deepEqual(readdirSync(join(dir, 'timeline')).sort(), Array.from({ length: total }, (_, index) => `${String(index + 1).padStart(12, '0')}.ndjson`))
   } finally {
     if (backend) await stop(backend)
     rmSync(fixture, { recursive: true, force: true })
   }
 })
 
-test('YATU: three real backends observe one CLI lifecycle writer without duplicate segmented events', { timeout: 90_000 }, async () => {
+test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate segmented events', { timeout: 120_000 }, async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-timeline-writers-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const id = 'timeline-many-backends'
   const ports: number[] = []
-  for (let index = 0; index < 3; index++) ports.push(await freePort())
+  for (let index = 0; index < 5; index++) ports.push(await freePort())
   const backends: ChildProcess[] = []
   const logs = new Map<number, string>()
   try {
@@ -121,10 +123,15 @@ test('YATU: three real backends observe one CLI lifecycle writer without duplica
       await waitFor(() => fetch(`http://127.0.0.1:${port}/health`).then((r) => r.ok).catch(() => false), `backend ${port} health\n${logs.get(port)}`, 30_000)
     }
 
-    const moves = [
-      ['active', undefined], ['awaiting', 'merge'], ['active', undefined],
-      ['asking', undefined], ['parked', undefined], ['error', undefined],
-    ] as const
+    const moves = Array.from({ length: 24 }, (_, index): readonly [string, string | undefined] => {
+      switch (index % 6) {
+        case 1: return ['awaiting', 'merge']
+        case 3: return ['asking', undefined]
+        case 4: return ['parked', undefined]
+        case 5: return ['error', undefined]
+        default: return ['active', undefined]
+      }
+    })
     const notes = moves.map((_, index) => `move-${index + 1}:${'x'.repeat(1200)}`)
     for (const [index, [status, proposal]] of moves.entries()) {
       const args = ['internal', 'session-state', status, '--session', id, '--note', notes[index]]

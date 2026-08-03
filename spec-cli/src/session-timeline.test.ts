@@ -335,6 +335,28 @@ test('tail reads across a large set of sealed segments without losing order', ()
   }
 })
 
+test('tail reads 500 events from 1,024 sealed segments in event order', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home)
+  const previous = process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
+  process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = '1024'
+  try {
+    withHome(home, () => {
+      for (let i = 0; i < 1024; i++) appendSent(ID, `${String(i).padStart(4, '0')}:${'x'.repeat(1800)}`, null)
+      const dir = join(sessionStoreDir(ID), 'timeline')
+      assert.equal(readdirSync(dir).length, 1024)
+      const tail = readTimeline(ID, 500)?.events ?? []
+      assert.equal(tail.length, 500)
+      assert.deepEqual(tail.map((event) => event.kind === 'sent' ? event.text.slice(0, 4) : '?'),
+        Array.from({ length: 500 }, (_, i) => String(i + 524).padStart(4, '0')))
+    })
+  } finally {
+    if (previous === undefined) delete process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
+    else process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = previous
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('a send the adapter cannot take still succeeds, and the message stays OWED', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
   seedSessionRecord(home)

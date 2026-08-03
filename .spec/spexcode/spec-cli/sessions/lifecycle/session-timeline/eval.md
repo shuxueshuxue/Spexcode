@@ -7,15 +7,15 @@ scenarios:
       `spex serve` processes that resolve to the SAME project root, so they share one sessions store — the
       ordinary state of a dogfood box, where every live supervisor and every hot-reloaded child is another
       backend on the same store. Drive real lifecycle transitions (awaiting/merge with a note, then active,
-      repeated) through the SAME writer every hook uses, `spex internal session-state`, and count the lines
-      each move produced in timeline.ndjson.
+      repeated) through the SAME writer every hook uses, `spex internal session-state`, and count the logical
+      timeline events each move produced, spanning numbered segments when the configured byte threshold rotates.
     expected: |
       Each real transition appears EXACTLY ONCE, whatever N is. There is one writer path — every hook
       shells to `spex internal session-*` — so nothing writes state behind the log's back and no process
       observes the store to catch up. Before the repair the count was `1 + N`, LINEAR in the number of live
       backends: each one ran its own fs.watch over the shared store and appended its own catch-up line.
-      Measured at N=3: 4 lines per move (and the live store, with 5 observers, showed 6). After: 6 moves,
-      6 lines. The read surface therefore returns the log as it is, with no adjacent-duplicate folding to
+      At N=5, 24 independently authored moves produce 24 logical events, including across byte-rotated
+      immutable segments. The read surface therefore returns the log as it is, with no adjacent-duplicate folding to
       hide the defect, and an unknown id still answers 404.
   - name: the-append-accepts
     tags: [backend-api, cli]

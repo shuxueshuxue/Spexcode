@@ -1,22 +1,23 @@
 ---
-title: work-pane
+title: node-popup
 status: active
 session: sess-merge
 hue: 335
-desc: The node popup — a reference view of intent; the live work surface moved to the session interface.
+desc: The `i` node popup — a reference lens on node intent; live work belongs to sessions.
 code:
   - spec-dashboard/src/NodeView.jsx
 related:
   - spec-dashboard/src/IssueCard.jsx
 ---
-# work-pane
+# node-popup
 
 ## raw source
 
-The spec and the terminal are one act split in two — the spec is the *intent*, the terminal is where you
-*change it in place*. Originally they shared one pop-out `work` pane, two columns (spec left for reading,
-terminal right for the work), so intent and the surface that changes it sat side by side in a fixed-size
-panel that never grows to xterm's measured width.
+The spec and the work it guides are one loop, but they have different durable identities. A node owns
+current intent and its history; a session owns a live worktree, agent, and terminal. A terminal therefore
+cannot be a node pane: one session can change several nodes, several sessions can touch one node, and the
+live surface must survive board navigation. The board makes intent immediately readable; the session
+interface is where that intent is changed in place.
 
 ## expanded spec
 
@@ -72,7 +73,7 @@ Issues/Evals list with the same fixed `node:` and current compact query, so ever
 registers an **eval** pane (a fourth reference face), but that pane's paged timeline data contract belongs
 to [[eval-tab]], just as the issues tab's content is
 [[dashboard-issues]]'; this node owns the popup shell and the spec/history/issues/edit panes, so the eval pane's
-reframe into a verdict-over-evidence timeline is that node's evolution, never work-pane drift. The **history** tab is
+reframe into a verdict-over-evidence timeline is that node's evolution, never node-popup drift. The **history** tab is
 the one merged version log: the latest version sits expanded with its proof, older ones start collapsed and
 reveal one at a time on the **down gesture** once you've finished the open one — scrolling past its end, *or*
 a `j`/`↓` keypress when there is nothing left to scroll (a short history with no scrollbar, or the bottom of
@@ -91,10 +92,10 @@ never a popup-only legacy alias. The compact Evals filter projects verdict as it
 human review as the distinct Needs review / Reviewed facet, so moving the canonical page's primary visual
 axis does not fork field semantics inside the popup.
 
-The "change it in place" surface — the live terminal — relocated to the *session* that does the changing
-(`Enter`; see [[session-console]] and [[command-box]]), keyed to a session rather than pinned to a node. The
-panel sizes to **itself**, never to xterm's measured width (each pane scrolls its own content, no stray
+The "change it in place" surface — the live terminal — belongs to the *session* doing the changing
+(`Enter`; see [[session-console]] and [[command-box]]), keyed to that session rather than pinned to a node.
+The panel sizes to **itself**, never to xterm's measured width (each pane scrolls its own content, no stray
 horizontal scrollbar) — but that sizing lives in `styles.css`, the dashboard's shared stylesheet governed by
-[[node-graph]]; this node owns only the
-popup component, so a style change elsewhere is never drift here. So the original "one act split in two"
-intent stands, but the union is dissolved: intent in the popup, the changing surface with the session.
+[[node-graph]]; this node owns only the popup component, so a style change elsewhere is never drift here.
+The original intention survives as one work loop across two truthful surfaces: intent in the node popup,
+live change in the session console.

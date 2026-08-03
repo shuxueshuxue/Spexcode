@@ -44,8 +44,8 @@ made this node necessary.
 
 ## expanded spec
 
-- **ONE module renders every prose surface.** The node-body view ([[graph-lean]]'s work pane and
-  [[work-pane]]), the Issues detail body and its compose preview ([[issues-view]]), every thread reply
+- **ONE module renders every prose surface.** The node-body view ([[node-popup]]), the Issues detail body
+  and its compose preview ([[issues-view]]), every thread reply
   (issue threads and [[event-detail]]'s remarks), and the session timeline ([[message-stream]]) all call
   the same renderer. It carries no page branch, no per-surface mode flag, and no "rich" vs "plain"
   dialect: a surface may pass DATA (a resolver, handlers, which source it wants rendered) but never a

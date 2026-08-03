@@ -23,7 +23,7 @@ import { cockpitReview } from './cockpit.js'
 import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
-import { evalTimeline, readBlobByHash } from '../../spec-eval/src/evaltab.js'
+import { readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
 import { fileHumanReading } from '../../spec-eval/src/filing.js'
 import { fileHumanOk } from '../../spec-eval/src/humanok.js'
@@ -140,10 +140,7 @@ app.get('/api/edit', async (c) => {
   }
   return c.json({ patch })
 })
-// a node's eval timeline (read half of `spex eval`): eval-sidecar readings joined with a live freshness
-// flag, newest-first; `hasEvalFile:false` when none declared. Contract belongs to [[spec-eval]].
-app.get('/api/specs/:id/evals', async (c) => c.json(await evalTimeline(c.req.param('id'))))
-// the eval seam's WRITE half over HTTP ([[spec-eval]] filing.ts) — the REST pair of the GET above: a
+// the eval seam's WRITE half over HTTP ([[spec-eval]] filing.ts): a
 // programmatic caller files a reading (verdict + optional transcript) through the SAME append the CLI
 // uses. The dashboard does not call this — [[event-detail]] reads readings and hosts remarks, never files.
 app.post('/api/specs/:id/evals', async (c) => {

@@ -72,7 +72,7 @@ const webName = (url) => {
 const resourceTabKey = (sessionId, kind, value) => `${sessionId}:${kind}:${value}`
 const webProxyUrl = (sessionId, key) => `${PROJECT_BASE}/web/${encodeURIComponent(sessionId)}/${encodeURIComponent(key)}/`
 
-function SessionFiles({ session, onFailure, onPreview }) {
+function SessionFiles({ session, onPreview, onDownload, onCopy }) {
   const t = useT()
   const [open, setOpen] = useState(false)
   const filesRef = useRef(null)
@@ -86,36 +86,6 @@ function SessionFiles({ session, onFailure, onPreview }) {
     window.addEventListener('pointerdown', closeOutside)
     return () => window.removeEventListener('pointerdown', closeOutside)
   }, [open])
-
-  const urlFor = (path) => apiUrl(`/api/sessions/${encodeURIComponent(session.id)}/files/download?path=${encodeURIComponent(path)}`)
-  const download = async (path) => {
-    const url = urlFor(path)
-    try {
-      const response = await fetch(url, { method: 'HEAD' })
-      if (!response.ok) {
-        const body = await response.json().catch(() => null)
-        throw new Error(body?.error || t('session.fileDownloadFailed', { status: response.status }))
-      }
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName(path)
-      link.style.display = 'none'
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-    } catch (error) {
-      onFailure(error instanceof Error ? error.message : String(error))
-    }
-  }
-
-  const copyPath = async (path) => {
-    try {
-      if (!navigator.clipboard?.writeText) throw new Error(t('session.fileCopyUnavailable'))
-      await navigator.clipboard.writeText(path)
-    } catch (error) {
-      onFailure(error instanceof Error ? error.message : String(error))
-    }
-  }
 
   if (!session) return null
 
@@ -133,9 +103,9 @@ function SessionFiles({ session, onFailure, onPreview }) {
             <button type="button" className="si-files-name" role="menuitem" aria-label={t('session.previewFile')}
               onClick={() => { setOpen(false); onPreview(path) }}>{fileName(path)}</button>
             <IconButton icon="download" size={14} className="si-files-download" role="menuitem" label={t('session.downloadFile')}
-              onClick={() => download(path)} />
+              onClick={() => onDownload(session.id, path)} />
             <IconButton icon="copy" size={14} className="si-files-copy" role="menuitem" label={path}
-              onClick={() => copyPath(path)} />
+              onClick={() => onCopy(path)} />
           </div>)}
         </div>
       )}
@@ -464,6 +434,34 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const refreshResource = (tab) => setResourceTabs((tabs) => tabs.map((current) =>
     current.id === tab.id ? { ...current, revision: current.revision + 1 } : current,
   ))
+  const fileActionFailure = (error) => setActionOutcome({ owner: 'panel', phase: 'failed', message: error instanceof Error ? error.message : String(error) })
+  const downloadFile = async (sessionId, path) => {
+    const url = apiUrl(`/api/sessions/${encodeURIComponent(sessionId)}/files/download?path=${encodeURIComponent(path)}`)
+    try {
+      const response = await fetch(url, { method: 'HEAD' })
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(body?.error || t('session.fileDownloadFailed', { status: response.status }))
+      }
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName(path)
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    } catch (error) {
+      fileActionFailure(error)
+    }
+  }
+  const copyFilePath = async (path) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error(t('session.fileCopyUnavailable'))
+      await navigator.clipboard.writeText(path)
+    } catch (error) {
+      fileActionFailure(error)
+    }
+  }
 
   useEffect(() => {
     const published = new Map()
@@ -1380,9 +1378,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
                 <div className="si-actions" role="group" aria-label={t('session.commandsLabel')}>
                   {activeResource?.kind === 'file' && (
-                    <IconButton icon="rotate-ccw" size={14} className="si-tool sc-blue refresh-resource" data-resource-action="refresh"
-                      label={t('session.refreshResourceTab', { name: activeResource.label })}
-                      onClick={() => refreshResource(activeResource)} />
+                    <>
+                      <IconButton icon="rotate-ccw" size={14} className="si-tool sc-blue refresh-resource" data-resource-action="refresh"
+                        label={t('session.refreshResourceTab', { name: activeResource.label })}
+                        onClick={() => refreshResource(activeResource)} />
+                      <IconButton icon="download" size={14} className="si-tool sc-blue file-download" data-resource-action="download"
+                        label={t('session.downloadFile')}
+                        onClick={() => { void downloadFile(activeResource.sessionId, activeResource.value) }} />
+                      <IconButton icon="copy" size={14} className="si-tool sc-blue file-copy" data-resource-action="copy"
+                        label={activeResource.value}
+                        onClick={() => { void copyFilePath(activeResource.value) }} />
+                    </>
                   )}
                   {uiCmds.filter((c) => c.button && (!activeResource && (!terminalFree || c.name !== 'merge')))
                     // Resident right-anchored tools (Command Box) sort to the row's right edge; transient action
@@ -1409,7 +1415,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
                 <SessionFiles
                   session={selSession}
-                  onFailure={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })}
+                  onDownload={downloadFile}
+                  onCopy={copyFilePath}
                   onPreview={(path) => openResource({
                     id: resourceTabKey(active, 'file', path), sessionId: active, kind: 'file', value: path, label: fileName(path), revision: 0,
                   })}
@@ -1446,7 +1453,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   )
                 })}
                 {activeResource && <SessionResourcePanel tab={activeResource} />}
-                {actionOutcome?.owner === 'panel' && !activeResource && !showRelaunch && !shelvedSel && (
+                {actionOutcome?.owner === 'panel' && !showRelaunch && !shelvedSel && (
                   <div className="si-action-outcome-float"><ActionOutcome outcome={actionOutcome} /></div>
                 )}
                 {showRelaunch && !activeResource && (

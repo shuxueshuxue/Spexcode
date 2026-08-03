@@ -1,8 +1,42 @@
 # Brand assets
 
 The mark is **two brackets holding one file**: code bound to a contract rather than asserted to match
-it, and the file is there because a spec governs exactly one file. Ink `#171A20`, paper `#EFE8D8`,
-accent `#16495A` (`#5FA8BE` on dark ground, where the darker teal loses contrast).
+it, and the file is there because a spec governs exactly one file. The file is **cleft corner to corner
+and rebuilt on the upper side of the cleft** — that half is a brighter material and the light in the
+seam comes from the crack itself, so the mark says the code was regenerated from its spec and came back
+better. Ink `#171A20`, paper `#EFE8D8`.
+
+## The cleft
+
+The cut runs the block's main diagonal, which is parallel to its chamfer, so the crack and the file's
+own corner are the same gesture. It folds exactly twice, at 44% and 56% of its length with a ±20-unit
+throw: the two straight runs stay long and the crossing stroke is short and steep. Two folds is the
+budget — with both ends pinned to opposite corners, the outer segments have to tilt to reach a displaced
+middle, so a crisp *straight → sideways → straight* step is not available under two folds; it costs four.
+
+| | at the seam → outward | seam |
+| --- | --- | --- |
+| old half, paper ground | `#22687E` → `#123E4D` | `#9ADCEC` at 12 units |
+| new half, paper ground | `#6FC0D8` → `#2A7188` | |
+| old half, dark ground | `#3D8CA4` → `#276F86` | `#E4F7FD` at 12 units |
+| new half, dark ground | `#A6DEEE` → `#5FA8BE` | |
+| single ink | `#171A20` | `#EFE8D8` at **8** units |
+
+Both surface gradients start **at the seam** and fall off outward, which is what makes the crack read as
+the light source rather than as damage.
+
+Three measured constraints hold this together, and breaking any of them breaks the mark at size:
+
+- **The coloured seam is ink, not a gap.** A paper gap removes mass, and at 16px the block is only
+  4.4px across, so a full-width gap hollows it into a ring. An inked seam costs nothing, which is the
+  only reason the cut may run corner to corner at all.
+- **The single-ink seam is therefore thinner**, 8 units rather than 12 — there the seam *is* paper and
+  does cost mass. At 12 the mono block reads broken by 32px.
+- **The seam disappears before the mark does.** Below about 24px the seam merges and the two-tone split
+  carries the whole idea; the split survives because it changes no silhouette. Do not widen the seam to
+  fight this — widening is what destroys the block.
+
+The gradients flatten to their midpoints in the 24-unit dashboard preset, which has no room for a ramp.
 
 | file | what it is |
 | --- | --- |

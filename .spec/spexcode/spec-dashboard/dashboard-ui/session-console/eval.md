@@ -204,8 +204,9 @@ scenarios:
     expected: >-
       The toolbar stays single-line while resource labels clip or scroll. A fresh web publication gets one
       selected tab only for the selected session; neither clicking an already-open filename nor the plus picker duplicates an
-      open resource or creates an overlay preview. A selected file has one right-side refresh action and no
-      merge action; a selected web has neither; the Terminal surface has merge and no resource refresh. Closing
+      open resource or creates an overlay preview. A selected file has right-side refresh, download, and copy-path
+      actions and no merge action; a selected web has none of those file actions; the Terminal surface has merge
+      and no resource actions. Closing
       permits one later reopen, and retracting removes the tab because its authorization is gone while the warm
       console remains hidden and pointer-inert underneath.
   - name: session-remembers-its-local-surface

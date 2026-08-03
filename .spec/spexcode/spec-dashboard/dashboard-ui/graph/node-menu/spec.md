@@ -20,7 +20,7 @@ node under the cursor and the board visibly agrees about which node that is.
 
 The menu exposes the node verbs plus one address handoff, with no new node mutation behind them:
 
-- **node info** — the `i` popup ([[work-pane]]).
+- **node info** — the `i` popup ([[node-popup]]).
 - **copy node URL** — copies the canonical [[address-routing]] `graph-node` address as a full URL resolved
   against the current dashboard document. It therefore preserves the current public origin and `/p/<project>/`
   scope rather than baking a tunnel host into the product. Clipboard API denial or an HTTP context falls back

@@ -1,18 +1,28 @@
 // One browser-safe identity registry shared by backend validation and every dashboard projection.
 // Geometry is data so the React renderer and favicon serializer cannot drift into separate drawings.
+//
+// @@@ shape keys travel through two renderers - a shape's own attributes override the group's
+// fill/stroke, which is how a multi-colour mark fits a single-fg registry. Both consumers pass the keys
+// through verbatim: the string serializer spreads them as attributes, React spreads them as JSX props.
+// So a key must be valid in BOTH, which rules out hyphenated names (React wants strokeWidth) - hence a
+// painted seam outline rather than a stroked line, since per-shape stroke-width cannot be expressed.
 
 export const DEFAULT_PROJECT_ICON = 'spexcode'
 export const DEFAULT_GATEWAY_ICON = 'gateway'
 
 export const IDENTITY_PRESETS = Object.freeze([
   {
-    id: 'spexcode', label: 'SpexCode', bg: '#166534', fg: '#f0fdf4',
+    // The brand mark: two brackets holding one file, cleft corner to corner and regenerated on the
+    // upper-right of the cleft. Painted rather than stroked — see the paint note below. Geometry is
+    // docs/brand/mark-dark.svg scaled by 24/512; the two surface gradients flatten to their midpoints
+    // because a 24-unit chip has no room for a ramp and the format carries no defs.
+    id: 'spexcode', label: 'SpexCode', bg: '#12161C', fg: '#EFE8D8',
     shapes: [
-      { tag: 'circle', cx: 12, cy: 6.2, r: 2.2 },
-      { tag: 'circle', cx: 6.2, cy: 17.5, r: 2 },
-      { tag: 'circle', cx: 17.8, cy: 17.5, r: 2 },
-      { tag: 'path', d: 'M12 8.4v2.1c0 2.2-5.8 1.8-5.8 5' },
-      { tag: 'path', d: 'M12 10.5c0 2.2 5.8 1.8 5.8 5' },
+      { tag: 'path', d: 'M 4.500,4.500 L 9.750,4.500 L 9.750,6.656 L 6.656,6.656 L 6.656,17.344 L 9.750,17.344 L 9.750,19.500 L 4.500,19.500 Z', fill: '#EFE8D8', stroke: 'none' },
+      { tag: 'path', d: 'M 19.500,4.500 L 14.250,4.500 L 14.250,6.656 L 17.344,6.656 L 17.344,17.344 L 14.250,17.344 L 14.250,19.500 L 19.500,19.500 Z', fill: '#EFE8D8', stroke: 'none' },
+      { tag: 'path', d: 'M 15.281,15.281 L 11.731,13.057 L 12.269,10.943 L 8.719,8.719 L 8.719,15.281 Z', fill: '#327D95', stroke: 'none' },
+      { tag: 'path', d: 'M 8.719,8.719 L 12.269,10.943 L 11.731,13.057 L 15.281,15.281 L 15.281,12.000 L 12.000,8.719 Z', fill: '#82C3D6', stroke: 'none' },
+      { tag: 'path', d: 'M 8.569,8.957 L 11.946,11.073 L 11.408,13.186 L 15.132,15.520 L 15.431,15.043 L 12.054,12.927 L 12.592,10.814 L 8.868,8.480 Z', fill: '#E4F7FD', stroke: 'none' },
     ],
   },
   {

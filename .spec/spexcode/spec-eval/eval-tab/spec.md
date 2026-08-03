@@ -47,7 +47,7 @@ sniffed from the content.
 
 The **eval tab** ([[spec-dashboard]]) is a fourth face on the node popup beside spec/history/issues, on the
 same `panesFor` registry. It is a **thin consumer of the chronological-timeline
-scaffold the history tab uses** (see [[work-pane]]): newest expanded, older reveal on the down gesture, an
+scaffold the history tab uses** (see [[node-popup]]): newest expanded, older reveal on the down gesture, an
 individual row-header toggle, no bulk-expand control, and — on a long timeline — an extremely compact
 embedded face of the canonical Evals filter. The popup and list page share one query parser, conjunctive
 filter engine, and field semantics through domain configuration/data adapters; the popup does not grow a

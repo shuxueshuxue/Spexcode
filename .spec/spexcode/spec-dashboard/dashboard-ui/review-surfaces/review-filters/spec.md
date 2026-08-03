@@ -52,7 +52,7 @@ own ONE visible token text ([[review-query]] parses it; [[review-chrome]] render
 bridge maps parsed tokens into engine state — duplicate qualifiers last-wins, `scope:` to no predicate
 (it picks the data source upstream), and any qualifier outside the page's map to the IMPOSSIBLE state,
 so an unknown token stays verbatim in the text and honestly matches nothing. Every human change remains
-a history push and browser Back replays it. [[work-pane]] and [[eval-tab]] keep plain structured state
+a history push and browser Back replays it. [[node-popup]] and [[eval-tab]] keep plain structured state
 only for the lifetime of the open Spec Information surface, surviving tab switches without minting a
 second address. Their compact face is
 one shallow sticky search row plus the shared accessible facet overflow. It uses the same adapter options,

@@ -100,7 +100,8 @@ BOTH and owned by [[archive]] — it never reads as a status and never rewrites 
   only a completed connect (`live`) or an instant refusal/absence (`ECONNREFUSED` off a stale socket file /
   `ENOENT` — proven `dead`) settle the question; a connect **timeout** (a thrashed loop fires the timer before
   the pending connect) or **EAGAIN** (a full backlog — a listener alive-but-busy) are `unproven`, read
-  `unknown`, never `offline`. This is the honesty rule the mass-restore incident violated (a slow box read as a
+  `unknown`, never `offline`. The board bounds concurrent listener connects so its own probe burst does not fill
+  healthy listeners' backlogs. This is the honesty rule the mass-restore incident violated (a slow box read as a
   graveyard, live workers relaunched to death) and the false-`offline` wait verdict (issue #40) too. Fail loud
   (`unknown`), never guess (`offline`). The same rule reaches one layer further down, because a settled `dead`
   answers only about the TRANSPORT: a socket path can be unlinked out from under its own live listener — by a

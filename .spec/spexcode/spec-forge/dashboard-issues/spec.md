@@ -25,7 +25,7 @@ Surface each spec node's bound open issues on the dashboard. Backend: fold each 
 count + list into the board via a resident `ForgeCache`, served on the existing `/api/graph` nodes —
 non-blocking (serve the last reconcile, refresh in the background) and silent when there's no forge/`gh`
 (no badge, no error). Frontend: one glance badge on the tile (count, hue distinct from the status dot, like
-the drift-badge), only when > 0; the issue LIST is read on demand in the focused node's [[work-pane]] Issues
+the drift-badge), only when > 0; the issue LIST is read on demand in the focused node's [[node-popup]] Issues
 tab and on [[issues-view]], not in a persistent sidebar or a card popped on the node.
 The badge is WORK, distinct from the derived status dot.
 
@@ -40,7 +40,7 @@ poll cadence** (~15s), so an externally-posted issue surfaces within about one p
 fold goes through the **unified Issue port** (spec-cli's [[issues]]): each node gets its **merged** issue
 list — this cache's forge slice AND the local store's threads ([[local-issues]]) — every item in the one
 Issue shape. The graph attaches only `reviewSummary.issues` counts and open ids; the full merged set stays
-in the server-only snapshot used by [[paged-review]] for the node-info **Issues tab** ([[work-pane]]) and
+in the server-only snapshot used by [[paged-review]] for the node-info **Issues tab** ([[node-popup]]) and
 canonical list. This node
 owns the forge slice into that fold; the merge itself is
 [[issues]]'s. Closed forge issues link by the explicit `Spec:` marker (the transitive PR path sees only

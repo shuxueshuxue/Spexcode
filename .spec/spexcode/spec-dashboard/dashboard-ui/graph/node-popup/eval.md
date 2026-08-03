@@ -10,7 +10,7 @@ scenarios:
       filter row LEADS with "showing X of Y" from the same filter model that picks the rows, and typing a
       needle moves X live. At 390px the words condense to a bare X/Y (the sentence stays in the
       aria-label) with no horizontal overflow. Capture and file with
-      `spex eval add work-pane --scenario caption-counts-and-result-summary --image <png>`.
+      `spex eval add node-popup --scenario caption-counts-and-result-summary --image <png>`.
     expected: >-
       Captions are plain labels + ReviewState state-count chips (no kbd digits, zero counts absent, one
       primitive across issues and eval); the compact filter row's leading summary reads "showing X of Y"
@@ -29,7 +29,7 @@ scenarios:
       the "spec" tab and back to "edit" a few times. Watch the edit pane on each return: the diff must
       reappear AT ONCE, never blanking to the "loading diff…" placeholder. Screenshot the edit tab
       showing the rendered diff and file it with
-      `spex yatsu eval work-pane --scenario edit-tab-no-reload-flash --image <png> --pass`.
+      `spex yatsu eval node-popup --scenario edit-tab-no-reload-flash --image <png> --pass`.
     expected: >-
       The edit tab renders the node's pending spec.md diff, and re-selecting the tab after switching
       away shows that diff immediately with no loading-flash — the same instant feel as the history,
@@ -42,7 +42,7 @@ scenarios:
       table. Press `i`, then the `spec` tab, and read the body. The `| … |` rows must render as a real
       HTML table — a tinted header row, bordered cells — NOT as a run-together paragraph of pipes. Cell
       text keeps its inline markdown (`` `code` ``, [[links]]). Screenshot the rendered table and file
-      it with `spex yatsu eval work-pane --scenario spec-body-renders-tables --image <png> --pass`.
+      it with `spex yatsu eval node-popup --scenario spec-body-renders-tables --image <png> --pass`.
     expected: >-
       A markdown table in a spec body renders as a bordered table with a header row and aligned cells,
       each cell's inline `code` and [[links]] preserved — never the mangled single-paragraph the
@@ -54,7 +54,7 @@ scenarios:
       node that has a yatsu score and governs several files — and press `i`, then the `spec` tab. Read
       the info board: a compact stat bar must carry the node's at-a-glance signals, and the governed
       files must read as a counted row of chips, not a vertical list. Screenshot the spec tab and file
-      it with `spex yatsu eval work-pane --scenario info-board-signals --image <png> --pass`.
+      it with `spex yatsu eval node-popup --scenario info-board-signals --image <png> --pass`.
     expected: >-
       The stat bar shows, left to right, the derived status as a coloured dot + label, the version, the
       aggregate yatsu score badge, a drift count when the node has drifted, and the last-editing session
@@ -76,7 +76,7 @@ scenarios:
       entry has been consumed, at desktop and 390px. The filed reading carries the interaction video and
       a pass verdict.
 ---
-# eval.md — work-pane
+# eval.md — node-popup
 
 The node popup is product surface — measured by **looking** (YATU), not a unit test. The agent drives the
 real dashboard: jump to a node mid-change, open its popup, and exercise the edit tab's tab-toggle. The loss

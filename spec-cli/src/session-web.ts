@@ -94,6 +94,12 @@ const toWeb = (url: string): SessionWeb => ({ url, key: sessionWebKey(url) })
 
 export function listSessionWebs(id: string, projectRoot?: string): SessionWeb[] {
   requireSession(id, projectRoot)
+  return readSessionWebs(id, projectRoot)
+}
+
+// Session projections already hold a parsed record; re-checking session.json here would make an in-memory
+// projection depend on the public route's existence guard. The route-facing list keeps that guard above.
+export function readSessionWebs(id: string, projectRoot?: string): SessionWeb[] {
   return readWebs(id, projectRoot).map(toWeb)
 }
 

@@ -11,13 +11,13 @@ import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite 
 import { adapterLoadedReferenceState, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
-import { listSessionFiles } from './session-files.js'
-import { listSessionWebs, type SessionWeb } from './session-web.js'
+import { readSessionFiles } from './session-files.js'
+import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { appendSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
 import { drain, enqueue, owesDelivery } from './delivery-queue.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
-import { assertSessionStopSafe, ResourceConflict } from './host-resources.js'
+import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
 import { processStartToken } from './process-identity.js'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationClose, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 
@@ -851,7 +851,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const pp = prompt ? oneLinePreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: listSessionFiles(rec.session), web: listSessionWebs(rec.session) }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session) }
 }
 
 export async function renameSession(id: string, name: string): Promise<boolean> {
@@ -2774,6 +2774,7 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
     throw new ResourceConflict(`refusing to archive ${id}: session liveness is ${lv}; exact leaf ownership is unproven`)
   // The adapter guard runs BEFORE any tmux/process signal. Active/unknown native turns and ambiguous descendant
   // ownership refuse here; a verified adapter receipt carries an exact subtree through to coldRuntime's commit.
+  assertSessionOwnerSafe(id, h.id)
   const preflight = await h.coldPreflight?.({ ...wt.rec, archived: false, stopped: lv === 'offline' })
   if (preflight && !preflight.ok) throw new ResourceConflict(`refusing to archive ${id}: ${preflight.reason}`)
   // Even a proven-offline leaf can leave a stale rendezvous/socket or adapter artifact. Reuse the same exact
@@ -2920,9 +2921,13 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(wt.rec, root)
   if (receiptFailure) throw new ResourceConflict(`refusing destructive close for ${id}: ${receiptFailure}; public record and resources remain the authority fence`)
   const closesCodexBinding = (wt.rec.harness === 'codex' || wt.rec.harness === 'codex-headless') && !!wt.rec.harnessSessionId
-  if (wt.rec.archived) await assertColdRetirementSafe(id, wt.rec)
-  else if (wt.rec.status === 'queued') await assertQueuedRetirementSafe(id, wt.rec, wt.path, wt.branch)
-  else throw new ResourceConflict(`refusing to close ${id}: target runtime was not cold-retired first`)
+  const retired = !wt.rec.archived && !!retirementReason(wt.rec)
+  // A retired row has already lost its worktree; close is its explicit record-only terminal cleanup.
+  if (!retired) {
+    if (wt.rec.archived) await assertColdRetirementSafe(id, wt.rec)
+    else if (wt.rec.status === 'queued') await assertQueuedRetirementSafe(id, wt.rec, wt.path, wt.branch)
+    else throw new ResourceConflict(`refusing to close ${id}: target runtime was not cold-retired first`)
+  }
   // The marker protects only the destructive half. A failed cold proof must leave a normal, resumable binding.
   if (closesCodexBinding) prepareCodexGenerationClose(runtimeRoot(), id, wt.rec.harnessSessionId!)
   appendCloseLedger(id, wt.rec, source)
@@ -2973,7 +2978,7 @@ async function closeSessionUnlocked(id: string, source: CloseSource): Promise<bo
       `refusing destructive close for ${id}: the unreadable record proves no adapter, leaf, worktree, or branch owner (${guard}). ${evidence}. Runtime remains at ${runtime}; worktree and branch ownership is unknown and was not touched; no process signal or deletion was attempted.`)
   }
   if (!wt) return false
-  if (!wt.rec.archived && wt.rec.status !== 'queued') {
+  if (!retirementReason(wt.rec) && !wt.rec.archived && wt.rec.status !== 'queued') {
     const archived = await archiveSessionUnlocked(id)
     if (!archived) return false
     wt = await findWorktree(id)

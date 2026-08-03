@@ -381,6 +381,22 @@ const probeRuntime = async (descriptor: SharedRuntimeDescriptor): Promise<Shared
   catch (error) { return { healthy: false, references: [], error: (error as Error).message } }
 }
 
+const sessionOwnerBlocker = (id: string, harnessId: string | null, recs: RawRecord[]): string | null => {
+  const targetRecord = recs.find((rec) => rec.session_id === id)
+  const targetHarness = harnessId ? harnessById(harnessId) : null
+  const targetThread = targetRecord?.harness_session_id
+  if (!targetHarness || !targetThread) return null
+  const ownerCount = recs.filter((rec) => rec.governed && (rec.harness || defaultHarness.id) === targetHarness.id && rec.harness_session_id === targetThread).length
+  if (ownerCount === 1) return null
+  const label = targetHarness.sharedRuntimes?.(runtimeRoot())[0]?.label ?? targetHarness.id
+  return `${label} target thread ${targetThread} has no one exact governed session owner`
+}
+
+export function assertSessionOwnerSafe(id: string, harnessId: string): void {
+  const blocker = sessionOwnerBlocker(id, harnessId, rawRecords())
+  if (blocker) throw new ResourceConflict(blocker)
+}
+
 const sessionStopBlocker = async (
   id: string,
   harnessId: string | null,
@@ -390,6 +406,9 @@ const sessionStopBlocker = async (
 ): Promise<string | null> => {
   const targetRecord = recs.find((rec) => rec.session_id === id)
   const targetHarness = harnessId ? harnessById(harnessId) : null
+  const targetThread = targetRecord?.harness_session_id
+  const ownerBlocker = sessionOwnerBlocker(id, harnessId, recs)
+  if (ownerBlocker) return ownerBlocker
   const exactKey = targetHarness?.targetDescriptorKey?.({ session: id, harnessSessionId: targetRecord?.harness_session_id }) ?? null
   const targetDescriptors = targetHarness?.sharedRuntimes?.(runtimeRoot()) ?? []
   if (targetHarness && targetDescriptors.length === 0) return null
@@ -404,9 +423,9 @@ const sessionStopBlocker = async (
     const pid = runtimePid(descriptor.pidFile)
     const ownerCounts = new Map<string, number>()
     for (const rec of entry.recs) if (rec.harness_session_id) ownerCounts.set(rec.harness_session_id, (ownerCounts.get(rec.harness_session_id) ?? 0) + 1)
-    const targetThread = entry.recs.find((rec) => rec.session_id === id)?.harness_session_id
-    if (targetThread && ownerCounts.get(targetThread) !== 1)
-      return `${descriptor.label} target thread ${targetThread} has no one exact governed session owner`
+    const entryTargetThread = entry.recs.find((rec) => rec.session_id === id)?.harness_session_id
+    if (entryTargetThread && ownerCounts.get(entryTargetThread) !== 1)
+      return `${descriptor.label} target thread ${entryTargetThread} has no one exact governed session owner`
     if (!knownProbes && descriptor.mutationGuard) {
       if (!targetThread) return `${descriptor.label} target has no exact governed thread identity`
       if (!pid) return `${descriptor.label} target-scoped mutation guard has no readable owner PID`

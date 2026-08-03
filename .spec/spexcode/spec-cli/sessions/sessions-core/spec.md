@@ -8,6 +8,7 @@ code:
 related:
   - spec-cli/src/sessionSlug.test.ts
   - spec-cli/src/session-create-cli.test.ts
+  - spec-cli/src/sessions-hot.test.ts
   - spec-cli/src/layout.ts
   - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/src/session-record-integrity.test.ts

@@ -624,19 +624,26 @@ export function cancelSessionWatch(watcher: string, targets: string[]): number {
 // Share one liveness snapshot rather than spawning tmux for every displayed session.
 export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; titles: Map<string, string>; sockets: Set<string>; unproven: Set<string> }
 
-// First pane per session wins; split only twice so titles may contain tabs.
+// tmux 3.5a replaces literal tabs in a format string with underscores. A record separator is emitted as this
+// printable escape on both supported tmux versions, while titles remain free to contain tabs.
+const TMUX_PANE_SEPARATOR = '\\037'
+const TMUX_PANE_FORMAT = '#{session_name}\x1f#{pane_pid}\x1f#{pane_title}'
+
+// First pane per session wins; split only twice so titles may contain the field separator.
 export function parseLivePanes(out: string): Map<string, { panePid?: number; title?: string }> {
   const m = new Map<string, { panePid?: number; title?: string }>()
   for (const line of out.split('\n')) {
     if (!line) continue
-    const t1 = line.indexOf('\t')
+    // Accept the former tab shape for callers replaying old snapshots; tmux itself emits TMUX_PANE_SEPARATOR.
+    const separator = line.includes(TMUX_PANE_SEPARATOR) ? TMUX_PANE_SEPARATOR : '\t'
+    const t1 = line.indexOf(separator)
     const name = (t1 < 0 ? line : line.slice(0, t1)).trim()
     if (!name || m.has(name)) continue   // first pane per session wins
     if (t1 < 0) { m.set(name, {}); continue }
-    const rest = line.slice(t1 + 1)
-    const t2 = rest.indexOf('\t')
+    const rest = line.slice(t1 + separator.length)
+    const t2 = rest.indexOf(separator)
     const pid = Number((t2 < 0 ? rest : rest.slice(0, t2)).trim())
-    const title = t2 < 0 ? '' : rest.slice(t2 + 1)
+    const title = t2 < 0 ? '' : rest.slice(t2 + separator.length)
     m.set(name, { panePid: Number.isFinite(pid) && pid > 0 ? pid : undefined, title: title || undefined })
   }
   return m
@@ -675,8 +682,8 @@ async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
     // ONE merged spawn replaces the old two (list-sessions + list-panes): window presence + pane pid + title.
     // A target-scoped close probe avoids unrelated panes turning a safe close into a global timeout.
     const args = targetId
-      ? ['list-panes', '-t', targetId, '-F', '#{session_name}\t#{pane_pid}\t#{pane_title}']
-      : ['list-panes', '-a', '-F', '#{session_name}\t#{pane_pid}\t#{pane_title}']
+      ? ['list-panes', '-t', targetId, '-F', TMUX_PANE_FORMAT]
+      : ['list-panes', '-a', '-F', TMUX_PANE_FORMAT]
     out = await tmux(args, targetId ? TARGET_PROBE_TIMEOUT_MS : TMUX_PROBE_TIMEOUT_MS)
   } catch (e) {
     // a TIMEOUT/kill is a probe FAILURE (we can't tell who's alive → unknown, never a false graveyard). A clean

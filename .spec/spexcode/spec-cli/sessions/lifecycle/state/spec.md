@@ -96,7 +96,8 @@ BOTH and owned by [[archive]] — it never reads as a status and never rewrites 
   one bounded call; under heavy load it can time out — a timed-out probe means we **cannot tell** who is alive,
   categorically different from "tmux is up and this session is gone," so those rows yield `unknown`, rendered
   **probe-failed**, never `offline`/`closed`, and the row **never vanishes** (enumerated from the durable
-  store). The **listener probe is tri-state for the same reason**:
+  store). Its three pane fields use a tmux-version-neutral boundary, so the session id remains addressable even
+  where a tmux version rewrites literal tabs in format output. The **listener probe is tri-state for the same reason**:
   only a completed connect (`live`) or an instant refusal/absence (`ECONNREFUSED` off a stale socket file /
   `ENOENT` — proven `dead`) settle the question; a connect **timeout** (a thrashed loop fires the timer before
   the pending connect) or **EAGAIN** (a full backlog — a listener alive-but-busy) are `unproven`, read

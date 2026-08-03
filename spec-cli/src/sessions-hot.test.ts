@@ -94,12 +94,13 @@ test('hot registry: a session with NO agent.pid is skipped (pre-registration →
 })
 
 test('parseLivePanes: one merged list-panes snapshot → id → {panePid, title}, tabs in a title survive', () => {
+  const sep = '\\037'
   const out = [
-    'sess-a\t1234\t✳ building the parser',   // ✳ glyph-led claude title
-    'sess-b\t5678\tbash',
-    'sess-c\t9012\ttitle\twith\ttabs',            // a title containing tabs — kept after the 2nd tab
-    'sess-a\t4321\tSHOULD BE IGNORED',            // a 2nd pane for sess-a → first pane wins
-    'sess-d\t0\tzero pid',                        // pid 0 → undefined
+    `sess-a${sep}1234${sep}✳ building the parser`,   // ✳ glyph-led claude title
+    `sess-b${sep}5678${sep}bash`,
+    `sess-c${sep}9012${sep}title\twith\ttabs`,      // a title containing tabs — kept after the 2nd separator
+    `sess-a${sep}4321${sep}SHOULD BE IGNORED`,        // a 2nd pane for sess-a → first pane wins
+    `sess-d${sep}0${sep}zero pid`,                    // pid 0 → undefined
   ].join('\n')
   const m = parseLivePanes(out)
   assert.equal(m.get('sess-a')?.panePid, 1234)

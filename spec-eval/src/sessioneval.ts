@@ -1743,13 +1743,6 @@ type SummaryBuildResult =
 
 export type SessionEvalSummaryBuilder = (id: string, path: string) => Promise<SummaryBuildResult>
 
-type DemandJob<T> = {
-  id: string
-  run: () => Promise<T>
-  resolve: (value: T) => void
-  reject: (error: unknown) => void
-}
-
 type ProjectionEntry = {
   id: string
   path: string
@@ -1759,6 +1752,7 @@ type ProjectionEntry = {
   current?: { generation: number; revision: string; value: SessionEvalSummary }
   scheduled: number | null
   running: number | null
+  flight: Promise<void> | null
   demandCancelledGeneration: number | null
   observerHolds: Set<string>
 }
@@ -1773,27 +1767,16 @@ type ProjectionCohortRow = Pick<StagedProjection, 'entry' | 'generation'>
 
 type ProjectionTarget = 'all' | { id?: string; path?: string }
 
-// Summary builds touch a session worktree's diff, history, and eval sidecars. Running one job per row
-// multiplies those git children and their parsed indexes by the retained session count, so the shared
-// projection queue has one bounded capacity for every project. A deployment can tune the capacity, but the
-// default is deliberately serial: board assembly remains responsive and memory has a natural settle point.
-const configuredProjectionConcurrency = Number(process.env.SPEXCODE_SESSION_EVAL_CONCURRENCY || 1)
-const PROJECTION_CONCURRENCY = Number.isFinite(configuredProjectionConcurrency)
-  ? Math.max(1, Math.floor(configuredProjectionConcurrency))
-  : 1
-
-// Pure generation coordinator around an injected stable builder. Snapshot construction only serializes
-// entries and authorizes the newest dirty generations; the async batch runs after that snapshot has captured
-// `updating(lastKnown)`, then emits one completion nudge for all stable/error results in the batch.
+// Pure generation coordinator around an injected stable builder. Sessions have independent evaluation cuts,
+// so an entry launches and publishes independently; generation/revision fences remain per entry.
 export class SessionEvalProjectionCache {
   readonly epoch: string
   private readonly entries = new Map<string, ProjectionEntry>()
   private readonly observerHolds = new Map<string, ProjectionTarget>()
   private readonly observerWaiters = new Set<() => void>()
-  private batch: Promise<void> | null = null
+  private readonly flights = new Set<Promise<void>>()
   private notify: () => void
   private precompute: boolean
-  private readonly demandQueue: DemandJob<any>[] = []
   private readonly demands = new Map<string, Promise<unknown>>()
 
   constructor(
@@ -1821,7 +1804,7 @@ export class SessionEvalProjectionCache {
       }
       this.authorize(entry)
     }
-    if (enabled) queueMicrotask(() => this.startBatch())
+    if (enabled) queueMicrotask(() => this.startScheduled())
   }
 
   private authorize(entry: ProjectionEntry): void {
@@ -1846,6 +1829,7 @@ export class SessionEvalProjectionCache {
       phase: 'loading',
       scheduled: null,
       running: null,
+      flight: null,
       demandCancelledGeneration: null,
       observerHolds: new Set(),
     }
@@ -1869,6 +1853,7 @@ export class SessionEvalProjectionCache {
           phase: 'loading',
           scheduled: null,
           running: null,
+          flight: null,
           demandCancelledGeneration: null,
           observerHolds: new Set(),
         }
@@ -1888,7 +1873,7 @@ export class SessionEvalProjectionCache {
       this.authorize(entry)
       out.set(session.id, this.project(entry))
     }
-    queueMicrotask(() => this.startBatch())
+    queueMicrotask(() => this.startScheduled())
     return out
   }
 
@@ -1966,28 +1951,31 @@ export class SessionEvalProjectionCache {
     const existing = this.demands.get(id)
     if (existing) return existing as Promise<T>
     const entry = this.ensureEntry(id, path)
-    // A queued summary for this same generation is superseded by the full demand build. If that demand
-    // rejects, snapshots must not recreate the cancelled eager work until a later invalidation advances g.
-    // A running summary is left alone; the priority job waits for it to settle before taking the slot.
+    // An unstarted summary is superseded by the full demand build. A running summary stays the one flight for
+    // this entry; demand waits for it only, never for unrelated session work.
     if (entry.running == null && entry.scheduled === entry.generation) {
       entry.scheduled = null
       entry.demandCancelledGeneration = entry.generation
     }
-    let resolve!: (value: T) => void
-    let reject!: (error: unknown) => void
-    const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej })
+    const priorFlight = entry.flight
+    const promise = (async () => {
+      if (priorFlight) await priorFlight
+      return run()
+    })()
     this.demands.set(id, promise)
-    this.demandQueue.push({ id, run, resolve, reject })
     promise.finally(() => {
       if (this.demands.get(id) === promise) this.demands.delete(id)
     }).catch(() => {})
-    queueMicrotask(() => this.startBatch())
     return promise
   }
 
   async idle(): Promise<void> {
-    await Promise.resolve()
-    while (this.batch) await this.batch
+    for (;;) {
+      await Promise.resolve()
+      const pending = [...this.flights, ...this.demands.values()]
+      if (!pending.length) return
+      await Promise.allSettled(pending)
+    }
   }
 
   accept(id: string, generation: number, revision: string, value: SessionEvalSummary): boolean {
@@ -2017,64 +2005,57 @@ export class SessionEvalProjectionCache {
     return target === 'all' || target.id === entry.id || target.path === entry.path
   }
 
-  private hasPending(): boolean {
-    return this.demandQueue.length > 0
-      || [...this.entries.values()].some((entry) => entry.scheduled != null && entry.running == null)
-  }
-
-  private publishCohort(staged: StagedProjection[]): boolean {
+  private publish(staged: StagedProjection): boolean {
     let changed = false
-    for (const { entry, generation, result } of staged) {
-      if (this.entries.get(entry.id) !== entry || entry.generation !== generation || entry.observerHolds.size) continue
-      if (result.kind === 'unstable') {
-        entry.generation++
-        entry.phase = 'updating'
-        entry.scheduled = null
-        entry.demandCancelledGeneration = null
-        this.authorize(entry)
-        changed = true
-        continue
-      }
-      if (result.kind === 'missing') {
-        changed = changed || entry.phase !== 'error'
-        entry.phase = 'error'
-        entry.scheduled = null
-        continue
-      }
-      changed = changed || entry.phase !== 'ready' || entry.current?.revision !== result.revision
-      entry.current = { generation, revision: result.revision, value: result.summary }
-      entry.phase = 'ready'
+    const { entry, generation, result } = staged
+    if (this.entries.get(entry.id) !== entry || entry.generation !== generation || entry.observerHolds.size) return false
+    if (result.kind === 'unstable') {
+      entry.generation++
+      entry.phase = 'updating'
       entry.scheduled = null
+      entry.demandCancelledGeneration = null
+      this.authorize(entry)
+      return true
     }
+    if (result.kind === 'missing') {
+      changed = entry.phase !== 'error'
+      entry.phase = 'error'
+      entry.scheduled = null
+      return changed
+    }
+    changed = entry.phase !== 'ready' || entry.current?.revision !== result.revision
+    entry.current = { generation, revision: result.revision, value: result.summary }
+    entry.phase = 'ready'
+    entry.scheduled = null
     return changed
   }
 
-  private startBatch(): void {
-    if (this.batch) return
-    if (!this.hasPending()) return
-    this.batch = (async () => {
-      const demand = this.demandQueue.shift()
-      if (demand) {
-        try { demand.resolve(await demand.run()) }
-        catch (error) { demand.reject(error) }
-        return
-      }
-      // Freeze this finite cohort. Inputs that arrive later remain scheduled for the next batch, so a
-      // busy stream cannot keep a completed cohort unpublished forever.
-      const cohort = [...this.entries.values()]
-        .filter((entry) => entry.scheduled != null && entry.running == null)
-        .map((entry) => ({ entry, generation: entry.scheduled! }))
-      const staged: StagedProjection[] = []
-      for (let offset = 0; offset < cohort.length && !this.demandQueue.length; offset += PROJECTION_CONCURRENCY) {
-        const chunk = cohort.slice(offset, offset + PROJECTION_CONCURRENCY)
-        const results = await Promise.all(chunk.map((row) => this.runEntry(row)))
-        for (const result of results) if (result) staged.push(result)
-      }
-      if (this.publishCohort(staged)) this.notify()
-    })().finally(() => {
-      this.batch = null
-      if (this.hasPending()) this.startBatch()
+  private startScheduled(): void {
+    for (const entry of this.entries.values()) {
+      if (entry.scheduled == null || entry.running != null) continue
+      this.startEntry({ entry, generation: entry.scheduled })
+    }
+  }
+
+  private startEntry(row: ProjectionCohortRow): void {
+    const flight = this.runEntry(row).then((staged) => {
+      if (staged && this.publish(staged)) this.notify()
     })
+    row.entry.flight = flight
+    this.flights.add(flight)
+    void flight.then(
+      () => {
+        this.flights.delete(flight)
+        if (row.entry.flight === flight) row.entry.flight = null
+        queueMicrotask(() => this.startScheduled())
+      },
+      (error) => {
+        this.flights.delete(flight)
+        if (row.entry.flight === flight) row.entry.flight = null
+        console.warn(`spec-eval: session summary runner failed for ${row.entry.id}: ${error instanceof Error ? error.message : String(error)}`)
+        queueMicrotask(() => this.startScheduled())
+      },
+    )
   }
 
   private async runEntry({ entry, generation }: ProjectionCohortRow): Promise<StagedProjection | null> {
@@ -2178,8 +2159,8 @@ export async function awaitSessionEvalProjectionIdle(): Promise<void> { await pr
 // it never deposits — but it still prefers a cached FULL model when one exists, because a complete answer
 // already paid for beats a cheap incomplete one.
 export async function buildSessionEvals(id: string, pick?: SessionEvalFocus): Promise<SessionEvals | null> {
-  // A full model is demand-only, but it still runs through the projection queue. This gives a selected session
-  // priority over unrelated queued summaries without opening a second git/build lane.
+  // A full model is demand-only. It joins its session's current summary flight, but unrelated summaries never
+  // gate this demand; a cached stable cut then replays without re-deriving Git state.
   for (;;) {
     const attempt = await projectionCache.demand(id, '', async () => {
       // a focused open renders no gates strip, so it reads the session's IDENTITY (a free store read)

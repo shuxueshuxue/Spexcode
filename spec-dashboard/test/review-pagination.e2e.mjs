@@ -447,14 +447,16 @@ try {
     && url.searchParams.get('q')?.includes('node:session-console') && url.searchParams.get('page') === '1')
   await page.locator('.ov-tab').filter({ hasText: /eval/i }).click()
   const nodeTimeline = await measure(await nodeTimelineWaiting, 'nodeview-evals-timeline-page-1')
-  assert.equal(nodeTimeline.data.items.length, 25)
-  assert.ok(nodeTimeline.data.total > 25)
+  const nodeResults = nodeTimeline.data.items.filter((item) => item.filterKind === 'result')
+  assert.ok(nodeTimeline.data.items.length <= 25)
+  assert.equal(new Set(nodeResults.map((item) => `${item.node}\0${item.scenario}`)).size, nodeResults.length,
+    'node preview is one latest result per scenario, never the raw measurement timeline')
   await page.waitForFunction((expected) => document.querySelectorAll('.pane-eval .eval-row').length === expected, nodeTimeline.data.items.length)
-  assert.match((await page.locator('.rf-summary').innerText()).toLowerCase(), /showing 25 of \d+/)
+  assert.match((await page.locator('.rf-summary').innerText()).toLowerCase(), new RegExp(`showing ${nodeTimeline.data.items.length} of ${nodeTimeline.data.total}`))
   assert.equal(await page.locator('.pane-eval-list-door').getAttribute('href'), '#/evals?q=is%3Aeval%20node%3Asession-console')
   assert.equal(await page.locator('.pane-eval .pane-view-all').count(), 0)
   await page.screenshot({ path: join(out, 'bounded-consumers.png'), fullPage: false })
-  desktopRecording.mark(`Palette and NodeView bounded consumers: 25/${paletteEvals.data.total}, 25/${nodeTimeline.data.total}`)
+  desktopRecording.mark(`Palette and NodeView bounded consumers: 25/${paletteEvals.data.total}, ${nodeTimeline.data.items.length}/${nodeTimeline.data.total}`)
 
   const slow = await desktop.newPage()
   await slow.route('**/api/issues?*', async (route) => {

@@ -1663,7 +1663,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-eval-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
 .si-eval-tab > svg { flex: none; color: var(--cyan); }
 .si-eval-label { color: var(--ink); font-size: var(--type-control); }
-.si-eval-arrow { opacity: .55; }
 .si-eval-stats { display: inline-flex; align-items: center; gap: 4px; }
 .si-eval-wait {
   display: inline-flex; align-items: center; gap: 2px; color: var(--muted);
@@ -1702,7 +1701,7 @@ a.scenario-count:hover { background: var(--panel2); }
   .si-resource-tab-main { max-width: 110px; }
 }
 @container (max-width: 390px) {
-  .si-tab-label, .si-eval-arrow { display: none; }
+  .si-tab-label { display: none; }
   .si-tab { width: 34px; padding-inline: 10px; }
   .si-eval-tab { padding-inline: 5px; }
 }

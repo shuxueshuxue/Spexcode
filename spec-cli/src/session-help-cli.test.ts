@@ -56,6 +56,8 @@ test('Stop teaching names every declaration face without changing the gate', () 
   assert.match(stopGate, /ask --note.*ASKING.*human/)
   assert.match(stopGate, /park --note.*managed spex session watch subscription.*backgrounded.*PARKED/)
   assert.match(stopGate, /done --propose merge \(review; ONLY clickable merge\).*nothing \(done; no merge\).*close \(close-pending\).*park \(parked; managed watch delivery or real background wake-up\).*ask \(asking; human reply\)/)
+  assert.match(stopGate, /session-running-children/)
+  assert.match(stopGate, /child session\(s\).*declare `spex session park.*do not declare done\/awaiting/)
   const doneHelp = sessionHelp('done').stdout
   assert.match(doneHelp, /running child session.*active.*parked.*spex session park.*refused/i)
 })

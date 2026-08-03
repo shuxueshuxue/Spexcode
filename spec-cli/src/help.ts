@@ -400,6 +400,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   refresh-footprint quiet materialize — the post-checkout/post-merge freshness anchor
   check-staged      pre-commit eval backstop: reject staged stray evidence files / malformed eval.md
   session-state <st> --session <id>   a lifecycle hook authors the session's state
+  session-running-children --session <id>  Stop gate read: list direct child sessions still active/parked
   session-fail  --session <id>        the StopFailure hook marks the session errored
   session-idle  --session <id>        the idle-prompt hook marks an active session idle
   commit-gate       the Stop gate's deterministic commit check (exit 0 = ready to declare done)

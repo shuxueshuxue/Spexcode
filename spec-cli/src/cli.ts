@@ -1124,6 +1124,11 @@ if (cmd === 'serve') {
     const st = process.argv[4] as any
     const ok = mark(() => s.markState(st, { proposal: flag('propose') as any, note: flag('note'), sessionId: sess }))
     console.log(ok.ok ? `state -> ${st}${noteEcho(flag('note'))}` : ok.reason ?? noRecord())
+  } else if (sub === 'session-running-children') {
+    const id = flag('session') || process.argv[4]
+    if (!id) { console.error('usage: spex internal session-running-children --session <id>'); process.exit(2) }
+    const { runningChildSessions } = await import('./sessions.js')
+    console.log(runningChildSessions(id).join('\n'))
   } else if (sub === 'session-fail') {
     // StopFailure is one native source for the shared active-only turn-failure CAS. A declaration or explicit
     // stop that landed first is authoritative, just as it is for Codex notifications and headless exits.

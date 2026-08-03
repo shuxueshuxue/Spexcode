@@ -88,7 +88,7 @@ test('session new keeps exact JSON stdout and emits the dependency receipt on st
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
   env.SPEXCODE_API_URL = ''
 
-  const child = spawn('tsx', [cli, 'session', 'new', '[[launch]] ordinary task', '--launcher', 'claude', '--api', `http://127.0.0.1:${address.port}`], {
+  const child = spawn('tsx', [cli, 'session', 'new', '[[launch]] ordinary task', '--launcher', 'claude', '--name', 'launch label', '--api', `http://127.0.0.1:${address.port}`], {
     cwd: pkgRoot,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -101,7 +101,7 @@ test('session new keeps exact JSON stdout and emits the dependency receipt on st
   await once(server, 'close')
 
   assert.equal(code, 0, stderr)
-  assert.deepEqual(posted, { prompt: '[[launch]] ordinary task', parent: null, launcher: 'claude' })
+  assert.deepEqual(posted, { prompt: '[[launch]] ordinary task', parent: null, launcher: 'claude', name: 'launch label' })
   assert.equal(stdout, '{\n  "id": "created-1"\n}\n')
   assert.equal(stderr, `spex: launched session created-1
   current result: the session JSON is on stdout now; \`spex session ls created-1\` is the later one-shot snapshot

@@ -36,11 +36,12 @@ type SessionVerbHelp = readonly [usage: string | readonly string[], detail: stri
 // Keeping the behavioral prose here prevents a compact probe from becoming a second, drifting manual.
 function sessionHelpDefinitions(): Record<string, SessionVerbHelp> {
   return {
-    new: ['spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>]',
+    new: ['spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>] [--name <name>]',
       `Launch a worker in its own node worktree. The materialized system contract reaches it
 automatically; the prompt supplies the task context. Its first [[id]] mention binds the
 session to that node. --prompt-file <path>|- carries a long prompt without shell quoting
-(exclusive with the inline prompt). The successful receipt names what to read, monitor, and reply on.`],
+(exclusive with the inline prompt). --name sets the session's initial display name without changing the prompt.
+The successful receipt names what to read, monitor, and reply on.`],
     ls: ['spex session ls [SEL…] [--status a,b] [--all] [--json]',
       'One-shot table of living sessions. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
@@ -81,7 +82,7 @@ you are running in, mid-turn. Your own ending is a declaration: \`done --propose
     quarantine: ['spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]',
       'Move only an unreadable record after the backend proves every named residue absent. --thread is an adapter-native conversation id, never the SpexCode session id; omit it for Claude. Quarantine and --restore both require the original exact id because corrupt rows are outside selectors.', ['project-bound']],
     done: ['spex session done --propose merge|nothing|close [--note T]',
-      '`merge` declares review: committed work ready for human review, and it is the ONLY declaration that offers a clickable merge. `nothing` declares done: committed work, but no merge proposal. `close` declares close-pending: PROPOSE discarding this worktree — the human closes it. This declaration is how a session ends itself; never run `session close` on your own id.'],
+      '`merge` declares review: committed work ready for human review, and it is the ONLY declaration that offers a clickable merge. `nothing` declares done: committed work, but no merge proposal. `close` declares close-pending: PROPOSE discarding this worktree — the human closes it. This declaration is how a session ends itself; never run `session close` on your own id. A parent with a clearly running child session (`active` or `parked`) must declare `spex session park` instead; the done declaration is refused until that child settles.'],
     park: ['spex session park --note <what-you-await>',
       'Declare parked only when a managed watch delivery or real background task will wake your own session. It self-resumes; waiting for a human is asking, not parked.'],
     ask: ['spex session ask --note <your-question>',
@@ -399,6 +400,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   refresh-footprint quiet materialize — the post-checkout/post-merge freshness anchor
   check-staged      pre-commit eval backstop: reject staged stray evidence files / malformed eval.md
   session-state <st> --session <id>   a lifecycle hook authors the session's state
+  session-running-children --session <id>  Stop gate read: list direct child sessions still active/parked
   session-fail  --session <id>        the StopFailure hook marks the session errored
   session-idle  --session <id>        the idle-prompt hook marks an active session idle
   commit-gate       the Stop gate's deterministic commit check (exit 0 = ready to declare done)

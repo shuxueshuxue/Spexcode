@@ -10,7 +10,8 @@ scenarios:
     expected: >
       Every probe exits 0 without running its verb and prints only that verb's exact usage/behaviour from
       the shared session help definition, not the repeated full drawer. Send keeps plain text plus unstable
-      last-resort raw keys, wait keeps its edge-triggered exit semantics, new explains launch inputs, and
+      last-resort raw keys, wait keeps its edge-triggered exit semantics, new explains launch inputs including
+      its prompt-independent initial `--name` override, and
       selector/write entries keep the shared SEL grammar/project-bound safety notes. Every entry points back
       to the help map/guide without prescribing an orchestration workflow. Bare `spex session` remains the
       complete compatible drawer.

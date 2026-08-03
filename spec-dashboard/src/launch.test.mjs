@@ -11,7 +11,7 @@ test('ordinary interactive launch posts only the prompt and named launcher', asy
   }
 
   try {
-    const result = await createSession('/tidy [[mobile-ui]] keep the composer', 'codex-local')
+    const result = await createSession('/tidy [[mobile-ui]] keep the composer', 'codex-local', 'must not cross the Dashboard boundary')
     assert.deepEqual(result, { ok: true, error: undefined })
     assert.equal(request.url, '/api/sessions')
     assert.equal(request.init.method, 'POST')

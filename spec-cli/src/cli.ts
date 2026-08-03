@@ -241,10 +241,11 @@ async function stateKit() {
   // A record that exists but CANNOT carry state (unreadable bytes, or a worktree that is gone) is its own
   // answer: the writer refused on purpose and already knows why, so that reason is what the caller prints —
   // never the no-record diagnosis, which would send the author chasing a wrong cwd ([[sessions-core]]).
-  const mark = (fn: () => boolean): { ok: boolean; reason?: string } => {
+  const mark = (fn: () => boolean): { ok: boolean; reason?: string; conflict?: boolean } => {
     try { return { ok: fn() } }
     catch (e) {
       if (e instanceof s.SessionRecordUnusable) return { ok: false, reason: e.message }
+      if (e instanceof s.StateDeclarationConflict) return { ok: false, reason: e.message, conflict: true }
       if (/not a git repository/i.test(String((e as any)?.stderr ?? e))) return { ok: false }
       throw e
     }
@@ -601,7 +602,7 @@ if (cmd === 'serve') {
       console.error('spex session new: --node was removed — put a [[<id>]] mention in the prompt — the first mention binds')
       process.exit(2)
     }
-    rejectUnknownFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'api', 'port'])
+    rejectUnknownFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'name', 'api', 'port'])
     const { createSession } = await import('./sessions.js')
     const promptFile = flag('prompt-file')
     const inline = flag('prompt') ?? positionals(4)[0]
@@ -614,7 +615,7 @@ if (cmd === 'serve') {
       catch (e) { console.error(`spex session new: --prompt-file ${promptFile}: ${e instanceof Error ? e.message : e}`); process.exit(2) }
       if (!prompt.trim()) { console.error(`spex session new: --prompt-file ${promptFile === '-' ? 'stdin' : promptFile} is empty — refusing a promptless launch`); process.exit(2) }
     }
-    const created = await createSession(prompt, flag('launcher') ?? undefined)
+    const created = await createSession(prompt, flag('launcher') ?? undefined, flag('name') ?? undefined)
     const { ownSessionId, subscribeSessionWatch } = await import('./sessions.js')
     let watchEstablished = false
     if (created.parent && created.parent === ownSessionId()) {
@@ -826,6 +827,7 @@ if (cmd === 'serve') {
         catch (e) { console.error(`issue closeout check failed (declaration unaffected): ${e instanceof Error ? e.message : e}`) }
       }
       const done = mark(() => s.markDone(p, sess, flag('note')))
+      if (!done.ok && done.conflict) process.exitCode = 1
       console.log(done.ok ? `done (${p})${DECLARED}${noteEcho(flag('note'))}${closeNote}` : done.reason ?? noRecord())
     } else if (sub === 'park') {
       // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)
@@ -1122,6 +1124,11 @@ if (cmd === 'serve') {
     const st = process.argv[4] as any
     const ok = mark(() => s.markState(st, { proposal: flag('propose') as any, note: flag('note'), sessionId: sess }))
     console.log(ok.ok ? `state -> ${st}${noteEcho(flag('note'))}` : ok.reason ?? noRecord())
+  } else if (sub === 'session-running-children') {
+    const id = flag('session') || process.argv[4]
+    if (!id) { console.error('usage: spex internal session-running-children --session <id>'); process.exit(2) }
+    const { runningChildSessions } = await import('./sessions.js')
+    console.log(runningChildSessions(id).join('\n'))
   } else if (sub === 'session-fail') {
     // StopFailure is one native source for the shared active-only turn-failure CAS. A declaration or explicit
     // stop that landed first is authoritative, just as it is for Codex notifications and headless exits.

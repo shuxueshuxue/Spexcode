@@ -256,6 +256,12 @@ export class SessionRecordUnusable extends Error {
     this.name = 'SessionRecordUnusable'
   }
 }
+export class StateDeclarationConflict extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'StateDeclarationConflict'
+  }
+}
 const corruptReason = (e: { path: string; error: string }): string =>
   `session record is unreadable: ${e.path} — ${e.error}. The file is kept as-is; nothing will rewrite it. A close attempt quarantines the bytes and reports the preserved runtime/worktree/branch residue, but cannot signal or delete without an exact owner.`
 function retirementReason(rec: SessRec): string | null {
@@ -268,6 +274,14 @@ function readLiveRecord(id: string): SessRec | null {
   const retired = retirementReason(rec)
   if (retired) throw new SessionRecordUnusable('retired', rec.session, retired)
   return rec
+}
+
+export function runningChildSessions(parentId: string): string[] {
+  return listSessionIds().filter((id) => {
+    if (id === parentId) return false
+    const child = readRecord(id)
+    return !!child && child.parent === parentId && !child.stopped && !child.archived && (child.status === 'active' || child.status === 'parked')
+  })
 }
 
 // Cross-process lifecycle serialization. Hooks and operator commands are separate CLI processes, so the
@@ -1060,12 +1074,13 @@ export type MsgSender = { id: string; label: string | null }
 export function withSenderHint(text: string, sender: MsgSender | null): string {
   if (!sender) return text
   const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
-  return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
+  return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"${LIVE_ARTIFACT_HANDOFF_HINT}`
 }
+export const LIVE_ARTIFACT_HANDOFF_HINT = '\n\n— LIVE ARTIFACT HANDOFF: when you produce a file or start a local webpage for the human to inspect, publish its live reference with `spex session files add <path>` or `spex session web add <url>`; never paste or copy the bytes.'
 export const withNoteReplyHint = (text: string): string =>
-  `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For a simple answer awaiting the next message, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.`
+  `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For a simple answer awaiting the next message, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.${LIVE_ARTIFACT_HANDOFF_HINT}`
 export const withTerminalReplyHint = (text: string): string =>
-  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).`
+  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).${LIVE_ARTIFACT_HANDOFF_HINT}`
 export const slugify = (s: string | null) =>
   (s || 'session').normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'session'
 
@@ -1629,12 +1644,14 @@ function throwIfCreateAborted(signal: AbortSignal, phase: SessionCreatePhase): v
 export async function sessionCreateRequest(body: unknown, options: SessionCreateRequestOptions = {}): Promise<SessionCreateRequestResult> {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: 400, error: 'body must be a JSON object' }
   const input = body as Record<string, unknown>
-  const unknown = Object.keys(input).filter((key) => !['prompt', 'parent', 'launcher'].includes(key)).sort()
+  const unknown = Object.keys(input).filter((key) => !['prompt', 'parent', 'launcher', 'name'].includes(key)).sort()
   if (unknown.length) return { status: 400, error: `unknown session-create field${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}` }
   const prompt = typeof input.prompt === 'string' ? input.prompt : ''
   if (!prompt.trim()) return { status: 400, error: 'empty prompt' }
   const launcher = typeof input.launcher === 'string' && input.launcher.trim() ? input.launcher.trim() : undefined
   const parent = typeof input.parent === 'string' && input.parent.trim() ? input.parent.trim() : null
+  if (input.name !== undefined && typeof input.name !== 'string') return { status: 400, error: 'session-create name must be a string' }
+  const name = typeof input.name === 'string' && input.name.trim() ? input.name.trim() : null
   let key: string
   try { key = normalizeCreateKey(options.requestKey) }
   catch (error) {
@@ -1643,7 +1660,9 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   }
   const requestDigest = digest(key)
   const id = sessionIdForCreateKey(key)
-  const payloadHash = digest(JSON.stringify({ prompt, parent, launcher: launcher ?? null }))
+  // Keep no-name retries byte-compatible with pre-name receipts; an explicit non-empty name is one more
+  // immutable creation input because it publishes the record's existing display override.
+  const payloadHash = digest(JSON.stringify({ prompt, parent, launcher: launcher ?? null, ...(name ? { name } : {}) }))
   const controller = new AbortController()
   const cancel = () => controller.abort(new SessionCreateError('session_create_cancelled', 'request', 'session creation caller disconnected', 408))
   if (options.signal?.aborted) cancel()
@@ -1653,7 +1672,7 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   traceSessionCreate(id, requestDigest, 'request', 'start')
   try {
     try {
-      const session = await prepareSession(prompt, parent, launcher, { id, requestDigest, payloadHash, signal: controller.signal })
+      const session = await prepareSession(prompt, parent, launcher, name, { id, requestDigest, payloadHash, signal: controller.signal })
       traceSessionCreate(id, requestDigest, 'request', 'finish')
       return { status: 201, session }
     } catch (error) {
@@ -1702,15 +1721,16 @@ async function probeSessionCreateAuthority(target: ApiBaseInfo): Promise<boolean
     return false
   } finally { clearTimeout(timer) }
 }
-export async function createSession(prompt: string, launcher?: string): Promise<Session> {
+export async function createSession(prompt: string, launcher?: string, name?: string): Promise<Session> {
   const parent = ownSessionId()
   const requestKey = randomUUID()
+  const body = { prompt, parent, launcher, ...(name !== undefined ? { name } : {}) }
   const target = await apiBaseInfo()
   const base = target.url
   const refused = await probeSessionCreateAuthority(target)
   if (refused) {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    const fallback = await sessionCreateRequest({ prompt, parent, launcher }, { requestKey })
+    const fallback = await sessionCreateRequest(body, { requestKey })
     if (fallback.status === 201) return fallback.session
     const error = new Error(`${fallback.code || 'session_create_failed'}: ${fallback.error}`)
     error.name = 'BackendError'
@@ -1724,7 +1744,7 @@ export async function createSession(prompt: string, launcher?: string): Promise<
     res = await fetch(`${base}/api/sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Idempotency-Key': requestKey },
-      body: JSON.stringify({ prompt, parent, launcher }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     })
   } catch (error) {
@@ -1988,7 +2008,7 @@ async function proveSessionCandidate(path: string, branch: string, signal: Abort
   return null
 }
 
-async function prepareSession(prompt: string, parent: string | null, launcher: string | undefined, context: SessionCreateContext): Promise<Session> {
+async function prepareSession(prompt: string, parent: string | null, launcher: string | undefined, name: string | null, context: SessionCreateContext): Promise<Session> {
   const { id, requestDigest, payloadHash, signal } = context
   let phase: SessionCreatePhase = 'creation-lock'
   let shouldDrain = false
@@ -2102,7 +2122,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
 
           let rec: SessRec = {
             session: id, governed: true, worktreePath: path, branch,
-            node: ref || null, title, name: null, parent: parent && parent !== id ? parent : null,
+            node: ref || null, title, name, parent: parent && parent !== id ? parent : null,
             status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
             harness: h.id, harnessSessionId: null, stopped: false, archived: false, coldProof: null, adapterRecovery: null, launcher: chosen.name,
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
@@ -2337,12 +2357,18 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
 export const resumeSession = (id: string, opts: ResumeOptions = {}) =>
   withSessionTransition(id, () => withRecordLock(id, () => resumeSessionUnlocked(id, opts)))
 
-export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?: string; sessionId?: string } = {}): boolean {
+export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?: string; sessionId?: string; enforceParentSupervision?: boolean } = {}): boolean {
   const id = opts.sessionId || ownSessionId()
   if (!id) return false
   return withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
     if (!rec) return false
+    if (opts.enforceParentSupervision && status === 'awaiting') {
+      const running = runningChildSessions(id)
+      if (running.length) {
+        throw new StateDeclarationConflict(`session ${id} has running sub-session(s): ${running.join(', ')} — declare \`spex session park --note "waiting for child session(s)"\` while they run; do not declare done/awaiting`)
+      }
+    }
     writeRecord({
       ...rec, status,
       proposal: status === 'awaiting' ? (opts.proposal ?? 'nothing') : null,
@@ -2351,7 +2377,7 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
     return true
   })
 }
-export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId })
+export const markDone = (proposal: Proposal = 'nothing', sessionId?: string, note?: string) => markState('awaiting', { proposal, note, sessionId, enforceParentSupervision: true })
 export const markError = (sessionId?: string) => markState('error', { sessionId })
 export function markTurnFailure(sessionId: string | undefined, note: string): boolean {
   if (!sessionId) return false

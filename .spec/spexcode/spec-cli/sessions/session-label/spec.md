@@ -26,7 +26,7 @@ internally consistent. The cure is one visible `title` computation; every surfac
 ## expanded spec
 
 **One computation site.** `toSession` is the single place the visible title is derived. Its precedence is
-`name` (a human name supplied at creation or rename) > live `activity` (pane self-summary, while online) > the first meaningful line of
+`name` (a human name supplied by CLI creation or rename) > live `activity` (pane self-summary, while online) > the first meaningful line of
 `note` > the first non-URL line of the launch prompt > node > stored prompt title > branch > id. A prompt
 whose first line is a bare URL therefore uses the next prose line when one exists. The wire carries this
 derived `title`; every surface — CLI tables, watch/notify lines, the reply-channel footer, board rows, the

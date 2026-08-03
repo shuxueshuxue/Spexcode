@@ -71,7 +71,7 @@ zones and rows exceed that height, the list owns the vertical scrollbar instead 
 pane's clipped edge.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
-input and optional initial-name field. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
+input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
 `fitTextarea` measurement path grows through each content line without a scrollbar until the host's
 declared cap. Composer keyboard meaning is deliberately split by product action: a **message** composer
 (TimelineChat conversation or Command Box) sends on plain Enter, inserts a line on Shift+Enter, and never
@@ -93,8 +93,7 @@ greyed and unfocused until the POST *and* a board re-read returned. You stay on 
 appears in the list below (the immediate board refresh, else the next poll, surfaces it). The old
 auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves your selection for you.
 
-The optional name is sent as the existing record `name` override ([[session-new]] / [[session-label]]), never
-spliced into the prompt and never a second identity. Beneath the box a launcher **pop-out picker** is the ONLY launch choice ([[launcher-select]]). A
+Beneath the box a launcher **pop-out picker** is the ONLY launch choice ([[launcher-select]]). A
 launcher names both the harness ([[harness-adapter]] — Claude vs Codex) and the command/auth profile, so the
 launch `POST /api/sessions` carries only `launcher`; the backend derives `harness` from that selected profile.
 The picker is a clean pill **button** wearing the selected launcher's harness vendor mark + name — no caret,

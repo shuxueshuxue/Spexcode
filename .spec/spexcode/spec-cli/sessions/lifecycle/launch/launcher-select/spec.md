@@ -77,8 +77,7 @@ unsupported inputs never disappear into a defaulted launch.
 
 Launcher choice belongs only to an explicit creation request: bare `spex session new` / the New Session
 composer uses `defaultLauncher`, while `--launcher <name>` / the dashboard picker passes the selected profile
-to the same `newSession` call. An optional session name is a display override, not a launcher choice, and rides
-the same create request independently. `@new` is ordinary prose, never an alternate creation API.
+to the same `newSession` call. `@new` is ordinary prose, never an alternate creation API.
 
 **Persisted and API-exposed, not badged on the board.** A session's chosen launcher NAME is durable data: it
 is stored on the record and rides the session payload (`/api/sessions` + `/api/graph`) alongside its

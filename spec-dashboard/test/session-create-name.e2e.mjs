@@ -110,29 +110,44 @@ try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
   const page = await context.newPage()
   const base = `http://127.0.0.1:${uiPort}`
-  const name = 'Browser-authored session name'
-  const prompt = 'create this session through the Dashboard'
+  const name = 'CLI-authored session name'
+  const prompt = 'create this session through the CLI'
+  const cliEnv = { ...process.env, SPEXCODE_API_URL: '' }
+  for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete cliEnv[key]
+  const cli = spawn(process.execPath, [tsxCli, join(cliRoot, 'src', 'cli.ts'), 'session', 'new', prompt, '--name', name, '--api', `http://127.0.0.1:${apiPort}`], {
+    cwd: project, env: cliEnv, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let stdout = '', stderr = ''
+  cli.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk })
+  cli.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk })
+  const [code] = await once(cli, 'close')
+  assert.equal(code, 0, stderr)
+  const created = JSON.parse(stdout)
+  assert.equal(created.raw.name, name, 'CLI --name writes the existing record field')
+  assert.equal(created.title, name, 'the API title derives from the CLI name')
+  assert.equal(created.label, name, 'the compatible selector handle comes from the same name')
+  assert.equal(created.prompt, prompt, 'the CLI name does not alter the launch prompt')
+
   await page.goto(`${base}/#/sessions/new`, { waitUntil: 'domcontentloaded' })
   await page.locator('.si-input').waitFor({ state: 'visible', timeout: 15_000 })
-  await page.locator('.si-new-name').fill(name)
-  await page.locator('.si-input').fill(prompt)
+  assert.equal(await page.locator('.si-new-name').count(), 0, 'Dashboard New Session exposes no name authoring input')
+  const dashboardPrompt = 'create this session through the Dashboard'
+  await page.locator('.si-input').fill(dashboardPrompt)
   await page.locator('.si-input').press('Enter')
 
-  const created = await waitFor(async () => {
+  const dashboardCreated = await waitFor(async () => {
     const response = await fetch(`http://127.0.0.1:${apiPort}/api/sessions?all=1`)
     if (!response.ok) return null
-    return (await response.json()).find((session) => session.raw?.name === name) || null
-  }, 'named Dashboard-created session')
-  assert.equal(created.title, name, 'the API title is the name the human entered')
-  assert.equal(created.label, name, 'the compatible selector handle comes from the same name')
-  assert.equal(created.prompt, prompt, 'the optional name did not alter the launch prompt')
+    return (await response.json()).find((session) => session.prompt === dashboardPrompt) || null
+  }, 'ordinary Dashboard-created session')
+  assert.equal(dashboardCreated.raw.name, null, 'Dashboard creates without a hidden name payload')
   await page.locator(`.si-item[data-sid="${created.id}"] .sess-id`).waitFor({ state: 'visible', timeout: 15_000 })
-  assert.equal((await page.locator(`.si-item[data-sid="${created.id}"] .sess-id`).textContent())?.trim(), name, 'the browser renders the server-derived name')
+  assert.equal((await page.locator(`.si-item[data-sid="${created.id}"] .sess-id`).textContent())?.trim(), name, 'the Dashboard renders the server-derived CLI name')
   await page.screenshot({ path: join(out, 'named-dashboard-session.png'), fullPage: true })
   await context.close()
   await browser.close()
   browser = null
-  writeFileSync(join(out, 'result.json'), JSON.stringify({ id: created.id, name, title: created.title, label: created.label, prompt }, null, 2))
+  writeFileSync(join(out, 'result.json'), JSON.stringify({ id: created.id, name, title: created.title, label: created.label, prompt, dashboardId: dashboardCreated.id }, null, 2))
   console.log(JSON.stringify({ ok: true, out, id: created.id, name }))
 } finally {
   if (browser) await browser.close().catch(() => {})

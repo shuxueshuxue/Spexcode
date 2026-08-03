@@ -147,9 +147,7 @@ The two planes, made native to touch:
   of the desktop console for exactly this reuse): the raw `/preset [[node]]…` grammar request (resolved by
   [[launch]]'s backend owner for every caller), the
   launcher fetch + default resolution + the per-browser remembered launcher choice, so phone and
-  desktop agree — and the one `POST /api/sessions`. Its optional initial name is the same record `name`
-  override the desktop sends; it never changes the prompt grammar or creates a phone-only identity. Launching
-  has one configuration choice — the launcher — and every
+  desktop agree — and the one `POST /api/sessions`. Launching has one configuration choice — the launcher — and every
   configured profile appears as an ordinary option, with no capability filtering, disabled
   compatibility row, or placeholder. Only the chrome is phone-shaped — shared `ComposerTextarea`, native launcher
   `<select>`, one launch button.

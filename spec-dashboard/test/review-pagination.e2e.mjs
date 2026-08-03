@@ -451,7 +451,8 @@ try {
   assert.ok(nodeTimeline.data.total > 25)
   await page.waitForFunction((expected) => document.querySelectorAll('.pane-eval .eval-row').length === expected, nodeTimeline.data.items.length)
   assert.match((await page.locator('.rf-summary').innerText()).toLowerCase(), /showing 25 of \d+/)
-  assert.equal(await page.locator('.pane-view-all').getAttribute('href'), '#/evals?q=is%3Aeval%20node%3Asession-console')
+  assert.equal(await page.locator('.pane-eval-list-door').getAttribute('href'), '#/evals?q=is%3Aeval%20node%3Asession-console')
+  assert.equal(await page.locator('.pane-eval .pane-view-all').count(), 0)
   await page.screenshot({ path: join(out, 'bounded-consumers.png'), fullPage: false })
   desktopRecording.mark(`Palette and NodeView bounded consumers: 25/${paletteEvals.data.total}, 25/${nodeTimeline.data.total}`)
 

@@ -9,6 +9,8 @@ related:
   - spec-eval/src/evaltab.ts
   - spec-cli/src/graph.ts
   - spec-dashboard/src/App.jsx
+  - spec-dashboard/src/NodeView.jsx
+  - spec-dashboard/src/ReviewShell.jsx
   - spec-dashboard/src/reviewFilters.js
   - spec-dashboard/test/eval-verdict-freshness.e2e.mjs
 ---
@@ -23,6 +25,11 @@ the latest result per scenario as the current score. That population is structur
 still paged at the request layer, so a large project never pays or renders its whole declared set. Review
 attends to what still counts; and in the GitHub navigation model each row is a LINK to the eval's own
 page, not a selection in a pane.
+
+The node inspector's Eval pane is a bounded preview of that same current-loss population, never a second
+history feed. It always carries one compact icon-only door to the node-filtered Evals ListView, so a
+reviewer can reach scenarios beyond its first page without interpreting a pagination count as a command.
+The scenario detail page, not either list, is where that scenario's complete measurement history lives.
 
 ## expanded spec
 
@@ -102,3 +109,12 @@ the session toolbar consumes only its canonical lean graph summary ([[session-ev
 a row model. Unknown coverage stays in the scoped leading strip and cannot enter the result adapter. Loading,
 empty, and failed models do not replace the list shell: the scope
 and kind controls stay mounted, with the appropriate empty note or explicit error beneath them.
+
+**The embedded node preview names its escape explicitly.** The node Eval pane uses the same server page and
+therefore shows at most 25 **latest-per-scenario** rows; it never unfolds historical readings to fill its
+space. Its compact filter row retains `showing X of Y` as status only, while a permanent icon-only anchor
+(with tooltip and accessible name) opens the canonical `is:eval node:<id>` ListView at every cardinality.
+There is no conditional trailing `showing 25 of N` link: an item count is not an action, and hiding the
+door for short lists gives the same review surface two different navigation grammars. The full ListView
+keeps its own bounded pagination; opening a scenario there reaches its detail, whose history is scoped to
+that one scenario.

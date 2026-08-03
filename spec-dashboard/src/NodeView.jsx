@@ -552,19 +552,17 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
   const dangling = filterItems.filter((item) => item.filterKind === EVAL_FILTER_KIND.DANGLING)
   const model = pageFilterModel(page.data, t)
   const groups = filterMenuGroups(model, onFilter, ['section', 'review', 'freshness', 'kind', 'filer', 'session'])
+  const listDoor = (
+    <a className="pane-eval-list-door" href={addressHash(reviewListAddress('evals', query))} data-tip={t('score.openList')} aria-label={t('score.openList')}>
+      <Icon name="chevron-right" size={14} />
+    </a>
+  )
   const filterEl = page.data.sourceTotal > 4
     ? <CompactReviewFilter key="filter" value={filter.q || ''} onChange={(q) => onFilter({ q: q || null })}
       summary={{ shown: filterItems.length, total: page.data.total }}
       placeholder={t('nodeView.filterScenarios')} searchLabel={t('reviewList.searchEvals')}
-      filterLabel={t('reviewList.filters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} />
-    : null
-  const viewAll = page.data.total > filterItems.length
-    ? (
-        <a className="pane-view-all" href={addressHash(reviewListAddress('evals', query))}>
-          {t('reviewList.showing', { shown: filterItems.length, total: page.data.total })} <Icon name="chevron-right" size={13} />
-        </a>
-      )
-    : null
+      filterLabel={t('reviewList.filters')} clearLabel={t('reviewList.all')} clearSearchLabel={t('reviewList.clearSearch')} groups={groups} trailing={listDoor} />
+    : <div className="pane-eval-list-door-row">{listDoor}</div>
   // Branch on the unfiltered list so a no-match state never flips the tree and remounts the compact search
   // mid-word — a filtered-to-empty timeline stays a ChronoPane with its controls intact.
   if (!readings.length) return (
@@ -573,7 +571,6 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
       <div className="eval-todo-note">{!filterItems.length ? t('nodeView.filterNone') : t('nodeView.eval.noReadings')}</div>
       {unmeasured.map((s) => <DeclaredScenario key={s.name} s={s} />)}
       {dangling.map((tr) => <DanglingTrack key={tr.threadId} track={tr} />)}
-      {viewAll}
     </div>
   )
   // unmeasured scenarios lead the one timeline as blind-spot rows; orphaned tracks trail it — both the same
@@ -616,7 +613,6 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
         )}
         renderEvidence={(r) => <EvalEvidence r={r} />}
       />
-      {viewAll}
     </>
   )
 }

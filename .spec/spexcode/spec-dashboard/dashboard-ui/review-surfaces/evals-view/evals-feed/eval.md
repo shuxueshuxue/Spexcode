@@ -1,5 +1,20 @@
 ---
 scenarios:
+  - name: node-preview-current-rows-and-list-door
+    tags: [frontend-e2e, desktop]
+    code: [spec-dashboard/src/NodeView.jsx, spec-dashboard/src/ReviewShell.jsx, spec-cli/src/reviews.ts]
+    related: [spec-dashboard/src/styles.css]
+    description: >
+      Against a branch-local backend with one node holding more than 25 declared scenarios and multiple
+      readings for at least one scenario, open that node's Eval pane in real Chromium. Compare the pane
+      rows with its paged `/api/evals` response, inspect the compact summary and the permanent list door,
+      then open the door and one scenario detail.
+    expected: >
+      The pane shows only the first 25 rows from the server's latest-per-(node, scenario) projection;
+      repeated measurements for one scenario never make a second list row. `showing 25 of N` remains a
+      filter summary, not a trailing command. A visible icon-only anchor with tooltip and accessible name
+      is present whether or not N exceeds 25, opens exactly `#/evals?q=is:eval%20node:<id>`, and the
+      selected scenario detail alone exposes that scenario's full measurement history.
   - name: unmeasured-filter-and-default-order
     tags: [frontend-e2e, desktop]
     code: [spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/reviewFilters.js, spec-cli/src/reviews.ts]

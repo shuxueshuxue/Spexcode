@@ -95,11 +95,13 @@ admission, request identity, deadline/cancellation, and the private prepare/publ
 The HTTP route, CLI no-listener fallback, and New Session composer call it. Preparation is not exported and
 cannot mint a never-aborted context for itself, so adding another caller cannot bypass the wall or transaction owner.
 
-An optional creation `name` is the existing record display override, not prompt content and not another identity.
-It follows `rename`'s normalization (trimmed; blank means absent), is included in a keyed request only when
-non-empty, and writes the new record's one `name` field at publication. The branch/worktree slug and prompt-derived
-stored title remain unchanged. Consequently `[[session-label]]` derives the first public title and compatible label
-from the same field that a later rename replaces or clears.
+`--name` is the CLI's optional human creation input for the existing record display override, not prompt content
+and not another identity. The CLI carries it through the HTTP payload, where it follows `rename`'s normalization
+(trimmed; blank means absent) and writes the new record's one `name` field at publication. Dashboard New Session
+does not author or send a name; it continues to create from its prompt/launcher form and only renders the resulting
+derived title. The branch/worktree slug and prompt-derived stored title remain unchanged. Consequently
+[[session-label]] derives the first public title and compatible label from the same field that a later rename
+replaces or clears.
 
 The record publication is the irreversible boundary. The transaction checks cancellation immediately before
 the synchronous atomic record replace and re-proves that the candidate path is the exact Git top-level, is

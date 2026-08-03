@@ -132,7 +132,7 @@ function MobileSessionDetail({ s, sessions, onBack }) {
   )
 }
 
-function MobileNewSession({ draft, setDraft, name, setName, onBack, onLaunched }) {
+function MobileNewSession({ draft, setDraft, onBack, onLaunched }) {
   const t = useT()
   const { launchers, launcher, pickLauncher } = useLaunchers()
   const [busy, setBusy] = useState(false)
@@ -141,9 +141,9 @@ function MobileNewSession({ draft, setDraft, name, setName, onBack, onLaunched }
     const raw = draft.trim()
     if (!raw || busy) return
     setBusy(true); setErr(null)
-    const r = await createSession(raw, launcher, name.trim() || undefined)
+    const r = await createSession(raw, launcher)
     setBusy(false)
-    if (r.ok) { setDraft(''); setName(''); onLaunched() }
+    if (r.ok) { setDraft(''); onLaunched() }
     else setErr(r.error || t('mobile.launchFailed'))   // fail loud, keep the draft — same rule as the send composer
   }
   return (
@@ -155,14 +155,6 @@ function MobileNewSession({ draft, setDraft, name, setName, onBack, onLaunched }
         </div>
       </div>
       <div className="m-new-body">
-        <input
-          className="m-new-name"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={t('mobile.namePlaceholder')}
-          aria-label={t('mobile.nameLabel')}
-        />
         <ComposerTextarea
           className="m-input m-new-input"
           rows={5}
@@ -190,7 +182,7 @@ function MobileNewSession({ draft, setDraft, name, setName, onBack, onLaunched }
 // the sessions plane: the SAME list the desktop console sidebar renders — zone grouping, nesting forest
 // with count-only disclosure pods, and the one shared avatar-less SessionRow face. Nothing mobile-flavored here
 // beyond the touch-sized wrapper row and the create entry above the list (its own screen, MobileNewSession).
-function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreating, newDraft, setNewDraft, newName, setNewName }) {
+function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreating, newDraft, setNewDraft }) {
   const t = useT()
   const open = openId ? sessions.find((s) => s.id === openId) : null
   const { expanded, toggle } = useFold()
@@ -198,7 +190,7 @@ function MobileSessions({ specs, sessions, openId, setOpenId, creating, setCreat
   const forest = useMemo(() => sessionForest(sessions, (id) => expanded.has(id), {
     zoneFolded: (z) => z === 'offline' && !offlineOpen,
   }), [sessions, expanded, offlineOpen])
-  if (creating) return <MobileNewSession draft={newDraft} setDraft={setNewDraft} name={newName} setName={setNewName} onBack={() => setCreating(false)} onLaunched={() => setCreating(false)} />
+  if (creating) return <MobileNewSession draft={newDraft} setDraft={setNewDraft} onBack={() => setCreating(false)} onLaunched={() => setCreating(false)} />
   if (open) return <MobileSessionDetail s={open} sessions={sessions} onBack={() => setOpenId(null)} />
   return (
     <div className="m-sesslist">
@@ -243,7 +235,6 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard })
   // the desktop's per-tab draft cache).
   const [creating, setCreating] = useState(false)
   const [newDraft, setNewDraft] = useState('')
-  const [newName, setNewName] = useState('')
   // the phone honors the [[side-nav]] route family for the review pages ([[mobile-ui]]): a #/evals or
   // #/issues address (list or detail, shared link or tab tap) renders the SAME routed pages the desktop
   // mounts, reflowed by [[review-chrome]]'s one-column CSS; Back is the browser's history. Specs/Sessions
@@ -318,7 +309,7 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard })
           </div>
         ) : (
           <MobileSessions specs={specs} sessions={sessions} openId={openSessionId} setOpenId={setOpenSessionId}
-            creating={creating} setCreating={setCreating} newDraft={newDraft} setNewDraft={setNewDraft} newName={newName} setNewName={setNewName} />
+            creating={creating} setCreating={setCreating} newDraft={newDraft} setNewDraft={setNewDraft} />
         )}
       </main>
 

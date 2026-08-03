@@ -280,7 +280,6 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
 export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false }) {
   const t = useT()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
-  const [name, setName] = useState('')        // optional initial value for the record's existing display override
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
   const [ctxMenu, setCtxMenu] = useState(null) // session-row right-click menu { x, y, session } — row-level actions live here
   const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
@@ -616,10 +615,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const submit = () => {
     const raw = prompt.trim()
     if (!raw) return
-    const initialName = name.trim()
     setPrompt('')
-    setName('')
-    createSession(raw, launcher, initialName || undefined).then(() => reload?.())
+    createSession(raw, launcher).then(() => reload?.())
   }
 
   // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@` session references
@@ -1300,14 +1297,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
               {attachmentQueue('new')}
-              <input
-                className="si-new-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t('session.namePlaceholder')}
-                aria-label={t('session.nameLabel')}
-              />
               {/* launcher picker — the only launch choice ([[launcher-select]]): the pop-out button picker
                   (LauncherPicker above) with per-launcher harness marks and read-only cmd details. */}
               {launchers.length ? <LauncherPicker launchers={launchers} launcher={launcher} pickLauncher={pickLauncher} /> : null}

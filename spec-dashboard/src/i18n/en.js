@@ -524,8 +524,6 @@ export default {
     lockTitle: 'right-click for session actions, including lock on graph',
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌥+N)',
-    nameLabel: 'initial session name',
-    namePlaceholder: 'initial session name (optional)',
     searchTitle: 'Search (⌥+/)',
     // the merged issues page ([[issues-view]]) — the second top pill beside New Session.
     issuesOff: 'The issues workflow is off.',
@@ -698,8 +696,6 @@ export default {
     noSessions: 'no live sessions — tap ＋ above to start one',
     newSession: 'new session',
     newPlaceholder: 'describe the task for a new agent…',
-    nameLabel: 'initial session name',
-    namePlaceholder: 'initial session name (optional)',
     launch: 'launch',
     launching: 'launching…',
     launchFailed: 'launch failed — the backend refused or is unreachable',

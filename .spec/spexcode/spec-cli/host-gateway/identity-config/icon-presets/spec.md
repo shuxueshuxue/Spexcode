@@ -19,6 +19,11 @@ copied into another identity field. Emoji, arbitrary Iconify names, and URLs alr
 valid through the adapter; structured chooser writes accept canonical registry ids and well-formed Iconify
 names, while rejecting other new arbitrary strings.
 
+A registry row carries a tile colour and one default ink, and each shape may override that paint with its
+own, so a multi-colour mark needs no second format. Shape keys reach both a string serializer and a React
+renderer verbatim, so every key must be legal in both; hyphenated presentation names are not, and a shape
+that needs its own stroke weight is authored as a painted outline instead.
+
 The same serializer produces browser favicon data URLs from a registry row, so the visual picker, project
 rows, scoped rail, global gateway mark, and browser tab cannot drift into separate variants. Missing values
 use the documented default; structured host writes reject malformed choices before touching disk

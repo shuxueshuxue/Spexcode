@@ -197,13 +197,13 @@ scenarios:
     tags: [frontend-e2e, desktop, cli, backend-api]
     test: spec-dashboard/test/session-web.e2e.mjs
     description: >-
-      Open a real selected session in the served dashboard, publish a changing loopback webpage from the real
-      CLI, inspect its automatic tab and same-origin frame, then use the top-right file menu's eye and the
+      Open a real selected session in the served dashboard, publish a loopback webpage from the real
+      CLI, inspect its automatic tab and same-origin frame, then click a filename in the top-right file menu and use the
       trailing plus picker to open, close, reopen, refresh the file from the right action group, and retract
       the resources.
     expected: >-
       The toolbar stays single-line while resource labels clip or scroll. A fresh web publication gets one
-      selected tab only for the selected session; neither the file-menu eye nor the plus picker duplicates an
+      selected tab only for the selected session; neither clicking an already-open filename nor the plus picker duplicates an
       open resource or creates an overlay preview. A selected file has one right-side refresh action and no
       merge action; a selected web has neither; the Terminal surface has merge and no resource refresh. Closing
       permits one later reopen, and retracting removes the tab because its authorization is gone while the warm

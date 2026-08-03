@@ -51,19 +51,18 @@ test('session toolbar keeps the Terminal tab, adds resource tabs, then Eval and 
 })
 
 test('file rows keep host paths off the label and reserve that detail for the copy tool', () => {
-  assert.match(source, /<span className="si-files-name">\{fileName\(path\)\}<\/span>/)
-  assert.doesNotMatch(source, /<span className="si-files-name" data-tip=/)
+  assert.match(source, /<button type="button" className="si-files-name" role="menuitem" aria-label=\{t\('session\.previewFile'\)\}/)
+  assert.doesNotMatch(source, /className="si-files-name" data-tip=/)
   assert.match(source, /className="si-files-copy" role="menuitem" label=\{path\}/)
-  assert.match(source, /className="si-files-preview" role="menuitem" label=\{t\('session\.previewFile'\)\}/)
   assert.match(source, /className="si-files-download" role="menuitem" label=\{t\('session\.downloadFile'\)\}/)
-  assert.match(source, /onClick=\{\(\) => \{ setOpen\(false\); onPreview\(path\) \}\}/)
+  assert.match(source, /className="si-files-name"[\s\S]{0,220}onClick=\{\(\) => \{ setOpen\(false\); onPreview\(path\) \}\}/)
   assert.doesNotMatch(source, /session\.(?:previewFile|downloadFile|filePreviewTitle)', \{ path/)
   assert.match(en, /previewFile: 'preview file'/)
   assert.match(en, /downloadFile: 'download file'/)
   assert.match(zh, /previewFile: '预览文件'/)
   assert.match(zh, /downloadFile: '下载文件'/)
   assert.match(css, /\.si-files-menu\s*\{[^}]*width:\s*max-content;/s)
-  assert.match(css, /\.si-files-row\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\) repeat\(3, 26px\);/s)
+  assert.match(css, /\.si-files-row\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\) repeat\(2, 26px\);/s)
   assert.match(css, /\.si-files-name\s*\{[^}]*max-width:\s*min\(280px, calc\(100vw - 130px\)\);/s)
 })
 

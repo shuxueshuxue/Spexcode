@@ -30,7 +30,7 @@ try {
   const fullPath = await copy.getAttribute('data-tip')
   if (!fullPath || await name.getAttribute('data-tip') || (await name.textContent())?.includes('/'))
     throw new Error('the compact file row must show only a name; only its copy-path icon may expose the full path')
-  for (const tool of ['.si-files-preview', '.si-files-download']) {
+  for (const tool of ['.si-files-download']) {
     const tip = await row.locator(tool).getAttribute('data-tip')
     if (!tip || tip.includes(fullPath)) throw new Error(`${tool} must name its action without exposing the full path`)
   }
@@ -42,11 +42,11 @@ try {
   await page.mouse.click(12, 840)
   await page.locator('.si-files-menu').waitFor({ state: 'hidden' })
   await button.click()
-  await row.locator('.si-files-preview').click()
+  await row.locator('.si-files-name').click()
   const resourceTab = page.locator('.si-resource-tab').filter({ hasText: visibleName })
   await resourceTab.waitFor({ state: 'visible' })
   if (!await resourceTab.evaluate((element) => element.classList.contains('on')))
-    throw new Error('the files-menu eye must select the same resource tab opened by the toolbar picker')
+    throw new Error('clicking the filename must select the same resource tab opened by the toolbar picker')
   await page.locator('.si-resource-file').waitFor({ state: 'visible' })
   if (await page.locator('.si-file-preview-backdrop').count())
     throw new Error('a files-menu preview must not create a second pop-out surface')

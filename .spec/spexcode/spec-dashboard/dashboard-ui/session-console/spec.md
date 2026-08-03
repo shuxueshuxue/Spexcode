@@ -146,7 +146,7 @@ action rather than an extension of Eval.
 The plus lists the selected session's posted
 files and loopback web services ([[files]] / [[web]]) that are not already open. Selecting one creates one
 browser-local tab for that exact session/reference; closing it removes only that view and permits reopening from
-the plus menu, never a duplicate. The top-right files dropdown's eye uses this same open/select operation for its
+the plus menu, never a duplicate. Clicking a filename in the top-right files dropdown uses this same open/select operation for its
 file row, so it cannot create a separate preview surface or a duplicate tab. A newly observed posted web service creates its one tab automatically, becoming
 selected only when its session already is. Each resource tab exposes a close icon. A selected **file** resource
 gets exactly one refresh action in the right-side toolbar action group; it rereads the current file preview
@@ -311,8 +311,8 @@ that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, w
 can actually own.) The **toolbar's command
 group** renders the same board-command registry. The independent top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
-hover tooltips. Its eye icon, rather than the inert file name, opens or selects the singleton resource tab; the
-adjacent download tool delegates to the authorized backend route. **Command Box** is present whenever live. The
+hover tooltips. Clicking the filename opens or selects the singleton resource tab; the adjacent download and
+copy tools remain explicit icon actions, with download delegating to the authorized backend route. **Command Box** is present whenever live. The
 right-side action group is surface-specific: a selected file shows its one refresh tool, a selected web shows
 neither refresh nor merge, and the Terminal surface alone shows the 24px **merge** tool. Merge is green and dispatchable only for the
 persisted `awaiting` + `proposal:merge` + `review` projection while liveness is `online`; `nothing`/done,

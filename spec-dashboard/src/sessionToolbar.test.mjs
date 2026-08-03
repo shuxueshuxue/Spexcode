@@ -62,7 +62,8 @@ test('file rows keep host paths off the label and reserve that detail for the co
   assert.match(en, /downloadFile: 'download file'/)
   assert.match(zh, /previewFile: '预览文件'/)
   assert.match(zh, /downloadFile: '下载文件'/)
-  assert.match(css, /\.si-files-menu\s*\{[^}]*width:\s*fit-content;/s)
+  assert.match(css, /\.si-files-menu\s*\{[^}]*width:\s*max-content;/s)
+  assert.match(css, /\.si-files-row\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\) repeat\(3, 26px\);/s)
   assert.match(css, /\.si-files-name\s*\{[^}]*max-width:\s*min\(280px, calc\(100vw - 130px\)\);/s)
 })
 

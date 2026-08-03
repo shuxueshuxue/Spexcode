@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: parent-done-refuses-while-child-runs
+    tags: [cli, backend-api]
+    test: spec-cli/src/session-timeline.test.ts
+    description: >-
+      In an isolated project store, create a governed parent and a direct governed child whose lifecycle is
+      `active`. Through the lifecycle declaration surface, attempt `spex session done --propose nothing`, then
+      declare `spex session park --note ...`, settle the child, and declare done again.
+    expected: >-
+      The first done declaration exits non-zero, leaves the parent's lifecycle unchanged, names the running
+      child id, and gives the exact park repair. Park records `parked`; once the child is settled, the same
+      done declaration succeeds. The implementation never silently changes a requested done/close proposal
+      into park. The Stop gate's forced continuation follows the same rule and records `parked` when a child
+      remains active/parked.
   - name: materialize-failure-note-keeps-record-structured
     tags: [backend-api, cli]
     code: [spec-cli/src/sessions.ts, spec-cli/src/session-create-transaction.test.ts]

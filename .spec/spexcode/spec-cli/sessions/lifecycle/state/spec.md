@@ -53,6 +53,12 @@ human** — a question, or the stop-gate's auto-default for an undeclared/uncomm
 below the cap — [[launch]]), and `idle` (stopped at the prompt without declaring). `merges` is a metadata
 count, not a state.
 
+The parent/child supervision rule is explicit at the lifecycle write boundary: when the session has a direct
+child whose authored lifecycle is `active` or `parked` (and it is not stopped or archived), the parent is still
+supervising. Any `done`/`awaiting` declaration, including a close proposal, is refused with the running child ids and the repair command
+`spex session park`; it is never silently rewritten. Once no child is clearly running, the parent may declare
+its own truthful final state.
+
 `parked` and `asking` split what a single over-loaded `blocked` used to conflate: a self-resuming
 background wait (leave it alone) versus a dead stop that won't move until a human nudges it (act on it).
 They carry distinct faces, so the board never reads "stuck, needs me" as "fine, self-resuming," or the

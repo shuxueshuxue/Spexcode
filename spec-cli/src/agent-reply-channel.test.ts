@@ -17,6 +17,8 @@ test('withSenderHint: agent→agent stamps the sender headline DELIMITED as a se
   assert.ok(out.includes(`— from session "launch" (${FULL})`), out)
   // the reply rides the SAME send, addressed at the sender's FULL id (never a prefix — must hit one session)
   assert.ok(out.includes(`To reply: spex session send ${FULL} "<your reply>"`), out)
+  assert.ok(out.includes('spex session files add <path>'), out)
+  assert.ok(out.includes('spex session web add <url>'), out)
 })
 
 test('withSenderHint: a sender named only by its bare id is `session <id>` — no empty quotes/parens', () => {

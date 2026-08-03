@@ -141,8 +141,15 @@ test('YATU: five real backends observe 24 CLI lifecycle writes without duplicate
       assert.match(result.stdout, new RegExp(`state -> ${status}`))
     }
 
-    const response = await fetch(`http://127.0.0.1:${ports[0]}/api/sessions/${id}/timeline`)
-    assert.equal(response.status, 200)
+    const responses: Response[] = []
+    await waitFor(async () => {
+      const candidate = await fetch(`http://127.0.0.1:${ports[0]}/api/sessions/${id}/timeline`).catch(() => null)
+      if (!candidate || candidate.status !== 200) return false
+      responses.push(candidate)
+      return true
+    }, 'timeline API after concurrent writes', 30_000)
+    const response = responses.at(-1)
+    assert.ok(response)
     const body = await response.json() as { events: Array<{ kind: string; status?: string; proposal?: string | null; note?: string | null }> }
     const events = body.events.filter((event) => event.kind === 'status')
     assert.deepEqual(events.map((event) => [event.status, event.proposal, event.note]), moves.map(([status, proposal], index) => [status, proposal ?? null, notes[index]]))

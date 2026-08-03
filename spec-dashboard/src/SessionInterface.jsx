@@ -130,9 +130,8 @@ function SessionFiles({ session, onFailure, onPreview }) {
       {open && (
         <div className="si-files-menu" role="menu" aria-label={t('session.filesListLabel')}>
           {files.map((path) => <div key={path} className="si-files-row" role="none">
-            <span className="si-files-name">{fileName(path)}</span>
-            <IconButton icon="eye" size={14} className="si-files-preview" role="menuitem" label={t('session.previewFile')}
-              onClick={() => { setOpen(false); onPreview(path) }} />
+            <button type="button" className="si-files-name" role="menuitem" aria-label={t('session.previewFile')}
+              onClick={() => { setOpen(false); onPreview(path) }}>{fileName(path)}</button>
             <IconButton icon="download" size={14} className="si-files-download" role="menuitem" label={t('session.downloadFile')}
               onClick={() => download(path)} />
             <IconButton icon="copy" size={14} className="si-files-copy" role="menuitem" label={path}
@@ -1346,8 +1345,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
                           <span>{tab.label}</span>
                         </button>
-                        <IconButton icon="rotate-ccw" size={12} className="si-resource-tab-action" label={t('session.refreshResourceTab', { name: tab.label })}
-                          onClick={() => refreshResource(tab)} />
                         <IconButton icon="x" size={12} className="si-resource-tab-action" label={t('session.closeResourceTab', { name: tab.label })}
                           onClick={() => closeResource(tab)} />
                       </div>
@@ -1382,7 +1379,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
 
                 <div className="si-actions" role="group" aria-label={t('session.commandsLabel')}>
-                  {uiCmds.filter((c) => c.button)
+                  {activeResource?.kind === 'file' && (
+                    <IconButton icon="rotate-ccw" size={14} className="si-tool sc-blue refresh-resource" data-resource-action="refresh"
+                      label={t('session.refreshResourceTab', { name: activeResource.label })}
+                      onClick={() => refreshResource(activeResource)} />
+                  )}
+                  {uiCmds.filter((c) => c.button && (!activeResource && (!terminalFree || c.name !== 'merge')))
                     // Resident right-anchored tools (Command Box) sort to the row's right edge; transient action
                     // buttons keep their registry order to its left. Stable sort preserves that left order.
                     .sort((a, b) => (a.anchor === 'right' ? 1 : 0) - (b.anchor === 'right' ? 1 : 0))

@@ -54,8 +54,9 @@ the route into an existence oracle for arbitrary backend paths.
 
 ## preview is safe and bounded
 
-The files menu's eye action opens or selects that path's existing [[session-console]] resource tab; it never
-creates a second pop-out reader. Its neighbouring download tool retains the direct download. Preview renders
+Clicking the filename opens or selects that path's existing [[session-console]] resource tab; it never
+creates a second pop-out reader. Its neighbouring download tool retains the direct download, while the copy
+tool remains the only control that exposes the absolute path. Preview renders
 raster PNG, JPEG, GIF, or WebP images, and text extensions as text. `.md` and `.markdown` use the dashboard's
 existing restricted Markdown renderer; every other text extension stays verbatim. The renderer treats raw HTML
 as text rather than executable dashboard markup. Text is served as `text/plain`; the resource tab is
@@ -75,9 +76,11 @@ The selected session's top-right file icon is disabled grey when its projected l
 one path is posted, the same icon is live and opens a compact, content-sized dropdown. Each row shows only
 the file name; the full absolute path is exposed only on its copy-path icon's tooltip, preserving the useful
 host-local detail without turning a toolbar menu into a path dump. Long names clip at a viewport-safe bound,
-but a short name does not inherit a fixed empty menu width. The name is inert: its eye icon opens or selects the
-same singleton resource tab that the toolbar's `+` picker opens, its adjacent download icon starts the download,
-and its copy icon writes the absolute path. Preview errors appear inside that tab, not in a second overlay.
+but a short name does not inherit a fixed empty menu width. Every row uses one flexible filename column followed
+by two fixed action columns, so copy and download stay aligned to the dropdown's right edge across all posted
+paths. The filename itself is the preview target: clicking it opens or selects the same singleton resource tab
+that the toolbar's `+` picker opens. Its adjacent download icon starts the download, and its copy icon writes the
+absolute path. Preview errors appear inside that tab, not in a second overlay.
 File and resource dropdowns share the app's restrained context-menu chrome:
 a real border plus shallow ambient depth, never a glowing halo. No browser fetch happens merely because the dropdown opened. The control
 uses the shared icon vocabulary and carries its accessible label/tooltip. A failed download is shown as a

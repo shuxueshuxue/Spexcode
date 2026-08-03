@@ -9,7 +9,7 @@ import { appendSent, lastHumanSendVia, readTimeline, timelineEvents } from './se
 import { pendingMessages } from './delivery-queue.js'
 import { rvSock } from './harness.js'
 import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
-import { cancelSessionWatch, composeSessionPrompt, listSessionWatches, markDone, markState, runningChildSessions, sendText, StateDeclarationConflict, subscribeSessionWatch, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
+import { cancelSessionWatch, composeSessionPrompt, listSessionWatches, markState, sendText, subscribeSessionWatch, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
 // The reply-channel signal must be SYMMETRIC (the [[session-timeline]] write surface): the phone's
 // explicit note-sends and every headless target carry the note insert, and the first terminal send after
@@ -278,20 +278,6 @@ test('withTerminalReplyHint: keeps the message and explicitly countermands the n
   assert.ok(out.includes('--note'), out)
   assert.ok(out.includes('no longer apply'), out)
   assert.ok(out.includes('LIVE ARTIFACT HANDOFF'), out)
-})
-
-test('done/awaiting is refused while a direct child is clearly running; park remains explicit', () => {
-  const home = mkdtempSync(join(tmpdir(), 'spex-child-state-'))
-  seedSessionRecord(home, PARENT)
-  seedSessionRecord(home, ID, PARENT)
-  withHome(home, () => {
-    assert.deepEqual(runningChildSessions(PARENT), [ID])
-    assert.throws(() => markDone('nothing', PARENT), StateDeclarationConflict)
-    assert.equal(markState('parked', { note: `waiting for ${ID}`, sessionId: PARENT }), true)
-    assert.equal(markState('awaiting', { proposal: 'nothing', sessionId: ID }), true)
-    assert.deepEqual(runningChildSessions(PARENT), [])
-    assert.equal(markState('awaiting', { proposal: 'nothing', sessionId: PARENT }), true)
-  })
 })
 
 // ---- the append IS the delivery ([[dispatch]]) ----

@@ -33,7 +33,6 @@ grep -q '^[[:space:]]*"governed"[[:space:]]*:[[:space:]]*true,\?$' "$rec" 2>/dev
 jget() { sed -n "s/^[[:space:]]*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\",\?$/\1/p" "$rec" 2>/dev/null | head -1; }
 status=$(jget status)
 proposal=$(jget proposal)
-running_children=$($S internal session-running-children --session "$sid" 2>/dev/null || true)
 
 # the value of the payload's structured `stop_hook_active` field (true on the hook-forced continuation),
 # read by field name rather than substring-sniffing the JSON blob. ([a-z]* captures true/false portably —
@@ -103,10 +102,6 @@ fi
 [ "${status:-active}" != "active" ] && exit 0
 
 if [ "$cont" = true ]; then
-  if [ -n "$running_children" ]; then
-    $S session park --session "$sid" --note "auto: child session(s) still running — parent parked" >/dev/null 2>&1 || true
-    exit 0
-  fi
   # the forced continuation also stopped without declaring -> escape the loop, don't block. Keep the commit
   # gate airtight: default to awaiting/nothing only when the tree is actually clean; otherwise an undeclared
   # stop with uncommitted work becomes `asking` (needs the human), never a false awaiting/done. The default
@@ -133,10 +128,6 @@ fi
 # declare-LAST discipline, and the `help session` entry that re-explains each choice's condition — every bit
 # of the full-to-terse information gap is recoverable from the entry, none of it from memory.
 taught="$sdir/stop-gate-taught"
-if [ -n "$running_children" ]; then
-  printf '{"decision":"block","reason":"undeclared stop — child session(s) %s are still running. This parent is supervising, so declare `spex session park --note \"waiting for child session(s)\"` as your LAST call; do not declare done/awaiting until every child settles. Conditions: `%s help session`."}\n' "$(printf '%s' "$running_children" | paste -sd, -)" "$S"
-  exit 0
-fi
 if [ -f "$taught" ]; then
   printf '{"decision":"block","reason":"undeclared stop — declare the ONE true state as your LAST call: `%s session <done --propose merge (review; ONLY clickable merge)|nothing (done; no merge)|close (close-pending) / park (parked; managed watch delivery or real background wake-up) / ask (asking; human reply)>`. Conditions: `%s help session`."}\n' "$S" "$S"
   exit 0

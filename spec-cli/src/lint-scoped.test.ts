@@ -1,13 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, readFileSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { extractors } from './anchors.js'
 import { specLint } from './lint.js'
-import { resetHistoryCachesForTests } from './git.js'
+import { eventLedgerDiagnosticsForTests, historyEventCachePathForTests, resetEventLedgerDiagnosticsForTests, resetHistoryCachesForTests } from './git.js'
 
 // [[code-anchor]] YATU CLI cases — the runtime semantics of measured multi-selectors and scoped
 // related, through the REAL `spex spec lint` in throwaway git repos (real stderr + exit code, never
@@ -284,6 +284,41 @@ test('lint is idempotent across process-local index resets', { skip }, async () 
     assert.deepEqual(cold, normalize(await specLint(fx.proj, extractors(fx.proj))), `lint changed on repeat read ${i}`)
     if (previous) assert.deepEqual(cold, previous, `optimized lint changed after cache reset ${i}`)
     previous = cold
+  }
+})
+
+test('one lint transaction joins event streams and hunk facts, rebuilds corruption, and serializes concurrent writers', { skip }, async () => {
+  const fx = fixture()
+  fx.node('calc', 'code:\n  - src/calc.ts#applyRate')
+  fx.commit('v1')
+  writeFileSync(join(fx.proj, 'src/calc.ts'), CALC('10', '2'))
+  fx.commit('first anchored move')
+  const normalize = (findings: Awaited<ReturnType<typeof specLint>>) => findings
+    .map(({ level, rule, spec, file }) => `${level}|${rule}|${spec ?? ''}|${file ?? ''}`).sort()
+  const ledger = historyEventCachePathForTests(fx.proj)
+  try {
+    resetHistoryCachesForTests(); resetEventLedgerDiagnosticsForTests()
+    const first = normalize(await specLint(fx.proj, extractors(fx.proj)))
+    assert.deepEqual(eventLedgerDiagnosticsForTests(), { reads: 1, locks: 1, replaces: 1 }, 'one lint must open and replace one ledger transaction')
+    assert.match(readFileSync(ledger, 'utf8'), /"immutable-hunk-v1"/, 'the same replacement must include the derived hunk facts')
+
+    writeFileSync(ledger, '{broken\n')
+    resetHistoryCachesForTests(); resetEventLedgerDiagnosticsForTests()
+    assert.deepEqual(normalize(await specLint(fx.proj, extractors(fx.proj))), first, 'a corrupt ledger rebuild changed the lint verdict')
+    assert.deepEqual(eventLedgerDiagnosticsForTests(), { reads: 1, locks: 1, replaces: 1 }, 'corruption rebuild must not reload or rewrite mid-build')
+
+    writeFileSync(join(fx.proj, 'src/calc.ts'), CALC('100', '2'))
+    fx.commit('second anchored move')
+    resetHistoryCachesForTests(); resetEventLedgerDiagnosticsForTests()
+    const [left, right] = await Promise.all([
+      specLint(fx.proj, extractors(fx.proj)),
+      specLint(fx.proj, extractors(fx.proj)),
+    ])
+    assert.deepEqual(normalize(left), normalize(right), 'concurrent lint readers disagreed')
+    assert.deepEqual(eventLedgerDiagnosticsForTests(), { reads: 2, locks: 2, replaces: 1 }, 'concurrent writers must serialize through one replacement')
+  } finally {
+    rmSync(dirname(ledger), { recursive: true, force: true })
+    resetHistoryCachesForTests()
   }
 })
 

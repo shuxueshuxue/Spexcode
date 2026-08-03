@@ -115,6 +115,10 @@ node count, and a single open's cost must grow with the selected session's node 
 per-node or per-reading spawn. It adds no second resident cache, generation,
 or gate: the result enters the existing content-revision/projection cache like every other session model.
 
+When that one model needs history or anchor-hunk facts, its build joins [[source-of-truth]]'s ledger transaction
+before either demand runs. The session face therefore shares its one decoded integrity-checked snapshot, lock,
+and possible replacement instead of making an event-stream transaction followed by a hunk-fact transaction.
+
 **The toolbar summary is a coherent projection, not a small fetch.** `sessionEvalSummary` lives beside the
 affected selector in this engine and reduces the already-scoped model to seven useful counts: measured,
 affected total, fresh pass, fresh fail, measured-but-needing-review, blind, and unknown. The toolbar renders the

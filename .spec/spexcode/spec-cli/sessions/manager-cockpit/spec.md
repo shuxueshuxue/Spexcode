@@ -60,11 +60,14 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   corpus, while a cold [[session-eval]] deep-link still pays this gate once — calling the cold path solved
   would be false, and the gate's share of it is still about ten times that page's own all-selector validation.
 
-  The reuse is per PROCESS, and the residual is stated rather than hidden: a fresh backend pays the first touch
-  again, and a trunk commit that touches the backend's own source makes the supervisor replace the child, so
-  that verdict is a first touch too. Crossing THAT needs hunk facts durable across processes, stored under the
-  same image identity, in the existing on-disk event ledger — [[source-of-truth]]'s to own, and deliberately
-  NOT implemented. Proportionality is
+  The reusable hunk facts are durable across processes in [[source-of-truth]]'s existing on-disk event ledger,
+  keyed by the SAME ordered image identity and pinned range-semantics schema [[code-anchor]] uses in process.
+  A fresh backend therefore replays known facts after a restart; an image the ledger has never seen still pays
+  one Git derivation and joins the gate's existing build-local ledger snapshot, lock, and one writer rather
+  than opening a second ledger transaction. This is not a second cache of
+  the lint verdict: a moved fingerprint still recomputes the verdict from its current tree, and no selector
+  outcome, window, or reachability judgment is persisted. A trunk commit that replaces the backend child is
+  consequently a first gate only for its newly introduced images, not a corpus-wide first touch. Proportionality is
   bought the one way described and no other: the gate keeps NO second cache of its verdict and narrows
   nothing — the counts are exactly what `spex spec lint` reports for that tree with its dirty files included, a
   moved fingerprint always recomputes instead of serving last-known, and a rejected run is never cached.

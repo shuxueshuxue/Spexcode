@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync, appendFileSync, mkdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, appendFileSync, mkdirSync, statSync, readdirSync, openSync, closeSync, readSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { sessionStoreDir, sessionArtifactPath, readAliasedRawRecord } from './layout.js'
 import type { Lifecycle, Proposal } from './sessions.js'
 
@@ -18,10 +19,81 @@ export type TimelineEvent =
   | { ts: string; kind: 'sent'; mid: string; text: string; from: string | null; replyVia?: 'note' }
 
 const timelinePath = (id: string): string => sessionArtifactPath(id, 'timeline.ndjson')
+const segmentsDir = (id: string): string => sessionArtifactPath(id, 'timeline')
+const SEGMENT = /^(\d+)\.ndjson$/
+const SEGMENT_NAME_WIDTH = 12
+const TAIL_BLOCK_BYTES = 64 * 1024
+
+// One logical timeline is legacy timeline.ndjson followed by immutable numbered segments. The directory
+// listing is its only index: numbering is append order, so there is no mutable manifest to repair.
+function segmentFiles(id: string): string[] {
+  try {
+    const dir = segmentsDir(id)
+    const names = readdirSync(dir).filter((name) => SEGMENT.test(name)).sort((a, b) => {
+      const an = BigInt(SEGMENT.exec(a)![1]), bn = BigInt(SEGMENT.exec(b)![1])
+      return an < bn ? -1 : an > bn ? 1 : 0
+    })
+    return names.map((name) => join(dir, name))
+  } catch { /* no numbered segments yet */ }
+  return []
+}
+
+function timelineFiles(id: string): string[] {
+  const files: string[] = []
+  const legacy = timelinePath(id)
+  if (existsSync(legacy)) files.push(legacy)
+  files.push(...segmentFiles(id))
+  return files
+}
+
+const segmentLimit = (): number => {
+  const configured = Number(process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES)
+  return Number.isFinite(configured) ? Math.max(1024, Math.floor(configured)) : 4 * 1024 * 1024
+}
+
+function activeSegment(id: string, bytes: number): string {
+  const dir = segmentsDir(id)
+  mkdirSync(dir, { recursive: true })
+  const segments = segmentFiles(id)
+  const current = segments.at(-1)
+  if (!current) return join(dir, `${String(1).padStart(SEGMENT_NAME_WIDTH, '0')}.ndjson`)
+  try {
+    if (statSync(current).size === 0 || statSync(current).size + bytes <= segmentLimit()) return current
+  } catch { /* a vanished active segment is recreated under its next number */ }
+  const n = BigInt(SEGMENT.exec(basename(current))![1]) + 1n
+  return join(dir, `${String(n).padStart(SEGMENT_NAME_WIDTH, '0')}.ndjson`)
+}
 
 function append(id: string, ev: TimelineEvent): void {
   mkdirSync(sessionStoreDir(id), { recursive: true })
-  appendFileSync(timelinePath(id), JSON.stringify(ev) + '\n')
+  const line = JSON.stringify(ev) + '\n'
+  appendFileSync(activeSegment(id, Buffer.byteLength(line)), line)
+}
+
+function parseLines(lines: string[]): TimelineEvent[] {
+  return lines.map((l) => {
+    try { return JSON.parse(l) as TimelineEvent } catch { return null }
+  }).filter((e): e is TimelineEvent => e != null && (e.kind === 'status' || e.kind === 'sent'))
+}
+
+function tailLines(path: string, limit: number): string[] {
+  let fd: number | null = null
+  try {
+    const size = statSync(path).size
+    fd = openSync(path, 'r')
+    let start = size
+    let text = ''
+    while (start > 0) {
+      const next = Math.max(0, start - TAIL_BLOCK_BYTES)
+      const buf = Buffer.alloc(start - next)
+      readSync(fd, buf, 0, buf.length, next)
+      text = buf.toString('utf8') + text
+      if (text.split('\n').filter(Boolean).length >= limit || next === 0) break
+      start = next
+    }
+    return text.split('\n').filter(Boolean).slice(-limit)
+  } catch { return [] }
+  finally { if (fd !== null) closeSync(fd) }
 }
 
 // Record a lifecycle value that has already landed in session.json. TypeScript state writers call this
@@ -47,18 +119,19 @@ export function appendSent(id: string, text: string, from: string | null, replyV
 // nothing. Index = event position, which is what a cursor names ([[session-cursors]]).
 export function timelineEvents(id: string): TimelineEvent[] {
   try {
-    const p = timelinePath(id)
-    if (!existsSync(p)) return []
-    return readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => {
-      try { return JSON.parse(l) as TimelineEvent } catch { return null }
-    }).filter((e): e is TimelineEvent => e != null && (e.kind === 'status' || e.kind === 'sent'))
+    return timelineFiles(id).flatMap((path) => parseLines(readFileSync(path, 'utf8').split('\n').filter(Boolean)))
   } catch { return [] }
 }
 
 // the same L0 read taken as CHEAPLY as it can be: a follower ([[session-follow]]) ticks over many logs, so it
 // stats first and parses only what grew. null = no log yet (a session that has authored nothing).
 export function timelineStamp(id: string): string | null {
-  try { const s = statSync(timelinePath(id)); return `${s.size}:${s.mtimeMs}` }
+  try {
+    const path = timelineFiles(id).at(-1)
+    if (!path) return null
+    const s = statSync(path)
+    return `${path}:${s.size}:${s.mtimeMs}`
+  }
   catch { return null }
 }
 
@@ -92,7 +165,12 @@ export function readTimeline(id: string, limit = 500): { events: TimelineEvent[]
   let raw: ReturnType<typeof readAliasedRawRecord>
   try { raw = readAliasedRawRecord(id) } catch { return null }
   if (!raw || !raw.governed) return null
-  const evs = timelineEvents(id)
-  const tail = evs.slice(Math.max(0, evs.length - Math.max(1, limit)))
+  const wanted = Math.max(1, limit)
+  const tail: TimelineEvent[] = []
+  for (const path of timelineFiles(id).reverse()) {
+    const remaining = wanted - tail.length
+    if (remaining <= 0) break
+    tail.unshift(...parseLines(tailLines(path, remaining)))
+  }
   return { events: tail.map((e) => (e.kind === 'status' ? { ...e, display: timelineDisplay(e) } : e)) }
 }

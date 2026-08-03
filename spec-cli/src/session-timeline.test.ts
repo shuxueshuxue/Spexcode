@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -291,6 +291,27 @@ test('appendSent stamps a unique mid on each durable line', () => {
       [second.mid, 'again', 'sender-1', 'note'],
     ])
   })
+})
+
+test('new appends rotate immutable numbered segments while the read surface preserves event order', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home)
+  const previous = process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
+  process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = '1024'
+  try {
+    withHome(home, () => {
+      appendSent(ID, 'a'.repeat(900), null)
+      appendSent(ID, 'b'.repeat(900), null)
+      appendSent(ID, 'c'.repeat(900), null)
+      const dir = join(sessionStoreDir(ID), 'timeline')
+      assert.deepEqual(readdirSync(dir).sort(), ['000000000001.ndjson', '000000000002.ndjson', '000000000003.ndjson'])
+      assert.deepEqual(timelineEvents(ID).map((event) => event.kind === 'sent' ? event.text[0] : '?'), ['a', 'b', 'c'])
+      assert.deepEqual(readTimeline(ID, 2)?.events.map((event) => event.kind === 'sent' ? event.text[0] : '?'), ['b', 'c'])
+    })
+  } finally {
+    if (previous === undefined) delete process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES
+    else process.env.SPEXCODE_TIMELINE_SEGMENT_BYTES = previous
+  }
 })
 
 test('a send the adapter cannot take still succeeds, and the message stays OWED', async () => {

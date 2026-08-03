@@ -116,7 +116,7 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   themselves from an honest empty page. At 390px the same controls wrap without horizontal overflow; no
   mobile-only pagination dialect exists.
 - **Matching is [[review-filters]], not page code.** The canonical ListViews bridge their ONE parsed token
-  text into that shared Issue/Eval engine and render its data-derived options; [[work-pane]] and
+  text into that shared Issue/Eval engine and render its data-derived options; [[node-popup]] and
   [[eval-tab]] project the same adapters into one extremely compact embedded control with popup-local
   state. This node owns the presentations and canonical address behavior — never a second parser or a
   second field predicate.

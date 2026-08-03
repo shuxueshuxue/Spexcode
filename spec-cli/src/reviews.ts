@@ -327,24 +327,25 @@ export async function evalDetailReview(node: string, scenario: string, scope?: s
   return projectEvalDetail(trunkEvalReviewItems(snapshot.evalNodes), sourceNode?.readings ?? [], node, scenario)
 }
 
-async function timelineEvalReview(text: string, requestedPage: unknown) {
-  const node = readToken(text, 'node')
-  if (!node) return null
-  const [timeline, sessions] = await Promise.all([evalTimeline(node), listSessions()])
-  const measured = new Set(timeline.readings.map((reading) => reading.scenario))
-  const items = [
-    ...timeline.scenarios.filter((scenario) => !measured.has(scenario.name)).map((scenario) => ({
+export function timelineEvalReviewItems(timeline: Awaited<ReturnType<typeof evalTimeline>>, node: string): ReviewItem[] {
+  const declared = new Set(timeline.scenarios.map((scenario) => scenario.name))
+  const latest = new Map<string, any>()
+  for (const reading of timeline.readings) {
+    if (declared.has(reading.scenario) && !latest.has(reading.scenario)) latest.set(reading.scenario, reading)
+  }
+  return [
+    ...timeline.scenarios.filter((scenario) => !latest.has(scenario.name)).map((scenario) => ({
       ...scenario,
       scenario: scenario.name,
       node,
       filterKind: EVAL_FILTER_KIND.UNMEASURED,
     })),
-    ...timeline.readings.map((reading, index) => ({
+    ...[...latest.values()].map((reading) => ({
       ...reading,
       state: evalReviewState(reading),
       node,
       filterKind: EVAL_FILTER_KIND.RESULT,
-      filterKey: `${EVAL_FILTER_KIND.RESULT}:${index}`,
+      filterKey: `${EVAL_FILTER_KIND.RESULT}:${reading.scenario}`,
     })),
     ...(timeline.dangling ?? []).map((track) => ({
       ...track,
@@ -353,6 +354,13 @@ async function timelineEvalReview(text: string, requestedPage: unknown) {
       filterKey: `${EVAL_FILTER_KIND.DANGLING}:${track.threadId}`,
     })),
   ]
+}
+
+async function timelineEvalReview(text: string, requestedPage: unknown) {
+  const node = readToken(text, 'node')
+  if (!node) return null
+  const [timeline, sessions] = await Promise.all([evalTimeline(node), listSessions()])
+  const items = timelineEvalReviewItems(timeline, node)
   const filtered = evalFilterModel(items, tokenFilterState(text, 'eval'), { sessions, defaultKind: 'all', defaultSection: '' })
   return {
     scope: null,

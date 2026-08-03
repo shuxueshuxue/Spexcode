@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { boundedEvalNeighbors, focusNodes, measuredSequence, paginateReview, projectEvalDetail, reviewPageNumber, scopedEvalReviewItems, trunkEvalReviewItems } from './reviews.js'
+import { boundedEvalNeighbors, focusNodes, measuredSequence, paginateReview, projectEvalDetail, reviewPageNumber, scopedEvalReviewItems, timelineEvalReviewItems, trunkEvalReviewItems } from './reviews.js'
 import { orderRowsOf } from '../../spec-eval/src/sessioneval.js'
 // @ts-expect-error The shared browser/server engine is deliberately plain JS — the same module the server
 // folds counts with, so this test measures the real canonical path rather than a re-implementation.
@@ -87,6 +87,24 @@ test('trunk and scoped eval sources produce one tagged stable item vocabulary', 
     ['legacy', ['code']],
     ['blind', ['code']],
   ], 'measured and blind rows carry the same canonical scenario impact')
+})
+
+test('node timeline review projects one latest reading per declared scenario', () => {
+  const items = timelineEvalReviewItems({
+    scenarios: [{ name: 'measured' }, { name: 'blind' }],
+    readings: [
+      { scenario: 'measured', ts: '2026-08-03T12:00:00.000Z', fresh: true, verdict: { status: 'pass' } },
+      { scenario: 'measured', ts: '2026-08-02T12:00:00.000Z', fresh: true, verdict: { status: 'fail' } },
+      { scenario: 'retired', ts: '2026-08-01T12:00:00.000Z', fresh: true, verdict: { status: 'pass' } },
+    ],
+    dangling: [{ scenario: 'retired', threadId: 'dangling-1' }],
+  } as any, 'node')
+
+  assert.deepEqual(items.map((item: any) => [item.scenario, item.filterKind, item.ts]), [
+    ['blind', 'unmeasured', undefined],
+    ['measured', 'result', '2026-08-03T12:00:00.000Z'],
+    ['retired', 'dangling', undefined],
+  ])
 })
 
 test('one detail projection returns only selected history and at most five lightweight neighbors', () => {

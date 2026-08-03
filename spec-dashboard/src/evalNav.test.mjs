@@ -66,7 +66,7 @@ test('popup tab captions: no visible key digits; state counts speak the shared R
   assert.match(nodeView, /const evalFail = node\.reviewSummary\?\.evals\?\.fail \|\| 0/)
 })
 
-test('the compact filter row leads with the one showing-X-of-Y summary from the filter model', () => {
+test('the compact filter row keeps its count while the Eval pane has a permanent ListView door', () => {
   const shell = read('ReviewShell.jsx')
   // the primitive renders full words + a phone-width X/Y condensation, the sentence kept as a real
   // (visually hidden) text node for assistive tech
@@ -78,6 +78,8 @@ test('the compact filter row leads with the one showing-X-of-Y summary from the 
   assert.match(nodeView, /summary=\{\{ shown: filterItems\.length, total: page\.data\.total \}\}/)
   assert.match(nodeView, /summary=\{\{ shown: issues\.length, total: page\.data\.total \}\}/)
   assert.match(nodeView, /className="pane-view-all" href=\{addressHash\(reviewListAddress\('issues', query\)\)\}/)
-  assert.match(nodeView, /className="pane-view-all" href=\{addressHash\(reviewListAddress\('evals', query\)\)\}/)
+  assert.match(nodeView, /className="pane-eval-list-door" href=\{addressHash\(reviewListAddress\('evals', query\)\)\} data-tip=\{t\('score\.openList'\)\} aria-label=\{t\('score\.openList'\)\}/)
+  const evalPane = nodeView.slice(nodeView.indexOf('export function EvalPane'), nodeView.indexOf('// PANES keys'))
+  assert.doesNotMatch(evalPane, /pane-view-all/)
   assert.match(css, /@media \(max-width: 640px\) \{\s*\.rf-summary-full \{ display: none; \}/)
 })

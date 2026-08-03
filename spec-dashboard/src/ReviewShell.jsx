@@ -390,7 +390,7 @@ export function TokenQueryInput({ value = '', onSubmit, placeholder, label, keys
 // `summary` ({shown, total}) leads the row with the ONE result count — "showing X of Y" on desktop,
 // bare X/Y under the phone breakpoint (the aria-label keeps the words) — so the filter row's leading
 // space states what the current view yields without repeating the caption's state tallies.
-export function CompactReviewFilter({ value = '', onChange, placeholder, searchLabel, filterLabel, groups, clearLabel, clearSearchLabel, summary }) {
+export function CompactReviewFilter({ value = '', onChange, placeholder, searchLabel, filterLabel, groups, clearLabel, clearSearchLabel, summary, trailing = null }) {
   const t = useT()
   const box = (
     <div className="rf-compact" role="search">
@@ -412,6 +412,7 @@ export function CompactReviewFilter({ value = '', onChange, placeholder, searchL
         <span className="rf-summary-compact" aria-hidden="true">{summary.shown}/{summary.total}</span>
       </span>
       {box}
+      {trailing}
     </div>
   )
 }

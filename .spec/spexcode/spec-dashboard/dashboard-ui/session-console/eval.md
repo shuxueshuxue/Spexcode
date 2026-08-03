@@ -197,7 +197,7 @@ scenarios:
     tags: [frontend-e2e, desktop, cli, backend-api]
     test: spec-dashboard/test/session-web.e2e.mjs
     description: >-
-      Open a real selected session in the served dashboard, publish a changing loopback webpage from the real
+      Open a real selected session in the served dashboard, publish a loopback webpage from the real
       CLI, inspect its automatic tab and same-origin frame, then click a filename in the top-right file menu and use the
       trailing plus picker to open, close, reopen, refresh the file from the right action group, and retract
       the resources.

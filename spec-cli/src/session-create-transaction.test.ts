@@ -141,10 +141,10 @@ esac
   }
   let child = startBackend()
   const waitForHealth = () => waitFor(async () => { try { return (await fetch(`${base}/health`)).ok } catch { return false } }, 'backend health')
-  const post = (key: string, prompt = '[[target]] transaction fixture', signal?: AbortSignal) => fetch(`${base}/api/sessions`, {
+  const post = (key: string, prompt = '[[target]] transaction fixture', signal?: AbortSignal, name?: string) => fetch(`${base}/api/sessions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'Idempotency-Key': key },
-    body: JSON.stringify({ prompt, parent: null, launcher: 'stall' }),
+    body: JSON.stringify({ prompt, parent: null, launcher: 'stall', ...(name ? { name } : {}) }),
     signal,
   })
   const rows = () => fetch(`${base}/api/sessions?all=1`).then((response) => response.json()) as Promise<any[]>
@@ -248,10 +248,13 @@ esac
 
     const key = 'collision-112'
     const started = Date.now()
-    const [left, right] = await Promise.all([post(key), post(key)])
+    const [left, right] = await Promise.all([post(key, undefined, undefined, 'formal transaction name'), post(key, undefined, undefined, 'formal transaction name')])
     const [a, b] = await Promise.all([left.json() as Promise<any>, right.json() as Promise<any>])
     assert.equal(left.status, 201); assert.equal(right.status, 201)
     assert.equal(a.id, b.id, 'same-key callers recover one receipt')
+    assert.equal(a.raw.name, 'formal transaction name', 'public record exposes the one initial name override')
+    assert.equal(a.title, 'formal transaction name', 'visible title derives from the same initial name override')
+    assert.equal(a.label, 'formal transaction name', 'selector-compatible label retains the same override')
     assert.match(a.id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
     assert.ok(Date.now() - started < 7_000, 'stalled headed launcher does not hold the receipt')
     assert.equal(dirname(a.path), join(configuredMain, '.worktrees'), 'publication consumes the resolved non-default layout.main')
@@ -267,6 +270,7 @@ esac
       return Object.hasOwn(frame.set ?? {}, `sess:${a.id}`)
     }), 'successful public create must explicitly push its session unit to the delta graph stream')
     assert.deepEqual(sessionDirs(), [a.id])
+    assert.equal(JSON.parse(readFileSync(recordPath(a.id), 'utf8')).name, 'formal transaction name', 'the durable record has no second creation-name field')
     assert.equal(worktrees(), 3)
     assert.match(readFileSync(trace, 'utf8'), /git-start .*defer=session-create .*worktree add/, 'session creation defers the post-checkout refresh to its explicit materialize phase')
     assert.doesNotMatch(readFileSync(trace, 'utf8'), /hook-spex args=/, 'the session-owned post-checkout hook does not compete with the explicit materialize')

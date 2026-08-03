@@ -516,6 +516,8 @@ export default {
     lockTitle: '右键打开会话操作，包括锁定到图谱',
     newSession: '新建会话',
     newSessionTitle: '新建会话（⌥+N）',
+    nameLabel: '会话初始名称',
+    namePlaceholder: '会话初始名称（可选）',
     searchTitle: '搜索（⌥+/）',
     // 合并 issues 页（[[issues-view]]）—— 新建会话旁的第二个顶部按钮。
     issuesOff: 'issues 工作流已关闭。',
@@ -687,6 +689,8 @@ export default {
     noSessions: '没有运行中的会话 —— 点上方 ＋ 新建',
     newSession: '新建会话',
     newPlaceholder: '描述要交给新 agent 的任务…',
+    nameLabel: '会话初始名称',
+    namePlaceholder: '会话初始名称（可选）',
     launch: '启动',
     launching: '启动中…',
     launchFailed: '启动失败 —— 后端拒绝或不可达',

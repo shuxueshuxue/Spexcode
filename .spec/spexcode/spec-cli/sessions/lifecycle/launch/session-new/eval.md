@@ -42,6 +42,20 @@ scenarios:
       that reused the same branch/path.
     code: spec-cli/src/sessions.ts, spec-cli/src/index.ts, spec-cli/src/client.ts
     test: spec-cli/src/session-create-transaction.test.ts
+  - name: create-name-reuses-the-session-name-chain
+    tags: [backend-api, cli, frontend-e2e]
+    description: >
+      In an isolated initialized Git project, create sessions with one explicit human name through the real
+      `spex session new --name`, public `POST /api/sessions`, and Dashboard New Session form. Read each
+      returned/public row and its persisted record, then exercise selector matching, rename, and the Dashboard
+      title after the worker starts.
+    expected: >
+      Every creation path accepts the same optional `name` input and writes it only to the existing record
+      `name` field. Its initial public `title` is that name while `raw.name` retains it and `label` remains the
+      compatible selector handle. A later rename replaces or clears that same field, and no prompt mutation or
+      second session-identity field is introduced.
+    code: spec-cli/src/sessions.ts, spec-cli/src/index.ts, spec-cli/src/cli.ts, spec-dashboard/src/launch.js, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/MobileApp.jsx
+    test: spec-dashboard/test/session-create-name.e2e.mjs
 ---
 
 # measuring session-new

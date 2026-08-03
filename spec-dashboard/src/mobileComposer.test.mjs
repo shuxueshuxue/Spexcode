@@ -24,7 +24,10 @@ test('mobile session detail retains the aligned TimelineChat composer', () => {
 
 test('both mobile-authored composers use the shared auto-growing textarea', () => {
   assert.match(mobileApp, /<ComposerTextarea[\s\S]*className="m-input m-new-input"/)
+  assert.match(mobileApp, /className="m-new-name"/)
+  assert.match(mobileApp, /createSession\(raw, launcher, name\.trim\(\) \|\| undefined\)/)
   assert.match(styles, /\.m-input\s*\{[^}]*min-height:\s*38px;[^}]*max-height:\s*min\(28cqh, 240px\);/s)
+  assert.match(styles, /\.m-new-name\s*\{[^}]*height:\s*38px;/s)
   assert.match(styles, /\.m-new-input\s*\{[^}]*flex:\s*none;[^}]*min-height:\s*120px;/s)
 })
 

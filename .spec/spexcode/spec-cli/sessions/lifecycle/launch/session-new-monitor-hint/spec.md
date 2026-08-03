@@ -40,6 +40,9 @@ another lifecycle: `done --propose merge` means review and the sole clickable me
 done without merge, `close` means close-pending, while ask/park name asking/parked and their distinct wake-up
 owners.
 
+`spex session new --help` lists its optional `--name <name>` alongside the prompt and launcher inputs. The
+name is the new record's initial display override; it does not enter, replace, or alter the launch prompt.
+
 Worker-only live-reference entries keep the same map: `session files add|ls|retract` names live file paths and
 `session web add|ls|retract` names live loopback web URLs ([[files]] / [[web]]). Their own nouns own format and
 gateway policy; this shared drawer tells an agent the capability exists without turning help into another guide.

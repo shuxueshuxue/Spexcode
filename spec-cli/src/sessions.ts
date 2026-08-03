@@ -1629,12 +1629,14 @@ function throwIfCreateAborted(signal: AbortSignal, phase: SessionCreatePhase): v
 export async function sessionCreateRequest(body: unknown, options: SessionCreateRequestOptions = {}): Promise<SessionCreateRequestResult> {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: 400, error: 'body must be a JSON object' }
   const input = body as Record<string, unknown>
-  const unknown = Object.keys(input).filter((key) => !['prompt', 'parent', 'launcher'].includes(key)).sort()
+  const unknown = Object.keys(input).filter((key) => !['prompt', 'parent', 'launcher', 'name'].includes(key)).sort()
   if (unknown.length) return { status: 400, error: `unknown session-create field${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}` }
   const prompt = typeof input.prompt === 'string' ? input.prompt : ''
   if (!prompt.trim()) return { status: 400, error: 'empty prompt' }
   const launcher = typeof input.launcher === 'string' && input.launcher.trim() ? input.launcher.trim() : undefined
   const parent = typeof input.parent === 'string' && input.parent.trim() ? input.parent.trim() : null
+  if (input.name !== undefined && typeof input.name !== 'string') return { status: 400, error: 'session-create name must be a string' }
+  const name = typeof input.name === 'string' && input.name.trim() ? input.name.trim() : null
   let key: string
   try { key = normalizeCreateKey(options.requestKey) }
   catch (error) {
@@ -1643,7 +1645,9 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   }
   const requestDigest = digest(key)
   const id = sessionIdForCreateKey(key)
-  const payloadHash = digest(JSON.stringify({ prompt, parent, launcher: launcher ?? null }))
+  // Keep no-name retries byte-compatible with pre-name receipts; an explicit non-empty name is one more
+  // immutable creation input because it publishes the record's existing display override.
+  const payloadHash = digest(JSON.stringify({ prompt, parent, launcher: launcher ?? null, ...(name ? { name } : {}) }))
   const controller = new AbortController()
   const cancel = () => controller.abort(new SessionCreateError('session_create_cancelled', 'request', 'session creation caller disconnected', 408))
   if (options.signal?.aborted) cancel()
@@ -1653,7 +1657,7 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   traceSessionCreate(id, requestDigest, 'request', 'start')
   try {
     try {
-      const session = await prepareSession(prompt, parent, launcher, { id, requestDigest, payloadHash, signal: controller.signal })
+      const session = await prepareSession(prompt, parent, launcher, name, { id, requestDigest, payloadHash, signal: controller.signal })
       traceSessionCreate(id, requestDigest, 'request', 'finish')
       return { status: 201, session }
     } catch (error) {
@@ -1702,15 +1706,16 @@ async function probeSessionCreateAuthority(target: ApiBaseInfo): Promise<boolean
     return false
   } finally { clearTimeout(timer) }
 }
-export async function createSession(prompt: string, launcher?: string): Promise<Session> {
+export async function createSession(prompt: string, launcher?: string, name?: string): Promise<Session> {
   const parent = ownSessionId()
   const requestKey = randomUUID()
+  const body = { prompt, parent, launcher, ...(name !== undefined ? { name } : {}) }
   const target = await apiBaseInfo()
   const base = target.url
   const refused = await probeSessionCreateAuthority(target)
   if (refused) {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
-    const fallback = await sessionCreateRequest({ prompt, parent, launcher }, { requestKey })
+    const fallback = await sessionCreateRequest(body, { requestKey })
     if (fallback.status === 201) return fallback.session
     const error = new Error(`${fallback.code || 'session_create_failed'}: ${fallback.error}`)
     error.name = 'BackendError'
@@ -1724,7 +1729,7 @@ export async function createSession(prompt: string, launcher?: string): Promise<
     res = await fetch(`${base}/api/sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Idempotency-Key': requestKey },
-      body: JSON.stringify({ prompt, parent, launcher }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     })
   } catch (error) {
@@ -1988,7 +1993,7 @@ async function proveSessionCandidate(path: string, branch: string, signal: Abort
   return null
 }
 
-async function prepareSession(prompt: string, parent: string | null, launcher: string | undefined, context: SessionCreateContext): Promise<Session> {
+async function prepareSession(prompt: string, parent: string | null, launcher: string | undefined, name: string | null, context: SessionCreateContext): Promise<Session> {
   const { id, requestDigest, payloadHash, signal } = context
   let phase: SessionCreatePhase = 'creation-lock'
   let shouldDrain = false
@@ -2102,7 +2107,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
 
           let rec: SessRec = {
             session: id, governed: true, worktreePath: path, branch,
-            node: ref || null, title, name: null, parent: parent && parent !== id ? parent : null,
+            node: ref || null, title, name, parent: parent && parent !== id ? parent : null,
             status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
             harness: h.id, harnessSessionId: null, stopped: false, archived: false, coldProof: null, adapterRecovery: null, launcher: chosen.name,
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,

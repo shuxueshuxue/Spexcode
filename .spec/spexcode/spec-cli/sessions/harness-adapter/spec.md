@@ -212,7 +212,9 @@ surface:
   presence, while lifecycle mutation uses the paginated loaded-ID set, both exact target descendant collections,
   and exact reads only for loaded members authorized by the operation. The periodic report keeps its short bounded
   probe budget; a lifecycle mutation's explicit target census has its own longer bounded budget so a busy shared
-  app-server does not turn a safe target proof into a false refusal. Ordinary stop reads the target and refuses
+  app-server does not turn a safe target proof into a false refusal. A transport-local census refusal is retried
+  a small bounded number of times with the same generation fence; semantic ownership refusals return immediately.
+  Ordinary stop reads the target and refuses
   descendants. Cold archive treats the adapter's native `ancestorThreadId` result as an ownership closure (all depths,
   excluding the ancestor), verifies every member's direct-parent chain against the active/archived collections,
   reads every loaded member, and archives the initially-active closure deepest-first with the ancestor last;

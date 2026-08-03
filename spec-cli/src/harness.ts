@@ -1188,7 +1188,7 @@ function isEndpointLike(value: unknown): value is CodexGenerationEndpoint {
     typeof (value as CodexGenerationEndpoint).socketPath === 'string'
 }
 
-async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expectedGeneration?: string, endpoint = legacyCodexGenerationEndpoint(dir)): Promise<CodexColdPreflight> {
+async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), expectedGeneration?: string, endpoint = legacyCodexGenerationEndpoint(dir)): Promise<CodexColdPreflight> {
   const generation = expectedGeneration ?? codexMutationGeneration(dir, endpoint)
   if (!generation || codexRuntimeGeneration(dir, endpoint) !== generation)
     return { ok: false, reason: 'Codex shared app-server generation is unproven or changed before subtree census' }
@@ -1288,6 +1288,22 @@ async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expecte
     archivedIds: Object.freeze(archivedIds),
   })
   return { ok: true, ...(activeIds.length ? {} : { alreadyCold: true }), receipt }
+}
+
+// A busy app-server can refuse one WebSocket census while accepting the next. The refusal is transport-local,
+// so retry the complete proof (including generation fencing) a small bounded number of times; semantic
+// ownership refusals still return immediately and never turn into repeated native reads.
+const CODEX_COLD_PREFLIGHT_RETRIES = 2
+const CODEX_COLD_PREFLIGHT_RETRY_MS = 250
+const isTransientCodexCensusFailure = (reason: string): boolean =>
+  /(?:timed out|connection|closed during|refused .*census|census failed|app-server busy)/i.test(reason)
+
+async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expectedGeneration?: string, endpoint = legacyCodexGenerationEndpoint(dir)): Promise<CodexColdPreflight> {
+  for (let attempt = 0; ; attempt++) {
+    const result = await codexColdPreflightOnce(threadId, dir, expectedGeneration, endpoint)
+    if (result.ok || attempt >= CODEX_COLD_PREFLIGHT_RETRIES || !isTransientCodexCensusFailure(result.reason)) return result
+    await new Promise((resolve) => setTimeout(resolve, CODEX_COLD_PREFLIGHT_RETRY_MS * (attempt + 1)))
+  }
 }
 
 async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSessionId: string }): Promise<HarnessOrphanThreadQuarantine> {

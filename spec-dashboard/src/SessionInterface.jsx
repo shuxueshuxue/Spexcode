@@ -130,9 +130,8 @@ function SessionFiles({ session, onFailure, onPreview }) {
       {open && (
         <div className="si-files-menu" role="menu" aria-label={t('session.filesListLabel')}>
           {files.map((path) => <div key={path} className="si-files-row" role="none">
-            <span className="si-files-name">{fileName(path)}</span>
-            <IconButton icon="eye" size={14} className="si-files-preview" role="menuitem" label={t('session.previewFile')}
-              onClick={() => { setOpen(false); onPreview(path) }} />
+            <button type="button" className="si-files-name" role="menuitem" aria-label={t('session.previewFile')}
+              onClick={() => { setOpen(false); onPreview(path) }}>{fileName(path)}</button>
             <IconButton icon="download" size={14} className="si-files-download" role="menuitem" label={t('session.downloadFile')}
               onClick={() => download(path)} />
             <IconButton icon="copy" size={14} className="si-files-copy" role="menuitem" label={path}

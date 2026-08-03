@@ -27,7 +27,8 @@ scenarios:
       every row rather than following each filename. Opening the
       menu transfers no file bytes. Clicking the filename opens or selects that path's singleton resource
       tab with the current escaped text or raster image without a disk download; no pop-out preview exists.
-      Its adjacent download tool downloads the bytes currently at that path, including the post-publication edit,
+      That selected tab's right-side toolbar offers refresh, download, and copy path; its download tool downloads
+      the bytes currently at that path, including the post-publication edit,
       proving that the list is a live reference rather than a snapshot. Clicking outside the transient dropdown
       dismisses it.
   - name: preview-refuses-untrusted-or-oversized-files-loudly

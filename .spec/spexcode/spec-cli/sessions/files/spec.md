@@ -54,8 +54,9 @@ the route into an existence oracle for arbitrary backend paths.
 
 ## preview is safe and bounded
 
-The files menu's eye action opens or selects that path's existing [[session-console]] resource tab; it never
-creates a second pop-out reader. Its neighbouring download tool retains the direct download. Preview renders
+Clicking the filename opens or selects that path's existing [[session-console]] resource tab; it never
+creates a second pop-out reader. Its neighbouring download tool retains the direct download, while the copy
+tool remains the only control that exposes the absolute path. Preview renders
 raster PNG, JPEG, GIF, or WebP images, and text extensions as text. `.md` and `.markdown` use the dashboard's
 existing restricted Markdown renderer; every other text extension stays verbatim. The renderer treats raw HTML
 as text rather than executable dashboard markup. Text is served as `text/plain`; the resource tab is

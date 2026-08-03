@@ -46,7 +46,7 @@ try {
   const resourceTab = page.locator('.si-resource-tab').filter({ hasText: visibleName })
   await resourceTab.waitFor({ state: 'visible' })
   if (!await resourceTab.evaluate((element) => element.classList.contains('on')))
-    throw new Error('the files-menu eye must select the same resource tab opened by the toolbar picker')
+    throw new Error('clicking the filename must select the same resource tab opened by the toolbar picker')
   await page.locator('.si-resource-file').waitFor({ state: 'visible' })
   if (await page.locator('.si-file-preview-backdrop').count())
     throw new Error('a files-menu preview must not create a second pop-out surface')

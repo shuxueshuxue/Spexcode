@@ -18,7 +18,7 @@ scenarios:
     description: >-
       Open a real served dashboard in a browser on a selected session with no posted files and capture the
       disabled grey files control. Publish a real artifact with the public CLI, change its bytes in place,
-      refresh the dashboard state, capture the live control and open its list, then click the eye to inspect
+      refresh the dashboard state, capture the live control and open its list, then click the filename to inspect
       the path in its resource tab and use the adjacent download tool to read the browser download.
     expected: >-
       The empty session control is visibly disabled; after publication it is active and lists only the file

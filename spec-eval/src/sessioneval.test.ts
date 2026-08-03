@@ -627,7 +627,7 @@ test('cold scoped demand waits through composed observer holds, then returns the
   })
 })
 
-test('projection cache batches initial misses into one publication', async () => {
+test('projection cache publishes each initial miss independently', async () => {
   let builds = 0, publishes = 0
   const cache = new SessionEvalProjectionCache(async (id) => {
     builds++
@@ -642,8 +642,8 @@ test('projection cache batches initial misses into one publication', async () =>
   assert.deepEqual([...rows.values()].map((row) => row.phase), ['loading', 'loading', 'loading'])
   await cache.idle()
 
-  assert.equal(builds, 3, 'the one batch computes one lean projection per cold session')
-  assert.equal(publishes, 1, 'the batch completion emits one canonical graph nudge, not N pushes')
+  assert.equal(builds, 3, 'each cold session computes one lean projection')
+  assert.equal(publishes, 3, 'each stable session emits its own graph nudge')
 })
 
 test('independent projections start together and publish without waiting for another session', async () => {
@@ -705,7 +705,7 @@ test('projection warmup can be disabled for plain graph reads', async () => {
   assert.equal(builds, 1, 'starting a delta era authorizes the current live projection')
 })
 
-test('projection queue never overlaps per-session history builds', async () => {
+test('independent projection builds have no cross-session concurrency cap', async () => {
   let active = 0, maxActive = 0, builds = 0
   const cache = new SessionEvalProjectionCache(async () => {
     active++
@@ -719,7 +719,7 @@ test('projection queue never overlaps per-session history builds', async () => {
   cache.snapshot(['a', 'b', 'c', 'd'].map((id) => ({ id, path: `/wt/${id}`, liveness: 'online' })))
   await cache.idle()
   assert.equal(builds, 4)
-  assert.equal(maxActive, 1, 'the bounded runner keeps worktree history walks serial')
+  assert.equal(maxActive, 4, 'every independent session build starts together')
 })
 
 test('ending and reopening a delta era does not enqueue a running generation twice', async () => {
@@ -744,7 +744,7 @@ test('ending and reopening a delta era does not enqueue a running generation twi
   assert.equal(cache.get('s')?.phase, 'ready')
 })
 
-test('a selected demand jumps ahead of unrelated queued summaries without opening a second lane', async () => {
+test('a selected demand waits only for its own running summary', async () => {
   const gates = new Map<string, ReturnType<typeof deferred<any>>>()
   const order: string[] = []
   let active = 0, maxActive = 0
@@ -758,34 +758,25 @@ test('a selected demand jumps ahead of unrelated queued summaries without openin
     active--
     return result
   }, () => {}, 'epoch')
-  const sessions = Array.from({ length: 30 }, (_, i) => {
-    const id = `s${i + 1}`
-    return { id, path: `/wt/${id}`, liveness: 'online' }
-  })
+  const sessions = ['s1', 's2'].map((id) => ({ id, path: `/wt/${id}`, liveness: 'online' }))
   cache.snapshot(sessions)
-  await Promise.resolve()
-  assert.deepEqual(order, ['s1'], 'the first summary owns the only running slot')
+  for (let attempt = 0; gates.size < 2 && attempt < 100; attempt++) await Promise.resolve()
+  assert.deepEqual(order, ['s1', 's2'], 'both independent summaries are already running')
 
-  const demand = cache.demand('s30', '/wt/s30', async () => {
-    order.push('demand:s30')
+  const demand = cache.demand('s1', '/wt/s1', async () => {
+    order.push('demand:s1')
     return 'selected'
   })
   gates.get('s1')!.resolve({ kind: 'stable', revision: 'r1', summary: summary(1) })
-  for (let i = 0; i < 20 && order.length < 2; i++) await new Promise((resolve) => setTimeout(resolve, 0))
-  assert.deepEqual(order.slice(0, 2), ['s1', 'demand:s30'], 'the selected id runs before the remaining queue')
+  for (let i = 0; i < 20 && !order.includes('demand:s1'); i++) await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.deepEqual(order, ['s1', 's2', 'demand:s1'], 'the selected demand starts when its own summary settles')
   assert.equal(await demand, 'selected')
-
-  for (const id of ['s2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11', 's12', 's13', 's14', 's15', 's16', 's17', 's18', 's19', 's20', 's21', 's22', 's23', 's24', 's25', 's26', 's27', 's28', 's29']) {
-    while (!gates.has(id)) await Promise.resolve()
-    gates.get(id)!.resolve({ kind: 'stable', revision: `r-${id}`, summary: summary(1) })
-    await Promise.resolve()
-  }
+  gates.get('s2')!.resolve({ kind: 'stable', revision: 'r2', summary: summary(1) })
   await cache.idle()
-  assert.deepEqual(order, ['s1', 'demand:s30', ...Array.from({ length: 28 }, (_, i) => `s${i + 2}`)])
-  assert.equal(maxActive, 1, 'demand priority stays inside the bounded queue')
+  assert.equal(maxActive, 2, 'the selected demand did not serialize unrelated session work')
 })
 
-test('a rejected demand suppresses its cancelled generation until invalidation', async () => {
+test('a rejected demand leaves other independent summaries free to settle', async () => {
   const gates = new Map<string, ReturnType<typeof deferred<any>>>()
   const order: string[] = []
   const cache = new SessionEvalProjectionCache(async (id) => {
@@ -794,52 +785,28 @@ test('a rejected demand suppresses its cancelled generation until invalidation',
     gates.set(id, gate)
     return gate.promise
   }, () => {}, 'epoch')
-  const sessions = [
-    { id: 's1', path: '/wt/s1', liveness: 'online' },
-    { id: 's2', path: '/wt/s2', liveness: 'online' },
-    { id: 's3', path: '/wt/s3', liveness: 'online' },
-  ]
+  const sessions = ['s1', 's2'].map((id) => ({ id, path: `/wt/${id}`, liveness: 'online' }))
   cache.snapshot(sessions)
-  await Promise.resolve()
-  const demand = cache.demand('s3', '/wt/s3', async () => {
-    order.push('demand:s3')
+  for (let attempt = 0; gates.size < 2 && attempt < 100; attempt++) await Promise.resolve()
+  const demand = cache.demand('s1', '/wt/s1', async () => {
+    order.push('demand:s1')
     throw new Error('selected demand failed')
   })
   gates.get('s1')!.resolve({ kind: 'stable', revision: 'r1', summary: summary(1) })
   await assert.rejects(demand, /selected demand failed/)
-  while (!gates.has('s2')) await Promise.resolve()
-  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
   gates.get('s2')!.resolve({ kind: 'stable', revision: 'r2', summary: summary(1) })
   await cache.idle()
-  assert.deepEqual(order, ['s1', 'demand:s3', 's2'])
-
-  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
-  await cache.idle()
-  assert.deepEqual(order, ['s1', 'demand:s3', 's2'], 'same-generation snapshots retain the demand cancellation')
-  assert.deepEqual(cache.get('s3'), { epoch: 'epoch', generation: 0, phase: 'loading' })
-
-  assert.equal(cache.invalidate({ id: 's3' }), 1)
-  assert.equal(cache.snapshot(sessions).get('s3')?.generation, 1)
-  while (!gates.has('s3')) await Promise.resolve()
-  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
-  assert.deepEqual(order, ['s1', 'demand:s3', 's2', 's3'], 'the next generation starts exactly one eager build')
-  gates.get('s3')!.resolve({ kind: 'stable', revision: 'r3', summary: summary(1) })
-  await cache.idle()
-  for (let i = 0; i < 3; i++) cache.snapshot(sessions)
-  await cache.idle()
-  assert.deepEqual(order, ['s1', 'demand:s3', 's2', 's3'], 'settled next-generation snapshots do not duplicate the build')
-  assert.deepEqual(cache.get('s3'), {
-    epoch: 'epoch', generation: 1, phase: 'ready', revision: 'r3', value: summary(1),
-  })
+  assert.deepEqual(order, ['s1', 's2', 'demand:s1'])
+  assert.equal(cache.get('s1')?.phase, 'ready', 'the failed reader did not erase its stable summary')
+  assert.equal(cache.get('s2')?.phase, 'ready', 'the unrelated summary settled normally')
 })
 
-test('a demand enqueued in the batch-finally gap is not lost', async () => {
+test('a demand started beside a summary settlement is not lost', async () => {
   let demand!: Promise<string>
   let cache!: SessionEvalProjectionCache
   cache = new SessionEvalProjectionCache(async (id) => {
     if (id === 's1') {
-      // Queue the demand from the same turn that resolves the only summary. Depending on promise reaction
-      // ordering this lands between the batch body resolving and its finally callback, the lost-wakeup gap.
+      // Start demand from the same turn that resolves the only summary; entry-local scheduling must not lose it.
       queueMicrotask(() => { demand = cache.demand('s2', '/wt/s2', async () => 'settled') })
     }
     return { kind: 'stable', revision: `r-${id}`, summary: summary(1) }

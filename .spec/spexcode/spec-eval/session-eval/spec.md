@@ -163,33 +163,30 @@ cache exists beside the batch one — it mints no entry, schedules no build, and
 consumer that must NOT build can report the existing projection with its phase. [[manager-cockpit]]'s review
 payload is exactly that consumer: this engine calls that payload, so the dependency runs one way only, and
 the cockpit reports `loading`/`updating`/`error`/absent as itself rather than as a computed result. Initial cache misses for live sessions may
-start one batch. A batch snapshots an authorized set and runs it in bounded chunks; every worker stages its
-stable/error outcome privately, so every launched row remains at the one pre-batch `loading` or
-`updating(lastKnown)` cut while its batch is in progress. Without priority work, all completed chunks form one
-finite cohort. A priority demand closes at the current launched-chunk boundary: the completed chunks form the
-finite cohort that is atomically published, while unlaunched authorized rows remain scheduled as the owed
-remainder for a later cohort. At publication, entry identity and generation are compared again; only
-still-current staged outcomes become visible together, followed by exactly one graph nudge. A newer generation,
-observer hold, or priority demand does not wait for global quiet or let an old staged outcome overwrite it.
-Dormant offline history is intentionally demand-only: the graph emits its
-loading/last-known projection without scheduling a summary build for every retained session, while opening that
-session's scoped Evals route builds only the requested worktree model. This keeps the toolbar projection useful
-for active work without turning historical session count into a cold-start fan-out.
+start one independent build per eligible entry. There is no cross-session concurrency cap or publication cohort:
+one session's Git/history work and one session's summary have no shared evaluation cut. Each entry publishes its
+own stable/error outcome as soon as its own generation and content revision still match; an unrelated slow,
+failed, or newer session never keeps that entry at `loading`/`updating`. Entry identity and generation are
+compared again at publication, so this independence cannot let an old result overwrite newer input. The graph
+stream emits the resulting session-unit deltas through its existing debounce; no summary-specific transport,
+cache, timer, or aggregate is introduced. Dormant offline history is intentionally demand-only: the graph emits
+its loading/last-known projection without scheduling a summary build for every retained session, while opening
+that session's scoped Evals route builds only the requested worktree model. This keeps the toolbar projection
+useful for active work without turning historical session count into a cold-start fan-out.
 
-The eager batch is enabled only while a delta graph subscriber owns the current stream era; plain HTTP/CLI
+Eager builds are enabled only while a delta graph subscriber owns the current stream era; plain HTTP/CLI
 reads therefore expose `loading` or last-known summaries without starting work for retained records. Within an
-enabled era, projection builds use a bounded queue rather than `Promise.all` over every live session. The bound
-is a runtime capacity control shared by all projects, not a production-size exception: it keeps git children
-and per-worktree history indexes from multiplying with session count, while the scoped Evals route remains the
-explicit demand path for one opened session.
+enabled era, every eligible current-generation projection starts independently. The resulting Git/node child
+count may scale with the active session set; that is the honest cost of removing an unrelated session's place in
+line from the toolbar's freshness contract. Each session still has exactly one in-flight summary for its own
+generation.
 
-That demand path has priority inside the same queue. A selected session cancels its own queued summary for the
-current generation, waits only for the currently running job, then runs its full model before unrelated queued
-summaries; a second demand for the same id joins the first promise. The queue never opens a second concurrency
-lane, and ordinary summaries resume after the demand settles. A demand that arrives while its own summary is
-already running joins that generation's completion rather than enqueueing a duplicate job.
-A cancelled queued summary remains suppressed for that generation through a rejected demand and repeated
-snapshots; only a later input generation is eager-eligible again.
+The demand path shares this entry-local flight. A selected session cancels an as-yet-unstarted summary for its
+current generation; when that summary is already running, demand waits only for that SAME entry to settle, then
+replays the stable content-addressed model rather than duplicating its work. A second demand for the same id
+joins the first promise. Unrelated eager summaries neither delay nor acquire a special lane around demand; every
+entry is already independently launchable. A rejected demand rejects only its own waiter, while other entries
+continue to settle and a later generation restores ordinary eager eligibility.
 
 **Freshness is event-driven, and an event NAMES its scope.** The one graph stream owns invalidation: refs
 cover session/main HEAD and merge-base moves (including CLI remark commits). A session's fingerprint reads

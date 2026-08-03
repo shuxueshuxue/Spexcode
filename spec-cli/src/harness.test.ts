@@ -996,6 +996,42 @@ test('codex native descendant census includes subAgent sources and follows every
   }
 })
 
+test('Codex close proof waits through a busy app-server collection response', { timeout: 30_000 }, async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), `spex-codex-close-census-delay-${process.pid}-`))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const target = 'delayed-close-target'
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: [], nextCursor: null }
+    if (message.method === 'thread/list' && message.params.ancestorThreadId) return { data: [], nextCursor: null }
+    if (message.method === 'thread/list') {
+      return new Promise((resolve) => setTimeout(() => resolve({
+        data: message.params.archived ? [{ id: target }] : [], nextCursor: null,
+      }), 5_500))
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const root = runtimeRoot()
+  const socket = codexAppServerSock(root)
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    owner = startCodexOwner(root)
+    assert.deepEqual(await codexHarness.coldRetirementPreflight?.({ session: 'delayed-close-session', harnessSessionId: target }), { ok: true, alreadyCold: true })
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('Codex cold retirement proves only target collections and never thread/reads an unrelated loaded sibling', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR

@@ -175,6 +175,9 @@ export const sessionHeadline = sessionTitle
 // execFile SIGKILLs the child and rejects with `killed:true`, which liveSnapshot tells apart from a clean
 // "no server" exit (see probeTimedOut) so a timeout renders `unknown`, not a false `offline`.
 const TMUX_PROBE_TIMEOUT_MS = 4000
+// A destructive close already names one target, so it can afford the longer bounded probe without making
+// every dashboard refresh wait behind an overloaded tmux server.
+const TARGET_PROBE_TIMEOUT_MS = 15000
 async function tmux(args: string[], timeoutMs?: number): Promise<string> {
   const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8', ...(timeoutMs ? { timeout: timeoutMs, killSignal: 'SIGKILL' as const } : {}) })
   return stdout
@@ -650,13 +653,17 @@ export function needsCodexProcScan(windowed: { harness: string; hasPid: boolean 
   return windowed.some((w) => (w.harness || 'claude') === 'codex' && !w.hasPid)
 }
 
-async function liveSnapshot(): Promise<LiveSnap> {
+async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
   const windows = new Map<string, PaneProbe>()
   const titles = new Map<string, string>()
   let out: string
   try {
     // ONE merged spawn replaces the old two (list-sessions + list-panes): window presence + pane pid + title.
-    out = await tmux(['list-panes', '-a', '-F', '#{session_name}\t#{pane_pid}\t#{pane_title}'], TMUX_PROBE_TIMEOUT_MS)
+    // A target-scoped close probe avoids unrelated panes turning a safe close into a global timeout.
+    const args = targetId
+      ? ['list-panes', '-t', targetId, '-F', '#{session_name}\t#{pane_pid}\t#{pane_title}']
+      : ['list-panes', '-a', '-F', '#{session_name}\t#{pane_pid}\t#{pane_title}']
+    out = await tmux(args, targetId ? TARGET_PROBE_TIMEOUT_MS : TMUX_PROBE_TIMEOUT_MS)
   } catch (e) {
     // a TIMEOUT/kill is a probe FAILURE (we can't tell who's alive → unknown, never a false graveyard). A clean
     // non-zero exit ("no server running" — genuinely zero sessions) is authoritative → the empty map = offline.
@@ -2728,7 +2735,7 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
   // A proven cold record is already archived; never clear it and issue a second thread/archive RPC. Verify the
   // adapter's exact resident reference first so an externally respawned thread is repaired rather than hidden.
   if (wt.rec.archived && hasValidColdProof(wt.rec)) {
-    const proofSnap = await liveSnapshot()
+    const proofSnap = await liveSnapshot(id)
     if (proofSnap.probeFailed) throw new ResourceConflict(`refusing to re-archive ${id}: liveness probe failed; the exact leaf may have respawned`)
     const proofLv = h.runtimeOwnership === 'adapter'
       ? (proofSnap.windows.has(id) ? 'online' : 'offline')
@@ -2765,7 +2772,7 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
     if (!wt) return false
   }
 
-  const snap = await liveSnapshot()
+  const snap = await liveSnapshot(id)
   if (snap.probeFailed) throw new ResourceConflict(`refusing to archive ${id}: liveness probe failed; the leaf may still be live`)
   const lv = h.runtimeOwnership === 'adapter'
     ? 'offline'
@@ -2789,7 +2796,7 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
     coldCommitted = true
     const latest = readRecord(id)
     if (!latest) throw new ResourceConflict(`refusing to archive ${id}: session record disappeared before filing`)
-    const finalSnap = await liveSnapshot()
+    const finalSnap = await liveSnapshot(id)
     if (finalSnap.probeFailed) throw new ResourceConflict(`refusing to archive ${id}: final liveness probe failed; the leaf may still be live`)
     const finalLv = h.runtimeOwnership === 'adapter'
       ? (finalSnap.windows.has(id) ? 'online' : 'offline')
@@ -2838,7 +2845,7 @@ async function assertColdRetirementSafe(id: string, rec: SessRec): Promise<void>
   if (rec.adapterRecovery)
     throw new ResourceConflict(`refusing to close archived session ${id}: adapter recovery is pending (${rec.adapterRecovery})`)
 
-  const [snap, socket] = await Promise.all([liveSnapshot(), rendezvousListening(id)])
+  const [snap, socket] = await Promise.all([liveSnapshot(id), rendezvousListening(id)])
   if (snap.probeFailed) throw new ResourceConflict(`refusing to close archived session ${id}: liveness probe failed; target runtime absence is unproven`)
   if (snap.windows.has(id)) throw new ResourceConflict(`refusing to close archived session ${id}: target tmux window has reappeared`)
   if (socket === 'live') throw new ResourceConflict(`refusing to close archived session ${id}: target rendezvous transport has reappeared`)
@@ -2884,7 +2891,7 @@ async function assertQueuedRetirementSafe(id: string, rec: SessRec, path: string
   if (rec.adapterRecovery || launching.has(id))
     throw new ResourceConflict(`refusing to close queued session ${id}: target launch/recovery is already in progress`)
 
-  const [snap, socket] = await Promise.all([liveSnapshot(), rendezvousListening(id)])
+  const [snap, socket] = await Promise.all([liveSnapshot(id), rendezvousListening(id)])
   if (snap.probeFailed) throw new ResourceConflict(`refusing to close queued session ${id}: liveness probe failed; target runtime absence is unproven`)
   if (snap.windows.has(id)) throw new ResourceConflict(`refusing to close queued session ${id}: target tmux window already exists`)
   if (socket === 'live') throw new ResourceConflict(`refusing to close queued session ${id}: target rendezvous transport already exists`)

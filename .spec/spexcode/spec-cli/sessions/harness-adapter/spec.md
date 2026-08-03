@@ -210,7 +210,9 @@ surface:
   product mutation treats that uncertainty as a separate fail-closed blocker. The adapter exposes full projection
   and mutation proof as separate capabilities: resource reporting may read every loaded reference to describe turn
   presence, while lifecycle mutation uses the paginated loaded-ID set, both exact target descendant collections,
-  and exact reads only for loaded members authorized by the operation. Ordinary stop reads the target and refuses
+  and exact reads only for loaded members authorized by the operation. The periodic report keeps its short bounded
+  probe budget; a lifecycle mutation's explicit target census has its own longer bounded budget so a busy shared
+  app-server does not turn a safe target proof into a false refusal. Ordinary stop reads the target and refuses
   descendants. Cold archive treats the adapter's native `ancestorThreadId` result as an ownership closure (all depths,
   excluding the ancestor), verifies every member's direct-parent chain against the active/archived collections,
   reads every loaded member, and archives the initially-active closure deepest-first with the ancestor last;

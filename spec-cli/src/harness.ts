@@ -968,6 +968,9 @@ function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/un
 }
 
 type CodexPagedIdsResult = { ok: true; ids: string[] } | { ok: false; error: string }
+// Dashboard/resource probes keep their own short budget; this target-scoped census is only entered by a
+// lifecycle mutation that already holds the session transition lock and must tolerate a busy app-server.
+const CODEX_MUTATION_CENSUS_MS = 15_000
 // Codex treats an omitted or empty sourceKinds filter as "interactive" defaults. Cold proof must census the
 // entire native thread graph, including subAgent/thread-spawn rows that have no Spex record, so the adapter
 // supplies every protocol source kind explicitly for its thread/list calls.
@@ -982,6 +985,7 @@ function codexPagedIds(
   extractId: (item: unknown) => string | null,
   label: string,
   onItem?: (item: unknown) => void,
+  timeoutMs = CODEX_MUTATION_CENSUS_MS,
 ): Promise<CodexPagedIdsResult> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
@@ -992,7 +996,7 @@ function codexPagedIds(
       if (settled) return
       settled = true; clearTimeout(timer); try { conn.destroy() } catch {}; resolve(result)
     }
-    const timer = setTimeout(() => done({ ok: false, error: `Codex ${label} timed out` }), 5000)
+    const timer = setTimeout(() => done({ ok: false, error: `Codex ${label} timed out after ${timeoutMs}ms` }), timeoutMs)
     conn.on('error', (error) => done({ ok: false, error: `Codex ${label} failed: ${rpcError(error)}` }))
     conn.on('close', () => { if (!settled) done({ ok: false, error: `Codex app-server closed during ${label}` }) })
     const send = (message: JsonRpc) => conn.write(wsText(JSON.stringify(message)))

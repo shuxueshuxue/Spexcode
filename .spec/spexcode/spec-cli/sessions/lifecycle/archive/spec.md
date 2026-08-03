@@ -20,6 +20,7 @@ related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/archive-shelf.e2e.mjs
   - spec-cli/src/session-archive-cold-close.api.test.ts
+  - spec-cli/src/session-close-probe.test.ts
 ---
 
 # archive

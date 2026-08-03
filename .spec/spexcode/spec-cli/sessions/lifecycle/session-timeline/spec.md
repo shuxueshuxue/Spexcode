@@ -11,6 +11,7 @@ related:
   - spec-cli/src/index.ts
   - spec-cli/src/layout.ts
   - spec-cli/src/session-timeline.test.ts
+  - spec-cli/src/session-timeline.api.test.ts
   - spec-dashboard/src/TimelineChat.jsx
 ---
 
@@ -23,7 +24,7 @@ world — what it declared, what was said to it — is a sequence of events, and
 `timeline.ndjson`, in the session's global store dir, is that log: the **record**, and the **conversation** a
 terminal-free surface renders, which are the same sequence read for two purposes. A message is accepted when
 its bytes are in this file — that is what a sender is told and what any later reader can prove. And because
-the file is only a file, it is the one thing about a session that any process may observe without owning
+the log is only files, it is the one thing about a session that any process may observe without owning
 anything — which is how a supervisor, a CI, or any external orchestrator watches a fleet without being
 granted access to it.
 
@@ -43,6 +44,15 @@ One JSON line per event, two kinds:
   session, null = a human. `mid` is a unique per-message id: it is what a reader's cursor names, so the
   same message can never be injected twice and never needs a separate idempotency ledger. The recorded
   text is the message BEFORE mechanism inserts — hints are transport, not conversation.
+
+**One logical log may span immutable files.** Existing sessions keep their legacy `timeline.ndjson` as the
+first segment. New writes append only to the highest numbered `timeline/<n>.ndjson` segment; once a segment
+reaches the fixed byte bound, the writer creates the next number and never edits the old file again. File-name
+order is event order; there is no mutable manifest or second history truth. Every reader joins legacy then
+numbered segments as one log. The detail tail reads newest segments backward until it has its requested events,
+while a full observer still sees the exact full sequence. A sealed segment may later be losslessly compressed,
+but no live cursor authorizes semantic deletion: archive preserves every segment and close remains the one
+physical deletion boundary.
 
 **The append is what ACCEPTS a message; the queue is what owes it.** `sendText` appends the `sent` line and
 enqueues the same message in one hold of the session's record lock ([[dispatch]]), and reports success on that

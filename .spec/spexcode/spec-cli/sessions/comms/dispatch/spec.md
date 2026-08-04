@@ -88,21 +88,24 @@ server's earlier read, and the base is never left half-merged. Async: `POST
 /api/sessions/:id/merge` returns `{dispatched:true}` once the merge prompt is appended (409 only when the
 record cannot accept it). The server no longer bumps `merges` on a click.
 
-The public merge dispatch accepts an optional `reviewedHead` from the immediately preceding manager review.
-An idempotent invocation carries that head together with the standard `Idempotency-Key` header; a key without
-review authority is malformed. The key is request authority, not transport identity: only its
-SHA-256 digest is retained on the existing durable sent timeline event, together with the normalized payload
-digest. Under the same session record lock that appends the prompt, a replay of the same key and payload
-returns the original accepted dispatch without appending or enqueueing a second prompt; reusing that key for
-a different reviewed head fails loudly with `session_merge_key_reused`. A first request whose reviewed head
-does not equal the branch's current exact head fails with `session_merge_head_changed` and records no receipt.
-The first keyed dispatch also proves that the recorded worktree still has its governed symbolic branch
-checked out and that the branch ref names the same object; detached or reassigned worktrees fail with
-`session_merge_branch_unproven` before any prompt or receipt. Callers that omit the header retain the ordinary
-one-shot dispatch and its original response shape **and input tolerance**: the route does not parse their body,
-so invalid JSON, `null`, and extra fields remain irrelevant. Closed parsing belongs only to the keyed authority
-extension. This is not another operation ledger: the
-timeline line is already the durable acceptance record and the pending queue remains its only delivery debt.
+The public merge dispatch requires `expectedBranchHead` and `expectedBaseHead` from the immediately preceding
+manager review together with the standard `Idempotency-Key` header. Missing authority, malformed JSON, unknown
+fields, abbreviated/non-native object ids, an ungoverned record, or any lifecycle other than
+`awaiting` + `proposal=merge` is refused before reopen, record mutation, timeline append, or queue mutation.
+The key is request authority, not transport identity: only a SHA-256 digest bound to the exact session id is
+retained on the existing durable sent timeline event, together with the normalized head-pair digest. Under the
+same session record lock that validates the record and Git pair and appends the prompt, a replay of the same
+session/key/payload returns the original accepted dispatch without appending or enqueueing a second prompt;
+reusing that key for a different pair fails loudly with `session_merge_key_reused`.
+
+The first acceptance proves that the recorded worktree still has its governed symbolic branch checked out,
+that the stored branch ref and canonical base ref still name the expected objects, and that the worktree HEAD
+matches the branch ref. Detached/reassigned worktrees fail with `session_merge_branch_unproven`; either moved
+ref fails with `session_merge_head_changed`. Only after the timeline+queue acceptance exists does merge perform
+the existing ensure-live operation and drain the debt. A retry after a backend crash therefore replays the
+receipt even if that accepted operation already reopened the session. There is no unkeyed bypass and no second
+operation ledger: the timeline line is the durable acceptance record and the pending queue remains its only
+delivery debt.
 
 **Prompts state the task; the git flow is mechanism, not duplicated prose.** The merge prompt above states
 only the **task** plus its own safety steps. It deliberately does **not** re-state the git flow's mechanics,

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -62,6 +62,12 @@ test('public review and merge authority bind exact head and one durable dispatch
   const home = join(fixture, 'home')
   const [portA, portB] = await Promise.all([freePort(), freePort()])
   const tmux = `spex-manager-authority-${process.pid}-${Date.now()}`
+  const gitBin = join(fixture, 'bin')
+  const gitTrace = join(fixture, 'git-argv.log')
+  const realGit = execFileSync('bash', ['-lc', 'command -v git'], { encoding: 'utf8' }).trim()
+  mkdirSync(gitBin, { recursive: true })
+  writeFileSync(join(gitBin, 'git'), '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$SPEX_MANAGER_GIT_TRACE"\nexec "$SPEX_MANAGER_REAL_GIT" "$@"\n')
+  chmodSync(join(gitBin, 'git'), 0o755)
   mkdirSync(join(project, '.spec', 'project'), { recursive: true })
   writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n\n# project\n')
   writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
@@ -80,6 +86,9 @@ test('public review and merge authority bind exact head and one durable dispatch
     SPEXCODE_HOME: home,
     SPEXCODE_TMUX: tmux,
     FAKE_HARNESS_INTERVAL_MS: '50',
+    PATH: `${gitBin}:${process.env.PATH ?? ''}`,
+    SPEX_MANAGER_GIT_TRACE: gitTrace,
+    SPEX_MANAGER_REAL_GIT: realGit,
   }
   delete env.SPEXCODE_API_URL
   delete env.SPEXCODE_SESSION_ID
@@ -114,8 +123,6 @@ test('public review and merge authority bind exact head and one durable dispatch
   let id = ''
   try {
     await Promise.all([waitHealth(baseA, 'backend A health'), waitHealth(baseB, 'backend B health')])
-    const legacyNoBody = await request(baseA, '/api/sessions/no-such-session/merge', { method: 'POST' })
-    assert.equal(legacyNoBody.status, 409, legacyNoBody.text)
     const created = await request(baseA, '/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Idempotency-Key': 'manager-authority-session' },
@@ -138,6 +145,7 @@ test('public review and merge authority bind exact head and one durable dispatch
     git(worktree, 'add', 'value.txt')
     git(worktree, 'commit', '-qm', 'spec: authority one')
     const headOne = git(worktree, 'rev-parse', 'HEAD')
+    const baseOne = git(project, 'rev-parse', 'main')
     const reviewOne = await request(baseA, `/api/sessions/${id}/review`)
     assert.equal(reviewOne.status, 200, reviewOne.text)
 
@@ -146,20 +154,59 @@ test('public review and merge authority bind exact head and one durable dispatch
     git(worktree, 'commit', '-qm', 'spec: authority two')
     const headTwo = git(worktree, 'rev-parse', 'HEAD')
     assert.notEqual(headTwo, headOne)
+    writeFileSync(join(project, 'base.txt'), 'base-two\n')
+    git(project, 'add', 'base.txt')
+    git(project, 'commit', '-qm', 'base two')
+    const baseTwo = git(project, 'rev-parse', 'main')
+    assert.notEqual(baseTwo, baseOne)
     const reviewTwo = await request(baseB, `/api/sessions/${id}/review`)
     assert.equal(reviewTwo.status, 200, reviewTwo.text)
 
-    const noKey = async (body: string) => request(baseA, `/api/sessions/${id}/merge`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body,
+    const merge = (base: string, key: string | null, expectedBranchHead: string, expectedBaseHead: string, extra: Record<string, unknown> = {}) => request(base, `/api/sessions/${id}/merge`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(key !== null ? { 'Idempotency-Key': key } : {}) },
+      body: JSON.stringify({ expectedBranchHead, expectedBaseHead, ...extra }),
     })
-    const noKeyReplies = [
-      await noKey('{ not json'),
-      await noKey('null'),
-      await noKey(JSON.stringify({ reviewedHead: headOne, extra: true })),
-    ]
-    const emptyKey = await request(baseA, `/api/sessions/${id}/merge`, {
-      method: 'POST', headers: { 'content-type': 'application/json', 'Idempotency-Key': '' }, body: JSON.stringify({ reviewedHead: headTwo }),
+    const declare = (proposal: 'merge' | 'nothing') => execFileSync(process.execPath, [
+      tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', proposal, '--note', `authority ${proposal}`,
+    ], { cwd: worktree, env: { ...env, SPEXCODE_SESSION_ID: id }, encoding: 'utf8' })
+
+    const activeBefore = await request(baseA, `/api/sessions/${id}`)
+    const activeRefusal = await merge(baseA, 'state-active', headTwo, baseTwo)
+    const activeAfter = await request(baseA, `/api/sessions/${id}`)
+    declare('nothing')
+    const nothingBefore = await request(baseA, `/api/sessions/${id}`)
+    const nothingRefusal = await merge(baseA, 'state-nothing', headTwo, baseTwo)
+    const nothingAfter = await request(baseA, `/api/sessions/${id}`)
+    declare('merge')
+
+    const noKey = await merge(baseA, null, headTwo, baseTwo)
+    const emptyKey = await merge(baseA, '', headTwo, baseTwo)
+    const missingBase = await request(baseA, `/api/sessions/${id}/merge`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'Idempotency-Key': 'missing-base' },
+      body: JSON.stringify({ expectedBranchHead: headTwo }),
     })
+    const extraField = await merge(baseA, 'extra-field', headTwo, baseTwo, { reviewedHead: headTwo })
+
+    writeFileSync(join(project, 'base.txt'), 'base-three\n')
+    git(project, 'add', 'base.txt')
+    git(project, 'commit', '-qm', 'base three')
+    const baseThree = git(project, 'rev-parse', 'main')
+    const staleBaseBefore = await request(baseA, `/api/sessions/${id}`)
+    const staleBase = await merge(baseA, 'stale-base', headTwo, baseTwo)
+    const staleBaseAfter = await request(baseA, `/api/sessions/${id}`)
+    const reviewThree = await request(baseA, `/api/sessions/${id}/review`)
+    assert.equal(reviewThree.status, 200, reviewThree.text)
+
+    writeFileSync(join(worktree, 'value.txt'), 'review-three\n')
+    git(worktree, 'add', 'value.txt')
+    git(worktree, 'commit', '-qm', 'spec: authority three')
+    const headThree = git(worktree, 'rev-parse', 'HEAD')
+    const staleBranchBefore = await request(baseA, `/api/sessions/${id}`)
+    const staleBranch = await merge(baseA, 'stale-branch', headTwo, baseThree)
+    const staleBranchAfter = await request(baseA, `/api/sessions/${id}`)
+    const reviewFour = await request(baseA, `/api/sessions/${id}/review`)
+    assert.equal(reviewFour.status, 200, reviewFour.text)
     const beforeKeyed = await request(baseA, `/api/sessions/${id}/timeline`)
     const baselinePrompts = beforeKeyed.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text))
 
@@ -175,14 +222,9 @@ test('public review and merge authority bind exact head and one durable dispatch
       return Array.isArray(value) ? value.length : -1
     }
 
-    const merge = (base: string, key: string, reviewedHead: string) => request(base, `/api/sessions/${id}/merge`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'Idempotency-Key': key },
-      body: JSON.stringify({ reviewedHead }),
-    })
     const concurrent = await Promise.all([
-      merge(baseA, 'maintenance-release-1', headTwo),
-      merge(baseB, 'maintenance-release-1', headTwo),
+      merge(baseA, 'maintenance-release-1', headThree, baseThree),
+      merge(baseB, 'maintenance-release-1', headThree, baseThree),
     ])
     const pendingAfterConcurrent = pendingCount()
     await Promise.all([stopBackend(backendA), stopBackend(backendB)])
@@ -190,27 +232,46 @@ test('public review and merge authority bind exact head and one durable dispatch
     backendB = null
     backendA = startBackend(portA)
     await waitHealth(baseA, 'restarted backend health')
-    const replay = await merge(baseA, 'maintenance-release-1', headTwo)
+    const replay = await merge(baseA, 'maintenance-release-1', headThree, baseThree)
     const pendingAfterRestartReplay = pendingCount()
-    const reused = await merge(baseA, 'maintenance-release-1', headOne)
-    const stale = await merge(baseA, 'maintenance-release-2', headOne)
+    const reused = await merge(baseA, 'maintenance-release-1', headTwo, baseThree)
 
-    git(worktree, 'checkout', '--detach', '-q', headTwo)
-    const detached = await merge(baseA, 'maintenance-release-detached', headTwo)
+    declare('merge')
+    git(worktree, 'checkout', '--detach', '-q', headThree)
+    const detached = await merge(baseA, 'maintenance-release-detached', headThree, baseThree)
     git(worktree, 'checkout', '-q', sessionBranch)
-    git(worktree, 'checkout', '-qb', 'authority-other', headTwo)
-    const wrongBranch = await merge(baseA, 'maintenance-release-wrong-branch', headTwo)
+    git(worktree, 'checkout', '-qb', 'authority-other', headThree)
+    const wrongBranch = await merge(baseA, 'maintenance-release-wrong-branch', headThree, baseThree)
     git(worktree, 'checkout', '-q', sessionBranch)
     git(worktree, 'branch', '-D', 'authority-other')
 
     const finalTimeline = await request(baseA, `/api/sessions/${id}/timeline`)
     const finalMergePrompts = finalTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text))
-    const keyedPrompt = finalMergePrompts.find((event: any) => event.text.includes(headTwo))?.text ?? ''
+    const keyedPrompt = finalMergePrompts.find((event: any) => event.text.includes(headThree) && event.text.includes(baseThree))?.text ?? ''
+    const rawTimeline = [join(sessionDir, 'timeline.ndjson'), join(sessionDir, 'timeline')]
+      .flatMap((path) => existsSync(path) && !path.endsWith('timeline') ? [path]
+        : existsSync(path) ? readdirSync(path).map((name) => join(path, name)) : [])
+      .map((path) => readFileSync(path, 'utf8')).join('\n')
+    const gitArgv = existsSync(gitTrace) ? readFileSync(gitTrace, 'utf8').split('\n').filter(Boolean) : []
+    const reviewUsesExactPair = (baseHead: string, branchHead: string) =>
+      gitArgv.some((line) => line.includes(`rev-list --count ${baseHead}..${branchHead}`))
+      && gitArgv.some((line) => line.includes(`merge-base ${baseHead} ${branchHead}`))
+      && gitArgv.some((line) => line.includes(`merge-tree --write-tree --no-messages ${baseHead} ${branchHead}`))
     const observed = {
-      reviewOneHead: reviewOne.body.head,
-      reviewTwoHead: reviewTwo.body.head,
-      noKey: noKeyReplies.map((reply) => ({ status: reply.status, body: reply.body })),
+      reviewOne: { branchHead: reviewOne.body.branchHead, baseHead: reviewOne.body.baseHead },
+      reviewTwo: { branchHead: reviewTwo.body.branchHead, baseHead: reviewTwo.body.baseHead },
+      reviewThree: { branchHead: reviewThree.body.branchHead, baseHead: reviewThree.body.baseHead },
+      reviewFour: { branchHead: reviewFour.body.branchHead, baseHead: reviewFour.body.baseHead },
+      reviewUsesExactPair: reviewUsesExactPair(baseOne, headOne) && reviewUsesExactPair(baseTwo, headTwo)
+        && reviewUsesExactPair(baseThree, headTwo) && reviewUsesExactPair(baseThree, headThree),
+      activeRefusal: { status: activeRefusal.status, code: activeRefusal.body.code, stateUnchanged: activeAfter.body.lifecycle === activeBefore.body.lifecycle && activeAfter.body.proposal === activeBefore.body.proposal },
+      nothingRefusal: { status: nothingRefusal.status, code: nothingRefusal.body.code, stateUnchanged: nothingAfter.body.lifecycle === nothingBefore.body.lifecycle && nothingAfter.body.proposal === nothingBefore.body.proposal },
+      noKey: { status: noKey.status, code: noKey.body.code },
       emptyKey: { status: emptyKey.status, code: emptyKey.body.code },
+      missingBase: { status: missingBase.status, code: missingBase.body.code },
+      extraField: { status: extraField.status, code: extraField.body.code },
+      staleBase: { status: staleBase.status, code: staleBase.body.code, stateUnchanged: staleBaseAfter.body.lifecycle === staleBaseBefore.body.lifecycle && staleBaseAfter.body.proposal === staleBaseBefore.body.proposal },
+      staleBranch: { status: staleBranch.status, code: staleBranch.body.code, stateUnchanged: staleBranchAfter.body.lifecycle === staleBranchBefore.body.lifecycle && staleBranchAfter.body.proposal === staleBranchBefore.body.proposal },
       baselinePromptCount: baselinePrompts.length,
       concurrent: concurrent.map((reply) => ({ status: reply.status, dispatched: reply.body.dispatched, replayed: reply.body.replayed }))
         .sort((left, right) => Number(left.replayed) - Number(right.replayed)),
@@ -218,27 +279,32 @@ test('public review and merge authority bind exact head and one durable dispatch
       replay: { status: replay.status, dispatched: replay.body.dispatched, replayed: replay.body.replayed },
       pendingAfterRestartReplay,
       reused: { status: reused.status, code: reused.body.code },
-      stale: { status: stale.status, code: stale.body.code },
       detached: { status: detached.status, code: detached.body.code },
       wrongBranch: { status: wrongBranch.status, code: wrongBranch.body.code },
       finalPromptCount: finalMergePrompts.length,
-      promptBindsReviewedHead: keyedPrompt.includes(headTwo),
+      promptBindsReviewedPair: keyedPrompt.includes(headThree) && keyedPrompt.includes(baseThree),
       promptReprovesSymbolicBranch: keyedPrompt.includes('symbolic-ref --quiet --short HEAD'),
       promptReprovesStoredRef: keyedPrompt.includes(`show-ref --verify --hash 'refs/heads/${sessionBranch}'`),
+      promptReprovesBaseRef: keyedPrompt.includes(`show-ref --verify --hash 'refs/heads/main'`),
       promptMergesExactObject: keyedPrompt.includes('merge --no-ff') && keyedPrompt.includes('"$candidate"'),
-      rawKeyVisible: JSON.stringify(finalTimeline.body).includes('maintenance-release-1'),
+      rawKeyVisible: rawTimeline.includes('maintenance-release-1'),
     }
     console.log(`manager-authority-proof ${JSON.stringify(observed)}`)
     assert.deepEqual(observed, {
-      reviewOneHead: headOne,
-      reviewTwoHead: headTwo,
-      noKey: [
-        { status: 200, body: { dispatched: true } },
-        { status: 200, body: { dispatched: true } },
-        { status: 200, body: { dispatched: true } },
-      ],
+      reviewOne: { branchHead: headOne, baseHead: baseOne },
+      reviewTwo: { branchHead: headTwo, baseHead: baseTwo },
+      reviewThree: { branchHead: headTwo, baseHead: baseThree },
+      reviewFour: { branchHead: headThree, baseHead: baseThree },
+      reviewUsesExactPair: true,
+      activeRefusal: { status: 409, code: 'session_merge_not_proposed', stateUnchanged: true },
+      nothingRefusal: { status: 409, code: 'session_merge_not_proposed', stateUnchanged: true },
+      noKey: { status: 400, code: 'session_merge_invalid_request' },
       emptyKey: { status: 400, code: 'session_merge_invalid_request' },
-      baselinePromptCount: 3,
+      missingBase: { status: 400, code: 'session_merge_invalid_request' },
+      extraField: { status: 400, code: 'session_merge_invalid_request' },
+      staleBase: { status: 409, code: 'session_merge_head_changed', stateUnchanged: true },
+      staleBranch: { status: 409, code: 'session_merge_head_changed', stateUnchanged: true },
+      baselinePromptCount: 0,
       concurrent: [
         { status: 200, dispatched: true, replayed: false },
         { status: 200, dispatched: true, replayed: true },
@@ -247,13 +313,13 @@ test('public review and merge authority bind exact head and one durable dispatch
       replay: { status: 200, dispatched: true, replayed: true },
       pendingAfterRestartReplay: 1,
       reused: { status: 409, code: 'session_merge_key_reused' },
-      stale: { status: 409, code: 'session_merge_head_changed' },
       detached: { status: 409, code: 'session_merge_branch_unproven' },
       wrongBranch: { status: 409, code: 'session_merge_branch_unproven' },
-      finalPromptCount: 4,
-      promptBindsReviewedHead: true,
+      finalPromptCount: 1,
+      promptBindsReviewedPair: true,
       promptReprovesSymbolicBranch: true,
       promptReprovesStoredRef: true,
+      promptReprovesBaseRef: true,
       promptMergesExactObject: true,
       rawKeyVisible: false,
     })

@@ -2289,13 +2289,13 @@ function parseStatPath(token: string): { from: string; to: string } {
   const arrowAt = token.indexOf(' => ')
   return arrowAt >= 0 ? { from: token.slice(0, arrowAt), to: token.slice(arrowAt + 4) } : { from: token, to: token }
 }
-export async function mergeBaseDiff(wtPath: string, mainRef = 'main'): Promise<ReviewDiffFile[]> {
+export async function mergeBaseDiff(wtPath: string, mainRef = 'main', headRef = 'HEAD'): Promise<ReviewDiffFile[]> {
   const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
-  const base = (await run(['merge-base', mainRef, 'HEAD'])).trim()
+  const base = (await run(['merge-base', mainRef, headRef])).trim()
   if (!base) return []
   const [numstatOut, statusOut] = await Promise.all([
-    run(['diff', '--numstat', '-M', `${base}..HEAD`]),
-    run(['diff', '--name-status', '-M', `${base}..HEAD`]),
+    run(['diff', '--numstat', '-M', `${base}..${headRef}`]),
+    run(['diff', '--name-status', '-M', `${base}..${headRef}`]),
   ])
   const status = new Map<string, { status: string; from: string }>()
   for (const r of parseNameStatus(statusOut)) status.set(r.to, { status: DIFF_STATUS[r.code] ?? r.code, from: r.from })
@@ -2316,11 +2316,11 @@ export async function mergeBaseDiff(wtPath: string, mainRef = 'main'): Promise<R
   return files
 }
 
-export function mergeConflicts(wtPath: string, mainRef = 'main'): Promise<boolean> {
+export function mergeConflicts(wtPath: string, mainRef = 'main', headRef = 'HEAD'): Promise<boolean> {
   return new Promise((resolve) => {
     const env = { ...process.env }
     delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
-    execFile(gitBinary(env), ['-C', wtPath, 'merge-tree', '--write-tree', '--no-messages', mainRef, 'HEAD'],
+    execFile(gitBinary(env), ['-C', wtPath, 'merge-tree', '--write-tree', '--no-messages', mainRef, headRef],
       { encoding: 'utf8', env, maxBuffer: 1 << 24 },
       // execFile sets err.code to the numeric EXIT code on a non-zero exit (1 = conflicts), or a string
       // errno (e.g. 'ENOENT') if git can't be spawned — only the exit-1 case is a real conflict verdict.

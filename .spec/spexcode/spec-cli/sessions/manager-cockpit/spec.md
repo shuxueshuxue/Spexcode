@@ -112,10 +112,12 @@ agent's verified act, never a server merge. The dispatch boundary nevertheless a
 currently declaring `awaiting` + `proposal=merge`, with an `Idempotency-Key` and the exact `branchHead` /
 `baseHead` pair returned by review. It validates the record and both Git refs before reopening or appending
 anything. Acceptance is one existing durable timeline+delivery-queue write; only after that receipt exists does
-the server ensure the original agent is live and drain the debt. Same-key/same-session/same-pair retries replay
-that acceptance across backend restarts, while a changed payload or either moved head is a loud 409. The raw key
-is never persisted. Thus review SHOWS a stable decision, merge binds exactly that decision, and the agent still
-ENFORCES the tested landing itself.
+the server ensure the original agent is live and drain the debt. Native CLI and dashboard clients derive their
+retry key from the reviewed session/head pair instead of volatile client state, so the same decision replays the
+same acceptance even after either client restarts. Same-key/same-session/same-pair retries replay across backend
+restarts too, while a changed payload or either moved head is a loud 409. The raw key is never persisted. Thus
+review SHOWS a stable decision, merge binds exactly that decision, and the agent still ENFORCES the tested landing
+itself.
 
 Two read verbs round out the manager surface, both backend-computed so a client (incl. a REMOTE one over
 `SPEXCODE_API_URL`) can monitor an agent without the binary terminal socket: **capture**

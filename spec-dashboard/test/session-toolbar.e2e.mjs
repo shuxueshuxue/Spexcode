@@ -287,6 +287,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
 async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme = 'minimal', status = 'working', liveness = 'online', proposal, lifecycle, archived = false, evalMode = 'mixed' }) {
   let evalReads = 0
   let mergeDispatches = 0
+  const mergeKeys = []
   const context = await browser.newContext({ viewport: { width, height: 760 } })
   await context.addInitScript(({ listWidth, lang, theme }) => {
     localStorage.setItem('spex.siListWidth', String(listWidth))
@@ -337,6 +338,7 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
       await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ dispatched: false, error: 'missing reviewed authority' }) })
       return
     }
+    mergeKeys.push(key)
     mergeDispatches++
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ dispatched: true }) })
   })
@@ -347,7 +349,7 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
   await page.goto(`${BASE}/#/sessions/${SESSION}`, { waitUntil: 'domcontentloaded' })
   await waitToolbar(page)
   await page.waitForTimeout(100)
-  return { context, page, evalReads: () => evalReads, mergeDispatches: () => mergeDispatches }
+  return { context, page, evalReads: () => evalReads, mergeDispatches: () => mergeDispatches, mergeKeys: () => [...mergeKeys] }
 }
 
 // Exact 390px terminal pane: 922 viewport - 52 rail - 480 persisted list.
@@ -388,6 +390,23 @@ for (const lang of ['en', 'zh']) {
     check(`${lang}/${theme} theme geometry`, row.height === 32 && row.overflow.length === 0 && row.chromeDistinct && row.localized, row)
     await context.close()
   }
+}
+
+{
+  const { context, page, mergeDispatches, mergeKeys } = await fixturePage({ status: 'review', liveness: 'online', proposal: 'merge' })
+  const mergeButton = page.locator('.si-tool.merge')
+  const dispatch = async () => {
+    await Promise.all([
+      page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/merge') && response.status() === 200),
+      mergeButton.click(),
+    ])
+    await page.waitForFunction(() => !document.querySelector('.si-tool.merge')?.disabled)
+  }
+  await dispatch()
+  await dispatch()
+  const keys = mergeKeys()
+  check('merge retries reuse the reviewed head-pair authority', mergeDispatches() === 2 && keys.length === 2 && keys[0] === keys[1], { dispatches: mergeDispatches(), keys })
+  await context.close()
 }
 
 let stableMergeX = null

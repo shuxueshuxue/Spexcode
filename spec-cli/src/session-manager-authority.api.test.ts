@@ -360,10 +360,14 @@ test('public review and merge authority bind exact head and one durable dispatch
     const cliOutput = execFileSync(process.execPath, [
       tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'merge', cliId, '--api', baseA,
     ], { cwd: project, env, encoding: 'utf8' })
+    const cliReplayOutput = execFileSync(process.execPath, [
+      tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'merge', cliId, '--api', baseA,
+    ], { cwd: project, env, encoding: 'utf8' })
     const cliTimeline = await request(baseA, `/api/sessions/${cliId}/timeline`)
     assert.match(cliOutput, /merge dispatched/)
+    assert.match(cliReplayOutput, /merge dispatched/)
     assert.equal(cliTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length, 1)
-    console.log(`manager-authority-cli ${JSON.stringify({ dispatched: true, promptCount: 1 })}`)
+    console.log(`manager-authority-cli ${JSON.stringify({ dispatched: true, replayed: true, promptCount: 1 })}`)
   } finally {
     if (cliId && backendA) await request(baseA, `/api/sessions/${cliId}/close`, { method: 'POST' }).catch(() => {})
     if (id && backendA) await request(baseA, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})

@@ -37,7 +37,12 @@ const BYTES_PER_GIBIBYTE = BYTES_PER_MEBIBYTE * MEBIBYTES_PER_GIBIBYTE
 let nextAttachmentKey = 0
 
 const attachmentKey = () => globalThis.crypto?.randomUUID?.() || `attachment-${Date.now()}-${++nextAttachmentKey}`
-const mergeRequestKey = () => globalThis.crypto?.randomUUID?.() || `merge-${Date.now()}-${++nextAttachmentKey}`
+const mergeRequestKey = (branchHead, baseHead) => {
+  const pairs = `${branchHead}${baseHead}`.match(/../g)
+  if (!pairs || pairs.some((pair) => !/^[0-9a-f]{2}$/.test(pair))) throw new Error('session review returned invalid Git object ids')
+  const bytes = String.fromCharCode(...pairs.map((pair) => Number.parseInt(pair, 16)))
+  return `merge-${btoa(bytes).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')}`
+}
 
 const HERO_WORDMARK = [
   '███████╗██████╗ ███████╗██╗  ██╗ ██████╗ ██████╗ ██████╗ ███████╗',
@@ -1038,7 +1043,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         setActionOutcome({ owner, phase: 'failed', message: review?.error || `session review refused (HTTP ${response.status})` })
         return false
       }
-      return await act('merge', { expectedBranchHead: review.branchHead, expectedBaseHead: review.baseHead }, owner, { 'Idempotency-Key': mergeRequestKey() })
+      return await act('merge', { expectedBranchHead: review.branchHead, expectedBaseHead: review.baseHead }, owner, { 'Idempotency-Key': mergeRequestKey(review.branchHead, review.baseHead) })
     } catch (error) {
       setActionOutcome({ owner, phase: 'failed', message: error instanceof Error ? error.message : String(error) })
       return false

@@ -840,7 +840,7 @@ if (cmd === 'serve') {
       for (const f of r.diff) console.log(`    ${f.status.padEnd(12)} +${f.additions} -${f.deletions}  ${f.path}`)
     }
   } else if (sub === 'merge') {
-    const [{ clientMerge, clientReview }, { randomUUID }] = await Promise.all([import('./client.js'), import('node:crypto')])
+    const [{ clientMerge, clientReview }, { createHash }] = await Promise.all([import('./client.js'), import('node:crypto')])
     const sel = positionals(4)[0]
     if (!sel) { console.error('usage: spex session merge <SEL>  (id | id-prefix | node | branch)'); process.exit(2) }
     const id = await resolveSelectorOrExit(sel)
@@ -849,7 +849,7 @@ if (cmd === 'serve') {
     const r = await clientMerge(id, {
       expectedBranchHead: review.branchHead,
       expectedBaseHead: review.baseHead,
-      requestKey: randomUUID(),
+      requestKey: createHash('sha256').update(`spexcode-cli-session-merge\0${id}\0${review.branchHead}\0${review.baseHead}`).digest('hex'),
     })
     if (r.dispatched) console.log(`merge dispatched to ${id} — its agent is landing the merge`)
     else console.error(`merge dispatch failed: ${r.reason}`)

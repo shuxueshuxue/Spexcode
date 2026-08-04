@@ -115,9 +115,13 @@ node count, and a single open's cost must grow with the selected session's node 
 per-node or per-reading spawn. It adds no second resident cache, generation,
 or gate: the result enters the existing content-revision/projection cache like every other session model.
 
-When that one model needs history or anchor-hunk facts, its build joins [[source-of-truth]]'s ledger transaction
-before either demand runs. The session face therefore shares its one decoded integrity-checked snapshot, lock,
-and possible replacement instead of making an event-stream transaction followed by a hunk-fact transaction.
+When that one model needs history or anchor-hunk facts, its build joins [[source-of-truth]]'s one ledger build
+context before either demand runs. If its writer lock is free, the model retains the ordinary transaction: one
+decoded integrity-checked snapshot, lock, and possible replacement instead of an event-stream transaction followed
+by a hunk-fact transaction. If an unrelated live writer already owns that lock, the foreground model reads the
+ledger's current atomic integrity-checked snapshot and derives missing facts through the same Git adapters without
+waiting; only those contended additions are discarded. It never adds a second cache or substitutes an empty
+verdict, and corrupt input or Git-interpretation movement remains loud ([[event-ledger-demand]]).
 
 **The toolbar summary is a coherent projection, not a small fetch.** `sessionEvalSummary` lives beside the
 affected selector in this engine and reduces the already-scoped model to seven useful counts: measured,

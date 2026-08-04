@@ -19,7 +19,8 @@ none (or @all) means every session.`
 
 const ROUTING_NOTE = `Backend routing: every backend-touching verb accepts --api <url> (--port <n> = localhost sugar) to name
 its backend explicitly — the flag always wins. Bare, it resolves: worker env / the cwd project's live
-recorded backend / fallback / :8787 (spex guide settings → BACKEND ROUTING).`
+recorded backend / fallback / :8787 (spex guide settings → BACKEND ROUTING). A password-gated explicit
+gateway accepts --password <pw> (or SPEXCODE_PASSWORD); its self-signed certificate needs explicit --insecure.`
 
 const DOT_NOTE = `\`.\` as a node argument means the node THIS worktree works on (the session's bound node, else the
 node/<id> branch). One-shot payload reads (graph · spec search · session ls/show/review · eval ls ·
@@ -63,6 +64,8 @@ It reads files only, so it needs no \`spex serve\` and costs the sessions it fol
 session's store is gone.`, ['selector']],
     review: ['spex session review <SEL> [--json]', 'Reports ahead · uncommitted · proposal · gates · merge-base diff.', ['selector']],
     merge: ['spex session merge <SEL>', 'Dispatches a gated merge to the session\'s own agent; it does not close the session.', ['selector', 'project-bound']],
+    reparent: ['spex session reparent <child-SEL...> --to <parent-SEL>',
+      'Move one or more governed children to a replacement parent, replacing only the former parent\'s managed watch relation. It never restarts a child and works when the former parent is offline.', ['selector', 'project-bound']],
     send: [['spex session send <SEL> "<msg>"', 'spex session send <SEL> --keys "<keys>"'],
       `Plain send delivers a message once its timeline append succeeds; a dead adapter only delays its context. --keys is the LAST RESORT:
 raw nav-mode keystrokes to a TUI dialog ("Up Up Enter", C-/M-/S- combos). The raw key surface
@@ -93,13 +96,13 @@ LOCAL-only (fails loud on a remote backend); show --capture and send are non-int
 }
 
 const SESSION_HELP_GROUPS = [
-  { title: 'Manager verbs (dispatch, monitor, land)', verbs: ['new', 'ls', 'resources', 'watch', 'wait', 'review', 'merge'] },
+  { title: 'Manager verbs (dispatch, monitor, land)', verbs: ['new', 'ls', 'resources', 'watch', 'wait', 'review', 'merge', 'reparent'] },
   { title: 'Control another session', verbs: ['send', 'interrupt', 'rename', 'show', 'resume', 'stop', 'archive', 'unarchive', 'close', 'quarantine'] },
   { title: 'Worker verbs (declare YOUR OWN state — a claim the graph and your supervisor act on)', verbs: ['done', 'park', 'ask', 'files', 'web'] },
   { title: 'Human escape hatch', verbs: ['attach'] },
 ] as const
 
-const SESSION_WRITE_NOTE = `Manager verbs that WRITE (send/interrupt/rename/resume/stop/close/merge) are PROJECT-BOUND: a backend serving
+const SESSION_WRITE_NOTE = `Manager verbs that WRITE (send/interrupt/rename/resume/stop/close/merge/reparent) are PROJECT-BOUND: a backend serving
 another project's repo refuses loudly — name the target with --api <url> to drive it on purpose.`
 
 function indent(text: string, spaces: number): string {

@@ -44,6 +44,12 @@ dispatched, versus a worker proposing its own end for the human to perform. Any 
 reclaim what it started — the propose-close cleanup nudge included — scopes its sweep to what the agent
 spawned and excludes the running session by name, because `.` and a bare own id are valid selectors here.
 
+`spex session reparent <child-SEL...> --to <parent-SEL>` is the manager recovery verb for moving a fleet to a
+replacement supervisor. `--to` is the operation's required destination rather than a second positional list:
+the resulting command reads naturally, permits a batch of children, and gives a missing parent an unambiguous
+usage error. It is a mutation like `send` or `rename`, so normal backend routing flags apply; its parent and
+watch semantics belong to [[session-reparent]], not to the generic grammar.
+
 `spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path>
 --branch <absent-branch>` is the separate record-integrity control for an unreadable row. It moves no worktree,
 branch, process, or readable lifecycle record: the backend consumes its exact absence witness before it moves

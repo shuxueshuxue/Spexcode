@@ -83,6 +83,7 @@ normal terminal prompt queue and wake it exactly like an ordinary send. A caller
 backgrounds `spex session wait <child>` and stays `parked` while it runs, only becoming `asking` when it
 genuinely needs the human. Strengthened in the `supervisor` config plugin.
 
-Out of scope: any child mutation or stored tree (read-time only). Nesting is a LIST fold over spawn
-provenance; its one thin watch call uses the independent supervision mechanism and can later be cancelled or
-replaced without rewriting the child.
+The original spawner is the normal source of a parent edge, but supervision recovery may deliberately change
+that durable edge through [[session-reparent]]. The tree remains a read-time fold: it has no stored parent
+collection and no migration of a missing parent. Reparent changes the child's one pointer and its independent
+watch relation together; ordinary view reads still need no repair daemon.

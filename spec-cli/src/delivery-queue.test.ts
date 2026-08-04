@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { drain, enqueue, owesDelivery, pendingMessages, type PendingMessage } from './delivery-queue.js'
+import { drain, enqueue, owesDelivery, pendingMessages, revokeSenderDelivery, type PendingMessage } from './delivery-queue.js'
 import { sessionArtifactPath, sessionStoreDir } from './layout.js'
 
 // What a session OWES its agent ([[delivery-queue]]). These pin the claims the mesh leans on: an entry leaves
@@ -129,5 +129,18 @@ test('an unparseable queue file reads as nothing owed rather than throwing on th
     mkdirSync(sessionStoreDir(ID), { recursive: true })
     writeFileSync(sessionArtifactPath(ID, 'pending.json'), '{ not json at all')
     assert.deepEqual(pendingMessages(ID), [])
+  })
+})
+
+test("a closed sender's queued debt is void and cannot block the recipient queue", async () => {
+  const home = freshHome()
+  await withHomeAsync(home, async () => {
+    enqueue(ID, { mid: 'closed', text: 'late command', from: 'closed-supervisor' })
+    enqueue(ID, msg('later-human-message'))
+    revokeSenderDelivery('closed-supervisor')
+    const handed: string[] = []
+    const result = await drain(ID, async (entry) => { handed.push(entry.mid); return true })
+    assert.deepEqual(handed, ['later-human-message'])
+    assert.deepEqual(result, { delivered: 1, remaining: 0 })
   })
 })

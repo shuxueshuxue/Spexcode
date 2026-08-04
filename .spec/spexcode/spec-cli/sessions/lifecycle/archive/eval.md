@@ -97,7 +97,9 @@ scenarios:
       The unloaded descendant-free target archives and then closes without waiting for or thread-reading unrelated
       loaded siblings, even when the complete resource report times out on those siblings. Its record becomes cold
       before close and its record/worktree/branch disappear only on close. Shared PID/start/isolation/socket and
-      every protected sibling reference remain unchanged. A target-only read that is unknown, a loaded active
+      every protected sibling reference remain unchanged. A brief target-census transport refusal retries the
+      complete proof and then closes only after a fresh valid census; a lasting transport failure, a target-only
+      read that is unknown, or a loaded active
       target, any active or archived native descendant, duplicate ownership, collection ambiguity, or generation
       mismatch refuses nonzero/409 with target and shared evidence unchanged. The full resources projection remains
       available and honestly reports any unrelated probe timeout; mutation does not obtain authority from it.

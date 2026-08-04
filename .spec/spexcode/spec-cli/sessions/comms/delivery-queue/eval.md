@@ -57,6 +57,17 @@ scenarios:
       Nothing is handed over at all: a queue is only ever filled by an enqueue, so a log is never read as a
       work list however long it grows. A message sent to that same session AFTER the sweep starts is
       delivered normally.
+  - name: close-voids-undelivered-outbound
+    tags: [cli, backend-api]
+    description: >-
+      With two real sessions, make the first send a distinctive `continue` while the second cannot accept
+      its prompt, so it remains pending. Close the first through `spex session close`, then restore the
+      recipient and wait through several delivery sweeps. Attempt one more `spex session send` from the
+      closed session identity through the backend.
+    expected: >-
+      Neither the pending nor the post-close message reaches the recipient's transcript. The recipient's
+      timeline retains the originally accepted message as audit history, but its pending queue progresses
+      past the revoked head. The post-close send fails loudly; no stale sender can restart work after close.
 ---
 
 # delivery-queue — yatsu

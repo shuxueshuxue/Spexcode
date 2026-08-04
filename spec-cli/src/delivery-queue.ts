@@ -11,6 +11,8 @@ import { runtimeRoot, sessionArtifactPath, sessionStoreDir } from './layout.js'
 export type PendingMessage = { mid: string; text: string; from: string | null }
 
 const queuePath = (id: string): string => sessionArtifactPath(id, 'pending.json')
+const revokedSenderRoot = (): string => join(runtimeRoot(), '.revoked-senders')
+const revokedSenderPath = (id: string): string => join(revokedSenderRoot(), id)
 
 // @@@ its own lock, deliberately NOT the record lock - the drain holds this across the adapter insert, which
 // is what makes "claim" real: two processes draining the same session cannot both hand over one message. The
@@ -68,6 +70,28 @@ function write(id: string, msgs: PendingMessage[]): void {
   renameSync(tmp, path)
 }
 
+// A closed sender may have left debt in many other sessions' queues. The marker is deliberately outside its
+// own store (which close removes) and is checked under the sender's record lock by dispatch: a close cannot
+// return while an old process can still append, and a later sweep cannot hand over what it sees here.
+export function revokeSenderDelivery(id: string): void {
+  mkdirSync(revokedSenderRoot(), { recursive: true })
+  writeFileSync(revokedSenderPath(id), `${id}\n`)
+}
+
+export const senderDeliveryRevoked = (id: string): boolean => existsSync(revokedSenderPath(id))
+
+export function pendingSnapshot(id: string): PendingMessage[] { return read(id) }
+
+// These two writes require the target's delivery lock. They are the queue half of a larger transaction
+// (currently reparent), which must be able to restore the exact previous debt if a later record write fails.
+export function replacePendingWhileLocked(id: string, msgs: PendingMessage[]): void { write(id, msgs) }
+export function revokePendingFromWhileLocked(id: string, sender: string): number {
+  const current = read(id)
+  const next = current.filter((msg) => msg.from !== sender)
+  write(id, next)
+  return current.length - next.length
+}
+
 // The enqueue rides the timeline append ([[dispatch]]): the caller holds the session's RECORD lock across
 // both, and the record is written first, so a crash between them leaves a message visible but undelivered —
 // never delivered but unrecorded.
@@ -78,6 +102,17 @@ export function enqueue(id: string, msg: PendingMessage): void {
 export const pendingMessages = (id: string): PendingMessage[] => read(id)
 
 export const owesDelivery = (id: string): boolean => existsSync(queuePath(id))
+
+// Record transitions and queue mutations take locks in the same direction: record locks first, then these
+// target queue locks. A batch reparent needs all child queues held at once so its pointer/watch/debt change
+// either commits together or restores together.
+export async function withDeliveryLocks<T>(rawIds: string[], body: () => Promise<T>, index = 0, ids = [...new Set(rawIds)].sort()): Promise<T> {
+  if (index >= ids.length) return body()
+  const release = await acquire(ids[index], 30_000)
+  if (!release) throw new Error(`delivery queue ${ids[index]}: timed out waiting for transaction lock`)
+  try { return await withDeliveryLocks(ids, body, index + 1, ids) }
+  finally { release() }
+}
 
 // Hand over what is owed, in order, exactly once. `insert` reports whether the adapter took the message: only
 // then is the entry dropped. A refusal ENDS the pass with that entry still queued and everything behind it
@@ -95,6 +130,12 @@ export async function drain(
     for (;;) {
       const queued = read(id)
       if (!queued.length) return { delivered, remaining: 0 }
+      if (queued[0].from && senderDeliveryRevoked(queued[0].from)) {
+        // Closing a sender voids its undelivered output, not the recipient's immutable conversation history.
+        // Drop a revoked head and continue so it cannot permanently block the messages behind it.
+        write(id, read(id).filter((m) => m.mid !== queued[0].mid))
+        continue
+      }
       let ok = false
       try { ok = await insert(queued[0]) } catch { ok = false }
       if (!ok) return { delivered, remaining: queued.length }

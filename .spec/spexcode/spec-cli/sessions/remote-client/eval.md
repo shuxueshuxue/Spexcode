@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: password-gated-remote-client
+    description: >
+      Start a real `spex serve --public` gateway with a configured password and its default self-signed
+      certificate. From a separate CLI process, explicitly address it with `--api`, provide the password,
+      and request its session listing; repeat with a target session and `session send`. Also try no password,
+      a wrong password, and normal TLS verification.
+    expected: >
+      `--api <gateway-url> --password <password> --insecure` performs the gateway's designed login once for
+      the command, keeps only the signed cookie in memory, then lists and sends through that remote backend.
+      Missing or wrong credentials fail loudly without a local fallback. A self-signed certificate remains
+      rejected unless the caller explicitly selects `--insecure`; trusted TLS needs no override.
+    tags: [cli, backend-api]
+    code: spec-cli/src/client.ts
   - name: cache-read-local-fallback
     description: >
       With one governed session record in the cwd project's local store and no backend listening,

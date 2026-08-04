@@ -1,5 +1,21 @@
 ---
 scenarios:
+  - name: merge-dispatch-is-durable-idempotent
+    tags: [backend-api]
+    test: { path: spec-cli/src/session-manager-authority.api.test.ts, name: "public review and merge authority bind exact head and one durable dispatch" }
+    code: [spec-cli/src/sessions.ts#mergeSession]
+    related: [spec-cli/src/session-timeline.ts, spec-cli/src/index.ts, spec-cli/src/client.ts]
+    description: >
+      Against the same isolated real backend and governed fake-harness session used by the exact-head review
+      control, POST merge twice with one caller-chosen `Idempotency-Key` and the returned `reviewedHead`, then
+      reuse that key with the other committed head. Read the public session timeline after every request and
+      restart no hidden helper between calls.
+    expected: >
+      The first request appends exactly one merge prompt and reports a fresh accepted dispatch. The identical
+      replay reports the durable prior acceptance and leaves both the sent timeline and pending delivery debt
+      single. Reusing the key with another reviewed head returns HTTP 409 with
+      `session_merge_key_reused` and appends nothing. A fresh key carrying a stale reviewed head returns HTTP
+      409 `session_merge_head_changed`, also with no receipt. No raw idempotency key is stored or returned.
   - name: codex-command-box-terminal-delivery
     tags: [backend-api, frontend-e2e, desktop]
     test: { path: spec-dashboard/test/command-box.e2e.mjs, name: "Command Box keeps a terminal delivery outcome" }

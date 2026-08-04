@@ -1,5 +1,20 @@
 ---
 scenarios:
+  - name: review-binds-the-exact-branch-head
+    tags: [backend-api]
+    test: { path: spec-cli/src/session-manager-authority.api.test.ts, name: "public review and merge authority bind exact head and one durable dispatch" }
+    code: [spec-cli/src/sessions.ts#reviewPayload]
+    related: [spec-cli/src/index.ts, spec-cli/src/cockpit.ts]
+    description: >
+      In an isolated real Git project and real Spex backend, create a governed session through
+      `POST /api/sessions`, commit work on its branch, and read `GET /api/sessions/:id/review`. Advance that
+      branch by one more commit after the first response and read it again. Use Git itself as the independent
+      oracle for both object ids.
+    expected: >
+      Every successful review response carries the full exact Git object id used for its committed review
+      facts. The first response remains bound to the first object after the branch advances; the second names
+      the new object. A moving symbolic HEAD is never returned as authority, and a response never labels
+      ahead, merge-base diff, or conflict work computed from another branch generation.
   - name: review-reports-measured-loss-without-grading-it
     tags: [backend-api]
     test: spec-cli/test/cockpit-eval-readout.mjs

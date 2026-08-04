@@ -32,6 +32,10 @@ same surface.
 → `null` → HTTP 404 / a non-zero CLI exit. The reads run in parallel, all against the source-of-truth base
 branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload carries:
 
+- **head** — the exact immutable Git object id whose committed branch state every review Git fact below
+  describes. Review never labels work derived from a moving `HEAD` name: it resolves the branch tip once and
+  uses that object id for ahead, merge-base diff, and conflict projection. A caller can therefore compare the
+  returned id with a later review or branch read and detect work authored after the review.
 - **ahead** — commits the node branch is ahead of the base.
 - **dirtyNonRuntime** — uncommitted files; SpexCode writes no runtime files into the worktree
   ([[runtime]]), so every dirty path is genuine spec/code work — the basis [[state]]'s commit gate uses.

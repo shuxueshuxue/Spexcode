@@ -42,6 +42,9 @@ owners.
 
 `spex session new --help` lists its optional `--name <name>` alongside the prompt and launcher inputs. The
 name is the new record's initial display override; it does not enter, replace, or alter the launch prompt.
+It also lists `--base <commit-ish>`, which pins the new worktree's fork point instead of taking the
+source-of-truth branch's current head ([[sessions-core]]); help names the input and its refusal-before-creation
+guarantee, and leaves the resolution contract to that owner.
 
 Worker-only live-reference entries keep the same map: `session files add|ls|retract` names live file paths and
 `session web add|ls|retract` names live loopback web URLs ([[files]] / [[web]]). Their own nouns own format and

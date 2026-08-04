@@ -35,6 +35,21 @@ scenarios:
       competing refresh. An ordinary linked worktree carries no marker and still invokes the normal refresh.
       Thus local state is present before the sole creation render without globally disabling Git hooks.
     test: spec-cli/src/session-create-transaction.test.ts
+  - name: create-pins-an-explicit-base
+    tags: [backend-api]
+    code: spec-cli/src/sessions.ts
+    description: >
+      Against the real backend in an isolated Git project, read the source-of-truth branch head, advance that
+      branch past it with another commit, then `POST /api/sessions` with `base` naming the earlier commit.
+      Read the created worktree's `HEAD` and its durable record. Repeat with a `base` that names no commit and
+      compare every owned resource — branches, worktrees, session stores, private candidate receipts — before
+      and after.
+    expected: >
+      The pinned create publishes normally and its worktree forks from the named commit, not from the drifted
+      branch head, and the durable record carries the pin so a later reader can tell a pinned run from an
+      unpinned one. A `base` that names no commit is refused with a 400 in `target-resolution`, before any Git
+      mutation or candidate receipt exists, leaving every owned resource byte-identical.
+    test: spec-cli/src/session-create-transaction.test.ts
   - name: a-dead-leaf-never-wedges-a-session
     tags: [backend-api, cli]
     code: spec-cli/src/sessions.ts

@@ -651,7 +651,7 @@ if (cmd === 'serve') {
       console.error('spex session new: --node was removed — put a [[<id>]] mention in the prompt — the first mention binds')
       process.exit(2)
     }
-    rejectUnknownFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'name', 'api', 'port'])
+    rejectUnknownFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'name', 'base', 'api', 'port'])
     const { createSession } = await import('./sessions.js')
     const promptFile = flag('prompt-file')
     const inline = flag('prompt') ?? positionals(4)[0]
@@ -664,7 +664,7 @@ if (cmd === 'serve') {
       catch (e) { console.error(`spex session new: --prompt-file ${promptFile}: ${e instanceof Error ? e.message : e}`); process.exit(2) }
       if (!prompt.trim()) { console.error(`spex session new: --prompt-file ${promptFile === '-' ? 'stdin' : promptFile} is empty — refusing a promptless launch`); process.exit(2) }
     }
-    const created = await createSession(prompt, flag('launcher') ?? undefined, flag('name') ?? undefined)
+    const created = await createSession(prompt, flag('launcher') ?? undefined, flag('name') ?? undefined, flag('base') ?? undefined)
     const { ownSessionId, subscribeSessionWatch } = await import('./sessions.js')
     let watchEstablished = false
     if (created.parent && created.parent === ownSessionId()) {

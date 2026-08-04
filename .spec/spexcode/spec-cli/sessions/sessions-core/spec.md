@@ -96,6 +96,17 @@ received HTTP response is never relabelled `backend_availability_indeterminate`.
 remains its independent 1500ms budget: the optional recorded-endpoint health read is discovery only and never
 consumes that budget.
 
+**A create may pin its fork point.** Creation accepts an optional `base` — any commit-ish the main checkout can
+resolve. Absent, the session forks from the auto-detected source-of-truth branch, i.e. from whatever that branch
+has drifted to at the moment the worktree is made; that is right for ordinary work but leaves a run against a
+frozen commit inexpressible, so an evaluation, a bisect, or a replay could not name the code it actually ran on.
+A supplied `base` is resolved during target resolution, BEFORE any Git mutation: one that names no commit fails
+the request with a 400 and leaves no half-made worktree, branch, store, or private candidate receipt behind. A
+resolved pin becomes the `git worktree add` start point and is stored on the record, so a later reader can tell
+a pinned run from an unpinned one. It also joins the idempotency payload hash — a retry that changes the pin is
+a different request, not the same one — while an unpinned create keeps its exact legacy record bytes and
+receipt hash, so nothing that never pinned gains a field.
+
 **Exclusion lives in the lock, never in a privileged process.** The per-session record lock is a filesystem
 lock with a PID liveness check, held across processes, so a session operation may run in whatever process
 takes it — a backend is the convenient owner of the launch environment and a shared cache, not the holder

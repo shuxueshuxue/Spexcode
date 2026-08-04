@@ -13,6 +13,7 @@ import {
   driftIndex,
   historyIndex,
   treeTextFiles,
+  withEventLedgerBuild,
   withEventLedgerDemand,
   type DriftIndex,
   type DriftPathEvent,
@@ -807,10 +808,12 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
   // family's node-existence layer). No worktree → the backend checkout, unchanged.
   const wtPath = worktreePathForBranch(identity.branch)
   const ctxRoot = wtPath ?? repoRoot()
-  const payload = await reviewPayload(id)
-  return payload
-    ? withEventLedgerDemand(ctxRoot, () => buildExportModelInLedger(id, payload, wtPath, ctxRoot))
-    : null
+  return withEventLedgerDemand(ctxRoot, async () => {
+    const payload = await reviewPayload(id)
+    return payload
+      ? withEventLedgerBuild(ctxRoot, () => buildExportModelInLedger(id, payload, wtPath, ctxRoot))
+      : null
+  })
 }
 
 async function buildExportModelInLedger(id: string, payload: ReviewPayloadValue, wtPath: string | null, ctxRoot: string): Promise<ExportModel> {
@@ -1633,7 +1636,7 @@ async function buildSessionEvalModel(
   // spec tree from the session worktree, same root as readings/indexes — a branch-NEW node must exist
   // in this model or the Eval tab/deep link can never reach its readings (see buildExportModel above).
   const ctxRoot = wtPath ?? repoRoot()
-  return withEventLedgerDemand(ctxRoot, () => buildSessionEvalModelInLedger(id, payload, wtPath, pick, ctxRoot))
+  return withEventLedgerBuild(ctxRoot, () => buildSessionEvalModelInLedger(id, payload, wtPath, pick, ctxRoot))
 }
 
 async function buildSessionEvalModelInLedger(
@@ -2083,25 +2086,27 @@ async function buildSummaryAttempt(id: string, _path: string): Promise<SummaryBu
   if (!identity) return { kind: 'missing' }
   const wtPath = worktreePathForBranch(identity.branch)
   const ctxPath = wtPath ?? repoRoot()
-  const payload = await reviewPayload(id)
-  if (!payload) return { kind: 'missing' }
-  const before = await sessionEvalContentRevision(ctxPath)
-  const cacheKey = `${id}\0${before}`
-  const cached = summaryByContent.get(cacheKey)
-  if (cached) {
+  return withEventLedgerDemand(ctxPath, async () => {
+    const payload = await reviewPayload(id)
+    if (!payload) return { kind: 'missing' }
+    const before = await sessionEvalContentRevision(ctxPath)
+    const cacheKey = `${id}\0${before}`
+    const cached = summaryByContent.get(cacheKey)
+    if (cached) {
+      const after = await sessionEvalContentRevision(ctxPath)
+      return before === after
+        ? { kind: 'stable', revision: after, summary: cached.summary }
+        : { kind: 'unstable' }
+    }
+    const model = await buildSessionEvalModel(id, payload, wtPath)
     const after = await sessionEvalContentRevision(ctxPath)
-    return before === after
-      ? { kind: 'stable', revision: after, summary: cached.summary }
-      : { kind: 'unstable' }
-  }
-  const model = await buildSessionEvalModel(id, payload, wtPath)
-  const after = await sessionEvalContentRevision(ctxPath)
-  if (before !== after) return { kind: 'unstable' }
-  const summary = sessionEvalSummary(model.nodes)
-  // Keep one content-addressed stable value per session. Revisions, not elapsed time, decide reuse.
-  // This fold IS the demand's fold, so it deposits the model too and a later open replays it.
-  depositStableCut(id, after, { summary, model })
-  return { kind: 'stable', revision: after, summary }
+    if (before !== after) return { kind: 'unstable' }
+    const summary = sessionEvalSummary(model.nodes)
+    // Keep one content-addressed stable value per session. Revisions, not elapsed time, decide reuse.
+    // This fold IS the demand's fold, so it deposits the model too and a later open replays it.
+    depositStableCut(id, after, { summary, model })
+    return { kind: 'stable', revision: after, summary }
+  })
 }
 
 // ONE content-addressed cut per session, keyed by id + content revision, carrying the summary the graph
@@ -2171,7 +2176,7 @@ export async function buildSessionEvals(id: string, pick?: SessionEvalFocus): Pr
   const wtPath = worktreePathForBranch(identity.branch)
   const ctxPath = wtPath ?? repoRoot()
   for (;;) {
-    const attempt = await projectionCache.demand(id, '', async () => {
+    const attempt = await projectionCache.demand(id, '', () => withEventLedgerDemand(ctxPath, async () => {
       // a focused open renders no gates strip, so it reads the session's IDENTITY (a free store read)
       // instead of its review payload (ahead count + dirty scan + merge-tree conflict probe).
       const payload = pick ? identity : await reviewPayload(id)
@@ -2216,7 +2221,7 @@ export async function buildSessionEvals(id: string, pick?: SessionEvalFocus): Pr
       depositStableCut(id, after, { summary, model })
       if (current) projectionCache.accept(id, generation, after, summary)
       return { kind: 'ready' as const, model, summary, generation, revision: after }
-    })
+    }))
     if (attempt.kind === 'missing') return null
     if (attempt.kind === 'retry') continue
     return {

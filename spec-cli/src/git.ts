@@ -452,6 +452,7 @@ type EventLedgerBuild = {
 }
 type EventLedgerDiagnostics = { reads: number; locks: number; replaces: number }
 const eventLedgerBuild = new AsyncLocalStorage<EventLedgerBuild>()
+const eventLedgerDemandPolicy = new AsyncLocalStorage<{ path: string }>()
 const eventLedgerDiagnostics: EventLedgerDiagnostics = { reads: 0, locks: 0, replaces: 0 }
 type EventStreamRequest = {
   kind: EventStreamKind
@@ -752,7 +753,9 @@ async function withEventCacheLock<T>(
         }
         const state = eventLockOwnerState(current)
         if (state === 'live') return EVENT_LEDGER_BUSY
-        if (state === 'dead') continue
+        // A live reclaimer may be arbitrating this exact dead owner. Foreground demand can safely derive
+        // from the atomic snapshot, but must not spin synchronously until that separate lease finishes.
+        if (state === 'dead') return EVENT_LEDGER_BUSY
         throw new Error(`history event cache lock owner identity is unreadable: ${path}`)
       }
       if (attempt >= attempts) {
@@ -841,14 +844,16 @@ async function eventLedgerTransaction<T>(
 // The event ledger is one build transaction, not one transaction per consumer: stream extraction and
 // immutable hunk derivation share the snapshot, integrity verdict, lock, and final replacement.
 export function withEventLedgerBuild<T>(root: string, run: () => Promise<T>): Promise<T> {
-  return eventLedgerTransaction(root, run, false)
+  const demand = eventLedgerDemandPolicy.getStore()
+  return eventLedgerTransaction(root, run, !!demand && demand.path === eventCacheLocation(root).path)
 }
 
-// A foreground projection may derive against the current atomic snapshot while a live writer owns the
-// replacement transaction. Missing facts still run through Git; only this contended read's additions are
-// discarded. An uncontended demand remains the ordinary durable writer transaction.
+// Demand is an ambient acquisition POLICY, not an eager lock. Nested ledger consumers therefore use the
+// read-only path under a live writer, while observer waits, revision reads, and stable-cut replay take no lock.
 export function withEventLedgerDemand<T>(root: string, run: () => Promise<T>): Promise<T> {
-  return eventLedgerTransaction(root, run, true)
+  const path = eventCacheLocation(root).path
+  if (eventLedgerDemandPolicy.getStore()?.path === path) return run()
+  return eventLedgerDemandPolicy.run({ path }, run)
 }
 
 export function eventLedgerDiagnosticsForTests(): EventLedgerDiagnostics { return { ...eventLedgerDiagnostics } }

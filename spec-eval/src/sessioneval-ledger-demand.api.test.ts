@@ -130,22 +130,27 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
       SPEXCODE_GIT_TIMEOUT_MS: '1500',
     })
 
-    const port = await freePort()
-    backend = spawn(process.execPath, ['--import', 'tsx', join(SOURCE, 'spec-cli/src/index.ts')], {
-      cwd: project,
-      env: { ...childEnv, PORT: String(port) },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    backend.stderr!.on('data', (chunk) => { backendStderr += chunk.toString() })
-    const origin = `http://127.0.0.1:${port}`
-    let healthy = false
-    for (let attempt = 0; attempt < 150; attempt++) {
-      try {
-        if ((await fetch(`${origin}/health`)).ok) { healthy = true; break }
-      } catch { /* backend is starting */ }
-      await new Promise((resolve) => setTimeout(resolve, 100))
+    let origin = ''
+    const startBackend = async () => {
+      const port = await freePort()
+      backendStderr = ''
+      backend = spawn(process.execPath, ['--import', 'tsx', join(SOURCE, 'spec-cli/src/index.ts')], {
+        cwd: project,
+        env: { ...childEnv, PORT: String(port) },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      backend.stderr!.on('data', (chunk) => { backendStderr += chunk.toString() })
+      origin = `http://127.0.0.1:${port}`
+      let healthy = false
+      for (let attempt = 0; attempt < 150; attempt++) {
+        try {
+          if ((await fetch(`${origin}/health`)).ok) { healthy = true; break }
+        } catch { /* backend is starting */ }
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      assert.equal(healthy, true, `backend failed to start: ${backendStderr.slice(-1200)}`)
     }
-    assert.equal(healthy, true, `backend failed to start: ${backendStderr.slice(-1200)}`)
+    await startBackend()
 
     const ledgerFiles = () => readdirSync(home, { recursive: true })
       .map((entry) => String(entry))
@@ -211,26 +216,37 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
     assert.ok(Array.isArray(cold.body?.items) && cold.body.items.some((item: any) => item.scenario === 'value-moves'), 'the response must carry the selected scenario rather than an empty fallback')
     assert.deepEqual(ledgerFiles(), [], 'cold read-only demand must not publish a writer-owned ledger')
 
+    await stop(backend)
+    backend = null
+    await startBackend()
     const exported = await fetch(`${origin}/api/sessions/${SESSION_ID}/evals?format=html`)
     const exportedHtml = await exported.text()
     assert.equal(exported.status, 200, `the public export surface inherited writer wall time: ${exportedHtml.slice(0, 1000)}`)
     assert.match(exportedHtml, /eval-ledger-demand-fixture/i)
 
+    await releaseWriter()
+    const graphWarm = await fetch(`${origin}/api/graph`)
+    assert.equal(graphWarm.status, 200, `summary control could not establish its non-eval graph baseline: ${await graphWarm.text()}`)
+    await startWriter()
     const streamAbort = new AbortController()
     const stream = await fetch(`${origin}/api/graph/stream?mode=delta`, { signal: streamAbort.signal })
     const reader = stream.body!.getReader()
     await reader.read()
+    const summaryDemand = await demand()
+    assert.equal(summaryDemand.response.status, 200, `summary projection demand failed under contention: ${summaryDemand.raw.slice(0, 1200)}`)
     let summaryReady = false
+    let summaryPhase: string | null = null
     for (let attempt = 0; attempt < 80; attempt++) {
       const graphResponse = await fetch(`${origin}/api/graph`)
       const graph = await graphResponse.json() as any
       const row = graph?.sessions?.find((item: any) => item.id === SESSION_ID)
+      summaryPhase = row?.evalSummary?.phase ?? null
       if (row?.evalSummary?.phase === 'ready' && row.evalSummary?.value?.total === 1) { summaryReady = true; break }
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
     streamAbort.abort()
     await reader.cancel().catch(() => {})
-    assert.equal(summaryReady, true, 'the graph summary surface settles while the independent ledger writer remains live')
+    assert.equal(summaryReady, true, `the graph summary surface did not settle while the independent ledger writer remained live (last phase: ${summaryPhase})\n${backendStderr.slice(-1500)}`)
 
     await releaseWriter()
 

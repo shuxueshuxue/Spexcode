@@ -38,10 +38,12 @@ from Git. Git failures, unknown lock ownership, and repeated Git interpretation 
 concurrent writer may publish the same immutable fact later; either answer has the same semantics because the ledger
 stores facts, not verdicts.
 
-The transaction encloses only immutable ledger derivation. Observer recovery waits, review payload assembly, content
-revision reads, and stable-cut replay happen before acquisition; the post-observer generation and content-revision
-fences remain after derivation. List, summary, and export therefore share one derivation transaction when they need
-facts, while a replay that needs no fact never consults an unrelated writer lock.
+Demand is an ambient, lazy acquisition policy. Observer recovery waits, content revision reads, stable-cut replay, and
+the non-ledger parts of review payload assembly take no lock; any nested history/hunk consumer enters the same demand
+policy at its ordinary ledger seam. Each transaction therefore encloses only immutable ledger derivation, including a
+cold review payload's real lint consumer, while the post-observer generation and content-revision fences remain after
+derivation. List, summary, and export all inherit that policy, and a replay that needs no ledger fact never consults an
+unrelated writer lock.
 
 This is one read policy over one ledger format and one derivation engine. It adds no cache, generation, timeout,
 path class, or background priority. Contention changes only who may persist newly derived immutable facts. A later

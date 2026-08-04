@@ -8,9 +8,9 @@ scenarios:
       - spec-cli/src/git.ts#withEventLedgerDemand
       - spec-eval/src/sessioneval.ts#buildSessionEvals
     description: >-
-      Start an isolated real backend over a linked-worktree session, then let an independent live process acquire
-      that repository's source-of-truth event-ledger write transaction and hold it open. While the writer remains
-      alive and still owns the lock, request the selected session through the public
+      Start an isolated real backend over a linked-worktree session, then, before any gate, model, or ledger warmup,
+      let an independent live process acquire that repository's source-of-truth event-ledger write transaction and
+      hold it open. While the writer remains alive and still owns the lock, request the selected session through the public
       `/api/evals?q=is:eval scope:<id>` surface. Capture the HTTP status, response shape, writer identity state,
       export and summary projections, replay behavior, stale-generation recovery, and the lock/snapshot failure
       boundaries.
@@ -23,5 +23,6 @@ scenarios:
       rebuilt from Git without replacing a live writer's bytes; Git failure, unknown lock identity, or repeated
       interpretation-identity movement remains loud. A content-revision replay does not enter the lock, a reused PID
       cannot retain it, and a normal release between losing create and owner observation retries acquisition.
+      A dead owner with a separate exact live reclaimer uses the same bounded read-only path rather than spinning.
 ---
 Foreground demand retains the durable ledger's meaning without inheriting an unrelated writer's wall time.

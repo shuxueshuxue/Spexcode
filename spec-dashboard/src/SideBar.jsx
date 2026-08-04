@@ -59,7 +59,7 @@ function ProjectChip({ identity, projects, gatewayIdentity, t }) {
         aria-expanded={projects ? open : undefined}
         onClick={() => { if (projects) setOpen((v) => !v) }}
       >
-        <IdentityIcon icon={identity?.icon} size={26} />
+        <IdentityIcon icon={identity?.icon} size={31} />
       </button>
       {open && projects && (
         <div className="proj-menu" role="menu">

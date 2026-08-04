@@ -2593,7 +2593,7 @@ a.scenario-count:hover { background: var(--panel2); }
 /* --- the rail's current-project selector chip + switcher menu --- */
 .proj-chip-wrap { position: relative; }
 .rail-btn.proj-chip {
-  padding: 4px; color: var(--ink2); overflow: hidden;
+  padding: 2.5px; color: var(--ink2); overflow: hidden;
 }
 .rail-btn.proj-chip:hover, .rail-btn.proj-chip.on { color: var(--blue); }
 .proj-menu {

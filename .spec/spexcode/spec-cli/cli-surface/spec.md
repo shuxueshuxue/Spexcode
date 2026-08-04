@@ -8,6 +8,7 @@ code:
 related:
   - spec-cli/src/guide.ts
   - spec-cli/src/help.ts
+  - spec-cli/src/session-send-cli.test.ts
 ---
 # cli-surface
 
@@ -46,6 +47,15 @@ declaration word (`done --propose close`), and the two differ in who acts: a man
 dispatched, versus a worker proposing its own end for the human to perform. Any prose that nudges an agent to
 reclaim what it started — the propose-close cleanup nudge included — scopes its sweep to what the agent
 spawned and excludes the running session by name, because `.` and a bare own id are valid selectors here.
+
+Objects and payloads are parsed by role after recognized flags and their values are removed, never by a fixed
+`process.argv` slot. Thus a routing flag may follow a selector before or after a write payload without becoming
+that payload. Each valued flag occurs at most once with exactly one non-empty value; alternate routing flags are
+mutually exclusive. An option-shaped payload uses the ordinary `--` end-of-options delimiter instead of being
+guessed from quoting or whitespace. That delimiter is authoritative for the entire invocation: routing, TLS,
+and authentication consumers read only the option prefix, so payload bytes can never become control flags again
+downstream. A write with a missing or extra positional, duplicate/missing flag value, or unknown flag fails before
+selector resolution or backend contact; a usage error can never print the write's success receipt.
 
 `spex session reparent <child-SEL...> --to <parent-SEL>` is the manager recovery verb for moving a fleet to a
 replacement supervisor. `--to` is the operation's required destination rather than a second positional list:

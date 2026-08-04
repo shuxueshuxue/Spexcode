@@ -1088,10 +1088,16 @@ function guardSession(id: string, primary: () => Session | null, degraded: () =>
 export type ApiBaseSource = 'flag' | 'worker-env' | 'record' | 'env-fallback' | 'default'
 export type ApiBaseInfo = { url: string; source: ApiBaseSource }
 const usageError = (msg: string): Error => { const e = new Error(msg); e.name = 'UsageError'; return e }
+
+export function optionArgv(argv: readonly string[] = process.argv): readonly string[] {
+  const delimiter = argv.indexOf('--')
+  return delimiter < 0 ? argv : argv.slice(0, delimiter)
+}
+
 // the explicit routing flag, read from THIS process's argv (never the environment — that's the point).
 // `--port` doubles as a BIND port for serve/dashboard, so the sugar is skipped for those verbs.
 function explicitApiFlag(): string | null {
-  const argv = process.argv
+  const argv = optionArgv()
   const ai = argv.indexOf('--api')
   if (ai >= 0) {
     const v = argv[ai + 1]
@@ -1148,13 +1154,12 @@ export type MsgSender = { id: string; label: string | null }
 export function withSenderHint(text: string, sender: MsgSender | null): string {
   if (!sender) return text
   const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
-  return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"${LIVE_ARTIFACT_HANDOFF_HINT}`
+  return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
 }
-export const LIVE_ARTIFACT_HANDOFF_HINT = '\n\n— LIVE ARTIFACT HANDOFF: when you produce a file or start a local webpage for the human to inspect, publish its live reference with `spex session files add <path>` or `spex session web add <url>`; never paste or copy the bytes.'
 export const withNoteReplyHint = (text: string): string =>
-  `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For a simple answer awaiting the next message, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.${LIVE_ARTIFACT_HANDOFF_HINT}`
+  `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For a simple answer awaiting the next message, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.`
 export const withTerminalReplyHint = (text: string): string =>
-  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).${LIVE_ARTIFACT_HANDOFF_HINT}`
+  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).`
 export const slugify = (s: string | null) =>
   (s || 'session').normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'session'
 

@@ -61,6 +61,9 @@ Missing credentials, rejected credentials, a login route that does not mint a co
 loud remote-transport failures, never a local fallback. Normal TLS validation remains the default. A gateway
 using SpexCode's intentional self-signed certificate needs explicit `--insecure`: that flag is an operator's
 deliberate trust decision for this command, never an automatic response to a certificate failure.
+Routing, credential, and TLS flags consume the CLI's one canonical option prefix: the first `--` ends that
+prefix for every reader. Bytes after it are payload and can never be rediscovered as `--api`, `--port`,
+`--password`, or `--insecure` by a lower layer.
 
 **Which backend — the ladder, flag-first.** One host runs many projects' backends, and a shell inherits the
 launching backend's `SPEXCODE_API_URL` — an env var cannot prove intent (exported-on-this-command and

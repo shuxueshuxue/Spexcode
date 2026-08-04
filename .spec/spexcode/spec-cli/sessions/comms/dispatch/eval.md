@@ -8,8 +8,8 @@ scenarios:
     description: >
       Against the same isolated real backend and governed fake-harness session used by the exact-head review
       control, POST merge twice with one caller-chosen `Idempotency-Key` and the returned `reviewedHead`, then
-      reuse that key with the other committed head. Read the public session timeline after every request and
-      restart no hidden helper between calls.
+      restart the backend on the same isolated store before the replay, then reuse that key with the other
+      committed head. Read the public session timeline after every request.
     expected: >
       The first request appends exactly one merge prompt and reports a fresh accepted dispatch. The identical
       replay reports the durable prior acceptance and leaves both the sent timeline and pending delivery debt

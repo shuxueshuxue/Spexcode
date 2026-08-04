@@ -83,14 +83,15 @@ verification, never a server check, and the base is never left half-merged. Asyn
 /api/sessions/:id/merge` returns `{dispatched:true}` once the merge prompt is appended (409 only when the
 record cannot accept it). The server no longer bumps `merges` on a click.
 
-The public merge dispatch accepts the standard `Idempotency-Key` header and an optional `reviewedHead` from
-the immediately preceding manager review. The key is request authority, not transport identity: only its
+The public merge dispatch accepts an optional `reviewedHead` from the immediately preceding manager review.
+An idempotent invocation carries that head together with the standard `Idempotency-Key` header; a key without
+review authority is malformed. The key is request authority, not transport identity: only its
 SHA-256 digest is retained on the existing durable sent timeline event, together with the normalized payload
 digest. Under the same session record lock that appends the prompt, a replay of the same key and payload
 returns the original accepted dispatch without appending or enqueueing a second prompt; reusing that key for
 a different reviewed head fails loudly with `session_merge_key_reused`. A first request whose reviewed head
 does not equal the branch's current exact head fails with `session_merge_head_changed` and records no receipt.
-Callers that omit the header retain the ordinary one-shot dispatch. This is not another operation ledger: the
+Callers that omit the header retain the ordinary one-shot dispatch and its original response shape. This is not another operation ledger: the
 timeline line is already the durable acceptance record and the pending queue remains its only delivery debt.
 
 **Prompts state the task; the git flow is mechanism, not duplicated prose.** The merge prompt above states

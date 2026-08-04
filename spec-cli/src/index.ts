@@ -572,8 +572,28 @@ app.post('/api/sessions/:id/resume', async (c) => {
 // a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
 // main's tree. 200 {dispatched:true} once the prompt is accepted, 409 {dispatched:false} if the agent is unreachable.
 app.post('/api/sessions/:id/merge', async (c) => {
-  const r = await mergeSession(c.req.param('id'))
-  return c.json(r, r.dispatched ? 200 : 409)
+  const rawBody = await c.req.text()
+  let body: unknown = {}
+  if (rawBody.trim()) {
+    try { body = JSON.parse(rawBody) }
+    catch { return c.json({ dispatched: false, reason: 'body must be valid JSON', code: 'session_merge_invalid_request' }, 400) }
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return c.json({ dispatched: false, reason: 'body must be a JSON object', code: 'session_merge_invalid_request' }, 400)
+  }
+  const input = body as Record<string, unknown>
+  const keys = Object.keys(input)
+  if (keys.some((key) => key !== 'reviewedHead')) {
+    return c.json({ dispatched: false, reason: `unknown session-merge field(s): ${keys.filter((key) => key !== 'reviewedHead').join(', ')}`, code: 'session_merge_invalid_request' }, 400)
+  }
+  if (input.reviewedHead !== undefined && typeof input.reviewedHead !== 'string') {
+    return c.json({ dispatched: false, reason: 'reviewedHead must be a string', code: 'session_merge_invalid_request' }, 400)
+  }
+  const r = await mergeSession(c.req.param('id'), {
+    requestKey: c.req.header('idempotency-key'),
+    ...(typeof input.reviewedHead === 'string' ? { reviewedHead: input.reviewedHead } : {}),
+  })
+  return c.json(r, r.dispatched ? 200 : (r.status ?? 409))
 })
 
 // one WS owns one native tmux client (pty-bridge): server→client = that client's rendered PTY bytes (binary);

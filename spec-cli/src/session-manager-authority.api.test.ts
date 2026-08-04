@@ -81,16 +81,32 @@ test('public review and merge authority bind exact head and one durable dispatch
   delete env.SPEXCODE_API_URL
   delete env.SPEXCODE_SESSION_ID
   for (const key of ['CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'OPENCODE_SESSION_ID', 'PI_SESSION_ID']) delete env[key]
-  const backend = spawn(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'serve', '--port', String(port)], {
-    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
-  })
-  const logs = capture(backend)
+  let backend: ChildProcess | null = null
+  let backendLog = ''
+  const startBackend = () => {
+    backend = spawn(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'serve', '--port', String(port)], {
+      cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
+    })
+    const current = capture(backend)
+    backend.stdout?.on('data', () => { backendLog = current() })
+    backend.stderr?.on('data', () => { backendLog = current() })
+  }
+  const stopBackend = async () => {
+    const current = backend
+    if (!current || current.exitCode !== null) return
+    try { process.kill(-current.pid!, 'SIGTERM') } catch { current.kill('SIGTERM') }
+    await Promise.race([new Promise((resolve) => current.once('close', resolve)), new Promise((resolve) => setTimeout(resolve, 5_000))])
+    if (current.exitCode === null) { try { process.kill(-current.pid!, 'SIGKILL') } catch { current.kill('SIGKILL') } }
+  }
+  startBackend()
   const base = `http://127.0.0.1:${port}`
   let id = ''
   try {
     await waitFor(async () => {
       try { return (await request(base, '/health')).status } catch { return 0 }
     }, (status) => status === 200, 'backend health')
+    const legacyNoBody = await request(base, '/api/sessions/no-such-session/merge', { method: 'POST' })
+    assert.equal(legacyNoBody.status, 409, legacyNoBody.text)
     const created = await request(base, '/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Idempotency-Key': 'manager-authority-session' },
@@ -128,6 +144,11 @@ test('public review and merge authority bind exact head and one durable dispatch
       body: JSON.stringify({ reviewedHead }),
     })
     const first = await merge('maintenance-release-1', headTwo)
+    await stopBackend()
+    startBackend()
+    await waitFor(async () => {
+      try { return (await request(base, '/health')).status } catch { return 0 }
+    }, (status) => status === 200, 'restarted backend health')
     const replay = await merge('maintenance-release-1', headTwo)
     const afterReplay = await request(base, `/api/sessions/${id}/timeline`)
     assert.equal(afterReplay.status, 200, afterReplay.text)
@@ -159,12 +180,9 @@ test('public review and merge authority bind exact head and one durable dispatch
     })
   } finally {
     if (id) await request(base, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
-    if (backend.exitCode === null) {
-      try { process.kill(-backend.pid!, 'SIGTERM') } catch { backend.kill('SIGTERM') }
-      await Promise.race([new Promise((resolve) => backend.once('close', resolve)), new Promise((resolve) => setTimeout(resolve, 5_000))])
-      if (backend.exitCode === null) { try { process.kill(-backend.pid!, 'SIGKILL') } catch { backend.kill('SIGKILL') } }
-    }
-    if (backend.exitCode && backend.exitCode !== 0) console.error(logs())
+    await stopBackend()
+    const finalBackend = backend as ChildProcess | null
+    if (finalBackend?.exitCode && finalBackend.exitCode !== 0 && finalBackend.signalCode !== 'SIGTERM') console.error(backendLog)
     try { execFileSync('tmux', ['-L', tmux, 'kill-server'], { stdio: 'ignore' }) } catch { /* public close may already stop the private server */ }
     rmSync(fixture, { recursive: true, force: true })
   }

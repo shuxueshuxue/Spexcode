@@ -9,6 +9,7 @@ code:
   - spec-cli/src/git.ts#git
   - spec-cli/src/git.ts#gitBuffer
   - spec-cli/src/git.ts#warnIfTimedOut
+  - spec-cli/src/git.ts#batchRevisionOids
 related:
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts

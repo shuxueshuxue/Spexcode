@@ -138,12 +138,14 @@ export async function evalTimelines(ids: readonly string[], ctx?: EvalContext, o
       idx, scidx, tracks, probe, anchors, order: true,
     }))
 
-  // An off-history anchor is the only reading that needs a content verdict; those primes serialize inside the
-  // probe per anchor, so issuing them together lets one anchor's paths union into one child instead of N.
-  await Promise.all(plans.flatMap((plan) => plan.ynode
+  // An off-history anchor is the only reading that needs a content verdict. Plan the population first so the
+  // probe can answer many anchor/HEAD pairs through bounded plural children instead of one child per anchor.
+  const contentDemands = plans.flatMap((plan) => plan.ynode
     ? plan.rows.filter((row) => !commitReachable(idx, row.reading.codeSha))
-        .map((row) => probe.prime?.(row.reading.codeSha, row.axis.paths, plan.ynode!.evalPath))
-    : []))
+        .map((row) => ({ anchorSha: row.reading.codeSha, paths: row.axis.paths, evalPath: plan.ynode!.evalPath }))
+    : [])
+  if (probe.primeMany) await probe.primeMany(contentDemands)
+  else await Promise.all(contentDemands.map((row) => probe.prime?.(row.anchorSha, [...row.paths], row.evalPath)))
   await anchors.prime?.(plans.flatMap((plan) => plan.rows.map((row) => ({ sinceSha: row.reading.codeSha, entries: row.axis.entries }))))
   // the primes above only RECORDED which eval.md blocks the assemble step will compare; one batched pair of
   // children answers the whole read's worth, the same shape the anchor prime above already has.

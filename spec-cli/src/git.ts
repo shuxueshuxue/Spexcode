@@ -194,9 +194,10 @@ export function isGitObjectId(root: string, value: string): boolean {
 // source corpus never approaches the byte ceiling.
 const BATCH_BLOB_CHUNK = 256
 const BATCH_BLOB_MAX_BUFFER = 1 << 26
-async function batchBuffer(args: string[], input: string, maxBuffer?: number): Promise<Buffer> {
+async function batchBuffer(args: string[], input: string, maxBuffer?: number, extraEnv: Record<string, string> = {}): Promise<Buffer> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  Object.assign(env, extraEnv)
   try { return (await execGitForCaller(args, env, maxBuffer, input)).stdout }
   catch (error: any) {
     if (error?.name === 'AbortError') throw error
@@ -204,9 +205,10 @@ async function batchBuffer(args: string[], input: string, maxBuffer?: number): P
     throw new Error(`git ${args.slice(2, 5).join(' ')} failed: ${String(error?.stderr || error?.message || 'unknown git error').trim()}`)
   }
 }
-export async function batchRevisionOids(root: string, revisions: string[]): Promise<(string | null)[]> {
+export async function batchRevisionOids(root: string, revisions: string[], options: { replaceObjects?: boolean } = {}): Promise<(string | null)[]> {
   if (!revisions.length) return []
-  const out = (await batchBuffer(['-C', root, 'cat-file', '--batch-check=%(objectname)'], revisions.join('\n') + '\n')).toString('utf8')
+  const extraEnv: Record<string, string> = options.replaceObjects === false ? { GIT_NO_REPLACE_OBJECTS: '1' } : {}
+  const out = (await batchBuffer(['-C', root, 'cat-file', '--batch-check=%(objectname)'], revisions.join('\n') + '\n', undefined, extraEnv)).toString('utf8')
   const lines = out.split('\n')
   if (lines.length - 1 !== revisions.length) throw new Error(`git cat-file --batch-check returned ${lines.length - 1} rows for ${revisions.length} revisions`)
   return revisions.map((revision, index) => {
@@ -424,6 +426,17 @@ export async function gitA(args: string[], input?: string): Promise<string> {
   }
 }
 
+async function gitARequired(args: string[], input?: string): Promise<string> {
+  const env = { ...process.env }
+  delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  try { return (await execGitForCaller(args, env, undefined, input)).stdout.toString('utf8') }
+  catch (error: any) {
+    if (error?.name === 'AbortError') throw error
+    warnIfTimedOut(error, args)
+    throw new Error(`git ${args.slice(2, 6).join(' ')} failed: ${String(error?.stderr || error?.message || 'unknown git error').trim()}`)
+  }
+}
+
 type TextEventRecord = { hash: string; raw: string }
 type IdentityEventRecord = { hash: string; identity: IdentityRawRecord }
 type EventRecord = TextEventRecord | IdentityEventRecord
@@ -440,7 +453,7 @@ const EVENT_CACHE_SCHEMA = 'history-events-v16'
 const IMMUTABLE_HUNK_FACT = 'immutable-hunk-v1'
 const EVENT_STREAM_KINDS = ['merge', 'identity-raw'] as const
 type EventStreamKind = typeof EVENT_STREAM_KINDS[number]
-type EventCacheLocation = { path: string; identity: string; objectFormat: GitObjectFormat }
+type EventCacheLocation = { path: string; identity: string; interpretation: string; objectFormat: GitObjectFormat }
 type EventLedgerSnapshot = {
   payload: Buffer
   state: EventCache
@@ -505,18 +518,39 @@ function eventCacheLocation(root: string): EventCacheLocation {
     : git(['-C', root, 'for-each-ref', 'refs/replace', '--format=%(refname) %(objectname)'])
   const objectFormat = gitObjectFormat(root)
   if (old && old.shallow === shallow && old.grafts === grafts && old.replacements === replacements && old.objectFormat === objectFormat)
-    return { path: old.path, identity: old.identity, objectFormat }
-  const identity = createHash('sha256')
+    return { path: old.path, identity: old.identity, interpretation: old.interpretation, objectFormat }
+  const interpretation = createHash('sha256')
     .update(`${EVENT_CACHE_SCHEMA}\0${objectFormat}\0${shallow}\0${grafts}\0${replacements}`)
-    .digest('hex').slice(0, 16)
+    .digest('hex')
+  const identity = interpretation.slice(0, 16)
   // projectRuntimeRoot derives checkout identity from dirname(common). A bare repository is its own common
   // dir, so a synthetic `.git` suffix preserves the repository path instead of collapsing sibling bares.
   const gitDir = gitDirOf(root)
   const storeIdentity = gitDir === root && common === root ? join(common, '.git') : common
   const path = join(projectRuntimeRoot(storeIdentity), `${EVENT_CACHE_SCHEMA}-${identity}.ndjson`)
-  eventPathMemo.set(rootId, { common, shallowPath, grafts, shallow, replacementStorage, replacements, path, identity, objectFormat })
-  return { path, identity, objectFormat }
+  eventPathMemo.set(rootId, { common, shallowPath, grafts, shallow, replacementStorage, replacements, path, identity, interpretation, objectFormat })
+  return { path, identity, interpretation, objectFormat }
 }
+
+// One existing source-of-truth identity governs every Git reader that interprets commit images. Consumers
+// may retain the full digest in memory while the ledger keeps its established short directory name.
+export function gitObjectInterpretation(root: string): {
+  identity: string
+  objectFormat: GitObjectFormat
+  replacements: ReadonlyMap<string, string>
+} {
+  const location = eventCacheLocation(root)
+  const raw = eventPathMemo.get(rootKey(root))?.replacements ?? ''
+  const replacements = new Map<string, string>()
+  for (const line of raw.split('\n').filter(Boolean)) {
+    const match = line.match(/^refs\/replace\/([0-9a-f]+) ([0-9a-f]+)$/)
+    if (!match || !isGitObjectIdForFormat(location.objectFormat, match[1]) || !isGitObjectIdForFormat(location.objectFormat, match[2]))
+      throw new Error(`malformed refs/replace projection '${line}' at ${root}`)
+    replacements.set(match[1], match[2])
+  }
+  return { identity: location.interpretation, objectFormat: location.objectFormat, replacements }
+}
+export function gitInterpretationIdentity(root: string): string { return eventCacheLocation(root).identity }
 function emptyEventCache(): EventCache {
   return { streams: new Map(), streamTips: new Map(), hunks: new Map() }
 }
@@ -1029,7 +1063,7 @@ async function identityRawEventStream(root: string, tip: string, request: EventS
   return value as IdentityRawRecord[]
 }
 export type GitTryFailure = 'exit' | 'spawn' | 'timeout'
-export async function gitTry(args: string[], options: { indexFile?: string; extraEnv?: Record<string, string | undefined> } = {}): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
+export async function gitTry(args: string[], options: { indexFile?: string; extraEnv?: Record<string, string | undefined>; input?: string } = {}): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
   const env = { ...process.env }
   for (const [key, value] of Object.entries(options.extraEnv ?? {})) {
     if (value === undefined) delete env[key]
@@ -1039,7 +1073,7 @@ export async function gitTry(args: string[], options: { indexFile?: string; extr
   if (options.indexFile) env.GIT_INDEX_FILE = options.indexFile
   const context = inheritedContext()
   try {
-    const { stdout, stderr } = await execGitForCaller(args, env)
+    const { stdout, stderr } = await execGitForCaller(args, env, undefined, options.input)
     return { ok: true, stdout: stdout.toString('utf8'), stderr }
   } catch (e: any) {
     if (context?.signal.aborted || e?.name === 'AbortError') throw e
@@ -2267,13 +2301,13 @@ function parseStatPath(token: string): { from: string; to: string } {
   const arrowAt = token.indexOf(' => ')
   return arrowAt >= 0 ? { from: token.slice(0, arrowAt), to: token.slice(arrowAt + 4) } : { from: token, to: token }
 }
-export async function mergeBaseDiff(wtPath: string, mainRef = 'main'): Promise<ReviewDiffFile[]> {
+export async function mergeBaseDiff(wtPath: string, mainRef = 'main', headRef = 'HEAD'): Promise<ReviewDiffFile[]> {
   const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
-  const base = (await run(['merge-base', mainRef, 'HEAD'])).trim()
+  const base = (await run(['merge-base', mainRef, headRef])).trim()
   if (!base) return []
   const [numstatOut, statusOut] = await Promise.all([
-    run(['diff', '--numstat', '-M', `${base}..HEAD`]),
-    run(['diff', '--name-status', '-M', `${base}..HEAD`]),
+    run(['diff', '--numstat', '-M', `${base}..${headRef}`]),
+    run(['diff', '--name-status', '-M', `${base}..${headRef}`]),
   ])
   const status = new Map<string, { status: string; from: string }>()
   for (const r of parseNameStatus(statusOut)) status.set(r.to, { status: DIFF_STATUS[r.code] ?? r.code, from: r.from })
@@ -2294,11 +2328,11 @@ export async function mergeBaseDiff(wtPath: string, mainRef = 'main'): Promise<R
   return files
 }
 
-export function mergeConflicts(wtPath: string, mainRef = 'main'): Promise<boolean> {
+export function mergeConflicts(wtPath: string, mainRef = 'main', headRef = 'HEAD'): Promise<boolean> {
   return new Promise((resolve) => {
     const env = { ...process.env }
     delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
-    execFile(gitBinary(env), ['-C', wtPath, 'merge-tree', '--write-tree', '--no-messages', mainRef, 'HEAD'],
+    execFile(gitBinary(env), ['-C', wtPath, 'merge-tree', '--write-tree', '--no-messages', mainRef, headRef],
       { encoding: 'utf8', env, maxBuffer: 1 << 24 },
       // execFile sets err.code to the numeric EXIT code on a non-zero exit (1 = conflicts), or a string
       // errno (e.g. 'ENOENT') if git can't be spawned — only the exit-1 case is a real conflict verdict.
@@ -2311,19 +2345,7 @@ export function mergeConflicts(wtPath: string, mainRef = 'main'): Promise<boolea
 // spoken: content equal to main is no op, an existing node reads `edited` never `added`) AND have been
 // touched by this branch since its fork point (attribution — main's own post-fork movement is not this
 // worktree's op). A `status --porcelain` pass adds untracked spec.md, a third diff vs HEAD marks committed.
-export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHint?: string): Promise<NodeOp[]> {
-  const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
-  // fork point = where this worktree branched from main; '' (no common ancestor / unreadable ref) falls
-  // back to mainRef so we still surface changes rather than going silent. The caller (cachedDelta) already
-  // computes this same merge-base to key its cache, so it passes it in to avoid a redundant subprocess.
-  const base = baseHint || (await run(['merge-base', mainRef, 'HEAD'])).trim() || mainRef
-  // the four queries are independent — run them in parallel.
-  const [mainOut, workOut, commOut, statusOut] = await Promise.all([
-    run(['diff', '--name-status', '-M', mainRef, '--', '.spec']),
-    run(['diff', '--name-status', '-M', base, '--', '.spec']),
-    run(['diff', '--name-status', '-M', `${base}...HEAD`, '--', '.spec']),
-    run(['status', '--porcelain', '--untracked-files=all', '--', '.spec']),
-  ])
+function projectWorktreeSpecDelta(mainOut: string, workOut: string, commOut: string, statusOut: string): NodeOp[] {
   const proposals = parseNameStatus(mainOut)
   // the branch's own footprint since its fork point — both sides of every row, so a rename matches
   // whichever side the vs-main diff names.
@@ -2347,7 +2369,7 @@ export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHin
   for (const r of proposals) {
     const path = r.code === 'D' ? r.from : r.to
     if (!isSpecMd(path)) continue
-    if (!touched.has(r.to) && !touched.has(r.from)) continue   // main moved it, not this branch → no op
+    if (!touched.has(r.to) && !touched.has(r.from)) continue
     seen.add(path)
     const op = codeFor[r.code] ?? 'edited'
     ops.push({
@@ -2362,4 +2384,130 @@ export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHin
     ops.push({ nodeId: nodeIdOf(path), op: 'added', path, committed: false, dirty: true })
   }
   return ops
+}
+
+type WorktreeSpecDemand = { path: string; head: string }
+export type WorktreeSpecDeltaOutcome = { base: string; ops: NodeOp[] } | { error: unknown }
+
+async function boundedMap<T, R>(values: T[], concurrency: number, fn: (value: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(values.length)
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (true) {
+      const index = next++
+      if (index >= values.length) return
+      results[index] = await fn(values[index])
+    }
+  }))
+  return results
+}
+
+// One cold layout demand across many linked worktrees. Merge-base and working-status are path facts, so they
+// stay per worktree under a fixed concurrency. Clean rows then collapse to immutable main→HEAD and base→HEAD
+// pairs in one framed child; dirty rows retain the ordinary worktree-aware projection.
+export async function worktreeSpecDeltas(root: string, mainSha: string, demands: WorktreeSpecDemand[], interpretation = gitInterpretationIdentity(root)): Promise<Map<string, WorktreeSpecDeltaOutcome>> {
+  const results = new Map<string, WorktreeSpecDeltaOutcome>()
+  if (!demands.length) return results
+  if (gitInterpretationIdentity(root) !== interpretation) {
+    const error = new Error('Git interpretation changed before the worktree overlay batch')
+    for (const demand of demands) results.set(demand.path, { error })
+    return results
+  }
+  const prepared = await boundedMap(demands, 4, async (demand) => {
+    try {
+      const run = (args: string[]) => gitARequired(['-C', demand.path, '-c', 'core.quotePath=false', ...args])
+      const [baseOut, statusOut] = await Promise.all([
+        run(['merge-base', mainSha, demand.head]),
+        run(['status', '--porcelain', '--untracked-files=all', '--', '.spec']),
+      ])
+      const base = baseOut.trim()
+      if (!base) throw new Error(`git merge-base returned no base for ${demand.path}`)
+      return { ...demand, base, statusOut }
+    } catch (error) {
+      results.set(demand.path, { error })
+      return null
+    }
+  })
+
+  const clean = prepared.filter((row): row is NonNullable<typeof row> => !!row && row.statusOut.trim() === '')
+  const dirty = prepared.filter((row): row is NonNullable<typeof row> => !!row && row.statusOut.trim() !== '')
+  const pairs: Array<{ from: string; to: string }> = []
+  const pairIndex = new Map<string, number>()
+  const addPair = (from: string, to: string): number => {
+    const key = `${from}\0${to}`
+    const hit = pairIndex.get(key)
+    if (hit != null) return hit
+    const index = pairs.length
+    pairIndex.set(key, index)
+    pairs.push({ from, to })
+    return index
+  }
+  const cleanIndexes = clean.map((row) => ({
+    row,
+    main: addPair(mainSha, row.head),
+    branch: addPair(row.base, row.head),
+  }))
+
+  if (pairs.length) {
+    try {
+      // diff-tree's stdin pair syntax is `<new> <old>`; reverse each ordinary from→to pair deliberately.
+      // --always is load-bearing: it emits a frame for an empty pair, preserving positional ownership.
+      const input = pairs.map(({ from, to }) => `${to} ${from}`).join('\n') + '\n'
+      const out = await gitARequired([
+        '-C', root, '-c', 'core.quotePath=false', 'diff-tree', '--stdin', '--no-commit-id', '--always',
+        '-r', '--name-status', '-M', `--format=${RS}%H`, '--', '.spec',
+      ], input)
+      // For two-tree stdin rows, diff-tree writes that row's name-status payload BEFORE its --format marker.
+      // The first split segment is therefore pair 0; each later pair lives after the previous marker, while
+      // the final marker carries no following pair. Treating markers as openers shifts every non-empty result.
+      const records = out.split(RS)
+      if (records.length - 1 !== pairs.length) throw new Error(`git diff-tree --stdin returned ${records.length - 1} frames for ${pairs.length} pairs`)
+      const frames = pairs.map((_, index) => {
+        if (index === 0) return records[0].split('\n').filter(Boolean).join('\n')
+        const lines = records[index].replace(/^\n/, '').split('\n')
+        lines.shift()
+        return lines.filter(Boolean).join('\n')
+      })
+      for (const { row, main, branch } of cleanIndexes) {
+        results.set(row.path, { base: row.base, ops: projectWorktreeSpecDelta(frames[main], frames[branch], frames[branch], '') })
+      }
+    } catch (error) {
+      for (const { row } of cleanIndexes) results.set(row.path, { error })
+    }
+  }
+
+  await Promise.all(dirty.map(async (row) => {
+    try {
+      const run = (args: string[]) => gitARequired(['-C', row.path, '-c', 'core.quotePath=false', ...args])
+      const [mainOut, workOut, commOut] = await Promise.all([
+        run(['diff', '--name-status', '-M', mainSha, '--', '.spec']),
+        run(['diff', '--name-status', '-M', row.base, '--', '.spec']),
+        run(['diff', '--name-status', '-M', `${row.base}...${row.head}`, '--', '.spec']),
+      ])
+      results.set(row.path, { base: row.base, ops: projectWorktreeSpecDelta(mainOut, workOut, commOut, row.statusOut) })
+    } catch (error) {
+      results.set(row.path, { error })
+    }
+  }))
+  if (gitInterpretationIdentity(root) !== interpretation) {
+    const error = new Error('Git interpretation changed during the worktree overlay batch')
+    for (const demand of demands) results.set(demand.path, { error })
+  }
+  return results
+}
+
+export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHint?: string): Promise<NodeOp[]> {
+  const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
+  // fork point = where this worktree branched from main; '' (no common ancestor / unreadable ref) falls
+  // back to mainRef so we still surface changes rather than going silent. The caller (cachedDelta) already
+  // computes this same merge-base to key its cache, so it passes it in to avoid a redundant subprocess.
+  const base = baseHint || (await run(['merge-base', mainRef, 'HEAD'])).trim() || mainRef
+  // the four queries are independent — run them in parallel.
+  const [mainOut, workOut, commOut, statusOut] = await Promise.all([
+    run(['diff', '--name-status', '-M', mainRef, '--', '.spec']),
+    run(['diff', '--name-status', '-M', base, '--', '.spec']),
+    run(['diff', '--name-status', '-M', `${base}...HEAD`, '--', '.spec']),
+    run(['status', '--porcelain', '--untracked-files=all', '--', '.spec']),
+  ])
+  return projectWorktreeSpecDelta(mainOut, workOut, commOut, statusOut)
 }

@@ -20,6 +20,17 @@ scenarios:
       repository answer is never truncated or rejected at Node's default limit, and an output overflow is not
       reported as a timeout merely because both boundaries terminate the child with SIGKILL.
     test: spec-cli/src/git.test.ts
+  - name: clean-worktree-pairs-share-one-framed-git-read
+    tags: [cli]
+    description: >-
+      Build several real linked worktrees whose immutable `.spec` tree pairs include an empty diff, an edit,
+      and a rename, then ask the Git adapter for every clean overlay in one demand.
+    expected: >-
+      One bounded `diff-tree --stdin` child returns one ordered frame per requested pair, including empty pairs;
+      each worktree's ops equal the ordinary per-worktree oracle byte for byte. Literal paths and rename status
+      are independent of the user's Git path-quoting preference, while dirty/untracked trees stay on the
+      worktree-aware fallback.
+    test: spec-cli/src/git.test.ts
 ---
 # eval.md — git-exec
 

@@ -1,5 +1,17 @@
 ---
 scenarios:
+  - name: session-send-flags-cannot-become-the-message
+    description: >
+      Drive the real `spex session send` CLI against a recording HTTP backend twice, once as
+      `session send <SEL> "<msg>" --api <url>` and once as `session send <SEL> --api <url> "<msg>"`,
+      then inspect the POST bodies rather than trusting the CLI receipt. Also invoke send with no message and
+      with an unknown flag while the backend records every request.
+    expected: >
+      Both valid orders exit zero, print `sent`, and POST the exact caller-authored message rather than a routing
+      flag. Missing message and unknown flag exit non-zero before selector resolution or dispatch, print no false
+      `sent`, and make zero backend requests.
+    tags: [cli, backend-api]
+    code: [spec-cli/src/cli.ts, spec-cli/src/session-send-cli.test.ts]
   - name: help-journey
     description: >
       Walk the three help layers as a fresh agent would, through the real CLI: (1) `spex help` — the

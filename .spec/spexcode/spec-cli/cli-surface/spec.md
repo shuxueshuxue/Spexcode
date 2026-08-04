@@ -8,6 +8,7 @@ code:
 related:
   - spec-cli/src/guide.ts
   - spec-cli/src/help.ts
+  - spec-cli/src/session-send-cli.test.ts
 ---
 # cli-surface
 

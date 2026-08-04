@@ -125,6 +125,27 @@ test('session send requires -- to disambiguate a single-token option-shaped mess
   })
 })
 
+test('session send end-of-options remains authoritative to downstream routing and auth', async () => {
+  await withBackend(async (api, requests, env) => {
+    const port = new URL(api).port
+    for (const args of [
+      ['session', 'send', TARGET, '--port', port, '--', '--api'],
+      ['session', 'send', TARGET, '--api', api, '--', '--port'],
+      ['session', 'send', TARGET, '--api', api, '--', '--insecure'],
+    ]) {
+      const result = await runCli(args, env)
+      assert.equal(result.code, 0, result.stderr)
+      assert.equal(result.stdout, 'sent\n')
+    }
+    const posts = requests.filter((request) => request.method === 'POST')
+    assert.deepEqual(posts.map((request) => request.body), [
+      { kind: 'text', text: '--api' },
+      { kind: 'text', text: '--port' },
+      { kind: 'text', text: '--insecure' },
+    ])
+  })
+})
+
 test('session send preserves the mutually exclusive raw-key face', async () => {
   await withBackend(async (api, requests, env) => {
     const result = await runCli(['session', 'send', TARGET, '--api', api, '--keys', 'Up Enter'], env)

@@ -7,12 +7,15 @@ scenarios:
       then inspect the POST bodies rather than trusting the CLI receipt. Send the single-token option-shaped
       message `--force` once through the documented `--` delimiter and once without it. Also invoke send with no
       message, an extra message, an unknown flag, duplicate `--api`/`--port`/`--keys`, and missing values while
-      the backend records every request.
+      the backend records every request. Finally send the recognized option names `--api`, `--port`, and
+      `--insecure` as payloads after `--`, while a real routing flag before the delimiter points at the recorder.
     expected: >
       Both valid orders exit zero, print `sent`, and POST the exact caller-authored message rather than a routing
       flag; `--` delivers the exact option-shaped message, while omitting the delimiter fails loud. Missing/extra
       message, unknown flag, duplicate valued flag, and missing value all exit 2 before selector resolution or
       dispatch, print no false `sent`, and make zero backend requests. Raw keys retain their exact one-value face.
+      Every recognized option-shaped payload reaches the POST byte-exactly and is ignored by all downstream
+      routing/auth readers; the delimiter cannot be locally correct in the parser but reinterpreted later.
     tags: [cli, backend-api]
     code: [spec-cli/src/cli.ts, spec-cli/src/session-send-cli.test.ts]
   - name: help-journey

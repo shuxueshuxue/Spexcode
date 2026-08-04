@@ -157,7 +157,7 @@ test('public review and merge authority bind exact head and one durable dispatch
     const stale = await merge('maintenance-release-2', headOne)
     const finalTimeline = await request(base, `/api/sessions/${id}/timeline`)
     const finalMergePrompts = finalTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text))
-    assert.deepEqual({
+    const observed = {
       reviewOneHead: reviewOne.body.head,
       reviewTwoHead: reviewTwo.body.head,
       first: { status: first.status, dispatched: first.body.dispatched, replayed: first.body.replayed },
@@ -167,7 +167,9 @@ test('public review and merge authority bind exact head and one durable dispatch
       stale: { status: stale.status, code: stale.body.code },
       finalPromptCount: finalMergePrompts.length,
       rawKeyVisible: JSON.stringify(finalTimeline.body).includes('maintenance-release-1'),
-    }, {
+    }
+    console.log(`manager-authority-proof ${JSON.stringify(observed)}`)
+    assert.deepEqual(observed, {
       reviewOneHead: headOne,
       reviewTwoHead: headTwo,
       first: { status: 200, dispatched: true, replayed: false },

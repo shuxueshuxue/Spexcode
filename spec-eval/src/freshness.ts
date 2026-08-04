@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, resolve } from 'node:path'
-import { gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent, eventsSince } from '../../spec-cli/src/git.js'
+import { batchRevisionOids, gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent, eventsSince } from '../../spec-cli/src/git.js'
 import { anchorHitExists, extOf, extractorFor, extractors, resolveAnchor, resolveSelectors, type AnchorHitQuery, type Extractor, type RelationEntry, type Unit } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
 import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
@@ -10,6 +10,8 @@ import { scenarioChangeCommits, scenarioBlocksAt, primeScenarioBlocks, type Scen
 // the CODE axis is touch-based (DriftIndex), so a code-file rename is out of scope — the same blind spot lint's code-drift has
 
 export type StaleAxis = 'code' | 'scenario' | 'remark' | 'anchor'
+
+export type ContentProbeDemand = { anchorSha: string; paths: readonly string[]; evalPath: string }
 
 // @@@ off-history content fallback - ancestry can't testify for a codeSha that isn't reachable from HEAD
 // (fold/rebase/squash-merge/cherry-pick all orphan the anchor), but the TREES still can: while the anchor
@@ -34,6 +36,7 @@ export type ContentProbe = {
   // codeDrift's display detail: commits in anchor..HEAD touching path (floored at 1 — the content differs)
   behind(anchorSha: string, path: string): number
   prime?(anchorSha: string, paths: string[], evalPath: string): Promise<void>
+  primeMany?(demands: readonly ContentProbeDemand[]): Promise<void>
   // answer every scenario-block demand `prime` recorded, in ONE batched pair of children. Optional and
   // idempotent: an unflushed demand degrades to the singular sync lookup, never to a wrong block.
   primeBlocks?(): Promise<void>
@@ -172,35 +175,105 @@ function acquireHeavyDiff(scopeKey: string, signal?: AbortSignal): Promise<() =>
   })
 }
 
-// @@@ one batch per anchor, only the paths actually asked about - the tree comparison is pathspec-scoped
+// @@@ one bounded batch per planned population, only the paths actually asked about - the tree comparison is pathspec-scoped
 // (`:(literal)` so a path holding a glob char, a space or a leading colon is matched verbatim, `-z` so the
 // answer needs no unquoting), and the answer retained is one boolean per REQUESTED path. Concurrent primes
 // on the same anchor therefore union their paths BEFORE the child starts: a caller records what it needs in
 // `pending`, then either starts the batch that drains pending or joins the running one and re-checks after —
 // so a path requested mid-flight rides the NEXT batch instead of racing this one, and a settled path is
-// never asked again. Different anchors stay serial through the same scope permit.
-function startAnchorBatch(root: string, rootKey: string, sha: string, current: string, entry: AnchorVerdicts): Promise<void> {
+// never asked again. Every bounded chunk stays serial through the same scope permit.
+const CONTENT_BATCH_RECORD_LIMIT = 8_192
+const CONTENT_BATCH_MARKER = '\x1espex-content:'
+type ContentBatchRow = { sha: string; entry: AnchorVerdicts; requested: string[] }
+
+function contentBatchChunks<T extends ContentBatchRow>(rows: T[]): T[][] {
+  const chunks: T[][] = []
+  let chunk: T[] = []
+  let paths = new Set<string>()
+  for (const row of rows) {
+    const next = new Set(paths)
+    for (const path of row.requested) next.add(path)
+    if (chunk.length && (chunk.length + 1) * next.size > CONTENT_BATCH_RECORD_LIMIT) {
+      chunks.push(chunk)
+      chunk = []
+      paths = new Set()
+    }
+    chunk.push(row)
+    for (const path of row.requested) paths.add(path)
+  }
+  if (chunk.length) chunks.push(chunk)
+  return chunks
+}
+
+function parseContentBatch(out: string, rows: ContentBatchRow[]): Set<string>[] {
+  let rowIndex = -1
+  let status: string | null = null
+  const changed = rows.map(() => new Set<string>())
+  for (const raw of out.split('\0')) {
+    if (!raw) continue
+    const token = raw.startsWith('\n') ? raw.slice(1) : raw
+    if (status !== null) {
+      if (rowIndex < 0 || rowIndex >= rows.length) throw new Error('git content diff batch emitted a path before its pair marker')
+      changed[rowIndex].add(token)
+      status = null
+      continue
+    }
+    if (token.startsWith(CONTENT_BATCH_MARKER)) {
+      rowIndex++
+      if (rowIndex >= rows.length) throw new Error('git content diff batch emitted too many pair markers')
+      continue
+    }
+    if (!/^[A-Z](?:\d+)?$/.test(token)) throw new Error(`git content diff batch emitted malformed status '${token}'`)
+    status = token
+  }
+  if (status !== null) throw new Error(`git content diff batch ended after status '${status}'`)
+  if (rowIndex + 1 !== rows.length)
+    throw new Error(`git content diff batch emitted ${rowIndex + 1} pair markers for ${rows.length} pairs`)
+  return changed
+}
+
+async function runContentBatch(root: string, current: string, rows: ContentBatchRow[]): Promise<void> {
+  const resolved = await batchRevisionOids(root, rows.map((row) => row.sha))
+  const readable: (ContentBatchRow & { oid: string })[] = []
+  const missing: ContentBatchRow[] = []
+  rows.forEach((row, index) => {
+    const oid = resolved[index]
+    if (oid) readable.push({ ...row, oid })
+    else missing.push(row)
+  })
+  const settled: { row: ContentBatchRow; changed: Set<string> }[] = []
+  for (const chunk of contentBatchChunks(readable)) {
+    const paths = [...new Set(chunk.flatMap((row) => row.requested))].sort()
+    const result = await gitTry([
+      '-C', root, '-c', 'core.quotePath=false', 'diff-tree', '--stdin', '--always', '-r', '--name-status', '-z',
+      '--no-renames', '--no-color', '--no-ext-diff', '--no-textconv', `--format=${CONTENT_BATCH_MARKER}%H`,
+      '--', ...paths.map((path) => `:(literal)${path}`),
+    ], { input: chunk.map((row) => `${row.oid} ${current}`).join('\n') + '\n' })
+    if (!result.ok)
+      throw new Error(`git content diff batch failed (${result.failure ?? 'unknown'}): ${result.stderr.trim() || 'unknown git error'}`)
+    parseContentBatch(result.stdout, chunk).forEach((changed, index) => settled.push({ row: chunk[index], changed }))
+  }
+  // Publish only after every chunk succeeds. A late transport failure leaves the entire planned population
+  // retryable instead of turning its early chunks into an accidental partial freshness answer.
+  for (const row of missing) row.entry.gone = true
+  for (const { row, changed } of settled)
+    for (const path of row.requested) row.entry.verdicts.set(path, changed.has(path))
+}
+
+function startPluralContentBatch(root: string, rootKey: string, current: string, rows: { sha: string; entry: AnchorVerdicts }[]): Promise<void> {
   const run = async (): Promise<void> => {
     const release = await acquireHeavyDiff(`${rootKey}\x1f${current}`, currentGitBuildAbortSignal())
-    // drain AFTER the permit, so every caller that registered while this batch was waiting rides THIS
-    // child instead of paying for another one; anything registered after this line is the next batch.
-    const batch = [...entry.pending]
-    entry.pending.clear()
-    try {
-      if (!batch.length) return
-      const result = await gitTry(['-C', root, 'diff', '--name-only', '-z', '--no-renames', sha, current,
-        '--', ...batch.map((path) => `:(literal)${path}`)])
-      if (!result.ok && result.failure !== 'exit')
-        throw new Error(`git content diff failed (${result.failure ?? 'unknown'}): ${result.stderr.trim() || 'unknown git error'}`)
-      if (!result.ok) { entry.gone = true; return }   // the anchor commit object is unreadable — content can't testify
-      const changed = new Set(result.stdout.split('\0').filter(Boolean))
-      for (const path of batch) entry.verdicts.set(path, changed.has(path))
-    } finally {
-      release()
-    }
+    const batch = rows.map((row) => ({ ...row, requested: [...row.entry.pending] }))
+      .filter((row) => row.requested.length)
+    for (const row of batch) row.entry.pending.clear()
+    try { await runContentBatch(root, current, batch) }
+    finally { release() }
   }
-  const flight = run().finally(() => { if (entry.flight === flight) entry.flight = null })
-  entry.flight = flight
+  let flight!: Promise<void>
+  flight = run().finally(() => {
+    for (const row of rows) if (row.entry.flight === flight) row.entry.flight = null
+  })
+  for (const row of rows) row.entry.flight = flight
   return flight
 }
 
@@ -230,35 +303,49 @@ export function contentProbeFor(root: string): ContentProbe {
   const rootKey = resolve(root)
   let head: string | undefined
   const headOf = () => (head ??= headSha(root))
-  return {
-    async prime(sha, paths, evalPath) {
-      const current = headOf()
-      const wanted = [...new Set([...paths, evalPath])].filter(Boolean)
-      // one scope resolve per prime: the entry stays this call's to settle even if the root's head moves
-      // under it, but the swap means nothing it writes afterwards can be read back at the new head.
-      const scope = scopeFor(rootKey, current)
-      const entry = touchAnchor(scope, sha)
-      while (!entry.gone) {
-        const missing = wanted.filter((path) => !entry.verdicts.has(path))
-        if (!missing.length) break
-        for (const path of missing) entry.pending.add(path)
-        // record first, then join: whoever starts the next batch drains everything pending by now.
-        if (entry.flight) await entry.flight
-        else await startAnchorBatch(root, rootKey, sha, current, entry)
+  const primeMany = async (demands: readonly ContentProbeDemand[]): Promise<void> => {
+    const current = headOf()
+    const scope = scopeFor(rootKey, current)
+    const grouped = new Map<string, { entry: AnchorVerdicts; paths: Set<string>; codePaths: Set<string>; evalPaths: Set<string> }>()
+    for (const demand of demands) {
+      const row = grouped.get(demand.anchorSha) ?? {
+        entry: touchAnchor(scope, demand.anchorSha), paths: new Set(), codePaths: new Set(), evalPaths: new Set(),
       }
-      if (entry.gone) return
-      for (const path of new Set(paths)) {
-        if (entry.verdicts.get(path) !== true) continue
-        await behindCount(root, scope, sha, current, path)
+      for (const path of demand.paths) { if (path) { row.paths.add(path); row.codePaths.add(path) } }
+      if (demand.evalPath) { row.paths.add(demand.evalPath); row.evalPaths.add(demand.evalPath) }
+      grouped.set(demand.anchorSha, row)
+    }
+    for (;;) {
+      const waiting = new Set<Promise<void>>()
+      const ready: { sha: string; entry: AnchorVerdicts }[] = []
+      for (const [sha, row] of grouped) {
+        if (row.entry.gone) continue
+        const missing = [...row.paths].filter((path) => !row.entry.verdicts.has(path))
+        if (!missing.length) continue
+        for (const path of missing) row.entry.pending.add(path)
+        if (row.entry.flight) waiting.add(row.entry.flight)
+        else ready.push({ sha, entry: row.entry })
       }
-      // RECORD the scenario-block demand; primeBlocks() below answers the whole read's worth in two
-      // children. A caller that never flushes still reads correct blocks — scenarioDiffers falls back to
-      // the singular sync lookup — so this is a cost seam, not a correctness one.
-      if (entry.verdicts.get(evalPath) === true) {
+      if (waiting.size) { await Promise.all(waiting); continue }
+      if (!ready.length) break
+      await startPluralContentBatch(root, rootKey, current, ready)
+    }
+    await Promise.all([...grouped].flatMap(([sha, row]) => row.entry.gone ? [] : [...row.codePaths]
+      .filter((path) => row.entry.verdicts.get(path) === true)
+      .map((path) => behindCount(root, scope, sha, current, path))))
+    for (const [sha, row] of grouped) {
+      if (row.entry.gone) continue
+      for (const evalPath of row.evalPaths) if (row.entry.verdicts.get(evalPath) === true) {
         scope.blockDemands.add(`${sha}\x1f${evalPath}`)
         scope.blockDemands.add(`${current}\x1f${evalPath}`)
       }
+    }
+  }
+  return {
+    async prime(sha, paths, evalPath) {
+      await primeMany([{ anchorSha: sha, paths, evalPath }])
     },
+    primeMany,
     async primeBlocks() {
       const scope = currentScope(rootKey, headOf())
       if (!scope?.blockDemands.size) return

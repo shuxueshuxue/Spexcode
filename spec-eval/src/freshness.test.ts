@@ -237,26 +237,40 @@ function fixtureRepo(): { root: string; anchor: string; head: string } {
 function fullDiff(root: string, anchor: string, head: string): Set<string> {
   return new Set(sh(root, ['diff', '--name-only', '-z', '--no-renames', anchor, head]).split('\0').filter(Boolean))
 }
-type TraceEvent = { event: 'start' | 'end'; pid: string; argv: string }
+type TraceEvent = { event: 'start' | 'end'; pid: string; argv: string; input: string[] }
 function diffTrace(delay = '0.03') {
   const bin = mkdtempSync(join(tmpdir(), 'freshness-git-bin-'))
   const log = join(bin, 'events.log')
   const hang = join(bin, 'hang')
   const shim = join(bin, 'git')
   writeFileSync(log, '')
-  writeFileSync(shim, `#!/bin/sh
-case " $* " in
-  *" diff --name-only -z --no-renames "*)
-    printf 'start\\t%s\\t%s\\n' "$$" "$*" >> "$SPEX_TEST_DIFF_LOG"
-    if [ -n "$SPEX_TEST_DIFF_HANG" ] && [ -e "$SPEX_TEST_DIFF_HANG" ]; then sleep 60; fi
-    if [ -n "$SPEX_TEST_DIFF_DELAY" ]; then sleep "$SPEX_TEST_DIFF_DELAY"; fi
-    "$SPEX_TEST_REAL_GIT" "$@"
-    code=$?
-    printf 'end\\t%s\\t%s\\n' "$$" "$*" >> "$SPEX_TEST_DIFF_LOG"
-    exit $code
-    ;;
-  *) exec "$SPEX_TEST_REAL_GIT" "$@" ;;
-esac
+  writeFileSync(shim, `#!${process.execPath}
+const fs = require('node:fs')
+const cp = require('node:child_process')
+const args = process.argv.slice(2)
+const input = fs.readFileSync(0)
+const watched = args.includes('diff-tree') && args.includes('--stdin') && args.includes('--always')
+const write = (event) => fs.appendFileSync(process.env.SPEX_TEST_DIFF_LOG,
+  JSON.stringify({ event, pid: String(process.pid), argv: args.join(' '), input: input.toString('utf8').split('\\n').filter(Boolean) }) + '\\n')
+if (watched) {
+  write('start')
+  const starts = fs.readFileSync(process.env.SPEX_TEST_DIFF_LOG, 'utf8').split('\\n')
+    .filter(Boolean).map((line) => JSON.parse(line)).filter((row) => row.event === 'start').length
+  if (Number(process.env.SPEX_TEST_DIFF_FAIL_AT) === starts) {
+    process.stderr.write('controlled content chunk failure\\n')
+    process.exit(73)
+  }
+  while (process.env.SPEX_TEST_DIFF_HANG && fs.existsSync(process.env.SPEX_TEST_DIFF_HANG))
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100)
+  if (process.env.SPEX_TEST_DIFF_DELAY)
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.SPEX_TEST_DIFF_DELAY) * 1000)
+}
+const result = cp.spawnSync(process.env.SPEX_TEST_REAL_GIT, args, { input, maxBuffer: 64 * 1024 * 1024 })
+if (watched) write('end')
+if (result.stdout) process.stdout.write(result.stdout)
+if (result.stderr) process.stderr.write(result.stderr)
+if (result.error) throw result.error
+process.exit(result.status ?? 1)
 `)
   chmodSync(shim, 0o755)
   const previous = {
@@ -283,10 +297,8 @@ esac
       else process.env[key] = value
     }
   }
-  const events = (): TraceEvent[] => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((line) => {
-    const [event, pid, ...argv] = line.split('\t')
-    return { event: event as TraceEvent['event'], pid, argv: argv.join('\t') }
-  })
+  const events = (): TraceEvent[] => readFileSync(log, 'utf8').trim().split('\n').filter(Boolean)
+    .map((line) => JSON.parse(line) as TraceEvent)
   return { bin, log, hang, shim, events, restore }
 }
 function peakActive(events: TraceEvent[]): { peak: number; final: number } {
@@ -408,14 +420,20 @@ test('content batch: a path nobody requested stays unprovable — no whole-repo 
   assert.equal(probe.changed(anchor, 'tracked.txt'), true)
 })
 
-test('content batch: 14 unique anchors under one root+HEAD run one child at a time', async () => {
+test('content batch: 14 unique anchors in one population use one object check and one content child', async () => {
   const { root, hashes } = schedulerRepo(15)
   const trace = diffTrace()
   try {
-    await Promise.all(hashes.slice(0, 14).map((sha) => contentProbeFor(root).prime!(sha, ['tracked.txt'], 'absent-eval.md')))
+    const probe = contentProbeFor(root)
+    await probe.primeMany!(hashes.slice(0, 14).map((anchorSha) => ({
+      anchorSha, paths: ['tracked.txt'], evalPath: 'absent-eval.md',
+    })))
     const events = trace.events()
-    assert.equal(events.filter((event) => event.event === 'start').length, 14)
+    const starts = events.filter((event) => event.event === 'start')
+    assert.equal(starts.length, 1)
+    assert.equal(starts[0].input.length, 14, 'the single child receives every resolved anchor/HEAD pair')
     assert.deepEqual(peakActive(events), { peak: 1, final: 0 })
+    assert.ok(hashes.slice(0, 14).every((sha) => probe.changed(sha, 'tracked.txt') === true))
   } finally {
     trace.restore()
   }
@@ -447,6 +465,31 @@ test('content batch: abort removes active and queued flights, then both retry wi
       'active and queued failures both leave retryable flights and no ghost waiter')
     assert.equal(retried[0].changed(hashes[0], 'tracked.txt'), true, 'the aborted verdict was never cached, so the retry settles it')
   } finally {
+    trace.restore()
+  }
+})
+
+test('content batch: a later chunk failure publishes no partial verdict and the whole population retries', async () => {
+  const { root, hashes } = schedulerRepo(93)
+  const trace = diffTrace('0')
+  const previous = process.env.SPEX_TEST_DIFF_FAIL_AT
+  process.env.SPEX_TEST_DIFF_FAIL_AT = '2'
+  const demands = hashes.slice(0, 92).map((anchorSha, index) => ({
+    anchorSha, paths: [`requested-${index}.txt`], evalPath: `eval-${index}.md`,
+  }))
+  try {
+    const probe = contentProbeFor(root)
+    await assert.rejects(probe.primeMany!(demands), /git content diff batch failed \(exit\): controlled content chunk failure/)
+    assert.ok(hashes.slice(0, 92).every((sha) => probe.canTestify(sha) === false),
+      'the successful first chunk did not leak a partial verdict')
+    delete process.env.SPEX_TEST_DIFF_FAIL_AT
+    await probe.primeMany!(demands)
+    assert.equal(trace.events().filter((event) => event.event === 'start').length, 4,
+      'both chunks ran before failure and both ran again on retry')
+    assert.ok(demands.every((row) => probe.changed(row.anchorSha, row.paths[0]) === false))
+  } finally {
+    if (previous === undefined) delete process.env.SPEX_TEST_DIFF_FAIL_AT
+    else process.env.SPEX_TEST_DIFF_FAIL_AT = previous
     trace.restore()
   }
 })
@@ -498,7 +541,8 @@ test('content batch: spawn failure is loud, not memoized, and a repaired child p
   try {
     process.env.PATH = trace.bin
     chmodSync(trace.shim, 0o644)
-    await assert.rejects(contentProbeFor(root).prime!(hashes[0], ['tracked.txt'], 'absent-eval.md'), /git content diff failed \(spawn\)/)
+    await assert.rejects(contentProbeFor(root).prime!(hashes[0], ['tracked.txt'], 'absent-eval.md'),
+      /git .*failed: git executable not found on PATH/)
     assert.equal(contentProbeFor(root).canTestify(hashes[0]), false, 'a failed batch settles nothing')
     chmodSync(trace.shim, 0o755)
     const retry = contentProbeFor(root)

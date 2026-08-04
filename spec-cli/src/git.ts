@@ -1029,7 +1029,7 @@ async function identityRawEventStream(root: string, tip: string, request: EventS
   return value as IdentityRawRecord[]
 }
 export type GitTryFailure = 'exit' | 'spawn' | 'timeout'
-export async function gitTry(args: string[], options: { indexFile?: string; extraEnv?: Record<string, string | undefined> } = {}): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
+export async function gitTry(args: string[], options: { indexFile?: string; extraEnv?: Record<string, string | undefined>; input?: string } = {}): Promise<{ ok: boolean; stdout: string; stderr: string; failure?: GitTryFailure }> {
   const env = { ...process.env }
   for (const [key, value] of Object.entries(options.extraEnv ?? {})) {
     if (value === undefined) delete env[key]
@@ -1039,7 +1039,7 @@ export async function gitTry(args: string[], options: { indexFile?: string; extr
   if (options.indexFile) env.GIT_INDEX_FILE = options.indexFile
   const context = inheritedContext()
   try {
-    const { stdout, stderr } = await execGitForCaller(args, env)
+    const { stdout, stderr } = await execGitForCaller(args, env, undefined, options.input)
     return { ok: true, stdout: stdout.toString('utf8'), stderr }
   } catch (e: any) {
     if (context?.signal.aborted || e?.name === 'AbortError') throw e

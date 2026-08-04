@@ -4,7 +4,7 @@ import { repoRoot } from './git.js'
 import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { envSessionId, listSessionIds, readPublicRecordEntry } from './layout.js'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
-import { apiBaseInfo, assertProjectMatch, fromRaw, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { apiBaseInfo, assertProjectMatch, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number, readonly transport?: unknown) {
@@ -19,11 +19,12 @@ const usageError = (message: string): Error => {
   return error
 }
 
-const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`)
+const hasFlag = (name: string): boolean => optionArgv().includes(`--${name}`)
 function flagValue(name: string): string | null {
-  const index = process.argv.indexOf(`--${name}`)
+  const argv = optionArgv()
+  const index = argv.indexOf(`--${name}`)
   if (index < 0) return null
-  const value = process.argv[index + 1]
+  const value = argv[index + 1]
   if (value === undefined || value.startsWith('--')) throw usageError(`--${name} expects a value`)
   return value
 }

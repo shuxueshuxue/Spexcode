@@ -298,14 +298,13 @@ export async function clientEvals(id: string): Promise<EvalsResult> {
   throw new BackendError(`session eval pages changed while fetching ${id}; retry the command`)
 }
 
-// POST /api/sessions/:id/merge — the cockpit's merge DISPATCH. A caller carrying review authority sends
-// both its exact reviewed head and durable request key; the ordinary interactive CLI remains one-shot.
-export async function clientMerge(id: string, options: { reviewedHead?: string; requestKey?: string } = {}): Promise<{ dispatched: boolean; replayed?: boolean; reviewedHead?: string; reason?: string; code?: string }> {
+// POST /api/sessions/:id/merge — the cockpit's merge DISPATCH. The caller returns the exact pair it just
+// reviewed and one durable request key; the backend accepts that decision once before ensuring the agent live.
+export async function clientMerge(id: string, options: { expectedBranchHead: string; expectedBaseHead: string; requestKey: string }): Promise<{ dispatched: boolean; replayed?: boolean; expectedBranchHead?: string; expectedBaseHead?: string; reason?: string; code?: string }> {
   await guarded('merge')
-  const headers: Record<string, string> = { 'content-type': 'application/json' }
-  if (options.requestKey) headers['Idempotency-Key'] = options.requestKey
+  const headers: Record<string, string> = { 'content-type': 'application/json', 'Idempotency-Key': options.requestKey }
   const r = await apiFetch(`/api/sessions/${seg(id)}/merge`, {
-    method: 'POST', headers, body: JSON.stringify(options.reviewedHead ? { reviewedHead: options.reviewedHead } : {}),
+    method: 'POST', headers, body: JSON.stringify({ expectedBranchHead: options.expectedBranchHead, expectedBaseHead: options.expectedBaseHead }),
   })
   return await r.json().catch(() => ({ dispatched: false, reason: `bad backend response (${r.status})` }))
 }

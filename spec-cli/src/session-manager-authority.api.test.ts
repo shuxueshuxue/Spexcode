@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -121,6 +122,7 @@ test('public review and merge authority bind exact head and one durable dispatch
   let backendA: Backend | null = startBackend(portA)
   let backendB: Backend | null = startBackend(portB)
   let id = ''
+  let cliId = ''
   try {
     await Promise.all([waitHealth(baseA, 'backend A health'), waitHealth(baseB, 'backend B health')])
     const created = await request(baseA, '/api/sessions', {
@@ -140,6 +142,8 @@ test('public review and merge authority bind exact head and one durable dispatch
     const sessionBranch = git(worktree, 'branch', '--show-current')
     assert.ok(worktree)
     assert.ok(sessionBranch)
+    const runtime = join(home, 'projects', encodeProject(project))
+    const sessionDir = join(runtime, 'sessions', id)
 
     writeFileSync(join(worktree, 'value.txt'), 'review-one\n')
     git(worktree, 'add', 'value.txt')
@@ -187,6 +191,17 @@ test('public review and merge authority bind exact head and one durable dispatch
       body: JSON.stringify({ expectedBranchHead: headTwo }),
     })
     const extraField = await merge(baseA, 'extra-field', headTwo, baseTwo, { reviewedHead: headTwo })
+    const legacyKey = 'legacy-single-head-receipt'
+    const hash = (value: string) => createHash('sha256').update(value).digest('hex')
+    appendFileSync(join(sessionDir, 'timeline.ndjson'), JSON.stringify({
+      ts: new Date().toISOString(), kind: 'sent', mid: 'legacy-receipt', text: 'legacy accepted merge', from: null,
+      dispatchReceipt: {
+        operation: 'merge',
+        requestDigest: hash(`spexcode-session-merge\0${legacyKey}`),
+        payloadHash: hash(JSON.stringify({ reviewedHead: headTwo })),
+      },
+    }) + '\n')
+    const legacyReceipt = await merge(baseA, legacyKey, headTwo, baseTwo)
 
     writeFileSync(join(project, 'base.txt'), 'base-three\n')
     git(project, 'add', 'base.txt')
@@ -210,8 +225,6 @@ test('public review and merge authority bind exact head and one durable dispatch
     const beforeKeyed = await request(baseA, `/api/sessions/${id}/timeline`)
     const baselinePrompts = beforeKeyed.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text))
 
-    const runtime = join(home, 'projects', encodeProject(project))
-    const sessionDir = join(runtime, 'sessions', id)
     const pendingPath = join(sessionDir, 'pending.json')
     const rendezvousPath = readFileSync(join(sessionDir, 'rv.path'), 'utf8').trim()
     rmSync(rendezvousPath, { force: true })
@@ -270,6 +283,7 @@ test('public review and merge authority bind exact head and one durable dispatch
       emptyKey: { status: emptyKey.status, code: emptyKey.body.code },
       missingBase: { status: missingBase.status, code: missingBase.body.code },
       extraField: { status: extraField.status, code: extraField.body.code },
+      legacyReceipt: { status: legacyReceipt.status, code: legacyReceipt.body.code },
       staleBase: { status: staleBase.status, code: staleBase.body.code, stateUnchanged: staleBaseAfter.body.lifecycle === staleBaseBefore.body.lifecycle && staleBaseAfter.body.proposal === staleBaseBefore.body.proposal },
       staleBranch: { status: staleBranch.status, code: staleBranch.body.code, stateUnchanged: staleBranchAfter.body.lifecycle === staleBranchBefore.body.lifecycle && staleBranchAfter.body.proposal === staleBranchBefore.body.proposal },
       baselinePromptCount: baselinePrompts.length,
@@ -302,6 +316,7 @@ test('public review and merge authority bind exact head and one durable dispatch
       emptyKey: { status: 400, code: 'session_merge_invalid_request' },
       missingBase: { status: 400, code: 'session_merge_invalid_request' },
       extraField: { status: 400, code: 'session_merge_invalid_request' },
+      legacyReceipt: { status: 409, code: 'session_merge_key_reused' },
       staleBase: { status: 409, code: 'session_merge_head_changed', stateUnchanged: true },
       staleBranch: { status: 409, code: 'session_merge_head_changed', stateUnchanged: true },
       baselinePromptCount: 0,
@@ -323,7 +338,34 @@ test('public review and merge authority bind exact head and one durable dispatch
       promptMergesExactObject: true,
       rawKeyVisible: false,
     })
+
+    const cliCreated = await request(baseA, '/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': 'manager-authority-cli-session' },
+      body: JSON.stringify({ prompt: 'manager authority CLI fixture', launcher: 'fake' }),
+    })
+    assert.equal(cliCreated.status, 201, cliCreated.text)
+    cliId = cliCreated.body.id
+    const cliDetail = await waitFor(
+      () => request(baseA, `/api/sessions/${cliId}`).then((reply) => reply.body),
+      (session) => session?.liveness === 'online',
+      'CLI fixture session online',
+    )
+    writeFileSync(join(cliDetail.path, 'cli.txt'), 'reviewed CLI\n')
+    git(cliDetail.path, 'add', 'cli.txt')
+    git(cliDetail.path, 'commit', '-qm', 'spec: reviewed CLI authority')
+    execFileSync(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', 'merge'], {
+      cwd: cliDetail.path, env: { ...env, SPEXCODE_SESSION_ID: cliId }, encoding: 'utf8',
+    })
+    const cliOutput = execFileSync(process.execPath, [
+      tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'merge', cliId, '--api', baseA,
+    ], { cwd: project, env, encoding: 'utf8' })
+    const cliTimeline = await request(baseA, `/api/sessions/${cliId}/timeline`)
+    assert.match(cliOutput, /merge dispatched/)
+    assert.equal(cliTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length, 1)
+    console.log(`manager-authority-cli ${JSON.stringify({ dispatched: true, promptCount: 1 })}`)
   } finally {
+    if (cliId && backendA) await request(baseA, `/api/sessions/${cliId}/close`, { method: 'POST' }).catch(() => {})
     if (id && backendA) await request(baseA, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
     for (const backend of [...backends]) {
       await stopBackend(backend)

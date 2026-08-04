@@ -569,13 +569,12 @@ app.post('/api/sessions/:id/resume', async (c) => {
   const r = await resumeSession(c.req.param('id'), { force })
   return c.json(r, r.ok ? 200 : (r.refused ? 409 : 404))
 })
-// a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
-// main's tree. 200 {dispatched:true} once the prompt is accepted, 409 {dispatched:false} if the agent is unreachable.
+// A reviewed dispatch to the session's own agent (it runs the merge), never a server merge. The caller returns
+// the exact branch/base OIDs with a durable key; sessions.ts validates and accepts them once before ensure-live.
 app.post('/api/sessions/:id/merge', async (c) => {
   const requestKey = c.req.header('idempotency-key')
   if (requestKey === undefined) {
-    const r = await mergeSession(c.req.param('id'))
-    return c.json(r, r.dispatched ? 200 : (r.status ?? 409))
+    return c.json({ dispatched: false, reason: 'Idempotency-Key is required with reviewed merge authority', code: 'session_merge_invalid_request' }, 400)
   }
   const rawBody = await c.req.text()
   let body: unknown = {}
@@ -588,15 +587,17 @@ app.post('/api/sessions/:id/merge', async (c) => {
   }
   const input = body as Record<string, unknown>
   const keys = Object.keys(input)
-  if (keys.some((key) => key !== 'reviewedHead')) {
-    return c.json({ dispatched: false, reason: `unknown session-merge field(s): ${keys.filter((key) => key !== 'reviewedHead').join(', ')}`, code: 'session_merge_invalid_request' }, 400)
+  const allowed = new Set(['expectedBranchHead', 'expectedBaseHead'])
+  if (keys.some((key) => !allowed.has(key))) {
+    return c.json({ dispatched: false, reason: `unknown session-merge field(s): ${keys.filter((key) => !allowed.has(key)).join(', ')}`, code: 'session_merge_invalid_request' }, 400)
   }
-  if (input.reviewedHead !== undefined && typeof input.reviewedHead !== 'string') {
-    return c.json({ dispatched: false, reason: 'reviewedHead must be a string', code: 'session_merge_invalid_request' }, 400)
+  if (typeof input.expectedBranchHead !== 'string' || typeof input.expectedBaseHead !== 'string') {
+    return c.json({ dispatched: false, reason: 'expectedBranchHead and expectedBaseHead must be strings', code: 'session_merge_invalid_request' }, 400)
   }
   const r = await mergeSession(c.req.param('id'), {
     requestKey,
-    ...(typeof input.reviewedHead === 'string' ? { reviewedHead: input.reviewedHead } : {}),
+    expectedBranchHead: input.expectedBranchHead,
+    expectedBaseHead: input.expectedBaseHead,
   })
   return c.json(r, r.dispatched ? 200 : (r.status ?? 409))
 })

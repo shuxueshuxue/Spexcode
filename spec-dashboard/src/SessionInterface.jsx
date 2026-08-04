@@ -37,6 +37,7 @@ const BYTES_PER_GIBIBYTE = BYTES_PER_MEBIBYTE * MEBIBYTES_PER_GIBIBYTE
 let nextAttachmentKey = 0
 
 const attachmentKey = () => globalThis.crypto?.randomUUID?.() || `attachment-${Date.now()}-${++nextAttachmentKey}`
+const mergeRequestKey = () => globalThis.crypto?.randomUUID?.() || `merge-${Date.now()}-${++nextAttachmentKey}`
 
 const HERO_WORDMARK = [
   '███████╗██████╗ ███████╗██╗  ██╗ ██████╗ ██████╗ ██████╗ ███████╗',
@@ -1006,13 +1007,13 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   // Lifecycle actions consume both status and structured bodies before reload. Their outcome belongs to the
   // selected action panel, never to the navigation list, so one refusal cannot masquerade as two operations.
-  const act = async (verb, body, owner = 'panel') => {
+  const act = async (verb, body, owner = 'panel', headers = {}) => {
     setActionOutcome({ owner, phase: 'pending', message: t('session.outcomeWorking') })
     let ok = true
     try {
       const res = await fetch(apiUrl(`/api/sessions/${active}/${verb}`), body
-        ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
-        : { method: 'POST' })
+        ? { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) }
+        : { method: 'POST', headers })
       const j = await res.json().catch(() => null)
       if (!res.ok || j?.ok === false) {
         ok = false
@@ -1026,6 +1027,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     await reload?.()
     if (ok && owner === 'command') closeCommandBox()
     return ok
+  }
+
+  const mergeReviewed = async (owner) => {
+    setActionOutcome({ owner, phase: 'pending', message: t('session.outcomeWorking') })
+    try {
+      const response = await fetch(apiUrl(`/api/sessions/${active}/review`))
+      const review = await response.json().catch(() => null)
+      if (!response.ok || typeof review?.branchHead !== 'string' || typeof review?.baseHead !== 'string') {
+        setActionOutcome({ owner, phase: 'failed', message: review?.error || `session review refused (HTTP ${response.status})` })
+        return false
+      }
+      return await act('merge', { expectedBranchHead: review.branchHead, expectedBaseHead: review.baseHead }, owner, { 'Idempotency-Key': mergeRequestKey() })
+    } catch (error) {
+      setActionOutcome({ owner, phase: 'failed', message: error instanceof Error ? error.message : String(error) })
+      return false
+    }
   }
 
   const resumeAndReturnToWorking = async () => {
@@ -1058,7 +1075,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     // (a real page switch, one push), never a console-local pane. The tab-bar door below is the same
     // address as a REAL anchor.
     eval: () => { if (active !== 'new') navigateAddress(sessionEvalAddress(active)) },
-    merge: (owner) => act('merge', undefined, owner),
+    merge: mergeReviewed,
     relaunch: resumeAndReturnToWorking,
     stop: (owner) => act('stop', undefined, owner),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
     // archive is cold storage: the backend stops the exact leaf before filing, then the browser opens the

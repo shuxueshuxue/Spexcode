@@ -326,7 +326,17 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
     session.evalSummary = evalProjection(evalMode)
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) })
   })
+  const branchHead = '1'.repeat(40), baseHead = '2'.repeat(40)
+  await page.route('**/api/sessions/*/review', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ branchHead, baseHead }) })
+  })
   await page.route('**/api/sessions/*/merge', async (route) => {
+    const body = route.request().postDataJSON()
+    const key = route.request().headers()['idempotency-key']
+    if (!key || body?.expectedBranchHead !== branchHead || body?.expectedBaseHead !== baseHead) {
+      await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ dispatched: false, error: 'missing reviewed authority' }) })
+      return
+    }
     mergeDispatches++
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ dispatched: true }) })
   })

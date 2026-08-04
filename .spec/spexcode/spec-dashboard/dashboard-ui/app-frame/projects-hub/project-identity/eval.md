@@ -16,7 +16,8 @@ scenarios:
       successful canonical save re-collapses it. Gateway edits touch only the host config; project edits
       touch only that project's `dashboard.icon`, including offline. Iconify choices outside the featured
       eight survive reload/restart and drive the same project row, switcher, rail, and favicon value; the
-      gateway choice drives its tab too. Themes remain legible, the 390px layout does not overlap, project
+      gateway choice drives its tab too. The scoped rail chip has no permanent container tile: its
+      background appears only on hover or while its switcher is open. Themes remain legible, the 390px layout does not overlap, project
       switching never leaks the last identity, and a guest sees neither catalog nor management controls.
     test: spec-dashboard/test/identity-chain.e2e.mjs
     related:

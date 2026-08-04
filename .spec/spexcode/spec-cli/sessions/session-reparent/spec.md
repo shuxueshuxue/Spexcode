@@ -33,10 +33,13 @@ process nor authored lifecycle, and its next record transition simply observes t
 For each child, the operation holds that child's ordinary record lock while it replaces the durable
 `parent` pointer and its target-owned `watchers.json` relation: the former parent is removed and the new
 parent is present exactly once. The old record is never asked to run a cancellation, so an offline or dead
-former supervisor is ordinary input. Existing messages already accepted into that former supervisor's
-queue remain history and debt; removal prevents only future watch notices. After the rewrite commits, the
-new parent is sent the child's current authored state through normal dispatch, matching an ordinary
-`session watch` installation.
+former supervisor is ordinary input. The same transaction holds each affected target delivery queue and the
+former parent's sender lock, so it revokes that former parent's **unhanded** messages to each moved child;
+the child's immutable timeline remains audit history. A message already claimed by the adapter before the
+transaction gets the queue lock may arrive before reparent returns, but an unhanded stale `continue` cannot
+arrive afterwards. This is a transfer of supervision, not a general messaging ACL: a still-live former
+session may deliberately send a new peer message later. After the rewrite commits, the new parent is sent the
+child's current authored state through normal dispatch, matching an ordinary `session watch` installation.
 
 The command validates the complete batch before changing the first child and reports the committed child
 ids. A filesystem failure rolls back the in-memory watch rewrite for that child before releasing its lock;

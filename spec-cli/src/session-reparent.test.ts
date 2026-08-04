@@ -43,6 +43,11 @@ function parentOf(dir: string): string | null {
   return raw.parent || null
 }
 
+function pendingFrom(dir: string): string[] {
+  const path = join(dir, 'pending.json')
+  return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')).map((entry: { from?: string | null }) => entry.from ?? '') : []
+}
+
 function timelineText(dir: string): string {
   const legacy = join(dir, 'timeline.ndjson')
   const segments = join(dir, 'timeline')
@@ -100,6 +105,7 @@ test('session reparent rewrites parent/watch through live backend and only falls
   writeSession(home, oldParent, null)
   writeSession(home, newParent, null)
   for (const dir of [childADir, childBDir]) writeFileSync(join(dir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z' }]) + '\n')
+  writeFileSync(join(childADir, 'pending.json'), JSON.stringify([{ mid: 'old-parent-command', text: 'stale continue', from: oldParent }]) + '\n')
   const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '', PORT: String(await freePort()) }
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
   const backend = spawn(process.execPath, [tsxCli, cli, 'serve', '--port', String(port)], { cwd: pkgRoot, env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -114,6 +120,7 @@ test('session reparent rewrites parent/watch through live backend and only falls
       assert.equal(parentOf(dir), newParent)
       assert.deepEqual(watchers(dir).map((entry) => entry.watcher), [newParent])
     }
+    assert.deepEqual(pendingFrom(childADir), [], 'a moved child does not retain an undelivered command from its former supervisor')
     const newParentTimeline = timelineText(sessionDir(home, newParent))
     assert.match(newParentTimeline, new RegExp(childA))
     assert.match(newParentTimeline, new RegExp(childB))

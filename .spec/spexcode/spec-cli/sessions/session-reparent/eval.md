@@ -11,7 +11,8 @@ scenarios:
       The command exits successfully without signalling or restarting either child. Both list-tree rows move
       to the replacement immediately; each child has the replacement as parent and exactly one watcher,
       with the former parent absent. The replacement receives each current state and the later transition;
-      the former parent receives no new transition. Its already accepted historical mail is not erased.
+      the former parent receives no new transition. A pending former-parent `continue` never reaches either
+      child after the transfer, while its accepted historical timeline line is not erased.
     tags: [cli, backend-api]
     code: spec-cli/src/session-reparent.ts
   - name: backendless-owner-fallback

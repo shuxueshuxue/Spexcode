@@ -29,7 +29,9 @@ for none of that. Nothing is owed exactly when the queue is empty, which is a fa
 than a computation over a large one.
 
 A queue is only ever filled by an enqueue, so nothing is owed that was not sent, and a log stays history no
-matter how many thousands of lines it grows to.
+matter how many thousands of lines it grows to. A terminal sender is the one exception to "owed until taken":
+closing a session revokes its **unhanded** outbound debt everywhere, because a dead coordinator must not regain
+control merely because a target was temporarily unavailable.
 
 ## expanded spec
 
@@ -56,6 +58,24 @@ The lock spans the insert deliberately, and it is NOT the record lock: the recor
 call (a native turn runs lifecycle hooks that re-enter the record writer, which is a deadlock), while nothing
 in the delivery path takes this one. Holding it across the insert is what makes "claim" real, so two processes
 draining the same session at the same moment cannot both hand over the same message.
+
+**Close revokes a sender, not history.** A successful close writes a durable sender-revocation marker outside
+the closing session's store (which is about to disappear). Agent-to-agent dispatch takes the claimed sender's
+record lock as well as the target's before it appends, while close keeps that same sender lock through record
+removal and marker publication. Thus a send either finished before close began and becomes revocable debt, or
+observes the marker and never records a new message; this holds across every backend sharing the store. A drain
+that sees a revoked sender removes that queue entry without calling the adapter, then continues so dead debt
+cannot block later mail. The target's `sent` history is intentionally unchanged: it is evidence that the message
+was accepted, not permission to hand it over after the sender died. An adapter insert already claimed before
+the close/reparent transaction obtains the queue lock may arrive before that operation returns; no unhanded
+entry from that sender may arrive after a successful close returns.
+
+**Supervisor transfer revokes only former control debt.** Reparent holds each moved child's record lock, its
+former parent's sender lock, and the moved queues' delivery locks in one ordered transaction. It replaces the
+parent/watch relation and removes unhanded entries whose `from` is that former parent, rolling both queue and
+record bytes back if a later write fails. Ordinary peer messages and the target's history remain intact. This
+is deliberately narrower than an authorization system: a still-live former session can explicitly send a new
+peer message after reparent, but a command it had already queued cannot cross the supervisory handoff.
 
 **Any process may drain; one process is expected to.** A pass costs nothing when the queue is empty, so
 `sendText` runs one immediately in whatever process accepted the message — that is what puts the text in a

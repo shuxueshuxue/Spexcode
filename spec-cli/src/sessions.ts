@@ -14,7 +14,7 @@ import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDi
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { appendSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
-import { drain, enqueue, owesDelivery } from './delivery-queue.js'
+import { drain, enqueue, owesDelivery, pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, senderDeliveryRevoked, withDeliveryLocks } from './delivery-queue.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
@@ -635,37 +635,47 @@ function assertReparentable(children: string[], parent: string, records: Map<str
 export async function reparentSessionRecords(rawChildren: string[], parent: string): Promise<SessionReparentResult> {
   const children = [...new Set(rawChildren)].sort()
   if (!parent) throw new ResourceConflict('reparent needs a destination parent session')
-  const before = new Map(children.map((id) => [id, managedWatchRecord(id)]))
-  assertReparentable(children, parent, before)
   const notify: SessRec[] = []
-  await withRecordLock('session-reparent-transaction', () => withRecordLocks(children, async () => {
-    const current = new Map(children.map((id) => [id, managedWatchRecord(id)]))
-    assertReparentable(children, parent, current)
-    const snapshots = children.map((id) => ({ id, record: current.get(id)!, watchers: readWatchEntries(id) }))
-    try {
-      for (const snapshot of snapshots) {
-        const { record, watchers } = snapshot
-        const hadNewParent = watchers.some((entry) => entry.watcher === parent)
-        const retainedNewParent = watchers.find((entry) => entry.watcher === parent)
-        const nextWatchers = watchers.filter((entry) => entry.watcher !== record.parent && entry.watcher !== parent)
-        nextWatchers.push(retainedNewParent ?? { watcher: parent, createdAt: new Date().toISOString() })
-        writeWatchEntries(snapshot.id, nextWatchers)
-        if (record.parent !== parent) writeRecord({ ...record, parent })
-        if (record.parent !== parent || !hadNewParent) notify.push({ ...record, parent })
+  await withRecordLock('session-reparent-transaction', async () => {
+    // Read former supervisors only after the transaction fence: a concurrent reparent may change exactly
+    // this relation, and its real sender lock is part of the next transaction's outgoing-message boundary.
+    const before = new Map(children.map((id) => [id, managedWatchRecord(id)]))
+    assertReparentable(children, parent, before)
+    const formerParents = [...new Set([...before.values()].flatMap((record) => record.parent ? [record.parent] : []))]
+    await withRecordLocks([...children, ...formerParents].sort(), () => withDeliveryLocks(children, async () => {
+      const current = new Map(children.map((id) => [id, managedWatchRecord(id)]))
+      assertReparentable(children, parent, current)
+      const snapshots = children.map((id) => ({ id, record: current.get(id)!, watchers: readWatchEntries(id), pending: pendingSnapshot(id) }))
+      try {
+        for (const snapshot of snapshots) {
+          const { record, watchers } = snapshot
+          const hadNewParent = watchers.some((entry) => entry.watcher === parent)
+          const retainedNewParent = watchers.find((entry) => entry.watcher === parent)
+          const nextWatchers = watchers.filter((entry) => entry.watcher !== record.parent && entry.watcher !== parent)
+          nextWatchers.push(retainedNewParent ?? { watcher: parent, createdAt: new Date().toISOString() })
+          writeWatchEntries(snapshot.id, nextWatchers)
+          if (record.parent !== parent) writeRecord({ ...record, parent })
+          if (record.parent !== parent || !hadNewParent) notify.push({ ...record, parent })
+        }
+        for (const snapshot of snapshots) {
+          if (snapshot.record.parent && snapshot.record.parent !== parent)
+            revokePendingFromWhileLocked(snapshot.id, snapshot.record.parent)
+        }
+      } catch (error) {
+        let rollbackFailure: unknown = null
+        for (const snapshot of [...snapshots].reverse()) {
+          try {
+            replacePendingWhileLocked(snapshot.id, snapshot.pending)
+            writeWatchEntries(snapshot.id, snapshot.watchers)
+            writeRecord(snapshot.record)
+          } catch (rollback) { rollbackFailure ??= rollback }
+        }
+        const detail = error instanceof Error ? error.message : String(error)
+        const rollbackDetail = rollbackFailure instanceof Error ? `; rollback also failed: ${rollbackFailure.message}` : ''
+        throw new ResourceConflict(`reparent did not commit: ${detail}${rollbackDetail}`)
       }
-    } catch (error) {
-      let rollbackFailure: unknown = null
-      for (const snapshot of snapshots.toReversed()) {
-        try {
-          writeWatchEntries(snapshot.id, snapshot.watchers)
-          writeRecord(snapshot.record)
-        } catch (rollback) { rollbackFailure ??= rollback }
-      }
-      const detail = error instanceof Error ? error.message : String(error)
-      const rollbackDetail = rollbackFailure instanceof Error ? `; rollback also failed: ${rollbackFailure.message}` : ''
-      throw new ResourceConflict(`reparent did not commit: ${detail}${rollbackDetail}`)
-    }
-  }))
+    }))
+  })
   for (const child of notify) {
     const delivered = await sendText(parent, watchMessage(child), child.session)
     if (!delivered.ok) throw new ResourceConflict(`reparent committed but could not queue ${child.session}'s current state for ${parent}: ${delivered.error}`)
@@ -3046,6 +3056,9 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   try { rmSync(sessionStoreDir(id), { recursive: true, force: true }) }
   catch (error) { throw new ResourceConflict(`refusing to finish close for ${id}: session record/prompt removal failed (${error instanceof Error ? error.message : String(error)})`) }
   if (existsSync(sessionStoreDir(id))) throw new ResourceConflict(`refusing to finish close for ${id}: session record removal failed`)
+  // The close still owns this sender's record lock. Marking after its store is gone lets any send already
+  // admitted finish before close returns, while every later send and every retry sweep sees terminal output.
+  revokeSenderDelivery(id)
   if (closesCodexBinding && wt.rec.harnessSessionId) {
     bindCodexGeneration(runtimeRoot(), id, wt.rec.harnessSessionId, null)
   }
@@ -3453,14 +3466,19 @@ export function formatTable(sessions: Session[], color = true): string {
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 export async function sendText(id: string, text: string, from?: string, opts: { replyVia?: 'note' } = {}): Promise<DispatchResult> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
-  const rec = readRecord(id)
-  if (!rec) return { ok: false, error: `no session record for ${id} — prompt NOT delivered` }
-  // Composed at ACCEPT time, once: the log keeps the raw conversational text plus the effective reply channel,
-  // the queue keeps the transport form. Composing again at handover would let a later send change the hints on
-  // a message that was already accepted.
-  const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
   try {
-    await withRecordLock(id, async () => {
+    // Taking a declared sender's record lock makes close a real outgoing fence even across backend processes:
+    // a send either appends before close obtains the fence (and close's revocation voids its debt), or sees
+    // the terminal marker before it records anything. Arbitrary legacy `from` values keep working; they just
+    // name an otherwise-unused lock until a matching session is closed.
+    await withRecordLocks([id, ...(from ? [from] : [])].sort(), async () => {
+      if (from && senderDeliveryRevoked(from)) throw new ResourceConflict(`sender session ${from} is closed; prompt NOT delivered`)
+      const rec = readRecord(id)
+      if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
+      // Composed at ACCEPT time, once: the log keeps the raw conversational text plus the effective reply channel,
+      // the queue keeps the transport form. Composing again at handover would let a later send change the hints on
+      // a message that was already accepted.
+      const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
       const appended = appendSent(id, text, from ?? null, prompt.replyVia)
       enqueue(id, { mid: appended.mid, text: prompt.text, from: from ?? null })
     })

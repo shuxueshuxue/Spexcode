@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { codexHarness } from './harness.js'
 import { processStartToken } from './process-identity.js'
-import { closeSession } from './sessions.js'
+import { closeSession, sendText } from './sessions.js'
+import { drain, pendingMessages } from './delivery-queue.js'
 import { runtimeRoot, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from './layout.js'
 
 test('close uses a target tmux probe when the global listing is busy', { concurrency: false }, async () => {
@@ -22,6 +23,7 @@ test('close uses a target tmux probe when the global listing is busy', { concurr
   const project = join(home, 'project')
   const bin = join(home, 'bin')
   const id = `close-target-probe-${process.pid}`
+  const recipient = `close-delivery-recipient-${process.pid}`
   const thread = `close-target-thread-${process.pid}`
   const worktree = join(home, 'worktree')
   const branch = `node/${id}`
@@ -62,6 +64,16 @@ esac
       merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: thread,
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
     }, null, 2)}\n`)
+    mkdirSync(sessionStoreDir(recipient), { recursive: true })
+    writeFileSync(sessionRecordPath(recipient), `${JSON.stringify({
+      session_id: recipient, governed: true, worktree_path: worktree, branch: '',
+      node: 'delivery-queue', title: '', name: '', parent: '', status: 'active', proposal: 'close',
+      merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
+      stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
+    }, null, 2)}\n`)
+    writeFileSync(sessionArtifactPath(recipient, 'pending.json'), JSON.stringify([
+      { mid: 'queued-before-close', text: 'stale continue', from: id },
+    ]) + '\n')
     leaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', thread], { stdio: 'ignore' })
     writeFileSync(sessionArtifactPath(id, 'agent.pid'), `${leaf.pid}\n`)
     codexHarness.sharedRuntimes = () => []
@@ -71,6 +83,11 @@ esac
     codexHarness.cleanupRuntime = async () => {}
     assert.equal(await closeSession(id), true)
     assert.equal(existsSync(sessionStoreDir(id)), false, 'the target close removes the record after the cold proof')
+    assert.equal((await sendText(recipient, 'late continue', id)).ok, false, 'a closed sender cannot append new outbound work')
+    const handed: string[] = []
+    await drain(recipient, async (message) => { handed.push(message.mid); return true })
+    assert.deepEqual(handed, [], 'a queued command from the closed sender is never handed to the recipient')
+    assert.deepEqual(pendingMessages(recipient), [], 'the sweep consumes revoked debt so it cannot block later mail')
     assert.equal(runtimeRoot(), join(home, 'projects', project.replace(/[/.]/g, '-')))
   } finally {
     codexHarness.sharedRuntimes = originalShared

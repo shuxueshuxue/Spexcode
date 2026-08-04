@@ -13,8 +13,8 @@ import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
-import { appendSent, recordStatus, lastHumanSendVia, sentDispatchReceipt, type SentDispatchReceipt } from './session-timeline.js'
-import { drain, enqueue, owesDelivery, pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, senderDeliveryRevoked, withDeliveryLocks } from './delivery-queue.js'
+import { appendSent, recordStatus, lastHumanSendVia, sentDispatchReceipt, settleSentDispatch, type SentDispatchReceipt, type SentDispatchState } from './session-timeline.js'
+import { drain, enqueue, ensurePendingWhileLocked, owesDelivery, pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, senderDeliveryRevoked, withDeliveryLocks } from './delivery-queue.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
@@ -2714,6 +2714,32 @@ async function proveMergeBranchIdentity(worktreePath: string, branch: string, ba
   return { ok: true, ...pair.value, top: actualTop }
 }
 
+async function acceptedMergeDispatch(id: string, idempotency: SentDispatchReceipt): Promise<SentDispatchState | null> {
+  return withRecordLock(id, async () => withDeliveryLocks([id], async () => {
+    const prior = sentDispatchReceipt(id, idempotency.operation, idempotency.requestDigest)
+    if (prior?.payloadHash === idempotency.payloadHash && prior.delivery && !prior.delivered) {
+      ensurePendingWhileLocked(id, {
+        mid: prior.mid,
+        text: prior.delivery.text,
+        from: prior.delivery.from,
+        dispatch: { operation: idempotency.operation, requestDigest: idempotency.requestDigest },
+      })
+    }
+    return prior
+  }))
+}
+
+async function replayAcceptedMerge(id: string, idempotency: SentDispatchReceipt, prior: SentDispatchState): Promise<void> {
+  // Old receipts predate recoverable delivery bytes and are already accepted history. Settled receipts are
+  // likewise response-only: replay must not reopen or otherwise mutate a session after its later lifecycle.
+  if (!prior.delivery || prior.delivered) return
+  await drainSession(id)
+  const current = sentDispatchReceipt(id, idempotency.operation, idempotency.requestDigest)
+  if (current?.delivered) return
+  await resumeSession(id, { guard: false })
+  await drainSession(id)
+}
+
 async function mergeSessionUnlocked(id: string, options: MergeSessionOptions = {}): Promise<MergeSessionResult> {
   const requestKey = normalizeMergeKey(options.requestKey)
   if (!requestKey) {
@@ -2732,14 +2758,25 @@ async function mergeSessionUnlocked(id: string, options: MergeSessionOptions = {
     requestDigest: digest(`spexcode-session-merge\0${requestKey}`),
     payloadHash: digest(JSON.stringify({ expectedBranchHead, expectedBaseHead })),
   }
-  const prior = await withRecordLock(id, async () => sentDispatchReceipt(id, 'merge', idempotency.requestDigest))
+  const prior = await acceptedMergeDispatch(id, idempotency)
   if (prior) {
     if (prior.payloadHash !== idempotency.payloadHash) {
       return { dispatched: false, reason: 'Idempotency-Key is already bound to another session-merge payload', code: 'session_merge_key_reused', status: 409 }
     }
-    await resumeSession(id, { guard: false })
-    await drainSession(id)
+    await replayAcceptedMerge(id, idempotency, prior)
     return { dispatched: true, replayed: true, expectedBranchHead, expectedBaseHead }
+  }
+  const [branchObject, baseObject] = await Promise.all([
+    gitTry(['-C', main, 'cat-file', '-e', `${expectedBranchHead}^{commit}`]),
+    gitTry(['-C', main, 'cat-file', '-e', `${expectedBaseHead}^{commit}`]),
+  ])
+  if (!branchObject.ok || !baseObject.ok) {
+    return {
+      dispatched: false,
+      reason: `reviewed heads are missing or are not commits: branch ${expectedBranchHead} / base ${expectedBaseHead}`,
+      code: 'session_merge_head_changed',
+      status: 409,
+    }
   }
   const wt = await findWorktree(id)
   if (!wt || !wt.branch) return { dispatched: false, reason: 'no such session' }
@@ -3617,25 +3654,40 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
       if (from && senderDeliveryRevoked(from)) throw new ResourceConflict(`sender session ${from} is closed; prompt NOT delivered`)
       const rec = readRecord(id)
       if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
-      if (opts.idempotency) {
-        const prior = sentDispatchReceipt(id, opts.idempotency.operation, opts.idempotency.requestDigest)
-        if (prior) {
-          if (prior.payloadHash !== opts.idempotency.payloadHash) {
-            const conflict = new ResourceConflict(`idempotency key is already bound to another ${opts.idempotency.operation} payload`)
-            Object.assign(conflict, { code: 'dispatch_key_reused' })
-            throw conflict
+      const accept = async () => {
+        if (opts.idempotency) {
+          const prior = sentDispatchReceipt(id, opts.idempotency.operation, opts.idempotency.requestDigest)
+          if (prior) {
+            if (prior.payloadHash !== opts.idempotency.payloadHash) {
+              const conflict = new ResourceConflict(`idempotency key is already bound to another ${opts.idempotency.operation} payload`)
+              Object.assign(conflict, { code: 'dispatch_key_reused' })
+              throw conflict
+            }
+            if (prior.delivery && !prior.delivered) {
+              ensurePendingWhileLocked(id, { mid: prior.mid, text: prior.delivery.text, from: prior.delivery.from })
+            }
+            replayed = true
+            return
           }
-          replayed = true
-          return
         }
+        await opts.acceptGuard?.(rec)
+        // Composed at ACCEPT time, once: the log keeps the raw conversational text plus the effective reply channel,
+        // the queue keeps the transport form. Composing again at handover would let a later send change the hints on
+        // a message that was already accepted.
+        const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
+        const dispatchReceipt = opts.idempotency
+          ? { ...opts.idempotency, delivery: { text: prompt.text, from: from ?? null } }
+          : undefined
+        const appended = appendSent(id, text, from ?? null, prompt.replyVia, dispatchReceipt)
+        enqueue(id, {
+          mid: appended.mid,
+          text: prompt.text,
+          from: from ?? null,
+          ...(opts.idempotency ? { dispatch: { operation: opts.idempotency.operation, requestDigest: opts.idempotency.requestDigest } } : {}),
+        })
       }
-      await opts.acceptGuard?.(rec)
-      // Composed at ACCEPT time, once: the log keeps the raw conversational text plus the effective reply channel,
-      // the queue keeps the transport form. Composing again at handover would let a later send change the hints on
-      // a message that was already accepted.
-      const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
-      const appended = appendSent(id, text, from ?? null, prompt.replyVia, opts.idempotency)
-      enqueue(id, { mid: appended.mid, text: prompt.text, from: from ?? null })
+      if (opts.idempotency) await withDeliveryLocks([id], accept)
+      else await accept()
     })
   } catch (error) {
     const code = (error as { code?: DispatchAcceptCode })?.code
@@ -3669,7 +3721,9 @@ export async function drainSession(id: string): Promise<void> {
         if (h.deliveryBlockedBy(await tmux(['capture-pane', '-p', '-t', rec.session], TMUX_PROBE_TIMEOUT_MS))) return false
       } catch { /* no pane to consult — let the insert itself decide */ }
     }
-    return (await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.mid }, msg.text)).ok
+    const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.mid }, msg.text)
+    if (delivered.ok && msg.dispatch) settleSentDispatch(id, msg.mid)
+    return delivered.ok
   })
 }
 

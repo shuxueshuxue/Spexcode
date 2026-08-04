@@ -5,6 +5,8 @@ hue: 145
 desc: The plural, bounded Git seam that lets off-history eval anchors testify from exact requested content without making anchor count the process count.
 code:
   - spec-eval/src/freshness.ts#contentProbeFor
+  - spec-eval/src/freshness.ts#contentBatchArgs
+  - spec-eval/src/freshness.ts#argvBytes
   - spec-eval/src/freshness.ts#contentBatchChunks
   - spec-eval/src/freshness.ts#parseContentBatch
   - spec-eval/src/freshness.ts#resolvedContentImages

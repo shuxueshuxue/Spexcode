@@ -3,12 +3,16 @@ scenarios:
   - name: off-history-content-probes-batch-across-anchors
     tags: [backend-api]
     code:
+      - spec-eval/src/freshness.ts#contentBatchArgs
+      - spec-eval/src/freshness.ts#argvBytes
       - spec-eval/src/freshness.ts#contentBatchChunks
       - spec-eval/src/freshness.ts#parseContentBatch
       - spec-eval/src/freshness.ts#resolvedContentImages
       - spec-eval/src/freshness.ts#runContentBatch
       - spec-eval/src/freshness.ts#startPluralContentBatch
       - spec-eval/src/freshness.ts#contentProbeFor
+      - spec-cli/src/git.ts#batchRevisionOids
+      - spec-cli/src/git.ts#gitObjectInterpretation
       - spec-eval/src/evaltab.ts#evalTimelines
     test:
       path: spec-eval/src/freshness-content-batch.api.test.ts

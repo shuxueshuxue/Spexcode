@@ -151,34 +151,13 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
       .map((entry) => String(entry))
       .filter((entry) => /history-events-v\d+-[0-9a-f]+\.ndjson$/.test(entry))
       .map((entry) => join(home, entry))
-    const demand = async () => {
-      const response = await fetch(`${origin}/api/evals?q=${encodeURIComponent(`is:eval scope:${SESSION_ID}`)}`)
+    const demand = async (signal?: AbortSignal) => {
+      const response = await fetch(`${origin}/api/evals?q=${encodeURIComponent(`is:eval scope:${SESSION_ID}`)}`, { signal })
       const raw = await response.text()
       let body: any = null
       try { body = JSON.parse(raw) } catch { /* preserve the raw response for a loud assertion */ }
       return { response, raw, body }
     }
-
-    const warm = await demand()
-    assert.equal(warm.response.status, 200, `initial demand failed: ${warm.raw.slice(0, 1200)}`)
-    assert.ok(warm.body?.items?.some((item: any) => item.scenario === 'value-moves'))
-    assert.equal(ledgerFiles().length, 1, 'the uncontended warm demand establishes the ordinary durable ledger')
-    const ledger = ledgerFiles()[0]
-    const lock = `${ledger}.lock`
-
-    mkdirSync(lock)
-    writeFileSync(join(lock, 'owner.json'), '{"pid":"unknown"}\n')
-    const replay = await demand()
-    console.log(JSON.stringify({ phase: 'replay-does-not-enter-ledger-transaction', status: replay.response.status }))
-    assert.equal(replay.response.status, 200, `a content-revision replay entered an unrelated lock: ${replay.raw.slice(0, 1200)}`)
-    assert.equal(existsSync(lock), true, 'a replay never mutates an unknown lock')
-    rmSync(lock, { recursive: true, force: true })
-
-    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 3\n')
-    git(worktree, 'add', 'src/value.ts')
-    git(worktree, 'commit', '-qm', 'advance value before contended corrupt snapshot')
-    const corrupt = Buffer.from('corrupt-ledger-without-integrity\n')
-    writeFileSync(ledger, corrupt)
 
     const holder = [
       `import { existsSync, writeFileSync } from 'node:fs'`,
@@ -188,37 +167,49 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
       `  while (!existsSync(${JSON.stringify(writerRelease)})) await new Promise((resolve) => setTimeout(resolve, 10))`,
       `})`,
     ].join('\n')
-    writer = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', holder], {
-      cwd: project,
-      env: childEnv,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    writer.stderr!.on('data', (chunk) => { writerStderr += chunk.toString() })
-    let held = false
-    for (let attempt = 0; attempt < 100; attempt++) {
-      if (existsSync(writerReady)) { held = true; break }
-      if (writer.exitCode !== null || writer.signalCode !== null) break
-      await new Promise((resolve) => setTimeout(resolve, 50))
+    const startWriter = async () => {
+      rmSync(writerReady, { force: true })
+      rmSync(writerRelease, { force: true })
+      writerStderr = ''
+      writer = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', holder], {
+        cwd: project,
+        env: childEnv,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      writer.stderr!.on('data', (chunk) => { writerStderr += chunk.toString() })
+      let held = false
+      for (let attempt = 0; attempt < 100; attempt++) {
+        if (existsSync(writerReady)) { held = true; break }
+        if (writer.exitCode !== null || writer.signalCode !== null) break
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      assert.equal(held, true, `writer failed to acquire the ledger: ${writerStderr.slice(-1200)}`)
     }
-    assert.equal(held, true, `writer failed to acquire the ledger: ${writerStderr.slice(-1200)}`)
+    const releaseWriter = async () => {
+      writeFileSync(writerRelease, 'release\n')
+      await stop(writer)
+      writer = null
+    }
+
+    await startWriter()
 
     const started = Date.now()
-    const contended = await demand()
+    const cold = await demand()
     const elapsedMs = Date.now() - started
     const observation = {
-      phase: 'live-writer-public-demand',
+      phase: 'cold-review-payload-live-writer-demand',
       runtime: process.version,
-      status: contended.response.status,
+      status: cold.response.status,
       elapsedMs,
       writerHeld: existsSync(writerReady) && !existsSync(writerRelease) && writer.exitCode === null,
-      rows: Array.isArray(contended.body?.items) ? contended.body.items.length : null,
-      error: contended.response.ok ? null : (contended.body?.error ?? contended.raw.slice(0, 1000)),
+      rows: Array.isArray(cold.body?.items) ? cold.body.items.length : null,
+      error: cold.response.ok ? null : (cold.body?.error ?? cold.raw.slice(0, 1000)),
     }
     console.log(JSON.stringify(observation))
     assert.equal(observation.writerHeld, true, 'the product response must be measured while the unrelated writer still owns the transaction')
-    assert.equal(contended.response.status, 200, `foreground eval demand waited for the live writer: ${JSON.stringify(observation)}\n${backendStderr.slice(-1500)}`)
-    assert.ok(Array.isArray(contended.body?.items) && contended.body.items.some((item: any) => item.scenario === 'value-moves'), 'the response must carry the selected scenario rather than an empty fallback')
-    assert.deepEqual(readFileSync(ledger), corrupt, 'a contended corrupt snapshot rebuilds from Git without replacing the writer-owned ledger')
+    assert.equal(cold.response.status, 200, `cold review payload waited for the live writer: ${JSON.stringify(observation)}\n${backendStderr.slice(-1500)}`)
+    assert.ok(Array.isArray(cold.body?.items) && cold.body.items.some((item: any) => item.scenario === 'value-moves'), 'the response must carry the selected scenario rather than an empty fallback')
+    assert.deepEqual(ledgerFiles(), [], 'cold read-only demand must not publish a writer-owned ledger')
 
     const exported = await fetch(`${origin}/api/sessions/${SESSION_ID}/evals?format=html`)
     const exportedHtml = await exported.text()
@@ -241,13 +232,11 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
     await reader.cancel().catch(() => {})
     assert.equal(summaryReady, true, 'the graph summary surface settles while the independent ledger writer remains live')
 
-    writeFileSync(writerRelease, 'release\n')
-    await stop(writer)
-    writer = null
+    await releaseWriter()
 
-    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 4\n')
+    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 3\n')
     git(worktree, 'add', 'src/value.ts')
-    git(worktree, 'commit', '-qm', 'advance value without contention')
+    git(worktree, 'commit', '-qm', 'advance value for the first uncontended ledger')
     const uncontended = await demand()
     const files = ledgerFiles()
     const durableObservation = {
@@ -261,11 +250,39 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
     assert.equal(uncontended.response.status, 200, `uncontended demand failed: ${JSON.stringify(durableObservation)}`)
     assert.equal(files.length, 1, 'an uncontended demand must retain the ordinary durable ledger transaction')
     assert.ok(statSync(files[0]).size > 0, 'the durable ledger replacement must contain derived facts')
+    const ledger = files[0]
+    const lock = `${ledger}.lock`
+
+    mkdirSync(lock)
+    writeFileSync(join(lock, 'owner.json'), '{"pid":"unknown"}\n')
+    const replay = await demand()
+    console.log(JSON.stringify({ phase: 'replay-does-not-enter-ledger-transaction', status: replay.response.status }))
+    assert.equal(replay.response.status, 200, `a content-revision replay entered an unrelated lock: ${replay.raw.slice(0, 1200)}`)
+    assert.equal(existsSync(lock), true, 'a replay never mutates an unknown lock')
+    rmSync(lock, { recursive: true, force: true })
+
+    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 4\n')
+    git(worktree, 'add', 'src/value.ts')
+    git(worktree, 'commit', '-qm', 'advance value before contended corrupt snapshot')
+    const corrupt = Buffer.from('corrupt-ledger-without-integrity\n')
+    writeFileSync(ledger, corrupt)
+    await startWriter()
+    const contended = await demand()
+    assert.equal(contended.response.status, 200, `corrupt contended snapshot failed to rebuild from Git: ${contended.raw.slice(0, 1200)}`)
+    assert.deepEqual(readFileSync(ledger), corrupt, 'a contended corrupt snapshot rebuilds from Git without replacing the writer-owned ledger')
+    await releaseWriter()
+
+    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 5\n')
+    git(worktree, 'add', 'src/value.ts')
+    git(worktree, 'commit', '-qm', 'replace corrupt snapshot without contention')
+    const rebuilt = await demand()
+    assert.equal(rebuilt.response.status, 200)
+    assert.notDeepEqual(readFileSync(ledger), corrupt)
 
     const generationHolder = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
     try {
       const beforeGeneration = createHash('sha256').update(readFileSync(ledger)).digest('hex')
-      writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 5\n')
+      writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 6\n')
       git(worktree, 'add', 'src/value.ts')
       git(worktree, 'commit', '-qm', 'advance value past stale writer generation')
       mkdirSync(lock)
@@ -286,9 +303,38 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
       rmSync(lock, { recursive: true, force: true })
     }
 
+    const reclaimer = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    try {
+      let reclaimerStart: string | null = null
+      for (let attempt = 0; attempt < 50 && !(reclaimerStart = processStartToken(reclaimer.pid!)); attempt++)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      assert.ok(reclaimerStart, 'stalled-reclaimer control acquired an exact process generation')
+      const beforeReclaimer = createHash('sha256').update(readFileSync(ledger)).digest('hex')
+      writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 7\n')
+      git(worktree, 'add', 'src/value.ts')
+      git(worktree, 'commit', '-qm', 'advance value while exact reclaimer owns dead-lock recovery')
+      mkdirSync(lock)
+      writeFileSync(join(lock, 'owner.json'), `${JSON.stringify({ pid: 999_999_999, startToken: 'dead-owner', nonce: randomUUID() })}\n`)
+      const reclaim = join(lock, 'reclaim')
+      mkdirSync(reclaim)
+      writeFileSync(join(reclaim, 'owner.json'), `${JSON.stringify({ pid: reclaimer.pid, startToken: reclaimerStart, nonce: randomUUID() })}\n`)
+      const reclaimerStarted = Date.now()
+      const bounded = await demand(AbortSignal.timeout(2_000))
+      const reclaimerElapsedMs = Date.now() - reclaimerStarted
+      const afterReclaimer = createHash('sha256').update(readFileSync(ledger)).digest('hex')
+      console.log(JSON.stringify({ phase: 'dead-owner-live-reclaimer', status: bounded.response.status, elapsedMs: reclaimerElapsedMs }))
+      assert.equal(bounded.response.status, 200, `a live reclaimer made foreground demand spin: ${bounded.raw.slice(0, 1200)}`)
+      assert.ok(reclaimerElapsedMs < 2_000, `foreground demand exceeded its bounded reclaimer window: ${reclaimerElapsedMs}ms`)
+      assert.equal(existsSync(lock), true, 'foreground demand never displaces the exact live reclaimer')
+      assert.equal(afterReclaimer, beforeReclaimer, 'reclaimer contention uses the read-only ledger path')
+    } finally {
+      await stop(reclaimer)
+      rmSync(lock, { recursive: true, force: true })
+    }
+
     if (process.platform !== 'win32') {
       const beforeReleaseRace = createHash('sha256').update(readFileSync(ledger)).digest('hex')
-      writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 6\n')
+      writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 8\n')
       git(worktree, 'add', 'src/value.ts')
       git(worktree, 'commit', '-qm', 'advance value across normal lock release race')
       mkdirSync(lock)
@@ -327,7 +373,7 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
     const pidOneStart = processStartToken(1)
     if (pidOnePermission === 'EPERM' && pidOneStart) {
       const beforeEperm = createHash('sha256').update(readFileSync(ledger)).digest('hex')
-      writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 7\n')
+      writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 9\n')
       git(worktree, 'add', 'src/value.ts')
       git(worktree, 'commit', '-qm', 'advance value under an exact EPERM writer identity')
       mkdirSync(lock)
@@ -341,7 +387,7 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
       rmSync(lock, { recursive: true, force: true })
     }
 
-    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 8\n')
+    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 10\n')
     git(worktree, 'add', 'src/value.ts')
     git(worktree, 'commit', '-qm', 'advance value before unknown owner refusal')
     mkdirSync(lock)

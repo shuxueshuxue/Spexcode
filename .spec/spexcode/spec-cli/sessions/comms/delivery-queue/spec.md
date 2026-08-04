@@ -38,15 +38,21 @@ control merely because a target was temporarily unavailable.
 `pending.json`, in the session's global store dir, is an ordered list of the messages that have been recorded
 but not yet handed to the agent. Each entry is self-contained — the message id, the sender, and the text
 exactly as it will be handed over, mechanism inserts already composed in ([[session-timeline]] owns that seam;
-the log keeps the raw conversational text, the queue keeps the transport form) — so the delivery path never
-reads the log. Transport state and record are therefore independent: history could be trimmed, archived, or
-read by anyone without changing what is owed. An empty queue is deleted rather than stored as an empty list,
-so "is anything owed?" is the existence of a file.
+the log keeps the raw conversational text, the queue keeps the transport form). A caller-keyed entry also
+carries the operation plus request digest that its private timeline receipt names, never the raw key. The
+ordinary delivery path never reads the log. Only a retry of that keyed acceptance reconciles the two durable
+sides: if its receipt exists without its exact message id in the queue, it restores the receipt's frozen
+transport bytes under this queue's lock. Transport state and record remain independent for every ordinary
+read: history could be trimmed, archived, or read by anyone without changing what is owed. An empty queue is
+deleted rather than stored as an empty list, so "is anything owed?" is the existence of a file.
 
 **The enqueue rides the append.** `sendText` records the `sent` line and enqueues the same message inside one
-hold of the session's record lock ([[dispatch]]). Success is still decided by the record write, unchanged: the
-queue is what the message is owed, not whether it was accepted. The record is written first — a crash between
-the two writes must leave a message that is visible but undelivered, never one delivered but unrecorded.
+hold of the session's record lock ([[dispatch]]); a keyed acceptance additionally holds this queue's lock, in
+the common record-then-delivery order. Success is still decided by the record write, unchanged: the queue is
+what the message is owed, not whether it was accepted. The record is written first — a crash between the two
+writes leaves a message that is visible but undelivered, never one delivered but unrecorded. For the keyed
+merge intent, the receipt carries the already-composed transport bytes, so the same request reconstructs that
+one missing debt rather than mistaking the durable receipt for completed delivery.
 
 **Draining is claim-insert-remove, under the queue's own lock.** A delivery pass takes the queue lock, and for
 each entry in order composes the prompt through the one seam ([[session-timeline]]) and hands it to the
@@ -57,7 +63,10 @@ property of a conversation, so a message is never skipped to deliver a later one
 The lock spans the insert deliberately, and it is NOT the record lock: the record lock cannot span an adapter
 call (a native turn runs lifecycle hooks that re-enter the record writer, which is a deadlock), while nothing
 in the delivery path takes this one. Holding it across the insert is what makes "claim" real, so two processes
-draining the same session at the same moment cannot both hand over the same message.
+draining the same session at the same moment cannot both hand over the same message. A keyed entry that the
+adapter accepts appends its private timeline settlement before this lock removes the debt. That settlement is
+what distinguishes "receipt exists because it was accepted" from "receipt exists and the agent already saw
+it" after a restart; a later replay of the response therefore never needs to reopen the session.
 
 **Close revokes a sender, not history.** A successful close writes a durable sender-revocation marker outside
 the closing session's store (which is about to disappear). Agent-to-agent dispatch takes the claimed sender's

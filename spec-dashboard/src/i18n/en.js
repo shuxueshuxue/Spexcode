@@ -277,7 +277,7 @@ export default {
 
   sessionEval: {
     btn: 'eval',
-    btnTitle: "open this session's evaluation — the measured eval evidence and the merge gates, on the Evals page",
+    btnTitle: "open this session's measured eval evidence on the Evals page",
     scopeDoor: 'Back to session terminal',
     none: 'no evaluation for this session yet',
     unavailable: 'evaluation unavailable until the session model loads successfully.',
@@ -643,7 +643,7 @@ export default {
     // board commands — the `/` commands Command Box runs HERE (not in the agent), each the typed twin of a
     // header button. `*Desc` is the `/` menu row's description; `*Title` is a button's hover tooltip.
     cmd: {
-      evalDesc: "open this session's Evals page — eval evidence, diff, merge gates",
+      evalDesc: "open this session's Evals page — affected scenarios and measured evidence",
       mergeTitle: 'merge this review proposal to main',
       mergeDesc: 'merge this review proposal to main',
       mergeUnavailableArchived: 'merge unavailable — this session is archived',

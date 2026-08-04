@@ -111,7 +111,7 @@ export function EvalScopeDoor({ sessionId }) {
   )
 }
 
-// The LIST page (`#/evals[?query]`): the session scope's back door + gates strip + export door
+// The LIST page (`#/evals[?query]`): the session scope's back door + unknown-coverage status + export door
 // leading the one [[evals-feed]] list INSIDE its shared PageScroll. All filter state is the URL's one token text; the scope: token
 // (default absent = the merged trunk) is the door into any session's un-merged worktree evals.
 export function EvalsListPage({ sessionId, pageData, loading, error, sessions, queryText, onQueryText, hrefFor, hrefForPage, notice }) {
@@ -119,14 +119,11 @@ export function EvalsListPage({ sessionId, pageData, loading, error, sessions, q
   const unknown = pageData?.unknown || 0
   const empty = sessionId && !loading && !error && (pageData?.sourceTotal ?? 0) === 0 ? t('sessionEval.none') : null
   const leading = sessionId ? (
-    // The terminal back door leads the toolbar, before every gate and the trailing export action.
+    // The terminal back door leads the toolbar, before optional unknown coverage and the export action.
         <div className="se-gates">
           <EvalScopeDoor sessionId={sessionId} />
-          {pageData && pageData.gates.map((g) => (
-            <span key={g.label} className={`se-gate ${g.ok ? 'ok' : 'bad'}`} data-tip={g.detail}><Icon name={g.ok ? 'check' : 'x'} size={11} /> {g.label}</span>
-          ))}
           {unknown > 0 && (
-            <span className="se-gate bad" data-tip={t('sessionEval.unknownCoverage', { n: unknown })}>
+            <span className="se-gate bad se-unknown" data-tip={t('sessionEval.unknownCoverage', { n: unknown })}>
               <Icon name="info" size={11} /> {unknown}
             </span>
           )}

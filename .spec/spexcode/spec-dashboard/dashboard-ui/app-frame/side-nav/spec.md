@@ -90,7 +90,8 @@ restores the list.
 - **Catalog-gated project switching, never project management.** Under the multi-project gateway
   ([[projects-hub]]) a `/p/<id>/` rail keeps the persistent current-project chip pinned above the five
   project-owned page entries. Its mark and label come from the route-matched [[project-identity]], never
-  an initial derived from whichever board loaded last. A SUCCESSFUL catalog probe gives that chip a menu for same-tab project
+  an initial derived from whichever board loaded last. It keeps the rail's neutral, borderless chrome at
+  rest; the standard rail background appears only on hover or while its menu is open. A SUCCESSFUL catalog probe gives that chip a menu for same-tab project
   switching plus an "All projects" door to the global `/projects` hub. Every menu row leads with the
   catalog identity mark in one aligned slot — project marks for project rows, gateway mark for the global
   row — while its accessible name and current check remain intact. Online (and legacy/unknown) project

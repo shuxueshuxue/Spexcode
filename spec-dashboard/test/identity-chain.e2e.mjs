@@ -140,6 +140,25 @@ async function assertSwitcherMarks(page) {
   return { menu, rocketItem }
 }
 
+async function assertProjectChipChrome(page) {
+  const chip = page.locator('.proj-chip')
+  const chrome = () => chip.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return { backgroundColor: style.backgroundColor, borderTopWidth: style.borderTopWidth }
+  })
+  const idle = await chrome()
+  await page.screenshot({ path: join(out, 'atlas-rail-chip-idle-dracula.png'), fullPage: true })
+  assert.deepEqual(idle, { backgroundColor: 'rgba(0, 0, 0, 0)', borderTopWidth: '0px' },
+    'the project chip matches a neutral rail button until it is hovered or opened')
+
+  await chip.hover()
+  assert.notEqual((await chrome()).backgroundColor, 'rgba(0, 0, 0, 0)', 'hover gives the project chip the standard rail background')
+
+  await chip.click()
+  assert.notEqual((await chrome()).backgroundColor, 'rgba(0, 0, 0, 0)', 'the open switcher keeps the standard rail background')
+  await chip.click()
+}
+
 const atlas = makeProject('atlas', 'Atlas Lab', 'compass')
 const rocket = makeProject('rocket', 'Rocket Yard', 'mdi:rocket-launch')
 writeFileSync(join(home, 'config.json'), '{\n  "gateway": { "icon": "database" }\n}\n')
@@ -267,6 +286,7 @@ try {
   assert.ok(atlasHref.endsWith('/lucide/radar.svg'))
   assert.match(await page.locator('.proj-chip').getAttribute('aria-label'), /Atlas Lab/)
   assert.match(await page.locator('.proj-chip .identity-iconify').getAttribute('style'), /lucide\/radar\.svg/)
+  await assertProjectChipChrome(page)
 
   step('switcher identity marks')
   await page.locator('.proj-chip').click()

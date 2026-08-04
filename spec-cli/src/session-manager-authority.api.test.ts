@@ -157,6 +157,9 @@ test('public review and merge authority bind exact head and one durable dispatch
       await noKey('null'),
       await noKey(JSON.stringify({ reviewedHead: headOne, extra: true })),
     ]
+    const emptyKey = await request(baseA, `/api/sessions/${id}/merge`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'Idempotency-Key': '' }, body: JSON.stringify({ reviewedHead: headTwo }),
+    })
     const beforeKeyed = await request(baseA, `/api/sessions/${id}/timeline`)
     const baselinePrompts = beforeKeyed.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text))
 
@@ -207,6 +210,7 @@ test('public review and merge authority bind exact head and one durable dispatch
       reviewOneHead: reviewOne.body.head,
       reviewTwoHead: reviewTwo.body.head,
       noKey: noKeyReplies.map((reply) => ({ status: reply.status, body: reply.body })),
+      emptyKey: { status: emptyKey.status, code: emptyKey.body.code },
       baselinePromptCount: baselinePrompts.length,
       concurrent: concurrent.map((reply) => ({ status: reply.status, dispatched: reply.body.dispatched, replayed: reply.body.replayed }))
         .sort((left, right) => Number(left.replayed) - Number(right.replayed)),
@@ -233,6 +237,7 @@ test('public review and merge authority bind exact head and one durable dispatch
         { status: 200, body: { dispatched: true } },
         { status: 200, body: { dispatched: true } },
       ],
+      emptyKey: { status: 400, code: 'session_merge_invalid_request' },
       baselinePromptCount: 3,
       concurrent: [
         { status: 200, dispatched: true, replayed: false },

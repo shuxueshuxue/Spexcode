@@ -573,7 +573,7 @@ app.post('/api/sessions/:id/resume', async (c) => {
 // main's tree. 200 {dispatched:true} once the prompt is accepted, 409 {dispatched:false} if the agent is unreachable.
 app.post('/api/sessions/:id/merge', async (c) => {
   const requestKey = c.req.header('idempotency-key')
-  if (!requestKey) {
+  if (requestKey === undefined) {
     const r = await mergeSession(c.req.param('id'))
     return c.json(r, r.dispatched ? 200 : (r.status ?? 409))
   }

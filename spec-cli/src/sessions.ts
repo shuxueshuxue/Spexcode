@@ -14,7 +14,7 @@ import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDi
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { appendSent, recordStatus, lastHumanSendVia, sentDispatchReceipt, settleSentDispatch, type SentDispatchReceipt, type SentDispatchState } from './session-timeline.js'
-import { drain, enqueue, ensurePendingWhileLocked, owesDelivery, pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, senderDeliveryRevoked, withDeliveryLocks } from './delivery-queue.js'
+import { drain, enqueue, ensurePendingWhileLocked, owesDelivery, pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, senderDeliveryRevoked, withDeliveryLocks, type PendingMessage } from './delivery-queue.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
@@ -2714,16 +2714,21 @@ async function proveMergeBranchIdentity(worktreePath: string, branch: string, ba
   return { ok: true, ...pair.value, top: actualTop }
 }
 
+type DispatchDelivery = NonNullable<SentDispatchReceipt['delivery']>
+function keyedPendingMessage(receipt: SentDispatchReceipt, mid: string, delivery: DispatchDelivery): PendingMessage {
+  return {
+    mid,
+    text: delivery.text,
+    from: delivery.from,
+    dispatch: { operation: receipt.operation, requestDigest: receipt.requestDigest },
+  }
+}
+
 async function acceptedMergeDispatch(id: string, idempotency: SentDispatchReceipt): Promise<SentDispatchState | null> {
   return withRecordLock(id, async () => withDeliveryLocks([id], async () => {
     const prior = sentDispatchReceipt(id, idempotency.operation, idempotency.requestDigest)
     if (prior?.payloadHash === idempotency.payloadHash && prior.delivery && !prior.delivered) {
-      ensurePendingWhileLocked(id, {
-        mid: prior.mid,
-        text: prior.delivery.text,
-        from: prior.delivery.from,
-        dispatch: { operation: idempotency.operation, requestDigest: idempotency.requestDigest },
-      })
+      ensurePendingWhileLocked(id, keyedPendingMessage(idempotency, prior.mid, prior.delivery))
     }
     return prior
   }))
@@ -3664,7 +3669,7 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
               throw conflict
             }
             if (prior.delivery && !prior.delivered) {
-              ensurePendingWhileLocked(id, { mid: prior.mid, text: prior.delivery.text, from: prior.delivery.from })
+              ensurePendingWhileLocked(id, keyedPendingMessage(opts.idempotency, prior.mid, prior.delivery))
             }
             replayed = true
             return
@@ -3679,12 +3684,9 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
           ? { ...opts.idempotency, delivery: { text: prompt.text, from: from ?? null } }
           : undefined
         const appended = appendSent(id, text, from ?? null, prompt.replyVia, dispatchReceipt)
-        enqueue(id, {
-          mid: appended.mid,
-          text: prompt.text,
-          from: from ?? null,
-          ...(opts.idempotency ? { dispatch: { operation: opts.idempotency.operation, requestDigest: opts.idempotency.requestDigest } } : {}),
-        })
+        enqueue(id, opts.idempotency
+          ? keyedPendingMessage(opts.idempotency, appended.mid, dispatchReceipt!.delivery!)
+          : { mid: appended.mid, text: prompt.text, from: from ?? null })
       }
       if (opts.idempotency) await withDeliveryLocks([id], accept)
       else await accept()
@@ -3713,6 +3715,12 @@ export async function drainSession(id: string): Promise<void> {
   if (!rec) return
   const h = harnessById(rec.harness || defaultHarness.id)
   await drain(id, async (msg) => {
+    if (msg.dispatch) {
+      const receipt = sentDispatchReceipt(id, msg.dispatch.operation, msg.dispatch.requestDigest)
+      if (!receipt || receipt.mid !== msg.mid || !receipt.delivery
+        || receipt.delivery.text !== msg.text || receipt.delivery.from !== msg.from) return false
+      if (receipt.delivered) return true
+    }
     // the pane guard ([[harness-adapter]] deliveryBlockedBy): the ONE pane state where the harness swallows a
     // prompt its channel confirms (claude's sessions panel), checkable only from the pane. Treated as a REFUSAL
     // rather than a skip — the message stays owed and the sweep hands it over once the pane leaves that state.

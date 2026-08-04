@@ -66,7 +66,11 @@ in the delivery path takes this one. Holding it across the insert is what makes 
 draining the same session at the same moment cannot both hand over the same message. A keyed entry that the
 adapter accepts appends its private timeline settlement before this lock removes the debt. That settlement is
 what distinguishes "receipt exists because it was accepted" from "receipt exists and the agent already saw
-it" after a restart; a later replay of the response therefore never needs to reopen the session.
+it" after a restart. Before any adapter call, drain reconciles a keyed head against its exact receipt. A matching
+settled receipt consumes the leftover debt without handing it over again; missing receipt, different message id,
+or different frozen transport bytes refuses and leaves the head in place. Thus process death between settlement
+and removal cannot duplicate an agent prompt, while corrupt authority can never silently discard one. A later
+replay of the response therefore never needs to reopen the session.
 
 **Close revokes a sender, not history.** A successful close writes a durable sender-revocation marker outside
 the closing session's store (which is about to disappear). Agent-to-agent dispatch takes the claimed sender's

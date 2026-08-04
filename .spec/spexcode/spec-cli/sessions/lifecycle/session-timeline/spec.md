@@ -56,6 +56,11 @@ are control metadata, not conversation: the public model still has exactly the t
 private settlement lines do not consume its tail limit or cursor positions. This remains the same append-only
 file sequence, not a second operation ledger.
 
+The settlement is also the restart fence for that removal gap. While holding the existing queue lock, drain
+matches a keyed pending entry back to its receipt by operation, request digest, message id, and frozen transport
+bytes before contacting the adapter. If that exact receipt is already settled, the queue entry is merely consumed;
+if receipt identity is absent or differs, it remains owed and delivery stops fail-closed.
+
 **One logical log may span immutable files.** Existing sessions keep their legacy `timeline.ndjson` as the
 first segment. New writes append only to the highest numbered `timeline/<n>.ndjson` segment; once a segment
 reaches the fixed byte bound, the writer creates the next number and never edits the old file again. File-name

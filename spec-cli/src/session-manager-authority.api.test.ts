@@ -69,6 +69,8 @@ test('public review and merge authority bind exact head and one durable dispatch
   const refMoveClaim = join(fixture, 'move-ref.claim')
   const crashArm = join(fixture, 'crash-after-receipt.arm')
   const crashClaim = join(fixture, 'crash-after-receipt.claim')
+  const settlementCrashArm = join(fixture, 'crash-after-settlement.arm')
+  const settlementCrashClaim = join(fixture, 'crash-after-settlement.claim')
   const crashPreload = join(fixture, 'crash-after-receipt.cjs')
   const realGit = execFileSync('bash', ['-lc', 'command -v git'], { encoding: 'utf8' }).trim()
   mkdirSync(gitBin, { recursive: true })
@@ -97,15 +99,26 @@ test('public review and merge authority bind exact head and one durable dispatch
     "const fs = require('node:fs')",
     "const { syncBuiltinESMExports } = require('node:module')",
     'const rename = fs.renameSync',
+    'const unlink = fs.unlinkSync',
     'fs.renameSync = (from, to) => {',
     '  const arm = process.env.SPEX_MANAGER_CRASH_ARM',
     "  if (arm && fs.existsSync(arm) && String(to).endsWith('/pending.json')) {",
-    '    try { fs.unlinkSync(arm) } catch {}',
+    '    try { unlink(arm) } catch {}',
     "    fs.writeFileSync(process.env.SPEX_MANAGER_CRASH_CLAIM, JSON.stringify({ pid: process.pid, from, to }) + '\\n')",
-    "    process.kill(process.pid, 'SIGKILL')",
+    '    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)',
     '    return',
     '  }',
     '  return rename(from, to)',
+    '}',
+    'fs.unlinkSync = (path) => {',
+    '  const arm = process.env.SPEX_MANAGER_SETTLEMENT_CRASH_ARM',
+    "  if (arm && fs.existsSync(arm) && String(path).endsWith('/pending.json')) {",
+    '    try { unlink(arm) } catch {}',
+    "    fs.writeFileSync(process.env.SPEX_MANAGER_SETTLEMENT_CRASH_CLAIM, JSON.stringify({ pid: process.pid, path }) + '\\n')",
+    '    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)',
+    '    return',
+    '  }',
+    '  return unlink(path)',
     '}',
     'syncBuiltinESMExports()',
     '',
@@ -137,6 +150,8 @@ test('public review and merge authority bind exact head and one durable dispatch
     SPEX_MANAGER_PROJECT: project,
     SPEX_MANAGER_CRASH_ARM: crashArm,
     SPEX_MANAGER_CRASH_CLAIM: crashClaim,
+    SPEX_MANAGER_SETTLEMENT_CRASH_ARM: settlementCrashArm,
+    SPEX_MANAGER_SETTLEMENT_CRASH_CLAIM: settlementCrashClaim,
     NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require=${crashPreload}`.trim(),
   }
   delete env.SPEXCODE_API_URL
@@ -145,8 +160,8 @@ test('public review and merge authority bind exact head and one durable dispatch
 
   const backends = new Set<Backend>()
   const startBackend = (port: number): Backend => {
-    const child = spawn(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'serve', '--port', String(port)], {
-      cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
+    const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(packageRoot, 'src', 'index.ts')], {
+      cwd: project, env: { ...env, PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
     })
     const backend = { child, readLog: capture(child) }
     backends.add(backend)
@@ -173,6 +188,7 @@ test('public review and merge authority bind exact head and one durable dispatch
   let cliId = ''
   let siblingId = ''
   let crashId = ''
+  let settlementId = ''
   try {
     await Promise.all([waitHealth(baseA, 'backend A health'), waitHealth(baseB, 'backend B health')])
     const created = await request(baseA, '/api/sessions', {
@@ -503,13 +519,16 @@ test('public review and merge authority bind exact head and one durable dispatch
       body: JSON.stringify({ expectedBranchHead: crashReview.body.branchHead, expectedBaseHead: crashReview.body.baseHead }),
     })
     writeFileSync(crashArm, 'armed\n')
-    const disconnected = await crashMerge().then(() => false, () => true)
+    const crashAttemptsPromise = Promise.allSettled([crashMerge(), crashMerge()])
     await waitFor(async () => existsSync(crashClaim), Boolean, 'backend crash after receipt')
+    await stopBackend(backendA)
+    backendA = null
+    const crashAttempts = await crashAttemptsPromise
+    const disconnected = crashAttempts.filter((attempt) => attempt.status === 'rejected').length
     await waitFor(async () => {
       try { return (await request(baseA, '/health')).status } catch { return 0 }
     }, (status) => status === 0, 'crashed backend listener absent')
     const debtAbsentAfterCrash = !existsSync(crashPending)
-    await stopBackend(backendA)
     backendA = startBackend(portA)
     await waitHealth(baseA, 'receipt-recovery backend health')
     const afterCrashTimeline = await request(baseA, `/api/sessions/${crashId}/timeline`)
@@ -541,24 +560,142 @@ test('public review and merge authority bind exact head and one durable dispatch
     const archivedAfterReplay = readFileSync(crashRecordPath, 'utf8')
     const finalCrashTimeline = await request(baseA, `/api/sessions/${crashId}/timeline`)
     const finalCrashPromptCount = finalCrashTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length
+
+    const settlementCreated = await request(baseA, '/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': 'manager-authority-settlement-session' },
+      body: JSON.stringify({ prompt: 'manager authority settlement fixture', launcher: 'fake' }),
+    })
+    assert.equal(settlementCreated.status, 201, settlementCreated.text)
+    settlementId = settlementCreated.body.id
+    const settlementDetail = await waitFor(
+      () => request(baseA, `/api/sessions/${settlementId}`).then((reply) => reply.body),
+      (session) => session?.liveness === 'online',
+      'settlement fixture session online',
+    )
+    writeFileSync(join(settlementDetail.path, 'settlement.txt'), 'reviewed settlement recovery\n')
+    git(settlementDetail.path, 'add', 'settlement.txt')
+    git(settlementDetail.path, 'commit', '-qm', 'spec: reviewed settlement recovery')
+    execFileSync(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', 'merge'], {
+      cwd: settlementDetail.path, env: { ...env, SPEXCODE_SESSION_ID: settlementId }, encoding: 'utf8',
+    })
+    const settlementReview = await request(baseA, `/api/sessions/${settlementId}/review`)
+    assert.equal(settlementReview.status, 200, settlementReview.text)
+    const settlementDir = join(runtime, 'sessions', settlementId)
+    const settlementPending = join(settlementDir, 'pending.json')
+    const settlementRecord = join(settlementDir, 'session.json')
+    const settlementMerge = () => request(baseA, `/api/sessions/${settlementId}/merge`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': 'crash-after-settlement' },
+      body: JSON.stringify({ expectedBranchHead: settlementReview.body.branchHead, expectedBaseHead: settlementReview.body.baseHead }),
+    })
+    writeFileSync(settlementCrashArm, 'armed\n')
+    const settlementAttempt = settlementMerge().then(() => false, () => true)
+    await waitFor(async () => existsSync(settlementCrashClaim), Boolean, 'backend crash after settlement')
+    const oldSettlementCapture = execFileSync('tmux', ['-L', tmux, 'capture-pane', '-p', '-t', settlementId], { encoding: 'utf8' })
+    const oldSettlementNativeCount = (oldSettlementCapture.match(/FAKE-HARNESS REPLY Merge your branch/g) ?? []).length
+    await stopBackend(backendA)
+    backendA = null
+    const settlementDisconnected = await settlementAttempt
+    await waitFor(async () => {
+      try { return (await request(baseA, '/health')).status } catch { return 0 }
+    }, (status) => status === 0, 'settlement-crashed backend listener absent')
+    const settlementTimelineFiles = [join(settlementDir, 'timeline.ndjson'), join(settlementDir, 'timeline')]
+      .flatMap((path) => existsSync(path) && !path.endsWith('timeline') ? [path]
+        : existsSync(path) ? readdirSync(path).map((name) => join(path, name)) : [])
+    const settlementStoredEvents = settlementTimelineFiles.flatMap((path) => readFileSync(path, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line)))
+    const settlementReceiptEvent = settlementStoredEvents.find((event: any) => event.kind === 'sent' && event.dispatchReceipt?.requestDigest)
+    const settlementCountAfterCrash = settlementStoredEvents.filter((event: any) => event.kind === 'dispatch-settled').length
+    const pendingAfterSettlementCrash = existsSync(settlementPending)
+    execFileSync('tmux', ['-L', tmux, 'kill-session', '-t', settlementId])
+    backendA = startBackend(portA)
+    await waitHealth(baseA, 'settlement-recovery backend health')
+    await waitFor(async () => !existsSync(settlementPending), Boolean, 'settled pending consumed without agent')
+    const debtAbsentAfterSettlementRestart = !existsSync(settlementPending)
+    await waitFor(
+      () => request(baseA, `/api/sessions/${settlementId}`).then((reply) => reply.body),
+      (session) => session?.liveness === 'offline',
+      'settlement fixture offline before agent restart',
+    )
+    const settlementResume = await request(baseA, `/api/sessions/${settlementId}/resume`, { method: 'POST' })
+    const settlementOnline = await waitFor(
+      () => request(baseA, `/api/sessions/${settlementId}`).then((reply) => reply.body),
+      (session) => session?.liveness === 'online',
+      'settlement fixture online after agent restart',
+    )
+    const newSettlementCapture = await request(baseA, `/api/sessions/${settlementId}/capture`)
+    const newSettlementNativeCount = (newSettlementCapture.text.match(/FAKE-HARNESS REPLY Merge your branch/g) ?? []).length
+    const settlementRecordBeforeReplay = readFileSync(settlementRecord, 'utf8')
+    const settlementReplay = await settlementMerge()
+    const settlementRecordAfterReplay = readFileSync(settlementRecord, 'utf8')
+
+    assert.ok(settlementReceiptEvent, 'settlement fixture has sent receipt event')
+    const receipt = settlementReceiptEvent.dispatchReceipt
+    assert.ok(receipt?.delivery, 'settlement fixture has recoverable receipt')
+    writeFileSync(settlementPending, JSON.stringify([{
+      mid: `${settlementReceiptEvent.mid}-mismatch`,
+      text: receipt.delivery.text,
+      from: receipt.delivery.from,
+      dispatch: { operation: receipt.operation, requestDigest: receipt.requestDigest },
+    }], null, 2) + '\n')
+    await new Promise((resolve) => setTimeout(resolve, 2_500))
+    const mismatchedDebtRetained = existsSync(settlementPending)
+      && JSON.parse(readFileSync(settlementPending, 'utf8'))[0]?.mid === `${settlementReceiptEvent.mid}-mismatch`
+    const captureAfterMismatch = await request(baseA, `/api/sessions/${settlementId}/capture`)
+    const nativeCountAfterMismatch = (captureAfterMismatch.text.match(/FAKE-HARNESS REPLY Merge your branch/g) ?? []).length
+    rmSync(settlementPending, { force: true })
+
     const recoveryObserved = {
       missingObject: missingObjectObserved,
-      disconnected,
+      concurrentCrashDisconnects: disconnected,
       receiptWithoutDebt: crashPromptCount === 1 && debtAbsentAfterCrash,
       recovered: { status: recovered.status, replayed: recovered.body?.replayed === true, nativeCount: nativeCountAfterRecovery, timelineCount: timelineCountAfterRecovery, debtAbsent: debtAbsentAfterRecovery },
       activeReplay: { status: activeReplay.status, replayed: activeReplay.body?.replayed === true, recordUnchanged: activeBeforeReplay === activeAfterReplay, nativeCount: nativeCountAfterActiveReplay, debtAbsent: !existsSync(crashPending) },
       archivedReplay: { status: archivedReplay.status, replayed: archivedReplay.body?.replayed === true, recordUnchanged: archivedBeforeReplay === archivedAfterReplay, timelineCount: finalCrashPromptCount, debtAbsent: !existsSync(crashPending) },
+      settlementCrash: {
+        disconnected: settlementDisconnected,
+        pendingAfterCrash: pendingAfterSettlementCrash,
+        settlementCount: settlementCountAfterCrash,
+        oldNativeCount: oldSettlementNativeCount,
+        debtAbsentAfterRestart: debtAbsentAfterSettlementRestart,
+        resumeStatus: settlementResume.status,
+        online: settlementOnline.liveness === 'online',
+        newNativeCount: newSettlementNativeCount,
+        totalNativeCount: oldSettlementNativeCount + newSettlementNativeCount,
+        replayStatus: settlementReplay.status,
+        replayed: settlementReplay.body?.replayed === true,
+        recordUnchanged: settlementRecordBeforeReplay === settlementRecordAfterReplay,
+        mismatchedDebtRetained,
+        nativeCountAfterMismatch,
+      },
     }
     console.log(`manager-authority-receipt-recovery ${JSON.stringify(recoveryObserved)}`)
     assert.deepEqual(recoveryObserved, {
       missingObject: { status: 409, code: 'session_merge_head_changed', objectTypeValidated: true, mutation: false },
-      disconnected: true,
+      concurrentCrashDisconnects: 2,
       receiptWithoutDebt: true,
       recovered: { status: 200, replayed: true, nativeCount: 1, timelineCount: 1, debtAbsent: true },
       activeReplay: { status: 200, replayed: true, recordUnchanged: true, nativeCount: 1, debtAbsent: true },
       archivedReplay: { status: 200, replayed: true, recordUnchanged: true, timelineCount: 1, debtAbsent: true },
+      settlementCrash: {
+        disconnected: true,
+        pendingAfterCrash: true,
+        settlementCount: 1,
+        oldNativeCount: 1,
+        debtAbsentAfterRestart: true,
+        resumeStatus: 200,
+        online: true,
+        newNativeCount: 0,
+        totalNativeCount: 1,
+        replayStatus: 200,
+        replayed: true,
+        recordUnchanged: true,
+        mismatchedDebtRetained: true,
+        nativeCountAfterMismatch: 0,
+      },
     })
   } finally {
+    if (settlementId && backendA) await request(baseA, `/api/sessions/${settlementId}/close`, { method: 'POST' }).catch(() => {})
     if (crashId && backendA) await request(baseA, `/api/sessions/${crashId}/close`, { method: 'POST' }).catch(() => {})
     if (siblingId && backendA) await request(baseA, `/api/sessions/${siblingId}/close`, { method: 'POST' }).catch(() => {})
     if (cliId && backendA) await request(baseA, `/api/sessions/${cliId}/close`, { method: 'POST' }).catch(() => {})

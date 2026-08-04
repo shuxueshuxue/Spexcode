@@ -14,9 +14,11 @@ scenarios:
       same store, and replay. Reuse the key with another pair on that session; create another governed session and
       use the same raw key for its own reviewed pair; then submit fresh keys while the first worktree is detached
       and while another branch is checked out. Submit a full-length object id absent from the repository. For a
-      separate session, kill the isolated backend exactly after receipt append and before queue rename, restart, and
-      replay; after one handover, set that fixture active and later archive it, replaying in both states. Read both
-      records, raw/public timelines, native fake-harness output, and pending debt.
+      separate session, race two same-key requests and kill the isolated backend exactly after receipt append and
+      before queue rename, restart, and replay. In another isolated session, kill the backend after the adapter's
+      one handover and settlement append but before pending removal; then restart both backend and agent. After one
+      settled handover, set the first fixture active and later archive it, replaying in both states. Read records,
+      raw/public timelines, native fake-harness output, and pending debt.
     expected: >
       Active, non-merge-proposal, unkeyed, missing-field, malformed, stale-branch, and stale-base requests fail
       before lifecycle/timeline/queue mutation. Across the concurrent valid requests exactly one appends a merge
@@ -25,9 +27,13 @@ scenarios:
       HTTP 409 `session_merge_key_reused`, while the other session independently accepts the same raw key once;
       detached and wrong-branch worktrees return `session_merge_branch_unproven`, and a nonexistent full object id
       returns structured `session_merge_head_changed`; none mutates. A crash between receipt and queue leaves one
-      public timeline line and no debt; restart replay reconstructs it and produces exactly one native handover.
-      Replays after that settlement, including after active and archived transitions, preserve record bytes, queue,
-      and native delivery count exactly. The accepted prompt binds both reviewed objects, requires the
+      public timeline line and no debt even with the second same-key request in flight; restart replay reconstructs
+      the one canonical keyed pending shape and produces exactly one native handover. If the process instead dies
+      after settlement but before pending removal, restart consumes that already-settled exact debt without a second
+      adapter call; after the agent also restarts, old-plus-new native output still contains exactly one handover and
+      the queue is absent. Missing/mismatched receipt identity remains owed and stops the pass. Replays after that
+      settlement, including after active and archived transitions, preserve record bytes, queue, and native delivery
+      count exactly. The accepted prompt binds both reviewed objects, requires the
       agent to re-prove worktree/symbolic-branch/stored-branch/canonical-base identity before change, and after
       sync merges the freshly frozen tested object rather than a branch name. No raw key is retained anywhere.
   - name: codex-command-box-terminal-delivery

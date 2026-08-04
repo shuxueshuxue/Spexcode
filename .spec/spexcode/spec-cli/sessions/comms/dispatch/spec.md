@@ -103,8 +103,11 @@ enqueueing a second prompt; reusing that key for a different pair on the same se
 separate authority domain; callers coordinating a successor persist a key derived from that successor id and pair.
 The receipt also carries the exact private transport text. A crash after receipt append but before queue publication
 is recoverable from that one durable event: same-key replay restores the missing `mid` debt under the existing queue
-lock and drains it once. Successful adapter handover appends a private settlement event before removing the debt.
-Once settled, replay returns the recorded acceptance without touching lifecycle or queue state — later active,
+lock and drains it once. Initial publication and every recovery use the same keyed pending shape: exact `mid`, frozen
+transport text/sender, operation, and request digest. Successful adapter handover appends a private settlement event
+before removing the debt. A process dying in that second gap leaves both settlement and pending; the next drain
+recognizes only an exact receipt/mid/transport match and consumes it without another adapter call. A missing or
+mismatched receipt is a refusal and stays owed. Once settled, replay returns the recorded acceptance without touching lifecycle or queue state — later active,
 stopped, or archived state is authoritative and is never reopened merely to replay a response. Old receipts without
 this recovery form retain their historical response-only replay semantics.
 

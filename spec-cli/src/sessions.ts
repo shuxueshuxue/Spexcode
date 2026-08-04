@@ -1148,13 +1148,12 @@ export type MsgSender = { id: string; label: string | null }
 export function withSenderHint(text: string, sender: MsgSender | null): string {
   if (!sender) return text
   const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
-  return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"${LIVE_ARTIFACT_HANDOFF_HINT}`
+  return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
 }
-export const LIVE_ARTIFACT_HANDOFF_HINT = '\n\n— LIVE ARTIFACT HANDOFF: when you produce a file or start a local webpage for the human to inspect, publish its live reference with `spex session files add <path>` or `spex session web add <url>`; never paste or copy the bytes.'
 export const withNoteReplyHint = (text: string): string =>
-  `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For a simple answer awaiting the next message, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.${LIVE_ARTIFACT_HANDOFF_HINT}`
+  `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For a simple answer awaiting the next message, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.`
 export const withTerminalReplyHint = (text: string): string =>
-  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).${LIVE_ARTIFACT_HANDOFF_HINT}`
+  `${text}\n\n— sent from a terminal-attached client: the sender now reads your terminal output directly. Reply in your normal conversation output from here on — stop putting replies in declaration --notes (the earlier terminal-free notices no longer apply; a --note can go back to being a short status line).`
 export const slugify = (s: string | null) =>
   (s || 'session').normalize('NFC').replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'session'
 

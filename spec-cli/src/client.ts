@@ -4,24 +4,110 @@ import { repoRoot } from './git.js'
 import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { envSessionId, listSessionIds, readPublicRecordEntry } from './layout.js'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
-import { apiBase, apiBaseInfo, assertProjectMatch, fromRaw, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { apiBaseInfo, assertProjectMatch, fromRaw, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 
 export class BackendError extends Error {
-  constructor(message: string, readonly status?: number) {
+  constructor(message: string, readonly status?: number, readonly transport?: unknown) {
     super(message)
     this.name = 'BackendError'   // cli.ts's top-level handler matches on the NAME, so it needs no import of this class
   }
 }
 
+const usageError = (message: string): Error => {
+  const error = new Error(message)
+  error.name = 'UsageError'
+  return error
+}
+
+const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`)
+function flagValue(name: string): string | null {
+  const index = process.argv.indexOf(`--${name}`)
+  if (index < 0) return null
+  const value = process.argv[index + 1]
+  if (value === undefined || value.startsWith('--')) throw usageError(`--${name} expects a value`)
+  return value
+}
+
+let gatewayCookie: { base: string; value: string } | null = null
+
+function prepareTls(base: string): void {
+  if (!hasFlag('insecure')) return
+  if (new URL(base).protocol !== 'https:') throw usageError('--insecure requires an https --api endpoint')
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+}
+
+function passwordFor(target: Awaited<ReturnType<typeof apiBaseInfo>>): string | null {
+  const password = flagValue('password') ?? process.env.SPEXCODE_PASSWORD ?? null
+  if (!password) return null
+  if (target.source !== 'flag') throw usageError('--password and SPEXCODE_PASSWORD require explicit --api routing')
+  return password
+}
+
+function withCookie(init: RequestInit | undefined, cookie: string): RequestInit {
+  const headers = new Headers(init?.headers)
+  headers.set('cookie', cookie)
+  return { ...init, headers }
+}
+
+async function loginGateway(base: string, password: string): Promise<string> {
+  let response: Response
+  try {
+    response = await fetch(`${base}/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ password }).toString(),
+      redirect: 'manual',
+    })
+  } catch (error) {
+    throw new BackendError(`gateway login could not reach ${base}: ${(error as Error).message}`, undefined, error)
+  }
+  if (response.status < 200 || response.status >= 400) throw new BackendError(`gateway login rejected credentials at ${base}`, response.status)
+  const headers = response.headers as Headers & { getSetCookie?: () => string[] }
+  const cookies = headers.getSetCookie?.() ?? [response.headers.get('set-cookie') ?? '']
+  const cookie = cookies.map((value) => value.split(';', 1)[0]).find(Boolean)
+  if (!cookie) throw new BackendError(`gateway login at ${base} did not return an authorization cookie`, response.status)
+  return cookie
+}
+
 // the ONE seam where "no backend" becomes loud. A network failure (nothing listening at the resolved base)
 // is the only thing thrown; an HTTP Response of any status is returned for the caller to interpret.
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  const base = await apiBase()
-  try {
-    return await fetch(`${base}${path}`, init)
-  } catch (e) {
-    throw new BackendError(`no backend reachable at ${base} — run \`spex serve\` in the project, or name one with --api <url> (${(e as Error).message})`)
+  const target = await apiBaseInfo()
+  const base = target.url
+  prepareTls(base)
+  const request = async (cookie?: string): Promise<Response> => {
+    try {
+      return await fetch(`${base}${path}`, cookie ? withCookie(init, cookie) : init)
+    } catch (error) {
+      throw new BackendError(`no backend reachable at ${base} — run \`spex serve\` in the project, or name one with --api <url> (${(error as Error).message})`, undefined, error)
+    }
   }
+  const existing = gatewayCookie?.base === base ? gatewayCookie.value : undefined
+  const response = await request(existing)
+  if (response.status !== 401) return response
+  if (existing) throw new BackendError(`gateway rejected the authenticated request at ${base}`, 401)
+  const password = passwordFor(target)
+  if (!password) throw new BackendError(`authentication required at ${base} — pass --password <pw> or set SPEXCODE_PASSWORD`, 401)
+  const cookie = await loginGateway(base, password)
+  gatewayCookie = { base, value: cookie }
+  const retried = await request(cookie)
+  if (retried.status === 401) throw new BackendError(`gateway rejected the authenticated request at ${base}`, 401)
+  return retried
+}
+
+export function backendConnectionRefused(error: unknown): boolean {
+  if (!(error instanceof BackendError)) return false
+  let current = error.transport
+  let sawRefusal = false
+  const seen = new Set<unknown>()
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current)
+    const code = (current as NodeJS.ErrnoException).code
+    if (code && code !== 'ECONNREFUSED') return false
+    if (code === 'ECONNREFUSED') sawRefusal = true
+    current = (current as { cause?: unknown }).cause
+  }
+  return sawRefusal
 }
 // every MUTATING verb is project-bound ([[remote-client]]'s write guard): resolve the backend, compare its
 // served root to the cwd project, refuse loudly on a same-host mismatch — an explicit --api/--port skips it.
@@ -290,6 +376,13 @@ export async function clientRename(id: string, name: string): Promise<boolean> {
   await guarded('session rename')
   const r = await apiFetch(`/api/sessions/${seg(id)}/rename`, post({ name }))
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
+}
+
+export async function clientReparent(children: string[], parent: string): Promise<import('./sessions.js').SessionReparentResult> {
+  await guarded('session reparent')
+  const r = await apiFetch('/api/sessions/reparent', post({ children, parent }))
+  if (!r.ok) throw new BackendError(`backend refused to reparent sessions: ${await r.text()}`, r.status)
+  return await r.json() as import('./sessions.js').SessionReparentResult
 }
 
 // POST /api/sessions/:id/input {kind:"keys"} — the LAST-RESORT raw nav-key face of send (tmux send-keys,

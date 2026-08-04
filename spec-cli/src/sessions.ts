@@ -607,6 +607,72 @@ export function cancelSessionWatch(watcher: string, targets: string[]): number {
   return cancelled
 }
 
+export type SessionReparentResult = { children: string[]; parent: string; notified: string[] }
+
+async function withRecordLocks<T>(ids: string[], body: () => Promise<T>, index = 0): Promise<T> {
+  if (index >= ids.length) return body()
+  return withRecordLock(ids[index], () => withRecordLocks(ids, body, index + 1))
+}
+
+function assertReparentable(children: string[], parent: string, records: Map<string, SessRec>): void {
+  if (!children.length) throw new ResourceConflict('reparent needs at least one child session')
+  managedWatchRecord(parent)
+  for (const id of children) {
+    const child = records.get(id)
+    if (!child?.governed) throw new ResourceConflict(`session ${id} is not a governed child session`)
+    if (id === parent) throw new ResourceConflict('a session cannot be its own parent')
+  }
+  const childIds = new Set(children)
+  const seen = new Set<string>()
+  for (let current: string | null = parent; current; ) {
+    if (childIds.has(current)) throw new ResourceConflict(`reparent would create a parent cycle through ${current}`)
+    if (seen.has(current)) throw new ResourceConflict(`cannot reparent through malformed parent cycle at ${current}`)
+    seen.add(current)
+    current = readRecord(current)?.parent ?? null
+  }
+}
+
+export async function reparentSessionRecords(rawChildren: string[], parent: string): Promise<SessionReparentResult> {
+  const children = [...new Set(rawChildren)].sort()
+  if (!parent) throw new ResourceConflict('reparent needs a destination parent session')
+  const before = new Map(children.map((id) => [id, managedWatchRecord(id)]))
+  assertReparentable(children, parent, before)
+  const notify: SessRec[] = []
+  await withRecordLock('session-reparent-transaction', () => withRecordLocks(children, async () => {
+    const current = new Map(children.map((id) => [id, managedWatchRecord(id)]))
+    assertReparentable(children, parent, current)
+    const snapshots = children.map((id) => ({ id, record: current.get(id)!, watchers: readWatchEntries(id) }))
+    try {
+      for (const snapshot of snapshots) {
+        const { record, watchers } = snapshot
+        const hadNewParent = watchers.some((entry) => entry.watcher === parent)
+        const retainedNewParent = watchers.find((entry) => entry.watcher === parent)
+        const nextWatchers = watchers.filter((entry) => entry.watcher !== record.parent && entry.watcher !== parent)
+        nextWatchers.push(retainedNewParent ?? { watcher: parent, createdAt: new Date().toISOString() })
+        writeWatchEntries(snapshot.id, nextWatchers)
+        if (record.parent !== parent) writeRecord({ ...record, parent })
+        if (record.parent !== parent || !hadNewParent) notify.push({ ...record, parent })
+      }
+    } catch (error) {
+      let rollbackFailure: unknown = null
+      for (const snapshot of snapshots.toReversed()) {
+        try {
+          writeWatchEntries(snapshot.id, snapshot.watchers)
+          writeRecord(snapshot.record)
+        } catch (rollback) { rollbackFailure ??= rollback }
+      }
+      const detail = error instanceof Error ? error.message : String(error)
+      const rollbackDetail = rollbackFailure instanceof Error ? `; rollback also failed: ${rollbackFailure.message}` : ''
+      throw new ResourceConflict(`reparent did not commit: ${detail}${rollbackDetail}`)
+    }
+  }))
+  for (const child of notify) {
+    const delivered = await sendText(parent, watchMessage(child), child.session)
+    if (!delivered.ok) throw new ResourceConflict(`reparent committed but could not queue ${child.session}'s current state for ${parent}: ${delivered.error}`)
+  }
+  return { children, parent, notified: notify.map((child) => child.session) }
+}
+
 // Share one liveness snapshot rather than spawning tmux for every displayed session.
 export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; titles: Map<string, string>; sockets: Set<string>; unproven: Set<string> }
 

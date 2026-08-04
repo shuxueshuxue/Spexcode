@@ -35,6 +35,7 @@ import { installProcessGuards } from './resilience.js'
 import { resolveProjectIdentity } from './project-identity.js'
 import { evalDetailReview, evalsReview, issuesReview } from './reviews.js'
 import { collectResourceReport, ResourceConflict } from './host-resources.js'
+import { reparentRequest, SessionReparentRequestError } from './session-reparent.js'
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
@@ -50,6 +51,7 @@ app.onError((error, c) => {
   // stack would hide exactly the sentence the human needs.
   if (error instanceof SessionRecordUnusable) return c.json({ error: error.message, code: error.code }, 409)
   if (error instanceof ResourceConflict) return c.json({ error: error.message, code: error.code }, 409)
+  if (error instanceof SessionReparentRequestError) return c.json({ error: error.message }, 400)
   console.error(error)
   return c.text('Internal Server Error', 500)
 })
@@ -676,6 +678,11 @@ app.post('/api/sessions/:id/input', async (c) => {
     return c.json({ ok }, ok ? 200 : 404)
   }
   return c.json({ error: 'input needs kind: "text" | "command" | "keys"' }, 400)
+})
+app.post('/api/sessions/reparent', async (c) => {
+  const result = await reparentRequest(await c.req.json().catch(() => null))
+  notifyBoardChanged('sessions')
+  return c.json(result)
 })
 // soft stop: kill the agent's tmux + socket but KEEP the worktree (resumable). Distinct from close, which
 // removes the worktree. {ok:false} = no such session.

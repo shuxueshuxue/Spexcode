@@ -36,6 +36,9 @@ is the only hot path that must find its watchers. After a state record commits, 
 and uses the existing send queue to notify each watcher only after releasing the target's lock; no monitor
 loop, second transport, or bidirectional index enters the shared layer. `wait` remains the cursor-backed
 reader fallback for callers with no governed delivery address.
+[[session-reparent]] uses that same target ownership: it takes the ordinary record locks while changing a
+child's parent pointer and watcher list, then delegates current-state delivery to the existing dispatch path.
+The core never asks a former watcher to participate in its own removal.
 A launch record carries the selected launcher name, its resolved harness, and the exact pinned
 `launch_cmd`; session lifecycle and comms call that one interactive adapter directly rather than routing on a
 second product dimension. The session's node is derived only from the raw prompt's first `[[id]]` topic

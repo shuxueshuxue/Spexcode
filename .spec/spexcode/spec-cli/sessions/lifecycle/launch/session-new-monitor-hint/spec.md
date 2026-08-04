@@ -47,6 +47,11 @@ Worker-only live-reference entries keep the same map: `session files add|ls|retr
 `session web add|ls|retract` names live loopback web URLs ([[files]] / [[web]]). Their own nouns own format and
 gateway policy; this shared drawer tells an agent the capability exists without turning help into another guide.
 
+The manager recovery entry, `session reparent <child-SEL...> --to <parent-SEL>`, names its required destination
+and batch shape without prescribing a recovery workflow. Its promise to rewrite the parent pointer and managed
+watch relation belongs to [[session-reparent]]; help only makes the operation discoverable alongside the other
+manager controls.
+
 One word — **close** — sits on both sides of the manager/worker split, so each entry states which side it is
 on in its own text instead of leaning on the drawer's grouping. `session close <SEL>` says it retires ANOTHER
 session and that its selector is never `.` and never the caller's own id; `done --propose close` says it only

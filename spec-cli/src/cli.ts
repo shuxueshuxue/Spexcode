@@ -57,7 +57,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -880,6 +880,19 @@ if (cmd === 'serve') {
         const quarantined = await c.clientQuarantine(id, { adapter, thread: flag('thread') ?? null, tmux, worktree, branch })
         console.log(`quarantined ${quarantined.id} -> ${quarantined.bundle}`)
       }
+    } else if (sub === 'reparent') {
+      rejectUnknownFlags('spex session reparent', 4, ['to', 'api', 'port'])
+      const children = positionals(4)
+      const to = flag('to')
+      if (!children.length || !to) {
+        console.error('usage: spex session reparent <child-SEL...> --to <parent-SEL>')
+        process.exit(2)
+      }
+      const childIds = [...new Set(await Promise.all(children.map(resolveSelectorOrExit)))]
+      const parent = await resolveSelectorOrExit(to)
+      const { reparentSessions } = await import('./session-reparent.js')
+      const result = await reparentSessions(childIds, parent)
+      console.log(`reparented ${result.children.join(', ')} -> ${result.parent}`)
     } else if (sub === 'send') {
       const full = await resolveSelectorOrExit(id)
       if (has('keys')) {
@@ -959,7 +972,7 @@ if (cmd === 'serve') {
       await assertLocalBackend()
       process.exit(await attachSession(await resolveSelectorOrExit(id)))
     } else {
-      console.error(`spex session: unknown verb '${sub}' — new | ls | files | web | show | watch | wait | review | merge | send | interrupt | rename | resume | stop | close | attach | done | park | ask  (spex help session)`)
+      console.error(`spex session: unknown verb '${sub}' — new | ls | files | web | show | watch | wait | review | merge | reparent | send | interrupt | rename | resume | stop | close | attach | done | park | ask  (spex help session)`)
       process.exit(2)
     }
   }

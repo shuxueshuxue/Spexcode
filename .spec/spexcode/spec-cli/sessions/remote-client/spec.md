@@ -7,6 +7,7 @@ code:
   - spec-cli/src/client.ts
 related:
   - spec-cli/src/remote-client-cache.test.ts
+  - spec-cli/src/remote-client-auth.api.test.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/supervise.ts
 ---

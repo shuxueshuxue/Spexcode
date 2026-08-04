@@ -27,7 +27,8 @@ scenarios:
     tags: [backend-api]
     code:
       - spec-cli/src/layout.ts#resolveLayout
-      - spec-cli/src/git.ts#worktreeSpecDelta
+      - spec-cli/src/layout.ts#layoutDeltas
+      - spec-cli/src/git.ts#worktreeSpecDeltas
     test: spec-cli/src/layout-overlay.api.test.ts
 ---
 

@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { git, repoRoot, gitA, headSha, worktreeSpecSig, worktreeSpecDelta, type NodeOp } from './git.js'
+import { git, repoRoot, gitA, gitInterpretationIdentity, headSha, worktreeSpecSig, worktreeSpecDelta, worktreeSpecDeltas, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { HARNESSES, type HarnessId } from './harness.js'
 import { encodeProject, projectRuntimeRoot, spexcodeHome } from './project-store.js'
@@ -476,32 +476,58 @@ export function sessionBranchIndex(): Map<string, string> {
   return index
 }
 
-// memo the overlay (4 git diffs/worktree, all .spec-scoped) keyed on fork-point merge-base + HEAD + spec
-// sig + MAIN'S TIP ([[worktree-linker]]): the main-tip component is what lets a merge landing identical
-// content dissolve a worktree's now-moot ops — the recompute it triggers is cheap because every diff is
-// .spec-scoped.
+// Retain only completed per-worktree overlays. Interpretation + main tip + HEAD + working signature completely
+// determine the merge-base and projection; a landed main tip therefore dissolves now-moot ops on the next read.
 const deltaCache = new Map<string, { key: string; ops: NodeOp[] }>()
 const safeHead = (p: string): string => { try { return headSha(p) } catch { return '' } }
-const safeMergeBase = async (wtPath: string, mainRef: string): Promise<string> => {
-  try { return (await gitA(['-C', wtPath, 'merge-base', mainRef, 'HEAD'])).trim() } catch { return '' }
-}
 let layoutHeadWarned = false
-async function cachedDelta(wtPath: string, mainRef: string, mainSha: string): Promise<NodeOp[]> {
-  const wtHead = safeHead(wtPath)
-  const base = await safeMergeBase(wtPath, mainRef)
-  // fail loud, never stale: if the merge-base, HEAD, or main tip can't be read the key is untrustworthy —
-  // bypass the cache and recompute (warn once) rather than risk serving a delta keyed on an empty sha
-  // across a real change.
-  if (!base || !wtHead || !mainSha) {
-    if (!layoutHeadWarned) { layoutHeadWarned = true; console.warn('spec-cli: layout overlay cache bypassed (unreadable merge-base/HEAD/main tip), recomputing every read') }
-    return worktreeSpecDelta(wtPath, mainRef)
-  }
-  const key = `${base}\0${wtHead}\0${mainSha}\0${worktreeSpecSig(wtPath)}`
-  const hit = deltaCache.get(wtPath)
-  if (hit && hit.key === key) return hit.ops
-  const ops = await worktreeSpecDelta(wtPath, mainRef, base)
-  deltaCache.set(wtPath, { key, ops })
-  return ops
+type LayoutDeltaOutcome = { ops: NodeOp[] } | { error: unknown }
+const layoutDeltaFlights = new Map<string, Promise<Map<string, LayoutDeltaOutcome>>>()
+
+// One exact public layout generation owns the cold overlay computation. The map is only an in-flight join:
+// the entry is deleted at settlement and deltaCache remains the sole retained result state.
+async function layoutDeltas(paths: string[], main: string, mainRef: string, mainSha: string): Promise<Map<string, LayoutDeltaOutcome>> {
+  const snapshots = paths.map((path) => ({ path, head: safeHead(path), sig: worktreeSpecSig(path) }))
+  const interpretation = gitInterpretationIdentity(main)
+  const flightKey = JSON.stringify([interpretation, mainRef, mainSha, snapshots.map(({ path, head, sig }) => [path, head, sig]).sort((a, b) => a[0].localeCompare(b[0]))])
+  const existing = layoutDeltaFlights.get(flightKey)
+  if (existing) return existing
+
+  const flight = (async () => {
+    const outcomes = new Map<string, LayoutDeltaOutcome>()
+    const misses: typeof snapshots = []
+    for (const snapshot of snapshots) {
+      const key = `${interpretation}\0${mainSha}\0${snapshot.head}\0${snapshot.sig}`
+      const hit = snapshot.head && mainSha ? deltaCache.get(snapshot.path) : null
+      if (hit?.key === key) outcomes.set(snapshot.path, { ops: hit.ops })
+      else misses.push(snapshot)
+    }
+
+    const valid = misses.filter(({ head }) => !!head && !!mainSha)
+    const batched = await worktreeSpecDeltas(main, mainSha, valid.map(({ path, head }) => ({ path, head })), interpretation)
+    for (const snapshot of valid) {
+      const outcome = batched.get(snapshot.path) ?? { error: new Error(`layout overlay batch omitted ${snapshot.path}`) }
+      if ('error' in outcome) outcomes.set(snapshot.path, outcome)
+      else {
+        const key = `${interpretation}\0${mainSha}\0${snapshot.head}\0${snapshot.sig}`
+        deltaCache.set(snapshot.path, { key, ops: outcome.ops })
+        outcomes.set(snapshot.path, { ops: outcome.ops })
+      }
+    }
+
+    await Promise.all(misses.filter(({ head }) => !head || !mainSha).map(async (snapshot) => {
+      if (!layoutHeadWarned) {
+        layoutHeadWarned = true
+        console.warn('spec-cli: layout overlay cache bypassed (unreadable HEAD/main tip), recomputing every read')
+      }
+      try { outcomes.set(snapshot.path, { ops: await worktreeSpecDelta(snapshot.path, mainRef) }) }
+      catch (error) { outcomes.set(snapshot.path, { error }) }
+    }))
+    return outcomes
+  })()
+  layoutDeltaFlights.set(flightKey, flight)
+  try { return await flight }
+  finally { if (layoutDeltaFlights.get(flightKey) === flight) layoutDeltaFlights.delete(flightKey) }
 }
 
 export async function resolveLayout(): Promise<Layout> {
@@ -529,6 +555,8 @@ export async function resolveLayout(): Promise<Layout> {
   const mainSha = await (async () => {
     try { return (await gitA(['-C', main, 'rev-parse', '--verify', `${mainRef}^{commit}`])).trim() } catch { return '' }
   })()
+  const activePaths = records.filter(({ raw }) => !raw.archived).map(({ raw }) => raw.worktree_path)
+  const deltas = await layoutDeltas(activePaths, main, mainRef, mainSha)
   const rows = await Promise.all(records.map(({ raw: r, liveness }) => {
     const node = r.node ?? (r.branch && r.branch.startsWith(convention.branchPrefix) ? r.branch.slice(convention.branchPrefix.length) : null)
     const base: Worktree = { path: r.worktree_path, branch: r.branch, node, session: r.session_id, status: r.status, isMain: false, ...(liveness ? { liveness } : {}), ops: [] }
@@ -538,7 +566,12 @@ export async function resolveLayout(): Promise<Layout> {
     // price of a retained archive is one enumerated record, NOT a git walk per poll.
     if (r.archived) return Promise.resolve(base)
     return guardWorktree<Worktree>(r.worktree_path,
-      async (): Promise<Worktree> => ({ ...base, ops: await cachedDelta(r.worktree_path, mainRef, mainSha) }),
+      (): Worktree => {
+        const outcome = deltas.get(r.worktree_path)
+        if (!outcome) throw new Error(`layout overlay missing ${r.worktree_path}`)
+        if ('error' in outcome) throw outcome.error
+        return { ...base, ops: outcome.ops }
+      },
       (): Worktree => ({ ...base, ops: deltaCache.get(r.worktree_path)?.ops ?? [] }))
   }))
   const corruptRows: Worktree[] = publicEntries.flatMap((entry) => entry.kind === 'corrupt'

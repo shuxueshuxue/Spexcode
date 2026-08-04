@@ -88,6 +88,7 @@ test('cold governed overlays are one public generation, not one Git fanout per s
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const argvLog = join(fixture, 'git-argv.log')
+  const failBatch = join(fixture, 'fail-batch')
   let backend: ChildProcess | null = null
   try {
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
@@ -150,6 +151,10 @@ test('cold governed overlays are one public generation, not one Git fanout per s
     writeFileSync(join(bin, 'git'), `#!/bin/sh
 printf '%s\\n' "$*" >> "${argvLog}"
 case " $* " in
+  *" diff-tree --stdin "*)
+    if [ -e "${failBatch}" ]; then exit 23; fi
+    sleep 0.04
+    ;;
   *" -- .spec "*) sleep 0.04 ;;
 esac
 exec "${realGit}" "$@"
@@ -203,6 +208,54 @@ exec "${realGit}" "$@"
     const mergeBases = commands.filter((line) => line.includes(' merge-base ') && !line.includes('--is-ancestor'))
     assert.equal(batch.length, 1, `one clean-tree batch owns both public surfaces:\n${commands.join('\n')}`)
     assert.equal(mergeBases.length, expected.size - 1, `one merge-base per non-archived worktree:\n${commands.join('\n')}`)
+
+    mkdirSync(join(project, '.spec', 'project', 'main-only'), { recursive: true })
+    writeFileSync(join(project, '.spec', 'project', 'main-only', 'spec.md'), specBody('main-only'))
+    git(project, 'add', '.spec')
+    git(project, 'commit', '-qm', 'main advances outside every branch footprint')
+    writeFileSync(failBatch, 'fail next clean batch\n')
+    const degradedResponse = await fetch(`${base}/api/settings`)
+    assert.equal(degradedResponse.status, 200, 'a batch failure serves per-row degraded state rather than a false empty generation')
+    const degraded = await degradedResponse.json() as typeof settings
+    for (const [id, want] of expected) {
+      const row = degraded.layout.worktrees.find((candidate) => candidate.session === id)
+      assert.ok(row)
+      assert.deepEqual(shape(row.ops), want, `failed flight retains prior ${id} ops`)
+    }
+
+    rmSync(failBatch)
+    writeFileSync(argvLog, '')
+    const repairedResponse = await fetch(`${base}/api/settings`)
+    assert.equal(repairedResponse.status, 200)
+    const repaired = await repairedResponse.json() as typeof settings
+    for (const [id, want] of expected) {
+      const row = repaired.layout.worktrees.find((candidate) => candidate.session === id)
+      assert.ok(row)
+      assert.deepEqual(shape(row.ops), want, `repair recomputes exact ${id} ops after main advance`)
+    }
+    const repairCommands = readFileSync(argvLog, 'utf8').trim().split('\n').filter(Boolean)
+    assert.equal(repairCommands.filter((line) => line.includes(' diff-tree ') && line.includes(' --stdin ')).length, 1,
+      `failed flight did not poison the next exact generation:\n${repairCommands.join('\n')}`)
+
+    const rawMain = git(project, 'rev-parse', 'main')
+    const replacementTree = git(join(fixture, 'worktrees', 'clean-0'), 'rev-parse', 'HEAD^{tree}')
+    const replacement = git(project, 'commit-tree', replacementTree, '-p', `${rawMain}^`, '-m', 'alternate main interpretation')
+    git(project, 'replace', rawMain, replacement)
+    assert.equal(git(project, 'rev-parse', 'main'), rawMain, 'replace changes interpretation without changing the raw main key')
+    writeFileSync(argvLog, '')
+    const replacedResponse = await fetch(`${base}/api/settings`)
+    assert.equal(replacedResponse.status, 200)
+    const replacedCommands = readFileSync(argvLog, 'utf8').trim().split('\n').filter(Boolean)
+    assert.equal(replacedCommands.filter((line) => line.includes(' diff-tree ') && line.includes(' --stdin ')).length, 1,
+      `refs/replace must invalidate the raw-SHA overlay cache:\n${replacedCommands.join('\n')}`)
+
+    git(project, 'replace', '-d', rawMain)
+    writeFileSync(argvLog, '')
+    const restoredResponse = await fetch(`${base}/api/settings`)
+    assert.equal(restoredResponse.status, 200)
+    const restoredCommands = readFileSync(argvLog, 'utf8').trim().split('\n').filter(Boolean)
+    assert.equal(restoredCommands.filter((line) => line.includes(' diff-tree ') && line.includes(' --stdin ')).length, 1,
+      `removing refs/replace must invalidate the alternate interpretation:\n${restoredCommands.join('\n')}`)
   } finally {
     await stopChild(backend)
     rmSync(fixture, { recursive: true, force: true })

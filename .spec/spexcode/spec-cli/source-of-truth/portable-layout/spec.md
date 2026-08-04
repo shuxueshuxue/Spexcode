@@ -6,6 +6,7 @@ hue: 160
 desc: Where things live — main, worktree→node mapping, the spec root node — is detected policy, never a baked-in name.
 code:
   - spec-cli/src/layout.ts#resolveLayout
+  - spec-cli/src/layout.ts#layoutDeltas
   - spec-cli/src/layout.ts#mainRoot
   - spec-cli/src/layout.ts#mainBranch
   - spec-cli/src/layout.ts#readJsonConfig

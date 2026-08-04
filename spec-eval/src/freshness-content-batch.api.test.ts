@@ -68,7 +68,8 @@ function traceRows(path: string): GitTrace[] {
 function contentCensus(path: string) {
   const rows = traceRows(path)
   const old = rows.filter((row) => row.args.includes('diff') && row.args.includes('--name-only') && row.args.includes('--no-renames'))
-  const chunks = rows.filter((row) => row.args.includes('diff-tree') && row.args.includes('--stdin') && row.args.includes('--always'))
+  const chunks = rows.filter((row) => row.args.includes('diff-tree') && row.args.includes('--stdin')
+    && row.args.includes('--always') && row.args.includes('--no-renames'))
   const anchorChecks = rows.filter((row) => row.args.includes('cat-file')
     && row.args.some((arg) => arg.startsWith('--batch-check'))
     && row.input.length === ANCHORS + 1

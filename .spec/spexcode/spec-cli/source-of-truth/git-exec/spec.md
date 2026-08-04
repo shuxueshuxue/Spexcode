@@ -9,6 +9,8 @@ code:
   - spec-cli/src/git.ts#git
   - spec-cli/src/git.ts#gitBuffer
   - spec-cli/src/git.ts#warnIfTimedOut
+  - spec-cli/src/git.ts#gitInterpretationIdentity
+  - spec-cli/src/git.ts#worktreeSpecDeltas
   - spec-cli/src/git.ts#batchRevisionOids
 related:
   - spec-cli/src/git.ts
@@ -55,6 +57,18 @@ reported as broken.
 Overflow is the one case that legitimately replaces the code, because exceeding the buffer is this seam's own
 verdict rather than the child's, and the kill it performs would otherwise surface as an unrelated signal.
 Timeout marks itself separately for the same reason. Everything else keeps whatever cause it arrived with.
+
+Many worktrees asking the same immutable tree question are one Git transport demand, not one child per
+worktree. The batch first freezes each worktree HEAD and its merge-base against the one resolved
+main tip, separates working trees with a real `.spec` overlay, and sends the clean tree pairs through one
+`diff-tree --stdin` stream. The demand is pinned to the existing shared Git interpretation identity (object
+format, shallow and graft bytes, and replacement refs) and is revalidated after the child completes; a changed
+interpretation is an unpublishable read, never a result cached under unchanged raw SHAs. `--always` frames even
+an empty pair, so one no-op cannot shift every later answer;
+the parser consumes those frames in request order and fails loud on a missing or extra frame. Dirty and
+untracked worktrees keep the ordinary worktree-aware path. The batch pins rename detection and
+`core.quotePath=false`: name-status parsing receives literal repository paths rather than a user's Git quoting
+preference, and a rename has the same meaning in the batch and fallback paths.
 
 The synchronous text and buffer entrances share one explicit output budget large enough for repository-wide
 Git projections. They never inherit Node's smaller default: a valid `ls-tree` or history answer crossing that

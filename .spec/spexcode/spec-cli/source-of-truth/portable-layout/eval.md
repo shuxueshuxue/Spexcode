@@ -14,6 +14,22 @@ scenarios:
     code:
       - spec-cli/src/layout.ts#mainBranch
       - spec-cli/src/layout.ts#readConfig
+  - name: cold-overlay-width-does-not-multiply-by-public-surface
+    description: >
+      In an isolated real repository, create several governed linked worktrees spanning clean edits, a rename,
+      dirty and untracked state, and an archived row. Start the real backend, then concurrently request public
+      `/api/settings` and `/api/graph` through a Git argv recorder.
+    expected: >
+      Both public surfaces return the same complete session rows and exact ops. The cold generation performs
+      one framed clean-tree batch and one merge-base/status proof per active worktree rather than repeating the
+      worktree fanout per surface; dirty, untracked, rename, main-advance, archived, and degraded semantics are
+      unchanged. A failed flight is not cached and the next request can repair.
+    tags: [backend-api]
+    code:
+      - spec-cli/src/layout.ts#resolveLayout
+      - spec-cli/src/layout.ts#layoutDeltas
+      - spec-cli/src/git.ts#worktreeSpecDeltas
+    test: spec-cli/src/layout-overlay.api.test.ts
 ---
 
 Measured through the CLI seam that resolves layout for every other verb (`spex internal trunk` =

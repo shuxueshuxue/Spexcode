@@ -426,6 +426,17 @@ export async function gitA(args: string[], input?: string): Promise<string> {
   }
 }
 
+async function gitARequired(args: string[], input?: string): Promise<string> {
+  const env = { ...process.env }
+  delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  try { return (await execGitForCaller(args, env, undefined, input)).stdout.toString('utf8') }
+  catch (error: any) {
+    if (error?.name === 'AbortError') throw error
+    warnIfTimedOut(error, args)
+    throw new Error(`git ${args.slice(2, 6).join(' ')} failed: ${String(error?.stderr || error?.message || 'unknown git error').trim()}`)
+  }
+}
+
 type TextEventRecord = { hash: string; raw: string }
 type IdentityEventRecord = { hash: string; identity: IdentityRawRecord }
 type EventRecord = TextEventRecord | IdentityEventRecord
@@ -539,6 +550,7 @@ export function gitObjectInterpretation(root: string): {
   }
   return { identity: location.interpretation, objectFormat: location.objectFormat, replacements }
 }
+export function gitInterpretationIdentity(root: string): string { return eventCacheLocation(root).identity }
 function emptyEventCache(): EventCache {
   return { streams: new Map(), streamTips: new Map(), hunks: new Map() }
 }
@@ -2333,19 +2345,7 @@ export function mergeConflicts(wtPath: string, mainRef = 'main', headRef = 'HEAD
 // spoken: content equal to main is no op, an existing node reads `edited` never `added`) AND have been
 // touched by this branch since its fork point (attribution — main's own post-fork movement is not this
 // worktree's op). A `status --porcelain` pass adds untracked spec.md, a third diff vs HEAD marks committed.
-export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHint?: string): Promise<NodeOp[]> {
-  const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
-  // fork point = where this worktree branched from main; '' (no common ancestor / unreadable ref) falls
-  // back to mainRef so we still surface changes rather than going silent. The caller (cachedDelta) already
-  // computes this same merge-base to key its cache, so it passes it in to avoid a redundant subprocess.
-  const base = baseHint || (await run(['merge-base', mainRef, 'HEAD'])).trim() || mainRef
-  // the four queries are independent — run them in parallel.
-  const [mainOut, workOut, commOut, statusOut] = await Promise.all([
-    run(['diff', '--name-status', '-M', mainRef, '--', '.spec']),
-    run(['diff', '--name-status', '-M', base, '--', '.spec']),
-    run(['diff', '--name-status', '-M', `${base}...HEAD`, '--', '.spec']),
-    run(['status', '--porcelain', '--untracked-files=all', '--', '.spec']),
-  ])
+function projectWorktreeSpecDelta(mainOut: string, workOut: string, commOut: string, statusOut: string): NodeOp[] {
   const proposals = parseNameStatus(mainOut)
   // the branch's own footprint since its fork point — both sides of every row, so a rename matches
   // whichever side the vs-main diff names.
@@ -2369,7 +2369,7 @@ export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHin
   for (const r of proposals) {
     const path = r.code === 'D' ? r.from : r.to
     if (!isSpecMd(path)) continue
-    if (!touched.has(r.to) && !touched.has(r.from)) continue   // main moved it, not this branch → no op
+    if (!touched.has(r.to) && !touched.has(r.from)) continue
     seen.add(path)
     const op = codeFor[r.code] ?? 'edited'
     ops.push({
@@ -2384,4 +2384,130 @@ export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHin
     ops.push({ nodeId: nodeIdOf(path), op: 'added', path, committed: false, dirty: true })
   }
   return ops
+}
+
+type WorktreeSpecDemand = { path: string; head: string }
+export type WorktreeSpecDeltaOutcome = { base: string; ops: NodeOp[] } | { error: unknown }
+
+async function boundedMap<T, R>(values: T[], concurrency: number, fn: (value: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(values.length)
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (true) {
+      const index = next++
+      if (index >= values.length) return
+      results[index] = await fn(values[index])
+    }
+  }))
+  return results
+}
+
+// One cold layout demand across many linked worktrees. Merge-base and working-status are path facts, so they
+// stay per worktree under a fixed concurrency. Clean rows then collapse to immutable main→HEAD and base→HEAD
+// pairs in one framed child; dirty rows retain the ordinary worktree-aware projection.
+export async function worktreeSpecDeltas(root: string, mainSha: string, demands: WorktreeSpecDemand[], interpretation = gitInterpretationIdentity(root)): Promise<Map<string, WorktreeSpecDeltaOutcome>> {
+  const results = new Map<string, WorktreeSpecDeltaOutcome>()
+  if (!demands.length) return results
+  if (gitInterpretationIdentity(root) !== interpretation) {
+    const error = new Error('Git interpretation changed before the worktree overlay batch')
+    for (const demand of demands) results.set(demand.path, { error })
+    return results
+  }
+  const prepared = await boundedMap(demands, 4, async (demand) => {
+    try {
+      const run = (args: string[]) => gitARequired(['-C', demand.path, '-c', 'core.quotePath=false', ...args])
+      const [baseOut, statusOut] = await Promise.all([
+        run(['merge-base', mainSha, demand.head]),
+        run(['status', '--porcelain', '--untracked-files=all', '--', '.spec']),
+      ])
+      const base = baseOut.trim()
+      if (!base) throw new Error(`git merge-base returned no base for ${demand.path}`)
+      return { ...demand, base, statusOut }
+    } catch (error) {
+      results.set(demand.path, { error })
+      return null
+    }
+  })
+
+  const clean = prepared.filter((row): row is NonNullable<typeof row> => !!row && row.statusOut.trim() === '')
+  const dirty = prepared.filter((row): row is NonNullable<typeof row> => !!row && row.statusOut.trim() !== '')
+  const pairs: Array<{ from: string; to: string }> = []
+  const pairIndex = new Map<string, number>()
+  const addPair = (from: string, to: string): number => {
+    const key = `${from}\0${to}`
+    const hit = pairIndex.get(key)
+    if (hit != null) return hit
+    const index = pairs.length
+    pairIndex.set(key, index)
+    pairs.push({ from, to })
+    return index
+  }
+  const cleanIndexes = clean.map((row) => ({
+    row,
+    main: addPair(mainSha, row.head),
+    branch: addPair(row.base, row.head),
+  }))
+
+  if (pairs.length) {
+    try {
+      // diff-tree's stdin pair syntax is `<new> <old>`; reverse each ordinary from→to pair deliberately.
+      // --always is load-bearing: it emits a frame for an empty pair, preserving positional ownership.
+      const input = pairs.map(({ from, to }) => `${to} ${from}`).join('\n') + '\n'
+      const out = await gitARequired([
+        '-C', root, '-c', 'core.quotePath=false', 'diff-tree', '--stdin', '--no-commit-id', '--always',
+        '-r', '--name-status', '-M', `--format=${RS}%H`, '--', '.spec',
+      ], input)
+      // For two-tree stdin rows, diff-tree writes that row's name-status payload BEFORE its --format marker.
+      // The first split segment is therefore pair 0; each later pair lives after the previous marker, while
+      // the final marker carries no following pair. Treating markers as openers shifts every non-empty result.
+      const records = out.split(RS)
+      if (records.length - 1 !== pairs.length) throw new Error(`git diff-tree --stdin returned ${records.length - 1} frames for ${pairs.length} pairs`)
+      const frames = pairs.map((_, index) => {
+        if (index === 0) return records[0].split('\n').filter(Boolean).join('\n')
+        const lines = records[index].replace(/^\n/, '').split('\n')
+        lines.shift()
+        return lines.filter(Boolean).join('\n')
+      })
+      for (const { row, main, branch } of cleanIndexes) {
+        results.set(row.path, { base: row.base, ops: projectWorktreeSpecDelta(frames[main], frames[branch], frames[branch], '') })
+      }
+    } catch (error) {
+      for (const { row } of cleanIndexes) results.set(row.path, { error })
+    }
+  }
+
+  await Promise.all(dirty.map(async (row) => {
+    try {
+      const run = (args: string[]) => gitARequired(['-C', row.path, '-c', 'core.quotePath=false', ...args])
+      const [mainOut, workOut, commOut] = await Promise.all([
+        run(['diff', '--name-status', '-M', mainSha, '--', '.spec']),
+        run(['diff', '--name-status', '-M', row.base, '--', '.spec']),
+        run(['diff', '--name-status', '-M', `${row.base}...${row.head}`, '--', '.spec']),
+      ])
+      results.set(row.path, { base: row.base, ops: projectWorktreeSpecDelta(mainOut, workOut, commOut, row.statusOut) })
+    } catch (error) {
+      results.set(row.path, { error })
+    }
+  }))
+  if (gitInterpretationIdentity(root) !== interpretation) {
+    const error = new Error('Git interpretation changed during the worktree overlay batch')
+    for (const demand of demands) results.set(demand.path, { error })
+  }
+  return results
+}
+
+export async function worktreeSpecDelta(wtPath: string, mainRef: string, baseHint?: string): Promise<NodeOp[]> {
+  const run = (args: string[]) => gitA(['-C', wtPath, '-c', 'core.quotePath=false', ...args])
+  // fork point = where this worktree branched from main; '' (no common ancestor / unreadable ref) falls
+  // back to mainRef so we still surface changes rather than going silent. The caller (cachedDelta) already
+  // computes this same merge-base to key its cache, so it passes it in to avoid a redundant subprocess.
+  const base = baseHint || (await run(['merge-base', mainRef, 'HEAD'])).trim() || mainRef
+  // the four queries are independent — run them in parallel.
+  const [mainOut, workOut, commOut, statusOut] = await Promise.all([
+    run(['diff', '--name-status', '-M', mainRef, '--', '.spec']),
+    run(['diff', '--name-status', '-M', base, '--', '.spec']),
+    run(['diff', '--name-status', '-M', `${base}...HEAD`, '--', '.spec']),
+    run(['status', '--porcelain', '--untracked-files=all', '--', '.spec']),
+  ])
+  return projectWorktreeSpecDelta(mainOut, workOut, commOut, statusOut)
 }

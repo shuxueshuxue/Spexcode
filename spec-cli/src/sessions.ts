@@ -691,10 +691,12 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
 // Share one liveness snapshot rather than spawning tmux for every displayed session.
 export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; titles: Map<string, string>; sockets: Set<string>; unproven: Set<string> }
 
-// tmux 3.5a replaces literal tabs in a format string with underscores. A record separator is emitted as this
-// printable escape on both supported tmux versions, while titles remain free to contain tabs.
+// tmux rewrites CONTROL characters in a format string before printing them — 3.6a turns both a tab and a raw
+// 0x1f into `_`, while 3.4 turns a raw 0x1f into the printable escape `\037`. So the field separator is ASKED
+// FOR as that printable text, which every supported version passes through untouched, and the format is built
+// from the same constant the parser splits on: the two can no longer disagree about what tmux actually emits.
 const TMUX_PANE_SEPARATOR = '\\037'
-export const TMUX_PANE_FORMAT = '#{session_name}\x1f#{pane_pid}\x1f#{pane_title}'
+export const TMUX_PANE_FORMAT = `#{session_name}${TMUX_PANE_SEPARATOR}#{pane_pid}${TMUX_PANE_SEPARATOR}#{pane_title}`
 
 // First pane per session wins; split only twice so titles may contain the field separator.
 export function parseLivePanes(out: string): Map<string, { panePid?: number; title?: string }> {

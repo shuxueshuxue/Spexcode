@@ -198,7 +198,9 @@ try {
   const events = []
   const step = (name) => events.push({ at: Date.now() - started, step: name })
   const consoleErrors = []
+  const failedRequests = []
   page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()) })
+  page.on('requestfailed', (request) => failedRequests.push(`${request.url()} ${request.failure()?.errorText || ''}`))
 
   step('open projects')
   await page.goto(`${base}/projects`, { waitUntil: 'domcontentloaded' })
@@ -468,10 +470,18 @@ try {
   assert.equal(await guestPage.locator('.proj-menu').count(), 0)
   await guest.close()
 
-  const unexpectedConsoleErrors = consoleErrors.filter((message) =>
-    !/Failed to load resource: the server responded with a status of (401|404)/.test(message) &&
-    !/EventSource's response has a MIME type .*text\/event-stream/.test(message))
-  assert.deepEqual(unexpectedConsoleErrors, [])
+  let expectedStreamDisconnects = failedRequests.filter((failure) =>
+    /\/api\/graph\/stream\?mode=delta net::ERR_INCOMPLETE_CHUNKED_ENCODING$/.test(failure)).length
+  const unexpectedConsoleErrors = consoleErrors.filter((message) => {
+    if (/Failed to load resource: the server responded with a status of (401|404)/.test(message)) return false
+    if (/EventSource's response has a MIME type .*text\/event-stream/.test(message)) return false
+    if (message === 'Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING' && expectedStreamDisconnects > 0) {
+      expectedStreamDisconnects -= 1
+      return false
+    }
+    return true
+  })
+  assert.deepEqual(unexpectedConsoleErrors, [], `failed requests: ${failedRequests.join(', ')}`)
   const catalog = await page.evaluate(() => fetch('/projects', { headers: { Accept: 'application/json' } }).then((response) => response.json()))
   assert.deepEqual(Object.fromEntries(catalog.projects.filter((project) => [atlas.id, rocket.id].includes(project.id)).map((project) => [project.id, project.identity.icon])), {
     [atlas.id]: 'tabler:radar',

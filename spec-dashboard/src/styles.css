@@ -2594,9 +2594,8 @@ a.scenario-count:hover { background: var(--panel2); }
 .proj-chip-wrap { position: relative; }
 .rail-btn.proj-chip {
   padding: 4px; color: var(--ink2); overflow: hidden;
-  border: 1px solid var(--line); border-radius: 6px; background: var(--panel2);
 }
-.rail-btn.proj-chip:hover, .rail-btn.proj-chip.on { border-color: var(--blue); color: var(--blue); }
+.rail-btn.proj-chip:hover, .rail-btn.proj-chip.on { color: var(--blue); }
 .proj-menu {
   position: absolute; left: calc(100% + 6px); top: 0; z-index: 60; min-width: 180px; max-width: 280px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px;

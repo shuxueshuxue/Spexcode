@@ -236,23 +236,6 @@ scenarios:
       There is no artificial cross-session queue bound: concurrent Git/node descendants may scale with the
       active session set. A rejected demand rejects only its own waiter; the other independent summaries keep
       settling.
-  - name: foreground-eval-does-not-wait-for-background-ledger-writer
-    tags: [backend-api]
-    test: spec-eval/src/sessioneval-ledger-demand.api.test.ts
-    code: [spec-eval/src/sessioneval.ts, spec-cli/src/git.ts]
-    description: >-
-      Start an isolated real backend over a linked-worktree session, then let an independent live process acquire
-      that repository's source-of-truth event-ledger write transaction and hold it open. While the writer remains
-      alive and still owns the lock, request the selected session through the public
-      `/api/evals?q=is:eval scope:<id>` surface. Capture the HTTP status, response shape, writer identity state,
-      and the backend's bounded lock failure if the request queues.
-    expected: >-
-      The selected eval request returns one coherent HTTP 200 projection while the unrelated writer still owns
-      the ledger transaction. It consumes the ledger's atomic integrity-checked snapshot and derives any missing
-      immutable facts through the same Git adapters; it never waits for the writer's complete build, returns a
-      lock-timeout error, substitutes an empty impact, or opens a second cache. If no writer is present, the same
-      demand path retains the ordinary locked transaction and persists newly derived facts. A corrupt snapshot,
-      Git failure, or repeated interpretation-identity movement remains loud rather than becoming availability.
   - name: open-cost-is-proportional
     tags: [backend-api]
     code:

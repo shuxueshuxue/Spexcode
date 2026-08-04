@@ -50,6 +50,20 @@ scenarios:
       unpinned one. A `base` that names no commit is refused with a 400 in `target-resolution`, before any Git
       mutation or candidate receipt exists, leaving every owned resource byte-identical.
     test: spec-cli/src/session-create-transaction.test.ts
+  - name: pane-snapshot-survives-the-installed-tmux
+    tags: [backend-api]
+    code: spec-cli/src/sessions.ts
+    description: >
+      Start a real tmux server with one session of a known name, ask it for `list-panes -a` using the EXACT
+      format the liveness snapshot sends, and feed that raw output to the pane parser. Also read the format
+      itself for control characters.
+    expected: >
+      The parser recovers that session's name as its own key carrying its pane pid, and the format carries no
+      control character. tmux 3.5+ rewrites a control separator to `_` (measured on 3.6a) while 3.4 prints a
+      real `0x1f` as the printable escape `\037` — so a control separator makes every pane row unparseable on a
+      newer tmux, the window map holds one junk key per line, and every session reads window-less: alive ones
+      collapse to `unknown` and the rest to a false `offline`.
+    test: spec-cli/src/sessions-hot.test.ts
   - name: a-dead-leaf-never-wedges-a-session
     tags: [backend-api, cli]
     code: spec-cli/src/sessions.ts

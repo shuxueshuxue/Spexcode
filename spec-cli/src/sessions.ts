@@ -694,7 +694,7 @@ export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; 
 // tmux 3.5a replaces literal tabs in a format string with underscores. A record separator is emitted as this
 // printable escape on both supported tmux versions, while titles remain free to contain tabs.
 const TMUX_PANE_SEPARATOR = '\\037'
-const TMUX_PANE_FORMAT = '#{session_name}\x1f#{pane_pid}\x1f#{pane_title}'
+export const TMUX_PANE_FORMAT = '#{session_name}\x1f#{pane_pid}\x1f#{pane_title}'
 
 // First pane per session wins; split only twice so titles may contain the field separator.
 export function parseLivePanes(out: string): Map<string, { panePid?: number; title?: string }> {

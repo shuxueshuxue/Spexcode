@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync } from 'node:
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { hotSignature, parseLivePanes, needsCodexProcScan } from './sessions.js'
+import { hotSignature, parseLivePanes, needsCodexProcScan, TMUX_PANE_FORMAT } from './sessions.js'
 import { sessionStoreDir, sessionArtifactPath } from './layout.js'
 
 // The 100ms hot tier is a launch-registered-pid death detector with a permanent pid-reuse latch, plus the
@@ -110,6 +110,28 @@ test('parseLivePanes: one merged list-panes snapshot → id → {panePid, title}
   assert.equal(m.get('sess-d')?.panePid, undefined)   // 0 is not a valid pane pid
   assert.equal(m.get('sess-d')?.title, 'zero pid')
   assert.equal(m.size, 4)
+})
+
+// The separator we ASK tmux for and the one the parser splits on must be the SAME bytes after tmux has
+// printed them. Measured 2026-08-04: tmux 3.6a rewrites a control character in a format string to `_`, while
+// 3.4 prints a real 0x1f as the printable escape `\037` — so only a printable separator survives both.
+test('the pane snapshot survives the installed tmux: a session name comes back as its own key', () => {
+  assert.ok(!/[\x00-\x1f\x7f]/.test(TMUX_PANE_FORMAT),
+    `the pane format must carry no control character — tmux >= 3.5 rewrites those to "_": ${JSON.stringify(TMUX_PANE_FORMAT)}`)
+  const sock = `spex-panefmt-${process.pid}`
+  const name = `panefmt-${process.pid}`
+  const tmux = (...args: string[]) => spawnSync('tmux', ['-L', sock, ...args], { encoding: 'utf8' })
+  const started = tmux('new-session', '-d', '-s', name, 'sleep 30')
+  assert.equal(started.status, 0, `tmux must be available to prove the pane snapshot: ${started.stderr}`)
+  try {
+    const listed = tmux('list-panes', '-a', '-F', TMUX_PANE_FORMAT)
+    assert.equal(listed.status, 0, listed.stderr)
+    const probe = parseLivePanes(listed.stdout).get(name)
+    assert.ok(probe, `the parser recovers the session name from real tmux output: ${JSON.stringify(listed.stdout)}`)
+    assert.ok((probe.panePid ?? 0) > 0, `and its pane pid: ${JSON.stringify(listed.stdout)}`)
+  } finally {
+    tmux('kill-server')
+  }
 })
 
 test('needsCodexProcScan: the legacy ps scan fires ONLY for a pid-less codex session', () => {

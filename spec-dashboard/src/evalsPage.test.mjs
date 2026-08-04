@@ -103,7 +103,7 @@ test('blind eval rows obey every reading-only token and remain inert', async () 
 test('session unknown coverage stays outside scenario rows and filter counts', () => {
   assert.doesNotMatch(page, /function sessionRows\(model\)/)
   assert.match(page, /const unknown = pageData\?\.unknown \|\| 0/)
-  assert.match(page, /className="se-gate bad"[\s\S]*sessionEval\.unknownCoverage/)
+  assert.match(page, /className="se-gate bad se-unknown"[\s\S]*sessionEval\.unknownCoverage/)
   const filterSurface = feed.slice(feed.indexOf('export default function EvalsGroup'))
   assert.doesNotMatch(filterSurface, /unknownCoverage/)
 })

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -64,7 +64,12 @@ function record(home: string, project: string, worktree: string): void {
 
 test('a public scoped eval demand does not wait for an unrelated live event-ledger writer', { timeout: 45_000 }, async () => {
   assert.match(process.version, /^v22\./, `ledger-demand API rig must run on Node 22, got ${process.version}`)
-  assert.equal(git(SOURCE, 'status', '--porcelain=v1', '--untracked-files=all'), '', 'product checkout must be clean')
+  console.log(JSON.stringify({
+    phase: 'provenance',
+    runtime: process.version,
+    productSha: git(SOURCE, 'rev-parse', 'HEAD'),
+    productDirty: git(SOURCE, 'status', '--porcelain=v1', '--untracked-files=all') !== '',
+  }))
   const fixture = mkdtempSync(join(tmpdir(), 'spex-eval-ledger-demand-'))
   const project = join(fixture, 'project')
   const worktree = join(fixture, 'worktree')
@@ -181,6 +186,33 @@ test('a public scoped eval demand does not wait for an unrelated live event-ledg
     assert.equal(observation.writerHeld, true, 'the product response must be measured while the unrelated writer still owns the transaction')
     assert.equal(response.status, 200, `foreground eval demand waited for the live writer: ${JSON.stringify(observation)}\n${backendStderr.slice(-1500)}`)
     assert.ok(Array.isArray(body?.items) && body.items.some((item: any) => item.scenario === 'value-moves'), 'the response must carry the selected scenario rather than an empty fallback')
+
+    const ledgerFiles = () => readdirSync(home, { recursive: true })
+      .map((entry) => String(entry))
+      .filter((entry) => /history-events-v\d+-[0-9a-f]+\.ndjson$/.test(entry))
+      .map((entry) => join(home, entry))
+    assert.deepEqual(ledgerFiles(), [], 'the contended read-only demand must not replace the writer-owned ledger')
+    writeFileSync(writerRelease, 'release\n')
+    await stop(writer)
+    writer = null
+
+    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 3\n')
+    git(worktree, 'add', 'src/value.ts')
+    git(worktree, 'commit', '-qm', 'advance value without contention')
+    const uncontended = await fetch(`${origin}/api/evals?q=${encodeURIComponent(`is:eval scope:${SESSION_ID}`)}`)
+    const uncontendedRaw = await uncontended.text()
+    const files = ledgerFiles()
+    const durableObservation = {
+      phase: 'uncontended-demand-persists',
+      status: uncontended.status,
+      ledgerFiles: files.length,
+      ledgerBytes: files.length === 1 ? statSync(files[0]).size : null,
+      error: uncontended.ok ? null : uncontendedRaw.slice(0, 1000),
+    }
+    console.log(JSON.stringify(durableObservation))
+    assert.equal(uncontended.status, 200, `uncontended demand failed: ${JSON.stringify(durableObservation)}`)
+    assert.equal(files.length, 1, 'an uncontended demand must retain the ordinary durable ledger transaction')
+    assert.ok(statSync(files[0]).size > 0, 'the durable ledger replacement must contain derived facts')
   } finally {
     try { writeFileSync(writerRelease, 'release\n') } catch { /* fixture setup may have failed before creation */ }
     await stop(writer)

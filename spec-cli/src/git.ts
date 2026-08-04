@@ -692,7 +692,13 @@ function reclaimDeadEventLock(lock: string, held: EventLockOwner, claimant: Even
   }
   return retireLockPath(lock)
 }
-async function withEventCacheLock<T>(path: string, run: () => Promise<T> | T): Promise<T> {
+const EVENT_LEDGER_BUSY = Symbol('event ledger held by a live writer')
+
+async function withEventCacheLock<T>(
+  path: string,
+  run: () => Promise<T> | T,
+  waitForWriter = true,
+): Promise<T | typeof EVENT_LEDGER_BUSY> {
   const lock = `${path}.lock`
   mkdirSync(join(path, '..'), { recursive: true })
   const owner: EventLockOwner = { pid: process.pid, token: randomBytes(16).toString('hex') }
@@ -711,6 +717,11 @@ async function withEventCacheLock<T>(path: string, run: () => Promise<T> | T): P
       if (error?.code !== 'EEXIST' && error?.code !== 'ENOTEMPTY') throw error
       const held = readEventLockOwner(lock)
       if (held && reclaimDeadEventLock(lock, held, owner)) continue
+      if (!waitForWriter) {
+        const current = readEventLockOwner(lock)
+        if (current && processAlive(current.pid)) return EVENT_LEDGER_BUSY
+        throw new Error(`history event cache lock has no provable live owner: ${path}`)
+      }
       if (attempt >= attempts) {
         const heldBy = readEventLockOwner(lock)?.pid
         throw new Error(`timed out waiting for history event cache lock held by ${heldBy ? `pid ${heldBy}` : 'unknown owner'}: ${path}`)
@@ -756,26 +767,55 @@ function activeEventLedger(root: string): EventLedgerBuild | null {
   return eventCacheLocation(root).path === build.location.path ? build : null
 }
 
-// The event ledger is one build transaction, not one transaction per consumer: stream extraction and
-// immutable hunk derivation share the snapshot, integrity verdict, lock, and final replacement.
-export async function withEventLedgerBuild<T>(root: string, run: () => Promise<T>): Promise<T> {
+async function runEventLedgerAttempt<T>(
+  root: string,
+  location: EventCacheLocation,
+  run: () => Promise<T>,
+  persist: boolean,
+): Promise<T | typeof EVENT_LEDGER_RETRY> {
+  const build: EventLedgerBuild = { location, snapshot: loadEventLedger(location), additions: [] }
+  const result = await eventLedgerBuild.run(build, run)
+  if (eventCacheLocation(root).identity !== location.identity) return EVENT_LEDGER_RETRY
+  if (persist && build.additions.length) {
+    removeEventTemps(location.path)
+    mkdirSync(join(location.path, '..'), { recursive: true })
+    replaceEventLedger(location.path, build.snapshot.payload, build.additions)
+  }
+  return result
+}
+
+async function eventLedgerTransaction<T>(
+  root: string,
+  run: () => Promise<T>,
+  demand: boolean,
+): Promise<T> {
   if (activeEventLedger(root)) return run()
   for (let attempt = 0; attempt < 8; attempt++) {
     const location = eventCacheLocation(root)
-    const value = await withEventCacheLock(location.path, async () => {
-      const build: EventLedgerBuild = { location, snapshot: loadEventLedger(location), additions: [] }
-      const result = await eventLedgerBuild.run(build, run)
-      if (eventCacheLocation(root).identity !== location.identity) return EVENT_LEDGER_RETRY
-      if (build.additions.length) {
-        removeEventTemps(location.path)
-        mkdirSync(join(location.path, '..'), { recursive: true })
-        replaceEventLedger(location.path, build.snapshot.payload, build.additions)
-      }
-      return result
-    })
+    const locked = await withEventCacheLock(
+      location.path,
+      () => runEventLedgerAttempt(root, location, run, true),
+      !demand,
+    )
+    const value = locked === EVENT_LEDGER_BUSY
+      ? await runEventLedgerAttempt(root, location, run, false)
+      : locked
     if (value !== EVENT_LEDGER_RETRY) return value as T
   }
   throw new Error('history event cache identity changed repeatedly during one ledger build')
+}
+
+// The event ledger is one build transaction, not one transaction per consumer: stream extraction and
+// immutable hunk derivation share the snapshot, integrity verdict, lock, and final replacement.
+export function withEventLedgerBuild<T>(root: string, run: () => Promise<T>): Promise<T> {
+  return eventLedgerTransaction(root, run, false)
+}
+
+// A foreground projection may derive against the current atomic snapshot while a live writer owns the
+// replacement transaction. Missing facts still run through Git; only this contended read's additions are
+// discarded. An uncontended demand remains the ordinary durable writer transaction.
+export function withEventLedgerDemand<T>(root: string, run: () => Promise<T>): Promise<T> {
+  return eventLedgerTransaction(root, run, true)
 }
 
 export function eventLedgerDiagnosticsForTests(): EventLedgerDiagnostics { return { ...eventLedgerDiagnostics } }

@@ -6,6 +6,7 @@ desc: Foreground derived reads share the durable event ledger without queueing b
 code:
   - spec-cli/src/git.ts#withEventCacheLock
   - spec-cli/src/git.ts#withEventLedgerBuild
+  - spec-cli/src/git.ts#withEventLedgerDemand
 related:
   - spec-eval/src/sessioneval.ts
   - spec-eval/src/sessioneval-ledger-demand.api.test.ts

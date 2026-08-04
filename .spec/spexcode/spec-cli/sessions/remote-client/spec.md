@@ -52,6 +52,15 @@ Pointing `--api` (or `SPEXCODE_API_URL`) at another machine's backend still moni
 machine's sessions with no code change — the dashboard's viewer-points-anywhere model, extended to the CLI.
 A local fallback never silently impersonates it: the source is stated on every read that took one.
 
+**A password-gated gateway is still an API endpoint.** With an explicit `--api`, `--password <password>`
+(or `SPEXCODE_PASSWORD`) means the CLI performs the gateway's existing designed login at that endpoint,
+holds the returned signed cookie only for this process, and retries the requested API call. The password is
+never written to a project config, record, or token cache; each fresh command proves its access again.
+Missing credentials, rejected credentials, a login route that does not mint a cookie, and a later 401 are
+loud remote-transport failures, never a local fallback. Normal TLS validation remains the default. A gateway
+using SpexCode's intentional self-signed certificate needs explicit `--insecure`: that flag is an operator's
+deliberate trust decision for this command, never an automatic response to a certificate failure.
+
 **Which backend — the ladder, flag-first.** One host runs many projects' backends, and a shell inherits the
 launching backend's `SPEXCODE_API_URL` — an env var cannot prove intent (exported-on-this-command and
 inherited look identical), which is exactly the misroute: every bare `spex` in a second project's tree

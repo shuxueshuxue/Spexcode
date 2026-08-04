@@ -9,6 +9,8 @@ code:
   - spec-cli/src/git.ts#git
   - spec-cli/src/git.ts#gitBuffer
   - spec-cli/src/git.ts#warnIfTimedOut
+  - spec-cli/src/git.ts#gitInterpretationIdentity
+  - spec-cli/src/git.ts#worktreeSpecDeltas
 related:
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts
@@ -58,7 +60,10 @@ Timeout marks itself separately for the same reason. Everything else keeps whate
 Many worktrees asking the same immutable tree question are one Git transport demand, not one child per
 worktree. The batch first freezes each worktree HEAD and its merge-base against the one resolved
 main tip, separates working trees with a real `.spec` overlay, and sends the clean tree pairs through one
-`diff-tree --stdin` stream. `--always` frames even an empty pair, so one no-op cannot shift every later answer;
+`diff-tree --stdin` stream. The demand is pinned to the existing shared Git interpretation identity (object
+format, shallow and graft bytes, and replacement refs) and is revalidated after the child completes; a changed
+interpretation is an unpublishable read, never a result cached under unchanged raw SHAs. `--always` frames even
+an empty pair, so one no-op cannot shift every later answer;
 the parser consumes those frames in request order and fails loud on a missing or extra frame. Dirty and
 untracked worktrees keep the ordinary worktree-aware path. The batch pins rename detection and
 `core.quotePath=false`: name-status parsing receives literal repository paths rather than a user's Git quoting

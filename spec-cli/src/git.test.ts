@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, exist
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, primeAncestorClosures, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, driftIndex, historyIndex, sourceIndexes, sourceIndexesFull, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from './git.js'
+import { driftFor, ancestorsOf, primeAncestorClosures, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, worktreeSpecDeltas, driftIndex, historyIndex, sourceIndexes, sourceIndexesFull, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from './git.js'
 import { loadSpecs } from './specs.js'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
@@ -792,6 +792,34 @@ test('ops already LANDED on main dissolve from the overlay', async () => {
   assert.equal((await worktreeSpecDelta(w, 'main')).length, 1)   // pending before the merge…
   execFileSync('git', ['-C', root, 'merge', '-q', '--no-ff', '-m', 'merge node/landed', 'node/landed'])
   assert.deepEqual(await worktreeSpecDelta(w, 'main'), [])       // …gone once main contains it
+})
+
+test('clean worktree delta pairs keep empty, edit, and rename frames in request order', async () => {
+  const { root, run, wt } = specRepo()
+  const unchanged = wt('batch-empty', 'main')
+  const edited = wt('batch-edit', 'main')
+  const renamed = wt('batch-rename', 'main')
+  appendFileSync(join(edited, '.spec/a/spec.md'), 'batch edit\n')
+  execFileSync('git', ['-C', edited, 'add', '.spec'])
+  execFileSync('git', ['-C', edited, 'commit', '-qm', 'batch edit'])
+  execFileSync('git', ['-C', renamed, 'mv', '.spec/a', '.spec/renamed-a'])
+  execFileSync('git', ['-C', renamed, 'commit', '-qm', 'batch rename'])
+  const paths = [unchanged, edited, renamed]
+  const demands = paths.map((path) => ({
+    path,
+    head: execFileSync('git', ['-C', path, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+  }))
+  const batch = await worktreeSpecDeltas(root, run('rev-parse', 'main'), demands)
+  for (const path of paths) {
+    const outcome = batch.get(path)
+    if (!outcome || 'error' in outcome) assert.fail(`batch did not produce ${path}: ${String(outcome && 'error' in outcome ? outcome.error : 'missing')}`)
+    assert.deepEqual(outcome.ops, await worktreeSpecDelta(path, 'main'), `batch equals ordinary oracle for ${path}`)
+  }
+  const emptyOutcome = batch.get(unchanged), editOutcome = batch.get(edited), renameOutcome = batch.get(renamed)
+  if (!emptyOutcome || 'error' in emptyOutcome || !editOutcome || 'error' in editOutcome || !renameOutcome || 'error' in renameOutcome) assert.fail('batch outcomes disappeared after comparison')
+  assert.deepEqual(emptyOutcome.ops, [])
+  assert.equal(editOutcome.ops[0]?.op, 'edited')
+  assert.equal(renameOutcome.ops[0]?.op, 'moved')
 })
 
 test('an explicit pending tip never occupies or evicts the root-owned HEAD index caches', async () => {

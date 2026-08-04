@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, resolve } from 'node:path'
-import { batchRevisionOids, gitA, gitTry, headSha, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent, eventsSince } from '../../spec-cli/src/git.js'
+import { batchRevisionOids, gitA, gitTry, headSha, gitObjectInterpretation, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent, eventsSince } from '../../spec-cli/src/git.js'
 import { anchorHitExists, extOf, extractorFor, extractors, resolveAnchor, resolveSelectors, type AnchorHitQuery, type Extractor, type RelationEntry, type Unit } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
 import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
@@ -53,13 +53,15 @@ export type ContentProbe = {
 // An anchor entry holds only PER-REQUESTED-PATH verdicts (plus the gone bit and the batch bookkeeping),
 // never a whole-repo path set.
 type AnchorVerdicts = {
+  imageOid: string | null | undefined // undefined = interpretation resolution is still in flight
   verdicts: Map<string, boolean>   // requested path → content differs between the two immutable trees
   gone: boolean                    // the anchor commit object is locally unreadable — content can't testify
   pending: Set<string>             // paths awaiting the next batch child
   flight: Promise<void> | null     // the single in-flight batch for this anchor
 }
 type RootScope = {
-  head: string
+  head: string                         // raw HEAD + the full Git interpretation identity
+  currentOid: string | null             // exact current image; null only while first resolution is in flight
   anchors: Map<string, AnchorVerdicts>
   behind: Map<string, number>
   behindFlight: Map<string, Promise<number>>   // the single in-flight count per (anchor, path)
@@ -70,14 +72,15 @@ const rootScopes = new Map<string, RootScope>()
 // guard the index caches use, and the only bound needed once per-root cardinality is the corpus, not history.
 const ROOT_SLOTS = Math.max(4, Number(process.env.SPEXCODE_FRESHNESS_ROOT_SLOTS || 64))
 
-function scopeFor(rootKey: string, head: string): RootScope {
+function scopeFor(rootKey: string, head: string, currentOid: string | null): RootScope {
   const current = rootScopes.get(rootKey)
-  if (current?.head === head) {
+  if (current?.head === head && (current.currentOid === currentOid || currentOid === null || current.currentOid === null)) {
+    if (currentOid !== null) current.currentOid = currentOid
     rootScopes.delete(rootKey)
     rootScopes.set(rootKey, current)
     return current
   }
-  const scope: RootScope = { head, anchors: new Map(), behind: new Map(), behindFlight: new Map(), blockDemands: new Set() }
+  const scope: RootScope = { head, currentOid, anchors: new Map(), behind: new Map(), behindFlight: new Map(), blockDemands: new Set() }
   rootScopes.set(rootKey, scope)
   while (rootScopes.size > ROOT_SLOTS) {
     const oldest = rootScopes.keys().next().value
@@ -102,10 +105,16 @@ export function freshnessCacheSize(root?: string): number {
   return total
 }
 
-function touchAnchor(scope: RootScope, sha: string): AnchorVerdicts {
+function touchAnchor(scope: RootScope, sha: string, imageOid: string | null | undefined): AnchorVerdicts {
   const hit = scope.anchors.get(sha)
-  if (hit) return hit
-  const entry: AnchorVerdicts = { verdicts: new Map(), gone: false, pending: new Set(), flight: null }
+  if (hit && imageOid === undefined) return hit
+  if (hit && hit.imageOid == null && imageOid !== undefined) {
+    hit.imageOid = imageOid
+    hit.gone = imageOid === null
+    return hit
+  }
+  if (hit && hit.imageOid === imageOid) return hit
+  const entry: AnchorVerdicts = { imageOid, verdicts: new Map(), gone: imageOid === null, pending: new Set(), flight: null }
   scope.anchors.set(sha, entry)
   return entry
 }
@@ -183,25 +192,52 @@ function acquireHeavyDiff(scopeKey: string, signal?: AbortSignal): Promise<() =>
 // so a path requested mid-flight rides the NEXT batch instead of racing this one, and a settled path is
 // never asked again. Every bounded chunk stays serial through the same scope permit.
 const CONTENT_BATCH_RECORD_LIMIT = 8_192
+const CONTENT_BATCH_ARGV_BYTE_LIMIT = 16 * 1_024
 const CONTENT_BATCH_MARKER = '\x1espex-content:'
-type ContentBatchRow = { sha: string; entry: AnchorVerdicts; requested: string[] }
+type ContentBatchRow = { sha: string; oid: string; entry: AnchorVerdicts; requested: string[] }
 
-function contentBatchChunks<T extends ContentBatchRow>(rows: T[]): T[][] {
-  const chunks: T[][] = []
-  let chunk: T[] = []
+function contentBatchArgs(root: string, paths: readonly string[]): string[] {
+  return [
+    '-C', root, '-c', 'core.quotePath=false', 'diff-tree', '--stdin', '--always', '-r', '--name-status', '-z',
+    '--no-renames', '--no-color', '--no-ext-diff', '--no-textconv', `--format=${CONTENT_BATCH_MARKER}%H`,
+    '--', ...paths.map((path) => `:(literal)${path}`),
+  ]
+}
+function argvBytes(args: readonly string[]): number {
+  return args.reduce((total, arg) => total + Buffer.byteLength(arg) + 1, 0)
+}
+
+function contentBatchChunks(root: string, rows: ContentBatchRow[]): ContentBatchRow[][] {
+  const chunks: ContentBatchRow[][] = []
+  let byRow = new Map<ContentBatchRow, ContentBatchRow>()
   let paths = new Set<string>()
-  for (const row of rows) {
-    const next = new Set(paths)
-    for (const path of row.requested) next.add(path)
-    if (chunk.length && (chunk.length + 1) * next.size > CONTENT_BATCH_RECORD_LIMIT) {
-      chunks.push(chunk)
-      chunk = []
-      paths = new Set()
-    }
-    chunk.push(row)
-    for (const path of row.requested) paths.add(path)
+  const flush = () => {
+    if (byRow.size) chunks.push([...byRow.values()])
+    byRow = new Map()
+    paths = new Set()
   }
-  if (chunk.length) chunks.push(chunk)
+  for (const row of rows) {
+    for (const path of row.requested) {
+      for (;;) {
+        const nextPaths = paths.has(path) ? paths : new Set(paths).add(path)
+        const nextRows = byRow.size + (byRow.has(row) ? 0 : 1)
+        const withinRecords = nextRows * nextPaths.size <= CONTENT_BATCH_RECORD_LIMIT
+        const withinArgv = argvBytes(contentBatchArgs(root, [...nextPaths])) <= CONTENT_BATCH_ARGV_BYTE_LIMIT
+        if (withinRecords && withinArgv) break
+        if (!byRow.size)
+          throw new Error(`git content diff path exceeds the ${CONTENT_BATCH_ARGV_BYTE_LIMIT}-byte argv bound: ${path}`)
+        flush()
+      }
+      let slice = byRow.get(row)
+      if (!slice) {
+        slice = { ...row, requested: [] }
+        byRow.set(row, slice)
+      }
+      slice.requested.push(path)
+      paths.add(path)
+    }
+  }
+  flush()
   return chunks
 }
 
@@ -232,41 +268,61 @@ function parseContentBatch(out: string, rows: ContentBatchRow[]): Set<string>[] 
   return changed
 }
 
-async function runContentBatch(root: string, current: string, rows: ContentBatchRow[]): Promise<void> {
-  const resolved = await batchRevisionOids(root, rows.map((row) => row.sha))
-  const readable: (ContentBatchRow & { oid: string })[] = []
-  const missing: ContentBatchRow[] = []
-  rows.forEach((row, index) => {
-    const oid = resolved[index]
-    if (oid) readable.push({ ...row, oid })
-    else missing.push(row)
+async function resolvedContentImages(
+  root: string,
+  raws: readonly string[],
+  replacements: ReadonlyMap<string, string>,
+): Promise<(string | null)[]> {
+  const targets = raws.map((raw) => {
+    let target = raw
+    const seen = new Set<string>()
+    while (replacements.has(target)) {
+      if (seen.has(target)) throw new Error(`refs/replace cycle while resolving content image '${raw}'`)
+      seen.add(target)
+      target = replacements.get(target)!
+    }
+    return target
   })
+  // One no-replace child proves both the names callers supplied and the exact final replacement targets.
+  // A target cannot make a nonexistent raw id look available, and a missing replacement target is loud.
+  const queries = [...new Set([...raws, ...targets])]
+  const answers = await batchRevisionOids(root, queries, { replaceObjects: false })
+  const checked = new Map(queries.map((query, index) => [query, answers[index]]))
+  return raws.map((raw, index) => {
+    if (!checked.get(raw)) return null
+    const target = checked.get(targets[index])
+    if (!target) throw new Error(`replacement target '${targets[index]}' for content image '${raw}' is unreadable`)
+    return target
+  })
+}
+
+async function runContentBatch(root: string, currentOid: string, rows: ContentBatchRow[]): Promise<void> {
   const settled: { row: ContentBatchRow; changed: Set<string> }[] = []
-  for (const chunk of contentBatchChunks(readable)) {
+  for (const chunk of contentBatchChunks(root, rows)) {
     const paths = [...new Set(chunk.flatMap((row) => row.requested))].sort()
-    const result = await gitTry([
-      '-C', root, '-c', 'core.quotePath=false', 'diff-tree', '--stdin', '--always', '-r', '--name-status', '-z',
-      '--no-renames', '--no-color', '--no-ext-diff', '--no-textconv', `--format=${CONTENT_BATCH_MARKER}%H`,
-      '--', ...paths.map((path) => `:(literal)${path}`),
-    ], { input: chunk.map((row) => `${row.oid} ${current}`).join('\n') + '\n' })
+    const result = await gitTry(contentBatchArgs(root, paths), {
+      input: chunk.map((row) => `${row.oid} ${currentOid}`).join('\n') + '\n',
+      // batchRevisionOids already froze replacements/grafts into exact object ids. Do not reinterpret those
+      // ids if refs/replace moves between the resolution child and this content child.
+      extraEnv: { GIT_NO_REPLACE_OBJECTS: '1' },
+    })
     if (!result.ok)
       throw new Error(`git content diff batch failed (${result.failure ?? 'unknown'}): ${result.stderr.trim() || 'unknown git error'}`)
     parseContentBatch(result.stdout, chunk).forEach((changed, index) => settled.push({ row: chunk[index], changed }))
   }
   // Publish only after every chunk succeeds. A late transport failure leaves the entire planned population
   // retryable instead of turning its early chunks into an accidental partial freshness answer.
-  for (const row of missing) row.entry.gone = true
   for (const { row, changed } of settled)
     for (const path of row.requested) row.entry.verdicts.set(path, changed.has(path))
 }
 
-function startPluralContentBatch(root: string, rootKey: string, current: string, rows: { sha: string; entry: AnchorVerdicts }[]): Promise<void> {
+function startPluralContentBatch(root: string, rootKey: string, scope: RootScope, rows: { sha: string; entry: AnchorVerdicts }[]): Promise<void> {
   const run = async (): Promise<void> => {
-    const release = await acquireHeavyDiff(`${rootKey}\x1f${current}`, currentGitBuildAbortSignal())
-    const batch = rows.map((row) => ({ ...row, requested: [...row.entry.pending] }))
+    const release = await acquireHeavyDiff(`${rootKey}\x1f${scope.head}`, currentGitBuildAbortSignal())
+    const batch = rows.map((row) => ({ ...row, oid: row.entry.imageOid!, requested: [...row.entry.pending] }))
       .filter((row) => row.requested.length)
     for (const row of batch) row.entry.pending.clear()
-    try { await runContentBatch(root, current, batch) }
+    try { await runContentBatch(root, scope.currentOid!, batch) }
     finally { release() }
   }
   let flight!: Promise<void>
@@ -282,14 +338,18 @@ function startPluralContentBatch(root: string, rootKey: string, current: string,
 // adopter-a's 415-node session scope: 1532 children for 806 distinct counts. `sha..current` names two
 // immutable commits, so a joiner can never be handed a different question's answer. A rejected flight is
 // cached nowhere and every joiner sees the same failure, matching the anchor batch above.
-function behindCount(root: string, scope: RootScope, sha: string, current: string, path: string): Promise<number> {
+function behindCount(root: string, scope: RootScope, sha: string, anchorOid: string, path: string): Promise<number> {
   const key = `${sha}\x1f${path}`
   const settled = scope.behind.get(key)
   if (settled !== undefined) return Promise.resolve(settled)
   const joined = scope.behindFlight.get(key)
   if (joined) return joined
   const run = async (): Promise<number> => {
-    const n = Number((await gitA(['-C', root, 'rev-list', '--count', `${sha}..${current}`, '--', path])).trim())
+    const result = await gitTry(['-C', root, 'rev-list', '--count', `${anchorOid}..${scope.currentOid!}`, '--', path], {
+      extraEnv: { GIT_NO_REPLACE_OBJECTS: '1' },
+    })
+    if (!result.ok) throw new Error(`git content drift count failed (${result.failure ?? 'unknown'}): ${result.stderr.trim() || 'unknown git error'}`)
+    const n = Number(result.stdout.trim())
     const count = Number.isFinite(n) && n > 0 ? n : 1
     scope.behind.set(key, count)
     return count
@@ -302,18 +362,52 @@ function behindCount(root: string, scope: RootScope, sha: string, current: strin
 export function contentProbeFor(root: string): ContentProbe {
   const rootKey = resolve(root)
   let head: string | undefined
+  let activeImageKey: string | undefined
   const headOf = () => (head ??= headSha(root))
+  const imageOf = () => {
+    const rawHead = headOf()
+    const interpretation = gitObjectInterpretation(root)
+    return { rawHead, key: `${rawHead}\x1f${interpretation.identity}`, interpretation }
+  }
   const primeMany = async (demands: readonly ContentProbeDemand[]): Promise<void> => {
-    const current = headOf()
-    const scope = scopeFor(rootKey, current)
-    const grouped = new Map<string, { entry: AnchorVerdicts; paths: Set<string>; codePaths: Set<string>; evalPaths: Set<string> }>()
+    if (!demands.length) return
+    const planned = new Map<string, { paths: Set<string>; codePaths: Set<string>; evalPaths: Set<string> }>()
     for (const demand of demands) {
-      const row = grouped.get(demand.anchorSha) ?? {
-        entry: touchAnchor(scope, demand.anchorSha), paths: new Set(), codePaths: new Set(), evalPaths: new Set(),
-      }
+      const row = planned.get(demand.anchorSha) ?? { paths: new Set(), codePaths: new Set(), evalPaths: new Set() }
       for (const path of demand.paths) { if (path) { row.paths.add(path); row.codePaths.add(path) } }
       if (demand.evalPath) { row.paths.add(demand.evalPath); row.evalPaths.add(demand.evalPath) }
-      grouped.set(demand.anchorSha, row)
+      planned.set(demand.anchorSha, row)
+    }
+    let scope!: RootScope
+    for (;;) {
+      const image = imageOf()
+      activeImageKey = image.key
+      const current = scopeFor(rootKey, image.key, null)
+      for (const [sha, row] of planned) {
+        const entry = touchAnchor(current, sha, undefined)
+        for (const path of row.paths) if (!entry.verdicts.has(path)) entry.pending.add(path)
+      }
+      const needsResolution = current.currentOid === null || [...planned].some(([sha]) => {
+        const entry = current.anchors.get(sha)!
+        return entry.imageOid === undefined || entry.gone
+      })
+      if (!needsResolution) { scope = current; break }
+      // Resolve HEAD and every anchor in ONE child, then require the interpretation inputs to remain stable.
+      // The returned object ids become the only images downstream commands may execute against.
+      const shas = [...planned.keys()]
+      const resolved = await resolvedContentImages(root, [image.rawHead, ...shas], image.interpretation.replacements)
+      if (imageOf().key !== image.key) continue
+      const currentOid = resolved[0]
+      if (!currentOid) throw new Error(`git content diff current image '${image.rawHead}' is unreadable`)
+      scope = scopeFor(rootKey, image.key, currentOid)
+      shas.forEach((sha, index) => touchAnchor(scope, sha, resolved[index + 1]))
+      break
+    }
+    const grouped = new Map<string, { entry: AnchorVerdicts; paths: Set<string>; codePaths: Set<string>; evalPaths: Set<string> }>()
+    for (const [sha, row] of planned) {
+      const entry = scope.anchors.get(sha)
+      if (!entry) throw new Error(`git content diff did not resolve planned anchor '${sha}'`)
+      grouped.set(sha, { entry, ...row })
     }
     for (;;) {
       const waiting = new Set<Promise<void>>()
@@ -328,16 +422,16 @@ export function contentProbeFor(root: string): ContentProbe {
       }
       if (waiting.size) { await Promise.all(waiting); continue }
       if (!ready.length) break
-      await startPluralContentBatch(root, rootKey, current, ready)
+      await startPluralContentBatch(root, rootKey, scope, ready)
     }
     await Promise.all([...grouped].flatMap(([sha, row]) => row.entry.gone ? [] : [...row.codePaths]
       .filter((path) => row.entry.verdicts.get(path) === true)
-      .map((path) => behindCount(root, scope, sha, current, path))))
+      .map((path) => behindCount(root, scope, sha, row.entry.imageOid!, path))))
     for (const [sha, row] of grouped) {
       if (row.entry.gone) continue
       for (const evalPath of row.evalPaths) if (row.entry.verdicts.get(evalPath) === true) {
-        scope.blockDemands.add(`${sha}\x1f${evalPath}`)
-        scope.blockDemands.add(`${current}\x1f${evalPath}`)
+        scope.blockDemands.add(`${row.entry.imageOid}\x1f${evalPath}`)
+        scope.blockDemands.add(`${scope.currentOid}\x1f${evalPath}`)
       }
     }
   }
@@ -347,7 +441,9 @@ export function contentProbeFor(root: string): ContentProbe {
     },
     primeMany,
     async primeBlocks() {
-      const scope = currentScope(rootKey, headOf())
+      const image = imageOf()
+      activeImageKey = image.key
+      const scope = currentScope(rootKey, image.key)
       if (!scope?.blockDemands.size) return
       const demands = [...scope.blockDemands].map((k) => {
         const cut = k.indexOf('\x1f')
@@ -359,22 +455,24 @@ export function contentProbeFor(root: string): ContentProbe {
     changed(sha, path) {
       // The async prime owns all I/O. An unprimed path is 'can't testify', never a fresh sync diff: a miss
       // stays conservative and no abort/transient failure can turn into an unbounded synchronous fallback.
-      const entry = currentScope(rootKey, headOf())?.anchors.get(sha)
+      const entry = activeImageKey ? currentScope(rootKey, activeImageKey)?.anchors.get(sha) : undefined
       if (!entry || entry.gone) return null
       return entry.verdicts.get(path) ?? null
     },
     canTestify(sha) {
       // a settled verdict — of either polarity — is the proof the anchor's tree was readable
-      const entry = currentScope(rootKey, headOf())?.anchors.get(sha)
+      const entry = activeImageKey ? currentScope(rootKey, activeImageKey)?.anchors.get(sha) : undefined
       return !!entry && !entry.gone && entry.verdicts.size > 0
     },
     scenarioDiffers(sha, evalPath, scenario) {
-      const a = scenarioBlocksAt(root, sha, evalPath)
+      const scope = activeImageKey ? currentScope(rootKey, activeImageKey) : undefined
+      const entry = scope?.anchors.get(sha)
+      const a = entry?.imageOid ? scenarioBlocksAt(root, entry.imageOid, evalPath) : null
       if (!a) return true   // eval.md unreadable at the anchor (renamed/absent) → can't prove → stale
-      return a.get(scenario) !== scenarioBlocksAt(root, headOf(), evalPath)?.get(scenario)
+      return a.get(scenario) !== scenarioBlocksAt(root, scope!.currentOid!, evalPath)?.get(scenario)
     },
     behind(sha, path) {
-      return currentScope(rootKey, headOf())?.behind.get(`${sha}\x1f${path}`) ?? 1
+      return (activeImageKey ? currentScope(rootKey, activeImageKey)?.behind.get(`${sha}\x1f${path}`) : undefined) ?? 1
     },
   }
 }

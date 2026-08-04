@@ -71,7 +71,7 @@ function contentCensus(path: string) {
   const chunks = rows.filter((row) => row.args.includes('diff-tree') && row.args.includes('--stdin') && row.args.includes('--always'))
   const anchorChecks = rows.filter((row) => row.args.includes('cat-file')
     && row.args.some((arg) => arg.startsWith('--batch-check'))
-    && row.input.length === ANCHORS
+    && row.input.length === ANCHORS + 1
     && row.input.every((line) => /^[0-9a-f]{40}$/.test(line)))
   return { old: old.length, chunks: chunks.length, anchorChecks: anchorChecks.length }
 }

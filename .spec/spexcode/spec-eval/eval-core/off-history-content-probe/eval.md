@@ -3,6 +3,11 @@ scenarios:
   - name: off-history-content-probes-batch-across-anchors
     tags: [backend-api]
     code:
+      - spec-eval/src/freshness.ts#contentBatchChunks
+      - spec-eval/src/freshness.ts#parseContentBatch
+      - spec-eval/src/freshness.ts#resolvedContentImages
+      - spec-eval/src/freshness.ts#runContentBatch
+      - spec-eval/src/freshness.ts#startPluralContentBatch
       - spec-eval/src/freshness.ts#contentProbeFor
       - spec-eval/src/evaltab.ts#evalTimelines
     test:
@@ -18,8 +23,11 @@ scenarios:
       Both cold public reads return the same forty fresh pass rows, full-set counts, and 25-row first page.
       One object batch plus bounded pair-diff chunks answer the complete off-history anchor set; content
       child count follows the chunk bound, never the forty anchors, and the unchanged repeat starts none.
-      Missing anchors remain the explicit anchor axis, and batching preserves mode-change, deletion, literal
-      glob/space path, abort/no-poison, and exact per-path verdict semantics.
+      Anchor/current replacements and grafts rotate the resolved image identity; a missing anchor becomes
+      available after its object is fetched; SHA-256 object ids remain native. One anchor with more than 8192
+      long requested paths splits under both record and argv-byte limits, and failure after an earlier slice
+      publishes no partial verdict. Batching also preserves mode-change, deletion, literal glob/space path,
+      abort/no-poison, and exact per-path verdict semantics.
 ---
 # eval.md — off-history-content-probe
 

@@ -194,9 +194,10 @@ export function isGitObjectId(root: string, value: string): boolean {
 // source corpus never approaches the byte ceiling.
 const BATCH_BLOB_CHUNK = 256
 const BATCH_BLOB_MAX_BUFFER = 1 << 26
-async function batchBuffer(args: string[], input: string, maxBuffer?: number): Promise<Buffer> {
+async function batchBuffer(args: string[], input: string, maxBuffer?: number, extraEnv: Record<string, string> = {}): Promise<Buffer> {
   const env = { ...process.env }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
+  Object.assign(env, extraEnv)
   try { return (await execGitForCaller(args, env, maxBuffer, input)).stdout }
   catch (error: any) {
     if (error?.name === 'AbortError') throw error
@@ -204,9 +205,10 @@ async function batchBuffer(args: string[], input: string, maxBuffer?: number): P
     throw new Error(`git ${args.slice(2, 5).join(' ')} failed: ${String(error?.stderr || error?.message || 'unknown git error').trim()}`)
   }
 }
-export async function batchRevisionOids(root: string, revisions: string[]): Promise<(string | null)[]> {
+export async function batchRevisionOids(root: string, revisions: string[], options: { replaceObjects?: boolean } = {}): Promise<(string | null)[]> {
   if (!revisions.length) return []
-  const out = (await batchBuffer(['-C', root, 'cat-file', '--batch-check=%(objectname)'], revisions.join('\n') + '\n')).toString('utf8')
+  const extraEnv: Record<string, string> = options.replaceObjects === false ? { GIT_NO_REPLACE_OBJECTS: '1' } : {}
+  const out = (await batchBuffer(['-C', root, 'cat-file', '--batch-check=%(objectname)'], revisions.join('\n') + '\n', undefined, extraEnv)).toString('utf8')
   const lines = out.split('\n')
   if (lines.length - 1 !== revisions.length) throw new Error(`git cat-file --batch-check returned ${lines.length - 1} rows for ${revisions.length} revisions`)
   return revisions.map((revision, index) => {
@@ -440,7 +442,7 @@ const EVENT_CACHE_SCHEMA = 'history-events-v16'
 const IMMUTABLE_HUNK_FACT = 'immutable-hunk-v1'
 const EVENT_STREAM_KINDS = ['merge', 'identity-raw'] as const
 type EventStreamKind = typeof EVENT_STREAM_KINDS[number]
-type EventCacheLocation = { path: string; identity: string; objectFormat: GitObjectFormat }
+type EventCacheLocation = { path: string; identity: string; interpretation: string; objectFormat: GitObjectFormat }
 type EventLedgerSnapshot = {
   payload: Buffer
   state: EventCache
@@ -505,17 +507,37 @@ function eventCacheLocation(root: string): EventCacheLocation {
     : git(['-C', root, 'for-each-ref', 'refs/replace', '--format=%(refname) %(objectname)'])
   const objectFormat = gitObjectFormat(root)
   if (old && old.shallow === shallow && old.grafts === grafts && old.replacements === replacements && old.objectFormat === objectFormat)
-    return { path: old.path, identity: old.identity, objectFormat }
-  const identity = createHash('sha256')
+    return { path: old.path, identity: old.identity, interpretation: old.interpretation, objectFormat }
+  const interpretation = createHash('sha256')
     .update(`${EVENT_CACHE_SCHEMA}\0${objectFormat}\0${shallow}\0${grafts}\0${replacements}`)
-    .digest('hex').slice(0, 16)
+    .digest('hex')
+  const identity = interpretation.slice(0, 16)
   // projectRuntimeRoot derives checkout identity from dirname(common). A bare repository is its own common
   // dir, so a synthetic `.git` suffix preserves the repository path instead of collapsing sibling bares.
   const gitDir = gitDirOf(root)
   const storeIdentity = gitDir === root && common === root ? join(common, '.git') : common
   const path = join(projectRuntimeRoot(storeIdentity), `${EVENT_CACHE_SCHEMA}-${identity}.ndjson`)
-  eventPathMemo.set(rootId, { common, shallowPath, grafts, shallow, replacementStorage, replacements, path, identity, objectFormat })
-  return { path, identity, objectFormat }
+  eventPathMemo.set(rootId, { common, shallowPath, grafts, shallow, replacementStorage, replacements, path, identity, interpretation, objectFormat })
+  return { path, identity, interpretation, objectFormat }
+}
+
+// One existing source-of-truth identity governs every Git reader that interprets commit images. Consumers
+// may retain the full digest in memory while the ledger keeps its established short directory name.
+export function gitObjectInterpretation(root: string): {
+  identity: string
+  objectFormat: GitObjectFormat
+  replacements: ReadonlyMap<string, string>
+} {
+  const location = eventCacheLocation(root)
+  const raw = eventPathMemo.get(rootKey(root))?.replacements ?? ''
+  const replacements = new Map<string, string>()
+  for (const line of raw.split('\n').filter(Boolean)) {
+    const match = line.match(/^refs\/replace\/([0-9a-f]+) ([0-9a-f]+)$/)
+    if (!match || !isGitObjectIdForFormat(location.objectFormat, match[1]) || !isGitObjectIdForFormat(location.objectFormat, match[2]))
+      throw new Error(`malformed refs/replace projection '${line}' at ${root}`)
+    replacements.set(match[1], match[2])
+  }
+  return { identity: location.interpretation, objectFormat: location.objectFormat, replacements }
 }
 function emptyEventCache(): EventCache {
   return { streams: new Map(), streamTips: new Map(), hunks: new Map() }

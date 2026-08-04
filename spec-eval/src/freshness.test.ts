@@ -439,6 +439,44 @@ test('content batch: 14 unique anchors in one population use one object check an
   }
 })
 
+test('content batch: replacement and graft changes rotate both anchor and current image interpretations', async () => {
+  const { root, hashes } = schedulerRepo(3)
+  const trace = diffTrace('0')
+  const anchor = hashes[1], current = hashes[2]
+  const probe = contentProbeFor(root)
+  const replacement = (tree: string, message: string) => sh(root, ['commit-tree', tree, '-m', message])
+  try {
+    await probe.prime!(anchor, ['tracked.txt'], 'absent-eval.md')
+    assert.equal(probe.changed(anchor, 'tracked.txt'), true)
+
+    sh(root, ['replace', '--graft', anchor])
+    await probe.prime!(anchor, ['tracked.txt'], 'absent-eval.md')
+    assert.equal(probe.changed(anchor, 'tracked.txt'), true, 'a graft changes ancestry interpretation, not this tree verdict')
+    sh(root, ['replace', '-d', anchor])
+
+    const anchorAsCurrent = replacement(`${current}^{tree}`, 'anchor replacement carries current tree')
+    sh(root, ['replace', anchor, anchorAsCurrent])
+    await probe.prime!(anchor, ['tracked.txt'], 'absent-eval.md')
+    assert.equal(probe.changed(anchor, 'tracked.txt'), false, 'the same raw anchor is re-read through its replacement image')
+    sh(root, ['replace', '-d', anchor])
+
+    const currentAsAnchor = replacement(`${anchor}^{tree}`, 'current replacement carries anchor tree')
+    sh(root, ['replace', current, currentAsAnchor])
+    await probe.prime!(anchor, ['tracked.txt'], 'absent-eval.md')
+    assert.equal(probe.changed(anchor, 'tracked.txt'), false, 'the same raw HEAD is re-read through its replacement image')
+    sh(root, ['replace', '-d', current])
+
+    await probe.prime!(anchor, ['tracked.txt'], 'absent-eval.md')
+    assert.equal(probe.changed(anchor, 'tracked.txt'), true, 'removing replacement refs restores the original images')
+    assert.equal(trace.events().filter((event) => event.event === 'start').length, 5,
+      'every interpretation move recomputed once; no raw-SHA verdict was reused')
+  } finally {
+    trace.restore()
+    rmSync(trace.bin, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test('content batch: abort removes active and queued flights, then both retry without a ghost spawn', async () => {
   const { root, hashes } = schedulerRepo(3)
   const trace = diffTrace('0')
@@ -469,28 +507,31 @@ test('content batch: abort removes active and queued flights, then both retry wi
   }
 })
 
-test('content batch: a later chunk failure publishes no partial verdict and the whole population retries', async () => {
-  const { root, hashes } = schedulerRepo(93)
+test('content batch: one over-limit long-path anchor splits, and a later chunk failure publishes nothing', async () => {
+  const { root, hashes } = schedulerRepo(2)
   const trace = diffTrace('0')
   const previous = process.env.SPEX_TEST_DIFF_FAIL_AT
   process.env.SPEX_TEST_DIFF_FAIL_AT = '2'
-  const demands = hashes.slice(0, 92).map((anchorSha, index) => ({
-    anchorSha, paths: [`requested-${index}.txt`], evalPath: `eval-${index}.md`,
-  }))
+  const paths = Array.from({ length: 8_300 }, (_, index) =>
+    `long/${String(index).padStart(5, '0')}-${'x'.repeat(80)}.txt`)
+  const demand = { anchorSha: hashes[0], paths, evalPath: 'absent-eval.md' }
   try {
     const probe = contentProbeFor(root)
-    await assert.rejects(probe.primeMany!(demands), /git content diff batch failed \(exit\): controlled content chunk failure/)
-    assert.ok(hashes.slice(0, 92).every((sha) => probe.canTestify(sha) === false),
-      'the successful first chunk did not leak a partial verdict')
+    await assert.rejects(probe.primeMany!([demand]), /git content diff batch failed \(exit\): controlled content chunk failure/)
+    assert.equal(probe.canTestify(hashes[0]), false, 'the successful first slice did not leak a partial verdict')
     delete process.env.SPEX_TEST_DIFF_FAIL_AT
-    await probe.primeMany!(demands)
-    assert.equal(trace.events().filter((event) => event.event === 'start').length, 4,
-      'both chunks ran before failure and both ran again on retry')
-    assert.ok(demands.every((row) => probe.changed(row.anchorSha, row.paths[0]) === false))
+    await probe.primeMany!([demand])
+    const starts = trace.events().filter((event) => event.event === 'start')
+    assert.ok(starts.length > 4, `the single row really split into several chunks: ${starts.length}`)
+    assert.ok(starts.every((event) => event.input.length === 1), 'every slice carries the one exact anchor/current pair')
+    assert.ok(starts.every((event) => Buffer.byteLength(event.argv) + 1 <= 16 * 1_024), 'every child stays inside the argv byte bound')
+    assert.ok(paths.every((path) => probe.changed(hashes[0], path) === false))
   } finally {
     if (previous === undefined) delete process.env.SPEX_TEST_DIFF_FAIL_AT
     else process.env.SPEX_TEST_DIFF_FAIL_AT = previous
     trace.restore()
+    rmSync(trace.bin, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
   }
 })
 
@@ -542,7 +583,7 @@ test('content batch: spawn failure is loud, not memoized, and a repaired child p
     process.env.PATH = trace.bin
     chmodSync(trace.shim, 0o644)
     await assert.rejects(contentProbeFor(root).prime!(hashes[0], ['tracked.txt'], 'absent-eval.md'),
-      /git .*failed: git executable not found on PATH/)
+      /git executable not found on PATH/)
     assert.equal(contentProbeFor(root).canTestify(hashes[0]), false, 'a failed batch settles nothing')
     chmodSync(trace.shim, 0o755)
     const retry = contentProbeFor(root)
@@ -560,6 +601,47 @@ test('content batch: an unreadable anchor object is the anchor axis, not a conte
   await probe.prime!('d'.repeat(40), ['tracked.txt'], 'absent-eval.md')
   assert.equal(probe.canTestify('d'.repeat(40)), false, 'content cannot testify for a gone anchor')
   assert.equal(probe.changed('d'.repeat(40), 'tracked.txt'), null)
+})
+
+test('content batch: a previously missing anchor becomes testifyable after its object arrives', async () => {
+  const { root } = schedulerRepo(2)
+  const source = mkdtempSync(join(tmpdir(), 'freshness-missing-source-'))
+  execFileSync(REAL_GIT, ['clone', '-q', root, source])
+  try {
+    sh(source, ['config', 'user.email', 't@t'])
+    sh(source, ['config', 'user.name', 't'])
+    writeFileSync(join(source, 'tracked.txt'), 'arrived later\n')
+    sh(source, ['commit', '-qam', 'available later'])
+    const anchor = sh(source, ['rev-parse', 'HEAD'])
+    const probe = contentProbeFor(root)
+    await probe.prime!(anchor, ['tracked.txt'], 'absent-eval.md')
+    assert.equal(probe.canTestify(anchor), false)
+    sh(root, ['fetch', '-q', source, anchor])
+    await probe.prime!(anchor, ['tracked.txt'], 'absent-eval.md')
+    assert.equal(probe.canTestify(anchor), true, 'gone is retried rather than cached as permanent absence')
+    assert.equal(probe.changed(anchor, 'tracked.txt'), true)
+  } finally {
+    rmSync(source, { recursive: true, force: true })
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('content batch: SHA-256 repositories use their native resolved image width', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'freshness-sha256-'))
+  try {
+    sh(root, ['init', '-q', '--object-format=sha256', '-b', 'main'])
+    sh(root, ['config', 'user.email', 't@t'])
+    sh(root, ['config', 'user.name', 't'])
+    writeFileSync(join(root, 'tracked.txt'), 'base\n')
+    sh(root, ['add', '.']); sh(root, ['commit', '-qm', 'base'])
+    const anchor = sh(root, ['rev-parse', 'HEAD'])
+    writeFileSync(join(root, 'tracked.txt'), 'head\n')
+    sh(root, ['commit', '-qam', 'head'])
+    const probe = contentProbeFor(root)
+    await probe.prime!(anchor, ['tracked.txt'], 'absent-eval.md')
+    assert.equal(anchor.length, 64)
+    assert.equal(probe.changed(anchor, 'tracked.txt'), true)
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
 // ---- per-root current-head scope: a rebuild must not leave the previous head's verdicts resident ----

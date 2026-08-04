@@ -219,16 +219,11 @@ remark track) and the in-history fast path pays no extra git call. An ack vindic
 reading. `freshness.ts` stays a pure computation — the remark track is fed in at the call sites, never
 read from the issue store here.
 
-The content fallback is also a bounded resource boundary, and its bound is the QUESTION, not just the
-schedule: freshness asks Git only about the governed paths a reading actually claims, and retains only
-those answers. The tree comparison is pathspec-scoped to the requested paths (matched literally, so a path
-carrying a glob character, a space or a leading colon is compared verbatim), and what enters the cache is
-one verdict per (root, HEAD, anchor, requested path) — never a repository-wide list of changed files.
-An unrequested path therefore has no verdict and reads as unprovable rather than fresh, which is what keeps
-the retained set proportional to governed breadth instead of repository width. Scheduling composes with
-that: concurrent callers on one anchor union their paths into a single child, a path requested after that
-child starts rides the next batch, a settled path is never asked again, and different anchors under one
-root and HEAD still run one at a time.
+The content fallback is also a bounded resource boundary: freshness asks Git only about the governed paths
+a reading actually claims, retains one verdict per requested path, and never retains a repository-wide
+changed-path set. [[off-history-content-probe]] owns the one plural Git schedule that preserves that meaning
+when a whole read carries many off-history anchors; eval-core consumes its settled verdicts and never grows a
+second transport or cache.
 
 **Every immutable-key answer under that schedule is joined while it is in flight, not merely reused once it
 settles.** A memo holding only settled values is silent about the window that matters — the whole timeline

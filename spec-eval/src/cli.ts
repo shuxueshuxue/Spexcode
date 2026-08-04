@@ -7,7 +7,7 @@ import { trackedSourceFiles } from '../../spec-cli/src/source-files.js'
 import { mainBranch, envSessionId, readRawRecord } from '../../spec-cli/src/layout.js'
 import { evalNodes, evalNodesAt, validateScenarios, resolveEvalNode, scenarioCodeAxis, scenarioHash, scenarioProjection, writeScenarioMeasurementMetadata, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
-import { staleAxes, contentProbeFor, anchorProbeFor, anchorProblems, type AnchorDemand } from './freshness.js'
+import { staleAxes, contentProbeFor, anchorProbeFor, anchorProblems, type AnchorDemand, type ContentProbeDemand } from './freshness.js'
 import { parseRelation, relationClaimsPath } from '../../spec-cli/src/anchors.js'
 import { scenarioIndex } from './scenariofresh.js'
 import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
@@ -144,6 +144,7 @@ async function scan(args: string[] = []): Promise<number> {
   // the in-loop primes stay as the correctness backstop and become cache hits.
   const latestByDir = new Map<string, ReturnType<typeof latestPerScenario>>()
   const anchorDemands: AnchorDemand[] = []
+  const contentDemands: ContentProbeDemand[] = []
   for (const s of specs) {
     const dirRel = dirname(s.path)
     const y = yByDir.get(dirRel)
@@ -156,8 +157,12 @@ async function scan(args: string[] = []): Promise<number> {
       const axis = scenarioCodeAxis(sc.code, s.codeEntries)
       if (changed && !nodeChanged(dirRel, axis.paths, changed, nodeDirs)) continue
       anchorDemands.push({ sinceSha: r.codeSha, entries: axis.entries })
+      if (!commitReachable(idx, r.codeSha))
+        contentDemands.push({ anchorSha: r.codeSha, paths: axis.paths, evalPath: y.evalPath })
     }
   }
+  await probe.primeMany?.(contentDemands)
+  await probe.primeBlocks?.()
   await anchors.prime?.(anchorDemands)
   for (const s of specs) {
     const dirRel = dirname(s.path)

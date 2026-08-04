@@ -11,6 +11,7 @@ code:
   - spec-cli/src/git.ts#warnIfTimedOut
   - spec-cli/src/git.ts#gitInterpretationIdentity
   - spec-cli/src/git.ts#worktreeSpecDeltas
+  - spec-cli/src/git.ts#batchRevisionOids
 related:
   - spec-cli/src/git.ts
   - spec-cli/src/git.test.ts

@@ -13,7 +13,7 @@ import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
-import { appendSent, recordStatus, lastHumanSendVia } from './session-timeline.js'
+import { appendSent, recordStatus, lastHumanSendVia, sentDispatchReceipt, type SentDispatchReceipt } from './session-timeline.js'
 import { drain, enqueue, owesDelivery, pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, senderDeliveryRevoked, withDeliveryLocks } from './delivery-queue.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
@@ -2554,6 +2554,7 @@ export type ReviewGates = {
 }
 export type ReviewPayload = {
   id: string; node: string | null; branch: string | null
+  head: string               // immutable branch object whose committed review facts this payload describes
   label: string              // the session's identity, derived ONCE via deriveLabel — the review surface renders THIS, never its own node||branch||id chain
   ahead: number              // commits the node branch is ahead of main
   dirtyNonRuntime: number    // uncommitted files excluding SpexCode's own runtime files
@@ -2609,18 +2610,19 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   const wt = await findWorktree(id)
   if (!wt) return null
   const base = mainBranch()
+  const head = (await gitA(['-C', wt.path, 'rev-parse', 'HEAD'])).trim()
   const [aheadOut, statusOut, diff, conflictsWithMain, lint] = await Promise.all([
-    gitA(['-C', wt.path, 'rev-list', '--count', `${base}..HEAD`]),
+    gitA(['-C', wt.path, 'rev-list', '--count', `${base}..${head}`]),
     gitA(['-C', wt.path, 'status', '--porcelain', '--untracked-files=all']),
-    mergeBaseDiff(wt.path, base),
-    mergeConflicts(wt.path, base),
+    mergeBaseDiff(wt.path, base, head),
+    mergeConflicts(wt.path, base, head),
     lintGate(),   // lint — memoized on the checkout fingerprint, not re-run per session/open
   ])
   // the worktree carries no SpexCode runtime files any more (the store lives in ~/.spexcode), so every dirty
   // path is genuine work — this is just the total uncommitted count.
   const dirtyNonRuntime = statusOut.split('\n').filter(Boolean).map(porcelainPath).length
   return {
-    id, node: wt.rec.node, branch: wt.branch,
+    id, node: wt.rec.node, branch: wt.branch, head,
     label: deriveLabel({ id, name: wt.rec.name, node: wt.rec.node, title: wt.rec.title, branch: wt.branch }),
     ahead: Number(aheadOut.trim()) || 0,
     dirtyNonRuntime, diff,
@@ -2629,32 +2631,134 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   }
 }
 
-function mergePrompt(mainPath: string, branch: string, reason: string): string {
+function mergePrompt(mainPath: string, worktreePath: string, worktreeTop: string, branch: string, reviewedHead: string, reason: string): string {
   const base = mainBranch()
+  const mainQ = shQuote(mainPath), worktreeQ = shQuote(worktreePath), topQ = shQuote(worktreeTop)
+  const branchQ = shQuote(branch), refQ = shQuote(`refs/heads/${branch}`), reviewedQ = shQuote(reviewedHead)
+  const messageQ = shQuote(`merge ${branch}: ${reason}`)
   return `Merge your branch \`${branch}\` into \`${base}\`, then propose close. You know this work, so resolve any conflicts yourself — in YOUR OWN worktree, never in the shared ${base} checkout.\n\n` +
+    `0. Re-prove the REVIEWED generation BEFORE changing anything. All four commands must succeed together; detached HEAD, another checked-out branch, a moved/missing stored ref, or any OID other than \`${reviewedHead}\` means STOP and report stale review — do not sync or land:\n` +
+    `   test "$(git -C ${worktreeQ} rev-parse --show-toplevel)" = ${topQ} &&\n` +
+    `   test "$(git -C ${worktreeQ} symbolic-ref --quiet --short HEAD)" = ${branchQ} &&\n` +
+    `   test "$(git -C ${worktreeQ} rev-parse HEAD)" = ${reviewedQ} &&\n` +
+    `   test "$(git -C ${mainQ} show-ref --verify --hash ${refQ})" = ${reviewedQ}\n` +
     `1. Sync first, where you work: \`git merge ${base}\` INTO your branch, resolve every conflict here, and re-run what proves your work. The ${base} checkout is the fleet's ONE landing door — a merge that stops to ask about conflicts holds it for everyone.\n` +
-    `2. Land only a TRIVIAL merge: \`git -C ${mainPath} merge-base --is-ancestor ${base} ${branch}\` must exit 0 (your branch already contains ${base}) — then\n   git -C ${mainPath} merge --no-ff -m "merge ${branch}: ${reason}" ${branch}\n   If that check fails, ${base} moved while you tested: go back to step 1 instead of landing.\n` +
+    `2. Freeze the TESTED result immediately before landing and merge that exact object, never a moving branch name:\n` +
+    `   candidate=$(git -C ${worktreeQ} rev-parse HEAD) &&\n` +
+    `   test "$(git -C ${worktreeQ} symbolic-ref --quiet --short HEAD)" = ${branchQ} &&\n` +
+    `   test "$(git -C ${mainQ} show-ref --verify --hash ${refQ})" = "$candidate" &&\n` +
+    `   git -C ${mainQ} merge-base --is-ancestor ${base} "$candidate" &&\n` +
+    `   git -C ${mainQ} merge --no-ff -m ${messageQ} "$candidate"\n` +
+    `   If any check fails, ${base} or the branch moved while you tested: go back to step 0/review instead of landing.\n` +
     `3. A busy door is a wait, not a race: if the ${base} checkout is already mid-merge (an unresolved index), retry with a bounded wait — never abort or resolve someone else's in-progress merge. ` +
-    `4. Verify it landed: \`${base}\`'s HEAD must now be the new merge commit and no merge may be left in progress — if YOUR merge went half-merged, run \`git -C ${mainPath} merge --abort\` and report it rather than leaving \`${base}\` mid-state. ` +
+    `4. Verify it landed: \`${base}\`'s HEAD must now be the new merge commit and no merge may be left in progress — if YOUR merge went half-merged, run \`git -C ${mainQ} merge --abort\` and report it rather than leaving \`${base}\` mid-state. ` +
     `5. Once you've verified \`${base}\` advanced cleanly, propose close for the human — do NOT close it yourself.`
 }
 
-async function mergeSessionUnlocked(id: string): Promise<{ dispatched: boolean; reason?: string }> {
+export type MergeSessionResult =
+  | { dispatched: true; replayed?: boolean; reviewedHead?: string }
+  | { dispatched: false; reason: string; code?: 'session_merge_invalid_request' | 'session_merge_key_reused' | 'session_merge_head_changed' | 'session_merge_branch_unproven'; status?: 400 | 409 }
+export type MergeSessionOptions = { requestKey?: string; reviewedHead?: string }
+
+function normalizeMergeKey(raw: string | undefined): string | null {
+  if (raw === undefined) return null
+  const key = raw.trim()
+  if (!key || key.length > 128 || !/^[\x21-\x7e]+$/.test(key)) return null
+  return key
+}
+
+async function proveMergeBranchIdentity(worktreePath: string, branch: string): Promise<{ ok: true; head: string; top: string } | { ok: false; reason: string }> {
+  const ref = `refs/heads/${branch}`
+  const [top, symbolic, head, stored] = await Promise.all([
+    gitTry(['-C', worktreePath, 'rev-parse', '--show-toplevel']),
+    gitTry(['-C', worktreePath, 'symbolic-ref', '--quiet', '--short', 'HEAD']),
+    gitTry(['-C', worktreePath, 'rev-parse', 'HEAD']),
+    gitTry(['-C', mainRoot(), 'show-ref', '--verify', '--hash', ref]),
+  ])
+  if (!top.ok || !symbolic.ok || !head.ok || !stored.ok) {
+    return { ok: false, reason: `branch identity is unreadable${!symbolic.ok ? ' (worktree HEAD is detached or not symbolic)' : ''}` }
+  }
+  let actualTop = top.stdout.trim(), expectedTop = worktreePath
+  try { actualTop = realpathSync(actualTop) } catch { /* comparison reports the missing/moved root */ }
+  try { expectedTop = realpathSync(expectedTop) } catch { /* comparison reports the missing/moved root */ }
+  if (actualTop !== expectedTop) return { ok: false, reason: `worktree top-level is ${actualTop}, expected ${expectedTop}` }
+  if (symbolic.stdout.trim() !== branch) return { ok: false, reason: `worktree checked out ${symbolic.stdout.trim() || '(detached)'}, expected ${branch}` }
+  const worktreeHead = head.stdout.trim(), storedHead = stored.stdout.trim()
+  if (worktreeHead !== storedHead) return { ok: false, reason: `worktree HEAD ${worktreeHead} does not match stored branch ${branch} at ${storedHead}` }
+  return { ok: true, head: worktreeHead, top: actualTop }
+}
+
+async function mergeSessionUnlocked(id: string, options: MergeSessionOptions = {}): Promise<MergeSessionResult> {
+  const requestKey = normalizeMergeKey(options.requestKey)
+  if (options.requestKey !== undefined && !requestKey) {
+    return { dispatched: false, reason: 'Idempotency-Key must be 1-128 visible ASCII characters', code: 'session_merge_invalid_request', status: 400 }
+  }
+  const reviewedHead = options.reviewedHead
+  if (requestKey && reviewedHead === undefined) {
+    return { dispatched: false, reason: 'reviewedHead is required with Idempotency-Key', code: 'session_merge_invalid_request', status: 400 }
+  }
+  if (reviewedHead !== undefined && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(reviewedHead)) {
+    return { dispatched: false, reason: 'reviewedHead must be a full lowercase Git object id', code: 'session_merge_invalid_request', status: 400 }
+  }
+  const idempotency = requestKey ? {
+    operation: 'merge' as const,
+    requestDigest: digest(`spexcode-session-merge\0${requestKey}`),
+    payloadHash: digest(JSON.stringify({ reviewedHead: reviewedHead ?? null })),
+  } : null
+  if (idempotency) {
+    const prior = await withRecordLock(id, async () => sentDispatchReceipt(id, 'merge', idempotency.requestDigest))
+    if (prior) {
+      if (prior.payloadHash !== idempotency.payloadHash) {
+        return { dispatched: false, reason: 'Idempotency-Key is already bound to another session-merge payload', code: 'session_merge_key_reused', status: 409 }
+      }
+      await drainSession(id)
+      return { dispatched: true, replayed: true, reviewedHead: reviewedHead! }
+    }
+  }
   const wt = await findWorktree(id)
   if (!wt || !wt.branch) return { dispatched: false, reason: 'no such session' }
   const branch = wt.branch, main = mainRoot()
+  let currentHead: string, worktreeTop = wt.path
+  if (requestKey) {
+    const branchProof = await proveMergeBranchIdentity(wt.path, branch)
+    if (!branchProof.ok) {
+      return { dispatched: false, reason: `session branch identity is unproven: ${branchProof.reason}`, code: 'session_merge_branch_unproven', status: 409 }
+    }
+    currentHead = branchProof.head
+    worktreeTop = branchProof.top
+  } else {
+    // The unkeyed interface predates review authority: keep accepting the same calls, including worktrees whose
+    // branch identity the new keyed path would reject. The dispatched agent prompt still proves the generation
+    // at the real landing boundary and stops there rather than silently merging a detached/reassigned checkout.
+    currentHead = (await gitA(['-C', wt.path, 'rev-parse', 'HEAD'])).trim()
+    try { worktreeTop = realpathSync(wt.path) } catch { /* resume/send reports the vanished worktree as before */ }
+  }
+  if (reviewedHead && currentHead !== reviewedHead) {
+    return {
+      dispatched: false,
+      reason: `session branch changed after review: expected ${reviewedHead}, found ${currentHead}`,
+      code: 'session_merge_head_changed',
+      status: 409,
+    }
+  }
+  const dispatchHead = reviewedHead ?? currentHead
   // ensure-live, NOT the guarded human relaunch: an already-online agent is reused (the merge prompt just needs
   // a live socket), and only a confirmed-offline one is relaunched — so merge never refuses on a live agent.
   const re = await resumeSession(id, { guard: false })
   if (!re.ok) return { dispatched: false, reason: re.error || 'could not resume session' }
-  const subject = (await gitA(['-C', main, 'log', '-1', '--format=%s', branch])).trim()
+  const subject = (await gitA(['-C', main, 'log', '-1', '--format=%s', dispatchHead])).trim()
   const reason = subject.replace(/^spec:\s+/, '') || branch
-  const r = await sendText(id, mergePrompt(main, branch, reason))
-  if (!r.ok) return { dispatched: false, reason: r.error }
-  return { dispatched: true }
+  const r = await sendText(id, mergePrompt(main, wt.path, worktreeTop, branch, dispatchHead, reason), undefined, { ...(idempotency ? { idempotency } : {}) })
+  if (r.code === 'dispatch_key_reused') {
+    return { dispatched: false, reason: 'Idempotency-Key is already bound to another session-merge payload', code: 'session_merge_key_reused', status: 409 }
+  }
+  if (!r.ok) return { dispatched: false, reason: r.error || 'could not dispatch merge prompt' }
+  return idempotency
+    ? { dispatched: true, replayed: r.replayed === true, reviewedHead: dispatchHead }
+    : { dispatched: true }
 }
-export const mergeSession = (id: string): Promise<{ dispatched: boolean; reason?: string }> =>
-  mergeSessionUnlocked(id)
+export const mergeSession = (id: string, options: MergeSessionOptions = {}): Promise<MergeSessionResult> =>
+  mergeSessionUnlocked(id, options)
 
 // @@@ killAgentProcess - the pane is the agent's HOME, not its LEASH. `kill-session` SIGHUPs the pane's
 // process group, and an idle agent goes with it (measured: ~0.8s) — but one mid-turn can outlive the whole
@@ -3469,8 +3573,11 @@ export function formatTable(sessions: Session[], color = true): string {
 // A RETIRED session (worktree gone) still receives: the record gate governs the lifecycle axis, and a message
 // that cannot reach an agent must at least leave a trace ([[session-timeline]]).
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
-export async function sendText(id: string, text: string, from?: string, opts: { replyVia?: 'note' } = {}): Promise<DispatchResult> {
+type DispatchIdempotency = SentDispatchReceipt
+type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: 'dispatch_key_reused' }
+export async function sendText(id: string, text: string, from?: string, opts: { replyVia?: 'note'; idempotency?: DispatchIdempotency } = {}): Promise<AcceptedDispatch> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
+  let replayed = false
   try {
     // Taking a declared sender's record lock makes close a real outgoing fence even across backend processes:
     // a send either appends before close obtains the fence (and close's revocation voids its debt), or sees
@@ -3480,21 +3587,37 @@ export async function sendText(id: string, text: string, from?: string, opts: { 
       if (from && senderDeliveryRevoked(from)) throw new ResourceConflict(`sender session ${from} is closed; prompt NOT delivered`)
       const rec = readRecord(id)
       if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
+      if (opts.idempotency) {
+        const prior = sentDispatchReceipt(id, opts.idempotency.operation, opts.idempotency.requestDigest)
+        if (prior) {
+          if (prior.payloadHash !== opts.idempotency.payloadHash) {
+            const conflict = new ResourceConflict(`idempotency key is already bound to another ${opts.idempotency.operation} payload`)
+            Object.assign(conflict, { code: 'dispatch_key_reused' })
+            throw conflict
+          }
+          replayed = true
+          return
+        }
+      }
       // Composed at ACCEPT time, once: the log keeps the raw conversational text plus the effective reply channel,
       // the queue keeps the transport form. Composing again at handover would let a later send change the hints on
       // a message that was already accepted.
       const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
-      const appended = appendSent(id, text, from ?? null, prompt.replyVia)
+      const appended = appendSent(id, text, from ?? null, prompt.replyVia, opts.idempotency)
       enqueue(id, { mid: appended.mid, text: prompt.text, from: from ?? null })
     })
   } catch (error) {
-    return { ok: false, error: `could not append the message to session ${id}'s log: ${error instanceof Error ? error.message : String(error)} — prompt NOT delivered` }
+    return {
+      ok: false,
+      error: `could not append the message to session ${id}'s log: ${error instanceof Error ? error.message : String(error)} — prompt NOT delivered`,
+      ...((error as { code?: string })?.code === 'dispatch_key_reused' ? { code: 'dispatch_key_reused' as const } : {}),
+    }
   }
   // Awaited, not fire-and-forget: an unawaited insert can lose its race with a short-lived caller's exit,
   // costing that send its same-turn arrival. Draining HERE rather than leaving it to the sweep is what puts
   // the text in a live agent's current turn instead of up to one tick later.
   await drainSession(id)
-  return { ok: true }
+  return { ok: true, ...(opts.idempotency ? { replayed } : {}) }
 }
 
 // @@@ drainSession - hand over what this session is owed, as ordinary prompts. Safe to call from anywhere and

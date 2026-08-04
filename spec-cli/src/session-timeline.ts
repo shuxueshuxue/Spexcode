@@ -18,6 +18,9 @@ export type TimelineEvent =
   | { ts: string; kind: 'status'; status: Lifecycle; proposal: Proposal | null; note: string | null; display?: string }
   | { ts: string; kind: 'sent'; mid: string; text: string; from: string | null; replyVia?: 'note' }
 
+export type SentDispatchReceipt = { operation: 'merge'; requestDigest: string; payloadHash: string }
+type StoredTimelineEvent = TimelineEvent & { dispatchReceipt?: SentDispatchReceipt }
+
 const timelinePath = (id: string): string => sessionArtifactPath(id, 'timeline.ndjson')
 const segmentsDir = (id: string): string => sessionArtifactPath(id, 'timeline')
 const SEGMENT = /^(\d+)\.ndjson$/
@@ -64,16 +67,16 @@ function activeSegment(id: string, bytes: number): string {
   return join(dir, `${String(n).padStart(SEGMENT_NAME_WIDTH, '0')}.ndjson`)
 }
 
-function append(id: string, ev: TimelineEvent): void {
+function append(id: string, ev: StoredTimelineEvent): void {
   mkdirSync(sessionStoreDir(id), { recursive: true })
   const line = JSON.stringify(ev) + '\n'
   appendFileSync(activeSegment(id, Buffer.byteLength(line)), line)
 }
 
-function parseLines(lines: string[]): TimelineEvent[] {
+function parseLines(lines: string[]): StoredTimelineEvent[] {
   return lines.map((l) => {
-    try { return JSON.parse(l) as TimelineEvent } catch { return null }
-  }).filter((e): e is TimelineEvent => e != null && (e.kind === 'status' || e.kind === 'sent'))
+    try { return JSON.parse(l) as StoredTimelineEvent } catch { return null }
+  }).filter((e): e is StoredTimelineEvent => e != null && (e.kind === 'status' || e.kind === 'sent'))
 }
 
 function tailLines(path: string, limit: number): string[] {
@@ -109,10 +112,21 @@ export function recordStatus(id: string, status: Lifecycle, proposal: Proposal |
 // the caller reports the throw rather than a false success. `text` is the message BEFORE any mechanism insert
 // (hints are transport, not conversation); `replyVia` is the effective channel the prompt seam chose. Returns
 // the new line's `mid`, which a best-effort poke carries.
-export function appendSent(id: string, text: string, from: string | null, replyVia?: 'note'): { mid: string } {
+export function appendSent(id: string, text: string, from: string | null, replyVia?: 'note', dispatchReceipt?: SentDispatchReceipt): { mid: string } {
   const mid = randomUUID()
-  append(id, { ts: new Date().toISOString(), kind: 'sent', mid, text, from, ...(replyVia ? { replyVia } : {}) })
+  append(id, { ts: new Date().toISOString(), kind: 'sent', mid, text, from, ...(replyVia ? { replyVia } : {}), ...(dispatchReceipt ? { dispatchReceipt } : {}) })
   return { mid }
+}
+
+export function sentDispatchReceipt(id: string, operation: SentDispatchReceipt['operation'], requestDigest: string): { mid: string; payloadHash: string } | null {
+  for (const path of timelineFiles(id)) {
+    for (const event of parseLines(readFileSync(path, 'utf8').split('\n').filter(Boolean))) {
+      if (event.kind === 'sent' && event.dispatchReceipt?.operation === operation && event.dispatchReceipt.requestDigest === requestDigest) {
+        return { mid: event.mid, payloadHash: event.dispatchReceipt.payloadHash }
+      }
+    }
+  }
+  return null
 }
 
 // The unowned read: any process may take it with nothing but filesystem access, and taking it perturbs
@@ -120,6 +134,7 @@ export function appendSent(id: string, text: string, from: string | null, replyV
 export function timelineEvents(id: string): TimelineEvent[] {
   try {
     return timelineFiles(id).flatMap((path) => parseLines(readFileSync(path, 'utf8').split('\n').filter(Boolean)))
+      .map(({ dispatchReceipt: _receipt, ...event }) => event as TimelineEvent)
   } catch { return [] }
 }
 
@@ -172,5 +187,8 @@ export function readTimeline(id: string, limit = 500): { events: TimelineEvent[]
     if (remaining <= 0) break
     tail.unshift(...parseLines(tailLines(path, remaining)))
   }
-  return { events: tail.map((e) => (e.kind === 'status' ? { ...e, display: timelineDisplay(e) } : e)) }
+  return { events: tail.map((e) => {
+    const { dispatchReceipt: _receipt, ...event } = e as StoredTimelineEvent
+    return event.kind === 'status' ? { ...event, display: timelineDisplay(event) } : event
+  }) }
 }

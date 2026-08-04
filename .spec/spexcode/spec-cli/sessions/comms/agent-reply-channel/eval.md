@@ -17,6 +17,7 @@ scenarios:
       FULL id with the label omitted (`— from session <id>.`, no empty quotes/parens).
       (b) Human sender: the delivered text is the message BYTE-FOR-BYTE, no hint appended and no `from` field —
       a plain shell has no session, so no half-built reply loop is smuggled in.
+    test: spec-cli/src/agent-reply-channel.api.test.ts
     code: spec-cli/src/agent-reply-channel.test.ts
     related: [spec-cli/src/sessions.ts, spec-cli/src/cli.ts]
 ---

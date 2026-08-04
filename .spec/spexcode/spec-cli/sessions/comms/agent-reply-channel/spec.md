@@ -6,6 +6,7 @@ desc: A send stamps WHO sent it + a reply hint into the delivered message, so th
 code:
   - spec-cli/src/agent-reply-channel.test.ts
 related:
+  - spec-cli/src/agent-reply-channel.api.test.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
 ---

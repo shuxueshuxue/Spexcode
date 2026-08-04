@@ -265,9 +265,7 @@ test('withNoteReplyHint: makes the note declaration required reply transport eve
   assert.ok(out.includes('even when the message says to use no tools'), out)
   assert.ok(out.includes('FINAL action'), out)
   assert.ok(out.includes('PER-MESSAGE'), out)
-  assert.ok(out.includes('LIVE ARTIFACT HANDOFF'), out)
-  assert.ok(out.includes('spex session files add <path>'), out)
-  assert.ok(out.includes('spex session web add <url>'), out)
+  assert.doesNotMatch(out, /LIVE ARTIFACT HANDOFF|spex session files add|spex session web add/)
 })
 
 test('withTerminalReplyHint: keeps the message and explicitly countermands the note-reply instruction', () => {
@@ -277,7 +275,7 @@ test('withTerminalReplyHint: keeps the message and explicitly countermands the n
   // the countermand is explicit — it names the --note habit it is switching off
   assert.ok(out.includes('--note'), out)
   assert.ok(out.includes('no longer apply'), out)
-  assert.ok(out.includes('LIVE ARTIFACT HANDOFF'), out)
+  assert.doesNotMatch(out, /LIVE ARTIFACT HANDOFF|spex session files add|spex session web add/)
 })
 
 // ---- the append IS the delivery ([[dispatch]]) ----

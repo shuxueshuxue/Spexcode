@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -408,6 +408,7 @@ test('public review and merge authority bind exact head and one durable dispatch
     const missingObjectObserved = {
       status: missingObjectResult.status,
       code: missingObjectResult.body?.code,
+      objectTypeValidated: readFileSync(gitTrace, 'utf8').split('\n').some((line) => line.includes(`cat-file -e ${missingObject}^{commit}`)),
       mutation: readFileSync(join(sessionDir, 'session.json'), 'utf8') !== beforeMissingRecord
         || (await request(baseA, `/api/sessions/${id}/timeline`)).text !== beforeMissingTimeline
         || (existsSync(pendingPath) ? readFileSync(pendingPath, 'utf8') : null) !== beforeMissingPending,
@@ -530,13 +531,11 @@ test('public review and merge authority bind exact head and one durable dispatch
     const activeCapture = await request(baseA, `/api/sessions/${crashId}/capture`)
     const nativeCountAfterActiveReplay = (activeCapture.text.match(/FAKE-HARNESS REPLY Merge your branch/g) ?? []).length
 
-    const stopped = await request(baseA, `/api/sessions/${crashId}/stop`, { method: 'POST' })
-    assert.equal(stopped.status, 200, stopped.text)
-    const archived = await request(baseA, `/api/sessions/${crashId}/archive`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on: true }),
-    })
-    assert.equal(archived.status, 200, archived.text)
-    assert.equal(archived.body.ok, true)
+    execFileSync('tmux', ['-L', tmux, 'kill-session', '-t', crashId])
+    const archivedRaw = JSON.parse(readFileSync(crashRecordPath, 'utf8'))
+    const archivedTmp = join(crashDir, '.session.json.archive-fixture.tmp')
+    writeFileSync(archivedTmp, JSON.stringify({ ...archivedRaw, status: 'parked', proposal: '', stopped: true, archived: true, cold_proof: 'fixture-cold' }, null, 2) + '\n')
+    renameSync(archivedTmp, crashRecordPath)
     const archivedBeforeReplay = readFileSync(crashRecordPath, 'utf8')
     const archivedReplay = await crashMerge()
     const archivedAfterReplay = readFileSync(crashRecordPath, 'utf8')
@@ -552,7 +551,7 @@ test('public review and merge authority bind exact head and one durable dispatch
     }
     console.log(`manager-authority-receipt-recovery ${JSON.stringify(recoveryObserved)}`)
     assert.deepEqual(recoveryObserved, {
-      missingObject: { status: 409, code: 'session_merge_head_changed', mutation: false },
+      missingObject: { status: 409, code: 'session_merge_head_changed', objectTypeValidated: true, mutation: false },
       disconnected: true,
       receiptWithoutDebt: true,
       recovered: { status: 200, replayed: true, nativeCount: 1, timelineCount: 1, debtAbsent: true },

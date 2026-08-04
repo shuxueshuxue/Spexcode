@@ -80,3 +80,29 @@ test('eval help teaches the same global result-first session order', async () =>
   assert.match(stdout, /blind spots follow measured rows/i)
   assert.doesNotMatch(stdout, /blind spots first|ahead of the inherited baseline/i)
 })
+
+test('session eval text omits the empty paged-list gate section', async () => {
+  const id = '22222222-3333-4444-8555-666666666666'
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json')
+    if (req.url === '/api/sessions?all=1') return void res.end(JSON.stringify([{ id }]))
+    if (req.url?.startsWith('/api/evals?')) return void res.end(JSON.stringify({
+      items: [{ node: 'gate-free', filterKind: 'blind', scenario: 'visible-row' }],
+      page: 1, pageCount: 1, total: 1, unknown: 0, revision: 'fixture', gates: [],
+    }))
+    res.statusCode = 404
+    res.end(JSON.stringify({ error: 'not found' }))
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  assert.ok(address && typeof address === 'object')
+
+  const { code, stdout, stderr } = await runCli(['eval', 'ls', '--session', id, '--api', `http://127.0.0.1:${address.port}`])
+  server.close()
+  await once(server, 'close')
+
+  assert.equal(code, 0, stderr)
+  assert.match(stdout, /visible-row/)
+  assert.doesNotMatch(stdout, /^\s*gates\s*:/m)
+})

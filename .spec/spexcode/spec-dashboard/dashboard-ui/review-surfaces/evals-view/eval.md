@@ -123,7 +123,7 @@ scenarios:
     code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/address.js]
     description: >
       Enter a session-scoped Evals LIST through a real console door click, then again by direct URL and
-      by reload, at 1440px and 390px, in en and zh: read the gates strip for the terminal door — tag,
+      by reload, at 1440px and 390px, in en and zh: read the list toolbar for the terminal door — tag,
       href, rendered hit-target size, visible text content, exact tooltip/aria, DOM order, screen position,
       Tab order, scroll owner, and computed sticky position/z-index/background/border at top/middle/bottom.
       At each position read whether list text is visible through the strip; at 390px read its line count,
@@ -138,7 +138,7 @@ scenarios:
       and re-read for doors and horizontal overflow.
     expected: >
       Only the scoped LIST carries the ONE icon-only terminal door: it is the se-gates toolbar's leftmost
-      child and first focusable control, before the inert lint/merge/ahead/committed gates and the export
+      child and first focusable control, before the optional unknown-coverage warning and the export
       action, so visual order and Tab order agree. The toolbar is the one PageScroll's sticky status strip:
       it stays pinned at that owner's 10px top inset from top through middle and bottom, has an opaque
       shared-token themed background/boundary with list content passing behind but never reading through,
@@ -155,7 +155,8 @@ scenarios:
       no banner. Its sole small return arrow/list link goes to the canonical scoped DEFAULT list,
       byte-identical to the address the console door minted; that landed list still carries the terminal
       door. Browser Back after list→detail restores the exact scoped list URL, while the list door alone
-      reaches #/sessions/<id> and keeps native keyboard/new-tab behavior. Trunk list/detail carry no door.
+      reaches #/sessions/<id> and keeps native keyboard/new-tab behavior. The list carries no
+      lint/merge/ahead/committed readiness gates; explicit review and export keep them. Trunk list/detail carry no door.
       Zero loss = Terminal → scoped list → scoped detail is one visible hierarchy, reversed one level at
       a time.
   - name: session-scope-and-legacy-redirect
@@ -164,13 +165,14 @@ scenarios:
     description: >
       With a live session that has worktree-rooted readings: on #/evals scope to that session through the
       query — type scope: and pick it from the bounded suggestions (board sessions only) — and read the
-      hash, the gates strip, and the rows. Then open the legacy address
+      hash, the list toolbar, and the rows. Then open the legacy address
       #/sessions/<id>/eval directly and read the hash after settle. Open the session console and click
       the Eval entry; read where it lands. Finally check a session-scoped row's href carries the scope.
     expected: >
       Scoping rewrites the address to the scoped LIST query (#/evals?q=is:eval scope:<id> —
       the same text every session door mints) and the list becomes that session's
-      WORKTREE-rooted model: the gates strip (the review numbers + the HTML export door) above, readings
+      WORKTREE-rooted model: the toolbar (terminal door + optional unknown coverage + HTML export door,
+      with no readiness gates) above, readings
       newest-first across session ownership, then inert unmeasured rows with no filed time. The session's
       own readings remain ✦-marked. Row hrefs carry ?q=scope:<id> ALONE — a detail address never drags list filters — so the
       detail's A/B history walks the worktree readings, and the detail's way back to the list is the

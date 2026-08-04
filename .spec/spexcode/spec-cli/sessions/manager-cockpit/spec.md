@@ -42,23 +42,24 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   --write-tree` — no checkout, nothing to abort, the SAFE form of "would this conflict"); `lint` (the
   [[spec-lint]] module's error / warning counts); and `evals`, the measured-loss READOUT. conflict/ahead/dirty are session-specific; the lint gate
   reflects the CLI package's own tree, where the command runs, so it is memoized on that tree's fingerprint
-  (an unchanged tree skips the re-lint on repeated reviews / [[session-eval]] opens).
+  (an unchanged tree skips the re-lint on repeated manager reviews / exports).
 
-  That memo only covers the case where nothing moved, and a session-scoped page pays this LOCATION gate
-  whatever its own scope is — so the gate may not RE-COST the whole REPOSITORY every time the tree moves while
-  the reviewed scope stays small. When the fingerprint moves — a trunk commit, one dirty edit — the verdict is
+  This location-wide verdict belongs to explicit manager review and the self-contained session export. The
+  interactive paged Eval list carries no manager gate strip and does not synchronously run this gate: a
+  whole-repository lint is not a property of one selected page. Within
+  the manager/export consumers, the memo only covers the case where nothing moved. When the fingerprint moves —
+  a trunk commit, one dirty edit — the verdict is
   recomputed, and a second verdict IN THE SAME PROCESS costs what MOVED, because the anchor engine reuses the
   hunks whose IMAGE IDENTITY it has already read under a pinned diff interpretation ([[code-anchor]] owns that
   identity — ordered result/parent images, not a commit id, which `refs/replace`, a graft or an unshallow can
   reinterpret) instead of re-probing every anchored window.
 
-  Measured here, and this is the whole claim, no wider: an empty-scope review and a ten-file-scope review each
+  Measured here, and this is the whole claim, no wider: an empty-scope manager review and a ten-file-scope review each
   pay the same 48 git children on a COLD process — 22 of them one `log --patch` per anchored path — and that
   first touch is UNCHANGED. What the reuse removes is paying it AGAIN on every later fingerprint move: 38
   children with 22 such queries, argv byte-identical to the previous run, down to 15 with none; a commit that
-  moves ONE anchored path, 42 with 22 down to 21 with one. So a warm backend's re-verdicts no longer cost the
-  corpus, while a cold [[session-eval]] deep-link still pays this gate once — calling the cold path solved
-  would be false, and the gate's share of it is still about ten times that page's own all-selector validation.
+  moves ONE anchored path, 42 with 22 down to 21 with one. So a warm backend's manager re-verdicts no longer cost
+  the corpus. The cold gate remains real when a caller asks for it; the paged Eval list no longer asks.
 
   The reusable hunk facts are durable across processes in [[source-of-truth]]'s existing on-disk event ledger,
   keyed by the SAME ordered image identity and pinned range-semantics schema [[code-anchor]] uses in process.

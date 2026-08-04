@@ -12,8 +12,8 @@ mkdirSync(OUT, { recursive: true })
 const { chromium } = await import(pathToFileURL(PW).href)
 
 const SHORT = SESSION.slice(0, 8)
-const SCOPED_Q = `is:eval state:current scope:${SESSION}`
-const LIST_HASH = `#/evals?q=${encodeURIComponent(SCOPED_Q).replaceAll('%20', '+')}`
+const SCOPED_Q = `is:eval scope:${SESSION}`
+const LIST_HASH = `#/evals?q=${encodeURIComponent(SCOPED_Q)}`
 let pass = 0
 let fail = 0
 const check = (name, ok, detail = '') => {
@@ -49,6 +49,8 @@ const listProbe = (page) => page.evaluate(() => {
       beforeGate: !gateRect || rect.right <= gateRect.left,
     } : null,
     focusOrder: focusables.map((el) => el.className),
+    readinessGates: toolbar?.querySelectorAll(':scope > .se-gate:not(.se-unknown)').length || 0,
+    exportDoors: toolbar?.querySelectorAll('.se-export').length || 0,
     doorCount: document.querySelectorAll('.se-door').length,
     headAction: !!document.querySelector('.ds-head-action'),
     banner: !!document.querySelector('.ds-banner, .se-banner-slot'),
@@ -105,6 +107,7 @@ let scopedRowHref = null
   const enList = await listProbe(page)
   check('list door is leftmost, first focusable, real, and short-labelled', doorOk(enList.door, 'Back to session terminal'), JSON.stringify(enList))
   check('scoped list has exactly one door and no banner/action seam', enList.doorCount === 1 && !enList.banner && !enList.headAction)
+  check('scoped list has export but no readiness gates', enList.readinessGates === 0 && enList.exportDoors === 1, JSON.stringify(enList))
   check('1440 list has no horizontal overflow', enList.widths.doc <= 1440 && enList.widths.body <= 1440, JSON.stringify(enList.widths))
   await page.screenshot({ path: join(OUT, 'b-01-scoped-list-1440-en.png') })
 
@@ -116,7 +119,7 @@ let scopedRowHref = null
   await page.waitForSelector('.se-export', { timeout: 15000 })
   await page.focus('.se-door')
   await page.keyboard.press('Tab')
-  check('Tab after the first door reaches trailing export, skipping inert gates',
+  check('Tab after the first door reaches trailing export with no readiness gates',
     await page.evaluate(() => document.activeElement?.classList.contains('se-export')))
   await page.keyboard.press('Shift+Tab')
   check('Shift+Tab returns to the list door', await page.evaluate(() => document.activeElement?.classList.contains('se-door')))
@@ -216,7 +219,11 @@ let scopedRowHref = null
 {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
-  await page.route(`**/api/sessions/${SESSION}/evals`, (route) => route.fulfill({ status: 503, contentType: 'text/plain', body: 'forced failure' }))
+  await page.route('**/api/evals/detail?*', (route) => {
+    const url = new URL(route.request().url())
+    if (url.searchParams.get('scope') !== SESSION) return route.continue()
+    return route.fulfill({ status: 503, contentType: 'text/plain', body: 'forced failure' })
+  })
   await page.goto(`${BASE}/${scopedRowHref}`)
   await page.waitForSelector('.ds-failed', { timeout: 15000 })
   const failed = await detailProbe(page)
@@ -243,6 +250,7 @@ let scopedRowHref = null
   await page.waitForSelector('a.lp-row', { timeout: 15000 })
   const mobile = await listProbe(page)
   check('390 list keeps the leftmost first-focus door', doorOk(mobile.door, 'Back to session terminal') && mobile.door.top < 300, JSON.stringify(mobile.door))
+  check('390 list has export but no readiness gates', mobile.readinessGates === 0 && mobile.exportDoors === 1, JSON.stringify(mobile))
   check('390 list has zero horizontal overflow', mobile.widths.doc <= 390 && mobile.widths.body <= 390, JSON.stringify(mobile.widths))
   await page.screenshot({ path: join(OUT, 'b-04-scoped-list-390-en.png') })
 

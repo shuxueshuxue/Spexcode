@@ -11,6 +11,7 @@ related:
   - spec-cli/src/eval-cli-read.test.ts
   - spec-dashboard/src/SessionInterface.jsx
   - spec-eval/src/sessioneval.test.ts
+  - spec-eval/src/sessioneval-cold-gate.api.test.ts
   - spec-eval/src/sessionimpact.api.test.ts
   - spec-dashboard/src/EvalsPage.jsx
   - spec-dashboard/test/session-scope-impact.e2e.mjs
@@ -33,7 +34,8 @@ route family — a session's evaluation is the same pages as the project's, scop
 
 **One engine, thin faces** (the [[eval-history]] / `buildBoard` pattern). The engine is `sessioneval.ts` in
 [[spec-eval]] — the marshaled *evaluation* lives with the evaluation package and is the
-one place the eval engine reaches into the review state ([[manager-cockpit]]'s `reviewPayload`). It runs ONLY on the
+one place the eval engine reaches into the full review state ([[manager-cockpit]]'s `reviewPayload`), and only
+the self-contained export needs that full bundle. It runs ONLY on the
 backend: `buildExportModel(id)` joins the payload's diff (grouped per spec node) with each affected scenario's
 [[eval-tab]] timeline (latest reading per scenario — verdict, expected, the content-addressed
 evidence) and the gates; `renderExportHtml(model)` emits ONE self-contained HTML document, evidence inlined
@@ -136,7 +138,9 @@ freshness. A build reads the revision before and after the fold; a mismatch is d
 summary and a demand projection bearing the same revision are the same evaluation cut, not two coincidentally similar
 reads.
 
-That same content-addressed cut carries the **derived full model**, not only the summary. Every build
+That same content-addressed cut carries the **derived full eval model**, not only the summary. Manager review
+chrome is deliberately outside the cut: it is current session state, not eval input, and including it would make
+every summary and exact-impact read synchronously buy questions they do not publish. Every build
 deposits its model beside the summary under the one `session + content revision` key, so a repeat open at an
 unmoved revision replays it instead of re-deriving it from Git — the observable difference between opening a
 session's evaluation once and opening it again is a read, not a rebuild. It is the same cache owner, key and
@@ -228,7 +232,7 @@ jump into, no extra fetch.
 
 **The interactive face is the Evals route family, session-scoped** ([[evals-view]]): the canonical
 address of a session's evaluation is `#/evals?q=is:eval scope:<id>` (the list — the same
-[[evals-feed]] row grammar with the session's gates strip above — its toolbar leading with the
+[[evals-feed]] row grammar — its toolbar leading with the
 icon-only terminal door as its first focusable control, labelled by the short localized
 `Back to session terminal` / `返回会话终端` command ([[evals-view]]) — filed readings ordered newest-first
 across source ownership, with this session's measurements ✦-marked and inherited measurements legible by
@@ -252,7 +256,9 @@ board command opens the same door. The LEGACY address `#/sessions/<id>/eval[/<no
 normalizes to the canonical form at the route layer ([[side-nav]] — replace, old links keep working).
 The scoped detail exposes no second terminal door: its one small back arrow, plus load-failed and
 not-found list links, return to this scoped list; only from the list does the terminal door leave the
-Evals hierarchy. There is NO build/typecheck/test gate in the gates strip, because soundness is proven by measuring the
+Evals hierarchy. The page-bounded list carries no manager gate strip. Conflict, lint, ahead, and committed
+remain together on explicit manager review and the self-contained export: none is a property of the selected
+scenario page, and none may delay it. Soundness is proven by measuring the
 real product, not by a language-specific checker; a session with no worktree/diff shows a clean empty
 state.
 
@@ -270,11 +276,10 @@ cached FULL model when one exists: a complete answer already paid for beats a ch
 the sequence pass carry no freshness claim and are refused outright if asked for a verdict, so the saving can
 never be spent on a guess.
 
-It does not buy the LIST page's chrome either. The gates strip — does this branch conflict with the base, how
-far ahead is it, is anything uncommitted — is a question about the branch, not about the scenario being read,
-and answering it costs a merge probe and a whole-worktree dirty scan. A detail renders none of it, so a
-focused build reads the session's IDENTITY from its record (free) rather than its review payload, and the
-model simply carries no gates. This is the same rule as the freshness scope, applied one layer out: a
+It does not buy manager review chrome either. Whether this branch conflicts with the base, how far ahead it is,
+what is uncommitted, and whether the backend checkout lints clean are questions about review, not about the
+scenario page being read. List and detail models therefore read the session's IDENTITY from its record (free)
+rather than its review payload and carry no gates. This is the same rule as the freshness scope, applied one layer out: a
 response buys the questions it answers. Each response
 carries the same generation and content revision as the graph field. It carries the `sessionEvalSummary`
 projection too WHEN it has one honestly: a focused detail measured the rows it renders, not the scope, so it
@@ -301,7 +306,10 @@ session-scoped list's CLI twin: it walks the same `/api/evals` pages and renders
 order as text by projecting the returned item sequence directly — filed readings newest-first across nodes
 and source ownership, the session's own readings ✦-marked and inherited readings distinguished by the absent
 ✦, then blind spots. A row retains its node label as context; the node is never a grouping key that can move
-that row out of the global sequence. An uncovered frontend node remains flagged — all over the same affected-scenario set, so a terminal-bound manager reads the measured loss
+that row out of the global sequence. The paged model's empty `gates` array is machine-shape compatibility,
+not a visible empty section: human text omits a blank `gates :` line, while `--json` preserves the exact
+response. Full conflict/lint/ahead/committed gates remain visible in explicit review and the export artifact.
+An uncovered frontend node remains flagged — all over the same affected-scenario set, so a terminal-bound manager reads the measured loss
 without the dashboard. `proof` is no longer a user-facing word at all: the export rides the eval read as
 its `--export` flag, and the old `spex review proof` spelling is gone — a signpost names the canonical
 form and exits non-zero, never running ([[cli-surface]]). The read/write split stays intact: `spex eval

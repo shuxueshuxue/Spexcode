@@ -306,6 +306,10 @@ exec "$IMPACT_REAL_GIT" "$@"
     check(!row(beta.body, 'retracted-scenario') && JSON.stringify(impactScenario(beta.body, 'retracted-scenario')?.impact) === '[]', 'retracted reading must not create measurement impact')
     check(JSON.stringify(impactScenario(beta.body, 'beta-scenario')?.selectorHits?.flatMap((hit: any) => hit.selectors)) === JSON.stringify(['beta']), 'beta-only must report beta selector hit')
 
+    // Move a real projection input before arming the race. Otherwise the beta cut above is a legitimate
+    // content-addressed replay and no exact diff runs; the old control accidentally triggered on the
+    // unrelated manager-review diff that a page-bounded list no longer performs.
+    writeFileSync(join(session, 'docs/context.md'), 'context race\n')
     writeFileSync(httpRaceEnable, 'enabled\n')
     const movingRequest = scoped()
     let raceReached = false
@@ -323,6 +327,7 @@ exec "$IMPACT_REAL_GIT" "$@"
     writeFileSync(httpRaceRelease, 'released\n')
     const movingHttp = await movingRequest
     rmSync(httpRaceEnable, { force: true })
+    writeFileSync(join(session, 'docs/context.md'), 'context v1\n')
     observe('moving-session-head-retry', movingHttp, {
       oldHead: betaHead,
       advancedHead: retryHead,

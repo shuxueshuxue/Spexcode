@@ -276,7 +276,7 @@ export default {
 
   sessionEval: {
     btn: '评测',
-    btnTitle: '打开此会话的评测页 —— 测得的评测证据与合并门禁（Evals 页会话视角）',
+    btnTitle: '在 Evals 页打开此会话已测得的评测证据',
     scopeDoor: '返回会话终端',
     none: '此会话暂无评测',
     unavailable: '会话模型成功加载前无法显示评测。',
@@ -635,7 +635,7 @@ export default {
     // 面板命令 —— Command Box 在本地执行（不发送给智能体）的 `/` 命令。
     // `*Desc` 是 `/` 菜单行的说明；`*Title` 是按钮的悬停提示。
     cmd: {
-      evalDesc: '切换到此会话的评测页 —— 评测证据、改动、合并门禁',
+      evalDesc: '切换到此会话的 Evals 页 —— 受影响场景与实测证据',
       mergeTitle: '将此待审查提案合并到 main',
       mergeDesc: '将此待审查提案合并到 main',
       mergeUnavailableArchived: '不能合并：该会话已归档',

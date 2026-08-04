@@ -116,7 +116,7 @@ filter (default off) picking the root.
   phone session header's eval doors are REAL ANCHORS whose href IS that canonical address, projected by
   [[address-routing]] — one ordinary hash push straight to the final address, never a JS-only button,
   never the legacy `?session` param) — sources the list from one session's WORKTREE-rooted model
-  ([[session-eval]]'s `/api/sessions/:id/evals` — its gates strip shown, blind spots as non-navigable
+  ([[session-eval]]'s `/api/sessions/:id/evals` — blind spots as non-navigable
   rows, in-session rows ✦-marked). That backend model is already bounded to scenarios whose own code or
   semantic contract this worktree affected, plus scenarios this session measured; the page never repeats
   the impact predicate. An affected declared scenario without a reading remains a blind/unmeasured row and
@@ -128,16 +128,17 @@ filter (default off) picking the root.
   default view — the door-minted address — keeping the user on the data-source axis their address named
   (no detail face carries a terminal door).
   The scoped LIST alone carries the restrained **terminal DOOR** — the ONE EvalScopeDoor primitive,
-  icon-only and never a visible banner: it is the gates toolbar's LEFTMOST item and first focusable
-  control, before lint/merge/ahead/committed and export, so the visual and keyboard hierarchy reads
+  icon-only and never a visible banner: it is the list toolbar's LEFTMOST item and first focusable
+  control, before the optional unknown-coverage warning and export, so the visual and keyboard hierarchy reads
   "back to the session" before the list's local controls at desktop and phone width. The gates strip is a
   leading child inside the SAME [[page-scroll]] as the list, never a sibling that moves the scrollbar
-  track below the shared inset. The whole gates toolbar is the scoped list's **sticky status strip**: it
+  track below the shared inset. The whole list toolbar is the scoped list's **sticky status strip**: it
   pins at that scrollport's shared 10px top inset while the list moves beneath it, with an opaque
   shared-token theme background and boundary so rows never read through it. Its height is stable at each
   viewport; at 390px the controls wrap into exactly two contained lines without covering the first row or
   widening the page. Trunk Evals mounts no strip or empty sticky placeholder, and Issues is unchanged. The
-  strip stays below the shared Filters popover and tooltip layers and does not disturb detail-side sticky
+  It carries no conflict/lint/ahead/committed readiness gates; explicit review and the self-contained export
+  retain that full gate row. The strip stays below the shared Filters popover and tooltip layers and does not disturb detail-side sticky
   containment. The door is a REAL anchor to `#/sessions/<id>`, the terminal console, wearing the left-arrow
   back glyph on a stable 32px hit target. Its tooltip and aria-label use the same short localized imperative
   without a dynamic id:

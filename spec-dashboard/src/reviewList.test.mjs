@@ -412,7 +412,10 @@ test('the scoped eval list owns the ONE terminal return door; details have no se
   assert.match(page, /<Icon name="arrow-left" size=\{16\} \/>\s*<\/a>/)
   // Exactly one home, leading the gates DOM before gate spans and the trailing export action.
   assert.equal((page.match(/<EvalScopeDoor sessionId=\{sessionId\} \/>/g) || []).length, 1)
-  assert.match(page, /<div className="se-gates">\s*<EvalScopeDoor sessionId=\{sessionId\} \/>\s*\{pageData && pageData\.gates/)
+  assert.match(page, /<div className="se-gates">\s*<EvalScopeDoor sessionId=\{sessionId\} \/>/)
+  assert.doesNotMatch(page, /pageData\.gates\.map/)
+  assert.match(page, /className="se-gate bad se-unknown"/)
+  assert.match(page, /className="se-export"/)
   assert.doesNotMatch(page, /const action = sessionId|action=\{action\}/)
   // Stable target and dead detail-action geometry removed.
   assert.match(css, /\.se-door \{[^}]*width: 32px; height: 32px;/)

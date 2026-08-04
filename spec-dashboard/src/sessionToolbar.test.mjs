@@ -148,6 +148,8 @@ test('session eval glance reuses the graph summary projection and review-state v
   assert.doesNotMatch(source, /si-eval-measured|list-checks|session\.evalMeasured/)
   assert.match(source, /summary\.unknown > 0/)
   assert.match(source, /t\('session\.evalUnknown'/)
+  assert.doesNotMatch(en, /session's evaluation[^\n]*merge gates|Evals page[^\n]*merge gates/i)
+  assert.doesNotMatch(zh, /评测页[^\n]*合并门禁/)
   assert.match(source, /summary\.phase === 'updating'/)
   assert.match(source, /summary\.phase === 'disconnected'/)
 })

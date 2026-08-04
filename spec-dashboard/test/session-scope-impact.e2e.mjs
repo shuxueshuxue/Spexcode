@@ -34,6 +34,7 @@ const [modelResponse, reviewResponse] = await Promise.all([
 if (!modelResponse.ok) throw new Error(`session model HTTP ${modelResponse.status}`)
 if (!reviewResponse.ok) throw new Error(`session review HTTP ${reviewResponse.status}`)
 const [model, review] = await Promise.all([modelResponse.json(), reviewResponse.json()])
+check('paged session list carries no manager readiness gates', Array.isArray(model.gates) && model.gates.length === 0, JSON.stringify(model.gates))
 const states = model.items.map((item) => ({
   node: item.node,
   scenario: item.scenario,
@@ -105,6 +106,9 @@ try {
       text: button.textContent.trim(),
     })),
     unknownTips: [...document.querySelectorAll('.se-gates > .se-gate')].map((gate) => gate.getAttribute('data-tip')).filter(Boolean),
+    readinessGates: document.querySelectorAll('.se-gates > .se-gate:not(.se-unknown)').length,
+    terminalDoors: document.querySelectorAll('.se-gates > .se-door').length,
+    exportDoors: document.querySelectorAll('.se-gates > .se-export').length,
     scrollOwners: document.querySelectorAll('.page-scroll').length,
   }))
   list.rows = list.orderedRows.slice().sort()
@@ -119,6 +123,8 @@ try {
     && list.verdicts[1]?.text.startsWith(`Pass${expected.freshPass}`)
     && list.verdicts[2]?.text.startsWith(`Unmeasured${expected.blind}`), JSON.stringify(list.verdicts))
   check('unknown coverage stays in leading, outside scenario rows', expected.unknown === 0 || list.unknownTips.some((tip) => tip?.includes(`${expected.unknown}`) && tip?.toLowerCase().includes('unknown')), JSON.stringify(list.unknownTips))
+  check('list toolbar contains terminal/export/unknown only, never readiness gates', list.readinessGates === 0
+    && list.terminalDoors === 1 && list.exportDoors === 1, JSON.stringify(list))
   check('scoped gates and rows share one PageScroll', list.scrollOwners === 1, String(list.scrollOwners))
   await page.screenshot({ path: join(OUT, 'scoped-list.png'), fullPage: true })
 

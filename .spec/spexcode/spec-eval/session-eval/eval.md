@@ -110,13 +110,14 @@ scenarios:
   - name: proof-renders
     tags: [frontend-e2e, desktop]
     description: >
-      Open the scoped list `#/evals?q=is:eval scope:<id>` for a real session and read the DOM: the gates strip, the row list
+      Open the scoped list `#/evals?q=is:eval scope:<id>` for a real session and read the DOM: the list toolbar, the row list
       (blind spots vs measured, in-session vs earlier), where evidence bytes load, and the export link.
       Open one row's standalone detail, then follow the export link and check the self-contained HTML still
       renders whole (masthead, gates, evidence inlined, diff drill-down).
     expected: |
-      The session-scoped list shows the gates strip (lint · merge · ahead · committed, the spex-review
-      numbers), then measured rows newest-first across source ownership, with this session's own readings
+      The session-scoped list toolbar contains the terminal door, the export action, and an unknown-coverage
+      warning only when unknown coverage exists. It contains NO lint/merge/ahead/committed readiness gates;
+      those remain together on explicit session review and the self-contained export. The list then shows measured rows newest-first across source ownership, with this session's own readings
       ✦-marked and inherited readings legible by the absent ✦, followed by blind spots with the empty ring.
       NO evidence bytes load with the list (rows are tier-1 JSON); blob requests
       begin only after a real row anchor opens its standalone detail. The `export ↗` link serves the
@@ -148,8 +149,8 @@ scenarios:
       `spex session review proof <SEL>`; the help probes (`spex help eval`, `spex eval --help`,
       the `spex help` map). Capture stdout/stderr + exit codes as the transcript.
     expected: >
-      `spex eval ls --session <SEL>` renders the /evals model as text in the tab's attention order — gates
-      strip, a ✦ legend when the session filed its own readings, then filed readings newest-first across
+      `spex eval ls --session <SEL>` renders the /evals model as text in the tab's attention order — no blank
+      `gates :` label for the paged model's empty gate array, a ✦ legend when the session filed its own readings, then filed readings newest-first across
       nodes and source ownership (own marked ✦, inherited distinguished by the absent ✦), followed by blind
       spots. Each item retains its node label without node regrouping; an empty diff prints a
       clean nothing-to-evaluate line; --json dumps the model. --export writes the self-contained HTML
@@ -177,10 +178,12 @@ scenarios:
       The phone session surface's eval door is the same real anchor. The typed /eval navigates to the same
       address. The console itself never mounts an eval pane (the terminal's width never reflows). The
       landed page is the SAME shared list chrome the un-scoped #/evals renders (one component set — no
-      session-only clone) carrying the icon-only terminal door as the gates toolbar's leftmost and first
+      session-only clone) carrying the icon-only terminal door as the list toolbar's leftmost and first
       focusable control, with the short localized back-to-terminal command ([[evals-view]]'s
       scoped-terminal-door), the
-      session's gates strip, and the export ↗ link at GET /api/sessions/<id>/evals?format=html. Zero loss
+      optional unknown-coverage warning, and the export ↗ link at GET /api/sessions/<id>/evals?format=html.
+      It carries no lint/merge/ahead/committed gates and no tooltip/menu copy claiming otherwise; full gates
+      remain in explicit review and export. Zero loss
       = one canonical home for a session's evaluation, reached through real-anchor doors.
   - name: session-eval-deep-link
     tags: [frontend-e2e, desktop]
@@ -301,6 +304,7 @@ scenarios:
 
 The controlled source fixture proves scenario membership, impact reasons, dirty-sidecar and rename edges,
 and export completeness against explicit inputs. YATU then drives the real dashboard with a session carrying
-real changes + readings: the session-scoped Evals pages are read from the live DOM (toolbar, rows, filters,
-gates, detail, Back), and the export artifact is opened as a plain document. The browser may prove that every
+real changes + readings: the session-scoped Evals pages are read from the live DOM (terminal/export/unknown
+toolbar, rows, filters, detail, Back), and the export artifact is opened as a plain document with its full
+review gates. The browser may prove that every
 face consumes the lean API model; it never uses that same API response as the independent membership oracle.

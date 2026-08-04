@@ -306,7 +306,10 @@ session-scoped list's CLI twin: it walks the same `/api/evals` pages and renders
 order as text by projecting the returned item sequence directly — filed readings newest-first across nodes
 and source ownership, the session's own readings ✦-marked and inherited readings distinguished by the absent
 ✦, then blind spots. A row retains its node label as context; the node is never a grouping key that can move
-that row out of the global sequence. An uncovered frontend node remains flagged — all over the same affected-scenario set, so a terminal-bound manager reads the measured loss
+that row out of the global sequence. The paged model's empty `gates` array is machine-shape compatibility,
+not a visible empty section: human text omits a blank `gates :` line, while `--json` preserves the exact
+response. Full conflict/lint/ahead/committed gates remain visible in explicit review and the export artifact.
+An uncovered frontend node remains flagged — all over the same affected-scenario set, so a terminal-bound manager reads the measured loss
 without the dashboard. `proof` is no longer a user-facing word at all: the export rides the eval read as
 its `--export` flag, and the old `spex review proof` spelling is gone — a signpost names the canonical
 form and exits non-zero, never running ([[cli-surface]]). The read/write split stays intact: `spex eval

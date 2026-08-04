@@ -45,6 +45,11 @@ dispatched, versus a worker proposing its own end for the human to perform. Any 
 reclaim what it started — the propose-close cleanup nudge included — scopes its sweep to what the agent
 spawned and excludes the running session by name, because `.` and a bare own id are valid selectors here.
 
+Objects and payloads are parsed by role after recognized flags and their values are removed, never by a fixed
+`process.argv` slot. Thus a routing flag may follow a selector before or after a write payload without becoming
+that payload. A write with a missing or extra positional, or an unknown flag, fails before selector resolution
+or backend contact; a usage error can never print the write's success receipt.
+
 `spex session reparent <child-SEL...> --to <parent-SEL>` is the manager recovery verb for moving a fleet to a
 replacement supervisor. `--to` is the operation's required destination rather than a second positional list:
 the resulting command reads naturally, permits a batch of children, and gives a missing parent an unambiguous

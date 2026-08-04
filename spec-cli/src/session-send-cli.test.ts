@@ -79,12 +79,17 @@ test('session send keeps the message positional when routing flags appear before
   })
 })
 
-test('session send rejects a missing message before session resolution or dispatch', async () => {
+test('session send rejects missing or extra positionals before session resolution or dispatch', async () => {
   await withBackend(async (api, requests, env) => {
-    const result = await runCli(['session', 'send', TARGET, '--api', api], env)
-    assert.equal(result.code, 2)
-    assert.equal(result.stdout, '')
-    assert.match(result.stderr, /usage: spex session send <SEL> "<msg>"/)
+    for (const args of [
+      ['session', 'send', TARGET, '--api', api],
+      ['session', 'send', TARGET, 'one message', 'second message', '--api', api],
+    ]) {
+      const result = await runCli(args, env)
+      assert.equal(result.code, 2)
+      assert.equal(result.stdout, '')
+      assert.match(result.stderr, /usage: spex session send <SEL> "<msg>"/)
+    }
     assert.deepEqual(requests, [], 'invalid argv must not reach the backend')
   })
 })
@@ -99,3 +104,12 @@ test('session send rejects unknown flags before session resolution or dispatch',
   })
 })
 
+test('session send preserves the mutually exclusive raw-key face', async () => {
+  await withBackend(async (api, requests, env) => {
+    const result = await runCli(['session', 'send', TARGET, '--api', api, '--keys', 'Up Enter'], env)
+    assert.equal(result.code, 0, result.stderr)
+    assert.equal(result.stdout, `sent 2 keys -> ${TARGET}\n`)
+    const posts = requests.filter((request) => request.method === 'POST')
+    assert.deepEqual(posts.map((request) => request.body), [{ kind: 'keys', keys: ['Up', 'Enter'] }])
+  })
+})

@@ -803,7 +803,8 @@ if (cmd === 'serve') {
     // session_id) and the stateKit shared with `spex internal session-*`. `c` (client.ts) backs the
     // read/control subs that route through the backend. Lazily imported.
     const c = await import('./client.js')
-    const id = process.argv[4]
+    const sendPositionals = sub === 'send' ? positionals(4) : []
+    const id = sub === 'send' ? sendPositionals[0] : process.argv[4]
     if (sub === 'resume') {
       // bring the agent back up (relaunch ONLY if confirmed offline, the backend owns it); demotes a working
       // `active` to idle but leaves a standing declaration/proposal untouched (see sessions.ts resumeSession()).
@@ -894,6 +895,14 @@ if (cmd === 'serve') {
       const result = await reparentSessions(childIds, parent)
       console.log(`reparented ${result.children.join(', ')} -> ${result.parent}`)
     } else if (sub === 'send') {
+      rejectUnknownFlags('spex session send', 4, ['keys', 'api', 'port', 'password', 'insecure'])
+      const rawKeys = has('keys')
+      if ((!rawKeys && sendPositionals.length !== 2) || (rawKeys && sendPositionals.length !== 1)) {
+        console.error(rawKeys
+          ? 'usage: spex session send <SEL> --keys "<keys>"   (e.g. "Up Up Enter", "C-r", single chars — last resort; try a plain send first)'
+          : 'usage: spex session send <SEL> "<msg>" [--api <url> | --port <n>]')
+        process.exit(2)
+      }
       const full = await resolveSelectorOrExit(id)
       if (has('keys')) {
         // the LAST-RESORT face of send: forward raw nav-mode keystrokes (tmux send-keys, NEVER the prompt
@@ -924,7 +933,7 @@ if (cmd === 'serve') {
         // the board), NOT the stable sessionLabel that stops at the bare prompt-truncation title.
         sender = 'ok' in sr ? { id: sr.ok.id, label: s.sessionHeadline(sr.ok) } : { id: senderId, label: null }
       }
-      const r = await c.clientSend(full, s.withSenderHint(process.argv[5] ?? '', sender), senderId ?? undefined)
+      const r = await c.clientSend(full, s.withSenderHint(sendPositionals[1], sender), senderId ?? undefined)
       console.log(r.ok ? 'sent' : `dispatch failed: ${r.error}`)
       process.exit(r.ok ? 0 : 1)
     } else if (sub === 'show') {

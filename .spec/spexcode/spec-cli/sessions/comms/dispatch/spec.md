@@ -92,11 +92,13 @@ The public merge dispatch requires `expectedBranchHead` and `expectedBaseHead` f
 manager review together with the standard `Idempotency-Key` header. Missing authority, malformed JSON, unknown
 fields, abbreviated/non-native object ids, an ungoverned record, or any lifecycle other than
 `awaiting` + `proposal=merge` is refused before reopen, record mutation, timeline append, or queue mutation.
-The key is request authority, not transport identity: only its SHA-256 digest is retained on the exact
-session's existing durable sent timeline event, together with the normalized head-pair digest. Under the
-same session record lock that validates the record and Git pair and appends the prompt, a replay of the same
-session/key/payload returns the original accepted dispatch without appending or enqueueing a second prompt;
-reusing that key for a different pair fails loudly with `session_merge_key_reused`.
+The key is request authority scoped to the exact `/api/sessions/:id/merge` route, not global transport identity:
+only its SHA-256 digest is retained on that session's existing durable sent timeline event, together with the
+normalized head-pair digest. Under the same session record lock that validates the record and Git pair and appends
+the prompt, a replay of the same session/key/payload returns the original accepted dispatch without appending or
+enqueueing a second prompt; reusing that key for a different pair on the same session fails loudly with
+`session_merge_key_reused`. Another session may independently accept the same raw key because its timeline is a
+separate authority domain; callers coordinating a successor persist a key derived from that successor id and pair.
 
 The first acceptance proves that the recorded worktree still has its governed symbolic branch checked out,
 that the stored branch ref and canonical base ref still name the expected objects, and that the worktree HEAD

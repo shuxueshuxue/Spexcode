@@ -8,13 +8,16 @@ scenarios:
     description: >
       In an isolated real Git project and real Spex backend, create a governed session through
       `POST /api/sessions`, commit work on its branch, and read `GET /api/sessions/:id/review`. Advance both
-      that branch and the canonical base after the first response and read it again. Capture the backend's Git
-      argv and use Git itself as the independent oracle for both object-id pairs and the review facts.
+      that branch and the canonical base after the first response and read it again. During another read, move the
+      canonical ref after the first pair snapshot but before review assembly finishes. Capture the backend's Git argv
+      and use Git itself as the independent oracle for both object-id pairs and the review facts.
     expected: >
       Every successful review response carries full exact `branchHead` and `baseHead` object ids from one ref
       snapshot. The first pair remains bound after either ref advances; the second names the new pair. Ahead,
       merge-base diff, and conflict commands consume those OIDs, never a moving symbolic branch, `HEAD`, or
-      canonical base name, and their results equal Git's independent answer for the published pair.
+      canonical base name, and their results equal Git's independent answer for the published pair. A ref that moves
+      during assembly makes that read fail with `session_review_head_changed`; the next stable read publishes the new
+      pair rather than a mixed-generation answer.
   - name: review-reports-measured-loss-without-grading-it
     tags: [backend-api]
     test: spec-cli/test/cockpit-eval-readout.mjs

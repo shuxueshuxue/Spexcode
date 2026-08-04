@@ -65,9 +65,31 @@ test('public review and merge authority bind exact head and one durable dispatch
   const tmux = `spex-manager-authority-${process.pid}-${Date.now()}`
   const gitBin = join(fixture, 'bin')
   const gitTrace = join(fixture, 'git-argv.log')
+  const refMoveArm = join(fixture, 'move-ref.arm')
+  const refMoveClaim = join(fixture, 'move-ref.claim')
   const realGit = execFileSync('bash', ['-lc', 'command -v git'], { encoding: 'utf8' }).trim()
   mkdirSync(gitBin, { recursive: true })
-  writeFileSync(join(gitBin, 'git'), '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$SPEX_MANAGER_GIT_TRACE"\nexec "$SPEX_MANAGER_REAL_GIT" "$@"\n')
+  writeFileSync(join(gitBin, 'git'), [
+    '#!/bin/sh',
+    'printf \'%s\\n\' "$*" >> "$SPEX_MANAGER_GIT_TRACE"',
+    'case " $* " in',
+    '  *" rev-list --count "*)',
+    '    if [ -f "$SPEX_MANAGER_MOVE_REF_ARM" ] && mkdir "$SPEX_MANAGER_MOVE_REF_CLAIM" 2>/dev/null; then',
+    '      "$SPEX_MANAGER_REAL_GIT" "$@"',
+    '      rc=$?',
+    '      if [ "$rc" -eq 0 ]; then',
+    '        old=$("$SPEX_MANAGER_REAL_GIT" -C "$SPEX_MANAGER_PROJECT" rev-parse refs/heads/main) || exit $?',
+    '        tree=$("$SPEX_MANAGER_REAL_GIT" -C "$SPEX_MANAGER_PROJECT" rev-parse "$old^{tree}") || exit $?',
+    '        next=$(printf \'mid-review ref move\\n\' | "$SPEX_MANAGER_REAL_GIT" -C "$SPEX_MANAGER_PROJECT" commit-tree "$tree" -p "$old") || exit $?',
+    '        "$SPEX_MANAGER_REAL_GIT" -C "$SPEX_MANAGER_PROJECT" update-ref refs/heads/main "$next" "$old" || exit $?',
+    '      fi',
+    '      exit "$rc"',
+    '    fi',
+    '    ;;',
+    'esac',
+    'exec "$SPEX_MANAGER_REAL_GIT" "$@"',
+    '',
+  ].join('\n'))
   chmodSync(join(gitBin, 'git'), 0o755)
   mkdirSync(join(project, '.spec', 'project'), { recursive: true })
   writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n\n# project\n')
@@ -90,6 +112,9 @@ test('public review and merge authority bind exact head and one durable dispatch
     PATH: `${gitBin}:${process.env.PATH ?? ''}`,
     SPEX_MANAGER_GIT_TRACE: gitTrace,
     SPEX_MANAGER_REAL_GIT: realGit,
+    SPEX_MANAGER_MOVE_REF_ARM: refMoveArm,
+    SPEX_MANAGER_MOVE_REF_CLAIM: refMoveClaim,
+    SPEX_MANAGER_PROJECT: project,
   }
   delete env.SPEXCODE_API_URL
   delete env.SPEXCODE_SESSION_ID
@@ -123,6 +148,7 @@ test('public review and merge authority bind exact head and one durable dispatch
   let backendB: Backend | null = startBackend(portB)
   let id = ''
   let cliId = ''
+  let siblingId = ''
   try {
     await Promise.all([waitHealth(baseA, 'backend A health'), waitHealth(baseB, 'backend B health')])
     const created = await request(baseA, '/api/sessions', {
@@ -258,6 +284,13 @@ test('public review and merge authority bind exact head and one durable dispatch
     git(worktree, 'checkout', '-q', sessionBranch)
     git(worktree, 'branch', '-D', 'authority-other')
 
+    writeFileSync(refMoveArm, 'armed\n')
+    const movedDuringReview = await request(baseA, `/api/sessions/${id}/review`)
+    rmSync(refMoveArm, { force: true })
+    const baseAfterMove = git(project, 'rev-parse', 'main')
+    const stableAfterMove = await request(baseA, `/api/sessions/${id}/review`)
+    assert.equal(stableAfterMove.status, 200, stableAfterMove.text)
+
     const finalTimeline = await request(baseA, `/api/sessions/${id}/timeline`)
     const finalMergePrompts = finalTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text))
     const keyedPrompt = finalMergePrompts.find((event: any) => event.text.includes(headThree) && event.text.includes(baseThree))?.text ?? ''
@@ -295,6 +328,8 @@ test('public review and merge authority bind exact head and one durable dispatch
       reused: { status: reused.status, code: reused.body.code },
       detached: { status: detached.status, code: detached.body.code },
       wrongBranch: { status: wrongBranch.status, code: wrongBranch.body.code },
+      movedDuringReview: { status: movedDuringReview.status, code: movedDuringReview.body.code },
+      stableAfterMove: { branchHead: stableAfterMove.body.branchHead, baseHead: stableAfterMove.body.baseHead },
       finalPromptCount: finalMergePrompts.length,
       promptBindsReviewedPair: keyedPrompt.includes(headThree) && keyedPrompt.includes(baseThree),
       promptReprovesSymbolicBranch: keyedPrompt.includes('symbolic-ref --quiet --short HEAD'),
@@ -330,6 +365,8 @@ test('public review and merge authority bind exact head and one durable dispatch
       reused: { status: 409, code: 'session_merge_key_reused' },
       detached: { status: 409, code: 'session_merge_branch_unproven' },
       wrongBranch: { status: 409, code: 'session_merge_branch_unproven' },
+      movedDuringReview: { status: 409, code: 'session_review_head_changed' },
+      stableAfterMove: { branchHead: headThree, baseHead: baseAfterMove },
       finalPromptCount: 1,
       promptBindsReviewedPair: true,
       promptReprovesSymbolicBranch: true,
@@ -338,6 +375,36 @@ test('public review and merge authority bind exact head and one durable dispatch
       promptMergesExactObject: true,
       rawKeyVisible: false,
     })
+
+    const siblingCreated = await request(baseA, '/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': 'manager-authority-sibling-session' },
+      body: JSON.stringify({ prompt: 'manager authority sibling fixture', launcher: 'fake' }),
+    })
+    assert.equal(siblingCreated.status, 201, siblingCreated.text)
+    siblingId = siblingCreated.body.id
+    const siblingDetail = await waitFor(
+      () => request(baseA, `/api/sessions/${siblingId}`).then((reply) => reply.body),
+      (session) => session?.liveness === 'online',
+      'sibling fixture session online',
+    )
+    writeFileSync(join(siblingDetail.path, 'sibling.txt'), 'reviewed sibling\n')
+    git(siblingDetail.path, 'add', 'sibling.txt')
+    git(siblingDetail.path, 'commit', '-qm', 'spec: reviewed sibling authority')
+    execFileSync(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', 'merge'], {
+      cwd: siblingDetail.path, env: { ...env, SPEXCODE_SESSION_ID: siblingId }, encoding: 'utf8',
+    })
+    const siblingReview = await request(baseA, `/api/sessions/${siblingId}/review`)
+    assert.equal(siblingReview.status, 200, siblingReview.text)
+    const siblingMerge = await request(baseA, `/api/sessions/${siblingId}/merge`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': 'maintenance-release-1' },
+      body: JSON.stringify({ expectedBranchHead: siblingReview.body.branchHead, expectedBaseHead: siblingReview.body.baseHead }),
+    })
+    const siblingTimeline = await request(baseA, `/api/sessions/${siblingId}/timeline`)
+    assert.deepEqual({ status: siblingMerge.status, dispatched: siblingMerge.body.dispatched, replayed: siblingMerge.body.replayed === true }, { status: 200, dispatched: true, replayed: false })
+    assert.equal(siblingTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length, 1)
+    console.log(`manager-authority-route-scope ${JSON.stringify({ sameRawKey: true, independentAcceptance: true, promptCount: 1 })}`)
 
     const cliCreated = await request(baseA, '/api/sessions', {
       method: 'POST',
@@ -369,6 +436,7 @@ test('public review and merge authority bind exact head and one durable dispatch
     assert.equal(cliTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length, 1)
     console.log(`manager-authority-cli ${JSON.stringify({ dispatched: true, replayed: true, promptCount: 1 })}`)
   } finally {
+    if (siblingId && backendA) await request(baseA, `/api/sessions/${siblingId}/close`, { method: 'POST' }).catch(() => {})
     if (cliId && backendA) await request(baseA, `/api/sessions/${cliId}/close`, { method: 'POST' }).catch(() => {})
     if (id && backendA) await request(baseA, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
     for (const backend of [...backends]) {

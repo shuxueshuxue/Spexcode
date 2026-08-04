@@ -35,7 +35,9 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
 - **branchHead / baseHead** — the exact immutable Git object ids whose branch/base generation every committed
   review fact below describes. Review resolves both branch refs in one Git ref snapshot, then uses ONLY those
   two object ids for ahead, merge-base diff, and conflict projection; a moving branch name, `HEAD`, or canonical
-  base name never rides a later review command. A caller can therefore bind a decision to the pair and reject
+  base name never rides a later review command. After assembling those facts it re-reads the pair and refuses the
+  review if either ref moved, so no response combines facts from one pair with a later visible generation. A caller
+  can therefore bind a decision to the pair and reject
   either work authored after review or canonical movement after review. Both ids ride the merge authority and
   prompt: the session agent re-proves its symbolic branch, worktree HEAD, stored branch ref, and canonical base
   ref before syncing, then freezes and merges the tested post-sync object. There is no second provenance model:
@@ -113,9 +115,11 @@ currently declaring `awaiting` + `proposal=merge`, with an `Idempotency-Key` and
 `baseHead` pair returned by review. It validates the record and both Git refs before reopening or appending
 anything. Acceptance is one existing durable timeline+delivery-queue write; only after that receipt exists does
 the server ensure the original agent is live and drain the debt. Native CLI and dashboard clients derive their
-retry key from the reviewed session/head pair instead of volatile client state, so the same decision replays the
-same acceptance even after either client restarts. Same-key/same-session/same-pair retries replay across backend
-restarts too, while a changed payload or either moved head is a loud 409. The raw key is never persisted. Thus
+retry key from the exact session route and reviewed head pair instead of volatile client state, so the same decision
+replays the same acceptance even after either client restarts. Key ownership is deliberately route-local: the same
+raw key may authorize an independent decision on another session, while the same route/key with another pair is a
+loud 409. Same-route/same-key/same-pair retries replay across backend restarts too, while either moved head is a loud
+409. The raw key is never persisted. Thus
 review SHOWS a stable decision, merge binds exactly that decision, and the agent still ENFORCES the tested landing
 itself.
 

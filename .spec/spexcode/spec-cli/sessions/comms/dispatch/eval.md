@@ -11,14 +11,16 @@ scenarios:
       proposes `nothing`; then declare merge. Submit missing/malformed authority and move each reviewed ref in
       turn. Remove only the fake harness rendezvous pathname while its owned pane remains live, concurrently POST
       the same caller key and exact branch/base pair through both backends, stop both backends, restart one on the
-      same store, and replay. Reuse the key with another pair, then submit fresh keys while the worktree is
-      detached and while another branch is checked out. Read the record, raw/public timeline, and pending debt.
+      same store, and replay. Reuse the key with another pair on that session; create another governed session and
+      use the same raw key for its own reviewed pair; then submit fresh keys while the first worktree is detached
+      and while another branch is checked out. Read both records, raw/public timelines, and pending debt.
     expected: >
       Active, non-merge-proposal, unkeyed, missing-field, malformed, stale-branch, and stale-base requests fail
       before lifecycle/timeline/queue mutation. Across the concurrent valid requests exactly one appends a merge
       prompt and one reports replay; the undeliverable prompt leaves exactly one pending debt. Restart replay
       reports the durable acceptance and leaves timeline/debt single. Reusing the key with another pair returns
-      HTTP 409 `session_merge_key_reused`; detached and wrong-branch worktrees return
+      HTTP 409 `session_merge_key_reused`, while the other session independently accepts the same raw key once;
+      detached and wrong-branch worktrees return
       `session_merge_branch_unproven`; none appends. The accepted prompt binds both reviewed objects, requires the
       agent to re-prove worktree/symbolic-branch/stored-branch/canonical-base identity before change, and after
       sync merges the freshly frozen tested object rather than a branch name. No raw key is retained anywhere.

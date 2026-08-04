@@ -572,6 +572,11 @@ app.post('/api/sessions/:id/resume', async (c) => {
 // a dispatch to the session's own agent (it runs the merge), never a server merge — the server never touches
 // main's tree. 200 {dispatched:true} once the prompt is accepted, 409 {dispatched:false} if the agent is unreachable.
 app.post('/api/sessions/:id/merge', async (c) => {
+  const requestKey = c.req.header('idempotency-key')
+  if (!requestKey) {
+    const r = await mergeSession(c.req.param('id'))
+    return c.json(r, r.dispatched ? 200 : (r.status ?? 409))
+  }
   const rawBody = await c.req.text()
   let body: unknown = {}
   if (rawBody.trim()) {
@@ -590,7 +595,7 @@ app.post('/api/sessions/:id/merge', async (c) => {
     return c.json({ dispatched: false, reason: 'reviewedHead must be a string', code: 'session_merge_invalid_request' }, 400)
   }
   const r = await mergeSession(c.req.param('id'), {
-    requestKey: c.req.header('idempotency-key'),
+    requestKey,
     ...(typeof input.reviewedHead === 'string' ? { reviewedHead: input.reviewedHead } : {}),
   })
   return c.json(r, r.dispatched ? 200 : (r.status ?? 409))

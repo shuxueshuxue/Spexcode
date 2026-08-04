@@ -1088,10 +1088,16 @@ function guardSession(id: string, primary: () => Session | null, degraded: () =>
 export type ApiBaseSource = 'flag' | 'worker-env' | 'record' | 'env-fallback' | 'default'
 export type ApiBaseInfo = { url: string; source: ApiBaseSource }
 const usageError = (msg: string): Error => { const e = new Error(msg); e.name = 'UsageError'; return e }
+
+export function optionArgv(argv: readonly string[] = process.argv): readonly string[] {
+  const delimiter = argv.indexOf('--')
+  return delimiter < 0 ? argv : argv.slice(0, delimiter)
+}
+
 // the explicit routing flag, read from THIS process's argv (never the environment — that's the point).
 // `--port` doubles as a BIND port for serve/dashboard, so the sugar is skipped for those verbs.
 function explicitApiFlag(): string | null {
-  const argv = process.argv
+  const argv = optionArgv()
   const ai = argv.indexOf('--api')
   if (ai >= 0) {
     const v = argv[ai + 1]

@@ -81,6 +81,51 @@ function rejectUnknownFlags(command: string, from: number, allowed: readonly str
   }
 }
 
+type SessionSendArgs =
+  | { selector: string; kind: 'text'; text: string }
+  | { selector: string; kind: 'keys'; keys: string[] }
+
+function sessionSendUsage(detail: string, keys = false): never {
+  console.error(`spex session send: ${detail}`)
+  console.error(keys
+    ? 'usage: spex session send <SEL> --keys "<keys>"   (e.g. "Up Up Enter", "C-r", single chars — last resort; try a plain send first)'
+    : 'usage: spex session send <SEL> "<msg>" [--api <url> | --port <n>]\n       spex session send <SEL> [--api <url> | --port <n>] -- <option-shaped-msg>')
+  process.exit(2)
+}
+
+function parseSessionSendArgs(args: string[]): SessionSendArgs {
+  const valueFlags = new Set(['--api', '--port', '--keys', '--password'])
+  const bareFlags = new Set(['--insecure'])
+  const values = new Map<string, string>()
+  const positionals: string[] = []
+  let endOfOptions = false
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i]
+    if (!endOfOptions && token === '--') { endOfOptions = true; continue }
+    if (!endOfOptions && token.startsWith('--')) {
+      if (!valueFlags.has(token) && !bareFlags.has(token)) sessionSendUsage(`unknown flag ${token}`)
+      if (values.has(token)) sessionSendUsage(`${token} may appear only once`, token === '--keys')
+      values.set(token, '')
+      if (bareFlags.has(token)) continue
+      const value = args[++i]
+      if (value === undefined || value === '' || value.startsWith('--')) sessionSendUsage(`${token} expects one non-empty value`, token === '--keys')
+      values.set(token, value)
+      continue
+    }
+    positionals.push(token)
+  }
+  if (values.has('--api') && values.has('--port')) sessionSendUsage('--api and --port are alternate routes; choose one')
+  const rawKeys = values.get('--keys')
+  if (rawKeys !== undefined) {
+    if (positionals.length !== 1) sessionSendUsage('raw keys take one selector and no text message', true)
+    const keys = rawKeys.split(/\s+/).filter(Boolean)
+    if (!keys.length) sessionSendUsage('--keys expects one non-empty value', true)
+    return { selector: positionals[0], kind: 'keys', keys }
+  }
+  if (positionals.length !== 2) sessionSendUsage('plain send requires exactly one selector and one message')
+  return { selector: positionals[0], kind: 'text', text: positionals[1] }
+}
+
 const SIGNPOSTS: Record<string, string> = {
   search: 'spex spec search <query>',
   owner: 'spex spec owner <path>',
@@ -802,8 +847,9 @@ if (cmd === 'serve') {
     // `s` (sessions.ts) backs the state PRODUCERS that stay local (done/park/ask write the global record by
     // session_id) and the stateKit shared with `spex internal session-*`. `c` (client.ts) backs the
     // read/control subs that route through the backend. Lazily imported.
+    const sendArgs = sub === 'send' ? parseSessionSendArgs(process.argv.slice(4)) : null
     const c = await import('./client.js')
-    const id = process.argv[4]
+    const id = sendArgs?.selector ?? process.argv[4]
     if (sub === 'resume') {
       // bring the agent back up (relaunch ONLY if confirmed offline, the backend owns it); demotes a working
       // `active` to idle but leaves a standing declaration/proposal untouched (see sessions.ts resumeSession()).
@@ -894,17 +940,16 @@ if (cmd === 'serve') {
       const result = await reparentSessions(childIds, parent)
       console.log(`reparented ${result.children.join(', ')} -> ${result.parent}`)
     } else if (sub === 'send') {
+      if (!sendArgs) sessionSendUsage('arguments were not parsed')
       const full = await resolveSelectorOrExit(id)
-      if (has('keys')) {
+      if (sendArgs.kind === 'keys') {
         // the LAST-RESORT face of send: forward raw nav-mode keystrokes (tmux send-keys, NEVER the prompt
         // socket) — how a manager drives a worker wedged in an interactive TUI dialog the prompt channel
         // can't reach (a select menu wanting one Enter/arrow). UNSTABLE, and able to confirm dangerous
         // dialogs — try plain `session send` text FIRST; reach for --keys only when text provably can't
         // land. Tokens = named keys, single chars, C-/M-/S- combos; whitespace-separated, delivered as ONE
         // ordered batch ([[nav-mode-key-ordering]]). Fail-loud: nothing delivered exits non-zero.
-        const keys = (flag('keys') ?? '').split(/\s+/).filter(Boolean)
-        if (keys.length === 0) { console.error('usage: spex session send <SEL> --keys "<keys>"   (e.g. "Up Up Enter", "C-r", single chars — last resort; try a plain send first)'); process.exit(2) }
-        if (await c.clientSendRawKeys(full, keys)) { console.log(`sent ${keys.length} key${keys.length === 1 ? '' : 's'} -> ${full}`); process.exit(0) }
+        if (await c.clientSendRawKeys(full, sendArgs.keys)) { console.log(`sent ${sendArgs.keys.length} key${sendArgs.keys.length === 1 ? '' : 's'} -> ${full}`); process.exit(0) }
         console.error(`spex session send --keys: nothing delivered to ${full} (offline, unknown session, or no valid key token)`)
         process.exit(1)
       }
@@ -924,7 +969,7 @@ if (cmd === 'serve') {
         // the board), NOT the stable sessionLabel that stops at the bare prompt-truncation title.
         sender = 'ok' in sr ? { id: sr.ok.id, label: s.sessionHeadline(sr.ok) } : { id: senderId, label: null }
       }
-      const r = await c.clientSend(full, s.withSenderHint(process.argv[5] ?? '', sender), senderId ?? undefined)
+      const r = await c.clientSend(full, s.withSenderHint(sendArgs.text, sender), senderId ?? undefined)
       console.log(r.ok ? 'sent' : `dispatch failed: ${r.error}`)
       process.exit(r.ok ? 0 : 1)
     } else if (sub === 'show') {

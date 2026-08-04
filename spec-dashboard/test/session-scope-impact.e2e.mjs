@@ -82,7 +82,9 @@ try {
     href: document.querySelector('.si-eval-tab')?.getAttribute('href') || '',
   }))
   check('toolbar omits the redundant measured/declared aggregate', toolbar.aggregateCount === 0, String(toolbar.aggregateCount))
-  check('toolbar visibly accounts for measured scenarios still needing review', toolbar.review === String(expected.needsReview), `${toolbar.review}/${expected.needsReview}`)
+  check('toolbar visibly accounts for measured scenarios still needing review', expected.needsReview === 0
+    ? toolbar.review === ''
+    : toolbar.review === String(expected.needsReview), `${toolbar.review}/${expected.needsReview}`)
   check('Eval tab accessible summary accounts for needs review', toolbar.label.includes(`${expected.needsReview} need review`), toolbar.label)
   check('toolbar preserves blind scenarios', expected.blind === 0 || toolbar.tips.some((tip) => tip?.includes(`${expected.blind}`)), JSON.stringify(toolbar.tips))
   check('toolbar reports unknown separately', expected.unknown === 0 || toolbar.tips.some((tip) => tip?.includes(`${expected.unknown}`) && tip?.toLowerCase().includes('unknown')), JSON.stringify(toolbar.tips))
@@ -108,7 +110,7 @@ try {
     unknownTips: [...document.querySelectorAll('.se-gates > .se-gate')].map((gate) => gate.getAttribute('data-tip')).filter(Boolean),
     readinessGates: document.querySelectorAll('.se-gates > .se-gate:not(.se-unknown)').length,
     terminalDoors: document.querySelectorAll('.se-gates > .se-door').length,
-    exportDoors: document.querySelectorAll('.se-gates > .se-export').length,
+    exportDoors: document.querySelectorAll('.se-gates .se-export').length,
     scrollOwners: document.querySelectorAll('.page-scroll').length,
   }))
   list.rows = list.orderedRows.slice().sort()

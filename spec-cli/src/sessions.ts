@@ -2637,6 +2637,13 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
     mergeConflicts(wt.path, baseHead, branchHead),
     lintGate(),   // lint — memoized on the checkout fingerprint, not re-run per session/open
   ])
+  const settledPair = await reviewHeadPair(wt.path, wt.branch, base)
+  if (settledPair.branchHead !== branchHead || settledPair.baseHead !== baseHead) {
+    throw new ResourceConflict(
+      `review head pair changed while assembling: started branch ${branchHead} / base ${baseHead}, ended branch ${settledPair.branchHead} / base ${settledPair.baseHead}`,
+      'session_review_head_changed',
+    )
+  }
   // the worktree carries no SpexCode runtime files any more (the store lives in ~/.spexcode), so every dirty
   // path is genuine work — this is just the total uncommitted count.
   const dirtyNonRuntime = statusOut.split('\n').filter(Boolean).map(porcelainPath).length

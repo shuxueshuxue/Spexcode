@@ -985,6 +985,14 @@ export async function sessionPrompt(id: string): Promise<string | null> {
 // Preserve rows through a transient record-read failure; prune after the store entry disappears.
 const lastKnownSession = new Map<string, Session>()
 
+// A BOARD row carries the launch ask only as its one-line preview. The full text is served by the
+// id-addressed record detail, which reads the stored prompt itself and overrides this field — so the list
+// never had a reader for it. Shipping it made the body grow with total ask LENGTH instead of session count
+// (measured on the adopter-a board: 2192 KB of a 2218 KB default body, 27 KB of which was actual board data)
+// and pinned the same bytes in `lastKnownSession` for the life of the process. The CREATE response keeps the
+// full text: it is a receipt for one ask the caller just made, not a row in a list of many.
+const boardRow = (s: Session): Session => { s.prompt = null; return s }
+
 export async function listSessions(includeArchived = false): Promise<Session[]> {
   // ONE store enumeration + ONE tmux snapshot (windows + pane pids + titles, merged) for the whole list, then
   // every session reconciles by a pure set lookup + one existsSync — no per-session tmux spawn.
@@ -1032,7 +1040,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     // A forced public liveness comes only from the shared record projection. Do not let live process/thread
     // evidence punch through it (including archive hazard repair).
     if (entry.kind === 'ok' && entry.liveness === 'offline') {
-      const pending = toSession(rec, 'offline', 'offline')
+      const pending = boardRow(toSession(rec, 'offline', 'offline'))
       lastKnownSession.set(id, pending)
       return pending
     }
@@ -1056,7 +1064,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     const cleanCold = rec.archived && !changedDuringCensus.has(id) && hasValidColdProof(rec) && physical === 'offline' && (!residentRequired || resident?.healthy === true)
     const projected = rec.archived && !cleanCold ? { ...rec, archived: false, stopped: false } : rec
     const projectedLv = projected === rec ? liveness(rec, snap) : physical!
-    const s = toSession(projected, reconcile(projected, snap), projectedLv, activity)
+    const s = boardRow(toSession(projected, reconcile(projected, snap), projectedLv, activity))
     if (projected !== rec) s.archiveHazard = changedDuringCensus.has(id)
       ? 'archived runtime hazard: record changed while adapter residency was being reconciled; retry exact archive'
       : hasValidColdProof(rec)

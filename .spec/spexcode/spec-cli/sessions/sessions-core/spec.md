@@ -61,7 +61,12 @@ the local snapshot exists; the explicit post-seed materialize is the transaction
 session objects it assembles carry their display strings pre-derived (`label`/`title`), a current `files`
 projection read from the session-owned `files.json`, and hide the
 bare name parts under `raw` — that naming seam's contract (chains, wire shape, enforcement) is
-[[session-label]]'s. Cross-feature defaults that must be read by the backend at runtime live here as the
+[[session-label]]'s. **A row in a LIST carries the originating ask only as its one-line preview.** The full
+text is served by the id-addressed record detail, which reads the stored prompt itself; a create response is
+a receipt for one ask and keeps it whole. So the list body stays proportional to the NUMBER of sessions
+rather than to the total length of what was asked — otherwise one long ask outweighs the entire rest of the
+board, on every poll and in the last-known-row cache, to serve a field no list reader consults.
+Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature
 node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[session-follow]],
 [[session-selectors]], [[agent-reply-channel]], [[spec-pointer]]) specializes a slice of it and lists it

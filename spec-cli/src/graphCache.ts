@@ -144,8 +144,9 @@ function digest(value: unknown): string {
 // The hot/warm liveness signatures and eval generations remain graph-stream's canonical event-owned axes.
 function sessionInputRevision(): SessionInputRevision {
   const ids = listSessionIds().sort()
-  // listSessions projects both the structured record and the separately-stored originating prompt into each
-  // board row. Fold both exact artifacts so a missed store event cannot leave a stale label/prompt forever.
+  // listSessions projects the structured record plus a one-line preview of the separately-stored originating
+  // prompt into each board row. Fold both exact artifacts so a missed store event cannot leave a stale
+  // label/preview forever — the prompt file is folded because the preview is derived from it.
   const sessionInputs = ids.map((id) => [
     id,
     textOrNull(sessionRecordPath(id)),

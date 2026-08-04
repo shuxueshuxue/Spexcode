@@ -66,8 +66,8 @@ session's store is gone.`, ['selector']],
     merge: ['spex session merge <SEL>', 'Dispatches a gated merge to the session\'s own agent; it does not close the session.', ['selector', 'project-bound']],
     reparent: ['spex session reparent <child-SEL...> --to <parent-SEL>',
       'Move one or more governed children to a replacement parent, replacing only the former parent\'s managed watch relation. It never restarts a child and works when the former parent is offline.', ['selector', 'project-bound']],
-    send: [['spex session send <SEL> "<msg>"', 'spex session send <SEL> --keys "<keys>"'],
-      `Plain send delivers a message once its timeline append succeeds; a dead adapter only delays its context. --keys is the LAST RESORT:
+    send: [['spex session send <SEL> "<msg>"', 'spex session send <SEL> [--api <url> | --port <n>] -- <option-shaped-msg>', 'spex session send <SEL> --keys "<keys>"'],
+      `Plain send delivers a message once its timeline append succeeds; a dead adapter only delays its context. Routing flags may precede or follow ordinary text; use -- before a message that begins with --. --keys is the LAST RESORT:
 raw nav-mode keystrokes to a TUI dialog ("Up Up Enter", C-/M-/S- combos). The raw key surface
 is UNSTABLE and can confirm dangerous dialogs — try a plain send first; use keys only when text
 provably cannot land.`, ['selector', 'project-bound']],

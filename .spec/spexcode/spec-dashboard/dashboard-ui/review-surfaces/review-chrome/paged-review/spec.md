@@ -29,9 +29,10 @@ The server imports [[review-filters]] and [[review-query]] directly. There is no
 qualifier mapping, or field predicates. It applies source selection, matching, section counts, and facet
 derivation over the complete population, then slices exactly once. The response is the shared
 `{items,page,perPage,total,sourceTotal,pageCount,prev,next,revision,counts,facets,section}` shape plus
-bounded domain metadata (issue enablement/write stores; scoped eval gates/unknown coverage). `sourceTotal`
+bounded domain metadata (issue enablement/write stores; scoped eval unknown coverage). `sourceTotal`
 distinguishes a vacant source from a filtered-zero view. `items.length <= 25`; neither a hidden full
-collection nor a second full-list field rides beside it. The exact scoped impact graph is a separate named
+collection nor a second full-list field rides beside it. A scoped Eval page composes no manager gate into that
+page; conflict, lint, ahead, and committed remain together on explicit review/export. The exact scoped impact graph is a separate named
 read, `GET /api/evals/impact?scope=<id>`: it preserves the selector/delta proof for a caller that asks for
 it, while the paged list keeps only each rendered row's own impact reasons.
 

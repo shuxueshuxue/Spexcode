@@ -1436,11 +1436,6 @@ export type SessionEvals = {
   // rather than publishing a fold over the window. `evalRevision.content` is the stronger identity anyway:
   // equal content revision IS the same evaluation cut, so a consumer fencing on it needs no counts.
   summary?: SessionEvalSummary
-  // the LIST page's chrome, and only its. A focused build renders no gates strip and no branch counters, so
-  // it does not buy them — see `order` below for what marks such a model partial.
-  gates?: ExportGate[]
-  ahead?: number
-  dirtyNonRuntime?: number
   evalRevision: SessionEvalRevision
   // present ONLY on a focused build: the whole population's identity+sequence facts, because `nodes` then
   // holds just the few the response will render. Its presence is exactly what marks a model as PARTIAL —
@@ -1629,19 +1624,19 @@ type SessionEvalModel = Omit<SessionEvals, 'summary' | 'evalRevision'>
 
 async function buildSessionEvalModel(
   id: string,
-  payload: ReviewPayloadValue | ReviewIdentity,
+  identity: ReviewIdentity,
   wtPath: string | null,
   pick?: SessionEvalFocus,
 ): Promise<SessionEvalModel> {
   // spec tree from the session worktree, same root as readings/indexes — a branch-NEW node must exist
   // in this model or the Eval tab/deep link can never reach its readings (see buildExportModel above).
   const ctxRoot = wtPath ?? repoRoot()
-  return withEventLedgerBuild(ctxRoot, () => buildSessionEvalModelInLedger(id, payload, wtPath, pick, ctxRoot))
+  return withEventLedgerBuild(ctxRoot, () => buildSessionEvalModelInLedger(id, identity, wtPath, pick, ctxRoot))
 }
 
 async function buildSessionEvalModelInLedger(
   id: string,
-  payload: ReviewPayloadValue | ReviewIdentity,
+  identity: ReviewIdentity,
   wtPath: string | null,
   pick: SessionEvalFocus | undefined,
   ctxRoot: string,
@@ -1668,14 +1663,12 @@ async function buildSessionEvalModelInLedger(
   nodes.sort((a, b) => (b.evals.filter((e) => e.inSession).length - a.evals.filter((e) => e.inSession).length)
     || (b.scenarios.length - a.scenarios.length) || (b.unknownCoverage.length - a.unknownCoverage.length))
 
-  const primary = payload.node && specById.has(payload.node) ? specById.get(payload.node)!.title : null
-  const full = 'gates' in payload ? payload : null
+  const primary = identity.node && specById.has(identity.node) ? specById.get(identity.node)!.title : null
   return {
     id,
-    node: payload.node,
-    branch: payload.branch,
-    title: primary || payload.node || payload.branch || id.slice(0, 8),
-    ...(full ? { ahead: full.ahead, dirtyNonRuntime: full.dirtyNonRuntime, gates: gateRows(full) } : {}),
+    node: identity.node,
+    branch: identity.branch,
+    title: primary || identity.node || identity.branch || id.slice(0, 8),
     nodes,
     impact,
     ...(order ? { order } : {}),
@@ -2087,8 +2080,6 @@ async function buildSummaryAttempt(id: string, _path: string): Promise<SummaryBu
   const wtPath = worktreePathForBranch(identity.branch)
   const ctxPath = wtPath ?? repoRoot()
   return withEventLedgerDemand(ctxPath, async () => {
-    const payload = await reviewPayload(id)
-    if (!payload) return { kind: 'missing' }
     const before = await sessionEvalContentRevision(ctxPath)
     const cacheKey = `${id}\0${before}`
     const cached = summaryByContent.get(cacheKey)
@@ -2098,7 +2089,7 @@ async function buildSummaryAttempt(id: string, _path: string): Promise<SummaryBu
         ? { kind: 'stable', revision: after, summary: cached.summary }
         : { kind: 'unstable' }
     }
-    const model = await buildSessionEvalModel(id, payload, wtPath)
+    const model = await buildSessionEvalModel(id, identity, wtPath)
     const after = await sessionEvalContentRevision(ctxPath)
     if (before !== after) return { kind: 'unstable' }
     const summary = sessionEvalSummary(model.nodes)
@@ -2177,10 +2168,6 @@ export async function buildSessionEvals(id: string, pick?: SessionEvalFocus): Pr
   const ctxPath = wtPath ?? repoRoot()
   for (;;) {
     const attempt = await projectionCache.demand(id, '', () => withEventLedgerDemand(ctxPath, async () => {
-      // a focused open renders no gates strip, so it reads the session's IDENTITY (a free store read)
-      // instead of its review payload (ahead count + dirty scan + merge-tree conflict probe).
-      const payload = pick ? identity : await reviewPayload(id)
-      if (!payload) return { kind: 'missing' as const }
       const known = projectionCache.get(id)
       const generation = known?.generation ?? 0
       await awaitObservableInputs(id, ctxPath)
@@ -2202,7 +2189,7 @@ export async function buildSessionEvals(id: string, pick?: SessionEvalFocus): Pr
         if (before !== settled) projectionCache.invalidate({ id })
         return { kind: 'retry' as const }
       }
-      const model = await buildSessionEvalModel(id, payload, wtPath, pick)
+      const model = await buildSessionEvalModel(id, identity, wtPath, pick)
       const after = await sessionEvalContentRevision(ctxPath)
       const current = projectionCache.get(id)
       if (before !== after || projectionCache.isObserverHeld(id, ctxPath)
@@ -2222,7 +2209,6 @@ export async function buildSessionEvals(id: string, pick?: SessionEvalFocus): Pr
       if (current) projectionCache.accept(id, generation, after, summary)
       return { kind: 'ready' as const, model, summary, generation, revision: after }
     }))
-    if (attempt.kind === 'missing') return null
     if (attempt.kind === 'retry') continue
     return {
       ...attempt.model,

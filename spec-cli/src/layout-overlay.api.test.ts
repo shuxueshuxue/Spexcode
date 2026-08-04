@@ -6,7 +6,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -89,6 +89,8 @@ test('cold governed overlays are one public generation, not one Git fanout per s
   const home = join(fixture, 'home')
   const argvLog = join(fixture, 'git-argv.log')
   const failBatch = join(fixture, 'fail-batch')
+  const holdBatch = join(fixture, 'hold-batch')
+  const batchEntered = join(fixture, 'batch-entered.log')
   let backend: ChildProcess | null = null
   try {
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
@@ -143,6 +145,7 @@ test('cold governed overlays are one public generation, not one Git fanout per s
     git(archived.path, 'commit', '-qm', 'archived edit')
     writeRecord(home, project, 'archived', archived.path, archived.branch, true)
     expected.set('archived', [])
+    writeRecord(home, project, 'missing', join(fixture, 'worktrees', 'missing'), 'node/missing')
 
     const bin = join(fixture, 'bin')
     mkdirSync(bin)
@@ -153,6 +156,10 @@ printf '%s\\n' "$*" >> "${argvLog}"
 case " $* " in
   *" diff-tree --stdin "*)
     if [ -e "${failBatch}" ]; then exit 23; fi
+    if [ -e "${holdBatch}" ]; then
+      printf 'entered\\n' >> "${batchEntered}"
+      while [ -e "${holdBatch}" ]; do sleep 0.01; done
+    fi
     sleep 0.04
     ;;
   *" -- .spec "*) sleep 0.04 ;;
@@ -202,6 +209,7 @@ exec "${realGit}" "$@"
       assert.deepEqual(shape(layoutRow.ops), want, `/api/settings exact ${id} ops`)
       assert.deepEqual(shape(graphRow.ops), want, `/api/graph exact ${id} ops`)
     }
+    assert.equal(settings.layout.worktrees.some((row) => row.session === 'missing'), false, '/api/settings omits a missing worktree')
 
     const commands = readFileSync(argvLog, 'utf8').trim().split('\n').filter(Boolean)
     const batch = commands.filter((line) => line.includes(' diff-tree ') && line.includes(' --stdin ') && line.endsWith(' -- .spec'))
@@ -256,6 +264,81 @@ exec "${realGit}" "$@"
     const restoredCommands = readFileSync(argvLog, 'utf8').trim().split('\n').filter(Boolean)
     assert.equal(restoredCommands.filter((line) => line.includes(' diff-tree ') && line.includes(' --stdin ')).length, 1,
       `removing refs/replace must invalidate the alternate interpretation:\n${restoredCommands.join('\n')}`)
+
+    const flightProbe = join(fixture, 'flight-probe.mts')
+    writeFileSync(flightProbe, `
+import assert from 'node:assert/strict'
+import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { resolveLayout } from ${JSON.stringify(pathToFileURL(join(here, 'layout.ts')).href)}
+import { withGitAbortSignal } from ${JSON.stringify(pathToFileURL(join(here, 'git.ts')).href)}
+const hold = ${JSON.stringify(holdBatch)}, entered = ${JSON.stringify(batchEntered)}
+const waitEntered = async (count) => {
+  const deadline = Date.now() + 5000
+  while ((existsSync(entered) ? readFileSync(entered, 'utf8').trim().split('\\n').filter(Boolean).length : 0) < count) {
+    if (Date.now() >= deadline) throw new Error('batch never entered controlled hold')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+const phase = async (graphFirst, count) => {
+  writeFileSync(hold, 'hold\\n')
+  const controller = new AbortController()
+  let graph, settings
+  if (graphFirst) {
+    graph = withGitAbortSignal(controller.signal, () => resolveLayout()).then(() => 'resolved', (error) => error?.name)
+    await waitEntered(count)
+    settings = resolveLayout()
+  } else {
+    settings = resolveLayout()
+    await waitEntered(count)
+    graph = withGitAbortSignal(controller.signal, () => resolveLayout()).then(() => 'resolved', (error) => error?.name)
+  }
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  controller.abort()
+  rmSync(hold, { force: true })
+  const [graphResult, settingsResult] = await Promise.all([graph, settings])
+  assert.equal(graphResult, 'AbortError')
+  assert.ok(settingsResult.worktrees.length > 1)
+  return { graphResult, rows: settingsResult.worktrees.length }
+}
+const graphFirst = await phase(true, 1)
+appendFileSync('.spec/project/spec.md', '\\nphase two main advance\\n')
+execFileSync('git', ['add', '.spec'])
+execFileSync('git', ['commit', '-qm', 'flight phase two'])
+const settingsFirst = await phase(false, 2)
+console.log(JSON.stringify({ graphFirst, settingsFirst }))
+`)
+    rmSync(batchEntered, { force: true })
+    const flightResult = spawnSync(process.execPath, ['--import', import.meta.resolve('tsx'), flightProbe], {
+      cwd: project,
+      env,
+      encoding: 'utf8',
+      timeout: 20_000,
+    })
+    assert.equal(flightResult.status, 0, `generation-owned cancellation probe failed:\n${flightResult.stdout}\n${flightResult.stderr}`)
+    assert.deepEqual(JSON.parse(flightResult.stdout.trim()), {
+      graphFirst: { graphResult: 'AbortError', rows: expected.size + 1 },
+      settingsFirst: { graphResult: 'AbortError', rows: expected.size + 1 },
+    })
+
+    await stopChild(backend)
+    backend = null
+    writeFileSync(failBatch, 'fail a new process first cold batch\n')
+    const coldPort = await freePort()
+    const coldEnv = { ...env, PORT: String(coldPort), SPEXCODE_TMUX: `spex-layout-cold-failure-${coldPort}` }
+    backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
+      cwd: project,
+      env: coldEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let coldLog = ''
+    backend.stdout?.on('data', (chunk) => { coldLog += String(chunk) })
+    backend.stderr?.on('data', (chunk) => { coldLog += String(chunk) })
+    const coldBase = `http://127.0.0.1:${coldPort}`
+    await waitFor(() => fetch(`${coldBase}/health`).then((response) => response.ok).catch(() => false), `cold backend health\n${coldLog}`)
+    const coldFailure = await fetch(`${coldBase}/api/settings`)
+    assert.equal(coldFailure.status, 500, `a first cold batch failure cannot publish false empty ops\n${coldLog}`)
+    rmSync(failBatch)
   } finally {
     await stopChild(backend)
     rmSync(fixture, { recursive: true, force: true })

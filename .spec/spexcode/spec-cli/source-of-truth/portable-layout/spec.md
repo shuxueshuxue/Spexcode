@@ -106,7 +106,10 @@ publish an idle/online candidate or silently drop an unreadable session while an
 
 One public generation of the layout owns one exact overlay flight. Concurrent consumers such as
 `/api/settings` and `/api/graph` join when main tip, worktree paths, worktree HEADs, and `.spec` signatures are
-identical; completion is evicted immediately, so this is coordination rather than a second cache. The existing
+identical; completion is evicted immediately, so this is coordination rather than a second cache. The flight,
+not whichever consumer arrived first, owns the bounded Git context. Each caller owns only its wait: a cancelled
+graph build leaves a concurrent settings read alive, while the generation aborts its Git children once no caller
+remains. Thus caller order cannot leak or erase cancellation authority. The existing
 per-worktree result cache remains the only retained state. A cold miss plans the whole governed, non-archived
 set together and lets [[git-exec]] batch clean immutable pairs; dirty and untracked worktrees retain their exact
 working-tree semantics. A missing worktree is still omitted, a transient per-worktree failure still serves only

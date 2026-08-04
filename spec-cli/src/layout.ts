@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { git, repoRoot, gitA, gitInterpretationIdentity, headSha, worktreeSpecSig, worktreeSpecDelta, worktreeSpecDeltas, type NodeOp } from './git.js'
+import { git, repoRoot, gitA, gitAbortError, currentGitBuildAbortSignal, gitInterpretationIdentity, headSha, worktreeSpecSig, worktreeSpecDelta, worktreeSpecDeltas, withGitAbortSignal, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
 import { HARNESSES, type HarnessId } from './harness.js'
 import { encodeProject, projectRuntimeRoot, spexcodeHome } from './project-store.js'
@@ -482,7 +482,13 @@ const deltaCache = new Map<string, { key: string; ops: NodeOp[] }>()
 const safeHead = (p: string): string => { try { return headSha(p) } catch { return '' } }
 let layoutHeadWarned = false
 type LayoutDeltaOutcome = { ops: NodeOp[] } | { error: unknown }
-const layoutDeltaFlights = new Map<string, Promise<Map<string, LayoutDeltaOutcome>>>()
+type LayoutDeltaFlight = {
+  promise: Promise<Map<string, LayoutDeltaOutcome>>
+  controller: AbortController
+  waiters: Set<symbol>
+  settled: boolean
+}
+const layoutDeltaFlights = new Map<string, LayoutDeltaFlight>()
 
 // One exact public layout generation owns the cold overlay computation. The map is only an in-flight join:
 // the entry is deleted at settlement and deltaCache remains the sole retained result state.
@@ -490,10 +496,15 @@ async function layoutDeltas(paths: string[], main: string, mainRef: string, main
   const snapshots = paths.map((path) => ({ path, head: safeHead(path), sig: worktreeSpecSig(path) }))
   const interpretation = gitInterpretationIdentity(main)
   const flightKey = JSON.stringify([interpretation, mainRef, mainSha, snapshots.map(({ path, head, sig }) => [path, head, sig]).sort((a, b) => a[0].localeCompare(b[0]))])
-  const existing = layoutDeltaFlights.get(flightKey)
-  if (existing) return existing
-
-  const flight = (async () => {
+  let flight = layoutDeltaFlights.get(flightKey)
+  if (flight?.controller.signal.aborted) {
+    layoutDeltaFlights.delete(flightKey)
+    flight = undefined
+  }
+  if (!flight) {
+    const controller = new AbortController()
+    const entry: LayoutDeltaFlight = { promise: Promise.resolve(new Map()), controller, waiters: new Set(), settled: false }
+    entry.promise = withGitAbortSignal(controller.signal, async () => {
     const outcomes = new Map<string, LayoutDeltaOutcome>()
     const misses: typeof snapshots = []
     for (const snapshot of snapshots) {
@@ -516,6 +527,10 @@ async function layoutDeltas(paths: string[], main: string, mainRef: string, main
     }
 
     await Promise.all(misses.filter(({ head }) => !head || !mainSha).map(async (snapshot) => {
+      if (!existsSync(snapshot.path)) {
+        outcomes.set(snapshot.path, { error: new Error(`worktree ${snapshot.path} is absent`) })
+        return
+      }
       if (!layoutHeadWarned) {
         layoutHeadWarned = true
         console.warn('spec-cli: layout overlay cache bypassed (unreadable HEAD/main tip), recomputing every read')
@@ -524,10 +539,33 @@ async function layoutDeltas(paths: string[], main: string, mainRef: string, main
       catch (error) { outcomes.set(snapshot.path, { error }) }
     }))
     return outcomes
-  })()
-  layoutDeltaFlights.set(flightKey, flight)
-  try { return await flight }
-  finally { if (layoutDeltaFlights.get(flightKey) === flight) layoutDeltaFlights.delete(flightKey) }
+    }).finally(() => {
+      entry.settled = true
+      if (layoutDeltaFlights.get(flightKey) === entry) layoutDeltaFlights.delete(flightKey)
+    })
+    layoutDeltaFlights.set(flightKey, entry)
+    flight = entry
+  }
+
+  const token = Symbol(flightKey)
+  const callerSignal = currentGitBuildAbortSignal()
+  flight.waiters.add(token)
+  let onAbort: (() => void) | null = null
+  try {
+    if (!callerSignal) return await flight.promise
+    if (callerSignal.aborted) throw gitAbortError()
+    return await Promise.race([
+      flight.promise,
+      new Promise<Map<string, LayoutDeltaOutcome>>((_, reject) => {
+        onAbort = () => reject(gitAbortError())
+        callerSignal.addEventListener('abort', onAbort, { once: true })
+      }),
+    ])
+  } finally {
+    if (onAbort) callerSignal?.removeEventListener('abort', onAbort)
+    flight.waiters.delete(token)
+    if (!flight.settled && flight.waiters.size === 0) flight.controller.abort()
+  }
 }
 
 export async function resolveLayout(): Promise<Layout> {
@@ -572,7 +610,11 @@ export async function resolveLayout(): Promise<Layout> {
         if ('error' in outcome) throw outcome.error
         return { ...base, ops: outcome.ops }
       },
-      (): Worktree => ({ ...base, ops: deltaCache.get(r.worktree_path)?.ops ?? [] }))
+      (): Worktree => {
+        const cached = deltaCache.get(r.worktree_path)
+        if (!cached) throw new Error(`layout overlay failed before ${r.worktree_path} had a last-known result`)
+        return { ...base, ops: cached.ops }
+      })
   }))
   const corruptRows: Worktree[] = publicEntries.flatMap((entry) => entry.kind === 'corrupt'
     ? [{ path: '', branch: null, node: null, session: entry.sessionId, status: 'corrupt', liveness: 'unknown', isMain: false, ops: [] }]

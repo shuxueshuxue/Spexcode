@@ -243,7 +243,7 @@ an admin password exists, and ungated projects serve open.`,
     line: 'spec <verb>           the governance graph: search · owner · lint · ack',
     body: `Usage: spex spec search <query…> [--limit N=10] [--json]
        spex spec owner <path> [--actionable]
-       spex spec lint
+       spex spec lint [--json]
        spex spec ack <node-id>… --reason "<why the contract still holds>"
 
 search — which spec node GOVERNS a topic, ranked by user-story relevance (which surfaces user-facing
@@ -267,7 +267,9 @@ leaf id reused) · mention (a [[id]] naming no node). Warns: coverage · drift
 "ignore"\` may silence it) · anchor (anchoring a type) · related-drift (a scoped related row warns
 per selector HIT, misses silent) · owners (whole-file governors only; scoped don't count) ·
 confusable-id (two leaf ids one edit apart). spec lint's errors BLOCK commits (the prepared reference hook; bypass SPEXCODE_SKIP_LINT=1);
-contrast \`spex eval lint\`, which is pure advisory and never blocks anyone.
+contrast \`spex eval lint\`, which is pure advisory and never blocks anyone. \`--json\` writes the
+versioned machine report to stdout (source candidates + structured findings); its exit code still blocks
+on errors.
 
 ack — stamp Spec-OK on HEAD (an empty stamp commit): the drift remedy when only MECHANICS changed
 and the spec's contract still holds. --reason is required and recorded in the ack commit's body

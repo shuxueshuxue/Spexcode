@@ -7,6 +7,14 @@ import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, re
 import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }
+export const SPEC_LINT_REPORT_PROJECTION = 'spex.spec-lint.report'
+export const SPEC_LINT_REPORT_SCHEMA_VERSION = 1
+export type SpecLintReport = {
+  projection: typeof SPEC_LINT_REPORT_PROJECTION
+  schemaVersion: typeof SPEC_LINT_REPORT_SCHEMA_VERSION
+  sourceFiles: string[]
+  findings: Finding[]
+}
 
 export type LintConfig = {
   governedRoots: string[]       // dirs whose tracked source files must each be governed by a spec. '.' = whole project.
@@ -69,6 +77,7 @@ export function normalizeConfig(cfg: LintConfig): LintConfig {
 }
 
 export type SpecLintOptions = { tip?: string }
+type SpecLintRun = { sourceFiles: string[]; findings: Finding[] }
 
 function untrackedAdoptionFiles(root: string): string[] {
   if (git(['-C', root, 'rev-parse', '--is-inside-work-tree']).trim() !== 'true') return []
@@ -126,10 +135,24 @@ export async function pendingTouchesGoverned(root: string, tip: string): Promise
 }
 
 export async function specLint(root = repoRoot(), regs = extractors(root), options: SpecLintOptions = {}): Promise<Finding[]> {
+  return (await specLintRun(root, regs, options)).findings
+}
+
+export async function specLintReport(root = repoRoot(), regs = extractors(root), options: SpecLintOptions = {}): Promise<SpecLintReport> {
+  const run = await specLintRun(root, regs, options)
+  return {
+    projection: SPEC_LINT_REPORT_PROJECTION,
+    schemaVersion: SPEC_LINT_REPORT_SCHEMA_VERSION,
+    sourceFiles: run.sourceFiles,
+    findings: run.findings,
+  }
+}
+
+function specLintRun(root: string, regs: ReturnType<typeof extractors>, options: SpecLintOptions): Promise<SpecLintRun> {
   return withEventLedgerBuild(root, () => specLintInLedger(root, regs, options))
 }
 
-async function specLintInLedger(root: string, regs: ReturnType<typeof extractors>, options: SpecLintOptions): Promise<Finding[]> {
+async function specLintInLedger(root: string, regs: ReturnType<typeof extractors>, options: SpecLintOptions): Promise<SpecLintRun> {
   const tip = options.tip ?? 'HEAD'
   const pending = tip !== 'HEAD'
   const changed = pending ? pendingChangedPaths(root, tip) : []
@@ -149,11 +172,14 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
   if (untracked.length) {
     const shown = untracked.slice(0, 6)
     const suffix = untracked.length > shown.length ? ` (+${untracked.length - shown.length} more)` : ''
-    return [{
-      level: 'error',
-      rule: 'integrity',
-      msg: `project source of truth is untracked: ${shown.join(', ')}${suffix} — add it with \`git add .spec spexcode.json\` and commit it; generated harness files such as .codex/, .claude/, and AGENTS.md are machine-local`,
-    }]
+    return {
+      sourceFiles: [],
+      findings: [{
+        level: 'error',
+        rule: 'integrity',
+        msg: `project source of truth is untracked: ${shown.join(', ')}${suffix} — add it with \`git add .spec spexcode.json\` and commit it; generated harness files such as .codex/, .claude/, and AGENTS.md are machine-local`,
+      }],
+    }
   }
   const governed = trackedSourceFiles(root, cfg.governedRoots, cfg, tip)
   const [hidx, didx] = await sourceIndexes(root, tip)
@@ -440,7 +466,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
     out.push({ level: 'warn', rule: 'related-drift', msg: `${rd.length} related file(s) across ${byNode.size} node(s) drifted ahead of their spec (SOFT — a dependency shifted, worth a glance; never blocks, no ack, no eval staleness). Most: ${worst}` })
   }
 
-  return out
+  return { sourceFiles: governed.slice().sort(), findings: out }
 }
 
 export const DRIFT_GUIDANCE = `DRIFT — a governed file has moved ahead of its spec. A CHECKPOINT, not a chore: find WHERE the truth

@@ -543,7 +543,7 @@ test('Codex archive ignores a non-returning unrelated read when the exact target
   }
 })
 
-test('Codex cold preflight retries a transient app-server census refusal', async () => {
+test('Codex cold preflight waits through a short app-server census refusal streak', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   const home = mkdtempSync(join(tmpdir(), 'spex-codex-cold-retry-'))
@@ -555,7 +555,7 @@ test('Codex cold preflight retries a transient app-server census refusal', async
   const server = codexRpcFixture((message) => {
     if (message.method === 'thread/loaded/list') {
       loadedCalls++
-      if (loadedCalls === 1) throw new Error('app-server busy')
+      if (loadedCalls <= 3) throw new Error('app-server busy')
       return { data: [{ id: target }], nextCursor: null }
     }
     if (message.method === 'thread/turns/list') return { data: [], nextCursor: null }
@@ -573,7 +573,7 @@ test('Codex cold preflight retries a transient app-server census refusal', async
     owner = startCodexOwner(root)
     const result = await codexHarness.coldPreflight?.({ session: 'cold-retry-session', harnessSessionId: target })
     assert.equal(result?.ok, true)
-    assert.ok(loadedCalls >= 2, 'the adapter retries after a transient census refusal')
+    assert.ok(loadedCalls >= 4, 'the adapter retries through a short transient census refusal streak')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await stopCodexOwner(owner)

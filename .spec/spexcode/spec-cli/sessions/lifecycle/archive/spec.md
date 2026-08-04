@@ -46,6 +46,9 @@ agent-authored lifecycle, worktree, branch, transcript, and conversation identit
 only after the existing exact-instance stop guard has safely stopped that session-owned leaf, tmux, and adapter
 transport. The shared project app-server/control plane is never touched; sibling references remain loaded. If
 ownership or the stop proof is unprovable, archive fails loudly and leaves the record unarchived and visible.
+An app-server's transport-local census refusal may retry its complete target proof within the one bounded archive
+operation, but never reuses a prior census or retries a semantic ownership, live-turn, descendant, or generation
+refusal. A lasting transport failure is still a loud refusal with the record and retained work unchanged.
 Native thread ownership is unique whether the target is currently loaded or not. A native descendant collection
 is runtime owned by its exact ancestor, not a separate Spex session: archive includes every uniquely-owned active
 or already-archived descendant at any depth in the same cold transition, while preserving each native conversation

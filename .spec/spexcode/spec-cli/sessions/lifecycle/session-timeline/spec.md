@@ -35,7 +35,7 @@ were mail, and made "is anything outstanding?" a scan of everything that ever ha
 
 ## expanded spec
 
-One JSON line per event, two kinds:
+The public event sequence has two kinds, one JSON line per event:
 
 - **status** `{ts, status, proposal, note}` — an authored-lifecycle transition, carrying the declaration
   note **in full** (the note IS the agent's reply to a reader who can't see the pane; [[state]] already
@@ -45,9 +45,16 @@ One JSON line per event, two kinds:
   same message can never be injected twice and never needs a separate idempotency ledger. The recorded
   text is the message BEFORE mechanism inserts — hints are transport, not conversation. A caller-authorized
   merge may also store a private `dispatchReceipt` on that SAME sent line: operation plus SHA-256 request and
-  payload digests, never the raw key. It makes a lost-response replay find the acceptance that already exists;
-  it is stripped from `timelineEvents` and the public timeline API because it is control metadata, not
-  conversation, and it is not a third event kind or a second ledger.
+  payload digests, never the raw key, together with the exact already-composed transport bytes needed to
+  recover a queue write lost after acceptance. It makes a lost-response replay find the acceptance that
+  already exists.
+
+The stored log has one private control event: **dispatch-settled** `{ts, operation, requestDigest, mid}`. A
+keyed queue drain appends it after the adapter accepts that exact message and before removing the debt. Both
+the receipt fields and settlement are stripped from `timelineEvents` and the public timeline API because they
+are control metadata, not conversation: the public model still has exactly the two authored kinds above, and
+private settlement lines do not consume its tail limit or cursor positions. This remains the same append-only
+file sequence, not a second operation ledger.
 
 **One logical log may span immutable files.** Existing sessions keep their legacy `timeline.ndjson` as the
 first segment. New writes append only to the highest numbered `timeline/<n>.ndjson` segment; once a segment
@@ -61,9 +68,11 @@ physical deletion boundary.
 **The append is what ACCEPTS a message; the queue is what owes it.** `sendText` appends the `sent` line and
 enqueues the same message in one hold of the session's record lock ([[dispatch]]), and reports success on that
 write. Acceptance therefore never depends on the transport, which is what dissolved the "delivered but
-unconfirmed" state — but it is not itself the handover. The message reaches the agent when
-[[delivery-queue]]'s drain hands it to the harness adapter as an ordinary prompt, retried until it lands. A
-reader of this log learns what was said; only the queue says what is still owed.
+unconfirmed" state — but it is not itself the handover. A keyed acceptance whose process dies before queue
+publication is reconstructed from its private receipt by the same-key retry. The message reaches the agent
+when [[delivery-queue]]'s drain hands it to the harness adapter as an ordinary prompt, retried until it lands;
+the private settlement then makes later response replay inert even if the session has since stopped or been
+archived. A public reader of this log learns what was said; only the queue says what is still owed.
 
 **Append authored state at its write boundary.** A declaration note is conversation content, so it cannot
 depend on a later sample of the mutable current-state record. Every lifecycle write compares the prior

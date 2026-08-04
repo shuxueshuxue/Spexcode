@@ -13,7 +13,7 @@ const { chromium } = await import(pathToFileURL(PW).href)
 
 const SHORT = SESSION.slice(0, 8)
 const SCOPED_Q = `is:eval scope:${SESSION}`
-const LIST_HASH = `#/evals?q=${encodeURIComponent(SCOPED_Q).replaceAll('%20', '+')}`
+const LIST_HASH = `#/evals?q=${encodeURIComponent(SCOPED_Q)}`
 let pass = 0
 let fail = 0
 const check = (name, ok, detail = '') => {
@@ -219,7 +219,11 @@ let scopedRowHref = null
 {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
   const page = await context.newPage()
-  await page.route(`**/api/sessions/${SESSION}/evals`, (route) => route.fulfill({ status: 503, contentType: 'text/plain', body: 'forced failure' }))
+  await page.route('**/api/evals/detail?*', (route) => {
+    const url = new URL(route.request().url())
+    if (url.searchParams.get('scope') !== SESSION) return route.continue()
+    return route.fulfill({ status: 503, contentType: 'text/plain', body: 'forced failure' })
+  })
   await page.goto(`${BASE}/${scopedRowHref}`)
   await page.waitForSelector('.ds-failed', { timeout: 15000 })
   const failed = await detailProbe(page)

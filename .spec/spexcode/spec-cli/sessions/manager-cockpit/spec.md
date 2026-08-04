@@ -35,7 +35,10 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
 - **head** — the exact immutable Git object id whose committed branch state every review Git fact below
   describes. Review never labels work derived from a moving `HEAD` name: it resolves the branch tip once and
   uses that object id for ahead, merge-base diff, and conflict projection. A caller can therefore compare the
-  returned id with a later review or branch read and detect work authored after the review.
+  returned id with a later review or branch read and detect work authored after the review. When the caller
+  authorizes merge, that exact id rides in the merge prompt: the session agent re-proves its symbolic branch,
+  worktree HEAD, and stored ref against it before syncing, then freezes and merges the tested post-sync object.
+  The review id therefore reaches the actual landing contract rather than ending at a server pre-dispatch check.
 - **ahead** — commits the node branch is ahead of the base.
 - **dirtyNonRuntime** — uncommitted files; SpexCode writes no runtime files into the worktree
   ([[runtime]]), so every dirty path is genuine spec/code work — the basis [[state]]'s commit gate uses.

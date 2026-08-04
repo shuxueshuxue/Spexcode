@@ -77,9 +77,14 @@ session (clears the proposal → active, `--resume`s via `reopen` if tmux died �
 rendezvous socket, closing the just-relaunched-no-socket race), then dispatches a **merge prompt**
 through this same `sendText`. The prompt tells the **agent** to merge its branch into the base branch
 from the **main checkout** (`-C <main>`, not its node worktree), resolve any conflicts (it knows the
-work's intent), verify the base HEAD advanced with no merge left in progress, `git merge --abort` if
-anything went half-merged, and propose close once verified — so the guarantee lives in the agent's
-verification, never a server check, and the base is never left half-merged. Async: `POST
+work's intent), and carries the exact reviewed object as authority. Before changing anything, the agent must
+re-prove that its worktree top-level, symbolic branch, worktree HEAD, and stored branch ref still name that
+reviewed object; detached HEAD, another branch, or a moved/missing ref stops the handoff. After syncing and
+re-running its proof, it freezes the tested result as an object id, re-proves the symbolic branch and stored
+ref, and merges that exact object rather than the moving branch name. It then verifies the base HEAD advanced
+with no merge left in progress, runs `git merge --abort` if anything went half-merged, and proposes close once
+verified — so the final generation fence lives at the agent's actual landing boundary, not only in the
+server's earlier read, and the base is never left half-merged. Async: `POST
 /api/sessions/:id/merge` returns `{dispatched:true}` once the merge prompt is appended (409 only when the
 record cannot accept it). The server no longer bumps `merges` on a click.
 
@@ -91,7 +96,12 @@ digest. Under the same session record lock that appends the prompt, a replay of 
 returns the original accepted dispatch without appending or enqueueing a second prompt; reusing that key for
 a different reviewed head fails loudly with `session_merge_key_reused`. A first request whose reviewed head
 does not equal the branch's current exact head fails with `session_merge_head_changed` and records no receipt.
-Callers that omit the header retain the ordinary one-shot dispatch and its original response shape. This is not another operation ledger: the
+The first keyed dispatch also proves that the recorded worktree still has its governed symbolic branch
+checked out and that the branch ref names the same object; detached or reassigned worktrees fail with
+`session_merge_branch_unproven` before any prompt or receipt. Callers that omit the header retain the ordinary
+one-shot dispatch and its original response shape **and input tolerance**: the route does not parse their body,
+so invalid JSON, `null`, and extra fields remain irrelevant. Closed parsing belongs only to the keyed authority
+extension. This is not another operation ledger: the
 timeline line is already the durable acceptance record and the pending queue remains its only delivery debt.
 
 **Prompts state the task; the git flow is mechanism, not duplicated prose.** The merge prompt above states

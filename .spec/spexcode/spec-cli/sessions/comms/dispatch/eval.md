@@ -6,16 +6,22 @@ scenarios:
     code: [spec-cli/src/sessions.ts#mergeSession]
     related: [spec-cli/src/session-timeline.ts, spec-cli/src/index.ts, spec-cli/src/client.ts]
     description: >
-      Against the same isolated real backend and governed fake-harness session used by the exact-head review
-      control, POST merge twice with one caller-chosen `Idempotency-Key` and the returned `reviewedHead`, then
-      restart the backend on the same isolated store before the replay, then reuse that key with the other
-      committed head. Read the public session timeline after every request.
+      Against two real same-host backends sharing one isolated project and store, create the governed
+      fake-harness session used by the exact-head review control. First POST merge without an Idempotency-Key
+      using invalid JSON, `null`, and an extra-field body. Then remove only the fake harness rendezvous pathname
+      while its owned pane process remains live, concurrently POST the same caller key and reviewed head through
+      both backends, stop both backends, restart one on the same store, and replay. Reuse the key with the other
+      committed head, submit a fresh key with that stale head, and submit fresh keys while the session worktree
+      is detached and while another branch is checked out. Read the public timeline and pending debt.
     expected: >
-      The first request appends exactly one merge prompt and reports a fresh accepted dispatch. The identical
-      replay reports the durable prior acceptance and leaves both the sent timeline and pending delivery debt
-      single. Reusing the key with another reviewed head returns HTTP 409 with
-      `session_merge_key_reused` and appends nothing. A fresh key carrying a stale reviewed head returns HTTP
-      409 `session_merge_head_changed`, also with no receipt. No raw idempotency key is stored or returned.
+      Every unkeyed request preserves the old `{dispatched:true}` interface without parsing or rejecting its
+      body. Across the concurrent keyed requests exactly one appends a merge prompt and one reports replay; the
+      undeliverable prompt leaves exactly one pending debt. The restart replay reports the durable acceptance
+      and leaves both timeline and debt single. Reusing the key with another reviewed head returns HTTP 409
+      `session_merge_key_reused`; a fresh stale head returns `session_merge_head_changed`; detached and
+      wrong-branch worktrees return `session_merge_branch_unproven`; none appends. The one keyed prompt binds the
+      reviewed object, requires the agent to re-prove worktree/symbolic-branch/stored-ref identity before change,
+      and after sync merges the freshly frozen tested object rather than a branch name. No raw key is retained.
   - name: codex-command-box-terminal-delivery
     tags: [backend-api, frontend-e2e, desktop]
     test: { path: spec-dashboard/test/command-box.e2e.mjs, name: "Command Box keeps a terminal delivery outcome" }

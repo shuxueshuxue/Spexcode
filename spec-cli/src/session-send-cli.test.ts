@@ -66,6 +66,7 @@ test('session send keeps the message positional when routing flags appear before
     for (const args of [
       ['session', 'send', TARGET, 'message before flag', '--api', api],
       ['session', 'send', TARGET, '--api', api, 'message after flag'],
+      ['session', 'send', TARGET, '--force-rebuild failed with 413', '--api', api],
     ]) {
       const result = await runCli(args, env)
       assert.equal(result.code, 0, result.stderr)
@@ -75,6 +76,7 @@ test('session send keeps the message positional when routing flags appear before
     assert.deepEqual(posts.map((request) => request.body), [
       { kind: 'text', text: 'message before flag' },
       { kind: 'text', text: 'message after flag' },
+      { kind: 'text', text: '--force-rebuild failed with 413' },
     ])
   })
 })

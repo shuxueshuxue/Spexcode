@@ -58,11 +58,12 @@ function flushExit(code = 0): Promise<never> {
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
 const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to'])
+const isFlagToken = (token: string): boolean => token.startsWith('--') && !/\s/.test(token)
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
     const t = process.argv[i]
-    if (t.startsWith('--')) { if (VALUE_FLAGS.has(t)) i++; continue }
+    if (isFlagToken(t)) { if (VALUE_FLAGS.has(t)) i++; continue }
     out.push(t)
   }
   return out
@@ -72,7 +73,7 @@ function rejectUnknownFlags(command: string, from: number, allowed: readonly str
   const known = new Set(allowed.map((name) => `--${name}`))
   for (let i = from; i < process.argv.length; i++) {
     const token = process.argv[i]
-    if (!token.startsWith('--')) continue
+    if (!isFlagToken(token)) continue
     if (!known.has(token)) {
       console.error(`${command}: unknown flag ${token}`)
       process.exit(2)

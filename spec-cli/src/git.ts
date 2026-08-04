@@ -5,6 +5,7 @@ import { join, isAbsolute, resolve, delimiter } from 'node:path'
 import { createHash, randomBytes } from 'node:crypto'
 import { projectRuntimeRoot } from './project-store.js'
 import { rootSlots, touchRoot as touchRootLru } from './root-lru.js'
+import { processStartToken } from './process-identity.js'
 
 const US = '\x1f', RS = '\x1e'
 
@@ -644,18 +645,29 @@ function loadEventLedger(location: EventCacheLocation): EventLedgerSnapshot {
   }
 }
 
-type EventLockOwner = { pid: number; token: string }
+type EventLockOwner = { pid: number; startToken: string; nonce: string }
 function readEventLockOwner(lock: string): EventLockOwner | null {
   try {
-    const value = JSON.parse(readFileSync(join(lock, 'owner.json'), 'utf8')) as { pid?: unknown; token?: unknown }
-    return Number.isInteger(value.pid) && (value.pid as number) > 0 && typeof value.token === 'string'
-      ? { pid: value.pid as number, token: value.token }
+    const value = JSON.parse(readFileSync(join(lock, 'owner.json'), 'utf8')) as { pid?: unknown; startToken?: unknown; nonce?: unknown }
+    return Number.isInteger(value.pid) && (value.pid as number) > 0
+      && typeof value.startToken === 'string' && !!value.startToken
+      && typeof value.nonce === 'string' && !!value.nonce
+      ? { pid: value.pid as number, startToken: value.startToken, nonce: value.nonce }
       : null
   } catch { return null }
 }
-function processAlive(pid: number): boolean {
-  try { process.kill(pid, 0); return true }
-  catch (error: any) { return error?.code !== 'ESRCH' }
+const sameEventLockOwner = (left: EventLockOwner | null, right: EventLockOwner | null): boolean =>
+  !!left && !!right && left.pid === right.pid && left.startToken === right.startToken && left.nonce === right.nonce
+
+function eventLockOwnerState(owner: EventLockOwner): 'live' | 'dead' | 'unknown' {
+  try { process.kill(owner.pid, 0) }
+  catch (error: any) {
+    if (error?.code === 'ESRCH') return 'dead'
+    if (error?.code !== 'EPERM') return 'unknown'
+  }
+  const observed = processStartToken(owner.pid)
+  if (!observed) return 'unknown'
+  return observed === owner.startToken ? 'live' : 'dead'
 }
 function retireLockPath(active: string): boolean {
   const inert = `${active}.inert.${process.pid}.${randomBytes(8).toString('hex')}`
@@ -668,14 +680,17 @@ function retireLockPath(active: string): boolean {
   return true
 }
 function reclaimDeadEventLock(lock: string, held: EventLockOwner, claimant: EventLockOwner): boolean {
-  if (processAlive(held.pid)) return false
+  if (eventLockOwnerState(held) !== 'dead') return false
   const reclaim = join(lock, 'reclaim')
   if (existsSync(reclaim)) {
     const reclaimer = readEventLockOwner(reclaim)
-    if (!reclaimer || processAlive(reclaimer.pid)) return false
+    if (!reclaimer) throw new Error(`history event cache lock has an unprovable reclaimer: ${lock}`)
+    const state = eventLockOwnerState(reclaimer)
+    if (state === 'unknown') throw new Error(`history event cache lock reclaimer identity is unreadable: ${lock}`)
+    if (state === 'live') return false
     retireLockPath(reclaim)
   }
-  const prepared = join(lock, `reclaim-${claimant.pid}-${claimant.token}`)
+  const prepared = join(lock, `reclaim-${claimant.pid}-${claimant.nonce}`)
   try {
     mkdirSync(prepared)
     writeFileSync(join(prepared, 'owner.json'), JSON.stringify(claimant))
@@ -686,7 +701,7 @@ function reclaimDeadEventLock(lock: string, held: EventLockOwner, claimant: Even
     throw error
   }
   const current = readEventLockOwner(lock)
-  if (current?.pid !== held.pid || current.token !== held.token || processAlive(current.pid)) {
+  if (!sameEventLockOwner(current, held) || (current && eventLockOwnerState(current) !== 'dead')) {
     retireLockPath(reclaim)
     return false
   }
@@ -701,12 +716,14 @@ async function withEventCacheLock<T>(
 ): Promise<T | typeof EVENT_LEDGER_BUSY> {
   const lock = `${path}.lock`
   mkdirSync(join(path, '..'), { recursive: true })
-  const owner: EventLockOwner = { pid: process.pid, token: randomBytes(16).toString('hex') }
+  const startToken = processStartToken(process.pid)
+  if (!startToken) throw new Error(`cannot prove history event cache lock claimant identity: ${path}`)
+  const owner: EventLockOwner = { pid: process.pid, startToken, nonce: randomBytes(16).toString('hex') }
   const attempts = Math.max(1, Math.ceil(GIT_TIMEOUT_MS / 5))
   const signal = inheritedContext()?.signal
   for (let attempt = 0; ; attempt++) {
     if (signal?.aborted) throw gitAbortError()
-    const claimant = `${lock}.claim.${owner.pid}.${owner.token}`
+    const claimant = `${lock}.claim.${owner.pid}.${owner.nonce}`
     try {
       mkdirSync(claimant)
       writeFileSync(join(claimant, 'owner.json'), JSON.stringify(owner))
@@ -716,11 +733,27 @@ async function withEventCacheLock<T>(
       rmSync(claimant, { recursive: true, force: true })
       if (error?.code !== 'EEXIST' && error?.code !== 'ENOTEMPTY') throw error
       const held = readEventLockOwner(lock)
-      if (held && reclaimDeadEventLock(lock, held, owner)) continue
+      if (!held) {
+        if (!existsSync(lock)) continue
+        throw new Error(`history event cache lock has no provable exact owner: ${path}`)
+      }
+      const heldState = eventLockOwnerState(held)
+      if (heldState === 'unknown')
+        throw new Error(`history event cache lock owner identity is unreadable: ${path}`)
+      if (heldState === 'dead') {
+        if (reclaimDeadEventLock(lock, held, owner)) continue
+        if (!existsSync(lock)) continue
+      }
       if (!waitForWriter) {
         const current = readEventLockOwner(lock)
-        if (current && processAlive(current.pid)) return EVENT_LEDGER_BUSY
-        throw new Error(`history event cache lock has no provable live owner: ${path}`)
+        if (!current) {
+          if (!existsSync(lock)) continue
+          throw new Error(`history event cache lock has no provable exact owner: ${path}`)
+        }
+        const state = eventLockOwnerState(current)
+        if (state === 'live') return EVENT_LEDGER_BUSY
+        if (state === 'dead') continue
+        throw new Error(`history event cache lock owner identity is unreadable: ${path}`)
       }
       if (attempt >= attempts) {
         const heldBy = readEventLockOwner(lock)?.pid
@@ -731,7 +764,7 @@ async function withEventCacheLock<T>(
   }
   eventLedgerDiagnostics.locks++
   try { return await run() } finally {
-    if (readEventLockOwner(lock)?.token === owner.token) retireLockPath(lock)
+    if (sameEventLockOwner(readEventLockOwner(lock), owner)) retireLockPath(lock)
   }
 }
 function removeEventTemps(path: string): void {

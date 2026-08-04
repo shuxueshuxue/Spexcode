@@ -24,15 +24,24 @@ must consume the same integrity-checked representation without waiting for an un
 The ordinary build transaction remains the sole writer. It acquires the project-scoped lock, reads one complete
 integrity-checked snapshot, lets every nested history and hunk consumer add facts to that build, rechecks the Git
 interpretation identity, and performs at most one atomic replacement. Dead-owner recovery and bounded waiting
-remain part of that writer contract.
+remain part of that writer contract. Lock authority is one exact process generation: PID, cross-platform process-start
+token, and a per-acquisition nonce. A reused PID is dead authority, an unreadable identity (including an EPERM process
+whose start token cannot be read) is unknown and fails loudly, and a lock that disappears after a losing create is a
+normal release race that retries acquisition rather than inventing an unknown owner.
 
 A foreground derived read first attempts that exact transaction without waiting. If the lock is free, the read is
 the writer and missing immutable facts become durable exactly as before. If a live writer already owns the lock,
 the foreground read opens the ledger's current atomic snapshot, runs the same derivation against it, and discards
 only the immutable additions that this read discovered. It never substitutes an empty verdict: a missing fact is
-derived from Git through the ordinary adapter, malformed ledger contents are rejected as a whole snapshot, and
-any Git interpretation identity movement retries the complete read. The concurrent writer may publish the same
-immutable fact later; either answer has the same semantics because the ledger stores facts, not verdicts.
+derived from Git through the ordinary adapter, and a malformed ledger is rejected as a reusable snapshot and rebuilt
+from Git. Git failures, unknown lock ownership, and repeated Git interpretation identity movement remain loud. The
+concurrent writer may publish the same immutable fact later; either answer has the same semantics because the ledger
+stores facts, not verdicts.
+
+The transaction encloses only immutable ledger derivation. Observer recovery waits, review payload assembly, content
+revision reads, and stable-cut replay happen before acquisition; the post-observer generation and content-revision
+fences remain after derivation. List, summary, and export therefore share one derivation transaction when they need
+facts, while a replay that needs no fact never consults an unrelated writer lock.
 
 This is one read policy over one ledger format and one derivation engine. It adds no cache, generation, timeout,
 path class, or background priority. Contention changes only who may persist newly derived immutable facts. A later

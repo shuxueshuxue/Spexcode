@@ -1,12 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'node:net'
 import { once } from 'node:events'
+import { createHash, randomUUID } from 'node:crypto'
+import { processStartToken } from '../../spec-cli/src/process-identity.js'
 
 const SOURCE = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SESSION_ID = 'eval-ledger-demand-0001'
@@ -62,7 +64,7 @@ function record(home: string, project: string, worktree: string): void {
   }, null, 2) + '\n')
 }
 
-test('a public scoped eval demand does not wait for an unrelated live event-ledger writer', { timeout: 45_000 }, async () => {
+test('public eval surfaces share one ledger truth without inheriting writer lock wall time', { timeout: 90_000 }, async () => {
   assert.match(process.version, /^v22\./, `ledger-demand API rig must run on Node 22, got ${process.version}`)
   console.log(JSON.stringify({
     phase: 'provenance',
@@ -145,6 +147,39 @@ test('a public scoped eval demand does not wait for an unrelated live event-ledg
     }
     assert.equal(healthy, true, `backend failed to start: ${backendStderr.slice(-1200)}`)
 
+    const ledgerFiles = () => readdirSync(home, { recursive: true })
+      .map((entry) => String(entry))
+      .filter((entry) => /history-events-v\d+-[0-9a-f]+\.ndjson$/.test(entry))
+      .map((entry) => join(home, entry))
+    const demand = async () => {
+      const response = await fetch(`${origin}/api/evals?q=${encodeURIComponent(`is:eval scope:${SESSION_ID}`)}`)
+      const raw = await response.text()
+      let body: any = null
+      try { body = JSON.parse(raw) } catch { /* preserve the raw response for a loud assertion */ }
+      return { response, raw, body }
+    }
+
+    const warm = await demand()
+    assert.equal(warm.response.status, 200, `initial demand failed: ${warm.raw.slice(0, 1200)}`)
+    assert.ok(warm.body?.items?.some((item: any) => item.scenario === 'value-moves'))
+    assert.equal(ledgerFiles().length, 1, 'the uncontended warm demand establishes the ordinary durable ledger')
+    const ledger = ledgerFiles()[0]
+    const lock = `${ledger}.lock`
+
+    mkdirSync(lock)
+    writeFileSync(join(lock, 'owner.json'), '{"pid":"unknown"}\n')
+    const replay = await demand()
+    console.log(JSON.stringify({ phase: 'replay-does-not-enter-ledger-transaction', status: replay.response.status }))
+    assert.equal(replay.response.status, 200, `a content-revision replay entered an unrelated lock: ${replay.raw.slice(0, 1200)}`)
+    assert.equal(existsSync(lock), true, 'a replay never mutates an unknown lock')
+    rmSync(lock, { recursive: true, force: true })
+
+    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 3\n')
+    git(worktree, 'add', 'src/value.ts')
+    git(worktree, 'commit', '-qm', 'advance value before contended corrupt snapshot')
+    const corrupt = Buffer.from('corrupt-ledger-without-integrity\n')
+    writeFileSync(ledger, corrupt)
+
     const holder = [
       `import { existsSync, writeFileSync } from 'node:fs'`,
       `import { withEventLedgerBuild } from ${JSON.stringify(join(SOURCE, 'spec-cli/src/git.ts'))}`,
@@ -168,51 +203,158 @@ test('a public scoped eval demand does not wait for an unrelated live event-ledg
     assert.equal(held, true, `writer failed to acquire the ledger: ${writerStderr.slice(-1200)}`)
 
     const started = Date.now()
-    const response = await fetch(`${origin}/api/evals?q=${encodeURIComponent(`is:eval scope:${SESSION_ID}`)}`)
-    const raw = await response.text()
+    const contended = await demand()
     const elapsedMs = Date.now() - started
-    let body: any = null
-    try { body = JSON.parse(raw) } catch { /* raw body is retained below */ }
     const observation = {
       phase: 'live-writer-public-demand',
       runtime: process.version,
-      status: response.status,
+      status: contended.response.status,
       elapsedMs,
       writerHeld: existsSync(writerReady) && !existsSync(writerRelease) && writer.exitCode === null,
-      rows: Array.isArray(body?.items) ? body.items.length : null,
-      error: response.ok ? null : (body?.error ?? raw.slice(0, 1000)),
+      rows: Array.isArray(contended.body?.items) ? contended.body.items.length : null,
+      error: contended.response.ok ? null : (contended.body?.error ?? contended.raw.slice(0, 1000)),
     }
     console.log(JSON.stringify(observation))
     assert.equal(observation.writerHeld, true, 'the product response must be measured while the unrelated writer still owns the transaction')
-    assert.equal(response.status, 200, `foreground eval demand waited for the live writer: ${JSON.stringify(observation)}\n${backendStderr.slice(-1500)}`)
-    assert.ok(Array.isArray(body?.items) && body.items.some((item: any) => item.scenario === 'value-moves'), 'the response must carry the selected scenario rather than an empty fallback')
+    assert.equal(contended.response.status, 200, `foreground eval demand waited for the live writer: ${JSON.stringify(observation)}\n${backendStderr.slice(-1500)}`)
+    assert.ok(Array.isArray(contended.body?.items) && contended.body.items.some((item: any) => item.scenario === 'value-moves'), 'the response must carry the selected scenario rather than an empty fallback')
+    assert.deepEqual(readFileSync(ledger), corrupt, 'a contended corrupt snapshot rebuilds from Git without replacing the writer-owned ledger')
 
-    const ledgerFiles = () => readdirSync(home, { recursive: true })
-      .map((entry) => String(entry))
-      .filter((entry) => /history-events-v\d+-[0-9a-f]+\.ndjson$/.test(entry))
-      .map((entry) => join(home, entry))
-    assert.deepEqual(ledgerFiles(), [], 'the contended read-only demand must not replace the writer-owned ledger')
+    const exported = await fetch(`${origin}/api/sessions/${SESSION_ID}/evals?format=html`)
+    const exportedHtml = await exported.text()
+    assert.equal(exported.status, 200, `the public export surface inherited writer wall time: ${exportedHtml.slice(0, 1000)}`)
+    assert.match(exportedHtml, /eval-ledger-demand-fixture/i)
+
+    const streamAbort = new AbortController()
+    const stream = await fetch(`${origin}/api/graph/stream?mode=delta`, { signal: streamAbort.signal })
+    const reader = stream.body!.getReader()
+    await reader.read()
+    let summaryReady = false
+    for (let attempt = 0; attempt < 80; attempt++) {
+      const graphResponse = await fetch(`${origin}/api/graph`)
+      const graph = await graphResponse.json() as any
+      const row = graph?.sessions?.find((item: any) => item.id === SESSION_ID)
+      if (row?.evalSummary?.phase === 'ready' && row.evalSummary?.value?.total === 1) { summaryReady = true; break }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    streamAbort.abort()
+    await reader.cancel().catch(() => {})
+    assert.equal(summaryReady, true, 'the graph summary surface settles while the independent ledger writer remains live')
+
     writeFileSync(writerRelease, 'release\n')
     await stop(writer)
     writer = null
 
-    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 3\n')
+    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 4\n')
     git(worktree, 'add', 'src/value.ts')
     git(worktree, 'commit', '-qm', 'advance value without contention')
-    const uncontended = await fetch(`${origin}/api/evals?q=${encodeURIComponent(`is:eval scope:${SESSION_ID}`)}`)
-    const uncontendedRaw = await uncontended.text()
+    const uncontended = await demand()
     const files = ledgerFiles()
     const durableObservation = {
       phase: 'uncontended-demand-persists',
-      status: uncontended.status,
+      status: uncontended.response.status,
       ledgerFiles: files.length,
       ledgerBytes: files.length === 1 ? statSync(files[0]).size : null,
-      error: uncontended.ok ? null : uncontendedRaw.slice(0, 1000),
+      error: uncontended.response.ok ? null : uncontended.raw.slice(0, 1000),
     }
     console.log(JSON.stringify(durableObservation))
-    assert.equal(uncontended.status, 200, `uncontended demand failed: ${JSON.stringify(durableObservation)}`)
+    assert.equal(uncontended.response.status, 200, `uncontended demand failed: ${JSON.stringify(durableObservation)}`)
     assert.equal(files.length, 1, 'an uncontended demand must retain the ordinary durable ledger transaction')
     assert.ok(statSync(files[0]).size > 0, 'the durable ledger replacement must contain derived facts')
+
+    const generationHolder = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    try {
+      const beforeGeneration = createHash('sha256').update(readFileSync(ledger)).digest('hex')
+      writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 5\n')
+      git(worktree, 'add', 'src/value.ts')
+      git(worktree, 'commit', '-qm', 'advance value past stale writer generation')
+      mkdirSync(lock)
+      writeFileSync(join(lock, 'owner.json'), `${JSON.stringify({
+        pid: generationHolder.pid,
+        token: 'legacy-reader-field',
+        startToken: `not-${processStartToken(generationHolder.pid!)}`,
+        nonce: randomUUID(),
+      })}\n`)
+      const reclaimed = await demand()
+      const afterGeneration = createHash('sha256').update(readFileSync(ledger)).digest('hex')
+      console.log(JSON.stringify({ phase: 'stale-writer-generation', status: reclaimed.response.status, lockPresent: existsSync(lock) }))
+      assert.equal(reclaimed.response.status, 200, `stale writer generation blocked demand: ${reclaimed.raw.slice(0, 1200)}`)
+      assert.equal(existsSync(lock), false, 'a reused PID with the wrong process-start generation cannot retain the writer lock')
+      assert.notEqual(afterGeneration, beforeGeneration, 'the reclaimed transaction persists the newly derived immutable facts')
+    } finally {
+      await stop(generationHolder)
+      rmSync(lock, { recursive: true, force: true })
+    }
+
+    if (process.platform !== 'win32') {
+      const beforeReleaseRace = createHash('sha256').update(readFileSync(ledger)).digest('hex')
+      writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 6\n')
+      git(worktree, 'add', 'src/value.ts')
+      git(worktree, 'commit', '-qm', 'advance value across normal lock release race')
+      mkdirSync(lock)
+      const fifo = join(lock, 'owner.json')
+      execFileSync('mkfifo', [fifo])
+      const owner = JSON.stringify({
+        pid: process.pid,
+        token: 'legacy-reader-field',
+        startToken: processStartToken(process.pid),
+        nonce: randomUUID(),
+      })
+      const releaseScript = [
+        `const { closeSync, openSync, rmSync, writeFileSync } = require('node:fs')`,
+        `const fd = openSync(${JSON.stringify(fifo)}, 'w')`,
+        `writeFileSync(fd, ${JSON.stringify(owner)})`,
+        `rmSync(${JSON.stringify(lock)}, { recursive: true, force: true })`,
+        `closeSync(fd)`,
+      ].join(';')
+      const releaser = spawn(process.execPath, ['-e', releaseScript], { stdio: 'ignore' })
+      try {
+        const released = await demand()
+        const afterReleaseRace = createHash('sha256').update(readFileSync(ledger)).digest('hex')
+        console.log(JSON.stringify({ phase: 'normal-release-after-create-collision', status: released.response.status }))
+        assert.equal(released.response.status, 200, `a normal lock release became an unknown-owner 500: ${released.raw.slice(0, 1200)}`)
+        assert.equal(existsSync(lock), false)
+        assert.notEqual(afterReleaseRace, beforeReleaseRace, 'the retried acquisition persists the new immutable facts')
+      } finally {
+        await stop(releaser)
+        rmSync(lock, { recursive: true, force: true })
+      }
+    }
+
+    let pidOnePermission: string | null = null
+    try { process.kill(1, 0); pidOnePermission = 'allowed' }
+    catch (error) { pidOnePermission = (error as NodeJS.ErrnoException).code ?? 'unknown' }
+    const pidOneStart = processStartToken(1)
+    if (pidOnePermission === 'EPERM' && pidOneStart) {
+      const beforeEperm = createHash('sha256').update(readFileSync(ledger)).digest('hex')
+      writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 7\n')
+      git(worktree, 'add', 'src/value.ts')
+      git(worktree, 'commit', '-qm', 'advance value under an exact EPERM writer identity')
+      mkdirSync(lock)
+      writeFileSync(join(lock, 'owner.json'), `${JSON.stringify({ pid: 1, startToken: pidOneStart, nonce: randomUUID() })}\n`)
+      const eperm = await demand()
+      const afterEperm = createHash('sha256').update(readFileSync(ledger)).digest('hex')
+      console.log(JSON.stringify({ phase: 'eperm-exact-writer-generation', status: eperm.response.status }))
+      assert.equal(eperm.response.status, 200, `EPERM hid a readable exact writer generation: ${eperm.raw.slice(0, 1200)}`)
+      assert.equal(existsSync(lock), true, 'an exact live EPERM writer retains its lock')
+      assert.equal(afterEperm, beforeEperm, 'contended EPERM demand never replaces the writer-owned ledger')
+      rmSync(lock, { recursive: true, force: true })
+    }
+
+    writeFileSync(join(worktree, 'src/value.ts'), 'export const value = 8\n')
+    git(worktree, 'add', 'src/value.ts')
+    git(worktree, 'commit', '-qm', 'advance value before unknown owner refusal')
+    mkdirSync(lock)
+    writeFileSync(join(lock, 'owner.json'), '{"pid":1,"startToken":null,"nonce":"unknown"}\n')
+    const beforeUnknown = createHash('sha256').update(readFileSync(ledger)).digest('hex')
+    const unknown = await demand()
+    const afterUnknown = createHash('sha256').update(readFileSync(ledger)).digest('hex')
+    console.log(JSON.stringify({ phase: 'unknown-lock-owner', status: unknown.response.status }))
+    assert.equal(unknown.response.status, 500, 'an unprovable lock owner must remain fail-loud')
+    assert.match(backendStderr, /no provable exact owner|identity is unreadable/i)
+    assert.equal(afterUnknown, beforeUnknown, 'an unknown lock owner cannot authorize ledger replacement')
+    assert.equal(existsSync(lock), true, 'an unknown lock is preserved for diagnosis')
+    rmSync(lock, { recursive: true, force: true })
   } finally {
     try { writeFileSync(writerRelease, 'release\n') } catch { /* fixture setup may have failed before creation */ }
     await stop(writer)

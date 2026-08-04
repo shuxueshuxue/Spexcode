@@ -64,6 +64,21 @@ scenarios:
       newer tmux, the window map holds one junk key per line, and every session reads window-less: alive ones
       collapse to `unknown` and the rest to a false `offline`.
     test: spec-cli/src/sessions-hot.test.ts
+  - name: a-board-row-carries-only-the-prompt-preview
+    tags: [backend-api]
+    code: spec-cli/src/sessions.ts
+    description: >
+      Against a real backend serving a real board whose sessions were launched with long asks, read
+      `GET /api/sessions` and weigh its body: total bytes, and the share spent on each row's `prompt` versus
+      its `promptPreview`. Then read `GET /api/sessions/:id` for the row with the longest ask.
+    expected: >
+      The list body is proportional to the NUMBER of sessions, not to the total length of their launch
+      prompts: a row carries the ask only as its one-line preview, so a single long ask cannot dominate the
+      board. The id-addressed detail still returns that ask in full, because it reads the stored prompt
+      itself rather than inheriting the row's field. The failure this locks: shipping the full text in every
+      row made 98.8% of a 2218 KB board body prompt text (27 KB of actual board data, worst single row
+      246 KB) and pinned those same bytes in the last-known-row cache for the life of the process — while the
+      detail route, the only full-text reader, never depended on them.
   - name: a-dead-leaf-never-wedges-a-session
     tags: [backend-api, cli]
     code: spec-cli/src/sessions.ts

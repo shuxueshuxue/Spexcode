@@ -8,7 +8,12 @@ import { runtimeRoot, sessionArtifactPath, sessionStoreDir } from './layout.js'
 // or archived without changing what is owed. A session that predates this mechanism owes nothing, because a
 // queue is only ever filled by an enqueue — which is why no backlog migration exists.
 
-export type PendingMessage = { mid: string; text: string; from: string | null }
+export type PendingMessage = {
+  mid: string
+  text: string
+  from: string | null
+  dispatch?: { operation: 'merge'; requestDigest: string }
+}
 
 const queuePath = (id: string): string => sessionArtifactPath(id, 'pending.json')
 const revokedSenderRoot = (): string => join(runtimeRoot(), '.revoked-senders')
@@ -55,7 +60,10 @@ function read(id: string): PendingMessage[] {
     return raw.filter((m): m is PendingMessage =>
       !!m && typeof m === 'object'
       && typeof (m as PendingMessage).mid === 'string'
-      && typeof (m as PendingMessage).text === 'string')
+      && typeof (m as PendingMessage).text === 'string'
+      && ((m as PendingMessage).dispatch === undefined
+        || ((m as PendingMessage).dispatch?.operation === 'merge'
+          && typeof (m as PendingMessage).dispatch?.requestDigest === 'string')))
   } catch { return [] }   // absent, empty, or unparseable all mean the honest thing: nothing owed
 }
 
@@ -93,10 +101,19 @@ export function revokePendingFromWhileLocked(id: string, sender: string): number
 }
 
 // The enqueue rides the timeline append ([[dispatch]]): the caller holds the session's RECORD lock across
-// both, and the record is written first, so a crash between them leaves a message visible but undelivered —
-// never delivered but unrecorded.
+// both, and the record is written first, so delivery is never unrecorded. A keyed dispatch also carries its
+// exact delivery bytes in the timeline receipt, letting its retry restore a queue write lost to a crash.
 export function enqueue(id: string, msg: PendingMessage): void {
   write(id, [...read(id), msg])
+}
+
+// Caller holds this target's delivery lock. A retry may reach this after either side of the receipt->queue
+// crash boundary; exact mid identity makes reconstruction idempotent without inspecting message text.
+export function ensurePendingWhileLocked(id: string, msg: PendingMessage): boolean {
+  const current = read(id)
+  if (current.some((pending) => pending.mid === msg.mid)) return false
+  write(id, [...current, msg])
+  return true
 }
 
 export const pendingMessages = (id: string): PendingMessage[] => read(id)

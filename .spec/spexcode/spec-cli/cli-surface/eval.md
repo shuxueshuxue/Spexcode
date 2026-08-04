@@ -4,12 +4,15 @@ scenarios:
     description: >
       Drive the real `spex session send` CLI against a recording HTTP backend twice, once as
       `session send <SEL> "<msg>" --api <url>` and once as `session send <SEL> --api <url> "<msg>"`,
-      then inspect the POST bodies rather than trusting the CLI receipt. Also invoke send with no message and
-      with an unknown flag while the backend records every request.
+      then inspect the POST bodies rather than trusting the CLI receipt. Send the single-token option-shaped
+      message `--force` once through the documented `--` delimiter and once without it. Also invoke send with no
+      message, an extra message, an unknown flag, duplicate `--api`/`--port`/`--keys`, and missing values while
+      the backend records every request.
     expected: >
       Both valid orders exit zero, print `sent`, and POST the exact caller-authored message rather than a routing
-      flag. Missing message and unknown flag exit non-zero before selector resolution or dispatch, print no false
-      `sent`, and make zero backend requests.
+      flag; `--` delivers the exact option-shaped message, while omitting the delimiter fails loud. Missing/extra
+      message, unknown flag, duplicate valued flag, and missing value all exit 2 before selector resolution or
+      dispatch, print no false `sent`, and make zero backend requests. Raw keys retain their exact one-value face.
     tags: [cli, backend-api]
     code: [spec-cli/src/cli.ts, spec-cli/src/session-send-cli.test.ts]
   - name: help-journey

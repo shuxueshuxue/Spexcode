@@ -66,7 +66,7 @@ test('session send keeps the message positional when routing flags appear before
     for (const args of [
       ['session', 'send', TARGET, 'message before flag', '--api', api],
       ['session', 'send', TARGET, '--api', api, 'message after flag'],
-      ['session', 'send', TARGET, '--force-rebuild failed with 413', '--api', api],
+      ['session', 'send', TARGET, '--api', api, '--', '--force'],
     ]) {
       const result = await runCli(args, env)
       assert.equal(result.code, 0, result.stderr)
@@ -76,21 +76,28 @@ test('session send keeps the message positional when routing flags appear before
     assert.deepEqual(posts.map((request) => request.body), [
       { kind: 'text', text: 'message before flag' },
       { kind: 'text', text: 'message after flag' },
-      { kind: 'text', text: '--force-rebuild failed with 413' },
+      { kind: 'text', text: '--force' },
     ])
   })
 })
 
-test('session send rejects missing or extra positionals before session resolution or dispatch', async () => {
+test('session send rejects malformed valued flags and positional arity before backend contact', async () => {
   await withBackend(async (api, requests, env) => {
+    const port = new URL(api).port
     for (const args of [
       ['session', 'send', TARGET, '--api', api],
       ['session', 'send', TARGET, 'one message', 'second message', '--api', api],
+      ['session', 'send', TARGET, 'message', '--api', api, '--api', api],
+      ['session', 'send', TARGET, 'message', '--port', port, '--port', port],
+      ['session', 'send', TARGET, '--api', api, '--keys', 'Up', '--keys', 'Enter'],
+      ['session', 'send', TARGET, 'message', '--api', ''],
+      ['session', 'send', TARGET, 'message', '--api', api, '--port', ''],
+      ['session', 'send', TARGET, '--api', api, '--keys', ''],
     ]) {
       const result = await runCli(args, env)
       assert.equal(result.code, 2)
       assert.equal(result.stdout, '')
-      assert.match(result.stderr, /usage: spex session send <SEL> "<msg>"/)
+      assert.doesNotMatch(result.stdout + result.stderr, /^sent$/m)
     }
     assert.deepEqual(requests, [], 'invalid argv must not reach the backend')
   })
@@ -103,6 +110,16 @@ test('session send rejects unknown flags before session resolution or dispatch',
     assert.equal(result.stdout, '')
     assert.equal(result.stderr, 'spex session send: unknown flag --bogus\n')
     assert.deepEqual(requests, [], 'unknown flags must not reach the backend')
+  })
+})
+
+test('session send requires -- to disambiguate a single-token option-shaped message', async () => {
+  await withBackend(async (api, requests, env) => {
+    const result = await runCli(['session', 'send', TARGET, '--force', '--api', api], env)
+    assert.equal(result.code, 2)
+    assert.equal(result.stdout, '')
+    assert.equal(result.stderr, 'spex session send: unknown flag --force\n')
+    assert.deepEqual(requests, [], 'an ambiguous option token must not reach the backend')
   })
 })
 

@@ -400,7 +400,7 @@ test('public review and merge authority bind exact head and one durable dispatch
       rawKeyVisible: false,
     })
 
-    const missingObject = '0'.repeat(headThree.length)
+    const missingObject = 'f'.repeat(headThree.length)
     const beforeMissingRecord = readFileSync(join(sessionDir, 'session.json'), 'utf8')
     const beforeMissingTimeline = (await request(baseA, `/api/sessions/${id}/timeline`)).text
     const beforeMissingPending = existsSync(pendingPath) ? readFileSync(pendingPath, 'utf8') : null
@@ -503,8 +503,10 @@ test('public review and merge authority bind exact head and one durable dispatch
     })
     writeFileSync(crashArm, 'armed\n')
     const disconnected = await crashMerge().then(() => false, () => true)
-    await waitFor(async () => backendA!.child.exitCode, (code) => code !== null, 'backend crash after receipt')
-    assert.equal(existsSync(crashClaim), true)
+    await waitFor(async () => existsSync(crashClaim), Boolean, 'backend crash after receipt')
+    await waitFor(async () => {
+      try { return (await request(baseA, '/health')).status } catch { return 0 }
+    }, (status) => status === 0, 'crashed backend listener absent')
     const debtAbsentAfterCrash = !existsSync(crashPending)
     await stopBackend(backendA)
     backendA = startBackend(portA)

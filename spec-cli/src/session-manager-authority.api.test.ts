@@ -67,6 +67,9 @@ test('public review and merge authority bind exact head and one durable dispatch
   const gitTrace = join(fixture, 'git-argv.log')
   const refMoveArm = join(fixture, 'move-ref.arm')
   const refMoveClaim = join(fixture, 'move-ref.claim')
+  const crashArm = join(fixture, 'crash-after-receipt.arm')
+  const crashClaim = join(fixture, 'crash-after-receipt.claim')
+  const crashPreload = join(fixture, 'crash-after-receipt.cjs')
   const realGit = execFileSync('bash', ['-lc', 'command -v git'], { encoding: 'utf8' }).trim()
   mkdirSync(gitBin, { recursive: true })
   writeFileSync(join(gitBin, 'git'), [
@@ -90,6 +93,23 @@ test('public review and merge authority bind exact head and one durable dispatch
     'exec "$SPEX_MANAGER_REAL_GIT" "$@"',
     '',
   ].join('\n'))
+  writeFileSync(crashPreload, [
+    "const fs = require('node:fs')",
+    "const { syncBuiltinESMExports } = require('node:module')",
+    'const rename = fs.renameSync',
+    'fs.renameSync = (from, to) => {',
+    '  const arm = process.env.SPEX_MANAGER_CRASH_ARM',
+    "  if (arm && fs.existsSync(arm) && String(to).endsWith('/pending.json')) {",
+    '    try { fs.unlinkSync(arm) } catch {}',
+    "    fs.writeFileSync(process.env.SPEX_MANAGER_CRASH_CLAIM, JSON.stringify({ pid: process.pid, from, to }) + '\\n')",
+    "    process.kill(process.pid, 'SIGKILL')",
+    '    return',
+    '  }',
+    '  return rename(from, to)',
+    '}',
+    'syncBuiltinESMExports()',
+    '',
+  ].join('\n'))
   chmodSync(join(gitBin, 'git'), 0o755)
   mkdirSync(join(project, '.spec', 'project'), { recursive: true })
   writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n\n# project\n')
@@ -108,13 +128,16 @@ test('public review and merge authority bind exact head and one durable dispatch
     ...process.env,
     SPEXCODE_HOME: home,
     SPEXCODE_TMUX: tmux,
-    FAKE_HARNESS_INTERVAL_MS: '50',
+    FAKE_HARNESS_INTERVAL_MS: '100000',
     PATH: `${gitBin}:${process.env.PATH ?? ''}`,
     SPEX_MANAGER_GIT_TRACE: gitTrace,
     SPEX_MANAGER_REAL_GIT: realGit,
     SPEX_MANAGER_MOVE_REF_ARM: refMoveArm,
     SPEX_MANAGER_MOVE_REF_CLAIM: refMoveClaim,
     SPEX_MANAGER_PROJECT: project,
+    SPEX_MANAGER_CRASH_ARM: crashArm,
+    SPEX_MANAGER_CRASH_CLAIM: crashClaim,
+    NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require=${crashPreload}`.trim(),
   }
   delete env.SPEXCODE_API_URL
   delete env.SPEXCODE_SESSION_ID
@@ -149,6 +172,7 @@ test('public review and merge authority bind exact head and one durable dispatch
   let id = ''
   let cliId = ''
   let siblingId = ''
+  let crashId = ''
   try {
     await Promise.all([waitHealth(baseA, 'backend A health'), waitHealth(baseB, 'backend B health')])
     const created = await request(baseA, '/api/sessions', {
@@ -376,6 +400,20 @@ test('public review and merge authority bind exact head and one durable dispatch
       rawKeyVisible: false,
     })
 
+    const missingObject = '0'.repeat(headThree.length)
+    const beforeMissingRecord = readFileSync(join(sessionDir, 'session.json'), 'utf8')
+    const beforeMissingTimeline = (await request(baseA, `/api/sessions/${id}/timeline`)).text
+    const beforeMissingPending = existsSync(pendingPath) ? readFileSync(pendingPath, 'utf8') : null
+    const missingObjectResult = await merge(baseA, 'missing-object', missingObject, baseAfterMove)
+    const missingObjectObserved = {
+      status: missingObjectResult.status,
+      code: missingObjectResult.body?.code,
+      mutation: readFileSync(join(sessionDir, 'session.json'), 'utf8') !== beforeMissingRecord
+        || (await request(baseA, `/api/sessions/${id}/timeline`)).text !== beforeMissingTimeline
+        || (existsSync(pendingPath) ? readFileSync(pendingPath, 'utf8') : null) !== beforeMissingPending,
+    }
+    console.log(`manager-authority-missing-object ${JSON.stringify(missingObjectObserved)}`)
+
     const siblingCreated = await request(baseA, '/api/sessions', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Idempotency-Key': 'manager-authority-sibling-session' },
@@ -435,7 +473,92 @@ test('public review and merge authority bind exact head and one durable dispatch
     assert.match(cliReplayOutput, /merge dispatched/)
     assert.equal(cliTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length, 1)
     console.log(`manager-authority-cli ${JSON.stringify({ dispatched: true, replayed: true, promptCount: 1 })}`)
+
+    const crashCreated = await request(baseA, '/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': 'manager-authority-crash-session' },
+      body: JSON.stringify({ prompt: 'manager authority crash fixture', launcher: 'fake' }),
+    })
+    assert.equal(crashCreated.status, 201, crashCreated.text)
+    crashId = crashCreated.body.id
+    const crashDetail = await waitFor(
+      () => request(baseA, `/api/sessions/${crashId}`).then((reply) => reply.body),
+      (session) => session?.liveness === 'online',
+      'crash fixture session online',
+    )
+    writeFileSync(join(crashDetail.path, 'crash.txt'), 'reviewed crash recovery\n')
+    git(crashDetail.path, 'add', 'crash.txt')
+    git(crashDetail.path, 'commit', '-qm', 'spec: reviewed crash recovery')
+    execFileSync(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', 'merge'], {
+      cwd: crashDetail.path, env: { ...env, SPEXCODE_SESSION_ID: crashId }, encoding: 'utf8',
+    })
+    const crashReview = await request(baseA, `/api/sessions/${crashId}/review`)
+    assert.equal(crashReview.status, 200, crashReview.text)
+    const crashDir = join(runtime, 'sessions', crashId)
+    const crashPending = join(crashDir, 'pending.json')
+    const crashMerge = () => request(baseA, `/api/sessions/${crashId}/merge`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': 'crash-after-receipt' },
+      body: JSON.stringify({ expectedBranchHead: crashReview.body.branchHead, expectedBaseHead: crashReview.body.baseHead }),
+    })
+    writeFileSync(crashArm, 'armed\n')
+    const disconnected = await crashMerge().then(() => false, () => true)
+    await waitFor(async () => backendA!.child.exitCode, (code) => code !== null, 'backend crash after receipt')
+    assert.equal(existsSync(crashClaim), true)
+    const debtAbsentAfterCrash = !existsSync(crashPending)
+    await stopBackend(backendA)
+    backendA = startBackend(portA)
+    await waitHealth(baseA, 'receipt-recovery backend health')
+    const afterCrashTimeline = await request(baseA, `/api/sessions/${crashId}/timeline`)
+    const crashPromptCount = afterCrashTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length
+    const recovered = await crashMerge()
+    const captureAfterRecovery = await request(baseA, `/api/sessions/${crashId}/capture`)
+    const nativeCountAfterRecovery = (captureAfterRecovery.text.match(/FAKE-HARNESS REPLY Merge your branch/g) ?? []).length
+    const afterRecoveryTimeline = await request(baseA, `/api/sessions/${crashId}/timeline`)
+    const timelineCountAfterRecovery = afterRecoveryTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length
+    const debtAbsentAfterRecovery = !existsSync(crashPending)
+
+    execFileSync(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'internal', 'session-state', 'active', '--session', crashId], {
+      cwd: crashDetail.path, env, encoding: 'utf8',
+    })
+    const crashRecordPath = join(crashDir, 'session.json')
+    const activeBeforeReplay = readFileSync(crashRecordPath, 'utf8')
+    const activeReplay = await crashMerge()
+    const activeAfterReplay = readFileSync(crashRecordPath, 'utf8')
+    const activeCapture = await request(baseA, `/api/sessions/${crashId}/capture`)
+    const nativeCountAfterActiveReplay = (activeCapture.text.match(/FAKE-HARNESS REPLY Merge your branch/g) ?? []).length
+
+    const stopped = await request(baseA, `/api/sessions/${crashId}/stop`, { method: 'POST' })
+    assert.equal(stopped.status, 200, stopped.text)
+    const archived = await request(baseA, `/api/sessions/${crashId}/archive`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on: true }),
+    })
+    assert.equal(archived.status, 200, archived.text)
+    assert.equal(archived.body.ok, true)
+    const archivedBeforeReplay = readFileSync(crashRecordPath, 'utf8')
+    const archivedReplay = await crashMerge()
+    const archivedAfterReplay = readFileSync(crashRecordPath, 'utf8')
+    const finalCrashTimeline = await request(baseA, `/api/sessions/${crashId}/timeline`)
+    const finalCrashPromptCount = finalCrashTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length
+    const recoveryObserved = {
+      missingObject: missingObjectObserved,
+      disconnected,
+      receiptWithoutDebt: crashPromptCount === 1 && debtAbsentAfterCrash,
+      recovered: { status: recovered.status, replayed: recovered.body?.replayed === true, nativeCount: nativeCountAfterRecovery, timelineCount: timelineCountAfterRecovery, debtAbsent: debtAbsentAfterRecovery },
+      activeReplay: { status: activeReplay.status, replayed: activeReplay.body?.replayed === true, recordUnchanged: activeBeforeReplay === activeAfterReplay, nativeCount: nativeCountAfterActiveReplay, debtAbsent: !existsSync(crashPending) },
+      archivedReplay: { status: archivedReplay.status, replayed: archivedReplay.body?.replayed === true, recordUnchanged: archivedBeforeReplay === archivedAfterReplay, timelineCount: finalCrashPromptCount, debtAbsent: !existsSync(crashPending) },
+    }
+    console.log(`manager-authority-receipt-recovery ${JSON.stringify(recoveryObserved)}`)
+    assert.deepEqual(recoveryObserved, {
+      missingObject: { status: 409, code: 'session_merge_head_changed', mutation: false },
+      disconnected: true,
+      receiptWithoutDebt: true,
+      recovered: { status: 200, replayed: true, nativeCount: 1, timelineCount: 1, debtAbsent: true },
+      activeReplay: { status: 200, replayed: true, recordUnchanged: true, nativeCount: 1, debtAbsent: true },
+      archivedReplay: { status: 200, replayed: true, recordUnchanged: true, timelineCount: 1, debtAbsent: true },
+    })
   } finally {
+    if (crashId && backendA) await request(baseA, `/api/sessions/${crashId}/close`, { method: 'POST' }).catch(() => {})
     if (siblingId && backendA) await request(baseA, `/api/sessions/${siblingId}/close`, { method: 'POST' }).catch(() => {})
     if (cliId && backendA) await request(baseA, `/api/sessions/${cliId}/close`, { method: 'POST' }).catch(() => {})
     if (id && backendA) await request(baseA, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})

@@ -55,6 +55,15 @@ Overflow is the one case that legitimately replaces the code, because exceeding 
 verdict rather than the child's, and the kill it performs would otherwise surface as an unrelated signal.
 Timeout marks itself separately for the same reason. Everything else keeps whatever cause it arrived with.
 
+Many worktrees asking the same immutable tree question are one Git transport demand, not one child per
+worktree. The batch first freezes each worktree HEAD and its merge-base against the one resolved
+main tip, separates working trees with a real `.spec` overlay, and sends the clean tree pairs through one
+`diff-tree --stdin` stream. `--always` frames even an empty pair, so one no-op cannot shift every later answer;
+the parser consumes those frames in request order and fails loud on a missing or extra frame. Dirty and
+untracked worktrees keep the ordinary worktree-aware path. The batch pins rename detection and
+`core.quotePath=false`: name-status parsing receives literal repository paths rather than a user's Git quoting
+preference, and a rename has the same meaning in the batch and fallback paths.
+
 The synchronous text and buffer entrances share one explicit output budget large enough for repository-wide
 Git projections. They never inherit Node's smaller default: a valid `ls-tree` or history answer crossing that
 default is still Git truth, not a failed command. Crossing SpexCode's explicit budget remains a loud overflow,

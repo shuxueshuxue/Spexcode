@@ -327,13 +327,14 @@ test('claude mark-active skips a subagent tool call but still flips on the paren
   const record = () => JSON.stringify({
     session_id: 'sid_P', governed: true, status: 'parked', proposal: '', note: 'waiting on a background wait',
   }, null, 2)
-  const fire = (payload: string) => spawnSync('bash', [dispatch, 'claude', 'PreToolUse'], {
+  const fire = (payload: string, envSession?: string) => spawnSync('bash', [dispatch, 'claude', 'PreToolUse'], {
     cwd: dir,
     env: {
       ...process.env,
       SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
       SPEX_HOOK_MANIFEST: join(runtime, 'hooks-manifest'),
       SPEXCODE_HOME: home,
+      ...(envSession ? { SPEXCODE_SESSION_ID: envSession } : {}),
     },
     input: payload,
     encoding: 'utf8',
@@ -360,4 +361,55 @@ test('claude mark-active skips a subagent tool call but still flips on the paren
   r = fire('{"session_id":"sid_P","hook_event_name":"PreToolUse","tool_name":"mcp__x__y","tool_input":{"agent_id":"a-param-not-a-stamp"}}')
   assert.equal(r.status, 0, r.stderr)
   assert.match(readFileSync(rec, 'utf8'), /"status": "active"/, 'a tool param named agent_id must still flip (deterministic prefix scan)')
+
+  // a child whose payload id names no record — not what claude 2.1.207 sends (it forwards the PARENT's id),
+  // but the shape identity resolution must survive: the fallback lands on the env parent, and the agent_id
+  // stamp is what refuses the write, read before any id resolution.
+  writeFileSync(rec, record())
+  r = fire('{"session_id":"sid_CHILD","agent_id":"ab737f25195ee419a","agent_type":"general-purpose","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"echo CHILD"}}', 'sid_P')
+  assert.equal(r.status, 0, r.stderr)
+  assert.match(readFileSync(rec, 'utf8'), /"status": "parked"/, 'an unresolvable child id resolving to the env parent must still be refused by the stamp')
+})
+
+// [[harness-adapter]] — claude's payload id is preferred only while it RESOLVES to a record. A
+// compaction/continuation mints a new conversation id while the record keeps the launched one; a blind
+// payload preference then names no record and every record-dependent hook silently no-ops.
+function identityRig() {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-hook-identity-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  const record = (sid: string) => {
+    mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
+    writeFileSync(join(runtime, 'sessions', sid, 'session.json'), JSON.stringify({ session_id: sid, governed: true }))
+  }
+  const resolve = (payloadId: string, envId: string) => spawnSync('bash', ['-c',
+    `. "$1"; hp_session_id "$2"`, 'bash', join(repo, 'spec-cli', 'hooks', 'harness.sh'),
+    JSON.stringify({ session_id: payloadId, hook_event_name: 'PreToolUse' })], {
+    cwd: dir,
+    env: { ...process.env, SPEXCODE_HARNESS: 'claude', SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: envId },
+    encoding: 'utf8',
+  })
+  return { record, resolve }
+}
+
+test('hp_session_id: an unresolvable claude payload id falls back to the launched record', () => {
+  const t = identityRig()
+  t.record('launched-record')
+  // the live conversation re-minted its id (compaction); no record answers to it
+  assert.equal(t.resolve('reminted-conversation', 'launched-record').stdout, 'launched-record')
+})
+
+test('hp_session_id: a resolvable claude payload id still wins over the inherited env', () => {
+  const t = identityRig()
+  t.record('launched-record')
+  t.record('subagent-parent')
+  // codex's thread alias and any harness whose payload names a live record: the preference is untouched
+  assert.equal(t.resolve('subagent-parent', 'launched-record').stdout, 'subagent-parent')
+})
+
+test('hp_session_id: a payload-less event still answers with the inherited env id', () => {
+  const t = identityRig()
+  t.record('launched-record')
+  assert.equal(t.resolve('', 'launched-record').stdout, 'launched-record')
 })

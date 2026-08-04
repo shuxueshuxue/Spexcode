@@ -158,9 +158,10 @@ scenarios:
       Record P stays `parked` with its note intact — a parent's declared state survives its own subagents'
       activity (the measured failure: every park was clobbered back to `active` within seconds by
       inherited-env mark-active, so the session read `working` on the board forever). What holds it is the
-      payload's own `agent_id` stamp, refusing the child's board write BEFORE any id resolution: a child id
-      names no record, so id preference alone would fall back to the env parent — see
-      `remint-identity-reaches-the-launched-record`, whose fallback this stamp must survive. The parent's own
+      payload's own `agent_id` stamp, refusing the child's board write BEFORE any id resolution — so it holds
+      whichever id the child's payload carries: the parent's (what claude 2.1.207 sends) resolves straight to
+      P, and one naming no record falls back to the env parent, which is P again (see
+      `remint-identity-reaches-the-launched-record`). The parent's own
       payload still writes P, and a payload-less event still falls back to the env id.
   - name: remint-identity-reaches-the-launched-record
     tags: [backend-api]

@@ -68,11 +68,28 @@ hp_field() {
 # every child tool call fired mark-active against the PARENT's record — the parent read `working` forever and
 # every park/done declaration was clobbered within seconds (measured). Same staleness class the codex branch
 # already guards against (payload-first below); claude now follows the same rule.
+# The claude preference is RESOLUTION-AWARE, not blind. "Claude's payload id equals its governed record id"
+# holds only while the launched conversation lives: a compaction/continuation MINTS A NEW conversation id
+# while the record keeps the launched one, and a blindly-preferred payload id then resolves to no record at
+# all — hp_store_dir echoes a path nothing sits at, so every record-dependent hook (stop-gate, mark-active,
+# idle, session-fail) silently no-ops and the session reads `working` forever (measured: a live session froze
+# at `active` while its terminal still answered). So the payload wins only when a record actually answers to
+# it, and an unresolvable payload falls back to the launched SPEXCODE_SESSION_ID. This cannot reopen the
+# subagent bug above: a Task subagent's payload carries the PARENT's session_id, which DOES resolve, so the
+# preference is unchanged there — the divergent branch is reached only when the two ids differ AND the
+# payload names nothing. The common path costs one string compare (the ids are equal), never a store read.
 hp_session_id() {
   local pid
   case "$SPEXCODE_HARNESS" in
     codex) hp_field "$1" session_id ;;
-    *)     pid=$(hp_field "$1" session_id); printf '%s' "${pid:-$SPEXCODE_SESSION_ID}" ;;
+    *)     pid=$(hp_field "$1" session_id)
+           if [ -n "$pid" ] && [ -n "$SPEXCODE_SESSION_ID" ] && [ "$pid" != "$SPEXCODE_SESSION_ID" ] \
+              && [ ! -e "$(hp_store_dir "$pid")/session.json" ] \
+              && [ -e "$(hp_store_dir "$SPEXCODE_SESSION_ID")/session.json" ]; then
+             printf '%s' "$SPEXCODE_SESSION_ID"
+           else
+             printf '%s' "${pid:-$SPEXCODE_SESSION_ID}"
+           fi ;;
   esac
 }
 

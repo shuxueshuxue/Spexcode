@@ -36,6 +36,9 @@ routing (`--api`/`--port`) is a flag — which is why `doctor --contract`/`--con
 `eval ls --session <SEL>`, and `issue links --pending` are flags, while `eval lint` (a report with
 its own finding classes) and `serve ui` (a different process) are verbs.
 
+`spex spec lint --json` is the machine representation of the same blocking report, not another lint
+verb: it emits the [[spec-lint]] versioned report on stdout while retaining lint's error-derived exit code.
+
 The resource surface keeps one lifecycle: `spex session resources [--json]` is the self-categorized, read-only
 host report. It may explain reclaim eligibility but never issues mutation authority; stop and close remain the
 only lifecycle verbs that release session resources. Both take a selector naming ANOTHER session, and every

@@ -14,6 +14,19 @@ scenarios:
       when those files are lint coverage candidates; an excluded `foo.py` is healthy. An explicit doctor
       extension admits an arbitrary matching filename by lowering to a wildcard candidate. Every command
       exits clean because health diagnosis is advisory.
+  - name: lint-json-report
+    tags: [cli]
+    test: spec-cli/src/lint-json.cli.test.ts
+    description: >-
+      Run the public `spex spec lint --json` CLI against temporary git repositories with (a) one covered
+      and one uncovered source candidate and (b) an integrity error. Consume stdout as JSON; do not import
+      `lint.ts`, `source-files.ts`, or any installed-package path.
+    expected: >-
+      Stdout is one versioned `spex.spec-lint.report` JSON document with the raw `sourceFiles` candidate
+      set and one structured row per lint finding (`level`, `rule`, optional `file`/`spec`, `msg`). A
+      consumer can derive coverage from those primitives, including a sorted unique list of `coverage`
+      finding files, without a bespoke board field or private source import. Warnings keep exit 0; the
+      integrity case still emits its JSON report and exits 1, exactly preserving the blocking gate.
   - name: govern-capped-at-one
     tags: [cli]
     description: >-

@@ -6,11 +6,13 @@ hue: 175
 desc: Deterministically keep the spec↔code graph and authored contracts structurally honest; `spex spec lint` is the production gate.
 code:
   - spec-cli/src/lint.ts#specLint
+  - spec-cli/src/lint.ts#specLintReport
   - spec-cli/src/lint.ts#loadConfig
 related:
   - spexcode.json
   - spec-cli/templates/hooks/commit-msg
   - spec-cli/templates/hooks/reference-transaction
+  - spec-cli/src/lint-json.cli.test.ts
 ---
 # spec-lint
 
@@ -30,6 +32,19 @@ must resolve, and a retired vocabulary must stay retired.
 deterministically verifiable contract structure. Errors block; warnings advise. The full registry (every
 rule, its level, its one-line meaning) is printed by `spex help spec` and `spex guide spec` — the manual
 lists ALL lint rules, always:
+
+**Machine report.** `spex spec lint --json` is the public, versioned report projection. Its stdout is one
+`{ projection: "spex.spec-lint.report", schemaVersion: 1, sourceFiles, findings }` JSON document and carries
+no human lint rendering. `sourceFiles` is the sorted, repo-relative raw candidate set selected by this
+node's coverage algebra at the linted tip; an adoption-integrity rejection that stops before source discovery
+publishes `[]`. `findings` is the same complete, deterministic finding sequence the text command renders;
+every item has `level` (`error` or `warn`), `rule`, `msg`, and, when the rule applies to one, `file` and/or
+`spec`. The report deliberately has no board-specific totals: a consumer derives its own coverage aggregate
+from `sourceFiles` and the unique `file` values of `coverage` findings. Thus an external quality board runs
+the porcelain command, parses stdout, and needs neither a package-root lookup nor imports of `lint.ts` or
+`source-files.ts`. JSON changes representation only: it still writes a report when there are errors and exits
+1 exactly when one or more findings have `level: "error"`; warnings alone remain exit 0. Without `--json`,
+the human stderr rendering and its guidance remain unchanged.
 
 One lint build opens the [[source-of-truth]] event ledger transaction around both its history indexes and
 anchor-hunk demand. The linter therefore shares one decoded, integrity-checked snapshot and at most one

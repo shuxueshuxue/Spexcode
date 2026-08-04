@@ -444,16 +444,21 @@ if (cmd === 'serve') {
       console.log(`${rel} is governed whole-file by ${whole.length} specs (all claims: ${ids}) — more than one file should hold. This file does TOO MUCH: SPLIT it so each governor owns its own module (or merge the nodes if they're one concern, or give it a single foundation owner + relate the rest).${relLine}`)
     }
   } else if (sub === 'lint') {
-    const { specLint, pendingTouchesGoverned, DRIFT_GUIDANCE } = await import('./lint.js')
+    const { specLintReport, pendingTouchesGoverned, DRIFT_GUIDANCE } = await import('./lint.js')
     const pending = flag('pending')
     if (pending && process.env.SPEXCODE_GATE_SCOPE_ONLY === '1') {
       const touches = await pendingTouchesGoverned(process.cwd(), pending)
       if (!touches) process.exit(76)
     }
-    const findings = await specLint(undefined, undefined, {
+    const report = await specLintReport(undefined, undefined, {
       tip: pending || 'HEAD',
     })
+    const { findings } = report
     const errors = findings.filter((f) => f.level === 'error')
+    if (has('json')) {
+      console.log(JSON.stringify(report, null, 2))
+      await flushExit(errors.length ? 1 : 0)
+    }
     for (const f of findings) console.error(`  ${f.level === 'error' ? '✗' : '•'} ${f.rule}: ${f.msg}`)
     console.error(`spex spec lint: ${errors.length} error(s), ${findings.length - errors.length} warning(s)`)
     // drift teaches from the ONE `spex spec lint` (no flag). Unanchored drift stays advisory forever; the

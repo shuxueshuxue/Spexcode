@@ -16,6 +16,7 @@ scenarios:
       exits clean because health diagnosis is advisory.
   - name: lint-json-report
     tags: [cli]
+    test: spec-cli/src/lint-json.cli.test.ts
     description: >-
       Run the public `spex spec lint --json` CLI against temporary git repositories with (a) one covered
       and one uncovered source candidate and (b) an integrity error. Consume stdout as JSON; do not import

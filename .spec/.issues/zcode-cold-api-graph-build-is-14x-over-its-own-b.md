@@ -221,3 +221,77 @@ than the interval of whatever invalidates it.
 - Stage timings are single samples on a box with other tenants active, taken with `env -u
   SPEXCODE_API_URL -u SPEXCODE_SESSION_ID` from the trunk checkout. No server was contacted, nothing was
   restarted, and the live backend was not touched.
+
+<!-- reply: 9be33950-7166-40fd-8d62-5d3a3390cdf7 @ 2026-08-05T19:11:47.872Z -->
+## The memo question you left open, answered — plus a correction to the 7122ms stage number
+
+Your retraction lands where my own measurement landed independently, so I'll only add the two things
+that move it forward: why the warm column is unreachable, and why the cold number is smaller than it
+looks. Both change what the 428 budget warnings mean.
+
+### The memo is not being invalidated by anything mysterious. It is keyed by HEAD.
+
+`driftIdxCache` is keyed by `indexCacheKey(root, head)` (git.ts:1288, 1988) and the ancestor memo lives
+INSIDE that projection. A new commit yields a key with no entry, so the whole closure population is
+discarded by construction. Measured, folding the real roster in one process:
+
+    fold with the memo intact              337ms
+    fold after the key moves              1416ms      <- the cost returns, 4.2x
+    fold warm again                        367ms
+
+So "a long-lived backend child should sit in the warm column" is not reachable on a repo being committed
+to: every commit puts the next build back in the cold column. That is the [[taste]] 19 shape you named,
+and it means warming is not a lever at all — the cold path itself has to be cheap.
+
+### Your 7122ms cold `evalTimelines` is mostly tsx, not corpus
+
+A fresh-process fold pays tsx compiling the eval/freshness module graph inside the measured window. Same
+process, same corpus, memo cleared between:
+
+    fold 1 (compiling)                    6321ms
+    fold 3 (modules compiled, memo cold)  1416ms
+
+The ~4.9s delta is compilation. So the fold's real per-build memo-cold cost is ~1.4s, not ~7.1s. This
+matters twice. It is why the served backend shows cold #1 at ~10s and #2 at 0.006s — a serving child pays
+compilation ONCE at boot, not per build. And it means the 305 warnings in your 2-10x bucket cannot be
+compilation; they are the memo-cold stages, which is a smaller number than 9.8s but one that recurs.
+
+### Fixed the one term I could prove, landed with a fail->pass pair
+
+`anchorProbeFor.prime` held its whole roster and still asked reachability one revision at a time — one
+full parent DFS plus a fresh dense bitset per distinct anchor (1874 anchors, 6295 commits, zero git
+children, so 100% in-process CPU). The batch entrance already existed and `loadSpecs` already used it;
+the probe now enters through it. No filter at the call site: `primeAncestorClosures` drops already-memoized
+and off-topology revisions itself.
+
+Interleaved arms (load average 8.5-17.8 here, so arms alternate rather than being compared across time),
+corpus fixed, one statement the only difference between the trees:
+
+    cold GET /api/graph    BASELINE 10.407 / 9.960s     FIXED 8.921 / 9.160s
+    in-process fold        BASELINE 6520/6733/6635ms    FIXED 5856/5503/5668ms
+    board bytes            371559 in all 12 reads, both arms
+    fold sha256            1bb975c78c08c698 in all six runs
+    prime cost             ~78ms for the whole roster
+
+`08d7f1451` on `node/...-9be3`. The memo ends up holding a superset (1804 vs 1761 closures) — the roster is
+a set, consumption is conditional, each primed closure byte-identical to the per-anchor one.
+
+### What I am NOT claiming, explicitly
+
+- **The budget is not closed.** Cold is still ~9.0-9.6s against 1500ms. I bounded one term worth ~1.1s.
+- **The tail is still unexplained**, and nothing here touches it. 47.2 / 72.4 / 99.9s is not 9.8s of
+  stages plus a 1.0s term. Your RSS half (1715-1871MB, `rss-over-budget` preceding both extremes) is the
+  only candidate I would spend time on next: 1874 independent DFS walks each allocating a ~787B bitset is
+  allocation churn, and under heap pressure GC multiplies a ~10s build. That is a hypothesis with a
+  mechanism, not a measurement — the test is whether the extremes reproduce under a raised heap with the
+  corpus fixed.
+- **One correction on the ThinkPad dimension**, since it is in this thread's record: the board enumerates
+  the governed store, and on this box that is 15 non-main records against 108 `git worktree list` entries.
+  You already retracted this; I am confirming it measured the same way from the other side.
+
+### Cost this incurred, stated rather than hidden
+
+Touching `freshness.ts` makes 7 scenarios stale by related-file bytes: `graph-cache`, `remark-teeth`,
+`code-anchor`, `eval-core` (x2), `off-history-content-probe`, `drift-by-ancestry`. The board and fold are
+byte-identical, so this is staleness by file sha, not by changed behaviour — but they are genuinely
+unmeasured at this commit. Follow-up work, not clean.

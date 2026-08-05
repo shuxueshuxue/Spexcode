@@ -173,3 +173,85 @@ dominated by a 2% threshold, which is the clearest possible instance of a quanti
 The fix shape in the body is unchanged and now better motivated — the magnitude belongs on the
 `entered` line for both numeric families, and hysteresis belongs on the edge detector. The second half
 matters more than I first weighted it: with a 2% budget, magnitude alone would still leave ~1455 lines.
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T19:09:29.122Z -->
+## The 2% budget is two clock ticks — measured on the live owner that produces 34.6% of this log
+
+`2c787e87` derived the unit from source; I verified it and then measured it. Both hold, and the
+quantisation makes it sharper than the arithmetic alone.
+
+### Unit, verified
+
+`host-resources.ts:535-544`: `cpuBefore/cpuAfter` come from `hostCpuSnapshot(procRoot).total` — the
+all-core total from `/proc/stat`. So
+
+    cpuPercent = (proc_tick_delta / all_core_tick_delta) * cpus().length * 100
+
+The core count cancels: the result is **single-core percent**, 100% = one saturated core. With
+`sampleMs: 1000`, `idleCpuPercent: 2` therefore means **20ms of CPU in a 1000ms window** — not 2% of
+the machine.
+
+### And 20ms is two ticks, on an instrument whose resolution is one tick
+
+`getconf CLK_TCK` = 100 here, so one tick is 10ms, and one tick maps to exactly **1.00%** through that
+formula (`1/1600 * 16 * 100`, core count again cancelling). So:
+
+    instrument resolution : 1 tick  = 1.00%
+    budget                : 2 ticks = 2.00%
+
+**The threshold sits at twice the quantum of the measurement.** There are exactly two representable
+values below it — 0% and 1%. No hysteresis is possible at that scale because there is no room between
+the floor and the line.
+
+### Measured on the live owner, 10 consecutive 1-second windows
+
+`orphan:32b7dd20` is not historical — it is alive (pids 3631393, 3631455) and its most recent edge is
+the **last line of the log**. Sampling its two processes the way `collectResourceReport` does:
+
+    window   3631393    3631455
+       1       0.00%      0.00%
+       2       0.00%      0.00%
+       3       0.00%      4.00%  *
+       4       0.00%      0.00%
+       5       0.00%      0.00%
+       6       0.00%      4.00%  *
+       7       0.00%      1.00%
+       8       0.00%      0.00%
+       9       0.00%      3.01%  *
+      10       0.00%      1.00%
+                                   (* over budget)
+
+Every value is an integer multiple of the 1% quantum, as predicted. One process crosses the line in
+**3 of 10 windows** and sits at 0–1% in the rest. That is the coin toss, on the owner that contributes
+634 edges — 34.6% of this log — and the mechanism is now measured rather than inferred.
+
+A node process holding a 1-second timer does 30–40ms of work when it wakes and ~0 when it does not.
+Against a 20ms line, that is *over, under, over, under* indefinitely. The budget is not measuring
+"idle"; at this resolution it is measuring **whether the process woke up during the sample**.
+
+### Consequence for the fix, which reweights it again
+
+The body proposed magnitude-on-the-edge plus hysteresis. This measurement says the ordering is the
+other way round, and that magnitude alone is actively worse than nothing here:
+
+- Carrying the magnitude on 1455 idle-CPU edges would print 1455 numbers drawn from `{0, 1, 3, 4}`. That
+  is not a readability improvement; it is decimal places on a coin toss.
+- **Hysteresis cannot fix it either**, because there is no gap to put a hysteresis band in — the
+  distance from floor to threshold is one tick. The honest fix for this family is upstream of both:
+  either the budget is wrong for a 1-second window at 100Hz, or the window is too short to make an
+  idleness claim. A quantity whose noise floor *is* the threshold cannot be edge-detected at all.
+
+So this issue's two-part fix applies cleanly to `rss-over-budget` (182 edges, a real magnitude, real
+room for a band) and does **not** apply to `idle-cpu-over-budget` (1455 edges, 79.5%). Those are two
+different defects that this issue had merged into one because both families are stripped by the same
+line. Splitting them is the correction: same symptom, same code path, different root cause.
+
+### Method note against myself
+
+My first pass at this asked "what fraction of *all* owned node processes sit near the threshold" and got
+2-of-72 samples in the 1–4% band, which reads as a refutation. Wrong denominator: there are ~24 such
+processes but only ~10 **owners**, and a single owner flipping 30% of samples generates unbounded edges
+regardless of how quiet the other 23 processes are. The dilution was mine, not the instrument's.
+
+That is the same defect as my first error of this night — reading loadavg without dividing by cores.
+A missing denominator then, a wrong denominator now.

@@ -10,7 +10,7 @@
   "scripts": {
     "serve": "node bin/spex.mjs serve",
     "lint": "tsx src/cli.ts spec lint",
-    "test": "tsx --test src/*.test.ts"
+    "test": "tsx --import ../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {
     "tsx": "^4.19.2"

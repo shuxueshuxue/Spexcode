@@ -146,6 +146,9 @@ hp_store_dir() {
   local rd; rd=$(hp_runtime_dir) || return 1
   local direct="$rd/sessions/$1"
   if [ -e "$direct/session.json" ]; then printf '%s' "$direct"; return 0; fi
+  # same two-halves-of-absence rule as layout.ts's readAliasedRecordEntry: an id owning a store dir is already
+  # one of ours, so its emptiness is settled and the alias grep is the wrong question (and a whole-store scan).
+  if [ -d "$direct" ]; then printf '%s' "$direct"; return 0; fi
   local hit
   hit=$(grep -lF "\"harness_session_id\": \"$1\"" "$rd"/sessions/*/session.json 2>/dev/null | head -1)
   [ -n "$hit" ] && { printf '%s' "${hit%/session.json}"; return 0; }

@@ -1,5 +1,5 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join, dirname, basename } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
 import { createConnection, type Socket } from 'node:net'
@@ -523,7 +523,62 @@ const SPEX = join(PKG, 'bin', 'spex.mjs')
 
 // The timeline is the message's copy, so rendezvous needs no receipt protocol. It writes one idempotent poke
 // carrying the timeline mid and reports only whether that write reached the local transport.
-function replyViaSocket(sock: string, text: string, mid?: string): Promise<DispatchResult> {
+type ClaudeForkTransport = { sock: string; auth: string }
+
+// The backend need not share the agent's config root: an explicitly chosen launcher can point Claude at its
+// own home. A moved source process remains alive by definition, so its one config-dir environment field is the
+// live authority for locating the daemon roster. A stale/reused pid can at worst name a roster with no exact
+// successor; it cannot select one without the moved/session-source checks below.
+function claudeConfigRoots(sourceSessionId: string, runtimeDir?: string): string[] {
+  const roots: string[] = []
+  try {
+    const pidFile = runtimeDir ? join(runtimeDir, 'sessions', sourceSessionId, 'agent.pid') : sessionArtifactPath(sourceSessionId, 'agent.pid')
+    const pid = Number(readFileSync(pidFile, 'utf8').trim())
+    if (Number.isInteger(pid) && pid > 0) {
+      const env = readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0')
+      const config = env.find((entry) => entry.startsWith('CLAUDE_CONFIG_DIR='))?.slice('CLAUDE_CONFIG_DIR='.length)
+      if (config) roots.push(config)
+    }
+  } catch { /* source not available or this platform does not expose procfs */ }
+  if (process.env.CLAUDE_CONFIG_DIR) roots.push(process.env.CLAUDE_CONFIG_DIR)
+  roots.push(join(homedir(), '.claude'))
+  return [...new Set(roots)]
+}
+
+// A moved Claude conversation is a daemon-owned fork. Its launch-time socket still answers, but that process
+// no longer returns to its prompt. A successor hook may have already recorded its exact Claude session id in
+// `moved`; use that durable identity first, then retain the roster's source-transcript relation for deployments
+// without the stamp. The roster remains the sole source of the live socket and current auth token. Keep this
+// lookup Claude-local so other rendezvous adapters cannot adopt a coincidentally matching id.
+function claudeForkTransport(sourceSessionId: string, runtimeDir?: string): ClaudeForkTransport | null {
+  const moved = (() => {
+    try {
+      const stamp = runtimeDir ? join(runtimeDir, 'sessions', sourceSessionId, 'moved') : sessionArtifactPath(sourceSessionId, 'moved')
+      return readFileSync(stamp, 'utf8').trim()
+    } catch {
+      return ''
+    }
+  })()
+  for (const configDir of claudeConfigRoots(sourceSessionId, runtimeDir)) {
+    try {
+      const roster = JSON.parse(readFileSync(join(configDir, 'daemon', 'roster.json'), 'utf8')) as { workers?: Record<string, any> }
+      const workers = Object.values(roster.workers ?? {})
+      const usable = (worker: any) => typeof worker?.rendezvousSock === 'string' && typeof worker.rvAuth === 'string'
+      const recorded = workers.filter((worker) => usable(worker) && moved && worker?.sessionId === moved)
+      const candidates = recorded.length ? recorded : workers.filter((worker) => {
+        const launch = worker?.dispatch?.launch
+        if (launch?.mode !== 'resume' || launch.fork !== true || typeof launch.sessionId !== 'string') return false
+        const source = basename(launch.sessionId).replace(/\.jsonl$/, '')
+        return source === sourceSessionId && usable(worker)
+      })
+      const worker = candidates.sort((a, b) => Number(b.startedAt ?? 0) - Number(a.startedAt ?? 0))[0]
+      if (worker) return { sock: worker.rendezvousSock, auth: worker.rvAuth }
+    } catch { /* this Claude config has no readable daemon roster */ }
+  }
+  return null
+}
+
+function replyViaSocket(sock: string, text: string, mid?: string, auth?: string): Promise<DispatchResult> {
   return new Promise((resolve) => {
     let settled = false
     let c: ReturnType<typeof createConnection>
@@ -545,7 +600,7 @@ function replyViaSocket(sock: string, text: string, mid?: string): Promise<Dispa
     })
     c.on('close', () => done({ ok: false, error: 'rendezvous connection closed before the poke was written' }))
     c.on('connect', () => c.write(
-      JSON.stringify({ type: 'reply', text, ...(mid ? { mid } : {}) }) + '\n',
+      `${auth ? JSON.stringify({ role: 'controller', auth }) + '\n' : ''}${JSON.stringify({ type: 'reply', text, ...(mid ? { mid } : {}) })}\n`,
       (error) => {
         if (error) return done({ ok: false, error: `rendezvous socket write failed: ${error.message}` })
         c.end()
@@ -560,6 +615,17 @@ export async function deliverViaRendezvous(id: string, text: string, mid?: strin
   let last: DispatchResult = { ok: false, error: 'not attempted' }
   for (let attempt = 0; attempt < POKE_ATTEMPTS; attempt++) {
     last = await replyViaSocket(sock, text, mid)
+    if (last.ok) return last
+  }
+  return { ok: false, error: `rendezvous poke failed after ${POKE_ATTEMPTS} attempts: ${last.error ?? 'unknown error'}` }
+}
+
+export async function deliverViaClaudeRendezvous(id: string, text: string, mid?: string, runtimeDir?: string): Promise<DispatchResult> {
+  const fork = claudeForkTransport(id, runtimeDir)
+  const sock = fork?.sock ?? rvSock(id)
+  let last: DispatchResult = { ok: false, error: 'not attempted' }
+  for (let attempt = 0; attempt < POKE_ATTEMPTS; attempt++) {
+    last = await replyViaSocket(sock, text, mid, fork?.auth)
     if (last.ok) return last
   }
   return { ok: false, error: `rendezvous poke failed after ${POKE_ATTEMPTS} attempts: ${last.error ?? 'unknown error'}` }
@@ -2209,7 +2275,7 @@ export const claudeHarness: Harness = {
   // dead-pane-reads-working bug). See rendezvousListening.
   liveness: socketListenerLiveness,
   leafOwnerNeedle: (rec) => rec.session,
-  deliver: (rec, text) => deliverViaRendezvous(rec.session, text, rec.mid),
+  deliver: (rec, text) => deliverViaClaudeRendezvous(rec.session, text, rec.mid, rec.runtimeDir),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
   coldRuntime: async () => ({ ok: true }),
   // The TUI's sessions panel ("← for agents") swallows an injected reply into PANEL context and never drains it

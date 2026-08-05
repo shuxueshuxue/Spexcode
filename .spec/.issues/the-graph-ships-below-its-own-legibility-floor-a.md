@@ -493,3 +493,104 @@ So the browser pass owes two measurements and the third item needs none:
    the promised quantity — reaches only the tooltip.
 
 Spec: node-graph
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T21:29:09.811Z -->
+## Amendment 6: retracting Amendment 5's central argument — the spec assigns the channel in the next clause
+
+**Amendment 5's section "The argument that needs no exclusion, and no browser" is false. Retracting it.**
+
+### What was wrong
+
+Amendment 5 argued that the discs count sessions while `:25` promises *places*, and that the promised quantity
+(`hiddenNodes`) was computed and routed off the board. Reading `:25` to the end of its own sentence kills both
+halves:
+
+> "...the `▸N` tab **fills with the lead hidden author's colour** ... and carries **one dot per distinct session
+> working inside**, capped with `+k`; **its tooltip names each session and how many nodes it touches in there**."
+
+1. **The disc rule is the spec's own.** `shown.map` producing one disc per session is compliance, not deviation.
+2. **The node-level count is assigned to the tooltip by the spec itself**, in the same clause. `hiddenNodes`
+   reaching only the tooltip is the specified behaviour, not a routing failure.
+
+And the promise is discharged by the channel the *following* sentence names: *"the lit tab is the signal and the
+counts are detail."* A **place** is a position on the board — which tabs are lit, and where they sit — not a
+node. That reading is delivered by fill, which is the property the spec says survives the shrink. My reading
+required *place = node* **and** required ignoring the second half of the same sentence.
+
+By the test established one round earlier — *does the original reasoning still hold on its own axis?* — there is
+no axis on which "the discs are the load-bearing aggregate" is true. So this is a retraction, not a narrowing.
+
+### The reusable cause, which is worth more than the correction
+
+This is the second time the same reading error produced a false finding. Both have the identical shape:
+
+| promise | channel assignment, in the next sentence |
+|---|---|
+| activity anywhere must be visible | "it is **not a camera driver**" |
+| the board reads how many places are in motion | "**the lit tab is the signal**, and the counts are detail" |
+
+> **A promise says something must exist; the assignment that follows says which channel carries it.** Quoting a
+> spec to justify a product change requires reading to the end of the paragraph, because the sentence that
+> constrains the implementation is systematically the one *after* the sentence that creates the obligation.
+
+That is an executable rule, not "read more carefully."
+
+### Two consequential demotions
+
+**The "selective payment" shape is withdrawn.** Its second half depended on the retracted claim. Its first half
+does not survive on its own either: the tile's version and badges are counts, and *"the counts are detail"* prices
+exactly that class. They were priced, not overlooked. No negligence narrative is available, and none is needed.
+
+**The disc-separation finding drops to a polish reading.** With the discs priced as detail by the spec and the
+node count assigned to the tooltip, "the separation renders at 0.85px" has **no promise standing behind it**. The
+arithmetic in Amendment 6's earlier draft is still true and still unconditional — it is simply no longer evidence
+of a contract violation. `devicePixelRatio` still belongs in any reading that touches it, for the reason given
+before (without it, two contradictory readings are both correct), but the claim it serves is now product quality,
+not a defect.
+
+### What the issue is actually left with — and it is one row wider than "just the title"
+
+The replacement offered was: everything on the tile is consistently, deliberately priced as detail, and the title
+is the only element of a different kind — it carries identity, not detail — and the only one with no downgrade
+clause. That is the right shape, but the boundary sits one element further out. The tile paragraph promises:
+
+> "a reader sees **at a glance** both *what this node is* and *who/when*."
+
+Three things, not one. And the spec's own row split is the pricing boundary:
+
+- **Row 1 — "identity & recency"**: `status dot · title` plus the recency signal. Both of its text elements are
+  named in the at-a-glance promise — *what this node is* and *when*.
+- **Row 2 — "marks & people"**: explicitly *"the denser cluster"*. Version and badges live here and are priced.
+  (*Who* also lives here, but is carried by avatars — shape and hue, the same shrink-immune channel as fill.)
+
+So the promised, text-rendered elements are **two**:
+
+```
+.node-title  --type-control  12px  ->  10.2px      identity; readable-column claim at the spec's opening
+.node-ago    --type-caption  10px  ->   8.5px      "when", named in the same at-a-glance sentence
+```
+
+(`styles.css:378`, `:379`; both on Row 1, `SpecNode.jsx:118` and `:124`.) `.node-ver` and the drift/issue badges
+share the 10px token but sit in the cluster the spec itself calls denser — **drop them from the issue.**
+
+### The remaining case
+
+1. **`.node-title` renders 10.2px against an authored 12px**, on the surface whose spec opens by claiming a
+   *"short, readable column"*. Unconditional, arithmetic.
+2. **Same desktop, same product, same datum `node.title`: 18px in the detail panel (`NodeView.jsx:201` ->
+   `.pane-doc h1` -> `--type-heading`), 10.2px on the map tile. 1.76x.** No second surface to appeal to, and the
+   direction is the least defensible one.
+3. **`.node-ago` renders 8.5px against an authored 10px**, carrying "when", which the same sentence promises at a
+   glance.
+4. **`0.85` appears in no `spec.md` and no `eval.md`.** The constant that produces every figure above is
+   unrecorded in the governed tree.
+
+Withdrawn from the issue: places-vs-sessions, the tooltip-routing argument, selective payment, the disc geometry,
+the dpr grading, `--type-hero`, the mobile `--type-title` comparison.
+
+Owed to a browser, recording `devicePixelRatio`: a Row 1 text element's rendered size >= its authored size, in the
+default view. That single measurement covers both surviving rows.
+
+Evidence grade: source verification and arithmetic. No filed reading.
+
+Spec: node-graph

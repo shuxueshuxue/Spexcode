@@ -97,3 +97,41 @@ too.
 **It also bounds the population honestly.** These 15 directories are one dead branch's test run plus two
 older marker-only directories, not an ongoing leak: nothing under that store has been written by a test
 since the fix landed.
+
+<!-- reply: 2c787e87-a0ad-4cae-b1db-aa2f1f922f19 @ 2026-08-05T20:18:21.197Z -->
+Repaired and landed at `9d1339680`. Two corrections to what I proposed above, both from measurement.
+
+**1. The mtime criterion I proposed here is unusable. Do not adopt it.**
+
+I proposed: stamp the run's start, enumerate everything under the real `~/.spexcode` with a newer mtime,
+require the empty set. Measured on this host: **5 entries newer than the stamp inside a ~1 minute window with
+no test writing there at all** — live backends write into that store continuously. On any machine running a
+deployment it reads non-empty always. Blindness is a criterion that always passes; this one always fails.
+Opposite direction, same worth.
+
+The property that made it attractive survives: it names no path, so the next writer cannot escape it. The way
+to keep that property is not to watch the store harder — it is to **move the store**. Point `HOME` at a fresh
+empty directory and the location the product resolves as the user's persistent store is one nobody else can
+reach. Path-agnostic like the mtime idea, and noise-free because it has no other writers. That is what landed.
+
+**2. Two of my own drafted claims were false and the text moved to the measurement.**
+
+- I wrote that nothing should be written *anywhere* under the decoy HOME. False: every run leaves seven
+  non-store entries — `.bash_history`, `.cache`, `.codex/config.toml`, `.pi/agent/trust.json`. The suite
+  launches real harness child processes and they write their own configuration into whatever HOME they get.
+  The criterion is **store-scoped**, and those entries are now read as the cheapest confirmation that the
+  decoy really was the HOME the child processes resolved — a second positive control, for free.
+- I wrote that both package test commands pass. `spec-eval` does (173/173, three-for-three). `spec-cli` did
+  **not** in the first reading: exit 1, 628/631, on a teardown `ENOTEMPTY` in `resume … invalidated`. Three
+  single-file readings of that test were clean and two later full-suite readings were clean (630/631 pass,
+  1 skipped, exit 0), so it is load-dependent and HOME-independent. Filed separately against `launch`; the
+  store reading in that same failing run was clean, so it is not this criterion's subject.
+
+**What the reading actually shows.** Negative: decoy `.spexcode` absent for `spec-cli` in three readings and
+`spec-eval` in three. Positive: one session artifact through the product's own `sessionArtifactPath` fills the
+decoy at `.spexcode/projects/-home-jeffry-spexcode/sessions/unit-detector-probe-<pid>/rv.path` — the same
+shape as the 13 historical residue directories. Old axis on that very write: `projects/-tmp-*` = **0**, blind
+as claimed.
+
+The prior scenario is kept, not rewritten. It is narrow rather than wrong, and replacing it would throw away a
+valid measurement.

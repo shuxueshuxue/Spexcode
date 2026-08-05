@@ -594,3 +594,92 @@ default view. That single measurement covers both surviving rows.
 Evidence grade: source verification and arithmetic. No filed reading.
 
 Spec: node-graph
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T21:34:54.236Z -->
+## Amendment 7: the criterion is the channel, not the row — and the closed classification it produces
+
+Amendment 6 drew the boundary at the spec's row split: Row 1 promised, Row 2 priced as "the denser cluster."
+**That boundary is wrong in one cell**, and correcting it yields a criterion that classifies every element on the
+tile, which is what keeps this issue from growing or shrinking by argument.
+
+### The at-a-glance promise crosses both rows
+
+`:29` promises *"what this node is"* **and** *"who/when"*. **"Who" is Row 2** — the live-editor avatars
+(`:33`). So Row 2 is not uniformly priced down; it contains a promised element. Avatars nonetheless raise no
+defect, because they ride the channel the spec itself certifies: shape and hue, not text.
+
+So row membership is not the discriminator. The spec supplies two independent rules, and the defect set is their
+intersection:
+
+- **the promise** (`:29`): what this node is, who, when.
+- **the channel** (`:25`): *"Fill-versus-outline survives zoom that digits do not."*
+
+> **promised × carried by text or digits = the defect set.**
+
+### Every element on the tile, classified
+
+| element | row | promised by `:29`? | channel | authored | @0.85 |
+|---|---|---|---|---|---|
+| `.node-title` | 1 | yes — *what this node is* | **text** | 12px | **10.2px** |
+| `.ov-mark` presence (`+ ~ ✕ →`) | 1 | yes — *when* ("touched now") | presence is binary, survives | 11px | 9.35px |
+| `.ov-mark` glyph identity (which op) | 1 | **no** — not identity, not who, not when | glyph shape only | 11px | 9.35px |
+| `.node-ago` ("3h") | 1 | yes — *when* | **digits** | 10px | **8.5px** |
+| `.node-dot` | 1 | state, per [[spec-node-states]] | colour + shape, survives | — | — |
+| avatars | 2 | yes — *who* | shape + hue, survives | — | — |
+| `.node-ver` (`v3`) | 2 | no — denser cluster | digits | 10px | 8.5px |
+| `⚠N`, issues, scenarios | 2 | no | digits | 10px | 8.5px |
+| `.av-more` (`+N`) | 2 | no — counts are detail | digits | 10px | 8.5px |
+
+**Exactly two rows are both promised and text-carried: `.node-title` and `.node-ago`.** Nothing else qualifies —
+the remainder is either unpromised (the Row 2 digit cluster, which `:25` explicitly prices as detail) or promised
+but riding a channel `:25` itself certifies as surviving (dot, glyph presence, avatars).
+
+The value of the table is its closure. A fifth candidate can no longer be added without landing in one of the two
+exempt categories, and neither surviving row can be dropped without contradicting one of the spec's own two rules.
+
+**`.ov-mark` is split deliberately.** It carries two payloads through one element, and the criterion applies per
+payload, not per element. Its *presence* discharges the promised "when" — any of the four glyphs says "now," so
+that half is binary and survives. Its *glyph identity* (added vs edited vs deleted vs moved) is carried by 9.35px
+glyph shape alone — hue names the author, the dashed ring names uncommitted, neither names the operation — so on
+channel grounds it is as fragile as any digit. It stays out of the defect set **because it is unpromised, not
+because it survives.** Listing it as one row with one channel would leave the closure open at exactly the joint
+someone will probe.
+
+### `.node-ago` has a stronger form than "it sits on the promised row"
+
+`:31` makes Row 1's recency signal a choice of two: with pending ops it is the op glyphs; without them it is *"the
+last-edited age, bare ('3h', '3 小时')."*
+
+> **The age is a digit, on the line `:29` promises is read at a glance, and the same document states that digits
+> do not survive the zoom.**
+
+Both the promise and its refutation are inside this one spec body — `:29`/`:31` against `:25`. No external
+legibility standard is needed, and unlike the title this does not even need the authored-versus-rendered
+comparison: the body prices the channel itself.
+
+**The slot's internal pricing was deliberate**, which forecloses the "nobody thought about it" reading: the
+with-ops branch is `--type-meta`, **11px** (`.ov-mark`, `styles.css:684`) — a step *larger* than the age's 10px.
+The design distinguished "moving now" from "last moved" inside one slot and paid more for the former.
+
+**Declaring its weight honestly:** `:31` also states the age is *"absent when there is no committed history"* and
+is replaced by glyphs when ops are pending. So it renders only on nodes that are committed and currently
+untouched — the quiet ones. It is a contract claim with low weight on any activity-centred surface. Stated here
+so that a reader who notices it does not treat it as concealed.
+
+### The case, as it now stands
+
+1. **`.node-title`** — promised (*what this node is*, plus the spec's opening claim of a "short, readable
+   column"), text-carried, authored 12px, renders 10.2px.
+2. **Same desktop, same product, same datum `node.title`** — 18px in the detail panel (`NodeView.jsx:201` →
+   `.pane-doc h1` → `--type-heading`) against 10.2px on the tile. **1.76×.**
+3. **`.node-ago`** — promised (*when*), digit-carried, and priced as non-surviving by `:25` in the same body.
+   Authored 10px, renders 8.5px. Contract claim, low demo weight.
+4. **`0.85`** appears in no `spec.md` and no `eval.md`.
+
+Withdrawn across amendments 5–7: places-versus-sessions, the tooltip-routing argument, selective payment, the disc
+geometry, the dpr grading, `--type-hero`, the mobile `--type-title` comparison, and Amendment 6's row-based
+boundary.
+
+Evidence grade: source verification and arithmetic throughout. No filed reading.
+
+Spec: node-graph

@@ -971,15 +971,18 @@ export function codexTurnFailureObserver(
   return { close: () => finish(null), closed }
 }
 
-// Protocol-verified cold/restore seam. The Codex schema (`codex app-server generate-json-schema --experimental`)
-// defines thread/archive and thread/unarchive with {threadId}; no guessed method or process command is used.
+// Protocol-verified cold/restore/control seam. The Codex schema (`codex app-server generate-json-schema --experimental`)
+// defines thread/archive and thread/unarchive with {threadId}, plus turn/interrupt with {threadId, turnId}; no
+// guessed method or process command is used.
 type CodexGenerationFence = { dir: string; endpoint: CodexGenerationEndpoint; generation: string }
-function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/unarchive', threadId: string, fence?: CodexGenerationFence): Promise<{ ok: true } | { ok: false; error: string }> {
+function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/unarchive' | 'turn/interrupt', threadId: string, fence?: CodexGenerationFence, turnId?: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const generationError = () => fence && codexRuntimeGeneration(fence.dir, fence.endpoint) !== fence.generation
     ? `Codex ${method} refused because the shared app-server generation changed`
     : null
   const before = generationError()
   if (before) return Promise.resolve({ ok: false, error: before })
+  if (method === 'turn/interrupt' && !turnId)
+    return Promise.resolve({ ok: false, error: 'Codex turn interrupt needs an exact turn id' })
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
@@ -1010,7 +1013,7 @@ function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/un
         const changed = generationError()
         if (changed) return done({ ok: false, error: changed })
         send({ method: 'initialized', params: {} })
-        return send({ id: 2, method, params: { threadId } })
+        return send({ id: 2, method, params: method === 'turn/interrupt' ? { threadId, turnId } : { threadId } })
       }
       if (m.id === 2 && m.result) {
         const changed = generationError()
@@ -1113,12 +1116,12 @@ export async function codexLoadedReferenceIds(sock: string): Promise<{ ok: true;
 
 const CODEX_TARGET_TURN_CENSUS_MS = 15_000
 
-function codexTargetTurnPresence(sock: string, threadId: string): Promise<{ ok: true; turnPresence: 'idle' | 'active' | 'unknown' } | { ok: false; error: string }> {
+function codexTargetTurnPresence(sock: string, threadId: string): Promise<{ ok: true; turnPresence: 'idle' | 'active' | 'unknown'; turnId?: string } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
     let upgraded = false, settled = false
-    const done = (result: { ok: true; turnPresence: 'idle' | 'active' | 'unknown' } | { ok: false; error: string }) => {
+    const done = (result: { ok: true; turnPresence: 'idle' | 'active' | 'unknown'; turnId?: string } | { ok: false; error: string }) => {
       if (settled) return
       settled = true; clearTimeout(timer); try { conn.destroy() } catch {}; resolve(result)
     }
@@ -1140,7 +1143,12 @@ function codexTargetTurnPresence(sock: string, threadId: string): Promise<{ ok: 
       if (message.id !== 2 || !message.result) return
       const turns = (message.result as { data?: unknown }).data
       if (!Array.isArray(turns)) return done({ ok: true, turnPresence: 'unknown' })
-      return done({ ok: true, turnPresence: turns.some((turn) => turn && typeof turn === 'object' && (turn as { status?: unknown }).status === 'inProgress') ? 'active' : 'idle' })
+      const active = turns.find((turn): turn is { id?: unknown; status?: unknown } =>
+        !!turn && typeof turn === 'object' && (turn as { status?: unknown }).status === 'inProgress')
+      if (!active) return done({ ok: true, turnPresence: 'idle' })
+      return typeof active.id === 'string' && active.id
+        ? done({ ok: true, turnPresence: 'active', turnId: active.id })
+        : done({ ok: true, turnPresence: 'unknown' })
     }
     conn.on('data', (chunk: Buffer) => {
       fs.buf = Buffer.concat([fs.buf, chunk])
@@ -1154,6 +1162,39 @@ function codexTargetTurnPresence(sock: string, threadId: string): Promise<{ ok: 
       if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: `Codex app-server closed during target thread ${threadId} turn census` })
     })
   })
+}
+
+const CODEX_INTERRUPT_SETTLE_MS = 15_000
+
+async function interruptCodexTurn(rec: HarnessDeliveryRecord): Promise<DispatchResult> {
+  if (!rec.harnessSessionId) return { ok: false, error: 'no exact Codex thread identity is registered' }
+  const threadId = rec.harnessSessionId
+  const dir = rec.runtimeDir || runtimeRoot()
+  const endpoint = codexEndpointForRecord(rec, dir)
+  if (!endpoint) return { ok: false, error: 'no exact Codex generation binding is registered for this target' }
+  const generation = codexRuntimeGeneration(dir, endpoint)
+  if (!generation) return { ok: false, error: 'Codex shared app-server generation is unproven' }
+  const fence = { dir, endpoint, generation }
+  const before = await codexTargetTurnPresence(endpoint.socketPath, threadId)
+  if (!before.ok) return { ok: false, error: before.error }
+  if (codexRuntimeGeneration(dir, endpoint) !== generation)
+    return { ok: false, error: 'shared Codex app-server generation changed during interrupt preflight' }
+  if (before.turnPresence === 'idle') return { ok: true }
+  if (before.turnPresence !== 'active' || !before.turnId)
+    return { ok: false, error: `Codex target thread ${threadId} turn state is unknown` }
+  const interrupted = await codexThreadMutation(endpoint.socketPath, 'turn/interrupt', threadId, fence, before.turnId)
+  if (!interrupted.ok) return { ok: false, error: interrupted.error }
+  const deadline = Date.now() + CODEX_INTERRUPT_SETTLE_MS
+  for (;;) {
+    const after = await codexTargetTurnPresence(endpoint.socketPath, threadId)
+    if (!after.ok) return { ok: false, error: after.error }
+    if (codexRuntimeGeneration(dir, endpoint) !== generation)
+      return { ok: false, error: 'shared Codex app-server generation changed during interrupt settlement' }
+    if (after.turnPresence === 'idle') return { ok: true }
+    if (after.turnPresence === 'unknown') return { ok: false, error: `Codex target thread ${threadId} turn state is unknown after interrupt` }
+    if (Date.now() >= deadline) return { ok: false, error: `Codex target thread ${threadId} remained active after interrupt` }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
 }
 
 // The app-server's loaded/list is cursor-paginated. Archive proof must scan every page; a first page that omits
@@ -2376,6 +2417,7 @@ export const codexHarness: Harness = {
   leafOwnerNeedle: (rec) => rec.harnessSessionId ?? null,
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   observeTurnFailures: codexTurnFailureObserver,
+  interrupt: interruptCodexTurn,
   cleanupRuntime: async () => { /* project-scoped app-server is shared; no per-session transport to remove */ },
   targetDescriptorKey: (rec) => {
     const endpoint = codexEndpointForRecord(rec)

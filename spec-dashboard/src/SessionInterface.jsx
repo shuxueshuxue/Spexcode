@@ -1212,7 +1212,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               control that comes and goes with its own contents can't be found when you need it, and its
               absence would be the only thing telling you the archive exists. */}
           {selecting ? (
-            <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={onBulkClosed} />
+            <SessionSelectBar ids={[...picked]} onCancel={exitSelect} onClosed={onBulkClosed}
+              onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })} />
           ) : (
           <div className="si-toprow">
             <button type="button" className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => { setShowShelf(false); setSel('new') }}>

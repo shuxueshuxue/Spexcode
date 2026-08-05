@@ -68,7 +68,9 @@ scenarios:
     expected: >
       Direct close first archives/cold-retires the exact live target. At the deletion boundary its runtime is
       absent and its retained record is archived with a cold witness; only then are record, worktree, and branch
-      removed. A refused or compensated attempt keeps the runtime/record/worktree/branch intact and writes no
+      removed. An exact active native target is first interrupted through its adapter, then receives that same
+      fresh cold proof before deletion; an unowned, generation-swapped, unknown, or still-active target is refused.
+      A refused or compensated attempt keeps the runtime/record/worktree/branch intact and writes no
       close-authorized event. Source is either user or an explicitly unverified session claim; forged
       authoritative-looking or nonexistent identities never become trusted attribution.
     tags: [backend-api, cli]

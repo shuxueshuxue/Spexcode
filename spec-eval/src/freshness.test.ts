@@ -83,20 +83,21 @@ test('changedSince: an off-history codeSha (rebased away or never merged) is con
 // ---- the off-history CONTENT fallback: trees testify when ancestry can't ----
 
 // a hand-built probe: `diff` = the paths a settled batch found changed (null = anchor commit object gone),
-// `blocks` answers scenarioDiffers. Also asserts the in-history fast path NEVER consults the probe.
-function probeOf(diff: Set<string> | null, scenarioDiffers = false): ContentProbe {
+// `blocks` answers scenarioDiffers, `anchorPast` = the commits the anchor's own topology walk already
+// carries. Also asserts the in-history fast path NEVER consults the probe.
+function probeOf(diff: Set<string> | null, scenarioDiffers = false, anchorPast?: Set<string>): ContentProbe {
   return {
     changed: (_sha, path) => (diff ? diff.has(path) : null),
     canTestify: () => diff !== null,
     scenarioDiffers: () => scenarioDiffers,
-    behind: () => 7,
+    inAnchorPast: (_sha, commit) => !!anchorPast?.has(commit),
   }
 }
 const throwingProbe: ContentProbe = {
   changed: () => { throw new Error('probe consulted on the in-history fast path') },
   canTestify: () => { throw new Error('probe consulted on the in-history fast path') },
   scenarioDiffers: () => { throw new Error('probe consulted on the in-history fast path') },
-  behind: () => { throw new Error('probe consulted on the in-history fast path') },
+  inAnchorPast: () => { throw new Error('probe consulted on the in-history fast path') },
 }
 const READING = { scenario: 's1', codeSha: 'GONE', evaluator: 'manual@1', ts: '2026-07-09T00:00:00Z' }
 
@@ -136,12 +137,17 @@ test('content fallback: the in-history fast path never consults the probe', () =
   assert.deepEqual(staleAxes({ ...READING, codeSha: 'B' }, ['f.ts'], 'y/eval.md', i, new Map([['y/eval.md', new Map()]]), [], throwingProbe), [])
 })
 
-test('codeDrift: off-history fallback reports only content-changed files, by the probe count', () => {
-  const i = didx({ TIP: ['BASE'], BASE: [] }, [['a.ts', ['BASE']], ['b.ts', ['BASE']]])
-  const probe = probeOf(new Set(['a.ts']))
-  assert.deepEqual(codeDrift(i, 'GONE', ['a.ts', 'b.ts'], probe), [{ file: 'a.ts', behind: 7 }])
+test('codeDrift: off-history fallback reports only content-changed files, counting against the ANCHOR\'s past', () => {
+  const i = didx({ TIP: ['MID'], MID: ['BASE'], BASE: [] }, [['a.ts', ['TIP', 'MID', 'BASE']], ['b.ts', ['BASE']]])
+  // the anchor's own past already carries two of a.ts's three touches → one commit of drift is left, the
+  // same subtraction the in-history branch makes with HEAD's ancestry
+  assert.deepEqual(codeDrift(i, 'GONE', ['a.ts', 'b.ts'], probeOf(new Set(['a.ts']), false, new Set(['BASE', 'MID']))), [{ file: 'a.ts', behind: 1 }])
+  // the anchor's past covers every touch, yet the trees demonstrably differ → floored at one, never zero
+  assert.deepEqual(codeDrift(i, 'GONE', ['a.ts'], probeOf(new Set(['a.ts']), false, new Set(['TIP', 'MID', 'BASE']))), [{ file: 'a.ts', behind: 1 }])
+  // the anchor's topology can't testify → every touch counts, conservatively
+  assert.deepEqual(codeDrift(i, 'GONE', ['a.ts'], probeOf(new Set(['a.ts']))), [{ file: 'a.ts', behind: 3 }])
   // no probe → the old conservative every-touch count
-  assert.deepEqual(codeDrift(i, 'GONE', ['a.ts', 'b.ts']), [{ file: 'a.ts', behind: 1 }, { file: 'b.ts', behind: 1 }])
+  assert.deepEqual(codeDrift(i, 'GONE', ['a.ts', 'b.ts']), [{ file: 'a.ts', behind: 3 }, { file: 'b.ts', behind: 1 }])
 })
 
 // ---- the stored-contract-hash scenario axis (#61): pure text compare, one track per reading ----
@@ -353,31 +359,103 @@ test('content batch: concurrent probes asking DISJOINT paths union into one chil
   }
 })
 
-// @@@ the drift COUNT needs the same flight the diff batch already has - the anchor batch unions concurrent
-// callers into one child, but each of them then walked the `behind` loop, and that map holds only SETTLED
-// counts. So the callers the batch just merged immediately re-split, one `rev-list --count` child each.
-// Measured on adopter-a's 415-node session scope: 1532 children for 806 distinct counts.
-test('content batch: concurrent probes asking the SAME (anchor, path) fork ONE drift count, not one each', async () => {
-  const { root, hashes } = schedulerRepo(2)
+// @@@ the drift COUNT is a reachability question, not a per-pair history walk - `rev-list --count
+// <anchor>..<HEAD> -- <path>` names an OFF-HISTORY range, so Git cannot cut the walk short: every pair
+// traverses the whole history. Measured cold on a 437-anchor z-code scope, 96.5% of the read's git-child
+// samples were those counts and `/api/graph` took 96.3s against a 1.5s budget. The anchors' own ancestry is
+// the only thing HEAD's index lacks, and ONE topology walk carries it for the whole roster; concurrent
+// probes join that walk exactly as they already join the content batch.
+function driftCountRepo(anchors: number): { root: string; anchorShas: string[]; paths: string[] } {
+  const root = mkdtempSync(join(tmpdir(), 'freshness-driftcount-'))
+  sh(root, ['init', '-q', '-b', 'main'])
+  sh(root, ['config', 'user.email', 't@t'])
+  sh(root, ['config', 'user.name', 't'])
+  const write = (rel: string, body: string) => {
+    mkdirSync(dirname(join(root, rel)), { recursive: true })
+    writeFileSync(join(root, rel), body)
+  }
+  const commit = (message: string) => { sh(root, ['add', '-A']); sh(root, ['commit', '-q', '-m', message]) }
+  const paths = ['a.ts', 'dir with space/b.ts', ':colon.ts', 'anchor-only.ts']
+  for (const path of [...paths, 'eval.md']) write(path, 'base\n')
+  commit('base')
+  // the anchors: a branch the current HEAD cannot reach — an unmerged branch and a rewritten history read
+  // the same way here, which is the whole point of the content fallback.
+  sh(root, ['checkout', '-q', '-b', 'anchors'])
+  const anchorShas: string[] = []
+  for (let index = 0; index < anchors; index++) {
+    write('a.ts', `anchor ${index}\n`)
+    write('anchor-only.ts', `anchor ${index}\n`)
+    commit(`anchor ${index}`)
+    anchorShas.push(sh(root, ['rev-parse', 'HEAD']))
+  }
+  sh(root, ['checkout', '-q', 'main'])
+  write('a.ts', 'main one\n'); commit('main moves a')
+  write('a.ts', 'main two\n'); write('dir with space/b.ts', 'main two\n'); commit('main moves a and the spaced path')
+  write(':colon.ts', 'main three\n'); commit('main moves the colon path')
+  return { root, anchorShas, paths }
+}
+type RevListCensus = { counts: string[]; topology: string[] }
+function revListTrace(): { census: () => RevListCensus; restore: () => void } {
   const bin = mkdtempSync(join(tmpdir(), 'freshness-revlist-bin-'))
   const log = join(bin, 'calls.log')
   writeFileSync(log, '')
-  writeFileSync(join(bin, 'git'), `#!/bin/sh\ncase " $* " in\n  *" rev-list --count "*) printf '%s\\n' "$*" >> '${log}' ;;\nesac\nexec '${REAL_GIT}' "$@"\n`)
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${log}'\nexec '${REAL_GIT}' "$@"\n`)
   chmodSync(join(bin, 'git'), 0o755)
   const savedPath = process.env.PATH
   process.env.PATH = `${bin}:${savedPath ?? ''}`
+  const rows = () => readFileSync(log, 'utf8').split('\n').filter(Boolean).filter((row) => row.includes('rev-list'))
+  return {
+    census: () => ({
+      counts: rows().filter((row) => row.includes('--count')),
+      topology: rows().filter((row) => row.includes('--parents') && row.includes('--stdin')),
+    }),
+    restore: () => { if (savedPath === undefined) delete process.env.PATH; else process.env.PATH = savedPath },
+  }
+}
+
+test('content batch: concurrent probes join ONE topology walk for the drift count, not one range count each', async () => {
+  const { root, anchorShas, paths } = driftCountRepo(1)
+  const idx = await driftIndex(root)
+  const trace = revListTrace()
   try {
     const first = contentProbeFor(root)
     const second = contentProbeFor(root)
     await Promise.all([
-      first.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md'),
-      second.prime!(hashes[0], ['tracked.txt'], 'absent-eval.md'),
+      first.prime!(anchorShas[0], paths, 'eval.md'),
+      second.prime!(anchorShas[0], paths, 'eval.md'),
     ])
-    const counts = readFileSync(log, 'utf8').split('\n').filter(Boolean)
-    assert.equal(counts.length, 1, `both probes must join one drift count, forked ${counts.length}`)
-    assert.equal(first.behind(hashes[0], 'tracked.txt'), 1, 'the joined count is the real answer, not a default')
-  } finally { process.env.PATH = savedPath }
+    const census = trace.census()
+    assert.equal(census.counts.length, 0, `no per-pair range count may fork, ${census.counts.length} did`)
+    assert.equal(census.topology.length, 1, `both probes must join one topology walk, forked ${census.topology.length}`)
+    for (const probe of [first, second])
+      assert.deepEqual(codeDrift(idx, anchorShas[0], ['a.ts'], probe), [{ file: 'a.ts', behind: 2 }],
+        'the joined walk is the real answer, not a default')
+  } finally { trace.restore(); rmSync(root, { recursive: true, force: true }) }
 })
+
+test('off-history drift counts: ONE topology walk for the whole read, never one rev-list per (anchor, path)', async () => {
+  const { root, anchorShas, paths } = driftCountRepo(12)
+  const idx = await driftIndex(root)
+  const trace = revListTrace()
+  try {
+    const probe = contentProbeFor(root)
+    const demands = anchorShas.map((anchorSha) => ({ anchorSha, paths, evalPath: 'eval.md' }))
+    await probe.primeMany!(demands)
+    const census = trace.census()
+    assert.equal(census.counts.length, 0, `no per-pair range count may fork, ${census.counts.length} did`)
+    assert.equal(census.topology.length, 1, `one walk answers all twelve anchors, forked ${census.topology.length}`)
+    assert.ok(census.topology[0].length < 400, `the roster rides stdin, not argv: ${census.topology[0]}`)
+    for (const anchorSha of anchorShas) assert.deepEqual(codeDrift(idx, anchorSha, paths, probe), [
+      { file: 'a.ts', behind: 2 },
+      { file: 'dir with space/b.ts', behind: 1 },
+      { file: ':colon.ts', behind: 1 },          // a leading colon is a path here, never pathspec magic
+      { file: 'anchor-only.ts', behind: 1 },     // only the anchor's own side moved it → floored at 1
+    ], `anchor ${anchorSha} drift detail`)
+    await probe.primeMany!(demands)
+    assert.deepEqual(trace.census(), census, 'the unchanged repeat walks nothing again')
+  } finally { trace.restore(); rmSync(root, { recursive: true, force: true }) }
+})
+
 
 test('content batch: a path requested mid-flight rides the NEXT batch, never the running child', async () => {
   const { root, hashes } = schedulerRepo(2)

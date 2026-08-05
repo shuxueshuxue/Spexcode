@@ -365,12 +365,13 @@ async function execGitForCaller(args: string[], env: NodeJS.ProcessEnv, maxBuffe
 // Event streams are the index input itself and may legitimately exceed execFile's fixed maxBuffer. Read
 // them through spawn so the only bound is the index the caller is intentionally constructing; timeout,
 // cancellation, process-group cleanup and build permits remain identical to the ordinary async transport.
-function execGitStream(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<GitExec> {
+function execGitStream(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSignal, input?: string): Promise<GitExec> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) { reject(gitAbortError()); return }
-    const child = spawn(gitBinary(env), args, { env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(gitBinary(env), args, { env, detached: true, stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] })
     const stdout: Buffer[] = [], stderr: Buffer[] = []
     let settled = false, aborted = false, timedOut = false
+    let stdinError: any = null
     const killTree = () => {
       if (!child.pid) return
       try { process.kill(-child.pid, 'SIGKILL') } catch { /* group may already be gone */ }
@@ -380,8 +381,14 @@ function execGitStream(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSig
     const timer = setTimeout(() => { timedOut = true; killTree() }, GIT_TIMEOUT_MS)
     timer.unref?.()
     signal?.addEventListener('abort', onAbort, { once: true })
-    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk))
-    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
+    child.stdout!.on('data', (chunk: Buffer) => stdout.push(chunk))
+    child.stderr!.on('data', (chunk: Buffer) => stderr.push(chunk))
+    if (input !== undefined) {
+      // A command can reject its input before the pipe drains. Keep that write failure on the same close
+      // path as exit and abort failures instead of letting Node raise an unhandled EPIPE.
+      child.stdin!.once('error', (error) => { stdinError ??= error })
+      child.stdin!.end(input)
+    }
     child.on('error', (error: any) => {
       if (settled) return
       settled = true; clearTimeout(timer); signal?.removeEventListener('abort', onAbort)
@@ -393,9 +400,9 @@ function execGitStream(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSig
       if (settled) return
       settled = true; clearTimeout(timer); signal?.removeEventListener('abort', onAbort)
       const result = { stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr).toString('utf8') }
-      if (code === 0 && !aborted && !timedOut) { resolve(result); return }
-      const error: any = new Error(`git exited with ${code ?? childSignal ?? 'unknown status'}`)
-      error.code = code
+      if (code === 0 && !aborted && !timedOut && !stdinError) { resolve(result); return }
+      const error: any = stdinError ?? new Error(`git exited with ${code ?? childSignal ?? 'unknown status'}`)
+      error.code = stdinError ? error.code : code
       error.signal = childSignal
       error.stdout = result.stdout.toString('utf8')
       error.stderr = result.stderr
@@ -405,11 +412,11 @@ function execGitStream(args: string[], env: NodeJS.ProcessEnv, signal?: AbortSig
     })
   })
 }
-async function execGitStreamForCaller(args: string[], env: NodeJS.ProcessEnv): Promise<GitExec> {
+async function execGitStreamForCaller(args: string[], env: NodeJS.ProcessEnv, input?: string): Promise<GitExec> {
   const context = inheritedContext()
-  if (!context) return execGitStream(args, env)
+  if (!context) return execGitStream(args, env, undefined, input)
   const release = await context.permits.acquire(context.signal)
-  try { return await execGitStream(withBuildLimits(args), env, context.signal) }
+  try { return await execGitStream(withBuildLimits(args), env, context.signal, input) }
   finally { release() }
 }
 
@@ -1083,10 +1090,17 @@ export async function gitTry(args: string[], options: { indexFile?: string; extr
   }
 }
 
-export async function gitRequiredA(args: string[], purpose: string): Promise<string> {
+// A walk whose OUTPUT is a projection the caller is intentionally building reads through the streamed
+// transport (no fixed stdout bound); `input` lets its revision roster ride stdin, so argv cannot grow with
+// the roster and needs no chunking.
+export async function gitRequiredA(args: string[], purpose: string, options: { input?: string; extraEnv?: Record<string, string | undefined> } = {}): Promise<string> {
   const env = { ...process.env }
+  for (const [key, value] of Object.entries(options.extraEnv ?? {})) {
+    if (value === undefined) delete env[key]
+    else env[key] = value
+  }
   delete env.GIT_DIR; delete env.GIT_WORK_TREE; delete env.GIT_INDEX_FILE; delete env.GIT_OBJECT_DIRECTORY
-  try { return (await execGitStreamForCaller(args, env)).stdout.toString('utf8') }
+  try { return (await execGitStreamForCaller(args, env, options.input)).stdout.toString('utf8') }
   catch (error: any) {
     if (error?.name === 'AbortError') throw error
     warnIfTimedOut(error, args)
@@ -1686,6 +1700,15 @@ export type DriftPathEvent = {
   parents: { commit: string; historicalPath: string }[]
 }
 
+// The ancestry substrate the reachability functions below actually read: a topology projection plus its
+// memoized closures. `DriftIndex` is one instance of it (HEAD's history); `unionTopology` builds another for
+// revisions HEAD cannot reach. Sharing the type is what keeps ONE reachability rule for both.
+export type Reachability = {
+  ord: Map<string, number>
+  parents: Map<string, string[]>
+  anc: Map<string, Uint8Array>
+}
+
 export type DiffLineRange = [number, number]
 export type CombinedDiffOwnedChanges = { after: DiffLineRange[]; before: DiffLineRange[][]; parentPaths: string[] }
 
@@ -2073,7 +2096,7 @@ export function historyEventCachePathForTests(root: string): string { return eve
 // this direct parent DFS, so neither path introduces a second reachability representation or persistent fact.
 // undefined when `sha` is not reachable from HEAD (rebased away, an unmerged branch, or never on any
 // ref) — callers apply their own conservative rule to that "can't prove" case.
-export function ancestorsOf(idx: DriftIndex, sha: string): Uint8Array | undefined {
+export function ancestorsOf(idx: Reachability, sha: string): Uint8Array | undefined {
   const hit = idx.anc.get(sha)
   if (hit) return hit
   const start = idx.ord.get(sha)
@@ -2098,7 +2121,7 @@ export function ancestorsOf(idx: DriftIndex, sha: string): Uint8Array | undefine
 // Fill the existing ancestry memo for a known roster in one child-before-parent topology pass. At each
 // commit the transient row names requested descendants; emitting those bits into the ordinary closures makes
 // the resulting bytes identical to calling ancestorsOf() independently for every requested SHA.
-export function primeAncestorClosures(idx: DriftIndex, shas: Iterable<string>): void {
+export function primeAncestorClosures(idx: Reachability, shas: Iterable<string>): void {
   const endpoints = [...new Set(shas)].filter((sha) => !idx.anc.has(sha) && idx.ord.has(sha))
   if (!endpoints.length) return
   const count = idx.ord.size
@@ -2157,9 +2180,29 @@ export function primeAncestorClosures(idx: DriftIndex, shas: Iterable<string>): 
     throw new Error(`cannot prime ancestry closures: topology yielded ${visited} of ${count} reachable commits`)
   for (let position = 0; position < endpoints.length; position++) idx.anc.set(endpoints[position], closures[position])
 }
-export function inAncestors(idx: DriftIndex, bits: Uint8Array, sha: string): boolean {
+export function inAncestors(idx: Reachability, bits: Uint8Array, sha: string): boolean {
   const o = idx.ord.get(sha)
   return o !== undefined && (bits[o >> 3] & (1 << (o & 7))) !== 0
+}
+
+// @@@ one walk for a whole roster of revisions, HEAD-reachable or not - the index above projects HEAD's
+// history, so a revision HEAD cannot reach (an unmerged branch, a rebased-away measurement anchor) has NO
+// ancestry there and `ancestorsOf` correctly answers undefined. A caller that needs those revisions' own
+// past gets it from the SAME projection shape, built by one `rev-list --parents` walk over the union of the
+// roster's histories, with the roster on stdin so argv never grows with it. Deliberately a SEPARATE
+// structure, never a graft into the shared index: making off-history tips reachable there would silently
+// switch every ancestry-vs-content decision that keys on `undefined`.
+export async function unionTopology(root: string, revisions: readonly string[]): Promise<Reachability> {
+  const roster = [...new Set(revisions)].filter(Boolean)
+  const reach: Reachability = { ord: new Map(), parents: new Map(), anc: new Map() }
+  if (!roster.length) return reach
+  const out = await gitRequiredA(['-C', root, 'rev-list', '--parents', '--stdin'], 'cannot walk revision topology', {
+    input: roster.map((revision) => `${revision}\n`).join(''),
+    // the roster is already exact object ids; do not reinterpret them if refs/replace moves mid-read.
+    extraEnv: { GIT_NO_REPLACE_OBJECTS: '1' },
+  })
+  const projection = topologyProjection(out)
+  return { ord: projection.order, parents: projection.parents, anc: new Map() }
 }
 
 // @@@ reachability is membership, not a closure - `ancestorsOf` returns undefined for EXACTLY the shas

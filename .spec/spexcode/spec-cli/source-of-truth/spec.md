@@ -188,7 +188,9 @@ parent-qualified suffix when that name collides — always a single URL-safe tok
 failure should behave: a sync read that throws (`git`, stderr piped so
 a fail-soft probe stays quiet from a non-repo dir); an async optional read that hides failure as `''` (`gitA`);
 a runner where the exit code IS the verdict (`gitTry`, returns ok + stderr); and an unbounded streaming required
-read (`gitRequiredA`) for history facts whose absence would change a verdict. Required derivation never turns a
+read (`gitRequiredA`) for history facts whose absence would change a verdict. The streaming shape also accepts an
+input roster on stdin, so a walk over many revisions keeps a fixed argv instead of growing one that would then
+need chunking. Required derivation never turns a
 spawn, timeout, non-zero exit, or fixed stdout buffer into an empty fact set. Inside a graph build all four also inherit that build's bounded pack footprint ([[graph-cache]]) —
 one place decides it, every shape obeys it, and the transport never learns which walk it is running. All of them BOUND their
 child: a git process that never exits (a wedged filesystem, a hijacked PATH git) is SIGKILLed after a

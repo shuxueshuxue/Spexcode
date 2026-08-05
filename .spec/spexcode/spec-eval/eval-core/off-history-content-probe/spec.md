@@ -12,6 +12,7 @@ code:
   - spec-eval/src/freshness.ts#resolvedContentImages
   - spec-eval/src/freshness.ts#runContentBatch
   - spec-eval/src/freshness.ts#startPluralContentBatch
+  - spec-eval/src/freshness.ts#primeAnchorTopology
 related:
   - spec-cli/src/git.ts
   - spec-eval/src/evaltab.ts
@@ -46,6 +47,33 @@ more paths than either bound is split across children, and every child's answers
 slice succeeds, so a late failure publishes none. Anchor count never becomes child count. A demand arriving
 after a chunk is drained rides the next chunk; a settled path is never asked again; abort or transport failure
 settles no verdict; and independent roots never share scheduling state.
+
+The count a drifted reading DISPLAYS obeys the same invariant. It is a reachability question, so it may not be
+asked as a per-pair `rev-list --count <anchor>..<HEAD> -- <path>`: that range is off-history by construction, so
+Git can never cut the walk short and every `(anchor, path)` pair traverses the whole history — measured cold on
+a 437-anchor deployment scope, 1748 of the read's 1750 Git children were those counts. What HEAD's own index
+genuinely cannot hold is only the ANCHORS' ancestry, and ONE `rev-list --parents` walk over the whole roster
+carries it, with the roster on stdin so argv never grows with the anchor set and needs no chunking. The count is
+then [[drift-by-ancestry]]'s in-memory rule read against that projection — the path's events the anchor has not
+already seen — floored at one because the trees demonstrably differ. Only anchors whose governed content
+actually differs need their past, so a byte-identical population walks nothing; the walk joins and re-checks
+exactly like a content chunk, a rejected walk publishes nothing and every joiner sees the same failure, and an
+unchanged repeat starts no child.
+
+That projection is deliberately SEPARATE from the shared drift index rather than a graft into it. Making
+off-history anchor tips reachable there would make ancestry stop answering "cannot testify" for exactly the
+revisions this whole node exists to serve, silently moving the freshness DECISION from content back to
+ancestry. The decision axis keeps reading the same index it always did; only the display count reads the
+anchors' own walk.
+
+Replacing the per-pair count with the ancestry rule changes displayed numbers, because the two rules were never
+the same rule: a path-scoped `rev-list` counts a merge whose blob differs from both parents even when every one
+of its lines was inherited from one of them, which [[drift-by-ancestry]] deliberately keeps outside a governed
+path window; it cannot see events on a pre-rename lineage; its default history simplification prunes commits
+the index retains; and a path whose name begins with `:` was read as pathspec magic and counted zero, surviving
+only on the floor. On a 6197-commit corpus with 437 off-history anchors every displayed count moved, in both
+directions, entirely within those four classes. The reading's own verdict — fresh or stale — is unaffected: it
+was, and remains, the content verdict.
 
 The interpretation identity is [[source-of-truth]]'s existing full object-format + shallow + graft +
 `refs/replace` identity, not a second fingerprint. A replacement or graft move rotates the one root scope;

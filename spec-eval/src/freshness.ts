@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, resolve } from 'node:path'
-import { batchRevisionOids, gitA, gitTry, headSha, gitObjectInterpretation, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, type DriftIndex, type DriftPathEvent, eventsSince } from '../../spec-cli/src/git.js'
+import { batchRevisionOids, gitA, gitTry, headSha, gitObjectInterpretation, currentGitBuildAbortSignal, gitAbortError, ancestorsOf, inAncestors, commitReachable, pathEvents, primeAncestorClosures, unionTopology, type DriftIndex, type DriftPathEvent, type Reachability, eventsSince } from '../../spec-cli/src/git.js'
 import { anchorHitExists, extOf, extractorFor, extractors, resolveAnchor, resolveSelectors, type AnchorHitQuery, type Extractor, type RelationEntry, type Unit } from '../../spec-cli/src/anchors.js'
 import type { Reading } from './sidecar.js'
 import { scenarioCodeAxis, scenarioHash, type Scenario, type ScenarioCodeAxisSource } from './scenarios.js'
@@ -33,8 +33,9 @@ export type ContentProbe = {
   canTestify(anchorSha: string): boolean
   // did THIS scenario's semantic block (description+expected) move between anchor and HEAD ([[scenariofresh]])
   scenarioDiffers(anchorSha: string, evalPath: string, scenario: string): boolean
-  // codeDrift's display detail: commits in anchor..HEAD touching path (floored at 1 — the content differs)
-  behind(anchorSha: string, path: string): number
+  // codeDrift's display detail, the half HEAD's index cannot answer: is `commit` already in the ANCHOR's own
+  // past? false when the anchor's topology can't testify — the caller then counts conservatively.
+  inAnchorPast(anchorSha: string, commit: string): boolean
   prime?(anchorSha: string, paths: string[], evalPath: string): Promise<void>
   primeMany?(demands: readonly ContentProbeDemand[]): Promise<void>
   // answer every scenario-block demand `prime` recorded, in ONE batched pair of children. Optional and
@@ -63,8 +64,9 @@ type RootScope = {
   head: string                         // raw HEAD + the full Git interpretation identity
   currentOid: string | null             // exact current image; null only while first resolution is in flight
   anchors: Map<string, AnchorVerdicts>
-  behind: Map<string, number>
-  behindFlight: Map<string, Promise<number>>   // the single in-flight count per (anchor, path)
+  topology: Reachability | null                // the anchors' OWN ancestry: one walk per scope, never per pair
+  topologyRoster: Set<string>                  // the anchor images that walk already carries
+  topologyFlight: Promise<void> | null         // the single in-flight walk
   blockDemands: Set<string>                    // (rev, evalPath) awaiting the one batched scenario-block read
 }
 const rootScopes = new Map<string, RootScope>()
@@ -80,7 +82,7 @@ function scopeFor(rootKey: string, head: string, currentOid: string | null): Roo
     rootScopes.set(rootKey, current)
     return current
   }
-  const scope: RootScope = { head, currentOid, anchors: new Map(), behind: new Map(), behindFlight: new Map(), blockDemands: new Set() }
+  const scope: RootScope = { head, currentOid, anchors: new Map(), topology: null, topologyRoster: new Set(), topologyFlight: null, blockDemands: new Set() }
   rootScopes.set(rootKey, scope)
   while (rootScopes.size > ROOT_SLOTS) {
     const oldest = rootScopes.keys().next().value
@@ -333,30 +335,36 @@ function startPluralContentBatch(root: string, rootKey: string, scope: RootScope
   return flight
 }
 
-// @@@ join the in-flight count, don't re-fork it - `behind` holds only SETTLED counts, so N concurrent
-// primes naming one (anchor, path) all missed and each forked its own `rev-list --count`. Measured on
-// adopter-a's 415-node session scope: 1532 children for 806 distinct counts. `sha..current` names two
-// immutable commits, so a joiner can never be handed a different question's answer. A rejected flight is
-// cached nowhere and every joiner sees the same failure, matching the anchor batch above.
-function behindCount(root: string, scope: RootScope, sha: string, anchorOid: string, path: string): Promise<number> {
-  const key = `${sha}\x1f${path}`
-  const settled = scope.behind.get(key)
-  if (settled !== undefined) return Promise.resolve(settled)
-  const joined = scope.behindFlight.get(key)
-  if (joined) return joined
-  const run = async (): Promise<number> => {
-    const result = await gitTry(['-C', root, 'rev-list', '--count', `${anchorOid}..${scope.currentOid!}`, '--', path], {
-      extraEnv: { GIT_NO_REPLACE_OBJECTS: '1' },
-    })
-    if (!result.ok) throw new Error(`git content drift count failed (${result.failure ?? 'unknown'}): ${result.stderr.trim() || 'unknown git error'}`)
-    const n = Number(result.stdout.trim())
-    const count = Number.isFinite(n) && n > 0 ? n : 1
-    scope.behind.set(key, count)
-    return count
+// @@@ the drift COUNT is a reachability question, so ONE walk answers the whole roster - counting it as
+// `rev-list --count <anchor>..<HEAD> -- <path>` names an OFF-HISTORY range, so Git can never cut the walk
+// short: every (anchor, path) pair traverses the entire history, and the pairs multiply. Measured cold on a
+// 437-anchor deployment scope: 1748 of the read's 1750 git children were those counts. What HEAD's index
+// genuinely lacks is only the ANCHORS' own ancestry, and one `rev-list --parents` walk over the whole roster
+// carries it; the count is then the same in-memory rule `eventsSince` applies on the in-history side. The
+// walk is a SEPARATE structure from the shared drift index on purpose: grafting off-history tips into that
+// index would make `ancestorsOf` stop answering undefined for them and silently switch the freshness
+// DECISION from this content probe to ancestry. A rejected walk caches nothing and every joiner sees the
+// same failure, matching the anchor batch above.
+async function primeAnchorTopology(root: string, scope: RootScope, oids: readonly string[]): Promise<void> {
+  for (;;) {
+    const missing = oids.filter((oid) => !scope.topologyRoster.has(oid))
+    if (!missing.length) return
+    // an anchor that arrives mid-walk rides the NEXT one instead of racing this one, exactly as a
+    // mid-flight path rides the next content batch.
+    if (scope.topologyFlight) { await scope.topologyFlight; continue }
+    const roster = [...new Set([...scope.topologyRoster, ...missing])]
+    const run = async (): Promise<void> => {
+      const reach = await unionTopology(root, roster)
+      // one child-before-parent pass for the whole roster; the bytes are identical to asking one by one.
+      primeAncestorClosures(reach, roster)
+      scope.topology = reach
+      scope.topologyRoster = new Set(roster)
+    }
+    let flight!: Promise<void>
+    flight = run().finally(() => { if (scope.topologyFlight === flight) scope.topologyFlight = null })
+    scope.topologyFlight = flight
+    await flight
   }
-  const flight = run().finally(() => { if (scope.behindFlight.get(key) === flight) scope.behindFlight.delete(key) })
-  scope.behindFlight.set(key, flight)
-  return flight
 }
 
 export function contentProbeFor(root: string): ContentProbe {
@@ -424,9 +432,12 @@ export function contentProbeFor(root: string): ContentProbe {
       if (!ready.length) break
       await startPluralContentBatch(root, rootKey, scope, ready)
     }
-    await Promise.all([...grouped].flatMap(([sha, row]) => row.entry.gone ? [] : [...row.codePaths]
-      .filter((path) => row.entry.verdicts.get(path) === true)
-      .map((path) => behindCount(root, scope, sha, row.entry.imageOid!, path))))
+    // only anchors whose governed content actually differs need their past: those are the readings that
+    // will render a drift count, and a byte-identical population walks nothing at all.
+    const drifted = [...grouped.values()]
+      .filter((row) => !row.entry.gone && [...row.codePaths].some((path) => row.entry.verdicts.get(path) === true))
+      .map((row) => row.entry.imageOid!)
+    if (drifted.length) await primeAnchorTopology(root, scope, drifted)
     for (const [sha, row] of grouped) {
       if (row.entry.gone) continue
       for (const evalPath of row.evalPaths) if (row.entry.verdicts.get(evalPath) === true) {
@@ -471,8 +482,12 @@ export function contentProbeFor(root: string): ContentProbe {
       if (!a) return true   // eval.md unreadable at the anchor (renamed/absent) → can't prove → stale
       return a.get(scenario) !== scenarioBlocksAt(root, scope!.currentOid!, evalPath)?.get(scenario)
     },
-    behind(sha, path) {
-      return (activeImageKey ? currentScope(rootKey, activeImageKey)?.behind.get(`${sha}\x1f${path}`) : undefined) ?? 1
+    inAnchorPast(sha, commit) {
+      const scope = activeImageKey ? currentScope(rootKey, activeImageKey) : undefined
+      const oid = scope?.anchors.get(sha)?.imageOid
+      if (!scope?.topology || !oid) return false
+      const bits = ancestorsOf(scope.topology, oid)
+      return !!bits && inAncestors(scope.topology, bits, commit)
     },
   }
 }
@@ -639,7 +654,8 @@ export function changedSince(idx: DriftIndex, sinceSha: string, path: string, pr
 // a stale eval can say "EvalsFeed.jsx +3" instead of a bare "code moved". Same DAG reachability as
 // changedSince (a commit touching the file that is NOT an ancestor of the reading's sha lies in sinceSha..HEAD);
 // an off-history sinceSha reports through the same content fallback (only files whose content differs, counted
-// by rev-list); with no probe or a gone anchor it counts every touch (conservative, matching changedSince).
+// against the anchor's own ancestry); with no probe or a gone anchor it counts every touch (conservative,
+// matching changedSince).
 // Reporting only — it never decides freshness (staleAxes does); it explains a decision already made.
 export function codeDrift(idx: DriftIndex, sinceSha: string, codeAxis: ScenarioCodeAxisSource, probe?: ContentProbe): { file: string; behind: number }[] {
   // an entry may be anchored (`path#symbol`); drift is reported per BASE FILE — a raw selector string names
@@ -651,7 +667,11 @@ export function codeDrift(idx: DriftIndex, sinceSha: string, codeAxis: ScenarioC
     const events = pathEvents(idx, f)
     const differs = since ? undefined : probe?.changed(sinceSha, f)
     const behind = since ? new Set(since.map((event) => event.commit)).size
-      : differs === true ? probe!.behind(sinceSha, f)
+      // off-history and the content differs: the SAME rule as the in-history branch above — the path's events
+      // this anchor has not already seen — read against the anchor's own ancestry instead of HEAD's. Floored
+      // at one: the trees demonstrably differ, so 'drifted by 0 commits' would be a lie whatever the walk
+      // could and could not project.
+      : differs === true ? Math.max(1, new Set(events.filter((event) => !probe!.inAnchorPast(sinceSha, event.commit)).map((event) => event.commit)).size)
       : differs === false ? 0
       : new Set(events.map((event) => event.commit)).size
     if (behind > 0) out.push({ file: f, behind })

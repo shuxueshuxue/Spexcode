@@ -57,6 +57,9 @@ reported as broken.
 Overflow is the one case that legitimately replaces the code, because exceeding the buffer is this seam's own
 verdict rather than the child's, and the kill it performs would otherwise surface as an unrelated signal.
 Timeout marks itself separately for the same reason. Everything else keeps whatever cause it arrived with.
+A child fed on stdin can reject its input before the pipe drains; on both the buffered and the streaming
+entrance that write failure travels the child's own close path and keeps its own cause, so it is neither an
+unhandled EPIPE nor an exit status the child never returned.
 
 Many worktrees asking the same immutable tree question are one Git transport demand, not one child per
 worktree. The batch first freezes each worktree HEAD and its merge-base against the one resolved

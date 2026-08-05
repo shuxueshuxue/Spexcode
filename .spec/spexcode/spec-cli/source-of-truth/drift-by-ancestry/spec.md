@@ -86,3 +86,11 @@ layer falls back to comparing content when the window is `null`. What no caller 
 reachability rule itself — retyping it is how it came to exist four times (`driftPathWindow` here, plus
 `changedSince`, the code window, and `codeDrift` in the eval layer), each with its own null handling to get
 subtly wrong.
+
+Reachability is a property of a topology projection, not of HEAD specifically. The memo, its batch entrance and
+the membership test read that shape alone, so a caller needing the past of revisions HEAD cannot reach builds a
+second projection of the same shape — one `rev-list --parents` walk over the union of a whole roster's
+histories, its revisions on stdin so argv cannot grow with the roster — and applies this same rule to it. Such
+a projection is never grafted into the HEAD index: the `null` answer above is load-bearing for every caller
+that distinguishes "ancestry cannot testify" from "nothing changed", and making off-history tips reachable
+there would silently retire that distinction.

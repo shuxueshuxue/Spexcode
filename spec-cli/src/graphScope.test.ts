@@ -552,8 +552,7 @@ test('archiving a dirty worktree subtracts its overlays without a full git walk'
     const fullOracle = await board.buildBoard()
     process.env.PATH = `${gitBin}:${previousPath}`
     cache.invalidateBoard('sessions')
-    const spliced = await cache.getBoardForSessionRefresh()
-    process.env.PATH = previousPath
+    const spliced = await cache.getBoard()
 
     assert.equal(existsSync(gitLog), false, 'archive projection must not spawn git')
     assert.equal(JSON.stringify(spliced.nodes), JSON.stringify(fullOracle.nodes),
@@ -562,6 +561,21 @@ test('archiving a dirty worktree subtracts its overlays without a full git walk'
       'the archived row leaves the working-set projection exactly as the full oracle does')
     assert.equal((await cache.patrolBoard()).nodes, spliced.nodes,
       'the splice carries the removed-root revision so patrol does not buy a delayed full rebuild')
+    assert.equal(existsSync(gitLog), false, 'the next patrol must not defer archive work into a full git build')
+    process.env.PATH = previousPath
+
+    writeSessionRecord({
+      worktree_path: linked, branch: 'node/archive-subtractive', status: 'active', proposal: '',
+      stopped: false, archived: false, cold_proof: '', note: 'root restored control',
+    })
+    process.env.PATH = `${gitBin}:${previousPath}`
+    rmSync(gitLog, { force: true })
+    cache.invalidateBoard('sessions')
+    const restored = await cache.getBoard()
+    process.env.PATH = previousPath
+    assert.ok(existsSync(gitLog), 'a restored root must promote the ordinary route to a full git-backed build')
+    assert.equal(JSON.stringify(restored.nodes), JSON.stringify(await board.buildBoard().then((value) => value.nodes)),
+      'the promoted root addition must match the full oracle')
   } finally {
     process.env.PATH = previousPath
     writeSessionRecord({ status: 'active', note: 'archive fixture restored', worktree_path: proj, branch: 'node/child-bs01', archived: false, stopped: false, cold_proof: '' })

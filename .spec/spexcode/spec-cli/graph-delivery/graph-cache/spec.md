@@ -85,6 +85,10 @@ The graph is built **once per change, not once per poll — and only as much of 
   not a raw `archived` bit: an invalid cold witness or reloaded-runtime hazard remains visible and keeps its root
   monitored. The subtractive path never reads a genuinely retired worktree. A root addition (create/resume) or
   any retained root revision movement remains a full obligation, so subtractive publication cannot hide new work.
+  This classification belongs to the common `getBoard()` validation and publication path as well as delta delivery:
+  a root-set reduction is a splice only when every other full input and every retained root digest is unchanged.
+  Thus an ordinary route racing the lifecycle watcher cannot promote an archive into a full history build, while
+  an addition or a retained-root change cannot borrow the subtractive carrier.
   A lifecycle write therefore never re-walks 180 spec files to ship a 1KB patch (the measured waste this scoping
   removed: ~250ms of unrelated fs work per push). A 'full' dirty (a ref move or worktree/.spec event) runs the
   whole `buildBoard()`, but its one structural builder does not queue that cheap projection: the splice inherits

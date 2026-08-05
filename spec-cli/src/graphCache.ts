@@ -223,7 +223,12 @@ function revisionCarriedByBoard(sample: BoardInputRevision, board: Board): Board
 
 // A sessions splice reuses its base topology. It may sample fresh record/projection inputs, but it must never
 // certify that those old nodes carry a full revision sampled after the base was built.
-function revisionCarriedBySessionSplice(base: BoardInputRevision, sample: SessionInputRevision, board: Board, stable: boolean): BoardInputRevision {
+function revisionCarriedBySessionSplice(
+  base: BoardInputRevision,
+  sample: Pick<SessionInputRevision, 'sessions' | 'projections' | 'projectionIds'>,
+  board: Board,
+  stable: boolean,
+): BoardInputRevision {
   const boardProjections = new Map(board.sessions.map((session) => [session.id, session.evalSummary ?? null]))
   const projections = stable
     ? digest(sample.projectionIds.map((id) => [id, boardProjections.get(id) ?? null]))
@@ -273,6 +278,15 @@ function carrySubtractiveWorktrees(base: BoardInputRevision, activeRoots: readon
     },
     added: false,
   }
+}
+
+function isPureSubtractiveWorktreeMove(base: BoardInputRevision, sample: BoardInputRevision): boolean {
+  const moved = Object.keys(sample.fullParts).filter((key) => sample.fullParts[key] !== base.fullParts[key])
+  if (moved.length !== 1 || moved[0] !== 'worktrees') return false
+  const current = Object.keys(sample.worktreeParts)
+  const previous = Object.keys(base.worktreeParts)
+  return current.length < previous.length
+    && current.every((root) => sample.worktreeParts[root] === base.worktreeParts[root])
 }
 
 // a build slower than this is LOGGED, never silently tolerated — the fail-loud regression alarm. Sized
@@ -423,6 +437,7 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
   let buildSessionGeneration = sessionGeneration
   let buildSessionProjectionPublication = sessionProjectionPublication
   let buildStartedWithSessionOwed = false
+  let buildAddedSessionRoot = false
   let completedRevision: BoardInputRevision | null = null
   // Do not invoke the producer inline. buildBoard() has an asynchronous signature but performs a sizeable
   // synchronous setup before its first await (Promise.all evaluates its arguments immediately). A stale HTTP
@@ -460,21 +475,23 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
         // the watcher event was about; an invalidation arriving after the sample keeps its own dirty window.
         if (prev && anchor && gen === sampledGen) {
           const fullMoved = before.full !== anchor.full
+          const subtractiveWorktreeMove = fullMoved && isPureSubtractiveWorktreeMove(anchor, before)
+          const structuralMoved = fullMoved && !subtractiveWorktreeMove
           const projectionMoved = before.sessions !== anchor.sessions || before.projections !== anchor.projections
           // A projection move nobody signalled is this validation doing the patrol's repair job.
-          if (projectionMoved && !sessionOwed && dirty !== 'sessions') {
+          if ((projectionMoved || subtractiveWorktreeMove) && !sessionOwed && dirty !== 'sessions') {
             gen++
             sessionOwed = true
             sessionGeneration++
           }
-          const owed = fullMoved ? 'full' : (sessionOwed || dirty === 'sessions') ? 'sessions' : 'none'
+          const owed = structuralMoved ? 'full' : (sessionOwed || dirty === 'sessions') ? 'sessions' : 'none'
           if (DEBUG && owed !== 'none') {
             const moved = Object.keys(before.fullParts).filter((key) => before.fullParts[key] !== anchor.fullParts[key])
             console.warn(`spec-cli: graph refresh revision moved — signalled=${dirty} scope=${owed} inputs=[${moved.join(', ')}]`)
           } else if (DEBUG && dirty !== 'none') {
             console.warn(`spec-cli: graph refresh discharged a ${dirty} signal — no graph input moved`)
           }
-          if (fullMoved) dirty = 'full'
+          if (structuralMoved) dirty = 'full'
           else if (sessionOwed || dirty === 'sessions') dirty = 'sessions'
           // Discharging CONSUMES the claim. Leaving it standing would make every later read re-enter this
           // validation, hold the board permanently stale/refreshing, and never converge.
@@ -514,7 +531,19 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
         // against a revision this board never carried, and the cache would converge on nothing. So a moved
         // half anchors on `before` — the conservative direction, which costs at most one extra rebuild and can
         // never certify unread bytes.
-        completedRevision = revisionCarriedByBoard(buildFullStable && buildSessionsStable ? after : before, board)
+        if (sessionsOnly && anchor) {
+          const projectedRoots = [...new Set(board.sessions.map((row) => row.path))].sort()
+          const rootTransition = carrySubtractiveWorktrees(anchor, projectedRoots)
+          buildAddedSessionRoot = rootTransition.added
+          completedRevision = revisionCarriedBySessionSplice(
+            rootTransition.revision,
+            before,
+            board,
+            buildFullStable && buildSessionsStable && !rootTransition.added,
+          )
+        } else {
+          completedRevision = revisionCarriedByBoard(buildFullStable && buildSessionsStable ? after : before, board)
+        }
         return board
       }))
         .then(resolveBuild, rejectBuild)
@@ -550,7 +579,7 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
       cachedRevision = completedRevision
       if (buildScope === 'full') topologyGeneration++
       else sessionProjectionPublication++
-      if (!buildFullStable) mergeDirty('full')
+      if (!buildFullStable || buildAddedSessionRoot) mergeDirty('full')
       traceCacheCommit(buildScope, buildStartedAt)
     }
     retryAt = 0

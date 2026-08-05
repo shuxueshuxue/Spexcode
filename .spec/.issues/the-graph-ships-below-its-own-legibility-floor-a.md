@@ -291,3 +291,115 @@ sole consumer `.si-hero` (`:1520`) is `mono` + `white-space: pre` — ASCII art,
 element — and it is outside the pane. Correct as authored.
 
 Spec: node-graph
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T21:12:08.155Z -->
+## Amendment 4: the spec promises and demotes the same quantity, and the demoted channel is sub-pixel
+
+This is the strongest form of the finding, and it reorders the issue. The defect is not primarily a font
+size. **The defect is that `spec.md:25` names a quantity as the debt the collapsed layout owes its reader,
+demotes that same quantity thirty words later, and ships it through the smallest channel on the tile.** The
+default zoom is what makes that consequential rather than merely verbal.
+
+### The contradiction, which needs no zoom at all
+
+`spec.md:25`, one paragraph, two sentences:
+
+> "with sessions scattered across the tree, and without expanding anything or moving the camera, the board
+> reads **how many places are in motion** and under which branch each one sits."
+
+> "Fill-versus-outline survives zoom that digits do not, so the lit tab is the signal and **the counts are
+> detail**."
+
+"How many places are in motion" is simultaneously **the aggregate the layout owes** and **detail**. The
+author's voice says the same thing at `styles.css:393-395`:
+
+> "Fill/no-fill is the one signal that still reads when the tile's own digits have blurred away, so it
+> carries the 'something is happening in there' meaning; **the dots below only say how many sessions**."
+
+That `only` is an explicit demotion. So the split is deliberate and coherent as engineering — fill answers
+*whether*, and it survives; the dots answer *how many*, and they are accepted as fragile. What is not
+coherent is that the paragraph opens by promising *how many* is what the board reads.
+
+This is readable at any zoom, by anyone with the two sentences side by side.
+
+### What the default zoom does to the demoted channel
+
+The counts are carried by `.hidden-dots` — one disc per distinct session inside a collapsed branch
+(`SpecNode.jsx:85-87`), capped at **3** (`:66`, `inside.slice(0, 3)`) with a `+k` overflow. Inside the
+transform pane, same multiplication as the title:
+
+```
+.hidden-dots i  width/height  4px  ->  3.40px
+.hidden-dots    gap           1px  ->  0.85px     <- sub-pixel
+.hidden-dots i  ring (shadow) 1px  ->  0.85px
+```
+
+**The load-bearing number is the gap, not the disc.** A 3.4px disc is perfectly visible. What fails is
+*separability*, and separability is the precondition for counting. A sub-pixel gap is necessarily
+antialiased away, and because each disc carries a **different** hue (`labelColor(e.seed)`), two merged discs
+leave no seam — they produce a third colour. The result does not look like two adjacent dots; it looks like
+one dot.
+
+So both branches of the count fail, and the second fails by the spec's own concession:
+
+| branch | how it is read | at zoom 0.85 |
+|---|---|---|
+| ≤ 3 sessions | enumerate the discs | separation is 0.85px, sub-pixel |
+| > 3 sessions | read `+k` | it is a **digit** — `:25` concedes digits do not survive zoom |
+
+`+k` inherits `.node-expand`'s `--type-caption` (`styles.css:388`) → **8.5px**. There is no third path.
+
+### Selective payment, now measured rather than inferred
+
+Amendment 3 showed the tile's captions were *priced* for the shrink: the counts were demoted to detail and
+fill was given the signal, precisely because 8.5px digits do not read. That pricing is correct.
+
+Put beside this amendment, the shape closes:
+
+- the **least important** text on the tile (ago, version, badges) got the fallback;
+- the **identity carrier** (the title) got one step up the scale and no fallback — Amendment 2/3;
+- the aggregate the spec **names as the debt** got the smallest channel on the tile and no fallback.
+
+Three consumers of the same shrink, and the one the contract singles out is the one that paid least.
+
+### The recovery paths, pre-empted — and one is excluded by the contract
+
+Both obvious rebuttals are worth answering here rather than after someone raises them.
+
+**"Hover it — the tooltip names each session."** True (`SpecNode.jsx:78-81`). But `:25` states the debt
+*with its conditions attached*: the board must read how many places are in motion **"without expanding
+anything or moving the camera."** A per-tile pointer interaction is therefore not a weak answer to a
+scanning question — **it is excluded by the same sentence that creates the obligation.**
+
+**"Select it — the panel shows the title larger."** It does not. The graph's detail panel renders the title
+at `NodeView.jsx:151` → `.part-title` → `--type-control` = **12px** (`styles.css:572`). The `--type-title`
+(16px) consumers are ReviewShell's `.ds-title`, a route titlebar `h1`, an offline message, `rich-text h1`,
+and the two **mobile** classes — none is the desktop graph's panel. So:
+
+> **12px is the largest size at which this product ever renders a spec node's title on the desktop.** The
+> scale holds 13 / 14 / 16 / 18 above it, and the desktop uses none of them for node identity.
+
+Selecting a node restores the title from 10.2px to its authored floor. It never exceeds it. "Click it and
+you'll see" has no bigger view to appeal to.
+
+### Consequence for the exits
+
+Exit 2 (default 1.0) repairs all three consumers at once with one constant, and restores the `≤3` branch to
+its authored 1px separation.
+
+Exit 1 (raise authored sizes) is now **six** rows wide, not one and not four: the title, four caption rows,
+and the dot geometry — and the dot geometry is the awkward one, since raising a 1px gap to survive 0.85
+means authoring fractional-pixel separations, which is where this class of bug comes from in the first
+place.
+
+### Evidence grade
+
+Unchanged from the opening paragraph: **derived from source, not a filed reading.** Every rendered figure
+above is `authored × 0.85`, not a measurement. The browser pass now owes two numbers, and the second has a
+numerator the product itself specified:
+
+1. a node title's rendered size ≥ its authored size, in the default view;
+2. with **N** sessions active inside a collapsed branch, whether **N** is recoverable from the tab
+   (enumeration for N ≤ 3, `+k` for N > 3).
+
+Spec: node-graph

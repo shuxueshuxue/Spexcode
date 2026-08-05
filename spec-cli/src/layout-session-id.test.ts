@@ -1,10 +1,10 @@
 import { test, before, after, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { envSessionId, sessionRecordPath, type RawRecord } from './layout.js'
+import { envSessionId, readAliasedRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
 
 // Reproduces the live codex interactive-attribution bug: design C runs ONE shared per-project codex
 // app-server launched with the FIRST session's SPEXCODE_SESSION_ID baked in. The agent's shell tool (its
@@ -72,4 +72,40 @@ test('claude is unaffected: CLAUDE_CODE_SESSION_ID == its record id resolves to 
   process.env.SPEXCODE_SESSION_ID = 'id_A'
   process.env.CLAUDE_CODE_SESSION_ID = 'id_A'
   assert.equal(envSessionId(), 'id_A')
+})
+
+// Absence splits in two and only one half is an alias question. An id that OWNS a store directory is already
+// one of ours — a sentinel-only self-launched agent has a store dir and no record — so its emptiness is a
+// settled fact about THAT session. Resolution must stop there rather than search the store, both because
+// another record could otherwise answer under a live session's own name and because the turn-failure
+// supervisor reconciles every record once a second: one record-less store dir meant a whole-store re-read and
+// re-parse per tick (measured on a live 339-session store with 176 record-less dirs: 60,003 reads/second).
+
+test('a store dir with no record never resolves to another record that aliases its name', () => {
+  // id_ghost owns a store dir and wrote no record; id_C's harness_session_id happens to equal that name.
+  writeRecord('id_C', 'id_ghost')
+  mkdirSync(sessionStoreDir('id_ghost'), { recursive: true })
+  try {
+    const entry = readAliasedRecordEntry('id_ghost')
+    assert.equal(entry.kind, 'absent')   // the live session's own name is not answerable by id_C
+  } finally {
+    rmSync(sessionStoreDir('id_ghost'), { recursive: true, force: true })
+    rmSync(sessionStoreDir('id_C'), { recursive: true, force: true })
+  }
+})
+
+test('resolving a record-less store dir does not enumerate the store', { skip: process.getuid?.() === 0 && 'root bypasses directory permissions' }, () => {
+  // `--x` on the sessions root still permits path traversal (so the store-dir check answers) but makes
+  // readdirSync fail — and listSessionIds is fail-loud on any non-ENOENT readdir error. So a scan is
+  // observable here as a throw, and its absence is the proof that resolution stopped at the store dir.
+  mkdirSync(sessionStoreDir('id_quiet'), { recursive: true })
+  const root = dirname(sessionStoreDir('id_quiet'))
+  chmodSync(root, 0o111)
+  try {
+    assert.throws(() => readdirSync(root), 'the --x root must make enumeration fail for this proof to mean anything')
+    assert.equal(readAliasedRecordEntry('id_quiet').kind, 'absent')
+  } finally {
+    chmodSync(root, 0o755)
+    rmSync(sessionStoreDir('id_quiet'), { recursive: true, force: true })
+  }
 })

@@ -7,14 +7,17 @@ scenarios:
     related: [spec-cli/src/index.ts, spec-cli/src/cockpit.ts]
     description: >
       In an isolated real Git project and real Spex backend, create a governed session through
-      `POST /api/sessions`, commit work on its branch, and read `GET /api/sessions/:id/review`. Advance that
-      branch by one more commit after the first response and read it again. Use Git itself as the independent
-      oracle for both object ids.
+      `POST /api/sessions`, commit work on its branch, and read `GET /api/sessions/:id/review`. Advance both
+      that branch and the canonical base after the first response and read it again. During another read, move the
+      canonical ref after the first pair snapshot but before review assembly finishes. Capture the backend's Git argv
+      and use Git itself as the independent oracle for both object-id pairs and the review facts.
     expected: >
-      Every successful review response carries the full exact Git object id used for its committed review
-      facts. The first response remains bound to the first object after the branch advances; the second names
-      the new object. A moving symbolic HEAD is never returned as authority, and a response never labels
-      ahead, merge-base diff, or conflict work computed from another branch generation.
+      Every successful review response carries full exact `branchHead` and `baseHead` object ids from one ref
+      snapshot. The first pair remains bound after either ref advances; the second names the new pair. Ahead,
+      merge-base diff, and conflict commands consume those OIDs, never a moving symbolic branch, `HEAD`, or
+      canonical base name, and their results equal Git's independent answer for the published pair. A ref that moves
+      during assembly makes that read fail with `session_review_head_changed`; the next stable read publishes the new
+      pair rather than a mixed-generation answer.
   - name: review-reports-measured-loss-without-grading-it
     tags: [backend-api]
     test: spec-cli/test/cockpit-eval-readout.mjs

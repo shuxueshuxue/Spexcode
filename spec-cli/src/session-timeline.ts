@@ -18,8 +18,17 @@ export type TimelineEvent =
   | { ts: string; kind: 'status'; status: Lifecycle; proposal: Proposal | null; note: string | null; display?: string }
   | { ts: string; kind: 'sent'; mid: string; text: string; from: string | null; replyVia?: 'note' }
 
-export type SentDispatchReceipt = { operation: 'merge'; requestDigest: string; payloadHash: string }
-type StoredTimelineEvent = TimelineEvent & { dispatchReceipt?: SentDispatchReceipt }
+export type SentDispatchReceipt = {
+  operation: 'merge'
+  requestDigest: string
+  payloadHash: string
+  delivery?: { text: string; from: string | null }
+}
+type DispatchSettlement = { ts: string; kind: 'dispatch-settled'; operation: 'merge'; requestDigest: string; mid: string }
+type StoredTimelineEvent =
+  | Extract<TimelineEvent, { kind: 'status' }>
+  | (Extract<TimelineEvent, { kind: 'sent' }> & { dispatchReceipt?: SentDispatchReceipt })
+  | DispatchSettlement
 
 const timelinePath = (id: string): string => sessionArtifactPath(id, 'timeline.ndjson')
 const segmentsDir = (id: string): string => sessionArtifactPath(id, 'timeline')
@@ -76,10 +85,10 @@ function append(id: string, ev: StoredTimelineEvent): void {
 function parseLines(lines: string[]): StoredTimelineEvent[] {
   return lines.map((l) => {
     try { return JSON.parse(l) as StoredTimelineEvent } catch { return null }
-  }).filter((e): e is StoredTimelineEvent => e != null && (e.kind === 'status' || e.kind === 'sent'))
+  }).filter((e): e is StoredTimelineEvent => e != null && (e.kind === 'status' || e.kind === 'sent' || e.kind === 'dispatch-settled'))
 }
 
-function tailLines(path: string, limit: number): string[] {
+function tailPublicEvents(path: string, limit: number): Exclude<StoredTimelineEvent, DispatchSettlement>[] {
   let fd: number | null = null
   try {
     const size = statSync(path).size
@@ -91,10 +100,13 @@ function tailLines(path: string, limit: number): string[] {
       const buf = Buffer.alloc(start - next)
       readSync(fd, buf, 0, buf.length, next)
       text = buf.toString('utf8') + text
-      if (text.split('\n').filter(Boolean).length >= limit || next === 0) break
+      const publicCount = parseLines(text.split('\n').filter(Boolean)).filter((event) => event.kind !== 'dispatch-settled').length
+      if (publicCount >= limit || next === 0) break
       start = next
     }
-    return text.split('\n').filter(Boolean).slice(-limit)
+    return parseLines(text.split('\n').filter(Boolean))
+      .filter((event): event is Exclude<StoredTimelineEvent, DispatchSettlement> => event.kind !== 'dispatch-settled')
+      .slice(-limit)
   } catch { return [] }
   finally { if (fd !== null) closeSync(fd) }
 }
@@ -118,15 +130,39 @@ export function appendSent(id: string, text: string, from: string | null, replyV
   return { mid }
 }
 
-export function sentDispatchReceipt(id: string, operation: SentDispatchReceipt['operation'], requestDigest: string): { mid: string; payloadHash: string } | null {
+export type SentDispatchState = {
+  mid: string
+  payloadHash: string
+  delivery: SentDispatchReceipt['delivery'] | null
+  delivered: boolean
+}
+
+export function sentDispatchReceipt(id: string, operation: SentDispatchReceipt['operation'], requestDigest: string): SentDispatchState | null {
+  let found: Omit<SentDispatchState, 'delivered'> | null = null
+  const settled = new Set<string>()
   for (const path of timelineFiles(id)) {
     for (const event of parseLines(readFileSync(path, 'utf8').split('\n').filter(Boolean))) {
-      if (event.kind === 'sent' && event.dispatchReceipt?.operation === operation && event.dispatchReceipt.requestDigest === requestDigest) {
-        return { mid: event.mid, payloadHash: event.dispatchReceipt.payloadHash }
+      if (event.kind === 'sent' && !found && event.dispatchReceipt?.operation === operation && event.dispatchReceipt.requestDigest === requestDigest) {
+        found = { mid: event.mid, payloadHash: event.dispatchReceipt.payloadHash, delivery: event.dispatchReceipt.delivery ?? null }
+      } else if (event.kind === 'dispatch-settled' && event.operation === operation && event.requestDigest === requestDigest) {
+        settled.add(event.mid)
       }
     }
   }
-  return null
+  return found ? { ...found, delivered: settled.has(found.mid) } : null
+}
+
+export function settleSentDispatch(id: string, mid: string): void {
+  let receipt: SentDispatchReceipt | null = null
+  let settled = false
+  for (const path of timelineFiles(id)) {
+    for (const event of parseLines(readFileSync(path, 'utf8').split('\n').filter(Boolean))) {
+      if (event.kind === 'sent' && event.mid === mid && event.dispatchReceipt?.delivery) receipt = event.dispatchReceipt
+      if (event.kind === 'dispatch-settled' && event.mid === mid) settled = true
+    }
+  }
+  if (!receipt || settled) return
+  append(id, { ts: new Date().toISOString(), kind: 'dispatch-settled', operation: receipt.operation, requestDigest: receipt.requestDigest, mid })
 }
 
 // The unowned read: any process may take it with nothing but filesystem access, and taking it perturbs
@@ -134,7 +170,12 @@ export function sentDispatchReceipt(id: string, operation: SentDispatchReceipt['
 export function timelineEvents(id: string): TimelineEvent[] {
   try {
     return timelineFiles(id).flatMap((path) => parseLines(readFileSync(path, 'utf8').split('\n').filter(Boolean)))
-      .map(({ dispatchReceipt: _receipt, ...event }) => event as TimelineEvent)
+      .flatMap((stored): TimelineEvent[] => {
+        if (stored.kind === 'dispatch-settled') return []
+        if (stored.kind === 'status') return [stored]
+        const { dispatchReceipt: _receipt, ...event } = stored
+        return [event]
+      })
   } catch { return [] }
 }
 
@@ -181,14 +222,15 @@ export function readTimeline(id: string, limit = 500): { events: TimelineEvent[]
   try { raw = readAliasedRawRecord(id) } catch { return null }
   if (!raw || !raw.governed) return null
   const wanted = Math.max(1, limit)
-  const tail: TimelineEvent[] = []
+  const tail: Exclude<StoredTimelineEvent, DispatchSettlement>[] = []
   for (const path of timelineFiles(id).reverse()) {
     const remaining = wanted - tail.length
     if (remaining <= 0) break
-    tail.unshift(...parseLines(tailLines(path, remaining)))
+    tail.unshift(...tailPublicEvents(path, remaining))
   }
   return { events: tail.map((e) => {
-    const { dispatchReceipt: _receipt, ...event } = e as StoredTimelineEvent
-    return event.kind === 'status' ? { ...event, display: timelineDisplay(event) } : event
+    if (e.kind === 'status') return { ...e, display: timelineDisplay(e) }
+    const { dispatchReceipt: _receipt, ...event } = e
+    return event
   }) }
 }

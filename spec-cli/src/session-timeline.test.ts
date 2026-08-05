@@ -5,7 +5,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { appendSent, lastHumanSendVia, readTimeline, sentDispatchReceipt, timelineEvents } from './session-timeline.js'
+import { appendSent, lastHumanSendVia, readTimeline, sentDispatchReceipt, settleSentDispatch, timelineEvents } from './session-timeline.js'
 import { pendingMessages } from './delivery-queue.js'
 import { rvSock } from './harness.js'
 import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
@@ -301,13 +301,38 @@ test('a dispatch receipt is durable for replay but absent from public timeline e
   withHome(home, () => {
     const receipt = { operation: 'merge' as const, requestDigest: 'a'.repeat(64), payloadHash: 'b'.repeat(64) }
     const appended = appendSent(ID, 'merge intent', null, undefined, receipt)
-    assert.deepEqual(sentDispatchReceipt(ID, 'merge', receipt.requestDigest), { mid: appended.mid, payloadHash: receipt.payloadHash })
+    assert.deepEqual(sentDispatchReceipt(ID, 'merge', receipt.requestDigest), {
+      mid: appended.mid, payloadHash: receipt.payloadHash, delivery: null, delivered: false,
+    })
     const internalRead = timelineEvents(ID)
     assert.equal(internalRead.length, 1)
     assert.ok(!('dispatchReceipt' in internalRead[0]))
     const publicRead = readTimeline(ID)
     assert.ok(publicRead)
     assert.ok(!('dispatchReceipt' in publicRead.events[0]))
+  })
+})
+
+test('a recoverable dispatch receipt settles privately without displacing the public tail', () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home)
+  withHome(home, () => {
+    const receipt = {
+      operation: 'merge' as const,
+      requestDigest: 'c'.repeat(64),
+      payloadHash: 'd'.repeat(64),
+      delivery: { text: 'transport merge intent', from: null },
+    }
+    const appended = appendSent(ID, 'merge intent', null, undefined, receipt)
+    assert.deepEqual(sentDispatchReceipt(ID, 'merge', receipt.requestDigest), {
+      mid: appended.mid, payloadHash: receipt.payloadHash, delivery: receipt.delivery, delivered: false,
+    })
+    settleSentDispatch(ID, appended.mid)
+    assert.deepEqual(sentDispatchReceipt(ID, 'merge', receipt.requestDigest), {
+      mid: appended.mid, payloadHash: receipt.payloadHash, delivery: receipt.delivery, delivered: true,
+    })
+    assert.deepEqual(timelineEvents(ID).map((event) => event.kind), ['sent'])
+    assert.deepEqual(readTimeline(ID, 1)?.events.map((event) => event.kind), ['sent'])
   })
 })
 

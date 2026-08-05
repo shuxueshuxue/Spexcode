@@ -211,6 +211,7 @@ export type SessRec = {
   launchOwner: string | null // stable public-backend authority while queued; null for active/legacy records
   createRequestId?: string | null // digest of the public Idempotency-Key; binds retry without storing the bearer
   createPayloadHash?: string | null // exact normalized create payload bound to createRequestId
+  base?: string | null   // explicit fork point the creator pinned; absent/null = the auto-detected source-of-truth branch
   launchReadinessPending?: LaunchReadinessPending | null // internal resume candidate; every public reader projects `original` until one final publish
 }
 type LaunchReadinessOriginal = Pick<SessRec, 'status' | 'proposal' | 'note' | 'stopped' | 'archived' | 'coldProof' | 'adapterRecovery'>
@@ -406,6 +407,7 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     launchOwner: launchOwner || null,
     createRequestId: raw.create_request_id || null,
     createPayloadHash: raw.create_payload_hash || null,
+    base: raw.base || null,             // records written before pinned bases → null → the source-of-truth branch
     launchReadinessPending: pendingRaw ? {
       version: 1,
       startedAt: (raw.launch_readiness_pending as { startedAt: number }).startedAt,
@@ -473,6 +475,9 @@ function writeRecord(rec: SessRec): void {
     launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
     create_request_id: rec.createRequestId ?? '',
     create_payload_hash: rec.createPayloadHash ?? '',
+    // Written only when the creator pinned one: an unpinned record keeps its exact legacy bytes, so a
+    // restore-the-frozen-record path stays byte-identical instead of silently gaining a key.
+    ...(rec.base ? { base: rec.base } : {}),
     launch_readiness_pending: rec.launchReadinessPending ? {
       version: 1,
       startedAt: rec.launchReadinessPending.startedAt,
@@ -686,10 +691,12 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
 // Share one liveness snapshot rather than spawning tmux for every displayed session.
 export type LiveSnap = { probeFailed: boolean; windows: Map<string, PaneProbe>; titles: Map<string, string>; sockets: Set<string>; unproven: Set<string> }
 
-// tmux 3.5a replaces literal tabs in a format string with underscores. A record separator is emitted as this
-// printable escape on both supported tmux versions, while titles remain free to contain tabs.
+// tmux rewrites CONTROL characters in a format string before printing them — 3.6a turns both a tab and a raw
+// 0x1f into `_`, while 3.4 turns a raw 0x1f into the printable escape `\037`. So the field separator is ASKED
+// FOR as that printable text, which every supported version passes through untouched, and the format is built
+// from the same constant the parser splits on: the two can no longer disagree about what tmux actually emits.
 const TMUX_PANE_SEPARATOR = '\\037'
-const TMUX_PANE_FORMAT = '#{session_name}\x1f#{pane_pid}\x1f#{pane_title}'
+export const TMUX_PANE_FORMAT = `#{session_name}${TMUX_PANE_SEPARATOR}#{pane_pid}${TMUX_PANE_SEPARATOR}#{pane_title}`
 
 // First pane per session wins; split only twice so titles may contain the field separator.
 export function parseLivePanes(out: string): Map<string, { panePid?: number; title?: string }> {
@@ -978,6 +985,14 @@ export async function sessionPrompt(id: string): Promise<string | null> {
 // Preserve rows through a transient record-read failure; prune after the store entry disappears.
 const lastKnownSession = new Map<string, Session>()
 
+// A BOARD row carries the launch ask only as its one-line preview. The full text is served by the
+// id-addressed record detail, which reads the stored prompt itself and overrides this field — so the list
+// never had a reader for it. Shipping it made the body grow with total ask LENGTH instead of session count
+// (measured on the adopter-a board: 2192 KB of a 2218 KB default body, 27 KB of which was actual board data)
+// and pinned the same bytes in `lastKnownSession` for the life of the process. The CREATE response keeps the
+// full text: it is a receipt for one ask the caller just made, not a row in a list of many.
+const boardRow = (s: Session): Session => { s.prompt = null; return s }
+
 export async function listSessions(includeArchived = false): Promise<Session[]> {
   // ONE store enumeration + ONE tmux snapshot (windows + pane pids + titles, merged) for the whole list, then
   // every session reconciles by a pure set lookup + one existsSync — no per-session tmux spawn.
@@ -1025,7 +1040,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     // A forced public liveness comes only from the shared record projection. Do not let live process/thread
     // evidence punch through it (including archive hazard repair).
     if (entry.kind === 'ok' && entry.liveness === 'offline') {
-      const pending = toSession(rec, 'offline', 'offline')
+      const pending = boardRow(toSession(rec, 'offline', 'offline'))
       lastKnownSession.set(id, pending)
       return pending
     }
@@ -1049,7 +1064,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     const cleanCold = rec.archived && !changedDuringCensus.has(id) && hasValidColdProof(rec) && physical === 'offline' && (!residentRequired || resident?.healthy === true)
     const projected = rec.archived && !cleanCold ? { ...rec, archived: false, stopped: false } : rec
     const projectedLv = projected === rec ? liveness(rec, snap) : physical!
-    const s = toSession(projected, reconcile(projected, snap), projectedLv, activity)
+    const s = boardRow(toSession(projected, reconcile(projected, snap), projectedLv, activity))
     if (projected !== rec) s.archiveHazard = changedDuringCensus.has(id)
       ? 'archived runtime hazard: record changed while adapter residency was being reconciled; retry exact archive'
       : hasValidColdProof(rec)
@@ -1674,7 +1689,7 @@ export class SessionCreateError extends Error {
     this.name = 'SessionCreateError'
   }
 }
-type SessionCreateContext = { id: string; requestDigest: string; payloadHash: string; signal: AbortSignal }
+type SessionCreateContext = { id: string; requestDigest: string; payloadHash: string; signal: AbortSignal; base?: string | null }
 type SessionCreateRequestOptions = {
   requestKey?: string
   signal?: AbortSignal
@@ -1723,7 +1738,7 @@ function throwIfCreateAborted(signal: AbortSignal, phase: SessionCreatePhase): v
 export async function sessionCreateRequest(body: unknown, options: SessionCreateRequestOptions = {}): Promise<SessionCreateRequestResult> {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { status: 400, error: 'body must be a JSON object' }
   const input = body as Record<string, unknown>
-  const unknown = Object.keys(input).filter((key) => !['prompt', 'parent', 'launcher', 'name'].includes(key)).sort()
+  const unknown = Object.keys(input).filter((key) => !['prompt', 'parent', 'launcher', 'name', 'base'].includes(key)).sort()
   if (unknown.length) return { status: 400, error: `unknown session-create field${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}` }
   const prompt = typeof input.prompt === 'string' ? input.prompt : ''
   if (!prompt.trim()) return { status: 400, error: 'empty prompt' }
@@ -1731,6 +1746,8 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   const parent = typeof input.parent === 'string' && input.parent.trim() ? input.parent.trim() : null
   if (input.name !== undefined && typeof input.name !== 'string') return { status: 400, error: 'session-create name must be a string' }
   const name = typeof input.name === 'string' && input.name.trim() ? input.name.trim() : null
+  if (input.base !== undefined && typeof input.base !== 'string') return { status: 400, error: 'session-create base must be a string' }
+  const base = typeof input.base === 'string' && input.base.trim() ? input.base.trim() : null
   let key: string
   try { key = normalizeCreateKey(options.requestKey) }
   catch (error) {
@@ -1740,8 +1757,9 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   const requestDigest = digest(key)
   const id = sessionIdForCreateKey(key)
   // Keep no-name retries byte-compatible with pre-name receipts; an explicit non-empty name is one more
-  // immutable creation input because it publishes the record's existing display override.
-  const payloadHash = digest(JSON.stringify({ prompt, parent, launcher: launcher ?? null, ...(name ? { name } : {}) }))
+  // immutable creation input because it publishes the record's existing display override. `base` joins them
+  // for the same reason and with the same shape: absent, it must not perturb an existing receipt's bytes.
+  const payloadHash = digest(JSON.stringify({ prompt, parent, launcher: launcher ?? null, ...(name ? { name } : {}), ...(base ? { base } : {}) }))
   const controller = new AbortController()
   const cancel = () => controller.abort(new SessionCreateError('session_create_cancelled', 'request', 'session creation caller disconnected', 408))
   if (options.signal?.aborted) cancel()
@@ -1751,7 +1769,7 @@ export async function sessionCreateRequest(body: unknown, options: SessionCreate
   traceSessionCreate(id, requestDigest, 'request', 'start')
   try {
     try {
-      const session = await prepareSession(prompt, parent, launcher, name, { id, requestDigest, payloadHash, signal: controller.signal })
+      const session = await prepareSession(prompt, parent, launcher, name, { id, requestDigest, payloadHash, base, signal: controller.signal })
       traceSessionCreate(id, requestDigest, 'request', 'finish')
       return { status: 201, session }
     } catch (error) {
@@ -1800,12 +1818,12 @@ async function probeSessionCreateAuthority(target: ApiBaseInfo): Promise<boolean
     return false
   } finally { clearTimeout(timer) }
 }
-export async function createSession(prompt: string, launcher?: string, name?: string): Promise<Session> {
+export async function createSession(prompt: string, launcher?: string, name?: string, base?: string): Promise<Session> {
   const parent = ownSessionId()
   const requestKey = randomUUID()
-  const body = { prompt, parent, launcher, ...(name !== undefined ? { name } : {}) }
+  const body = { prompt, parent, launcher, ...(name !== undefined ? { name } : {}), ...(base !== undefined ? { base } : {}) }
   const target = await apiBaseInfo()
-  const base = target.url
+  const apiUrl = target.url
   const refused = await probeSessionCreateAuthority(target)
   if (refused) {
     console.error('spex: no backend reachable — launching in-process (caller env owns auth, no concurrency cap)')
@@ -1820,7 +1838,7 @@ export async function createSession(prompt: string, launcher?: string, name?: st
   timer.unref?.()
   let res: Response
   try {
-    res = await fetch(`${base}/api/sessions`, {
+    res = await fetch(`${apiUrl}/api/sessions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Idempotency-Key': requestKey },
       body: JSON.stringify(body),
@@ -2088,7 +2106,7 @@ async function proveSessionCandidate(path: string, branch: string, signal: Abort
 }
 
 async function prepareSession(prompt: string, parent: string | null, launcher: string | undefined, name: string | null, context: SessionCreateContext): Promise<Session> {
-  const { id, requestDigest, payloadHash, signal } = context
+  const { id, requestDigest, payloadHash, base, signal } = context
   let phase: SessionCreatePhase = 'creation-lock'
   let shouldDrain = false
   traceSessionCreate(id, requestDigest, phase, 'start')
@@ -2127,6 +2145,16 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
       const title = ref ? null : titleFromPrompt(rawPrompt)
       const slug = `${slugify(ref || title)}-${id.slice(0, 4)}`
       const root = mainRoot()
+      // An explicit base pins the fork point so a run is reproducible against a frozen commit instead of
+      // whatever the source-of-truth branch has drifted to. Resolve it here, before any git mutation: an
+      // unknown ref must fail the create request outright, never leave a half-made worktree behind.
+      const startPoint = base ?? mainBranch()
+      if (base) {
+        const resolved = await withGitAbortSignal(signal, () => gitTry(['-C', root, 'rev-parse', '--verify', '--quiet', `${base}^{commit}`]))
+        if (!resolved.ok || !resolved.stdout.trim()) {
+          throw new SessionCreateError('session_create_failed', phase, `session-create base does not name a commit: ${base}`, 400)
+        }
+      }
       const branch = `${readConfig(dirname(gitCommonDir())).branchPrefix ?? 'node/'}${slug}`
       const path = join(root, '.worktrees', slug)
       const spec = ref ? launchSpecs?.find((node) => node.id === ref) : undefined
@@ -2184,7 +2212,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           gitMutationStarted = true
           traceSessionCreate(id, requestDigest, phase, 'start', 'worktree-add')
           const added = await withGitAbortSignal(signal, () => gitTry(
-            ['-C', root, 'worktree', 'add', '-b', branch, path, mainBranch()],
+            ['-C', root, 'worktree', 'add', '-b', branch, path, startPoint],
             { extraEnv: DEFER_FOOTPRINT_REFRESH },
           ))
           traceSessionCreate(id, requestDigest, phase, 'finish', 'worktree-add')
@@ -2205,6 +2233,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
             status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
             harness: h.id, harnessSessionId: null, stopped: false, archived: false, coldProof: null, adapterRecovery: null, launcher: chosen.name,
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
+            ...(base ? { base } : {}),
           }
           owned.store = true
           const dir = storeDir(id)

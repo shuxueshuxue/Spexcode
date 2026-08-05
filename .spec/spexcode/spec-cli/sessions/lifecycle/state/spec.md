@@ -90,8 +90,12 @@ BOTH and owned by [[archive]] — it never reads as a status and never rewrites 
   one bounded call; under heavy load it can time out — a timed-out probe means we **cannot tell** who is alive,
   categorically different from "tmux is up and this session is gone," so those rows yield `unknown`, rendered
   **probe-failed**, never `offline`/`closed`, and the row **never vanishes** (enumerated from the durable
-  store). Its three pane fields use a tmux-version-neutral boundary, so the session id remains addressable even
-  where a tmux version rewrites literal tabs in format output. The **listener probe is tri-state for the same reason**:
+  store). Its three pane fields are separated by a **printable** boundary that the format asks for and the parser
+  splits on as ONE constant, because tmux itself rewrites control characters in a format string on the way out
+  (a tab and a raw `0x1f` both become `_` on 3.6a; a raw `0x1f` becomes the printable escape `\037` on 3.4). A
+  separator that survives one version and not the next is worse than a wrong reading on one row: no session is
+  seen to own a window at all, so every live agent's row degrades to `unknown` at once.
+  The **listener probe is tri-state for the same reason**:
   only a completed connect (`live`) or an instant refusal/absence (`ECONNREFUSED` off a stale socket file /
   `ENOENT` — proven `dead`) settle the question; a connect **timeout** (a thrashed loop fires the timer before
   the pending connect) or **EAGAIN** (a full backlog — a listener alive-but-busy) are `unproven`, read

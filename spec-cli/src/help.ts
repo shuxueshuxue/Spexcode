@@ -37,11 +37,13 @@ type SessionVerbHelp = readonly [usage: string | readonly string[], detail: stri
 // Keeping the behavioral prose here prevents a compact probe from becoming a second, drifting manual.
 function sessionHelpDefinitions(): Record<string, SessionVerbHelp> {
   return {
-    new: ['spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>] [--name <name>]',
+    new: ['spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>] [--name <name>] [--base <commit-ish>]',
       `Launch a worker in its own node worktree. The materialized system contract reaches it
 automatically; the prompt supplies the task context. Its first [[id]] mention binds the
 session to that node. --prompt-file <path>|- carries a long prompt without shell quoting
 (exclusive with the inline prompt). --name sets the session's initial display name without changing the prompt.
+--base <commit-ish> pins the fork point instead of the source-of-truth branch's current head, so a run can be
+reproduced against a frozen commit; a base that names no commit is refused before anything is created.
 The successful receipt names what to read, monitor, and reply on.`],
     ls: ['spex session ls [SEL…] [--status a,b] [--all] [--json]',
       'One-shot table of living sessions. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.', ['selector']],

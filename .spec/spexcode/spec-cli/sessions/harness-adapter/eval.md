@@ -155,12 +155,30 @@ scenarios:
       dispatch.sh with SPEXCODE_SESSION_ID=P exported. Also simulate the two legit env uses: the parent's
       own payload (session_id=P) and a payload with NO session_id at all. Read record P after each.
     expected: >-
-      The child's hook resolves to ITS payload id (S-child, non-governed, no record → the board-lifecycle
-      hooks no-op) and record P stays `parked` with its note intact — a parent's declared state survives
-      its own subagents' activity (the measured failure: every park was clobbered back to `active` within
-      seconds by inherited-env mark-active, so the session read `working` on the board forever). The
-      parent's own payload still writes P, and a payload-less event still falls back to the env id — the
-      payload wins only when present, mirroring the codex alias rule one case below.
+      Record P stays `parked` with its note intact — a parent's declared state survives its own subagents'
+      activity (the measured failure: every park was clobbered back to `active` within seconds by
+      inherited-env mark-active, so the session read `working` on the board forever). What holds it is the
+      payload's own `agent_id` stamp, refusing the child's board write BEFORE any id resolution — so it holds
+      whichever id the child's payload carries: the parent's (what claude 2.1.207 sends) resolves straight to
+      P, and one naming no record falls back to the env parent, which is P again (see
+      `remint-identity-reaches-the-launched-record`). The parent's own
+      payload still writes P, and a payload-less event still falls back to the env id.
+  - name: remint-identity-reaches-the-launched-record
+    tags: [backend-api]
+    code: spec-cli/hooks/harness.sh
+    description: >-
+      A governed claude session whose harness re-mints its conversation id mid-session (compaction /
+      continuation): the record was launched under id L and its `harness_session_id` is empty, while every
+      later hook payload carries a NEW id N that names no record. Drive the REAL hook surface — pipe a
+      PreToolUse payload with session_id=N into dispatch.sh with SPEXCODE_SESSION_ID=L exported — and read
+      the launched record afterwards. Repeat with a payload whose id IS resolvable, which must still win.
+    expected: >-
+      The hook reaches record L and stamps it (an AskUserQuestion call leaves it `asking`), because a payload
+      id that resolves to no record is not an identity — it is a miss, and the launched record is the only
+      identity the hook can prove. Before this, every board-lifecycle hook silently no-opped against a
+      phantom `<store>/sessions/<N>/` directory: the stop gate never fired and the session read `active` on
+      the board forever after its agent had stopped. A payload id that DOES resolve still wins over the env,
+      so the codex thread alias and the subagent case above are untouched.
   - name: codex-apply-patch-triggers-spec-hooks
     tags: [backend-api]
     description: >-

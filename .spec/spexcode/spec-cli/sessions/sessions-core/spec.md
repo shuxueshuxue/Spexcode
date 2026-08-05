@@ -61,7 +61,12 @@ the local snapshot exists; the explicit post-seed materialize is the transaction
 session objects it assembles carry their display strings pre-derived (`label`/`title`), a current `files`
 projection read from the session-owned `files.json`, and hide the
 bare name parts under `raw` — that naming seam's contract (chains, wire shape, enforcement) is
-[[session-label]]'s. Cross-feature defaults that must be read by the backend at runtime live here as the
+[[session-label]]'s. **A row in a LIST carries the originating ask only as its one-line preview.** The full
+text is served by the id-addressed record detail, which reads the stored prompt itself; a create response is
+a receipt for one ask and keeps it whole. So the list body stays proportional to the NUMBER of sessions
+rather than to the total length of what was asked — otherwise one long ask outweighs the entire rest of the
+board, on every poll and in the last-known-row cache, to serve a field no list reader consults.
+Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature
 node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[session-follow]],
 [[session-selectors]], [[agent-reply-channel]], [[spec-pointer]]) specializes a slice of it and lists it
@@ -95,6 +100,17 @@ proven mismatch. Timeout, reset, DNS, and every other transport result fail with
 received HTTP response is never relabelled `backend_availability_indeterminate`. The instance authority wall
 remains its independent 1500ms budget: the optional recorded-endpoint health read is discovery only and never
 consumes that budget.
+
+**A create may pin its fork point.** Creation accepts an optional `base` — any commit-ish the main checkout can
+resolve. Absent, the session forks from the auto-detected source-of-truth branch, i.e. from whatever that branch
+has drifted to at the moment the worktree is made; that is right for ordinary work but leaves a run against a
+frozen commit inexpressible, so an evaluation, a bisect, or a replay could not name the code it actually ran on.
+A supplied `base` is resolved during target resolution, BEFORE any Git mutation: one that names no commit fails
+the request with a 400 and leaves no half-made worktree, branch, store, or private candidate receipt behind. A
+resolved pin becomes the `git worktree add` start point and is stored on the record, so a later reader can tell
+a pinned run from an unpinned one. It also joins the idempotency payload hash — a retry that changes the pin is
+a different request, not the same one — while an unpinned create keeps its exact legacy record bytes and
+receipt hash, so nothing that never pinned gains a field.
 
 **Exclusion lives in the lock, never in a privileged process.** The per-session record lock is a filesystem
 lock with a PID liveness check, held across processes, so a session operation may run in whatever process

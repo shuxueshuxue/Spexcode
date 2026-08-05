@@ -276,6 +276,7 @@ export type RawRecord = {
   launch_cmd?: string // the RESOLVED base launcher command PINNED at creation, so a resume replays the EXACT launcher (and its config-dir env) that made the conversation, never a since-changed default ([[launcher-select]] resume-launcher-pin); absent → old record, fall back to the launcher name / ambient
   create_request_id?: string // SHA-256 digest of the create Idempotency-Key; the raw key is never persisted
   create_payload_hash?: string // normalized create payload bound to create_request_id
+  base?: string // the exact fork point pinned at creation; absent/empty → the auto-detected source-of-truth branch
   launch_readiness_pending?: '' | RawLaunchReadinessPending
 }
 

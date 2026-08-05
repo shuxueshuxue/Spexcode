@@ -184,6 +184,15 @@ surface:
   a harness adds an adapter (with its `clean`), never a prune branch in materialize.
 - **payload accessors** — read `session_id`, the edited-file path (Claude `tool_input.file_path` vs Codex
   `apply_patch` command — Codex has NO `file_path`), and notification type, from a hook's stdin.
+- **acting identity** — which id a hook acts on. The payload's `session_id` is the acting thread, so it is
+  preferred; the launched `SPEXCODE_SESSION_ID` in the hook's env is the fallback. That preference is
+  RESOLUTION-AWARE, never blind: a payload id wins only when a record answers to it (directly, or through the
+  `harness_session_id` alias a backend captured at thread start). A harness may re-mint its conversation id
+  mid-session — a claude compaction/continuation does — while the record keeps the launched one, and a blindly
+  preferred payload id then names no record at all. Every record-dependent hook (the lifecycle gates, the
+  freshness stamp, the failure path) would silently no-op and the session would read `working` forever, with no
+  error on any surface. So an unresolvable payload id falls back to the launched id, and an unresolvable
+  divergence is the only case that costs a store read: when the two ids agree, nothing is read.
 - **launch / sessionId** — the launch command and id model: Claude `claude --session-id <uuid> [--worktree]`
   (caller chooses the id); Codex `codex` under the launcher's configured approval/sandbox policy (id is codex-assigned — the backend
   owns it via `thread/start` at launch and resumes by it). The agent-typed CLI resolves its own id via the

@@ -240,12 +240,13 @@ test('boardCache scope: sessions-scoped splices (skips node work), full-scoped (
   assert.equal(b4.nodes, b3.nodes, 'a session-only patrol repair must splice, not promote to full')
   assert.equal(b4.sessions[0].note, 'patrol session repair')
 
-  // The prompt is a separate store artifact but a first-class board row field. A missed prompt write must move
-  // the sessions revision just like session.json, without paying for a node rebuild.
+  // The prompt is a separate store artifact that a board row carries as its one-line preview. A missed prompt
+  // write must move the sessions revision just like session.json, without paying for a node rebuild — the
+  // preview is what the row exposes, so it is what proves the artifact was re-read.
   writeFileSync(layout.sessionArtifactPath(SESS_ID, 'prompt'), 'A newly discovered originating prompt.\n')
   const b5 = await cache.patrolBoard()
   assert.equal(b5.nodes, b4.nodes, 'a prompt-only repair remains sessions-scoped')
-  assert.equal(b5.sessions[0].prompt, 'A newly discovered originating prompt.\n')
+  assert.equal(b5.sessions[0].promptPreview, 'A newly discovered originating prompt.')
 })
 
 // ---------------------------------------------------------------------------------------------------------

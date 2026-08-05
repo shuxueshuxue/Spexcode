@@ -138,7 +138,9 @@ try {
   const dashboardCreated = await waitFor(async () => {
     const response = await fetch(`http://127.0.0.1:${apiPort}/api/sessions?all=1`)
     if (!response.ok) return null
-    return (await response.json()).find((session) => session.prompt === dashboardPrompt) || null
+    // A board row carries the ask only as its one-line preview; the full text lives on the id-addressed
+    // detail. This prompt is shorter than HEADLINE_PREVIEW_COLUMNS, so its preview is the ask verbatim.
+    return (await response.json()).find((session) => session.promptPreview === dashboardPrompt) || null
   }, 'ordinary Dashboard-created session')
   assert.equal(dashboardCreated.raw.name, null, 'Dashboard creates without a hidden name payload')
   await page.locator(`.si-item[data-sid="${created.id}"] .sess-id`).waitFor({ state: 'visible', timeout: 15_000 })

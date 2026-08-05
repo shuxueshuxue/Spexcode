@@ -141,10 +141,10 @@ esac
   }
   let child = startBackend()
   const waitForHealth = () => waitFor(async () => { try { return (await fetch(`${base}/health`)).ok } catch { return false } }, 'backend health')
-  const post = (key: string, prompt = '[[target]] transaction fixture', signal?: AbortSignal, name?: string) => fetch(`${base}/api/sessions`, {
+  const post = (key: string, prompt = '[[target]] transaction fixture', signal?: AbortSignal, name?: string, pinnedBase?: string) => fetch(`${base}/api/sessions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'Idempotency-Key': key },
-    body: JSON.stringify({ prompt, parent: null, launcher: 'stall', ...(name ? { name } : {}) }),
+    body: JSON.stringify({ prompt, parent: null, launcher: 'stall', ...(name ? { name } : {}), ...(pinnedBase ? { base: pinnedBase } : {}) }),
     signal,
   })
   const rows = () => fetch(`${base}/api/sessions?all=1`).then((response) => response.json()) as Promise<any[]>
@@ -433,6 +433,26 @@ esac
       { gitDeath: 201, storeDeath: 201 },
       `same-key restart must recover both process-death stages; git=${JSON.stringify(gitRetryBody)} store=${JSON.stringify(storeRetryBody)}`,
     )
+
+    const pinnedCommit = git(project, 'rev-parse', 'staging')
+    execFileSync('git', ['-C', configuredMain, '-c', 'user.name=create-fixture', '-c', 'user.email=create@example.test',
+      'commit', '-q', '--allow-empty', '-m', 'drift the source-of-truth branch past the pin'])
+    assert.notEqual(git(project, 'rev-parse', 'staging'), pinnedCommit, 'the control drifts staging past the pinned commit')
+    const pinnedCreate = await post('base-pin', '[[target]] base pin fixture', undefined, undefined, pinnedCommit)
+    const pinnedSession = await pinnedCreate.json() as any
+    assert.equal(pinnedCreate.status, 201, `an explicit base publishes one session: ${JSON.stringify(pinnedSession)}`)
+    assert.equal(git(pinnedSession.path, 'rev-parse', 'HEAD'), pinnedCommit, 'the created worktree forks from the pinned commit, not the drifted branch head')
+    assert.equal(JSON.parse(readFileSync(recordPath(pinnedSession.id), 'utf8')).base, pinnedCommit, 'the durable record carries the pin it was created against')
+
+    // Earlier cases deliberately leave orphan receipts behind, so the claim is that a refused base adds
+    // nothing to them — not that the candidate directory is empty.
+    const baseState = () => ({ refs: nodeRefs(), worktrees: worktrees(), stores: sessionDirs(), receipts: candidateReceipts().sort() })
+    const beforeUnknownBase = baseState()
+    const unknownBase = await post('base-unknown', '[[target]] unknown base fixture', undefined, undefined, 'refs/heads/no-such-base')
+    const unknownBaseBody = await unknownBase.json() as any
+    assert.equal(unknownBase.status, 400, `a base naming no commit is refused: ${JSON.stringify(unknownBaseBody)}`)
+    assert.deepEqual({ code: unknownBaseBody.code, phase: unknownBaseBody.phase }, { code: 'session_create_failed', phase: 'target-resolution' })
+    assert.deepEqual(baseState(), beforeUnknownBase, 'a refused base mutates nothing — no worktree, no branch, no store, no candidate receipt')
 
   } finally {
     graphAbort.abort()

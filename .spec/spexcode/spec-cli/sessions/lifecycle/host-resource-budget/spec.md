@@ -121,6 +121,14 @@ stopped, archive, or proposal fields. Invalid lifecycle/proposal enum members ar
 candidate process cannot override the frozen/offline owner or reference projection. This is the same reading
 `/api/sessions`, graph, and settings expose.
 
+A record's harness id is registry data that outlives the config which created it, so a removed or renamed
+harness leaves a governed record this registry cannot resolve. The host report is a sweep over every record on
+disk rather than a request naming one harness, so one unresolvable record never aborts it. That record stays a
+visible session owner whose finding names the unknown id, its lifecycle is unknown, it joins no shared runtime,
+and reclaim is ineligible because stop safety cannot be proven for an adapter that cannot be resolved. Every
+other owner keeps its own findings. Resolving a harness at a request boundary stays fail-loud, because there
+the failure reaches whoever named that id.
+
 The sampler must stay cheaper than the work it governs. Shared-runtime probes read lightweight loaded-thread
 status only and never load whole conversation histories during a periodic sample.
 

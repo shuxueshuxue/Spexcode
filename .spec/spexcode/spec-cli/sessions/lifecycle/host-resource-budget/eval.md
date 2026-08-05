@@ -23,6 +23,20 @@ scenarios:
       backend owner, exact PID/start identities, RSS/PSS and sampled CPU against budgets, shared loaded/active
       references, orphan/identity-leak findings, advisory eligibility, and explicit unattributed cost. The read
       creates no plan or mutation token and changes no process, record, worktree, branch, port, or health state.
+  - name: unresolvable-harness-record-keeps-the-host-report
+    tags: [cli, backend-api]
+    description: >-
+      In an isolated throwaway project with its own SPEXCODE_HOME, runtime directory, and backend port, hold two
+      governed session records: one naming a harness id the running registry resolves and one naming an id it
+      cannot. That second state is what a removed plugin harness or a renamed harness id leaves behind; the public
+      create path validates the harness, so the record is placed in that state directly while every read under
+      measurement goes through the public surface. Read the host resource report through `GET /api/resources` and
+      through `spex session resources` in text and JSON.
+    expected: >-
+      The read returns a report rather than failing. Every resolvable owner still carries its own findings, and the
+      unresolvable record remains a visible session owner whose findings name the unknown harness id, with reclaim
+      ineligible because stop safety cannot be proven for a harness the registry cannot resolve. One unreadable
+      record never removes another owner's findings.
   - name: leaf-identity-changes-during-stop-guard
     tags: [backend-api]
     code: spec-cli/src/sessions.ts#killAgentProcess

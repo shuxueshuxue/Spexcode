@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { defaultHarness, HARNESSES, harnessById, sessionIdentityEnvVars, type HarnessLivenessRecord, type SharedRuntimeDescriptor, type SharedRuntimeProbe } from './harness.js'
+import { defaultHarness, HARNESSES, harnessById, harnessByIdOrNull, sessionIdentityEnvVars, type HarnessLivenessRecord, type SharedRuntimeDescriptor, type SharedRuntimeProbe } from './harness.js'
 import { listSessionIds, readConfig, readJsonConfig, readPublicRecordEntry, readRawRecord, runtimeRoot, type PublicRecordEntry, type RawRecord } from './layout.js'
 import { repoRoot } from './git.js'
 import { endpointRecordPath } from './host.js'
@@ -219,6 +219,31 @@ const runtimePid = (file: string): number | null => {
   catch { return null }
 }
 type SharedEntry = { descriptor: SharedRuntimeDescriptor; recs: RawRecord[] }
+// A session record outlives the config that created it, so a removed plugin harness or a renamed harness id
+// leaves a governed record this registry cannot resolve. That is a normal long-lived state for a host-wide
+// sweep, not a request naming a bad id: the sweep reports the record and keeps every other owner's findings.
+const unresolvableHarness = (rec: RawRecord): string | null => {
+  const id = rec.harness || defaultHarness.id
+  return harnessByIdOrNull(id) ? null : id
+}
+// Mirrors the corrupt-record owner: a record the sweep could not fully read stays a public owner so its
+// absence from a process-derived group cannot read as health. Here the unknown half is the harness, so
+// lifecycle is unknown and reclaim is closed rather than guessed from the record's own status field.
+const unresolvedHarnessOwners = (recs: RawRecord[], budgets: ResourceBudgets, have: (sessionId: string) => boolean): ResourceOwner[] => {
+  const out: ResourceOwner[] = []
+  for (const rec of recs) {
+    const unresolved = unresolvableHarness(rec)
+    if (!unresolved || !rec.governed || rec.stopped || have(rec.session_id)) continue
+    out.push({
+      kind: 'session', id: rec.session_id, label: `session ${rec.session_id.slice(0, 8)}`, status: rec.status, liveness: 'unknown',
+      processes: [], rssMiB: 0, pssMiB: null, cpuPercent: 0,
+      budget: { rssMiB: budgets.sessionRssMiB, idleCpuPercent: budgets.idleCpuPercent },
+      findings: [`harness-unresolved:${unresolved}`],
+      reclaim: { eligible: false, reason: `harness '${unresolved}' is not resolvable by this registry; shared-runtime stop safety cannot be proven` },
+    })
+  }
+  return out
+}
 const sharedDescriptors = (recs: RawRecord[], retainRegistry = false): Map<string, SharedEntry> => {
   const out = new Map<string, { descriptor: SharedRuntimeDescriptor; recs: RawRecord[] }>()
   for (const harness of HARNESSES) for (const descriptor of harness.sharedRuntimes?.(runtimeRoot()) ?? []) {
@@ -229,7 +254,8 @@ const sharedDescriptors = (recs: RawRecord[], retainRegistry = false): Map<strin
     // reported as an archive hazard. Clean archived records carry stopped:true and no loaded reference, so they
     // contribute nothing to the active set while still preserving exact ownership if the invariant is violated.
     if (!rec.governed) continue
-    const harness = harnessById(rec.harness || defaultHarness.id)
+    const harness = harnessByIdOrNull(rec.harness || defaultHarness.id)
+    if (!harness) continue   // joined to no descriptor; surfaced as a finding on that record's own session owner
     const exactKey = harness.targetDescriptorKey?.({ session: rec.session_id, harnessSessionId: rec.harness_session_id }) ?? null
     for (const descriptor of harness.sharedRuntimes?.(runtimeRoot()) ?? []) {
       if (exactKey && descriptor.key !== exactKey) continue
@@ -525,6 +551,7 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
       budget: { rssMiB: budgets.sessionRssMiB, idleCpuPercent: budgets.idleCpuPercent },
       findings: [`session-record-corrupt:${entry.error}`], reclaim: { eligible: false, reason: 'session record is corrupt; ownership and lifecycle are unknown' },
     })
+    owners.push(...unresolvedHarnessOwners(recs, budgets, (sessionId) => owners.some((owner) => owner.kind === 'session' && owner.id === sessionId)))
     const report: ResourceReport = { version: 1, measuredAt: new Date().toISOString(), projectRoot: root, platform: platform(), available: false, unavailableReason: `host process metrics are unavailable on ${platform()}; shared runtime references remain visible`, host: { memoryTotalMiB: null, memoryUsedMiB: null, memoryAvailableMiB: null, swapTotalMiB: null, swapUsedMiB: null, cpuPercent: null }, budgets, owners, totals: { rssMiB: 0, pssMiB: null, cpuPercent: 0 }, findings: owners.reduce((n, o) => n + o.findings.length, 0) }
     if (opts.persist !== false) atomicJson(join(runtimeRoot(), 'resource-report.json'), report)
     return report
@@ -581,8 +608,15 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
       if (rec?.archived) findings.push('archived-runtime-hazard:leaf-still-resident')
       if (totals.rssMiB > rssBudget) findings.push(`rss-over-budget:${Math.round((totals.rssMiB - rssBudget) * 10) / 10}MiB`)
       if (status !== 'active' && status !== 'queued' && totals.cpuPercent > idleBudget) findings.push(`idle-cpu-over-budget:${Math.round((totals.cpuPercent - idleBudget) * 10) / 10}%`)
-      const stopBlocker = rec ? await sessionStopBlocker(id, rec.harness || defaultHarness.id, inv.recs, sharedProbes) : null
-      if (terminal(rec) && totals.cpuPercent <= idleBudget && !stopBlocker) {
+      // The stop guard resolves the record's harness fail-loud, which is right for a stop REQUEST and wrong
+      // here: this sweep reads rows nobody named. An unresolvable harness makes stop safety unprovable, so it
+      // is reported and reclaim stays closed — never a resolvable-looking zero, never a lost report.
+      const unresolved = rec ? unresolvableHarness(rec) : null
+      if (unresolved) findings.push(`harness-unresolved:${unresolved}`)
+      const stopBlocker = rec && !unresolved ? await sessionStopBlocker(id, rec.harness || defaultHarness.id, inv.recs, sharedProbes) : null
+      if (unresolved) {
+        reclaim = { eligible: false, reason: `harness '${unresolved}' is not resolvable by this registry; shared-runtime stop safety cannot be proven` }
+      } else if (terminal(rec) && totals.cpuPercent <= idleBudget && !stopBlocker) {
         reclaim = { eligible: true, reason: `terminal lifecycle ${rec!.status}/${rec!.proposal}; a future exact action must revalidate every fact` }
       } else reclaim = { eligible: false, reason: stopBlocker ? `shared runtime unsafe: ${stopBlocker}` : terminal(rec) ? 'terminal record is still consuming CPU; liveness contradicts safe retirement' : 'owner is not terminal; budget age/status alone never authorizes stop' }
     } else if (owner.startsWith('shared:')) {
@@ -639,6 +673,8 @@ export async function collectResourceReport(opts: { procRoot?: string; persist?:
       budget: { rssMiB: budgets.sessionRssMiB, idleCpuPercent: budgets.idleCpuPercent },
       findings: [`session-record-corrupt:${entry.error}`], reclaim: { eligible: false, reason: 'session record is corrupt; ownership and lifecycle are unknown' },
     })
+
+  owners.push(...unresolvedHarnessOwners(inv.recs, budgets, (sessionId) => owners.some((owner) => owner.kind === 'session' && owner.id === sessionId)))
 
   // A referenced shared runtime with no readable process is still operationally important: keep its live or
   // unknown refcount visible instead of silently omitting it from a process-derived report.

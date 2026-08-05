@@ -2945,9 +2945,15 @@ export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, openc
 // the legacy/default adapter for old records and config defaults. New launches derive harness from a launcher.
 export const defaultHarness: Harness = claudeHarness
 
+// the registry lookup as DATA. A sweep over records nobody is currently asking about (a removed plugin, a
+// renamed id) must report an unresolvable harness rather than abort, so it resolves through this.
+export function harnessByIdOrNull(id: string): Harness | null {
+  return HARNESSES.find((x) => x.id === id) ?? null
+}
+
 // resolve an adapter by id (the detector). Throws on an unknown id — fail loud, never silently default.
 export function harnessById(id: string): Harness {
-  const h = HARNESSES.find((x) => x.id === id)
+  const h = harnessByIdOrNull(id)
   if (!h) throw new Error(`unknown harness '${id}' (known: ${HARNESSES.map((x) => x.id).join(', ')})`)
   return h
 }

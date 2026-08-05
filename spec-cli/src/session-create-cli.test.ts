@@ -9,12 +9,78 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import * as ts from 'typescript'
 
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
 const tsxCli = join(dirname(createRequire(import.meta.url).resolve('tsx/package.json')), 'dist', 'cli.mjs')
 const WATCH_PARENT = 'create-watch-parent'
 const WATCH_CHILD = 'create-watch-child'
+
+test('every allowed flag read as a value is declared to the positional scanner', () => {
+  const source = readFileSync(cli, 'utf8')
+  const file = ts.createSourceFile(cli, source, ts.ScriptTarget.Latest, true)
+  const valueFlags = new Set<string>()
+  const valueReads = new Set<string>()
+  const allowedFlags = new Set<string>()
+  let foundValueFlags = false
+  let rejectUnknownCalls = 0
+
+  const strings = (node: ts.Expression | undefined): string[] | null => {
+    if (!node || !ts.isArrayLiteralExpression(node)) return null
+    const names: string[] = []
+    for (const element of node.elements) {
+      if (!ts.isStringLiteral(element)) return null
+      names.push(element.text)
+    }
+    return names
+  }
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'VALUE_FLAGS' &&
+      node.initializer && ts.isNewExpression(node.initializer) && ts.isIdentifier(node.initializer.expression) &&
+      node.initializer.expression.text === 'Set') {
+      const names = strings(node.initializer.arguments?.[0])
+      assert.ok(names, 'VALUE_FLAGS must be a literal string array')
+      for (const name of names) valueFlags.add(name)
+      foundValueFlags = true
+    }
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      if (node.expression.text === 'flag' && node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0])) {
+        valueReads.add(node.arguments[0].text)
+      }
+      if (node.expression.text === 'rejectUnknownFlags') {
+        rejectUnknownCalls++
+        const names = strings(node.arguments[2])
+        assert.ok(names, 'rejectUnknownFlags allowlists must be literal string arrays')
+        for (const name of names) allowedFlags.add(name)
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+
+  assert.ok(foundValueFlags, 'VALUE_FLAGS declaration found')
+  assert.ok(rejectUnknownCalls > 0, 'rejectUnknownFlags calls found')
+  const missing = [...allowedFlags]
+    .filter((name) => valueReads.has(name) && !valueFlags.has(`--${name}`))
+    .sort()
+  assert.deepEqual(missing, [], 'every allowed flag read by flag(name) must consume its argv value')
+})
+
+test('session new keeps name and base values out of positional prompt intake', () => {
+  const promptFile = join(tmpdir(), `spex-missing-prompt-${process.pid}`)
+  for (const [flag, value] of [['--name', 'spaced session name'], ['--base', 'no-such-commit']]) {
+    const r = spawnSync('tsx', [cli, 'session', 'new', '--prompt-file', promptFile, flag, value], {
+      cwd: pkgRoot,
+      encoding: 'utf8',
+    })
+    assert.equal(r.status, 2)
+    assert.equal(r.stdout, '')
+    assert.match(r.stderr, new RegExp(`^spex session new: --prompt-file ${promptFile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:`))
+    assert.doesNotMatch(r.stderr, /give the prompt either inline or via --prompt-file, not both/)
+  }
+})
 
 function writeGovernedSession(home: string, id: string, parent = ''): string {
   const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: pkgRoot, encoding: 'utf8' }).trim())

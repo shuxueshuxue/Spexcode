@@ -227,6 +227,31 @@ PICK THE EVIDENCE KIND BY WHAT THE BEHAVIOUR DOES OVER TIME:
                       \`data\` — rendered as a validatable data block, not flattened into scrolling transcript
                       text; free-form output stays a transcript. You pick the flag; the KIND follows the bytes.
 The flags combine in ONE filing — several stills can ride beside the clip of the same run.
+POPULATION DISCIPLINE: when \`expected\` quantifies over a set ("every X is Y", "nothing under Z"), the
+measurement reports the set's SIZE, not only the verdict. An empty set satisfies a universal claim
+VACUOUSLY, so a pass over nothing and a real pass are indistinguishable — and the universal form reads
+STRICTER than an enumeration, which is what makes it the hardest wrong-population case to catch. File
+\`N of N\`, never a bare boolean: \`0 of 0\` shows itself, \`true\` does not. The denominator must come from a
+source that can DISAGREE with the numerator — count the population off the surface that does NOT decide the
+outcome (a backend export, a ledger, the enumeration upstream of the thing under test) and the passing members
+off the surface under test. A ratio whose halves share one source says only "what I selected, I selected": a
+selector that silently drops half the population reports \`3 of 3\` when the truth is 6. Two weaker defences
+that do not substitute — a precondition sentence depends on the next author remembering it, a printed
+denominator depends on a reader noticing it. Nothing here enforces either (the schema has no population
+field), so treat a zero-population run as a NON-reading and do not file it. Cheaper than any of that, when
+you can get it: restate the claim over something the product CANNOT make empty. "every active node's name is
+readable" needs someone to arrange activity and goes vacuous when nobody does; "the rendered size never falls
+below the authored size" is a property of the viewport itself, true of a one-node graph, and has no
+population to get wrong. A claim with no population beats a well-reported one.
+RENDERED GEOMETRY (browser): measure the rendered BOX, never the authored STYLE. An ancestor CSS \`transform\`
+— the ordinary zoom/pan wrapper on a canvas or graph view — does NOT change computed style, so
+\`getComputedStyle(el).fontSize\` answers the AUTHORED size while the screen shows that size times the
+ancestor scale, and the reading is a SILENT FALSE PASS. (No numbers here on purpose: the authored size is
+whatever this project's stylesheet says today, and a manual that hard-codes one teaches a constant that
+drifts — read it off the tree you are measuring.) Go through \`getBoundingClientRect()\` (it carries the
+ancestor scale) and derive the effective size from the box, or from a known string's width. This is also why
+a geometric claim ships WITH its \`--image\`: a rect can be computed wrong, while "is that text legible" is
+human-judgeable, so the two evidences cover each other.
 ANCHOR DISCIPLINE: an eval's \`codeSha\` is HEAD at filing time, and a git sha names only a COMMIT — an
 uncommitted change has none. So measure the tree you are about to commit, COMMIT it, then file; confidence
 is earned on the working tree, but the anchor can only land after the commit. Filing from a dirty tree
@@ -285,7 +310,8 @@ see LAUNCHERS.
 ── LAYOUT (spexcode.json — portable; set only for a NON-DEFAULT repo layout) ──
   main          path to the source-of-truth checkout. Default: the \`main\` worktree.
   mainBranch    the stable source-of-truth BRANCH worktrees fork from. spex init stamps the root checkout's
-                branch at adoption; an older omitted value uses the conventional main.
+                branch at adoption and the stamped value stays put for every later checkout, so a clone or a
+                fresh worktree does not re-guess it; an older omitted value uses the conventional main.
   branchPrefix  how a node branch is named. Default "node/".
 Example — a repo whose trunk is \`staging\`, not \`main\`:
   { "mainBranch": "staging" }
@@ -627,5 +653,11 @@ export function guideText(topic?: string): string | null {
   if (!topic) return SETUP + FOOTER
   const t = TOPICS[topic]
   return t ? t + FOOTER : null
+}
+
+// @@@ the unknown-topic list is DERIVED, never re-typed - a hand-kept enumeration goes blind the moment a
+// topic is added beside it, and it did: `files` and `web` shipped while the error still named four.
+export function guideTopics(): string[] {
+  return Object.keys(TOPICS)
 }
 import { uploadPolicyDefaults } from './layout.js'

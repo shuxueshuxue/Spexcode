@@ -46,8 +46,33 @@ the agent from one verb, picked by an optional topic:
   The concept is tool-neutral (Playwright is one emitter); `--timeline` is axis-tagged (a video's `time`,
   a transcript's `line`, a still sequence's `frame`, a data export's `index` — legacy `tMs` maps read as
   `time`), and a filing's axis must match an attached evidence entry's kind.
+
+  It is prescriptive about the READING as well as the evidence, and for the same reason: the ways a
+  measurement lies are not obvious from the schema, so the manual is where they get named. Two are stated
+  because both fail silently and both were reached by measuring rather than reasoning. A universal `expected`
+  is vacuously true over an empty set, so the reading reports its population as `N of N` rather than a bare
+  verdict — and the denominator is counted off a surface that can disagree with the numerator, because a ratio
+  whose halves share one source only asserts that what was selected was selected. And a browser reading goes
+  through the rendered box, never computed style: an ancestor CSS `transform` leaves computed style at the
+  authored size while the screen shows the scaled one, so a plausible-looking geometric reading passes while
+  measuring something that is not on screen. That second rule is also the honest reason a geometric claim
+  ships with its `--image` — a rect can be computed wrong where legibility is human-judgeable.
+
+  Neither rule is enforced anywhere, and the manual says so instead of implying a gate. The escalation these
+  two sit inside is real: a precondition sentence depends on the author remembering it, a printed denominator
+  depends on a reader noticing it, and only a refusal at filing time depends on nobody — but refusing needs a
+  population the schema does not carry, so this page prescribes and does not pretend to bind. The escalation's
+  own terminus is stated too, because it is cheaper than every rung above it: a claim restated over something
+  the product cannot make empty has no population to report, arrange, or get wrong. "Every active node's name
+  is readable" needs activity someone must arrange; "the rendered size never falls below the authored size" is
+  a property of the viewport, true of a one-node graph. The ladder's goal was never a rule that gets
+  remembered — it is a rule that cannot be broken.
   The always-on system prompt is the **clue** that the format exists; this manual carries the detail. An
-  unknown topic fails loud (names the real topics), never a silent setup dump.
+  unknown topic fails loud, naming **every** registered topic and never a silent setup dump — and that list
+  is DERIVED from the topic registry rather than re-typed beside it. A hand-kept enumeration of the topics is
+  the same wrong-population defect the reading rules above describe, one layer down, and it had already
+  happened: `files` and `web` were registered as real pages while the unknown-topic error still named four.
+  Nothing about the shorter list looked wrong, because an enumeration cannot report what it is missing.
 - **`settings` → the agent-facing RUNTIME-SETTINGS manual.** SpexCode's own settings are self-documenting
   through this same primitive rather than a new mechanism: `spex guide settings` prints every `spexcode.json`
   / `spexcode.local.json` field (launchers, dashboard icon, upload transfer policy, deterministic lint policy,
@@ -105,6 +130,7 @@ its own `guide.ts` module rather than the shared `cli.ts` hub — *not* a plante
 which translate the browser UI, not operator-facing CLI output. `guide` tells you the loop and the
 formats; [[spex-init]] performs the first step of it.
 
-This node's stake in `cli.ts` is now a thin dispatch (`process.argv[3]` → `guideText`); the content lives
+This node's stake in `cli.ts` is now a thin dispatch (`process.argv[3]` → `guideText`, plus `guideTopics()`
+for the unknown-topic list so that list cannot drift from the registry); the content lives
 in `guide.ts`. `cli.ts` is the shared command hub every verb routes through, so a sibling verb's churn
 there is that feature's, not `guide`'s drift.

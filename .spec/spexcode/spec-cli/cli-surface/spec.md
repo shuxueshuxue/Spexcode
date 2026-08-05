@@ -128,6 +128,15 @@ Dead-end rule: an unknown command, unknown drawer verb, unknown help topic, unkn
 a bare `spex internal` each fail loud AND name the layer to go back to; a removed spelling fails
 loud AND names its replacement — never a silent exit.
 
+Naming the layer is not the whole duty when the message also names the ALTERNATIVES, because a list can be
+complete, loud, and wrong at once. Where those alternatives are a registry ANOTHER module owns, the hub
+derives the list from that registry and never re-types it; where they are the sibling `if` branches in this
+same file, a literal list stays literal — it sits beside the thing it describes, so a reader adding a branch
+sees it. The guide-topic list was the first kind written as the second and shipped two topics behind
+([[guide]] holds `TOPICS`, the hub held a copy), and nothing about the short list looked wrong: an
+enumeration cannot report what it is missing. That failure mode is silent by construction, which is why the
+rule is about where the list's truth LIVES rather than about keeping copies in step.
+
 A machine dump names its human twin: `spex graph --json` is for programs, so when stdout is a tty a
 single stderr line points at the readable `spex graph`. The hint is stderr-only and tty-gated, so
 piped output stays byte-identical.

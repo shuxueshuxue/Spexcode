@@ -134,6 +134,25 @@ The principles, in the maintainer's own framing:
     the product already had the answer. A cheap extractor is not the cheap half of the job; it is where the
     expensive mistake lives.
 
+22. **Prose is not a free edit: you can hold a tree's proof and then move the contract that proof was
+    against.** The maintainer's framing: "散文不是免费的编辑：你可以握着一棵树的证明，然后把那个证明所针对的
+    契约挪走。" Freshness has more than one axis, and the rule we already wrote down only guards one of them:
+    "commit the verified tree, then file" catches the *code* moving after the proof, and says nothing about the
+    *contract* moving after the proof. Measured, self-caught by the session that did it: it filed a passing
+    reading, then softened the wording of the same scenario in `eval.md`, and both readings went stale on the
+    scenario axis — in its own words, "I was holding the proof of that tree, and then I moved the contract that
+    proof was against." The reason this one gets its own entry rather than an amendment to the code-axis rule is
+    that the two feel nothing alike: editing code, you know you are moving the thing under test; editing wording
+    feels like polishing a document, and `scenarioHash` disagrees. Its sibling is the same shape wearing a
+    different costume — a *sampling* choice that silently decides the claim. One-build-per-fresh-process does not
+    merely hide an in-process memo, it **inverts the conclusion**: 507ms cold against 12–15ms warm is a factor of
+    forty, so "a cache buys ~0 here" and "this is the headline finding" were separated by nothing but how the
+    sample was taken; the corpus picked to prove it could not exhibit the defect at all (0 of 1144 distinct
+    reading `codeSha`s reachable from that HEAD, therefore zero selector queries reaching the engine). Hence the
+    method rule that came out of it: on a loaded box a **fixed wall-clock threshold is not a claim** — compare
+    load-matched pairs, and put the falsifiable half of the claim on something load-independent. The stopwatch is
+    the symptom; the count of git child processes is the assertion.
+
 ## expanded spec
 
 This node is the seed. The de-drift campaign distills these into a sharper checklist (the "20 tastes" + the

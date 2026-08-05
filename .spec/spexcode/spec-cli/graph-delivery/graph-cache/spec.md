@@ -309,24 +309,34 @@ difference is not the tree walk. Board-only work, in size order: eval timeline a
 778–876ms, the `.spec`/`eval.md` walk 227–405ms, the scenario and remark index 109–129ms, session census and
 liveness 98–119ms, worktree layout and overlay discovery 102–108ms — and then everything else (overlay/ghost
 projection, issue merge, review fold, the resident session-eval copy, identity, and serializing a 583KB board)
-under 7ms each. Inside freshness, selector-anchor verification alone is 558.7–591.8ms while the content
-fallback across all 3,023 readings is 29.7–35.8ms.
+under 7ms each. Inside freshness on that corpus, the 558.7–591.8ms attributed to selector-anchor verification is
+**cold-process working-tree parsing, not steady-state verification cost**: it is the same first-build parse
+`currentTreeUnitMemo` already absorbs, and a repeat rebuild in the same process spends 12–15ms where the first
+spent 507ms. The content fallback across all 3,023 readings is 29.7–35.8ms.
 
 The dimension is readings and their code axes, not node count. At 119 / 238 / 357 / 476 ids the readings go
 882 / 1,543 / 2,176 / 3,023 while full freshness goes 621.0 / 663.9 / 714.6 / 911.7 ms — **sublinear**, which
-says the cost is a fixed sum re-paid per build rather than a walk that scales wrongly, and that distinction is
-the entire lever: those 3,023 reading demands deduplicate to **73 distinct selector queries**, an answer set the
-current HEAD already determines. A full build triggered by an issue, worktree or session change re-derives all
-73 with HEAD unmoved. Ordering without freshness (`order: true`, 229.8ms) is not the substitute it looks like —
+says the cost is a fixed sum re-paid per build rather than a walk that scales wrongly. That fixed sum is what
+[[selector-anchor-scope]] now scopes to the root's current head, and the corpus that exhibits it is **spexcode
+governing itself** — 1,850 anchored demands deduplicating to 1,018 distinct queries — not the 476-node adopter
+measured above: none of that adopter's 1,144 distinct reading `codeSha`s is reachable from its HEAD, so zero
+selector queries reach the hit engine there and it cannot show this cost at all. Ordering without freshness
+(`order: true`, 229.8ms) is not the substitute it looks like —
 it deliberately emits `freshnessDeferred`, and the review summary's counts need real fresh/stale decisions.
 
-Two measurement pitfalls belong with those numbers, because both produce a wrong answer that looks clean.
+Three measurement pitfalls belong with those numbers, because each produces a wrong answer that looks clean.
 `startBuild()` deliberately defers its producer one event-loop turn and the warning timer starts after that
 defer, so end-to-end waiting (2117–2329ms on the same corpus) is a different quantity from the logged build
-time and the two may not be compared. And a 3755ms sample from a live server is a real slow sample of this same
+time and the two may not be compared. A 3755ms sample from a live server is a real slow sample of this same
 path, not a corpus floor: that run was interleaved with asynchronous `session summary build failed` and
 resource-monitor work, while the board's own synchronous `sessionEvalProjections()` call measures 0.4ms in an
-isolated process.
+isolated process. And **one build per fresh process does not merely hide the in-process memos, it can invert the
+conclusion** — the 507ms-versus-12ms gap above is a factor of forty, which is the whole distance between "a
+cache buys nothing here" and "this is the dominant cost", decided by sampling method alone. A build measured
+once per process is a measurement of process startup reported as steady state, so per-build claims need a
+repeat rebuild inside one process, and on a loaded box a fixed wall-clock threshold is not a claim at all:
+compare load-matched pairs and anchor the falsifiable half on something load-independent, such as a count of
+git child processes.
 
 This is the third half of [[graph-delivery]]'s one budget: [[graph-lean]] decides *how much* rides the
 wire, [[graph-stream]] decides *when* the wire is paid, and graph-cache decides *how often the graph is

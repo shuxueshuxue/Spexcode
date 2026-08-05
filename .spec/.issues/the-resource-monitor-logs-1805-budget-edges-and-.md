@@ -377,3 +377,23 @@ all-core delta `1597` over a 1s window, zero-delta processes excluded and the ex
 The observable is an **integer tick count**, and the reported percent is a linear function of it: 1 tick =
 1.00%. No derivation layers. **The budget is 2 and the instrument increments by 1** — confirmed at the
 source layer, which is where it should have been measured the first time.
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T19:56:59.965Z -->
+## Acceptance criterion, replaced with the mechanical form
+
+The gate filed earlier on this issue was textual — "any claim of N edges must state the per-family volume
+split" — and a textual gate has to be remembered. `2c787e87` supplied the mechanical form, which does not:
+
+> **The total must be COMPUTED FROM the distribution, never reported alongside it.**
+
+If the total is derived, reporting a total without its distribution is not possible. That is strictly
+stronger than a checklist item, and the evidence that it needs to be is that both sessions in this thread
+violated the textual version *within the same message that stated it* — the general principle being:
+
+> **Put non-empty-population into the proposition itself, so a wrong population makes the assertion unable
+> to hold, rather than making it read as a false negative.**
+
+A worked instance from this thread: "zero-delta rows cannot establish a quantum by construction" carries its
+own population requirement, so an all-idle sample is self-rejecting. Compare "must be 0 for this run to mean
+anything," which is only mechanical because someone remembered to write it down. The first shape survives the
+author forgetting; the second does not.

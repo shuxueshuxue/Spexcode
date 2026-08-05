@@ -446,6 +446,10 @@ export function readAliasedRawRecord(id: string): RawRecord | null {
 export function readAliasedRecordEntry(id: string): RecordEntry {
   const direct = readRecordEntry(id)
   if (direct.kind !== 'absent') return direct
+  // @@@ absence splits in two, and only one half is an alias question - an id owning a store dir is already
+  // one of ours (the sentinel-only agent above), so its emptiness is settled; searching would let an unrelated
+  // record answer under a live session's own name, and costs a whole-store re-parse per 1s supervisor tick.
+  if (existsSync(sessionStoreDir(id))) return { kind: 'absent' }
   for (const sid of listSessionIds()) {
     const r = readRawRecord(sid)
     if (r && r.harness_session_id && r.harness_session_id === id) return { kind: 'ok', raw: r }

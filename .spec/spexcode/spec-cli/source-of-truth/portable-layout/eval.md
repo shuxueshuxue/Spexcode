@@ -30,6 +30,21 @@ scenarios:
       - spec-cli/src/layout.ts#layoutDeltas
       - spec-cli/src/git.ts#worktreeSpecDeltas
     test: spec-cli/src/layout-overlay.api.test.ts
+  - name: record-less-store-dir-never-scans-the-store
+    description: >
+      In an isolated SPEXCODE_HOME, build a store holding both records and record-less session directories
+      (the sentinel-only self-launched shape), including one record-less directory whose name equals another
+      record's `harness_session_id`. Resolve those ids through the alias seam, with the sessions root left
+      traversable but not enumerable so that any store scan is observable as a fail-loud readdir error.
+    expected: >
+      A record-less store directory resolves as absent without enumerating the store, so the neighbouring
+      record never answers under that live session's name and the per-tick cost stays one directory check
+      rather than a whole-store re-read. Genuine alias resolution — an id owning no store directory — still
+      finds the one record that captured it as `harness_session_id`.
+    tags: [cli]
+    code:
+      - spec-cli/src/layout.ts#readAliasedRecordEntry
+    test: spec-cli/src/layout-session-id.test.ts
 ---
 
 Measured through the CLI seam that resolves layout for every other verb (`spex internal trunk` =

@@ -1,5 +1,19 @@
 ---
 scenarios:
+  - name: valued-session-new-flags-stay-out-of-positionals
+    description: >
+      Through the real `spex session new` CLI, pass a nonexistent `--prompt-file` with a spaced `--name`, then
+      repeat it with `--base`. Both forms must reach the prompt-file refusal before any backend contact. With a
+      nonempty prompt file and an isolated empty `SPEXCODE_HOME` (no recorded backend), pass a commit-ish that
+      cannot resolve as `--base` and inspect the CLI's local creation result.
+    expected: >
+      The `--name` and `--base` values are never reclassified as an inline prompt: each nonexistent file exits 2
+      naming that file, not the either/or prompt error, and creates no session. The supplied invalid base reaches
+      its own HTTP 400 target-resolution refusal before any session artifact is created. The value-flag guard fails
+      when any allowed `flag(name)` input lacks the positional scanner's one value declaration.
+    tags: [cli]
+    code: spec-cli/src/cli.ts
+    related: spec-cli/src/session-create-cli.test.ts
   - name: session-send-flags-cannot-become-the-message
     description: >
       Drive the real `spex session send` CLI against a recording HTTP backend twice, once as

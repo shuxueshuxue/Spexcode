@@ -164,7 +164,13 @@ function sessionInputRevision(): SessionInputRevision {
 function boardInputRevision(board: Board | null): BoardInputRevision {
   const root = repoRoot()
   const session = sessionInputRevision()
-  const activeRoots = session.activeRoots
+  // Durable active records are the current root set; a cached ordinary row may be stale and must not replace
+  // them. The one projection-only addition is explicit: listSessions republishes an archived-runtime hazard
+  // into the working set, and that marked row keeps its root monitored until cold state is repaired.
+  const activeRoots = [...new Set([
+    ...session.activeRoots,
+    ...(board?.sessions.flatMap((row) => row.archiveHazard ? [row.path] : []) ?? []),
+  ])].sort()
   const main = mainCheckout()
   const base = mainBranch()
   const mainTip = refSha(main, base)
@@ -350,7 +356,8 @@ function startSessionSplice(): Flight | null {
       if (base !== cached || revision !== cachedRevision || generation !== topologyGeneration) continue
       const stable = before.sessions === after.sessions && before.projections === after.projections &&
         JSON.stringify(before.activeRoots) === JSON.stringify(after.activeRoots)
-      const rootTransition = carrySubtractiveWorktrees(revision, before.activeRoots)
+      const projectedRoots = [...new Set(board.sessions.map((row) => row.path))].sort()
+      const rootTransition = carrySubtractiveWorktrees(revision, projectedRoots)
       const carried = stable ? rootTransition.revision : revision
       cached = board
       cachedJson = null

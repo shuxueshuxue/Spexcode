@@ -81,7 +81,9 @@ The graph is built **once per change, not once per poll — and only as much of 
   lifecycle fields leave every node/eval/issue unit byte-identical. Archive and close are the one subtractive
   topology transition already proven by that carrier: the splice removes overlays sourced by roots that left the
   active session set, drops empty ghost nodes, re-derives affected status/parent facts, and carries the old full
-  revision minus those exact root entries. It never reads the retired worktree. A root addition (create/resume) or
+  revision minus those exact root entries. The active set is the row projection the splice actually publishes,
+  not a raw `archived` bit: an invalid cold witness or reloaded-runtime hazard remains visible and keeps its root
+  monitored. The subtractive path never reads a genuinely retired worktree. A root addition (create/resume) or
   any retained root revision movement remains a full obligation, so subtractive publication cannot hide new work.
   A lifecycle write therefore never re-walks 180 spec files to ship a 1KB patch (the measured waste this scoping
   removed: ~250ms of unrelated fs work per push). A 'full' dirty (a ref move or worktree/.spec event) runs the

@@ -530,6 +530,21 @@ test('archiving a dirty worktree subtracts its overlays without a full git walk'
     assert.ok(before.nodes.find((node: any) => node.id === 'child')?.overlays.some((overlay: any) => overlay.source === linked),
       'the control needs a dirty existing-node overlay to remove')
 
+    // A raw archived bit with no valid cold witness is projected back into the working set as a hazard. The
+    // splice must follow that public projection rather than subtracting from the raw bit and hiding live work.
+    writeSessionRecord({
+      worktree_path: linked, branch: 'node/archive-subtractive', status: 'awaiting', proposal: 'nothing',
+      stopped: true, archived: true, cold_proof: 'invalid-cold-proof', note: 'archive hazard control',
+    })
+    cache.invalidateBoard('sessions')
+    const hazard = await cache.getBoardForSessionRefresh()
+    assert.equal(hazard.sessions.length, 1)
+    assert.equal(hazard.sessions[0].archived, false, 'invalid cold state remains in the working-set projection')
+    assert.ok(hazard.nodes.find((node: any) => node.id === 'child')?.overlays.some((overlay: any) => overlay.source === linked),
+      'a projected archive hazard must retain its active-root overlays')
+    assert.equal((await cache.patrolBoard()).nodes, hazard.nodes,
+      'the hazard root remains in the carried revision instead of disappearing on patrol')
+
     writeSessionRecord({
       worktree_path: linked, branch: 'node/archive-subtractive', status: 'awaiting', proposal: 'nothing',
       stopped: true, archived: true, cold_proof: `cold-v1|claude|${SESS_ID}|no-resident-ref`, note: 'cold archived',

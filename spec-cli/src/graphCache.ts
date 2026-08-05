@@ -27,9 +27,10 @@ type BoardInputRevision = {
   projections: string
   combined: string
   fullParts: Record<string, string>
+  worktreeParts: Record<string, string>
   projectionIds: string[]
 }
-type SessionInputRevision = Pick<BoardInputRevision, 'sessions' | 'projections' | 'projectionIds'>
+type SessionInputRevision = Pick<BoardInputRevision, 'sessions' | 'projections' | 'projectionIds'> & { activeRoots: string[] }
 const DEBUG = process.env.SPEXCODE_BOARD_DEBUG === '1'
 
 function textOrNull(path: string): string | null {
@@ -153,20 +154,23 @@ function sessionInputRevision(): SessionInputRevision {
     textOrNull(sessionArtifactPath(id, 'prompt')),
   ] as const)
   const projections = digest(ids.map((id) => [id, sessionEvalProjection(id)]))
-  return { sessions: digest(sessionInputs), projections, projectionIds: ids }
+  const activeRoots = [...new Set(ids.flatMap((id) => {
+    const entry = readPublicRecordEntry(id)
+    return entry.kind === 'ok' && entry.raw.governed && !entry.raw.archived ? [entry.raw.worktree_path] : []
+  }))].sort()
+  return { sessions: digest(sessionInputs), projections, projectionIds: ids, activeRoots }
 }
 
 function boardInputRevision(board: Board | null): BoardInputRevision {
   const root = repoRoot()
   const session = sessionInputRevision()
-  const records = listSessionIds().map(readPublicRecordEntry).flatMap((entry) => entry.kind === 'ok' ? [entry.raw] : [])
-  const governed = records.filter((record) => record.governed).sort((a, b) => a.session_id.localeCompare(b.session_id))
-  const activeRoots = [...new Set(governed.filter((record) => !record.archived).map((record) => record.worktree_path))].sort()
+  const activeRoots = session.activeRoots
   const main = mainCheckout()
   const base = mainBranch()
   const mainTip = refSha(main, base)
   const nodeIds = (board?.nodes ?? []).map((node) => node.id)
   const issuesStamp = boardThreads({ host: resolveForgeHost(), state: residentForgeState() }, nodeIds).stamp
+  const worktreeParts = Object.fromEntries(activeRoots.map((worktree) => [worktree, digest(worktreeRevision(worktree))]))
   const fullInputs = {
     root: worktreeRevision(root),
     config: [
@@ -176,7 +180,7 @@ function boardInputRevision(board: Board | null): BoardInputRevision {
       [join(main, 'spexcode.local.json'), textOrNull(join(main, 'spexcode.local.json'))],
     ],
     main: { root: main, branch: base, tip: mainTip },
-    worktrees: activeRoots.map((worktree) => worktreeRevision(worktree)),
+    worktrees: worktreeParts,
     issuesStamp,
     identity: resolveProjectIdentity(root, root),
   }
@@ -187,6 +191,7 @@ function boardInputRevision(board: Board | null): BoardInputRevision {
     ...session,
     combined: digest([full, session.sessions, session.projections]),
     fullParts,
+    worktreeParts,
   }
 }
 
@@ -205,6 +210,7 @@ function revisionCarriedByBoard(sample: BoardInputRevision, board: Board): Board
     projections,
     combined: digest([full, sample.sessions, projections]),
     fullParts,
+    worktreeParts: sample.worktreeParts,
     projectionIds: sample.projectionIds,
   }
 }
@@ -222,6 +228,7 @@ function revisionCarriedBySessionSplice(base: BoardInputRevision, sample: Sessio
     projections,
     combined: digest([base.full, sample.sessions, projections]),
     fullParts: base.fullParts,
+    worktreeParts: base.worktreeParts,
     projectionIds: sample.projectionIds,
   }
 }
@@ -237,7 +244,28 @@ function revisionCarriedByPublishedSessionRebase(full: BoardInputRevision, publi
     projections: published.projections,
     combined: digest([full.full, published.sessions, published.projections]),
     fullParts: full.fullParts,
+    worktreeParts: full.worktreeParts,
     projectionIds: published.projectionIds,
+  }
+}
+
+function carrySubtractiveWorktrees(base: BoardInputRevision, activeRoots: readonly string[]): { revision: BoardInputRevision; added: boolean } {
+  const active = new Set(activeRoots)
+  const known = Object.keys(base.worktreeParts)
+  if (activeRoots.some((root) => !(root in base.worktreeParts))) return { revision: base, added: true }
+  if (known.every((root) => active.has(root))) return { revision: base, added: false }
+  const worktreeParts = Object.fromEntries(Object.entries(base.worktreeParts).filter(([root]) => active.has(root)))
+  const fullParts = { ...base.fullParts, worktrees: digest(worktreeParts) }
+  const full = digest(fullParts)
+  return {
+    revision: {
+      ...base,
+      full,
+      fullParts,
+      worktreeParts,
+      combined: digest([full, base.sessions, base.projections]),
+    },
+    added: false,
   }
 }
 
@@ -320,11 +348,15 @@ function startSessionSplice(): Flight | null {
       const board = await spliceSessions(base)
       const after = sessionInputRevision()
       if (base !== cached || revision !== cachedRevision || generation !== topologyGeneration) continue
-      const stable = before.sessions === after.sessions && before.projections === after.projections
+      const stable = before.sessions === after.sessions && before.projections === after.projections &&
+        JSON.stringify(before.activeRoots) === JSON.stringify(after.activeRoots)
+      const rootTransition = carrySubtractiveWorktrees(revision, before.activeRoots)
+      const carried = stable ? rootTransition.revision : revision
       cached = board
       cachedJson = null
-      cachedRevision = revisionCarriedBySessionSplice(revision, before, board, stable)
+      cachedRevision = revisionCarriedBySessionSplice(carried, before, board, stable)
       sessionProjectionPublication++
+      if (rootTransition.added) mergeDirty('full')
       if (!stable) {
         sessionOwed = true
         sessionGeneration++

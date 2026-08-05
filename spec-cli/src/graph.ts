@@ -24,6 +24,8 @@ function resolveParent(path: string, byDir: Record<string, string>): string | nu
   return null
 }
 
+const OVERLAY_TO_PATH = Symbol('overlay-to-path')
+
 // The server-only review snapshot keeps latest readings verbatim. Graph JSON receives only counts.
 export function latestPerScenario<T extends { scenario: string }>(readings: T[]): T[] {
   const seen = new Set<string>()
@@ -88,6 +90,7 @@ export async function buildBoard() {
         op: op.op, source, label, branch: w.branch, seed,
         committed: op.committed, dirty: op.dirty,
         toParent: op.op === 'moved' ? resolveParent(op.toPath || op.path, byDir) : null,
+        [OVERLAY_TO_PATH]: op.op === 'moved' ? op.toPath || op.path : null,
       }
       if (op.op === 'added' && !byId[op.nodeId]) {
         if (ghostById[op.nodeId]) { ghostById[op.nodeId].overlays.push(ov); continue }
@@ -191,6 +194,7 @@ export async function buildBoard() {
 export async function spliceSessions(prev: Awaited<ReturnType<typeof buildBoard>>): Promise<Awaited<ReturnType<typeof buildBoard>>> {
   const sessions = await listSessions()
   const evalProjections = sessionEvalProjections(sessions)
+  const activeSources = new Set(sessions.map((session) => session.path))
   const opsByPath: Record<string, any[]> = {}
   for (const s of prev.sessions) opsByPath[s.source] = s.ops
   const sess = sessions.map((s) => ({
@@ -199,7 +203,48 @@ export async function spliceSessions(prev: Awaited<ReturnType<typeof buildBoard>
     ops: rowOps(s, opsByPath),
     evalSummary: evalProjections.get(s.id),
   }))
-  return { ...prev, sessions: sess }
+  // Archive and close are subtractive topology changes: their worktree leaves the working set, so its
+  // overlays must leave in the same cheap publication as its row. Filtering the already-built units is exact
+  // and forks nothing. A newly-active source is intentionally absent here; graphCache keeps a full obligation
+  // for additions/resume so resolveLayout can discover that worktree's current delta.
+  let nodeProjectionMoved = false
+  const projectedNodes = prev.nodes.flatMap((node: any) => {
+    const overlays = (node.overlays || []).filter((overlay: any) => activeSources.has(overlay.source))
+    if (node.ghost && overlays.length === 0) { nodeProjectionMoved = true; return [] }
+    if (overlays.length === (node.overlays || []).length) return [node]
+    nodeProjectionMoved = true
+    if (node.ghost) return [{ ...node, overlays, status: deriveStatus({ version: 0, drift: 0, hasOverlay: true }) }]
+    return [{ ...node, overlays, status: deriveStatus({
+      version: node.version,
+      drift: node.drift,
+      hasOverlay: overlays.length > 0,
+      hasCode: (node.code?.length ?? 0) > 0,
+      fmStatus: node.fmStatus ?? undefined,
+    }) }]
+  })
+  const nodes = nodeProjectionMoved ? projectedNodes : prev.nodes
+  if (nodeProjectionMoved) {
+    const byDir: Record<string, string> = {}
+    for (const node of nodes) if (node.path) byDir[node.path.replace(/\/spec\.md$/, '')] = node.id
+    const retainedIds = new Set(nodes.map((node: any) => node.id))
+    for (let index = 0; index < nodes.length; index++) {
+      const node: any = nodes[index]
+      let changed = false
+      let parent = node.parent
+      if (node.ghost) {
+        const next = resolveParent(node.path, byDir)
+        if (next !== parent) { parent = next; changed = true }
+      }
+      const overlays = (node.overlays || []).map((overlay: any) => {
+        if (!overlay.toParent || retainedIds.has(overlay.toParent)) return overlay
+        const toPath = overlay[OVERLAY_TO_PATH]
+        changed = true
+        return { ...overlay, toParent: typeof toPath === 'string' ? resolveParent(toPath, byDir) : null }
+      })
+      if (changed) nodes[index] = { ...node, parent, overlays }
+    }
+  }
+  return { ...prev, nodes, sessions: sess }
 }
 
 // A full producer may finish after the session lane has already shown a newer row. Reuse that published

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # @@@ harness.sh - the SHELL face of the [[harness-adapter]] (spec-cli/src/harness.ts). The hook scripts run
 # as pure shell, so they cannot import the TS adapter; this sourced library is its mirror. dispatch.sh sources
-# it and exports SPEXCODE_HARNESS (claude|codex|opencode) — baked into the shim by each adapter, so a hook learns its
+# it and exports SPEXCODE_HARNESS (claude|codex|opencode|zcode) — baked into the shim by each adapter, so a hook learns its
 # harness deterministically, never by sniffing the payload shape. EVERY harness-divergent payload-parse lives
 # HERE; the hook scripts stay harness-agnostic and just call hp_* (the one place Claude's tool names appear in
 # shell, plus codex's Bash-command mapping). The session-id + global-store resolution is harness-agnostic and
 # lives here too, so the six hooks no longer each repeat the git-common-dir → project-key dance.
-# SPEXCODE_HARNESS is claude|codex|opencode|pi|plugin: `plugin` is the bundle form ([[plugin-harness]]) and its
-# host (adopter-a/Claude) shares Claude's payload shape; `opencode`'s generated plugin ([[opencode-harness]]) and
-# `pi`'s generated extension ([[pi-harness]]) SYNTHESIZE claude-shaped payloads by construction — so every
-# `case "$SPEXCODE_HARNESS"` below routes all three through the claude branch via the default case; only codex
+# SPEXCODE_HARNESS is claude|codex|opencode|pi|zcode|plugin: `plugin` is the bundle form ([[plugin-harness]]) and its
+# host (adopter-a/Claude) shares Claude's payload shape; `opencode`'s generated plugin ([[opencode-harness]]),
+# `pi`'s generated extension ([[pi-harness]]), and z-code's native hook payload all share that Claude shape — so every
+# `case "$SPEXCODE_HARNESS"` below routes all four through the claude branch via the default case; only codex
 # keeps parse arms of its own.
 
 

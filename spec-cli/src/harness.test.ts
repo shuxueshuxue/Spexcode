@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot, sessionArtifactPath } from './layout.js'
 import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from './process-identity.js'
@@ -923,7 +923,7 @@ test('launchEnv keeps rendezvous bootstrap knowledge in the owning adapters', ()
   for (const harness of [claudeHarness, piHarness, opencodeHarness, piHeadlessHarness, opencodeHeadlessHarness]) {
     assert.deepEqual(harness.launchEnv(id), rendezvous, harness.id)
   }
-  for (const harness of [claudeHeadlessHarness, codexHarness, codexHeadlessHarness]) {
+  for (const harness of [claudeHeadlessHarness, codexHarness, codexHeadlessHarness, zcodeHarness]) {
     assert.deepEqual(harness.launchEnv(id), [], harness.id)
   }
 })
@@ -1913,6 +1913,23 @@ test('baseCmd resolves the launcher command the pin freezes: the named-launcher 
   assert.equal(codexHarness.baseCmd(undefined), 'codex')
   assert.equal(opencodeHarness.baseCmd(undefined), 'opencode')
   assert.equal(piHarness.baseCmd(undefined), 'pi')
+  assert.equal(zcodeHarness.baseCmd(undefined), 'zcode')
+})
+
+test('zcode adapter launches one prompt, materializes Claude-compatible hooks, and refuses unsupported control', async () => {
+  assert.equal(zcodeHarness.headless, true)
+  assert.equal(zcodeHarness.launchOneShot, true)
+  assert.equal(zcodeHarness.launchCmd('id', undefined, '/opt/zcode'), '/opt/zcode --prompt')
+  assert.equal(zcodeHarness.sessionIdArg('id'), '')
+  assert.equal(zcodeHarness.shimFile('/project'), '/project/.zcode/settings.json')
+  assert.deepEqual(zcodeHarness.contractFiles('/project'), ['/project/AGENTS.md'])
+  assert.equal(zcodeHarness.liveness({ session: 'z' }, true, undefined, { pidAlive: true }), 'online')
+  assert.equal(zcodeHarness.liveness({ session: 'z' }, true, undefined, { pidAlive: false }), 'offline')
+  const shim = zcodeHarness.shim('/d/dispatch.sh', '/s/spex')
+  assert.match(shim.content, /"SessionStart"/)
+  assert.match(shim.content, /dispatch\.sh zcode Stop/)
+  await assert.rejects(() => zcodeHarness.deliver({ session: 'z' }, 'follow up'), /zcode has no control channel/)
+  assert.throws(() => zcodeHarness.resumeArg({ session: 'z' }), /zcode has no control channel/)
 })
 
 test('rendezvousListening: tri-state — live listener, proven-dead stale file/absent path, unproven timeout', async () => {

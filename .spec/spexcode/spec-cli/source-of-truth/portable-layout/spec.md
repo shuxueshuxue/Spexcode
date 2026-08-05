@@ -130,6 +130,20 @@ the agent's shell under the FIRST session's baked `SPEXCODE_SESSION_ID`, while c
 thread's `CODEX_THREAD_ID` per command, which aliases correctly. Claude is unchanged (its env var already
 equals its record id); a raw, un-aliased harness id is the last resort, below `SPEXCODE_SESSION_ID`.
 
+**Alias search answers a question only about ids the store does not already own**, and both layers —
+`readAliasedRecordEntry` and the shell twin `hp_store_dir` — apply that rule identically. Absence splits in
+two. An id that owns a STORE DIRECTORY is already one of ours: "this session exists and has written no record
+yet" — the sentinel-only self-launched agent above — is a settled fact about *that* session, so resolution
+stops there and reports absence. Only an id owning no store directory can be some record's
+`harness_session_id`, and only then may the search over records run. Collapsing the two halves is wrong twice
+over. It is a mis-resolution: an unrelated record whose harness id happens to equal a live session's name
+would answer under that name, displacing the session the id actually denotes. And it is unbounded work:
+because the turn-failure supervisor reconciles every record once a second ([[sessions-core]]), a single
+record-less store directory re-read and re-parsed the WHOLE store on every tick — measured on a live
+339-session store with 176 record-less directories at 60,003 synchronous reads per second, which saturates
+the event loop and starves every request behind it, the board build included. The cost of the correct rule is
+one directory check, so the search stays linear only where a search is the actual question.
+
 The same *policy-not-hardcode* rule governs where the config loaders look. The spec tree's **root
 node** — the single top-level directory under `.spec/` that holds a `spec.md` — is detected at read
 time, never assumed by name: the dogfood repo's is `spexcode`, a `spex init` adopter's is `project`. So

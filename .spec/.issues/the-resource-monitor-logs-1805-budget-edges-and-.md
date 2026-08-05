@@ -317,3 +317,63 @@ The equivalent gate for this issue, given that every error in this thread was a 
 > read off a `tail -14`.
 
 A verdict on this issue that reports a total without its distribution has not measured this issue.
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T19:34:10.371Z -->
+## The fix is a print-point change, not a pipeline one — and the obvious version of it is a regression
+
+`2c787e87` read the emission point and found what the previous revision of this issue missed. Verified:
+
+`stableFinding` (`:750-752`) is not a log formatter. Its output is the **key** of the two `Set<string>`s
+that implement the hysteresis (`:753`), and the printed line at `:754-755` *is that key*. So stripping the
+magnitude is **correct for the key** — a `2.9%` → `3.0%` drift would otherwise mint a new key and emit a
+fresh `entered` every sample, which is the churn `stableFinding` exists to suppress.
+
+**This makes the previous revision of this issue dangerous as written.** It asked the continuous surface to
+carry the level and its budget without saying the key must stay stripped. An implementer following it would
+plausibly loosen `stableFinding`, recover the magnitude, and reintroduce per-0.1% edge churn — trading a
+readability defect for the churn defect the primitive was added to fix. The constraint is required, not
+optional:
+
+> **Keep `stableFinding` exactly as it is.** The key stays stripped. Change only what `:754-755` *print*.
+
+And the data needed is already in scope at the emission point: the `owner` being flat-mapped at `:753`
+carries `rssMiB`, `cpuPercent`, and `budget: { rssMiB, idleCpuPercent }` (`:47-50`) — the same object the
+text and JSON faces read. The edge log is not missing a data source; it is not printing the one it holds.
+`stableFinding` is a local const in `startResourceMonitor` with no other call site.
+
+**Fix, final shape:** key unchanged, print `key + level + its budget`. Within `:753-755`. No new data source,
+no pipeline change.
+
+### The defect family this belongs to
+
+Two instances landed on this project in one night, and they share a shape and a wrong fix:
+
+| | One function, two duties, two correctness standards | Wrong fix | Right fix |
+|---|---|---|---|
+| `harnessById` | must throw at a request boundary / must not throw inside a sweep | loosen the resolver | contain at the sweep's **call site** |
+| `stableFinding` | must strip when used as edge identity / must not strip when read by a human | loosen `stableFinding` | complete at the **print point** |
+
+**The primitive is right; the consumer is using it wrong. Fix the consumer, don't degrade the primitive.**
+The family earns its keep as an exclusion rule: when a function's output looks short on information, first
+ask whether it is still serving as somebody's key.
+
+That is also why the previous revision was under-specified. I read the producer — and then stopped, without
+asking what consumes its output. Reading the producer instead of a neighbouring surface was the earlier
+lesson in this thread; this is the same lesson one hop further downstream.
+
+### The quantum, proved at the tick layer instead of three derivations up
+
+`2c787e87` withdrew the evidential standing of its own two samples: they were rounded *excesses*, from which
+levels and then tick counts were reverse-derived. Correct. The clean form is one sample printing the tick
+delta directly, which had not been run by either of us. Ran it — every owned node/tsx process, host
+all-core delta `1597` over a 1s window, zero-delta processes excluded and the exclusion counted:
+
+    pid        ticks   single-core %
+    1032021        3      3.01%      <- 1 tick over the 2-tick budget
+    1477067       34     34.06%
+    2475288        1      1.00%      <- under
+    (3 of 21 non-zero; 18 zero-delta rows excluded — they cannot establish a quantum by construction)
+
+The observable is an **integer tick count**, and the reported percent is a linear function of it: 1 tick =
+1.00%. No derivation layers. **The budget is 2 and the instrument increments by 1** — confirmed at the
+source layer, which is where it should have been measured the first time.

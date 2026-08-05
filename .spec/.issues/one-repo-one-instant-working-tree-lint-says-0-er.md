@@ -61,3 +61,40 @@ difference being that the last one recorded its reason in the commit body rather
 silently. Any claim of the form "z-code is a governed workspace" has to be read against that.
 
 Raw adoption-blocker measurements: `spexcode-base` `studies/zcode-adoption-blockers/notes.md`.
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T17:56:46.432Z -->
+The remedy this issue leaves implicit — "then track the governed source" — has now been measured on the
+same mirror by session `2c787e87`, and it is **not a small step**. Recording it here because it changes
+this issue's option set, not just its context.
+
+What `git add -A` would stage on that mirror:
+
+    paths staged                     : 18173
+      AppleDouble / .DS_Store        :  8069   (44%)
+      source                         :  7997
+    >1MB blobs                       : 4.2MB .webm, 2.4MB png, 2.1MB api.json, 1.6MB .icns
+    .gitignore itself                : NOT tracked
+    .env.development / .env.production / .env.e2e.local.example
+      + apps/zcode-cli/.env.template : four files, none masked by gitignore;
+                                       three contain long value assignments
+
+(Path/mask/count measurements only — no values were read or written anywhere.)
+
+So on a real monorepo the cheap-sounding remedy commits 8069 junk files, several MB-scale binaries, and
+**four unignored `.env` files** into history. The absence of a remote does not reduce that: credentials in
+commit history are in commit history.
+
+Two consequences for this issue:
+
+1. **The diagnostic fix stays narrow and stays worth doing.** Nothing above touches it — saying
+   "N governed paths exist in the working tree but are untracked" once, with a count, is still one
+   sentence and still the honest verdict. It gets *more* valuable, not less, because it is now the only
+   cheap half.
+2. **"Track them and the gate starts working" must stop being stated as the obvious follow-up.** The
+   ordered form is: track `.gitignore` first → add by source extension, targeted → mask AppleDouble →
+   exclude `.env*` explicitly and confirm each one separately. That is a reviewed add, not a side effect
+   of another task, and it should not be smuggled in as cleanup while doing something else.
+
+The gate arithmetic in the issue body is unaffected — those files genuinely are absent from the committed
+tree, and every commit in that mirror genuinely is bypassing the gate. What changes is that closing the
+bypass is its own reviewed piece of work with a credential-exposure step in the middle of it.

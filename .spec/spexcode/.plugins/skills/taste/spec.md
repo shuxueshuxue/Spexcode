@@ -134,6 +134,47 @@ The principles, in the maintainer's own framing:
     the product already had the answer. A cheap extractor is not the cheap half of the job; it is where the
     expensive mistake lives.
 
+22. **Prose is not a free edit: you can hold a tree's proof and then move the contract that proof was
+    against.** The maintainer's framing: "散文不是免费的编辑：你可以握着一棵树的证明，然后把那个证明所针对的
+    契约挪走。" Freshness has more than one axis, and the rule we already wrote down only guards one of them:
+    "commit the verified tree, then file" catches the *code* moving after the proof, and says nothing about the
+    *contract* moving after the proof. Measured, self-caught by the session that did it: it filed a passing
+    reading, then softened the wording of the same scenario in `eval.md`, and both readings went stale on the
+    scenario axis — in its own words, "I was holding the proof of that tree, and then I moved the contract that
+    proof was against." The reason this one gets its own entry rather than an amendment to the code-axis rule is
+    that the two feel nothing alike: editing code, you know you are moving the thing under test; editing wording
+    feels like polishing a document, and `scenarioHash` disagrees. Its sibling is the same shape wearing a
+    different costume — a *sampling* choice that silently decides the claim. One-build-per-fresh-process does not
+    merely hide an in-process memo, it **inverts the conclusion**: 507ms cold against 12–15ms warm is a factor of
+    forty, so "a cache buys ~0 here" and "this is the headline finding" were separated by nothing but how the
+    sample was taken; the corpus picked to prove it could not exhibit the defect at all (0 of 1144 distinct
+    reading `codeSha`s reachable from that HEAD, therefore zero selector queries reaching the engine). Hence the
+    method rule that came out of it: on a loaded box a **fixed wall-clock threshold is not a claim** — compare
+    load-matched pairs, and put the falsifiable half of the claim on something load-independent. The stopwatch is
+    the symptom; the count of git child processes is the assertion.
+
+23. **An expected value that can be derived must be derived — hardcoding it once opens a second source of
+    truth.** Say the fact once; derive it everywhere else. Two independent instances landed in one evening,
+    arrived at from opposite directions, and both are *guards* rather than fixes: `docs-quickstart.test.ts`
+    reconstructs the expected harness list from the live `NATIVE_HARNESS_IDS` registry, so registering a
+    harness without updating the three surfaces that teach adoption (both READMEs' Quick start, `spex guide`'s
+    setup page) fails there — measured, on the author of this entry, within the hour of adding `zcode`;
+    and `session-create-cli.test.ts` parses `cli.ts` with the TypeScript AST to derive three sets
+    (the `VALUE_FLAGS` literal, every `flag('x')` value read, every `rejectUnknownFlags` allowlist) and
+    assert their relationship with **no flag name written in the test at all**, so the next person who adds a
+    valued flag and forgets the distant table fails on the right assertion instead of receiving a confident
+    wrong sentence about a *different* flag. That second failure mode is the whole point: a restated list does
+    not fail loudly when it drifts, it fails *elsewhere*, wearing the costume of an unrelated bug. This is the
+    same bone as [[taste]] 16 — two truths will disagree eventually, and on that day nothing tells you which
+    one to believe — and it is what [[taste]] 3 looks like when complexity is genuinely bought back: an AST
+    test is more code than a string array, and it retires a class of defect rather than one instance of it.
+    The discipline it pairs with is 22's, but the two are not the same kind: 22 is *temporal* (do not move the
+    contract after the proof) and a human has to remember it, while this one is *structural* and enforces
+    itself — a derived expectation catches you without anyone remembering anything. Two cautions keep it
+    honest: derive from the authoritative home, because deriving from a copy silently promotes the copy; and
+    the rule is about *expectations*, not about outlawing constants — a fact with exactly one home is fine
+    where it lives, the defect is the second place that restates it.
+
 ## expanded spec
 
 This node is the seed. The de-drift campaign distills these into a sharper checklist (the "20 tastes" + the

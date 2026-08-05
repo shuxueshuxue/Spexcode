@@ -5,8 +5,8 @@ scenarios:
     code: [spec-eval/src/freshness.ts]
     description: >-
       In a fresh process with no server and no HTTP, drive the real `graphCache` full producer against a
-      corpus whose eval readings carry anchored `code:` entries (this repo governs itself: 241 nodes, 1850
-      anchored demands, 1018 distinct selector queries). Build the board, then force repeated FULL rebuilds
+      corpus whose eval readings carry anchored `code:` entries (this repo governs itself: on the order of a
+      thousand distinct selector queries). Build the board, then force repeated FULL rebuilds
       by moving one issue file — so the drift-index tip, every governed source file, and every reading stay
       byte-identical between rebuilds. Read the build time the product itself reports against its own
       `SPEXCODE_BOARD_BUDGET_MS` budget once the durable caches have warmed and the board has converged.
@@ -25,9 +25,12 @@ scenarios:
       top-level key set first (`identity`, `issuesStamp`, `nodes`, `sessions`; overlays live inside
       `nodes[].overlays`) and assert the comparison is non-vacuous before diffing the body.
     expected: >-
-      Identical bytes. Same top-level keys, equal per-key digests, equal serialized length, and a
-      non-vacuous comparison (241 nodes present, 180 carrying an eval summary). A key the board does not
-      carry must not be able to report "identical" by comparing nothing on both sides.
+      Identical bytes, judged against a control of two BYTE-IDENTICAL copies of the code compared the same
+      way — the scoped board must match the recompute exactly as closely as identical code matches itself,
+      so any harness residue is visible instead of being argued away. Same top-level keys, equal per-key
+      digests, equal serialized length, and a comparison proven non-vacuous (the whole node set present,
+      a substantial subset carrying eval summaries and overlays, verdicts actually resident). A key the
+      board does not carry must not be able to report "identical" by comparing nothing on both sides.
 ---
 
 # selector-anchor-scope — evals

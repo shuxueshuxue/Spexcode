@@ -17,8 +17,7 @@ scenarios:
       Run the real CLI verb `spex guide settings` and read its stdout. It must print the runtime-settings
       manual for spexcode.json / spexcode.local.json — the Config fields plus the crucial committed-vs-
       host-local file distinction, with the clean-init launcher commands and a concrete host-local profile
-      example. Also probe an unknown topic (`spex guide bogus`) to confirm the fallback still names the real
-      topics.
+      example. The unknown-topic fallback has its own scenario below and is not probed here.
     expected: >
       Output names BOTH files by role (spexcode.json = committed/portable, spexcode.local.json =
       gitignored/host-specific), documents the launcher schema
@@ -32,7 +31,21 @@ scenarios:
       and `doctor.breadth`, not under `lint`; the retired `lint.maxChildren` spelling appears only in a
       migration note naming its doctor replacement.
       The sessions section explains maxActive's default and that it counts compute slots, not total
-      sessions. The unknown topic fails loud, listing `Topics: spec, eval, settings, footprint`.
+      sessions.
+    tags: cli
+    code: spec-cli/src/guide.ts
+  - name: unknown-topic-names-every-registered-topic
+    description: >
+      Run `spex guide <unknown>` and read the loud failure, then count the topics the CLI actually serves by
+      driving each one — `spex guide <topic>` for every key in guide.ts's TOPICS registry — and compare the
+      two sets. The denominator is the registry (the surface that does NOT print the message); the numerator
+      is the list the error message prints. Both must be reported as `N of N`.
+    expected: >
+      Exit is non-zero and stdout carries no page. The printed `Topics:` list equals the registry's key set —
+      `N of N` with N counted off the registry, not off the message — and every listed topic really serves a
+      page (each `spex guide <topic>` exits 0 with its own header). The reading names N. A reading whose two
+      sides come from the same source does not count: the message's own list can never disagree with itself,
+      so a reading that counts the printed names and then checks the printed names asserts nothing.
     tags: cli
     code: spec-cli/src/guide.ts
   - name: eval-topic-keeps-step-names-label-only

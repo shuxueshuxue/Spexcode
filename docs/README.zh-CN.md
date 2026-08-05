@@ -57,7 +57,7 @@ spec、commit、eval 组成一个优化循环。spec 是损失函数:写下你�
 ```sh
 npm i -g spexcode                              # 安装 `spex` 命令
 cd your-repo
-spex init --harness claude,codex,opencode,pi,claude-headless,opencode-headless,pi-headless,codex-headless   # 创建 .spec/、安装 git 钩子、物化 agent 契约
+spex init --harness claude,codex,opencode,pi,zcode,claude-headless,opencode-headless,pi-headless,codex-headless   # 创建 .spec/、安装 git 钩子、物化 agent 契约
 ```
 
 引入到这里就完成了。示例列出了全部内建 harness,不用的删掉就行,`--harness` 必填,接受任意一个 id 或逗号分隔的子集。`spex init` 是增量的:在任何现有 git 仓库上都能跑,绝不覆盖你的文件,只做三件事。它创建根节点 `.spec/project/spec.md` 和一份初始的 `spexcode.json`,安装 git 钩子,再把工作流规则**物化**进你的 agent 本来就会读的文件(`CLAUDE.md`、`AGENTS.md`):改动代码之前先读管辖它的 spec,spec 和代码在同一个 commit 里提交,只提出合并提议、不执行合并。任何打开这个仓库的 agent 都会自己发现这套工作流。

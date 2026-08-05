@@ -14,7 +14,7 @@ the rest, you don't hand-author the spec tree or wire the dashboard yourself.
    startup commands.)
 
 2. Adopt a repo
-     cd <your-repo> && spex init --harness claude,codex,opencode,pi,claude-headless,opencode-headless,pi-headless,codex-headless   # seeds .spec/ + git hooks (additive, never overwrites)
+     cd <your-repo> && spex init --harness claude,codex,opencode,pi,zcode,claude-headless,opencode-headless,pi-headless,codex-headless   # seeds .spec/ + git hooks (additive, never overwrites)
    --harness is required and has no default — the explicit choice of which harness(es) materialize
    delivers into. The example lists every built-in; drop the ones you don't use (any one id or
    comma-separated subset is valid).

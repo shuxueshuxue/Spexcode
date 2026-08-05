@@ -386,11 +386,11 @@ if (cmd === 'serve') {
     console.log(h)
   } else console.log(overviewHelp())
 } else if (cmd === 'guide') {
-  const { guideText } = await import('./guide.js')
+  const { guideText, guideTopics } = await import('./guide.js')
   if (process.argv[3] === 'config') signpost('spex guide config', 'spex guide settings')
   const text = guideText(process.argv[3])
   if (text === null) {
-    console.error(`spex guide: no topic '${process.argv[3]}'. Topics: spec, eval, settings, footprint. Run \`spex guide\` (no topic) for the setup workflow, \`spex help\` for the command map.`)
+    console.error(`spex guide: no topic '${process.argv[3]}'. Topics: ${guideTopics().join(', ')}. Run \`spex guide\` (no topic) for the setup workflow, \`spex help\` for the command map.`)
     process.exit(2)
   }
   console.log(text)

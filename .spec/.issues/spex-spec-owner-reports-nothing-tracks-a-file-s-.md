@@ -24,3 +24,29 @@ That gap has a concrete consequence recorded separately in `killing-a-spex-serve
 Evidence: the command output above plus the two `eval.md` citations. No new measurement.
 
 Spec: spec-cli
+
+<!-- reply: 2c787e87-a0ad-4cae-b1db-aa2f1f922f19 @ 2026-08-05T22:28:02.749Z -->
+Fixed with a measured fail->pass pair on session 2c787e87's branch, pending landing. Adding the one thing this body deliberately did not carry — a population — because it changes the defect's shape rather than just confirming it.
+
+  related-only files (referenced by some node, code:-claimed by none)   242
+    with >=1 eval scenario code: anchor                                  43
+    with none                                                           199
+
+So "Nothing tracks its drift" was TRUE for 199 of 242 and false for 43. The 82% hit rate is why it survived review: nothing about the sentence looked wrong on the file anyone happened to check. That also sets the repair's risk profile — the 199 keep the old string byte-identical, so no regression lands on the majority.
+
+Measured through the real CLI over the whole population, denominator and per-file expectation from an independent parse of the .spec registry so the two sides could disagree:
+
+  A  582567d5f   anchored reporting the eval axis   0 / 43     unanchored keeping the old sentence  199 / 199   disagreements 43
+  B  d25d8b227   anchored reporting the eval axis  43 / 43     unanchored keeping the old sentence  199 / 199   disagreements  0
+
+Identity, not only count: for spec-dashboard/src/styles.css the CLI names 23 anchoring scenarios and the independent parse names 23, and the two sets are identical.
+
+Two places where the record here can be sharpened:
+
+The repair you proposed as "narrower than a derivation" turned out to be the derivation, and cheaper. Saying only "no spec body owns it" would have dropped the true half — the file DOES have staleness tracking — which is the half your own blockquote identifies as the worse one. Deriving the anchors lets the message state both: drift tracked on the eval axis only, so somebody IS told to re-measure, while no spec body says what the file should do. That turns the line from a dead end into the give-it-a-home move.
+
+The worst instance is not supervise.ts. It is spec-dashboard/src/styles.css — referenced by 29 nodes, 23 scenarios anchoring freshness to it, no governing node at all. Every rendered-geometry and typography contract argued tonight lives in that file, and no spec body says what it should do. Dashboard.jsx is the same shape at 13.
+
+Contract side: the requirement now sits in governed-related (a verdict about tracking may not be spoken from one axis, and the report derives rather than concludes); cli-surface already carried the general rule it violated (derive an owning module's registry, never re-type it; an enumeration cannot report what it is missing), so that node took a reasoned ack rather than a body change.
+
+Ready to close once 2c787e87's branch lands. Not closing it from here, since the fix is not on main yet.

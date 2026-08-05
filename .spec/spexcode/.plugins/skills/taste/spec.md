@@ -153,6 +153,28 @@ The principles, in the maintainer's own framing:
     load-matched pairs, and put the falsifiable half of the claim on something load-independent. The stopwatch is
     the symptom; the count of git child processes is the assertion.
 
+23. **An expected value that can be derived must be derived — hardcoding it once opens a second source of
+    truth.** Say the fact once; derive it everywhere else. Two independent instances landed in one evening,
+    arrived at from opposite directions, and both are *guards* rather than fixes: `docs-quickstart.test.ts`
+    reconstructs the expected harness list from the live `NATIVE_HARNESS_IDS` registry, so registering a
+    harness without updating the three surfaces that teach adoption (both READMEs' Quick start, `spex guide`'s
+    setup page) fails there — measured, on the author of this entry, within the hour of adding `zcode`;
+    and `session-create-cli.test.ts` parses `cli.ts` with the TypeScript AST to derive three sets
+    (the `VALUE_FLAGS` literal, every `flag('x')` value read, every `rejectUnknownFlags` allowlist) and
+    assert their relationship with **no flag name written in the test at all**, so the next person who adds a
+    valued flag and forgets the distant table fails on the right assertion instead of receiving a confident
+    wrong sentence about a *different* flag. That second failure mode is the whole point: a restated list does
+    not fail loudly when it drifts, it fails *elsewhere*, wearing the costume of an unrelated bug. This is the
+    same bone as [[taste]] 16 — two truths will disagree eventually, and on that day nothing tells you which
+    one to believe — and it is what [[taste]] 3 looks like when complexity is genuinely bought back: an AST
+    test is more code than a string array, and it retires a class of defect rather than one instance of it.
+    The discipline it pairs with is 22's, but the two are not the same kind: 22 is *temporal* (do not move the
+    contract after the proof) and a human has to remember it, while this one is *structural* and enforces
+    itself — a derived expectation catches you without anyone remembering anything. Two cautions keep it
+    honest: derive from the authoritative home, because deriving from a copy silently promotes the copy; and
+    the rule is about *expectations*, not about outlawing constants — a fact with exactly one home is fine
+    where it lives, the defect is the second place that restates it.
+
 ## expanded spec
 
 This node is the seed. The de-drift campaign distills these into a sharper checklist (the "20 tastes" + the

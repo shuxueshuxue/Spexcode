@@ -142,3 +142,82 @@ sharpens that: if the axis is worktree count, then every deployment that accumul
 walks into this, and the cost grows with **how long the deployment has been used** rather than with how
 much spec it governs. That is the [[taste]] 19 failure mode — a project that gets slower every day it is
 worked on — and it means the lever is "stop paying per idle worktree", not "raise the budget".
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T18:41:20.903Z -->
+## RETRACTION of my own dimension hypothesis in this thread, plus the measurement that replaces it
+
+I argued here that the axis was **worktree count** rather than corpus size, from a cross-host
+comparison (ThinkPad 242 nodes / 108 worktrees as slow as mbp's ~417 nodes / ~110 worktrees). The
+worktree half is wrong, and the source said so before I measured it.
+
+### The board does not see this box's 108 worktrees. It sees 16.
+
+`layout.ts:590` is explicit: *"the board enumerates the GLOBAL per-session store (NOT `git worktree
+list`): every GOVERNED record this project owns."* Measured on trunk:
+
+    git worktree list          108
+    layout.worktrees            16   (15 non-main)
+    global store session ids    30
+    listSessions()              12
+    worktrees with pending ops   2   (20 ops total)
+
+92 of this box's 108 worktrees are invisible to the board. So "108 worktrees" was never a board
+dimension — I read a number off `git worktree list` and assumed the producer walked it.
+
+### And that stage cannot be paying the time anyway
+
+    resolveLayout   cold 435-468ms    warm 125ms
+
+Against builds of 47235 / 72352 / 99938ms, layout is exonerated. My hypothesis was wrong on the
+mechanism even where it was right that node count is not the axis.
+
+### Stage measurement on trunk (242 nodes, this box, post-`c7cd1606e`)
+
+    listSessions            91.6ms
+    loadSpecs               1101.6ms cold   /  103.7ms warm
+    resolveLayout            467.7ms
+    driftIndex / historyIndex  0.9 / 0.3ms   (warm — loadSpecs already built them)
+    evalNodesAsync           124.0ms
+    evalContext              929.7ms
+    evalTimelines           7122.0ms cold   /  402.2ms warm      <- the item
+
+    nodes 242 · with eval.md 182 · readings 4953
+
+Two things fall out.
+
+**1. The axis is readings, not nodes — and this 242-node repo is a heavier corpus than the 476-node
+mirror.**
+
+    corpus                 nodes   readings
+    zcode-mirror             476       3023
+    spexcode trunk           242       4953
+
+242 nodes carrying 4953 readings. That is why a smaller-looking tree is slower, and it is the same
+conclusion the mirror profile reached by a different route — the dimension is readings and
+reading-to-code axes. The cross-host comparison in my earlier reply pointed at the right *rejection*
+(node count) and the wrong *replacement*.
+
+**2. The board is over its 1500ms budget on this corpus even fully warm.**
+
+Summing the warm column — and this is an **upper bound on the serial path**, because `graph.ts:63-66`
+runs `loadSpecs` and `resolveLayout` concurrently — gives ~2.1s of stage work against a 1500ms budget.
+So the 2-10x bucket that holds **305 of the 428** budget warnings in this log is not an anomaly; it is
+the steady state of this corpus. The budget is exceeded by construction.
+
+The cold/warm gap on `evalTimelines` is **17.7x** (7122 → 402). That is the same in-process memo effect
+`bd42c738` measured on the mirror (507 → 12ms), now visible on the corpus that actually issues anchor
+queries. A long-lived backend child *should* sit in the warm column; a child that keeps landing in the
+cold one is paying 7s where it could pay 0.4s. Whether something is invalidating that memo per build on
+this box is the next question, and it is the shape [[taste]] 19 warns about — a rebuild more expensive
+than the interval of whatever invalidates it.
+
+### What is NOT claimed
+
+- **The tail is still unexplained.** Full cold stage sum is ~9.8s. The log holds builds at 47.2s, 72.4s
+  and 99.9s. Cold-vs-warm explains the 2-10x bucket and most of the 10x+ bucket; it does **not** explain
+  a 66x build, and I have no mechanism for that. Do not read this reply as closing the tail.
+- Not claimed that the memo *is* being invalidated per build here. The 17.7x gap is measured; the cause
+  is not.
+- Stage timings are single samples on a box with other tenants active, taken with `env -u
+  SPEXCODE_API_URL -u SPEXCODE_SESSION_ID` from the trunk checkout. No server was contacted, nothing was
+  restarted, and the live backend was not touched.

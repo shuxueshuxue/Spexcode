@@ -89,3 +89,56 @@ reads/second, which is still O(store size) per second and will grow, but at 15s 
 
 Next attribution should target the `.spec` tree read and the per-node git fanout. Same rule as before: no
 special-case bypass, and no claim of a fix without a cold product measurement to match this table.
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T18:15:41.605Z -->
+A second host now shows this issue's symptom, and because the two hosts disagree on almost every other
+axis, the pair is a dimension test rather than a second anecdote. Measured tonight on the ThinkPad
+(the product repo's own backend, `:8787`, child running post-`c7cd1606e` code):
+
+| axis | mbp / zcode (this issue) | ThinkPad / spexcode (tonight) |
+|---|---:|---:|
+| spec nodes | ~417 | **242** |
+| readings | — | 5,277 |
+| board payload | 675,896 B | **374,331 B** |
+| worktrees in the repo | ~110 session worktrees / 185 total | **108** |
+| extreme `/api/graph` builds | 21838ms, 16317ms cold | **47235ms, 72352ms** |
+
+So the ThinkPad has **~58% of the nodes and ~55% of the payload** and produces builds of the same order
+or worse. If the dominant cost scaled with nodes, readings, or response bytes, these two hosts should
+differ by roughly 2x in the same direction. They do not. **The one axis on which they nearly agree is
+worktree count (108 vs ~110), and that is also the axis this issue's launcher already names as the
+standing suspicion.**
+
+That is [[taste]] 18 applied to this issue's open question: the unresolved dominant cost has a dimension,
+and this pair points at worktrees rather than corpus size.
+
+## An arithmetic lead, offered as a hypothesis with its own test
+
+A separate profile of the same board producer on a 2-worktree corpus measured the worktree stage —
+"worktree layout and overlay delta discovery", `graph.ts:63-74` → `layout.ts:576+` — at **102-108ms for
+2 worktrees**. If that stage carries a meaningful per-worktree cost rather than a fixed one, 108
+worktrees is a ~50x multiplier on it, which lands in the observed range on its own.
+
+**This is arithmetic on someone else's two-worktree sample, not a measurement at 108.** The test that
+settles it is one number: time that single stage on this host, then on a checkout with few worktrees, and
+see whether it scales with the count. Until then it is a lead, not a cause.
+
+## The memory half, which may be the same finding
+
+Filed separately as `the-board-budget-warning-logs-a-1-002x-and-a-48x`: on this host both extreme builds
+are immediately preceded in the log by `[resources] entered backend:...:rss-over-budget`, and the live
+board-producing child sits at **1715-1871MB RSS, oscillating, against node's default 4288MB cap** with no
+`--max-old-space-size` passed — an order of magnitude above the same process signature elsewhere on the
+box (44-148MB). Walking 108 worktrees and their `.spec` deltas is a plausible source of exactly that
+plateau, which would make the worktree axis and the RSS observation one finding rather than two.
+
+Not claimed: that RSS causes the slow builds (log adjacency on two events plus a mechanism), or that the
+plateau is a leak (within the sampling window it is flat, not climbing).
+
+## Why this matters for the fix shape
+
+This issue already notes that `SPEXCODE_BOARD_TIMEOUT_MS=180000` only hides the 503. The cross-host pair
+sharpens that: if the axis is worktree count, then every deployment that accumulates session worktrees
+walks into this, and the cost grows with **how long the deployment has been used** rather than with how
+much spec it governs. That is the [[taste]] 19 failure mode — a project that gets slower every day it is
+worked on — and it means the lever is "stop paying per idle worktree", not "raise the budget".

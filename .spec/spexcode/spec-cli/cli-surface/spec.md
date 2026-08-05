@@ -9,6 +9,7 @@ related:
   - spec-cli/src/guide.ts
   - spec-cli/src/help.ts
   - spec-cli/src/session-send-cli.test.ts
+  - spec-cli/src/session-create-cli.test.ts
 ---
 # cli-surface
 
@@ -56,6 +57,12 @@ guessed from quoting or whitespace. That delimiter is authoritative for the enti
 and authentication consumers read only the option prefix, so payload bytes can never become control flags again
 downstream. A write with a missing or extra positional, duplicate/missing flag value, or unknown flag fails before
 selector resolution or backend contact; a usage error can never print the write's success receipt.
+
+`VALUE_FLAGS` is the one declaration of which recognized options consume their following token while the shared
+positional scanner runs. A per-verb `rejectUnknownFlags` allowlist says only that an option is permitted; when that
+verb reads an allowed option through `flag(name)`, a source-level guard requires `--${name}` in `VALUE_FLAGS`.
+Therefore a new valued option cannot be accepted and then silently reclassified as a positional payload: the test
+fails until the one value declaration is updated.
 
 `spex session reparent <child-SEL...> --to <parent-SEL>` is the manager recovery verb for moving a fleet to a
 replacement supervisor. `--to` is the operation's required destination rather than a second positional list:

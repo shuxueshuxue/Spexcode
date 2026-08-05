@@ -525,6 +525,8 @@ export default {
   session: {
     opsTitle: 'nodes this session is changing — right-click for session actions',
     lockTitle: 'right-click for session actions, including lock on graph',
+    worktreeBadge: 'WT',
+    worktreeTitle: ({ branch }) => branch ? `isolated worktree · ${branch}` : 'isolated worktree',
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌥+N)',
     searchTitle: 'Search (⌥+/)',

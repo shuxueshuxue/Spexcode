@@ -5,7 +5,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, w
 import { tmpdir } from 'node:os'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { changedSince, codeDrift, contentProbeFor, anchorProbeFor, anchorProblems, freshnessCacheSize, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
+import { changedSince, codeDrift, contentProbeFor, anchorProbeFor, anchorProblems, anchorVerdictCacheSize, freshnessCacheSize, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
 import { scenarioCodeAxis, scenarioHash } from './scenarios.js'
 import { driftIndex, withGitAbortSignal, type DriftIndex } from '../../spec-cli/src/git.js'
 
@@ -909,4 +909,124 @@ test('scenario code axis: a selector never moves the scenario contract hash', ()
   const none = { name: 's1', ...CONTRACT }
   assert.equal(scenarioHash(anchored), scenarioHash(bare))
   assert.equal(scenarioHash(none), scenarioHash(bare))
+})
+
+// ---- the selector-anchor verdict scope ([[selector-anchor-scope]]) ----
+
+// Counts the git children a stretch of work actually spawns, so "issued no query" is READ off the process
+// table rather than argued from timings. The probe's own scope naming is filesystem-only (headSha reads
+// .git/HEAD; the interpretation is memoized), so a fully-served sweep must spawn nothing at all.
+function countingGit<T>(body: () => Promise<T>): Promise<{ result: T; children: string[] }> {
+  const bin = mkdtempSync(join(tmpdir(), 'freshness-anchor-bin-'))
+  const log = join(bin, 'children.log')
+  writeFileSync(log, '')
+  writeFileSync(join(bin, 'git'), `#!/usr/bin/env node
+const fs = require('node:fs'), cp = require('node:child_process')
+const args = process.argv.slice(2)
+fs.appendFileSync(process.env.SPEX_ANCHOR_LOG, args.join(' ') + '\\n')
+const r = cp.spawnSync(process.env.SPEX_ANCHOR_REAL_GIT, args, { input: fs.readFileSync(0), maxBuffer: 64 * 1024 * 1024 })
+if (r.stdout) process.stdout.write(r.stdout)
+if (r.stderr) process.stderr.write(r.stderr)
+if (r.error) throw r.error
+process.exit(r.status ?? 1)
+`)
+  chmodSync(join(bin, 'git'), 0o755)
+  const previousPath = process.env.PATH
+  process.env.PATH = `${bin}:${process.env.PATH ?? ''}`
+  process.env.SPEX_ANCHOR_LOG = log
+  process.env.SPEX_ANCHOR_REAL_GIT = REAL_GIT
+  return body().then((result) => ({ result, children: readFileSync(log, 'utf8').split('\n').filter(Boolean) }))
+    .finally(() => {
+      process.env.PATH = previousPath
+      delete process.env.SPEX_ANCHOR_LOG
+      delete process.env.SPEX_ANCHOR_REAL_GIT
+      rmSync(bin, { recursive: true, force: true })
+    })
+}
+
+test('selector anchors: a rebuild at an unchanged head issues ZERO anchor queries', async () => {
+  // The primary invariant. Milliseconds are the symptom; the query count is the thing.
+  const { root, base } = anchorRepo()
+  editBeta(root)
+  const idx = await driftIndex(root)
+  // two scenarios anchoring DIFFERENT units of one file — each is its own entry, so each is its own verdict
+  const demands = [['m.ts#alpha'], ['m.ts#beta']]
+    .map((code) => ({ sinceSha: base, entries: scenarioCodeAxis(code as any, []).entries }))
+  const sweep = async () => {
+    const probe = anchorProbeFor(root, idx)      // a whole new probe — the board builds one per read
+    for (const demand of demands) await probe.prime?.([demand])
+    return [probe.hit(base, 'm.ts', ['alpha']), probe.hit(base, 'm.ts', ['beta'])]
+  }
+
+  const cold = await countingGit(sweep)
+  assert.ok(cold.children.length > 0, 'the first sweep must really derive the verdicts')
+
+  const warm = await countingGit(sweep)          // same head, same demand set
+  assert.deepEqual(warm.children, [], `a rebuild at an unchanged head re-derived: ${warm.children.join(' | ')}`)
+  assert.deepEqual(warm.result, cold.result, 'the served verdicts must be the derived ones')
+  assert.deepEqual(cold.result, [false, true], 'alpha untouched, beta moved — the answer itself')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('selector anchors: a head move invalidates — an old head\'s verdict is never read back', async () => {
+  // Proven with a READING, not an argument: the window `sinceSha..HEAD` lengthens as HEAD advances, so the
+  // same (sinceSha, path, selectors) legitimately flips false -> true. A verdict that survived the move
+  // would report the reading FRESH after its own unit moved — the unsafe direction.
+  const { root, base } = anchorRepo()
+  const sc: any = scOf(['m.ts#alpha'])
+  const reading: any = { ...readingAt(base), scenarioHash: scenarioHash(sc) }
+  const entries = scenarioCodeAxis(sc.code, []).entries
+
+  const before = await driftIndex(root)
+  const first = anchorProbeFor(root, before)
+  await first.prime?.([{ sinceSha: base, entries }])
+  assert.equal(first.hit(base, 'm.ts', ['alpha']), false, 'nothing has touched alpha yet')
+  assert.deepEqual(staleAxes(reading, sc.code, 'n/eval.md', before, new Map(), [], undefined, sc, first), [])
+
+  editAlpha(root)                                   // the head moves, and it moves THROUGH the anchored unit
+  const after = await driftIndex(root)
+  const second = anchorProbeFor(root, after)
+  await second.prime?.([{ sinceSha: base, entries }])
+  assert.equal(second.hit(base, 'm.ts', ['alpha']), true,
+    'the pre-move verdict survived the head move and reported a moved unit as untouched')
+  assert.deepEqual(staleAxes(reading, sc.code, 'n/eval.md', after, new Map(), [], undefined, sc, second), ['code'])
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('selector anchors: editing the source a selector resolves against invalidates its verdict', async () => {
+  // The one input the head does NOT fix. The working tree is dirty by construction while a session works, and
+  // the units a selector resolves to come from those exact bytes — so the image is part of the key.
+  const { root, base } = anchorRepo()
+  editBeta(root)
+  const idx = await driftIndex(root)
+  const entries = scenarioCodeAxis(['m.ts#alpha'] as any, []).entries
+  const first = anchorProbeFor(root, idx)
+  await first.prime?.([{ sinceSha: base, entries }])
+  assert.equal(first.hit(base, 'm.ts', ['alpha']), false)
+
+  // rename the unit in the WORKING TREE only — no commit, so the head has not moved at all
+  writeFileSync(join(root, 'm.ts'), 'export function renamed(): string {\n  return \'a0\'\n}\n\nexport const beta = {\n  tag: \'b1\',\n}\n')
+  const second = anchorProbeFor(root, idx)
+  await second.prime?.([{ sinceSha: base, entries }])
+  assert.equal(second.hit(base, 'm.ts', ['alpha']), null,
+    'a now-DEAD selector inherited the verdict it had while it still resolved — a dead anchor reading fresh')
+  rmSync(root, { recursive: true, force: true })
+})
+
+test('selector anchors: three rebuilds over the same demands hold one generation, not three', async () => {
+  const { root, base } = anchorRepo()
+  editBeta(root)
+  const demands = [['m.ts#alpha'], ['m.ts#beta']]
+    .map((code) => ({ sinceSha: base, entries: scenarioCodeAxis(code as any, []).entries }))
+  const sizes: number[] = []
+  const idx = await driftIndex(root)
+  for (let round = 0; round < 3; round++) {
+    const probe = anchorProbeFor(root, idx)
+    for (const demand of demands) await probe.prime?.([demand])
+    sizes.push(anchorVerdictCacheSize(root))
+  }
+  assert.deepEqual(sizes, [sizes[0], sizes[0], sizes[0]],
+    `cardinality grew with rebuild count instead of staying at the corpus: ${sizes.join(' -> ')}`)
+  assert.equal(sizes[0], 2, 'one verdict per (reading, anchored entry) at the current head')
+  rmSync(root, { recursive: true, force: true })
 })

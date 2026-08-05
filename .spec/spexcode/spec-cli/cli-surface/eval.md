@@ -94,6 +94,26 @@ scenarios:
       retired early) exits 2 as a plain unknown command with the `spex help` pointer.
     tags: [cli]
     code: [spec-cli/src/cli.ts, spec-cli/src/help.ts]
+  - name: owner-report-consults-both-tracking-axes
+    description: >
+      Ask the real CLI for `spec owner` on a file that NO spec node code:-claims but at least one eval
+      scenario code:-anchors, and then on a related-only file that no scenario anchors. Build the
+      denominator from the eval.md registry — the code: lines under .spec — rather than from the message,
+      so the two sides can disagree; then check the message's named scenarios against it by count and by
+      identity. Also confirm the --actionable hook path is unchanged for a related-only file.
+    expected: >
+      For the anchored file the report names the anchoring scenarios by node and scenario name, and says
+      the drift is tracked on the eval axis only while no spec body states what the file should do; it
+      never says nothing tracks its drift, because that sentence is a verdict about both axes and the
+      spec axis is empty here precisely when the eval axis is not. The named set equals the registry's
+      code: anchors for that path exactly — same count, same identities — which is what makes the
+      reading cross-source rather than a message quoting itself. For the unanchored related-only file the
+      report still says nothing tracks its drift, so the negative branch stays reachable and the fix did
+      not trade a false universal for an unconditional claim. --actionable still exits 0 silently for a
+      related-only file either way, since a soft edge is not worth interrupting an edit for.
+    tags: [cli]
+    code: [spec-cli/src/cli.ts]
+    related: [spec-eval/src/scenarios.ts, spec-cli/src/specs.ts]
 ---
 
 Measure through the real CLI binary (`node spec-cli/bin/spex.mjs …`), never by reading help.ts: run

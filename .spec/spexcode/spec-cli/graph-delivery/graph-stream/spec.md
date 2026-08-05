@@ -183,6 +183,47 @@ the failed flight was occupied, matching [[graph-cache]]'s restored dirty scope.
 work, `patrol` is added alongside those retained causes; only a successful changed refresh whose sole cause was
 patrol is a blind-watcher `PATROL-REPAIR`.
 
+**The two boards must agree, and the criterion has to name a DOMAIN or it is unfalsifiable.** This channel's
+correctness is checkable from outside itself: a one-shot `spex graph --json` recomputes the whole board with no
+server at all, so byte-equality against a running `/api/graph` says the incremental publisher landed everywhere
+the full recompute did. Measured on the dogfood mirror it holds — `nodes` equal across all 476 of that corpus
+with 0 differing, `identity` equal, `issuesStamp` equal. But it holds **on the graph domain only.** The
+`sessions` domain carries `liveness` and `evalSummary`, server-only runtime projections; liveness lives on the
+pollers' axis, outside board revision entirely, and a one-shot CLI structurally cannot produce it. So an
+unqualified "the two must be byte-equal" is not a strict criterion, it is a broken one: it fails forever on a
+healthy system, and what fails is the criterion's missing domain rather than the publisher. The qualifier is
+recorded here with the evidence for why it is needed, in the words of the person who spent an evening on the
+wrong side of it — without the domain qualifier, a later reader will go fix something that does not exist,
+exactly what I did tonight.
+
+Reading the answer's own freshness label before diffing its body is part of that criterion, not an
+optimisation. `/api/graph` asks the cache for `stale-ok` and then states what it actually returned in
+`x-spexcode-graph` (`fresh`, or `stale, refreshing`); the same mirror logged full builds of 1510–3755ms
+against a 1500ms budget, so a diff taken inside that window disagrees legitimately and says nothing at all
+about the publisher.
+
+**A one-shot harness cannot reach the unwatched-commit state, and that is a known boundary rather than a fixed
+defect.** The shape that invites the worry is real: worktree observers are filtered by liveness, so an offline
+session's worktree holds no leaf watcher, and the sessions splice only ever subtracts overlays. The conclusion
+drawn from that shape — that a one-shot worker's final commit lands unseen and waits for the patrol — is
+false, for a structural reason worth stating so nobody re-derives the worry: **the last thing such a harness
+does is declare.** Its commit necessarily precedes its own declare-done, so at commit time the session is still
+working/online and its worktree watcher is attached. Measured: overlay visible under 2.7s after the commit,
+declare-done tens of seconds later, and `PATROL-REPAIR` occurrences across the whole run: zero. That zero is
+the causal answer a stopwatch cannot give — no leaf was blind, so the patrol never did a watcher's work.
+
+What that leaves open is a real question rather than a closed one: **which harness class does reach that
+state?** One whose activity outlives its declaration — a background process still committing after the session
+says done, an external agent committing into a worktree whose session already closed, a human editing a retired
+worktree. For those the liveness filter and the subtract-only splice are exactly the exposure the shape
+suggests, and the patrol's ~15s cadence is the whole of their coverage. Nothing is changed for them here: the
+state is reachable in principle and unreached by every harness that exists today.
+
+**A long-lived-REPL harness has been covering for this product's own problems.** Claude and Codex sit in their
+REPL after finishing, staying online, keeping a watcher attached and liveness green — so an entire class of
+post-work timing path was never walked. z-code's one-shot shape walks it on the first attempt. That is the
+first real return on adopting z-code, and it has nothing to do with a demo.
+
 **Rebuilds are gated on someone listening.** With no delta subscriber the pipeline never builds — plain
 subscribers get the zero-cost notify, a closed dashboard costs nothing (both pollers stop with their last
 subscriber). With delta subscribers the debounced fire rebuilds ONCE through [[graph-cache]]'s single-flight

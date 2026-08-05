@@ -114,6 +114,26 @@ The principles, in the maintainer's own framing:
     read-versus-own cut classifies *operations* and silently destroys the *adoption ladder*, which is the
     thing that makes each layer worth having on its own.
 
+21. **Our real failure mode is misidentifying the data source, and it never announces itself.** The two
+    operating rules, in the maintainer's framing: "先读答案自己带的元数据，再 diff 它的正文" and "一个坏的提取器
+    会给出最令人安心的那种假答案". This is knowledge about how *we* go wrong, so it is governed like any other
+    contract. A reasoning error runs into a contradiction and gets caught; reading the wrong source returns a
+    clean, internally consistent, confidently wrong answer, and nothing in the loop objects. Measured in one
+    evening, four times, none caught by a human: `/api/graph`'s body read while ignoring the
+    `x-spexcode-graph: stale, refreshing` header it attaches to itself, turning one mid-rebuild sample into a
+    claimed permanent product hole; a comparison keyed on a top-level `overlays` field the board does not
+    have (its keys are `identity`/`issuesStamp`/`nodes`/`sessions`, overlays live under `nodes[].overlays`),
+    so both sides returned zero and the script reported "identical"; an isolated Vite server that ignored
+    `?api=` and served its default backend, so two eval readings measured the wrong process; and a
+    43-node/0.487-zoom reading taken as a whole-tree sample when it was already the drill-down's *folded*
+    output, which defined a feature for a phenomenon that does not exist. So: before diffing a body, read what
+    the answer says about itself — its freshness label, its own key set, which endpoint actually served it.
+    And prefer the product's own instrument to a measurement built for the occasion: a `PATROL-REPAIR` count
+    of zero answers the causal question ("was any watcher blind?") that a 1-second stopwatch poller can only
+    circle around, and four separate experiments that evening were made unnecessary by first asking whether
+    the product already had the answer. A cheap extractor is not the cheap half of the job; it is where the
+    expensive mistake lives.
+
 ## expanded spec
 
 This node is the seed. The de-drift campaign distills these into a sharper checklist (the "20 tastes" + the

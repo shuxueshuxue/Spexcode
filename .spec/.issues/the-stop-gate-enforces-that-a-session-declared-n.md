@@ -6,7 +6,7 @@ nodes: stop-gate
 created: 2026-08-05T16:38:55.284Z
 ---
 
-Spec: stop-gate, session-close
+Spec: stop-gate, lifecycle
 
 **The Stop gate enforces that a session DECLARED, not that its deliverable is durable.** A session
 can pass the gate, close clean, and leave nothing a later reader can find.

@@ -34,7 +34,7 @@ anchor-selector verdicts sit outside the only counter built to catch exactly thi
 recomputed once per rebuild in silence. That blindness is the more serious half of this defect; the
 milliseconds are its symptom.
 
-## Measured cost (476-node zcode mirror, no server contacted)
+## Measured cost (476-node adopter-a mirror, no server contacted)
 
 Board full build **1710 / 1825 / 1870 ms** (mean 1802) against the product's own **1500ms** budget.
 `evalTimelines` is 778–876ms of that; the shared `loadSpecs` baseline lint also pays is 394–524ms.

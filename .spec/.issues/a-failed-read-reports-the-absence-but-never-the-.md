@@ -28,7 +28,7 @@ fix instead of a source read.
 
 ## Instance 2 — a silently discarded shape, then a lie about absence
 
-In zcode's `~/.zcode/cli/config.json`, writing `model.main` as an **object** makes
+In the adopter's `~/.adopter-a/cli/config.json`, writing `model.main` as an **object** makes
 `parseModelTarget` discard it silently; the surface then reports the **config as missing**. Two
 faults compounding: the parse drops a value it does not understand without saying so, and the
 downstream report converts "present but unparseable" into "absent" — which sends the reader to
@@ -62,5 +62,5 @@ required; when a contract requires a value, name its source in the contract.**
 Our `materialize` binds **five** hook events and does **not** bind `PermissionRequest` or
 `PostToolUseFailure`. `PostToolUseFailure` is the valuable one: a stuck worker's most common shape
 is consecutive tool failures, and we currently cannot receive that signal at all. The defect is on
-our side, not zcode's. Filed here as a pointer only, so it is not lost in the merge — it deserves
+our side, not the adopter's. Filed here as a pointer only, so it is not lost in the merge — it deserves
 its own thread when someone picks up hook coverage.

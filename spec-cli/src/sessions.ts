@@ -3288,7 +3288,9 @@ async function closeSessionUnlocked(id: string, source: CloseSource): Promise<bo
   if (!retirementReason(wt.rec) && !wt.rec.archived && wt.rec.status !== 'queued') {
     // A confirmed terminal close may end an exact native turn before cold proof. Ordinary archive deliberately
     // remains non-destructive while a turn is active; close already means discard this session's work.
-    const interrupt = harnessById(wt.rec.harness || defaultHarness.id).interrupt
+    const harness = harnessById(wt.rec.harness || defaultHarness.id)
+    assertSessionOwnerSafe(id, harness.id)
+    const interrupt = harness.interrupt
     if (interrupt) {
       const result = await interrupt({ ...wt.rec, runtimeDir: runtimeRoot() })
       if (!result.ok) throw new ResourceConflict(`refusing to close ${id}: native interrupt failed (${result.error || 'unknown error'})`)

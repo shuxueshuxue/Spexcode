@@ -19,6 +19,7 @@ test('close uses a target tmux probe when the global listing is busy', { concurr
   const originalColdRuntime = codexHarness.coldRuntime
   const originalColdRetirementPreflight = codexHarness.coldRetirementPreflight
   const originalCleanup = codexHarness.cleanupRuntime
+  const originalInterrupt = codexHarness.interrupt
   const home = mkdtempSync(join(tmpdir(), `spex-close-target-probe-${process.pid}-`))
   const project = join(home, 'project')
   const bin = join(home, 'bin')
@@ -81,6 +82,7 @@ esac
     codexHarness.coldRuntime = async () => ({ ok: true })
     codexHarness.coldRetirementPreflight = async () => ({ ok: true, alreadyCold: true })
     codexHarness.cleanupRuntime = async () => {}
+    codexHarness.interrupt = async () => ({ ok: true })
     assert.equal(await closeSession(id), true)
     assert.equal(existsSync(sessionStoreDir(id)), false, 'the target close removes the record after the cold proof')
     assert.equal((await sendText(recipient, 'late continue', id)).ok, false, 'a closed sender cannot append new outbound work')
@@ -95,6 +97,7 @@ esac
     codexHarness.coldRuntime = originalColdRuntime
     codexHarness.coldRetirementPreflight = originalColdRetirementPreflight
     codexHarness.cleanupRuntime = originalCleanup
+    codexHarness.interrupt = originalInterrupt
     if (leaf?.pid && processStartToken(leaf.pid)) {
       try { process.kill(leaf.pid, 'SIGKILL') } catch { /* already exited */ }
     }

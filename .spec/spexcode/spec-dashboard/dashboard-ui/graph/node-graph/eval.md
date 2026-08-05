@@ -47,6 +47,27 @@ scenarios:
       positions before settling with focus centred, preserving the move's direction; node containers may
       transition opacity but never transform. The filed reading carries video because a settled still cannot
       distinguish a connected camera move from detached structural animation.
+  - name: collapsed-branch-declares-its-activity
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Point the dashboard at a backend whose graph carries pending overlays from several sessions in
+      DIFFERENT subtrees, then open the graph and touch nothing at all — no expanding, no clicking, no
+      key presses, no camera move. Read the real DOM: how many `.node-expand` tabs exist, how many carry
+      the lit `has-hidden` state, and for each lit tab its hidden-child count, its session dots, its fill
+      colour and its tooltip. Independently recompute the truth from `/api/graph` by walking every
+      overlay-bearing node up its ancestor chain, and compare per branch, in both directions — a tab must
+      be lit exactly when its subtree holds activity. Also capture the full viewport transform and the
+      focused node, and confirm they are unchanged from the same board with the aggregate absent: lighting
+      a branch is not a camera driver. Screenshot the untouched board.
+    expected: >-
+      Every collapsed tab whose subtree holds a pending overlay is filled in its lead hidden author's hue
+      and carries one dot per session at work inside (capped `+k`), while a collapsed tab with a quiet
+      subtree stays plain outline — so a busy closed branch and a quiet one never look alike. Each lit
+      tab's distinct-node count and session count agree exactly with the independent recomputation from
+      `/api/graph`, counting a node touched by two sessions once, and the lit set sums to the graph's own
+      overlay-node total. The viewport transform and focused node are byte-identical to the board without
+      the aggregate. The reader can therefore tell how many places are in motion and under which branch
+      each one sits with zero interaction; without the aggregate the same board shows no indication at all.
 ---
 # eval.md — node-graph
 

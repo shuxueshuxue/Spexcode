@@ -390,6 +390,16 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   padding: 2px 4px; pointer-events: none;
 }
 .spec-node.focused .node-expand { color: var(--blue); border-color: var(--blue); }
+/* a collapsed branch with work inside FILLS with the lead hidden author's hue (--ovh). Fill/no-fill is
+   the one signal that still reads when the tile's own digits have blurred away, so it carries the
+   "something is happening in there" meaning; the dots below only say how many sessions. */
+.node-expand.has-hidden {
+  background: var(--ovh); border-color: var(--ovh-ring); color: var(--ovh-fg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ovh-ring) 32%, transparent);
+}
+.spec-node.focused .node-expand.has-hidden { color: var(--ovh-fg); border-color: var(--ovh-ring); }
+.hidden-dots { display: flex; align-items: center; gap: 1px; margin-left: 2px; }
+.hidden-dots i { width: 4px; height: 4px; border-radius: 50%; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25); }
 
 /* ---- row 2: marks · editor avatars ---- */
 .node-editors { display: flex; align-items: center; gap: 3px; }

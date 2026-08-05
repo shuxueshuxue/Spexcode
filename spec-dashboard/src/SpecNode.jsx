@@ -1,6 +1,6 @@
 import { Handle, Position } from '@xyflow/react'
 import { Avatar } from './avatar.jsx'
-import { labelColor } from './color.js'
+import { avatarColors, labelColor } from './color.js'
 import { ScenarioCount } from './score.jsx'
 import { useT } from './i18n/index.jsx'
 
@@ -56,6 +56,41 @@ function IssueBadge({ summary, t }) {
   return <span className="issue-badge" data-tip={t('specNode.openIssues', { n: summary.open })}>◆{summary.open}</span>
 }
 
+// The ▸N tab of a collapsed node. Structural on its own (the hidden direct-child count), it also
+// advertises the ACTIVITY inside: filled in the lead hidden author's hue with one dot per session at
+// work in there, so a busy closed branch never reads as a quiet one. Fill survives the zoom that digits
+// do not, which is why the tint carries the signal and the counts stay detail. `data.hidden` is
+// descendant-only — this node's own overlay is already row 1's business.
+function CollapsedTab({ data, t }) {
+  const inside = data.hidden || []
+  const shown = inside.slice(0, 3)
+  const extra = inside.length - shown.length
+  const nodes = data.hiddenNodes || 0            // distinct nodes in motion in there, not a sum of the per-session tallies
+  // the lead author's hue at the avatar face's lightness/saturation — that pair is already the project's
+  // answer to "a fill and a legible mark on it at an arbitrary hue", and white-on-hue is not (a yellow
+  // session gave white text nothing to sit on). Same hue as the ring, so the tab still names the session.
+  const face = inside.length ? avatarColors(inside[0].seed) : null
+  return (
+    <span
+      className={`node-expand${inside.length ? ' has-hidden' : ''}`}
+      style={face ? { '--ovh': face.bg, '--ovh-fg': face.fg, '--ovh-ring': labelColor(inside[0].seed) } : undefined}
+      data-tip={inside.length
+        ? [t('specNode.expandable', { n: data.childCount }),
+           t('specNode.hiddenActive', { nodes, sessions: inside.length }),
+           ...inside.map((e) => t('specNode.hiddenAuthor', { label: e.label, n: e.nodes }))].join('\n')
+        : t('specNode.expandable', { n: data.childCount })}
+    >
+      ▸{data.childCount}
+      {inside.length > 0 && (
+        <span className="hidden-dots">
+          {shown.map((e) => <i key={e.source} style={{ background: labelColor(e.seed) }} />)}
+          {extra > 0 && `+${extra}`}
+        </span>
+      )}
+    </span>
+  )
+}
+
 export default function SpecNode({ data, selected }) {
   const t = useT()
   const s = STATUS[data.status] || STATUS.pending
@@ -99,10 +134,8 @@ export default function SpecNode({ data, selected }) {
         <ScenarioCount summary={data.reviewSummary?.evals} />
         <Editors data={data} />
       </div>
-      {/* collapsed node gets a ▸N tab naming its hidden child count (App sets data.collapsed/childCount). */}
-      {data.collapsed && (
-        <span className="node-expand" data-tip={t('specNode.expandable', { n: data.childCount })}>▸{data.childCount}</span>
-      )}
+      {/* collapsed node gets a ▸N tab naming its hidden child count, lit when a hidden descendant is being worked on. */}
+      {data.collapsed && <CollapsedTab data={data} t={t} />}
       <Handle type="source" position={Position.Right} {...EDGE_ANCHOR_PROPS} />
     </div>
   )

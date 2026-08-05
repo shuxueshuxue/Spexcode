@@ -497,6 +497,8 @@ export default {
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? '（未提交）' : ''}`,
     openIssues: ({ n }) => `${n} 个待办 issue——打开节点信息查看`,
     expandable: ({ n }) => `${n} 个子节点——聚焦展开`,
+    hiddenActive: ({ nodes, sessions }) => `里面有 ${nodes} 个节点正被 ${sessions} 个 session 改动:`,
+    hiddenAuthor: ({ label, n }) => `  ${label}——${n} 个节点`,
   },
 
   // 节点右键菜单（[[node-menu]]）——板上节点动词的鼠标侧标签。

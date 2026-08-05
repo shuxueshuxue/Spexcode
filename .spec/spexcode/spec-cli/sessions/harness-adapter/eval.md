@@ -449,6 +449,26 @@ scenarios:
       discovery walks the date tree newest-first but exhaustively, so future-dated junk cannot mask the real
       current-day rollout. No duplicate prompt/thread retry is created, and cleanup leaves no seeded directory,
       session record, tmux window, worktree, or branch behind.
+  - name: cold-retirement-cost-does-not-scale-with-transcript
+    tags: [backend-api, cli]
+    code:
+      - spec-cli/src/harness.ts#codexThreadCollection
+      - spec-cli/src/harness.ts#codexColdPreflightOnce
+      - spec-cli/src/harness.ts#codexTargetMutationGuard
+    test:
+      path: spec-cli/src/harness.test.ts
+      name: Codex cold proof reads turn presence from the collection census it already performs
+    description: >-
+      Retire a real, long-lived Codex-backed session through `spex session archive` while the shared app-server
+      still holds its thread loaded and that thread's persisted rollout has grown large — the target measured
+      here in the tens-to-hundreds of megabytes, against the census's fixed budget. Time the outcome and record
+      which native question the cold proof asked of the app-server.
+    expected: >-
+      The retirement completes. The cold proof establishes each loaded member's turn presence from the paginated
+      collection census it already performs, whose cost tracks how many native threads exist rather than how much
+      history any one of them holds, so a thread that has been alive for weeks stays retirable. A loaded thread
+      with a genuinely running turn still refuses with an active-turn reason, and presence the app-server did not
+      report is still `unknown` and still fails closed: the false timeout goes away, the gate does not.
   # harness-delivery-campaign:start
   - name: delivery-combo-claude-launch-idle
     tags: [backend-api, cli]

@@ -3,12 +3,14 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 
 const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
 const dispatch = join(repo, 'spec-cli', 'hooks', 'dispatch.sh')
 const legacyMarkActive = join(repo, 'spec-cli', 'hooks', 'compat', 'mark-active-sed-v0.fixture')
 const legacyMarkActive052 = join(repo, 'spec-cli', 'hooks', 'compat', 'mark-active-0.5.2-eef1.fixture')
+const legacyMarkActive052Sha256 = '6124673259e0b79318fb5a66e7d8138d5bb7735dca1ecf6f7d2dffa6fbb7affa'
 
 test('dispatch exits 2 when a blocking handler emits decision:block JSON', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-'))
@@ -64,9 +66,9 @@ const legacyMarkActiveFixtures = [
   ['0.5.2 release eef1e154 source', legacyMarkActive052],
 ] as const
 
-test('the 0.5.2 release fixture is byte-identical to eef1e154', () => {
-  const releaseSource = execFileSync('git', ['show', 'eef1e154:spec-cli/templates/spec/project/.plugins/core/mark-active/mark-active.sh'], { encoding: 'utf8' })
-  assert.equal(readFileSync(legacyMarkActive052, 'utf8'), releaseSource)
+test('the 0.5.2 release fixture retains its recorded bytes', () => {
+  const actual = createHash('sha256').update(readFileSync(legacyMarkActive052)).digest('hex')
+  assert.equal(actual, legacyMarkActive052Sha256)
 })
 
 for (const [label, source] of legacyMarkActiveFixtures) {

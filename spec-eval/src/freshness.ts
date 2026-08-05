@@ -68,6 +68,11 @@ type RootScope = {
   topologyRoster: Set<string>                  // the anchor images that walk already carries
   topologyFlight: Promise<void> | null         // the single in-flight walk
   blockDemands: Set<string>                    // (rev, evalPath) awaiting the one batched scenario-block read
+  // the SELECTOR-anchor probe's verdicts, in the same scope for the same reason ([[selector-anchor-scope]]):
+  // a `sinceSha..HEAD` window lengthens as HEAD advances, so these are per-head immutable, never forever
+  // immutable. One scope object means one head move drops both probes' answers at once, and the cardinality
+  // invariant this scope exists to hold is observable for both.
+  anchorVerdicts: Map<string, boolean>
 }
 const rootScopes = new Map<string, RootScope>()
 // Roots come and go (a closed worktree never asks again), so cap how many stay warm — the same bounded-slot
@@ -82,7 +87,7 @@ function scopeFor(rootKey: string, head: string, currentOid: string | null): Roo
     rootScopes.set(rootKey, current)
     return current
   }
-  const scope: RootScope = { head, currentOid, anchors: new Map(), topology: null, topologyRoster: new Set(), topologyFlight: null, blockDemands: new Set() }
+  const scope: RootScope = { head, currentOid, anchors: new Map(), topology: null, topologyRoster: new Set(), topologyFlight: null, blockDemands: new Set(), anchorVerdicts: new Map() }
   rootScopes.set(rootKey, scope)
   while (rootScopes.size > ROOT_SLOTS) {
     const oldest = rootScopes.keys().next().value
@@ -104,6 +109,17 @@ export function freshnessCacheSize(root?: string): number {
   if (root !== undefined) return rootScopes.get(resolve(root))?.anchors.size ?? 0
   let total = 0
   for (const scope of rootScopes.values()) total += scope.anchors.size
+  return total
+}
+
+// The same invariant for the OTHER probe in this scope. It needs its own counter rather than a bigger number
+// from the one above: the two hold different things (content anchor entries vs selector-anchor verdicts), and
+// a counter that cannot see a case is exactly how "one retained generation, not one per rebuild" came to be
+// declared, observable, and still violated ([[selector-anchor-scope]]).
+export function anchorVerdictCacheSize(root?: string): number {
+  if (root !== undefined) return rootScopes.get(resolve(root))?.anchorVerdicts.size ?? 0
+  let total = 0
+  for (const scope of rootScopes.values()) total += scope.anchorVerdicts.size
   return total
 }
 
@@ -528,18 +544,35 @@ const anchorKey = (sinceSha: string, path: string, selectors: readonly string[])
 // an unparseable file does not re-parse once per entry.
 const CURRENT_TREE_MEMO_MAX = 4096
 const currentTreeUnitMemo = new Map<string, { units: Unit[] } | { failed: string }>()
-function currentTreeUnits(root: string, x: Extractor, path: string): Unit[] {
+// The memo key doubles as the IMAGE's name — the extractor that answered plus the exact bytes it read — so a
+// caller retaining a verdict derived from these units names it by the same identity that decides the parse
+// ([[selector-anchor-scope]]). Returning the key rather than re-deriving it elsewhere is what keeps the two
+// from drifting apart.
+function currentTreeImage(root: string, x: Extractor, path: string): { key: string; units: Unit[] } {
   const source = readFileSync(join(root, path), 'utf8')
   const key = `${x.memoKey(path)}\0${createHash('sha1').update(source).digest('hex')}`
   const hit = currentTreeUnitMemo.get(key)
-  if (hit) { if ('failed' in hit) throw new Error(hit.failed); return hit.units }
+  if (hit) { if ('failed' in hit) throw new Error(hit.failed); return { key, units: hit.units } }
   let entry: { units: Unit[] } | { failed: string }
   try { entry = { units: x.extract(source, path) } }
   catch (err: any) { entry = { failed: err?.message ?? String(err) } }
   if (currentTreeUnitMemo.size >= CURRENT_TREE_MEMO_MAX) currentTreeUnitMemo.clear()
   currentTreeUnitMemo.set(key, entry)
   if ('failed' in entry) throw new Error(entry.failed)
-  return entry.units
+  return { key, units: entry.units }
+}
+
+// what selector resolution READS for one path, named by its identity — or the reason nothing could be read.
+// Split out from the verdict below so a caller can name the image before deciding whether it still has to
+// derive the verdict at all; a `problem` image has no name, and an unnameable input is never retained.
+type EntryImage = { key: string; units: Unit[] } | { problem: string }
+function entryImage(root: string, regs: Extractor[], path: string, selector: string | undefined): EntryImage {
+  const x = extractorFor(regs, extOf(path))
+  if (!x) return { problem: `\`code\` selector \`${path}#${selector}\` — no designated extractor for that language; drop the #anchor or add a language row` }
+  const ready = x.ready()
+  if (ready !== true) return { problem: `\`code\` anchors on ${path} are unverified: ${ready}` }
+  try { return currentTreeImage(root, x, path) }
+  catch (err: any) { return { problem: `\`code\` anchors on ${path} are unverified: ${err?.message ?? String(err)}` } }
 }
 
 // every selector of one entry resolves to exactly one unit in the CURRENT tree, or the entry cannot testify.
@@ -547,21 +580,18 @@ function currentTreeUnits(root: string, x: Extractor, path: string): Unit[] {
 // unit of that name", which for a name that exists nowhere is a vacuous no — true of spec drift, where the
 // dead anchor is a separate blocking error, and dangerously false here, where the same silence would retire
 // a reading's whole code axis. `problem` names the repair for lint; null means the entry is verifiable.
-function entryUnverifiable(root: string, regs: Extractor[], entry: RelationEntry): string | null {
-  const x = extractorFor(regs, extOf(entry.path))
-  if (!x) return `\`code\` selector \`${entry.path}#${entry.selectors[0]}\` — no designated extractor for that language; drop the #anchor or add a language row`
-  const ready = x.ready()
-  if (ready !== true) return `\`code\` anchors on ${entry.path} are unverified: ${ready}`
-  let units
-  try { units = currentTreeUnits(root, x, entry.path) }
-  catch (err: any) { return `\`code\` anchors on ${entry.path} are unverified: ${err?.message ?? String(err)}` }
+function selectorProblem(units: Unit[], path: string, selectors: readonly string[]): string | null {
   // the SAME classifier the gate uses ([[code-anchor]]'s resolveSelectors) — only the wording is ours, so a
   // selector can never be verifiable to one reader and dead to the other.
-  for (const r of resolveSelectors(units, entry.selectors)) {
-    if ('dead' in r) return `\`code\` selector \`${entry.path}#${r.selector}\` names no unit in that file — follow the rename or drop the selector (evals stay stale until then)`
-    if ('ambiguous' in r) return `\`code\` selector \`${entry.path}#${r.selector}\` is ambiguous — ${r.ambiguous} units share that name; pin a unique one`
+  for (const r of resolveSelectors(units, selectors)) {
+    if ('dead' in r) return `\`code\` selector \`${path}#${r.selector}\` names no unit in that file — follow the rename or drop the selector (evals stay stale until then)`
+    if ('ambiguous' in r) return `\`code\` selector \`${path}#${r.selector}\` is ambiguous — ${r.ambiguous} units share that name; pin a unique one`
   }
   return null
+}
+function entryUnverifiable(root: string, regs: Extractor[], entry: RelationEntry): string | null {
+  const image = entryImage(root, regs, entry.path, entry.selectors[0])
+  return 'problem' in image ? image.problem : selectorProblem(image.units, entry.path, entry.selectors)
 }
 
 // @@@ the verify sweep must reach the MACROTASK queue - resolving every reading's `code:` selectors against
@@ -576,32 +606,76 @@ function entryUnverifiable(root: string, regs: Extractor[], entry: RelationEntry
 const VERIFY_YIELD_BUDGET_MS = Number(process.env.SPEXCODE_VERIFY_YIELD_BUDGET_MS || 50)
 const yieldToEventLoop = (): Promise<void> => new Promise<void>((resolve) => { setImmediate(resolve) })
 
+// A verdict's window is `sinceSha..HEAD`, and that window LENGTHENS as HEAD advances — the same
+// (sinceSha, path, selectors) that answers false at one head can legitimately answer true at the next. So
+// these are per-head immutable, never content-addressed-forever, and they belong in the root's current-head
+// scope above rather than in a memo of their own ([[selector-anchor-scope]]).
+// The working tree, however, does NOT stand still at one head: a session re-images the files a selector
+// resolves against, and each image is its own key. Bound that with the same drop-wholesale idiom the
+// current-tree parse memo uses instead of inventing a second eviction policy.
+const ANCHOR_VERDICT_MAX = Math.max(1024, Number(process.env.SPEXCODE_ANCHOR_VERDICT_SLOTS || 8192))
+
 export function anchorProbeFor(root: string, idx: DriftIndex): AnchorProbe {
+  const rootKey = resolve(root)
   const regs = extractors(root)
   const verdicts = new Map<string, boolean>()
+  // The scope is the one the content probe already owns, entered only when the index's own tip IS the
+  // current head. An index built at another tip cannot borrow this head's answers, and — the reason this is
+  // a guard rather than a rotation — a head that moved mid-read must not make THIS probe displace the
+  // content probe's just-settled scope. Either the two probes agree on the head and share one scope, or this
+  // one keeps nothing and recomputes.
+  const scopeOf = (): RootScope | null => {
+    if (!idx.tip) return null
+    const rawHead = headSha(root)
+    if (idx.tip !== rawHead) return null
+    return scopeFor(rootKey, `${rawHead}\x1f${gitObjectInterpretation(root).identity}`, null)
+  }
+  // which extractor BUILD answered is part of a verdict's identity too — a host TypeScript resolving to a
+  // different module or version must not inherit the previous one's units.
+  const registry = regs.map((x) => x.memoKey('\0registry')).join('\x1e')
   return {
     async prime(demands) {
+      const scope = scopeOf()
       const keys: string[] = []
+      const scoped: (string | null)[] = []
       const queries: AnchorHitQuery[] = []
       const queued = new Set<string>()
+      // one coherent read of each source per sweep: every entry on a path resolves against the same bytes,
+      // and the read that names the verdict is the read the verdict was derived from.
+      const images = new Map<string, EntryImage>()
+      const imageOf = (path: string, selector: string | undefined): EntryImage => {
+        let hit = images.get(path)
+        if (hit === undefined) { hit = entryImage(root, regs, path, selector); images.set(path, hit) }
+        return hit
+      }
+      const remember = (name: string | null, hit: boolean) => { if (scope && name !== null) {
+        if (scope.anchorVerdicts.size >= ANCHOR_VERDICT_MAX) scope.anchorVerdicts.clear()
+        scope.anchorVerdicts.set(name, hit)
+      } }
       let sinceYield = Date.now()
       for (const { sinceSha, entries } of demands) for (const e of entries) {
         if (Date.now() - sinceYield >= VERIFY_YIELD_BUDGET_MS) { await yieldToEventLoop(); sinceYield = Date.now() }
         if (!e.selectors.length) continue
         const key = anchorKey(sinceSha, e.path, e.selectors)
         if (verdicts.has(key) || queued.has(key)) continue
-        if (entryUnverifiable(root, regs, e)) continue  // no verdict → conservative stale (lint says why)
+        const image = imageOf(e.path, e.selectors[0])
+        const name = 'problem' in image ? null : `${registry}\x1f${image.key}\x1f${key}`
+        const remembered = scope && name !== null ? scope.anchorVerdicts.get(name) : undefined
+        if (remembered !== undefined) { verdicts.set(key, remembered); continue }
+        // a miss runs the FULL derivation below, unchanged — it is what a verdict MEANS, not a fallback
+        if ('problem' in image || selectorProblem(image.units, e.path, e.selectors)) continue  // no verdict → conservative stale (lint says why)
         const win = eventsSince(idx, sinceSha, e.path)
         if (win === null) continue
-        if (!win.length) { verdicts.set(key, false); continue }
+        if (!win.length) { verdicts.set(key, false); remember(name, false); continue }
         queued.add(key)
         keys.push(key)
+        scoped.push(name)
         queries.push({ win, symbols: [...e.selectors] })
       }
 
       if (!queries.length) return
       const results = await anchorHitExists(root, queries, regs)
-      results.forEach((hit, index) => verdicts.set(keys[index], hit))
+      results.forEach((hit, index) => { verdicts.set(keys[index], hit); remember(scoped[index], hit) })
     },
     hit(sinceSha, path, selectors) {
       return verdicts.get(anchorKey(sinceSha, path, selectors)) ?? null

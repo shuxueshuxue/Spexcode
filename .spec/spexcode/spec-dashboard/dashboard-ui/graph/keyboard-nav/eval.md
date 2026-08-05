@@ -85,6 +85,23 @@ scenarios:
       camera follows the keyboard, not the mouse.
     code:
       - spec-dashboard/src/Dashboard.jsx
+  - name: remote-graph-delta-does-not-pan-camera
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Open the dashboard against a backend whose graph header is fresh and let the graph settle without
+      clicking, typing, expanding, or moving the pointer. Capture the complete React Flow viewport
+      transform and focused node. While that same untouched browser page remains open, make one real
+      dirty edit to a tracked `spec.md` in a separate governed session worktree so the dashboard's own
+      EventSource receives a `graph-delta`. After that delta has rendered, capture the complete viewport
+      transform and focused node again, and screenshot the untouched dashboard. File the browser delta
+      observation and the before/after readings with the verdict.
+    expected: >-
+      A real remote graph delta may update graph content, but it never becomes a camera or focus driver:
+      with zero user input, the complete viewport transform and focused node are byte-identical before
+      and after the dashboard receives the delta. This is distinct from the aggregate's static A/B
+      comparison: it proves the existing camera invariant holds while live graph data actually changes.
+    code:
+      - spec-dashboard/src/Dashboard.jsx
   - name: slash-search-spans-four-planes
     tags: [frontend-e2e, desktop]
     description: >-

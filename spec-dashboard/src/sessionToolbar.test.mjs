@@ -7,6 +7,7 @@ import { inboxCommands, mergeAvailability, uiCommandsFor, UI_COMMANDS } from './
 const here = fileURLToPath(new URL('.', import.meta.url))
 const source = readFileSync(new URL('./SessionInterface.jsx', import.meta.url), 'utf8')
 const contextMenu = readFileSync(new URL('./SessionContextMenu.jsx', import.meta.url), 'utf8')
+const selectBar = readFileSync(new URL('./SessionSelectBar.jsx', import.meta.url), 'utf8')
 const sessionWindow = readFileSync(new URL('./SessionWindow.jsx', import.meta.url), 'utf8')
 const timelineChat = readFileSync(new URL('./TimelineChat.jsx', import.meta.url), 'utf8')
 const focus = readFileSync(new URL('./focus.js', import.meta.url), 'utf8')
@@ -109,6 +110,13 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.match(source, /setActionOutcome\(\{ owner, phase: 'failed'/)
   assert.match(source, /onError=\{\(message\) => \{[\s\S]{0,300}setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)/)
   assert.doesNotMatch(source, /si-action-error|setActErr|<aside[^>]*>[\s\S]{0,400}ActionOutcome/)
+})
+
+test('bulk close returns every refusal to the shared action outcome', () => {
+  assert.match(selectBar, /const body = await response\.json\(\)\.catch\(\(\) => null\)/)
+  assert.match(selectBar, /!response\.ok \|\| body\?\.ok === false/)
+  assert.match(selectBar, /onError\?\.\(failures\.join\('\\n'\)\)/)
+  assert.match(source, /<SessionSelectBar[\s\S]{0,300}onError=\{\(message\) => setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)\}/)
 })
 
 test('only corrupt rows expose the witnessed quarantine control', () => {

@@ -152,3 +152,82 @@ conversely, finding the constant wrong requires **no** retraction of that readin
 what prevents the fake conflict of having to overturn a correct reading in order to change a default.
 
 Spec: node-graph
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T20:53:59.508Z -->
+## Amendment 2: the derivation is closed, the primary evidence moves, and one citation was wrong
+
+### The last escape hatch is shut
+
+If the graph applied an inverse `1/zoom` to node contents — as some do, to keep text at constant screen size
+— the whole 10.2px derivation would be void. It doesn't. Re-verified independently:
+`useStore` / `getZoom` / `1/zoom` / `scale(` have **0 occurrences** in either `SpecNode.jsx` or
+`Dashboard.jsx`, and `SpecNode`'s inline styles carry colour only (overlay hue, avatar hue, `--ov`, status
+dot) with no geometric compensation.
+
+So the chain is complete, and every way out of it has been checked and found shut:
+
+```
+authored 12px  ->  inside the transform pane  ->  no inverse scaling  ->  default zoom 0.85  ->  10.2px
+```
+
+| Escape hatch | Checked | Result |
+|---|---|---|
+| a second `.node-title` outside the graph | `grep` across `spec-dashboard/src` | only `SpecNode.jsx:118` |
+| the class not living in the scaled layer | `nodeTypes = { spec: SpecNode }` (`Dashboard.jsx:34`, used `:621`) | inside the pane |
+| inverse `1/zoom` compensation | `useStore`/`getZoom`/`1/zoom`/`scale(` in both files | 0 hits |
+
+**The source derivation is now exhausted.** The only remaining gap is the browser half stated in the opening
+paragraph — a rendered measurement via `getBoundingClientRect`.
+
+### Correction: `.m-node-title` is at `styles.css:1946`
+
+I cited 1935. That was correct in the worktree I was reading and wrong for this repo — the two copies of
+`styles.css` differ, and only this one citation moved. I re-derived all nine in trunk coordinates; the other
+eight (`:378`, `:28`, `:31`, `SpecNode.jsx:118`, `Dashboard.jsx:34`, `:621`, `:630`, `:631`, `:632`) are
+identical.
+
+Worth naming the general form, because this thread has now hit it three times: **a line number is a
+tree-relative coordinate, and an issue is read from a different tree than the one it was written in.** The
+first two instances were different repositories; this one was the same repository, same path, worktree versus
+trunk. The durable coordinate is the selector or symbol (`.m-node-title`, `--type-title`, `defaultViewport`);
+the line number is a convenience that decays. A wrong one is worse than none — it makes the next reader think
+they have the wrong file.
+
+### The 1.57× drops to a footnote, and better primary evidence takes its place
+
+Demoting the mobile comparison, for a good reason: larger type on a touch surface is *ordinary design*
+(viewing distance, touch targets), so "those two faces should differ" is a cheap rebuttal — and one that could
+carry away the real claim bundled with it. It stays only as background: elsewhere in this same product the
+same thing is 16px (`styles.css:1946` → `--type-title`, `:31`).
+
+The primary evidence is a contradiction **inside a single spec body**, which needs neither the mobile face nor
+any human observer. `node-graph/spec.md:25`:
+
+> "**Fill-versus-outline survives zoom that digits do not**, so the lit tab is the signal and the counts are
+> detail."
+
+The node already knows text fails under zoom, and engineered around it — the collapsed tab's *counts* were
+demoted to detail precisely because they wouldn't survive, with fill carrying the signal instead. The same
+sentence's reasoning is repeated at `SpecNode.jsx:61-62`.
+
+Now apply that reasoning to the title:
+
+- it is the **identity carrier** — "the board reads *which* one", the thing the whole drill-down exists to
+  deliver;
+- it has **no fill fallback**, unlike the tab counts which got one;
+- it is authored at the **smallest token in the scale** (`--type-control`, 12px — below body 13, subtitle 14,
+  title 16);
+- and the default viewport **scales it below even that** (10.2px).
+
+So the body concedes text does not survive zoom, engineers a fallback for its *least* important text, and
+leaves its *most* important text with no fallback at the smallest size, scaled down — while claiming twice
+(`:6`, `:23`) that the result is "readable". That contradiction stands whether or not a mobile face exists,
+and whether or not anyone finds 10.2px legible.
+
+### Aside, explicitly not part of the claim
+
+`--type-control` names a *control* tier — buttons, inputs — not a title tier. A map tile's title borrowing a
+control-density token is a plausible account of how 12px got chosen, and it is inference from a token's name,
+not evidence. Recorded because it suggests where else to look, not because it supports anything above.
+
+Spec: node-graph

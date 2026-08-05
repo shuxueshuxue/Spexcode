@@ -96,21 +96,26 @@ scenarios:
     code: [spec-cli/src/cli.ts, spec-cli/src/help.ts]
   - name: owner-report-consults-both-tracking-axes
     description: >
-      Ask the real CLI for `spec owner` on a file that NO spec node code:-claims but at least one eval
-      scenario code:-anchors, and then on a related-only file that no scenario anchors. Build the
-      denominator from the eval.md registry — the code: lines under .spec — rather than from the message,
-      so the two sides can disagree; then check the message's named scenarios against it by count and by
-      identity. Also confirm the --actionable hook path is unchanged for a related-only file.
+      Ask the real CLI for `spec owner` on EVERY related-only file in the repository — each path some node
+      references but no node code:-claims — and classify which tracking sentence each answer used. Build both
+      the population and the per-file expectation from an independent parse of the .spec registry, not from
+      the CLI's own output, so the two sides can disagree; then check the named scenarios against that parse
+      by count and by identity on the most-anchored file. Also confirm the --actionable hook path is
+      unchanged for a related-only file.
     expected: >
-      For the anchored file the report names the anchoring scenarios by node and scenario name, and says
-      the drift is tracked on the eval axis only while no spec body states what the file should do; it
-      never says nothing tracks its drift, because that sentence is a verdict about both axes and the
-      spec axis is empty here precisely when the eval axis is not. The named set equals the registry's
-      code: anchors for that path exactly — same count, same identities — which is what makes the
-      reading cross-source rather than a message quoting itself. For the unanchored related-only file the
-      report still says nothing tracks its drift, so the negative branch stays reachable and the fix did
-      not trade a false universal for an unconditional claim. --actionable still exits 0 silently for a
-      related-only file either way, since a soft edge is not worth interrupting an edit for.
+      Every file the registry says has at least one scenario code: anchor gets the eval-axis report, and
+      every file it says has none keeps the older sentence — both counts complete, with zero disagreements
+      across the whole population. The anchored report names the anchoring scenarios by node and scenario
+      name and says the drift is tracked on the eval axis only while no spec body states what the file should
+      do; it never says nothing tracks its drift, because that sentence is a verdict about both axes and the
+      spec axis is empty here precisely when the eval axis is not. The named set equals the registry's code:
+      anchors for that path exactly — same count, same identities — which is what makes the reading
+      cross-source rather than a message quoting itself. The unanchored side is measured over its whole
+      population rather than one sampled file, because that side is the MAJORITY here and a criterion that
+      probes one of it goes green through a regression in the rest: the negative branch must stay reachable
+      for all of them, so the fix cannot trade a false universal for an unconditional claim. --actionable
+      still exits 0 silently for a related-only file either way, since a soft edge is not worth interrupting
+      an edit for.
     tags: [cli]
     code: [spec-cli/src/cli.ts]
     related: [spec-eval/src/scenarios.ts, spec-cli/src/specs.ts]

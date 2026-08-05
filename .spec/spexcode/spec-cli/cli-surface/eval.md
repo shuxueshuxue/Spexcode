@@ -123,3 +123,14 @@ scenarios:
 
 Measure through the real CLI binary (`node spec-cli/bin/spex.mjs …`), never by reading help.ts: run
 each probe, capture stdout/stderr + exit codes as the transcript, and file with `--result`.
+
+Spelling that path out matters asymmetrically, and the asymmetry runs opposite to where attention goes. In a
+worktree the bare word `spex` resolves to a globally installed copy of some other version, so a probe that
+reaches for it measures a different program than the tree under test. On the PASS side that mistake is
+self-announcing: the other program cannot produce the behaviour being claimed, so the reading fails rather
+than lies. On the FAIL side it is invisible — an older install and a not-yet-fixed tree emit byte-identical
+output — so the `--fail` half of a pair is precisely the one that can be measured with the wrong instrument
+and still look right. The invocation is therefore worth recording beside the fail reading, where nothing else
+would catch it, rather than beside the pass reading, where the measurement catches it for free. The same
+hazard reaches review: a reviewer standing in the worktree types the bare word, sees the old sentence, and
+concludes the fix is absent.

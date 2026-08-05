@@ -975,49 +975,57 @@ export function codexTurnFailureObserver(
 // defines thread/archive and thread/unarchive with {threadId}, plus turn/interrupt with {threadId, turnId}; no
 // guessed method or process command is used.
 type CodexGenerationFence = { dir: string; endpoint: CodexGenerationEndpoint; generation: string }
-function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/unarchive' | 'turn/interrupt', threadId: string, fence?: CodexGenerationFence, turnId?: string): Promise<{ ok: true } | { ok: false; error: string }> {
+// A failed mutation says whether the server can still commit it. `refused` means the request never reached the
+// server or the server answered by rejecting it, so the target is provably unchanged and compensation is safe.
+// `unknown` means the request was sent and no verdict came back — the server may still be executing it, so
+// sending anything else down the same connection queues behind that work and fails too.
+type CodexMutationOutcome = { ok: true } | { ok: false; error: string; commit: 'refused' | 'unknown' }
+function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/unarchive' | 'turn/interrupt', threadId: string, fence?: CodexGenerationFence, turnId?: string, budgetMs = CODEX_MUTATION_BASE_MS): Promise<CodexMutationOutcome> {
   const generationError = () => fence && codexRuntimeGeneration(fence.dir, fence.endpoint) !== fence.generation
     ? `Codex ${method} refused because the shared app-server generation changed`
     : null
   const before = generationError()
-  if (before) return Promise.resolve({ ok: false, error: before })
+  if (before) return Promise.resolve({ ok: false, error: before, commit: 'refused' })
   if (method === 'turn/interrupt' && !turnId)
-    return Promise.resolve({ ok: false, error: 'Codex turn interrupt needs an exact turn id' })
+    return Promise.resolve({ ok: false, error: 'Codex turn interrupt needs an exact turn id', commit: 'refused' })
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
-    let upgraded = false, settled = false
-    const done = (r: { ok: true } | { ok: false; error: string }) => {
+    let upgraded = false, settled = false, requested = false
+    const done = (r: CodexMutationOutcome) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       try { conn.destroy() } catch {}
       resolve(r)
     }
-    // thread/archive may wait up to 10s in shutdown_and_wait before the server commits; keep a margin so a
-    // legitimate late response is not turned into an early timeout race.
-    const timer = setTimeout(() => done({ ok: false, error: generationError() || `Codex ${method} timed out after 15s` }), 15000)
-    conn.on('error', (e) => done({ ok: false, error: generationError() || `Codex ${method} connection failed: ${rpcError(e)}` }))
-    conn.on('close', () => { if (!settled) done({ ok: false, error: `Codex app-server closed during ${method}` }) })
+    // Once the request is on the wire the server owns it, so every unanswered end — timeout, socket error,
+    // early close, a generation swap — leaves the commit unknown rather than refused.
+    const unanswered = (error: string) => done({ ok: false, error, commit: requested ? 'unknown' : 'refused' })
+    const timer = setTimeout(() => unanswered(generationError() || `Codex ${method} did not answer within ${budgetMs}ms`), budgetMs)
+    conn.on('error', (e) => unanswered(generationError() || `Codex ${method} connection failed: ${rpcError(e)}`))
+    conn.on('close', () => { if (!settled) unanswered(`Codex app-server closed during ${method}`) })
     const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
     conn.on('connect', () => {
       const changed = generationError()
-      if (changed) return done({ ok: false, error: changed })
+      if (changed) return unanswered(changed)
       conn.write(WS_UPGRADE(randomBytes(16).toString('base64')))
     })
     const handle = (json: string) => {
       let m: JsonRpc
       try { m = JSON.parse(json) } catch { return }
-      if (m.error) return done({ ok: false, error: generationError() || `Codex ${method} failed: ${m.error.message || JSON.stringify(m.error)}` })
+      // The server answered by rejecting, so the target is provably unchanged whether or not we had sent it.
+      if (m.error) return done({ ok: false, error: generationError() || `Codex ${method} failed: ${m.error.message || JSON.stringify(m.error)}`, commit: 'refused' })
       if (m.id === 1 && m.result) {
         const changed = generationError()
-        if (changed) return done({ ok: false, error: changed })
+        if (changed) return unanswered(changed)
         send({ method: 'initialized', params: {} })
+        requested = true
         return send({ id: 2, method, params: method === 'turn/interrupt' ? { threadId, turnId } : { threadId } })
       }
       if (m.id === 2 && m.result) {
         const changed = generationError()
-        return changed ? done({ ok: false, error: changed }) : done({ ok: true })
+        return changed ? unanswered(changed) : done({ ok: true })
       }
     }
     conn.on('data', (chunk: Buffer) => {
@@ -1026,12 +1034,12 @@ function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/un
         const i = fs.buf.indexOf('\r\n\r\n')
         if (i < 0) return
         const head = fs.buf.slice(0, i).toString('utf8')
-        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `Codex app-server refused WebSocket upgrade for ${method}` })
+        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `Codex app-server refused WebSocket upgrade for ${method}`, commit: 'refused' })
         upgraded = true
         fs.buf = fs.buf.slice(i + 4)
         send(wsInitialize)
       }
-      if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: `Codex app-server closed during ${method}` })
+      if (drainWsFrames(fs, conn, handle)) unanswered(`Codex app-server closed during ${method}`)
     })
   })
 }
@@ -1040,6 +1048,18 @@ type CodexPagedIdsResult = { ok: true; ids: string[] } | { ok: false; error: str
 // Dashboard/resource probes keep their own short budget; this target-scoped census is only entered by a
 // lifecycle mutation that already holds the session transition lock and must tolerate a busy app-server.
 const CODEX_MUTATION_CENSUS_MS = 15_000
+// A mutation's response budget. `thread/unarchive` and `turn/interrupt` are state flips the server answers at
+// once — measured 36ms to unarchive the very same 279 MB thread that took 47.7s to archive — so they keep the
+// base. `thread/archive` on a LOADED thread differs in kind: the server flushes that thread's whole in-memory
+// rollout inside shutdown_and_wait before it commits, so the wait is proportional to accumulated history
+// (measured 47.7s for 279 MB, ~5.9 MB/s, against ~1.5s for a notLoaded member that flushes nothing). A fixed
+// ceiling therefore never bounds the operation; it only picks the transcript size above which archive stops
+// working, and raising it just moves that size. The scaled term is deliberately pessimistic — a floor rate ~6x
+// under the measured one — because its job is to catch a WEDGED server, not to predict a flush: a machine
+// several times slower still archives, while a hung one still fails loudly.
+const CODEX_MUTATION_BASE_MS = 15_000
+const CODEX_ARCHIVE_FLUSH_FLOOR_BYTES_PER_MS = 1000
+const codexArchiveBudgetMs = (bytes: number) => CODEX_MUTATION_BASE_MS + Math.ceil(bytes / CODEX_ARCHIVE_FLUSH_FLOOR_BYTES_PER_MS)
 // Codex treats an omitted or empty sourceKinds filter as "interactive" defaults. Cold proof must census the
 // entire native thread graph, including subAgent/thread-spawn rows that have no Spex record, so the adapter
 // supplies every protocol source kind explicitly for its thread/list calls.
@@ -1479,8 +1499,16 @@ async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSe
     return { ok: false, reason: `Codex native thread ${threadId} is not one exact active orphan` }
   const siblingIds = plan.guard.referenceIds.filter((id) => id !== threadId)
   const legacy = legacyCodexGenerationEndpoint(dir)
-  const archived = await codexThreadMutation(legacy.socketPath, 'thread/archive', threadId, { dir, endpoint: legacy, generation })
-  if (!archived.ok) return { ok: false, reason: `${archived.error} while archiving orphan Codex thread ${threadId}` }
+  // Quarantine archives one exact orphan, so it pays the same flush a subtree member does when that orphan is
+  // loaded; the budget is derived the same way rather than being a second, differently-wrong constant.
+  let orphanBudgetMs = CODEX_MUTATION_BASE_MS
+  if (plan.guard.referenceIds.includes(threadId)) {
+    const rollout = codexRolloutBytes(threadId)
+    if ('unreadable' in rollout) return { ok: false, reason: `Codex native thread ${threadId} is loaded and its rollout exists but cannot be measured, so the archive flush budget is unknown` }
+    orphanBudgetMs = codexArchiveBudgetMs(rollout.bytes)
+  }
+  const archived = await codexThreadMutation(legacy.socketPath, 'thread/archive', threadId, { dir, endpoint: legacy, generation }, undefined, orphanBudgetMs)
+  if (!archived.ok) return { ok: false, reason: `${archived.error} while archiving orphan Codex thread ${threadId}${archived.commit === 'unknown' ? '; commit state is unknown' : ''}` }
   const after = await codexColdPreflight(threadId, dir, generation)
   const failed = (reason: string): HarnessOrphanThreadQuarantine => ({ ok: false, reason })
   if (!after.ok) {
@@ -1922,6 +1950,20 @@ export function codexRolloutExists(threadId: string, root = codexSessionsDir()):
     if (kids(join(root, y, m, d)).some((f) => f.includes(threadId))) return true
   }
   return false
+}
+// The same day-dir walk, answering how big that rollout is. `thread/archive` on a LOADED thread flushes the
+// thread's in-memory rollout inside the server's shutdown_and_wait before it commits, so this size IS the work
+// an archive asks for; a notLoaded thread flushes nothing and its size is irrelevant. NO rollout file is a real
+// `0`, not an error: a thread that has started but not yet persisted (thread/start alone writes none, and a
+// fresh app-server lags 2-4s) has nothing to flush, so refusing it would be a false refusal. Only a file that
+// exists and cannot be measured is unreadable, and that fails closed rather than passing as small.
+export function codexRolloutBytes(threadId: string, root = codexSessionsDir()): { bytes: number } | { unreadable: true } {
+  const kids = (d: string) => { try { return readdirSync(d).sort().reverse() } catch { return [] as string[] } }
+  for (const y of kids(root)) for (const m of kids(join(root, y))) for (const d of kids(join(root, y, m))) {
+    const hit = kids(join(root, y, m, d)).find((f) => f.includes(threadId))
+    if (hit) { try { return { bytes: statSync(join(root, y, m, d, hit)).size } } catch { return { unreadable: true } } }
+  }
+  return { bytes: 0 }
 }
 // poll until the thread's rollout lands (resume-ready) or the budget runs out. Returns false on timeout so the
 // caller can FAIL LOUD instead of handing `resume` / the stored record a non-resumable id. The budget must
@@ -2524,9 +2566,24 @@ export const codexHarness: Harness = {
       if (siblingBefore.some((referenceId) => !afterIds.has(referenceId))) return { ok: false, reason: 'a pre-existing shared Codex sibling reference disappeared during archive' }
       return { ok: true }
     }
+    const loadedSet = new Set(plan.guard.referenceIds)
     for (const id of plan.activeIds) {
-      const archived = await codexThreadMutation(sock, 'thread/archive', id, fence)
-      if (!archived.ok) return compensate(`${archived.error} while archiving Codex subtree member ${id}`)
+      // Only a loaded member pays the rollout flush, and an unreadable size must not become a small budget,
+      // so it fails closed before the server is asked to mutate anything.
+      let budgetMs = CODEX_MUTATION_BASE_MS
+      if (loadedSet.has(id)) {
+        const rollout = codexRolloutBytes(id)
+        if ('unreadable' in rollout) return compensate(`Codex subtree member ${id} is loaded and its rollout exists but cannot be measured, so the archive flush budget is unknown`)
+        budgetMs = codexArchiveBudgetMs(rollout.bytes)
+      }
+      const archived = await codexThreadMutation(sock, 'thread/archive', id, fence, undefined, budgetMs)
+      if (archived.ok) continue
+      const reason = `${archived.error} while archiving Codex subtree member ${id}`
+      // Compensating an unknown commit is what turns one slow member into a false "compensation failed": the
+      // unarchive queues behind an archive the server is still executing and times out too. Report the unknown
+      // commit instead — that is the recovery token resume already reconciles.
+      if (archived.commit === 'unknown') return { ok: false, reason: `${reason}; commit state is unknown and no compensation was attempted` }
+      return compensate(reason)
     }
     let verified: { ok: true } | { ok: false; reason: string } = { ok: false, reason: 'Codex archive verification timed out' }
     const verifyDeadline = Date.now() + 30_000

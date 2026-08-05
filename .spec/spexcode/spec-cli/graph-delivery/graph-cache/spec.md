@@ -300,6 +300,34 @@ setup, so a dirty HTTP burst is not blocked by the producer's synchronous pre-aw
 env-overridable (`SPEXCODE_BOARD_BUDGET_MS` /
 `SPEXCODE_BOARD_TIMEOUT_MS` / `SPEXCODE_BOARD_BUILD_TIMEOUT_MS`).
 
+**Where a full build's time actually goes — measured, so the budget warning names a lever instead of a mood.**
+On a 476-node adopter corpus (429 nodes carrying `eval.md`, 2,521 declared scenarios, 3,023 stored readings) a
+fresh-process full build logged 1710 / 1825 / 1870 ms against the 1500ms budget. The `sourceIndexes` +
+`loadSpecs` baseline — history and drift included — is 394–524ms of that and is **shared with `spex spec lint`**,
+which is why a no-server lint of the same corpus finishes at 1.61s wall while the board needs more: the
+difference is not the tree walk. Board-only work, in size order: eval timeline and freshness derivation
+778–876ms, the `.spec`/`eval.md` walk 227–405ms, the scenario and remark index 109–129ms, session census and
+liveness 98–119ms, worktree layout and overlay discovery 102–108ms — and then everything else (overlay/ghost
+projection, issue merge, review fold, the resident session-eval copy, identity, and serializing a 583KB board)
+under 7ms each. Inside freshness, selector-anchor verification alone is 558.7–591.8ms while the content
+fallback across all 3,023 readings is 29.7–35.8ms.
+
+The dimension is readings and their code axes, not node count. At 119 / 238 / 357 / 476 ids the readings go
+882 / 1,543 / 2,176 / 3,023 while full freshness goes 621.0 / 663.9 / 714.6 / 911.7 ms — **sublinear**, which
+says the cost is a fixed sum re-paid per build rather than a walk that scales wrongly, and that distinction is
+the entire lever: those 3,023 reading demands deduplicate to **73 distinct selector queries**, an answer set the
+current HEAD already determines. A full build triggered by an issue, worktree or session change re-derives all
+73 with HEAD unmoved. Ordering without freshness (`order: true`, 229.8ms) is not the substitute it looks like —
+it deliberately emits `freshnessDeferred`, and the review summary's counts need real fresh/stale decisions.
+
+Two measurement pitfalls belong with those numbers, because both produce a wrong answer that looks clean.
+`startBuild()` deliberately defers its producer one event-loop turn and the warning timer starts after that
+defer, so end-to-end waiting (2117–2329ms on the same corpus) is a different quantity from the logged build
+time and the two may not be compared. And a 3755ms sample from a live server is a real slow sample of this same
+path, not a corpus floor: that run was interleaved with asynchronous `session summary build failed` and
+resource-monitor work, while the board's own synchronous `sessionEvalProjections()` call measures 0.4ms in an
+isolated process.
+
 This is the third half of [[graph-delivery]]'s one budget: [[graph-lean]] decides *how much* rides the
 wire, [[graph-stream]] decides *when* the wire is paid, and graph-cache decides *how often the graph is
 built* — one build per MEASURED change, shared by every reader.

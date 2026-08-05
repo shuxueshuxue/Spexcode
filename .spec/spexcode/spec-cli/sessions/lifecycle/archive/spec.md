@@ -55,9 +55,10 @@ or already-archived descendant at any depth in the same cold transition, while p
 for later same-thread resume. For adapters whose archive RPC can race native child creation, the complete target
 subtree census runs again after the mutation and before success. A new, missing, duplicated, or reassigned member
 in that interval refuses and compensates instead of filing a false zero-runtime proof.
-Archive eligibility reads the target's fresh native turn census, not its public lifecycle/status projection: an
-`inProgress` turn refuses with zero mutation, while a loaded target whose complete turn census has no
-`inProgress` turn may archive even if a hook-authored public status still reads working.
+Archive eligibility reads the target's live native turn state, not its public lifecycle/status projection: a turn in
+flight refuses with zero mutation, while a loaded target the runtime reports idle may archive even if a hook-authored
+public status still reads working. That live state comes from the census the ownership proof already performs, so
+eligibility never costs a transcript read — a target alive for weeks stays archivable.
 That rule is for reversible archive. A human-confirmed terminal `close` first passes the same exact target-ownership
 guard, then may invoke the adapter's exact native interrupt for its recorded target turn, wait for that turn to settle,
 and then repeat the complete cold proof
@@ -69,11 +70,23 @@ full projection. It first proves the shared PID/start/detached-receipt/socket ge
 set, and checks the target's active and archived descendant collections. Ordinary stop reads only the exact target
 and still refuses a resident descendant subtree. Archive additionally reads each loaded member of the exact owned
 subtree, then archives every member that was initially active under one generation fence; members already in the
-archived collection are verified but not mutated. An absent target with no descendants may therefore stop or
+archived collection are verified but not mutated. Each member's archive budget follows the work that member's
+archive actually does. Only a loaded member's archive flushes that thread's persisted rollout before the runtime
+commits, so the wait it is given scales with that rollout's measured size, while a member the runtime already
+reports unloaded flushes nothing and keeps the ordinary bounded budget. A rollout not yet persisted is zero work
+rather than an unknown, because a thread that has started but written nothing has nothing to flush; a rollout that
+exists and cannot be measured is unknown and fails closed before any mutation. One fixed per-request ceiling is not
+a bound on this operation at all — it only names the transcript size above which archive stops working — so the
+ceiling is derived rather than assigned, at a deliberately pessimistic flush rate whose job is to catch a wedged
+runtime rather than to predict a flush. An absent target with no descendants may therefore stop or
 archive even while an unrelated loaded or unowned sibling is slow or unresponsive; those sibling IDs still protect
 the shared root, which the session mutation never signals. A loaded active subtree member, an unknown exact member read, a
 member present in both or neither native collection, changed ancestry, duplicate ownership, or a shared-generation
-identity change fails closed. Success requires a post-mutation recensus proving parent plus the identical descendant
+identity change fails closed. A sent archive request that is never answered leaves commit state unknown for the
+same reason a generation change does: the runtime may still be executing it. Compensation is not attempted on an
+unknown commit, because an unarchive issued behind work the runtime has not finished is itself starved — that
+would turn one slow member into a false compensation failure — so the operation reports the unknown commit and
+leaves the recorded recovery token for resume to reconcile. Success requires a post-mutation recensus proving parent plus the identical descendant
 closure uniquely archived, every subtree member unloaded, and every pre-existing unrelated loaded sibling retained.
 The resource report remains the complete projection and may inspect every loaded reference; its latency or an
 unrelated turn-read failure is not mutation authority.

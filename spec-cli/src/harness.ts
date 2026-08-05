@@ -975,49 +975,57 @@ export function codexTurnFailureObserver(
 // defines thread/archive and thread/unarchive with {threadId}, plus turn/interrupt with {threadId, turnId}; no
 // guessed method or process command is used.
 type CodexGenerationFence = { dir: string; endpoint: CodexGenerationEndpoint; generation: string }
-function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/unarchive' | 'turn/interrupt', threadId: string, fence?: CodexGenerationFence, turnId?: string): Promise<{ ok: true } | { ok: false; error: string }> {
+// A failed mutation says whether the server can still commit it. `refused` means the request never reached the
+// server or the server answered by rejecting it, so the target is provably unchanged and compensation is safe.
+// `unknown` means the request was sent and no verdict came back — the server may still be executing it, so
+// sending anything else down the same connection queues behind that work and fails too.
+type CodexMutationOutcome = { ok: true } | { ok: false; error: string; commit: 'refused' | 'unknown' }
+function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/unarchive' | 'turn/interrupt', threadId: string, fence?: CodexGenerationFence, turnId?: string, budgetMs = CODEX_MUTATION_BASE_MS): Promise<CodexMutationOutcome> {
   const generationError = () => fence && codexRuntimeGeneration(fence.dir, fence.endpoint) !== fence.generation
     ? `Codex ${method} refused because the shared app-server generation changed`
     : null
   const before = generationError()
-  if (before) return Promise.resolve({ ok: false, error: before })
+  if (before) return Promise.resolve({ ok: false, error: before, commit: 'refused' })
   if (method === 'turn/interrupt' && !turnId)
-    return Promise.resolve({ ok: false, error: 'Codex turn interrupt needs an exact turn id' })
+    return Promise.resolve({ ok: false, error: 'Codex turn interrupt needs an exact turn id', commit: 'refused' })
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
-    let upgraded = false, settled = false
-    const done = (r: { ok: true } | { ok: false; error: string }) => {
+    let upgraded = false, settled = false, requested = false
+    const done = (r: CodexMutationOutcome) => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       try { conn.destroy() } catch {}
       resolve(r)
     }
-    // thread/archive may wait up to 10s in shutdown_and_wait before the server commits; keep a margin so a
-    // legitimate late response is not turned into an early timeout race.
-    const timer = setTimeout(() => done({ ok: false, error: generationError() || `Codex ${method} timed out after 15s` }), 15000)
-    conn.on('error', (e) => done({ ok: false, error: generationError() || `Codex ${method} connection failed: ${rpcError(e)}` }))
-    conn.on('close', () => { if (!settled) done({ ok: false, error: `Codex app-server closed during ${method}` }) })
+    // Once the request is on the wire the server owns it, so every unanswered end — timeout, socket error,
+    // early close, a generation swap — leaves the commit unknown rather than refused.
+    const unanswered = (error: string) => done({ ok: false, error, commit: requested ? 'unknown' : 'refused' })
+    const timer = setTimeout(() => unanswered(generationError() || `Codex ${method} did not answer within ${budgetMs}ms`), budgetMs)
+    conn.on('error', (e) => unanswered(generationError() || `Codex ${method} connection failed: ${rpcError(e)}`))
+    conn.on('close', () => { if (!settled) unanswered(`Codex app-server closed during ${method}`) })
     const send = (m: JsonRpc) => conn.write(wsText(JSON.stringify(m)))
     conn.on('connect', () => {
       const changed = generationError()
-      if (changed) return done({ ok: false, error: changed })
+      if (changed) return unanswered(changed)
       conn.write(WS_UPGRADE(randomBytes(16).toString('base64')))
     })
     const handle = (json: string) => {
       let m: JsonRpc
       try { m = JSON.parse(json) } catch { return }
-      if (m.error) return done({ ok: false, error: generationError() || `Codex ${method} failed: ${m.error.message || JSON.stringify(m.error)}` })
+      // The server answered by rejecting, so the target is provably unchanged whether or not we had sent it.
+      if (m.error) return done({ ok: false, error: generationError() || `Codex ${method} failed: ${m.error.message || JSON.stringify(m.error)}`, commit: 'refused' })
       if (m.id === 1 && m.result) {
         const changed = generationError()
-        if (changed) return done({ ok: false, error: changed })
+        if (changed) return unanswered(changed)
         send({ method: 'initialized', params: {} })
+        requested = true
         return send({ id: 2, method, params: method === 'turn/interrupt' ? { threadId, turnId } : { threadId } })
       }
       if (m.id === 2 && m.result) {
         const changed = generationError()
-        return changed ? done({ ok: false, error: changed }) : done({ ok: true })
+        return changed ? unanswered(changed) : done({ ok: true })
       }
     }
     conn.on('data', (chunk: Buffer) => {
@@ -1026,12 +1034,12 @@ function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/un
         const i = fs.buf.indexOf('\r\n\r\n')
         if (i < 0) return
         const head = fs.buf.slice(0, i).toString('utf8')
-        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `Codex app-server refused WebSocket upgrade for ${method}` })
+        if (!/^HTTP\/1\.1 101/.test(head)) return done({ ok: false, error: `Codex app-server refused WebSocket upgrade for ${method}`, commit: 'refused' })
         upgraded = true
         fs.buf = fs.buf.slice(i + 4)
         send(wsInitialize)
       }
-      if (drainWsFrames(fs, conn, handle)) done({ ok: false, error: `Codex app-server closed during ${method}` })
+      if (drainWsFrames(fs, conn, handle)) unanswered(`Codex app-server closed during ${method}`)
     })
   })
 }
@@ -1040,6 +1048,18 @@ type CodexPagedIdsResult = { ok: true; ids: string[] } | { ok: false; error: str
 // Dashboard/resource probes keep their own short budget; this target-scoped census is only entered by a
 // lifecycle mutation that already holds the session transition lock and must tolerate a busy app-server.
 const CODEX_MUTATION_CENSUS_MS = 15_000
+// A mutation's response budget. `thread/unarchive` and `turn/interrupt` are state flips the server answers at
+// once — measured 36ms to unarchive the very same 279 MB thread that took 47.7s to archive — so they keep the
+// base. `thread/archive` on a LOADED thread differs in kind: the server flushes that thread's whole in-memory
+// rollout inside shutdown_and_wait before it commits, so the wait is proportional to accumulated history
+// (measured 47.7s for 279 MB, ~5.9 MB/s, against ~1.5s for a notLoaded member that flushes nothing). A fixed
+// ceiling therefore never bounds the operation; it only picks the transcript size above which archive stops
+// working, and raising it just moves that size. The scaled term is deliberately pessimistic — a floor rate ~6x
+// under the measured one — because its job is to catch a WEDGED server, not to predict a flush: a machine
+// several times slower still archives, while a hung one still fails loudly.
+const CODEX_MUTATION_BASE_MS = 15_000
+const CODEX_ARCHIVE_FLUSH_FLOOR_BYTES_PER_MS = 1000
+const codexArchiveBudgetMs = (bytes: number) => CODEX_MUTATION_BASE_MS + Math.ceil(bytes / CODEX_ARCHIVE_FLUSH_FLOOR_BYTES_PER_MS)
 // Codex treats an omitted or empty sourceKinds filter as "interactive" defaults. Cold proof must census the
 // entire native thread graph, including subAgent/thread-spawn rows that have no Spex record, so the adapter
 // supplies every protocol source kind explicitly for its thread/list calls.
@@ -1114,9 +1134,14 @@ export async function codexLoadedReferenceIds(sock: string): Promise<{ ok: true;
   return result.ok ? { ok: true, referenceIds: result.ids } : result
 }
 
-const CODEX_TARGET_TURN_CENSUS_MS = 15_000
+const CODEX_RUNNING_TURN_READ_MS = 15_000
 
-function codexTargetTurnPresence(sock: string, threadId: string): Promise<{ ok: true; turnPresence: 'idle' | 'active' | 'unknown'; turnId?: string } | { ok: false; error: string }> {
+// @@@ presence vs identity - two different questions, deliberately not one helper.
+// A gate asks "is a turn in flight right now"; thread/list answers that for every thread at once, at a cost
+// that tracks the thread COUNT. Interrupt must additionally name the turn to interrupt, and only a turn read
+// carries the id — a cost that tracks that one thread's persisted HISTORY. So this read stays for interrupt,
+// where the target is by definition active and short-lived, and no gate may be routed back through it.
+function codexRunningTurn(sock: string, threadId: string): Promise<{ ok: true; turnPresence: 'idle' | 'active' | 'unknown'; turnId?: string } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
@@ -1125,7 +1150,7 @@ function codexTargetTurnPresence(sock: string, threadId: string): Promise<{ ok: 
       if (settled) return
       settled = true; clearTimeout(timer); try { conn.destroy() } catch {}; resolve(result)
     }
-    const timer = setTimeout(() => done({ ok: false, error: `Codex target thread ${threadId} turn census timed out after ${CODEX_TARGET_TURN_CENSUS_MS}ms` }), CODEX_TARGET_TURN_CENSUS_MS)
+    const timer = setTimeout(() => done({ ok: false, error: `Codex target thread ${threadId} turn census timed out after ${CODEX_RUNNING_TURN_READ_MS}ms` }), CODEX_RUNNING_TURN_READ_MS)
     conn.on('error', (error) => done({ ok: false, error: `Codex target thread ${threadId} turn census failed: ${rpcError(error)}` }))
     conn.on('close', () => { if (!settled) done({ ok: false, error: `Codex app-server closed during target thread ${threadId} turn census` }) })
     const send = (message: JsonRpc) => conn.write(wsText(JSON.stringify(message)))
@@ -1175,7 +1200,7 @@ async function interruptCodexTurn(rec: HarnessDeliveryRecord): Promise<DispatchR
   const generation = codexRuntimeGeneration(dir, endpoint)
   if (!generation) return { ok: false, error: 'Codex shared app-server generation is unproven' }
   const fence = { dir, endpoint, generation }
-  const before = await codexTargetTurnPresence(endpoint.socketPath, threadId)
+  const before = await codexRunningTurn(endpoint.socketPath, threadId)
   if (!before.ok) return { ok: false, error: before.error }
   if (codexRuntimeGeneration(dir, endpoint) !== generation)
     return { ok: false, error: 'shared Codex app-server generation changed during interrupt preflight' }
@@ -1186,7 +1211,7 @@ async function interruptCodexTurn(rec: HarnessDeliveryRecord): Promise<DispatchR
   if (!interrupted.ok) return { ok: false, error: interrupted.error }
   const deadline = Date.now() + CODEX_INTERRUPT_SETTLE_MS
   for (;;) {
-    const after = await codexTargetTurnPresence(endpoint.socketPath, threadId)
+    const after = await codexRunningTurn(endpoint.socketPath, threadId)
     if (!after.ok) return { ok: false, error: after.error }
     if (codexRuntimeGeneration(dir, endpoint) !== generation)
       return { ok: false, error: 'shared Codex app-server generation changed during interrupt settlement' }
@@ -1203,8 +1228,18 @@ export function codexThreadList(sock: string, params: Record<string, unknown>): 
   return codexThreadCollection(sock, params).then((result) => result.ok ? { ok: true, ids: result.ids } : result)
 }
 
+// Every thread/list row carries the app-server's live turn state for that thread, in the protocol's own
+// three variants. `notLoaded` duplicates what thread/loaded/list reports; `idle`/`active` answer the only
+// question a lifecycle gate asks. Any other shape is `unknown` and fails closed — never derived from
+// something cheaper.
+type CodexThreadStatus = 'notLoaded' | 'idle' | 'active' | 'unknown'
+const codexRowStatus = (row: { status?: unknown }): CodexThreadStatus => {
+  const type = (row.status as { type?: unknown } | null | undefined)?.type
+  return type === 'notLoaded' || type === 'idle' || type === 'active' ? type : 'unknown'
+}
+
 type CodexThreadCollectionResult =
-  | { ok: true; ids: string[]; parentById: Map<string, string | null> }
+  | { ok: true; ids: string[]; parentById: Map<string, string | null>; statusById: Map<string, CodexThreadStatus> }
   | { ok: false; error: string }
 
 function codexThreadCollection(sock: string, params: Record<string, unknown>): Promise<CodexThreadCollectionResult> {
@@ -1212,6 +1247,7 @@ function codexThreadCollection(sock: string, params: Record<string, unknown>): P
     ? params.sourceKinds
     : [...CODEX_THREAD_SOURCE_KINDS]
   const parentById = new Map<string, string | null>()
+  const statusById = new Map<string, CodexThreadStatus>()
   const conflictingParents = new Set<string>()
   return codexPagedIds(sock, 'thread/list', { ...params, sourceKinds, useStateDbOnly: true }, (item) => {
     if (typeof item === 'string') return item
@@ -1219,26 +1255,40 @@ function codexThreadCollection(sock: string, params: Record<string, unknown>): P
     return typeof id === 'string' ? id : null
   }, 'thread/list', (item) => {
     if (!item || typeof item !== 'object') return
-    const row = item as { id?: unknown; parentThreadId?: unknown }
+    const row = item as { id?: unknown; parentThreadId?: unknown; status?: unknown }
     if (typeof row.id !== 'string') return
     const parent = typeof row.parentThreadId === 'string' ? row.parentThreadId : null
     if (parentById.has(row.id) && parentById.get(row.id) !== parent) conflictingParents.add(row.id)
     parentById.set(row.id, parent)
+    // Parent ownership is a fact about the graph, so a disagreement across pages is a census fault.
+    // Turn state is live, so a mid-drain change is not a fault — it is simply no longer knowable here.
+    const status = codexRowStatus(row)
+    statusById.set(row.id, statusById.has(row.id) && statusById.get(row.id) !== status ? 'unknown' : status)
   }).then((result) => {
     if (!result.ok) return result
     if (conflictingParents.size) return { ok: false as const, error: `Codex thread/list returned conflicting parent ownership for ${[...conflictingParents].join(', ')}` }
-    return { ...result, parentById }
+    return { ...result, parentById, statusById }
   })
 }
+
+// The gate's question is about the tip — is a turn in flight right now — and thread/list already answers it
+// for every thread at once, at a cost that tracks how many threads exist. Reading turns instead costs the
+// target's whole persisted history against a fixed budget, so a long-lived session becomes unmutatable.
+const codexPresenceFromStatus = (status: CodexThreadStatus | undefined): SharedRuntimeMutationGuard['targetTurnPresence'] =>
+  status === 'idle' || status === 'active' ? status : 'unknown'
 
 async function codexTargetMutationGuard(threadId: string, dir = runtimeRoot(), endpoint = legacyCodexGenerationEndpoint(dir)): Promise<SharedRuntimeMutationGuard> {
   const generationBefore = codexMutationGeneration(dir, endpoint)
   if (!generationBefore) return { healthy: false, referenceIds: [], targetTurnPresence: 'unknown', descendantIds: [], error: 'Codex shared app-server generation is unproven' }
   const sock = endpoint.socketPath
-  const [loaded, activeDescendants, archivedDescendants] = await Promise.all([
+  // The descendant collections are ancestor-filtered and therefore exclude the target itself, so the
+  // target's own turn state comes from the whole-collection census. These run concurrently with the rest.
+  const [loaded, activeDescendants, archivedDescendants, activeList, archivedList] = await Promise.all([
     codexLoadedReferenceIds(sock),
     codexThreadList(sock, { ancestorThreadId: threadId, archived: false, sourceKinds: [] }),
     codexThreadList(sock, { ancestorThreadId: threadId, archived: true, sourceKinds: [] }),
+    codexThreadCollection(sock, { archived: false, sourceKinds: [] }),
+    codexThreadCollection(sock, { archived: true, sourceKinds: [] }),
   ])
   const referenceIds = loaded.ok ? loaded.referenceIds : []
   const descendantIds = activeDescendants.ok && archivedDescendants.ok
@@ -1247,12 +1297,11 @@ async function codexTargetMutationGuard(threadId: string, dir = runtimeRoot(), e
   if (!loaded.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: loaded.error }
   if (!activeDescendants.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: activeDescendants.error }
   if (!archivedDescendants.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: archivedDescendants.error }
-  let targetTurnPresence: SharedRuntimeMutationGuard['targetTurnPresence'] = 'none'
-  if (referenceIds.includes(threadId)) {
-    const target = await codexTargetTurnPresence(sock, threadId)
-    if (!target.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: target.error }
-    targetTurnPresence = target.turnPresence
-  }
+  if (!activeList.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: activeList.error }
+  if (!archivedList.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: archivedList.error }
+  const targetTurnPresence: SharedRuntimeMutationGuard['targetTurnPresence'] = referenceIds.includes(threadId)
+    ? codexPresenceFromStatus(activeList.statusById.get(threadId) ?? archivedList.statusById.get(threadId))
+    : 'none'
   if (codexRuntimeGeneration(dir, endpoint) !== generationBefore)
     return { healthy: false, referenceIds, targetTurnPresence, descendantIds, error: 'shared Codex app-server generation changed during target guard' }
   return { healthy: true, referenceIds, targetTurnPresence, descendantIds }
@@ -1304,8 +1353,8 @@ async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), exp
     codexLoadedReferenceIds(sock),
     codexThreadCollection(sock, { ancestorThreadId: threadId, archived: false, sourceKinds: [] }),
     codexThreadCollection(sock, { ancestorThreadId: threadId, archived: true, sourceKinds: [] }),
-    codexThreadList(sock, { archived: true, sourceKinds: [] }),
-    codexThreadList(sock, { archived: false, sourceKinds: [] }),
+    codexThreadCollection(sock, { archived: true, sourceKinds: [] }),
+    codexThreadCollection(sock, { archived: false, sourceKinds: [] }),
   ])
   if (codexRuntimeGeneration(dir, endpoint) !== generation)
     return { ok: false, reason: 'shared Codex app-server generation changed during subtree census' }
@@ -1357,18 +1406,20 @@ async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), exp
     }
   }
 
+  // Every subtree member was just proven to occur in exactly one whole-collection census, so that census
+  // already carries each one's live turn state. No second round of native reads, and therefore no second
+  // generation fence — nothing was read between the fence above and here.
+  const statusById = new Map([...activeList.statusById, ...archivedList.statusById])
   const loadedSet = new Set(loaded.referenceIds)
   const loadedSubtreeIds = subtreeIds.filter((id) => loadedSet.has(id))
-  const turnStates = await Promise.all(loadedSubtreeIds.map(async (id) => ({ id, state: await codexTargetTurnPresence(sock, id) })))
-  if (codexRuntimeGeneration(dir, endpoint) !== generation)
-    return { ok: false, reason: 'shared Codex app-server generation changed during subtree turn census' }
-  for (const { id, state } of turnStates) {
-    if (!state.ok) return { ok: false, reason: state.error }
-    if (state.turnPresence === 'active') return { ok: false, reason: `Codex subtree member ${id} has an active turn` }
-    if (state.turnPresence === 'unknown') return { ok: false, reason: `Codex subtree member ${id} turn state is unknown` }
+  for (const id of loadedSubtreeIds) {
+    const presence = codexPresenceFromStatus(statusById.get(id))
+    if (presence === 'active') return { ok: false, reason: `Codex subtree member ${id} has an active turn` }
+    if (presence === 'unknown') return { ok: false, reason: `Codex subtree member ${id} turn state is unknown` }
     if (archivedSet.has(id)) return { ok: false, reason: `Codex archived subtree member ${id} remains loaded` }
   }
 
+  // Proven, not assumed: a loaded target is one of the members the loop above just cleared.
   const targetTurnPresence: SharedRuntimeMutationGuard['targetTurnPresence'] = loadedSet.has(threadId) ? 'idle' : 'none'
   const guard: SharedRuntimeMutationGuard = {
     healthy: true,
@@ -1448,8 +1499,16 @@ async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSe
     return { ok: false, reason: `Codex native thread ${threadId} is not one exact active orphan` }
   const siblingIds = plan.guard.referenceIds.filter((id) => id !== threadId)
   const legacy = legacyCodexGenerationEndpoint(dir)
-  const archived = await codexThreadMutation(legacy.socketPath, 'thread/archive', threadId, { dir, endpoint: legacy, generation })
-  if (!archived.ok) return { ok: false, reason: `${archived.error} while archiving orphan Codex thread ${threadId}` }
+  // Quarantine archives one exact orphan, so it pays the same flush a subtree member does when that orphan is
+  // loaded; the budget is derived the same way rather than being a second, differently-wrong constant.
+  let orphanBudgetMs = CODEX_MUTATION_BASE_MS
+  if (plan.guard.referenceIds.includes(threadId)) {
+    const rollout = codexRolloutBytes(threadId)
+    if ('unreadable' in rollout) return { ok: false, reason: `Codex native thread ${threadId} is loaded and its rollout exists but cannot be measured, so the archive flush budget is unknown` }
+    orphanBudgetMs = codexArchiveBudgetMs(rollout.bytes)
+  }
+  const archived = await codexThreadMutation(legacy.socketPath, 'thread/archive', threadId, { dir, endpoint: legacy, generation }, undefined, orphanBudgetMs)
+  if (!archived.ok) return { ok: false, reason: `${archived.error} while archiving orphan Codex thread ${threadId}${archived.commit === 'unknown' ? '; commit state is unknown' : ''}` }
   const after = await codexColdPreflight(threadId, dir, generation)
   const failed = (reason: string): HarnessOrphanThreadQuarantine => ({ ok: false, reason })
   if (!after.ok) {
@@ -1891,6 +1950,20 @@ export function codexRolloutExists(threadId: string, root = codexSessionsDir()):
     if (kids(join(root, y, m, d)).some((f) => f.includes(threadId))) return true
   }
   return false
+}
+// The same day-dir walk, answering how big that rollout is. `thread/archive` on a LOADED thread flushes the
+// thread's in-memory rollout inside the server's shutdown_and_wait before it commits, so this size IS the work
+// an archive asks for; a notLoaded thread flushes nothing and its size is irrelevant. NO rollout file is a real
+// `0`, not an error: a thread that has started but not yet persisted (thread/start alone writes none, and a
+// fresh app-server lags 2-4s) has nothing to flush, so refusing it would be a false refusal. Only a file that
+// exists and cannot be measured is unreadable, and that fails closed rather than passing as small.
+export function codexRolloutBytes(threadId: string, root = codexSessionsDir()): { bytes: number } | { unreadable: true } {
+  const kids = (d: string) => { try { return readdirSync(d).sort().reverse() } catch { return [] as string[] } }
+  for (const y of kids(root)) for (const m of kids(join(root, y))) for (const d of kids(join(root, y, m))) {
+    const hit = kids(join(root, y, m, d)).find((f) => f.includes(threadId))
+    if (hit) { try { return { bytes: statSync(join(root, y, m, d, hit)).size } } catch { return { unreadable: true } } }
+  }
+  return { bytes: 0 }
 }
 // poll until the thread's rollout lands (resume-ready) or the budget runs out. Returns false on timeout so the
 // caller can FAIL LOUD instead of handing `resume` / the stored record a non-resumable id. The budget must
@@ -2493,9 +2566,24 @@ export const codexHarness: Harness = {
       if (siblingBefore.some((referenceId) => !afterIds.has(referenceId))) return { ok: false, reason: 'a pre-existing shared Codex sibling reference disappeared during archive' }
       return { ok: true }
     }
+    const loadedSet = new Set(plan.guard.referenceIds)
     for (const id of plan.activeIds) {
-      const archived = await codexThreadMutation(sock, 'thread/archive', id, fence)
-      if (!archived.ok) return compensate(`${archived.error} while archiving Codex subtree member ${id}`)
+      // Only a loaded member pays the rollout flush, and an unreadable size must not become a small budget,
+      // so it fails closed before the server is asked to mutate anything.
+      let budgetMs = CODEX_MUTATION_BASE_MS
+      if (loadedSet.has(id)) {
+        const rollout = codexRolloutBytes(id)
+        if ('unreadable' in rollout) return compensate(`Codex subtree member ${id} is loaded and its rollout exists but cannot be measured, so the archive flush budget is unknown`)
+        budgetMs = codexArchiveBudgetMs(rollout.bytes)
+      }
+      const archived = await codexThreadMutation(sock, 'thread/archive', id, fence, undefined, budgetMs)
+      if (archived.ok) continue
+      const reason = `${archived.error} while archiving Codex subtree member ${id}`
+      // Compensating an unknown commit is what turns one slow member into a false "compensation failed": the
+      // unarchive queues behind an archive the server is still executing and times out too. Report the unknown
+      // commit instead — that is the recovery token resume already reconciles.
+      if (archived.commit === 'unknown') return { ok: false, reason: `${reason}; commit state is unknown and no compensation was attempted` }
+      return compensate(reason)
     }
     let verified: { ok: true } | { ok: false; reason: string } = { ok: false, reason: 'Codex archive verification timed out' }
     const verifyDeadline = Date.now() + 30_000

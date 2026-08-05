@@ -229,15 +229,23 @@ surface:
   reference owner. An unhealthy/unknown probe returns an unknown refcount rather than a record-derived fallback;
   product mutation treats that uncertainty as a separate fail-closed blocker. The adapter exposes full projection
   and mutation proof as separate capabilities: resource reporting may read every loaded reference to describe turn
-  presence, while lifecycle mutation uses the paginated loaded-ID set, both exact target descendant collections,
-  and exact reads only for loaded members authorized by the operation. The periodic report keeps its short bounded
+  presence, while lifecycle mutation uses the paginated loaded-ID set, both exact target descendant collections, and
+  the whole-collection census — whose rows already carry each thread's live turn state, so presence for every member
+  is answered by the reads the proof performs anyway. A gate asks whether a turn is in flight at the tip, so its cost
+  must track how many threads exist, never how much history any one of them holds; a per-thread transcript read makes
+  a long-lived session unmutatable against any fixed budget, and raising the budget only moves the threshold. Turn
+  IDENTITY is the separate question: only interrupt needs to name the turn it interrupts, so only interrupt pays a
+  transcript read, against a target that is by definition active. Presence the app-server did not report — including
+  two native sources contradicting each other — is unknown and fails closed; it is never derived from something
+  cheaper. The periodic report keeps its short bounded
   probe budget; a lifecycle mutation's explicit target census has its own longer bounded budget so a busy shared
   app-server does not turn a safe target proof into a false refusal. A transport-local census refusal is retried
   a small bounded number of times with the same generation fence; semantic ownership refusals return immediately.
   Ordinary stop reads the target and refuses
   descendants. Cold archive treats the adapter's native `ancestorThreadId` result as an ownership closure (all depths,
   excluding the ancestor), verifies every member's direct-parent chain against the active/archived collections,
-  reads every loaded member, and archives the initially-active closure deepest-first with the ancestor last;
+  establishes every loaded member's turn presence from those same collections, and archives the initially-active
+  closure deepest-first with the ancestor last;
   already-archived members are proof, not mutation.
   Unreadable-record quarantine is a separate, narrower adapter operation because it has no record-shaped ownership
   claim to pass into cold archive. It receives one exact native thread id plus the exact unreadable record id

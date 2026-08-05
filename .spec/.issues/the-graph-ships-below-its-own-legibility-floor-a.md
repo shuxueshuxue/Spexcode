@@ -683,3 +683,76 @@ boundary.
 Evidence grade: source verification and arithmetic throughout. No filed reading.
 
 Spec: node-graph
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T21:39:27.871Z -->
+## Amendment 8: correcting a citation in Amendment 7, and the closure re-verified per payload
+
+### The citation
+
+Amendment 7 cites `.ov-mark`'s `--type-meta` at `styles.css:684`. **That is the wrong line.** Measured in both
+the trunk and the worktree checkout, identically:
+
+```
+styles.css:27    --type-meta: 11px;                                  <- the token
+styles.css:684   .ov-marks { display: flex; gap: 3px; ... }          <- the flex container, no font-size
+styles.css:685   .ov-mark  { font-size: var(--type-meta); ... }      <- the rule that sets 11px
+```
+
+`684` names a rule with no `font-size` in it, so anyone checking the 11px figure at that line would find nothing
+supporting it and reasonably doubt the number. **Read Amendment 7's citation as `styles.css:685`.** The 11px
+figure and everything derived from it are unaffected — the deliberate within-slot pricing (11px for the with-ops
+branch against 10px for the age) stands.
+
+Worth recording, because the cause is not the one that looks obvious. A container and its child differing by a
+single `s` invites a substring-match error, and that is a real trap — the anchorable coordinate is the
+**(selector, property)** pair, not the selector, since `.ov-mark` as a query necessarily matches `.ov-marks`
+first. But that is not what happened here. The number came from a **range print** (`sed -n '683,687p'`), whose
+output must be decoded by *counting* from the start of the range; a blank line inside the range shifts every
+subsequent line by one, silently.
+
+> A labelled output (`grep -n`) carries the line number with the line. A range print requires the reader to
+> count, and counting is exactly what an invisible line breaks. Positional decoding of tool output is a second
+> source of wrong coordinates, independent of selector ambiguity.
+
+Also worth stating: two earlier discrepancies on this thread *were* explained by trunk-versus-worktree
+differences, and `diff -q` confirms these two `styles.css` files do still differ elsewhere — so that explanation
+was available here and is **false**. The `.ov-mark` rules are byte-identical at identical line numbers in both
+trees. A previously-correct explanation is a tempting wrong one.
+
+### The closure, now measured rather than asserted
+
+Amendment 7 argued the criterion applies per payload, not per element, and split `.ov-mark` on that basis. The
+remaining multi-payload elements have now been enumerated and classified, and the citations verified against
+source:
+
+| element | payload | promised by `:29`? | channel | verdict |
+|---|---|---|---|---|
+| `.ov-mark` | presence ("touched now") | yes — *when* | binary, survives | out: survives |
+| `.ov-mark` | which op (`+ ~ ✕ →`) | **no** | 9.35px glyph discrimination | out: unpromised |
+| `.node-dot` | four-state | no — `:31` defers to [[spec-node-states]] | colour block | out: unpromised |
+| `.pulse` | active-now motion (`styles.css:376-377`, `animation: pulse 1.6s infinite`) | arguably *when* | **animation** | out: survives |
+| avatar | who | yes — *who* | shape + hue | out: survives |
+| `.av-st-*` | liveness (`:415-417`, 3px ring; offline `opacity: .55`) | no — Row 2 denser cluster | colour ring | out: unpromised |
+
+**Six payloads, all out. The defect set is unchanged: `.node-title` and `.node-ago`.** The closure claim in
+Amendment 7 was itself an unverified assertion; it has now been checked and holds.
+
+A byproduct: the spec's channel pricing is a **gradient, not a dichotomy**, and all four tiers appear on this one
+tile —
+
+```
+animation  >  fill / shape / hue  >  glyph shape  >  digits
+```
+
+`:25` names only the endpoints ("fill-versus-outline survives zoom that digits do not"). The two middle tiers are
+what the classification above had to distinguish in order to close.
+
+### One caveat on the exits
+
+Raising the authored sizes fixes the floor violation but **enlarges the tiles**, so fewer fit on one screen. It
+does not reduce the need for a converged default view — it should not be chosen on the belief that it settles
+legibility as a side effect. The three exits (raise authored sizes / default zoom 1.0 / compensate inside the
+transform) remain a design choice recordable in the spec body with no measurement; only the fail→pass pair needs
+a browser.
+
+Spec: node-graph

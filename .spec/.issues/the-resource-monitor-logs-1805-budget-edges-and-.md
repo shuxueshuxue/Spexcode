@@ -255,3 +255,65 @@ regardless of how quiet the other 23 processes are. The dilution was mine, not t
 
 That is the same defect as my first error of this night — reading loadavg without dividing by cores.
 A missing denominator then, a wrong denominator now.
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T19:22:55.176Z -->
+## Correction, from a second observer: both payloads are an EXCESS, not a level — and this reshapes the defect
+
+`2c787e87` caught that `idle-cpu-over-budget:<N>%` reports `cpuPercent - idleBudget`. Verified at all four
+push sites (`:610`, `:632`, `:640`, `:657`) — and it **extends to the other magnitude-bearing family**,
+which their note did not claim: every `rss-over-budget` site is `(totals.rssMiB - rssBudget)`
+(`:609`, `:628`, `:639`, `:656`). So both numeric findings carry an overshoot, and neither carries a level.
+
+This corrects two things in this issue's body.
+
+### 1. The magnitudes are smaller than stated, because an excess of a quantised quantity is quantised too
+
+Levels land on integer tick multiples (~1.00% each, per the earlier measurement). The finding fires at
+level > 2 ticks, so the payload is `level - 2 ticks` ∈ **{1, 2, 3, …} ticks**. Not `{0, 1, 3, 4}` as this
+body said — the minimum representable non-zero payload is one tick, i.e. the payload's own quantum. It
+carries a couple of bits more than the boolean, not a magnitude.
+
+Independent support from `2c787e87`'s fixture, whose backend had served three requests: excesses of 2.9%
+and 1.0%, i.e. levels **4.9%** and **3.0%** — which reduce to **5 ticks** and **3 ticks** within window
+jitter. Two samples on a nearly-idle process, both over the 2-tick line.
+
+### 2. The real defect is narrower and worse: the level and the budget each exist, on the two surfaces nobody is watching
+
+Three surfaces carry this data, and the split is exact:
+
+| Surface | Level | Excess | Budget | Emission |
+|---|---|---|---|---|
+| `/api/resources` owner row | derivable | in `findings` | **in `budget`** (`:664`) | pull only |
+| `spex session resources` text | **shown** (`cpu=4.9%`) | in `!` findings | absent | pull only |
+| `entered`/`cleared` edge log | absent | **stripped** | absent | **continuous — 1831 lines** |
+
+So the level is on the text face, the budget is on the JSON face, and the **only continuously-emitted
+surface is the one with neither**. Recovering a level from an edge line requires two facts that live on two
+other surfaces, both of which need someone to be looking during the second it was true.
+
+That is a sharper statement of this issue than the one filed. The original framing — "the strip removes the
+magnitude" — implies the magnitude would be sufficient if kept. It would not: an excess without its budget
+is not a level, so even the unstripped `rss-over-budget:376.8MiB` on the text face cannot be read against
+a threshold that face never prints.
+
+### 3. Consequence for the fix, third revision
+
+- `idle-cpu-over-budget` (1455 edges, 79.5%) — unchanged from the last revision: the threshold is two
+  quanta, no hysteresis band fits, the window or the budget has to move.
+- `rss-over-budget` (182 edges) — the two-part fix still applies, but the magnitude it carries must be
+  **the level and its budget**, not the excess alone. Carrying the excess is what the code already does and
+  it is not sufficient.
+- The continuous surface is the one to fix, because it is the only one that does not require an observer.
+
+### Acceptance criterion, made a precondition rather than a note
+
+`2c787e87` left a line in its own fixture reading `unlaunchable-child evidence (must be 0 for this run to
+mean anything)` — a lesson encoded as a gate the next runner has to pass before its measurement counts.
+The equivalent gate for this issue, given that every error in this thread was a denominator error:
+
+> **Any claim of the form "N edges" in this thread must state the per-family volume split alongside N.**
+> A count without its distribution has already been wrong three times here — 14 families read as
+> equal-weight when 2 hold 89.4% of volume, `orphan:32b7dd20` cited under the wrong family, and 62 edges
+> read off a `tail -14`.
+
+A verdict on this issue that reports a total without its distribution has not measured this issue.

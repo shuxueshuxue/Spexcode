@@ -28,7 +28,10 @@ scenarios:
       project-wide paginated loaded-ID read (O(pages), no per-thread `thread/read`); a legacy archived+live or
       externally reloaded violation is instead projected archived:false with real liveness/status plus an
       `archiveHazard` marker until an explicit repair. A dead PID plus socket with no live listener is a healthy
-      empty root, while a live or ambiguous root remains a visible hazard.
+      empty root, while a live or ambiguous root remains a visible hazard. Removing the archived active root is
+      carried by that same subtractive session splice: its overlays and empty ghosts disappear with the row, the
+      result equals an independent full oracle, and neither the immediate publication nor the next patrol starts a
+      Git/history build.
     tags: [backend-api]
   - name: archive-cold-runtime-and-capacity
     description: >

@@ -32,8 +32,12 @@ const g = (...a: string[]) => execFileSync('git', ['-C', proj, ...a], { encoding
 
 // write a spec node's spec.md (working tree) — used at setup AND mid-test to mutate a NODE.
 function writeSpec(relDir: string, title: string, status = 'active', body = 'Body prose stating the node intent.') {
-  mkdirSync(join(proj, relDir), { recursive: true })
-  writeFileSync(join(proj, relDir, 'spec.md'),
+  writeSpecIn(proj, relDir, title, status, body)
+}
+
+function writeSpecIn(root: string, relDir: string, title: string, status = 'active', body = 'Body prose stating the node intent.') {
+  mkdirSync(join(root, relDir), { recursive: true })
+  writeFileSync(join(root, relDir, 'spec.md'),
     `---\ntitle: ${title}\nstatus: ${status}\nhue: 210\ndesc: fixture node\n---\n\n${body}\n`)
 }
 
@@ -503,7 +507,58 @@ test('a full completion re-bases a published session projection and leaves only 
   }
 })
 
-// LAST ON PURPOSE — this one adds and removes a linked worktree, which rewrites the fixture's `packed-refs`.
+test('archiving a dirty worktree subtracts its overlays without a full git walk', { skip: !gitOk && 'git not available' }, async () => {
+  const linked = join(tmpdir(), `boardscope-archive-${process.pid}-${Date.now()}`)
+  const gitRoot = mkdtempSync(join(tmpdir(), 'boardscope-archive-git-'))
+  const gitBin = join(gitRoot, 'bin')
+  mkdirSync(gitBin, { recursive: true })
+  const gitLog = logGitCalls(gitRoot, gitBin)
+  const previousPath = process.env.PATH
+  try {
+    g('worktree', 'add', '-q', '-b', 'node/archive-subtractive', linked)
+    writeFileSync(join(linked, '.spec', 'proj', 'child', 'spec.md'),
+      '---\ntitle: Child Node DIRTY ARCHIVE\nstatus: active\nhue: 210\ndesc: fixture node\n---\n\nDirty worktree body.\n')
+    writeSpecIn(linked, '.spec/proj/archive-ghost', 'Archive Ghost')
+    writeSessionRecord({
+      worktree_path: linked, branch: 'node/archive-subtractive', status: 'awaiting', proposal: 'nothing',
+      stopped: true, archived: false, cold_proof: '', note: 'dirty archive candidate',
+    })
+    cache.invalidateBoard('full')
+    const before = await cache.getBoard()
+    assert.ok(before.nodes.some((node: any) => node.id === 'archive-ghost' && node.ghost),
+      'the control needs a branch-only ghost to remove')
+    assert.ok(before.nodes.find((node: any) => node.id === 'child')?.overlays.some((overlay: any) => overlay.source === linked),
+      'the control needs a dirty existing-node overlay to remove')
+
+    writeSessionRecord({
+      worktree_path: linked, branch: 'node/archive-subtractive', status: 'awaiting', proposal: 'nothing',
+      stopped: true, archived: true, cold_proof: `cold-v1|claude|${SESS_ID}|no-resident-ref`, note: 'cold archived',
+    })
+    const fullOracle = await board.buildBoard()
+    process.env.PATH = `${gitBin}:${previousPath}`
+    cache.invalidateBoard('sessions')
+    const spliced = await cache.getBoardForSessionRefresh()
+    process.env.PATH = previousPath
+
+    assert.equal(existsSync(gitLog), false, 'archive projection must not spawn git')
+    assert.equal(JSON.stringify(spliced.nodes), JSON.stringify(fullOracle.nodes),
+      'the subtractive splice must match a full rebuild after removing dirty overlays and empty ghosts')
+    assert.equal(JSON.stringify(spliced.sessions), JSON.stringify(fullOracle.sessions),
+      'the archived row leaves the working-set projection exactly as the full oracle does')
+    assert.equal((await cache.patrolBoard()).nodes, spliced.nodes,
+      'the splice carries the removed-root revision so patrol does not buy a delayed full rebuild')
+  } finally {
+    process.env.PATH = previousPath
+    writeSessionRecord({ status: 'active', note: 'archive fixture restored', worktree_path: proj, branch: 'node/child-bs01', archived: false, stopped: false, cold_proof: '' })
+    cache.invalidateBoard('full')
+    await cache.getBoard()
+    try { g('worktree', 'remove', '--force', linked) } catch { rmSync(linked, { recursive: true, force: true }) }
+    try { g('branch', '-qD', 'node/archive-subtractive') } catch { /* already removed */ }
+    rmSync(gitRoot, { recursive: true, force: true })
+  }
+})
+
+// LAST ON PURPOSE — these final cases add and remove linked worktrees, which rewrite the fixture's `packed-refs`.
 // That file is an input to git.ts's event-cache identity, so the next assembly re-derives it through one
 // SYNCHRONOUS git probe; a later test that holds git at a controlled gate would claim that probe and stall
 // its own event loop. The state this leaves belongs at the end of the fixture's life, not in the middle of it.

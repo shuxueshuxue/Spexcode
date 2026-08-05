@@ -95,3 +95,81 @@ the sample count. Both are readable straight from the log without a new surface.
 - Not claimed that the strip at `:714-716` is a mistake. It is the right key; the omission is that the
   payload went with it.
 - The per-owner alternation counts are line counts from one log on one host over one window, not a rate.
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T18:48:29.864Z -->
+## Correction to this issue's own numbers, from a judgment `2c787e87` supplied
+
+The question put to me: are `backend:ff82b0ad`'s edges actually `rss-over-budget`, or another family?
+`stableFinding()` strips the numeric suffix but keeps the family name, so one `uniq -c` decides it.
+
+### The family attribution in the body holds
+
+    entered backend:ff82b0ad-...:rss-over-budget          30
+    entered backend:ff82b0ad-...:idle-cpu-over-budget      1
+    cleared  (same split)                              30 / 1
+
+30 of 31 are RSS. The hypothesis that the boolean might not even belong to the resource I named is
+refuted for this owner.
+
+### But the count in the body is wrong: 7/7 should be 30/30
+
+The body says `backend:ff82b0ad-... 7 entered / 7 cleared`. That figure came from a `tail -14` of a
+60-line grep, read as the total. The owner has **62 edges** (60 RSS + 2 idle-cpu).
+
+This is the fourth time in this night's work that I have reported a **subset as the population** — n=2
+for the RSS correlation, 6 samples for a board-staleness read, 10-of-428 for the budget-warning series,
+and now 14-of-60 for these edges. The individual numbers were different mistakes; the habit is one
+mistake: **sampling with a tail and reporting without the count.** Worth stating in the issue rather
+than only fixing the digit, because the digit is not the defect.
+
+### Whole-log totals, replacing the body's line-anchored count
+
+The body's `1805` came from a `^`-anchored grep and undercounts interleaved lines. Full count **1831**:
+
+| Finding family | Edges | Payload |
+|---|---:|---|
+| `idle-cpu-over-budget` | **1455** | stripped |
+| `rss-over-budget` | 182 | stripped |
+| `identity-leak:project-control-plane-carries-session-id` | 150 | preserved |
+| `record-without-live-thread` | 14 | preserved |
+| `orphan:owner-record-absent` | 11 | preserved |
+| `control-plane-probe-failed:` (codex app-server probe timeout) | 8 | preserved |
+| `unowned-loaded-thread` | 6 | preserved |
+| `turn-presence-unknown` | 4 | preserved |
+| `unattributed:project-process-without-owner` | 1 | preserved |
+
+    stripped (the 2 numeric families) : 1637   89.4%
+    preserved (label families)        :  194   10.6%
+
+### This sharpens the fix argument past where the body put it
+
+`2c787e87` enumerated every family that reaches `findings` — 14 of them, and **exactly the 2 that carry
+a magnitude are the 2 that get stripped.** By volume that is not a corner case: the mechanism removes
+the payload from **89.4% of all edges** and preserves it on the 10.6% that never had a magnitude to
+report. It discards precisely the severity-bearing part and keeps precisely the part that was already
+self-describing.
+
+The control is already in the tree: the newly added `harness-unresolved:<id>` takes the preserved
+branch, so its edge carries the unresolvable id **by default** — nobody designed that. So point 1 of
+the fix section is not a new convention; it is restoring the default to the two families that were
+special-cased out of it.
+
+### And the dominant family is not the one this issue was written around
+
+    idle-cpu-over-budget   1455 / 1831   =  79.5% of all edges
+    budget: idleCpuPercent: 2            (host-resources.ts:89)
+
+A 2% idle-CPU budget means "not perfectly idle". On a 16-core host with several live sessions that is
+crossed continuously, and the edge detector has no hysteresis, so it pays two lines per crossing
+forever. One owner alone:
+
+    orphan:32b7dd20-...  ->  634 idle-cpu edges  =  34.6% of the entire resource log
+
+The body cited that owner's 312/311 inside a section about RSS and never named its family. It is an
+**idle-CPU** owner. The loudest single thing in this log was misattributed by implication, in an issue
+whose subject is that this log cannot be read. Correcting it strengthens the case: the churn is
+dominated by a 2% threshold, which is the clearest possible instance of a quantity riding its budget.
+
+The fix shape in the body is unchanged and now better motivated — the magnitude belongs on the
+`entered` line for both numeric families, and hysteresis belongs on the edge detector. The second half
+matters more than I first weighted it: with a 2% budget, magnitude alone would still leave ~1455 lines.

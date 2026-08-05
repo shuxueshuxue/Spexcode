@@ -231,3 +231,63 @@ control-density token is a plausible account of how 12px got chosen, and it is i
 not evidence. Recorded because it suggests where else to look, not because it supports anything above.
 
 Spec: node-graph
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T21:01:25.687Z -->
+## Amendment 3: where the 12px came from, and exit 1 costs more than stated
+
+Two measurements taken after Amendment 2. The first explains the mechanism without appealing to anyone's
+intent; the second makes exit 1 more expensive than this issue priced it.
+
+### The token was calibrated on a different surface
+
+`--type-control` (12px) has **82 consumers** in `styles.css` — buttons, inputs, menu items, table cells,
+`code`, `.desc`, pagination, review labels. Exactly **one** of them lives inside the scaled transform pane:
+`.node-title`. (Checked by resolving every class `SpecNode.jsx` renders against `styles.css`; `.node-title` is
+its only `--type-control` hit.) The other 81 render at 1:1.
+
+So the token is not wrong. On the surface where 81 of its consumers live, 12px *is* 12px, and that was a
+defensible choice. The defect is that one consumer carried the constant into a surface with a different
+transform, where the default renders it at 10.2px.
+
+The asymmetry is what hid it. At 41/41 someone would have asked which context the value was for; at 81/1 the
+token reads as settled and the outlier looks like it is using the house style.
+
+This also says where the repair belongs. Not "give `.node-title` its own constant" — that is one more branch.
+**A surface that transforms its children owes its children a floor, expressed where the transform is chosen
+rather than where each child is authored.**
+
+### The tile is smaller than this issue said, and it lands `spec.md:25` exactly
+
+I measured only the title. Every *other* text in the tile is `--type-caption` = **10px**, the bottom step of
+the whole scale (10/11/12/13/14/16/18):
+
+```
+.node-title    --type-control  12px  ->  10.2px  @ 0.85
+.node-ago      --type-caption  10px  ->   8.5px
+.node-ver      --type-caption  10px  ->   8.5px
+.drift-badge   --type-caption  10px  ->   8.5px
+.issue-badge   --type-caption  10px  ->   8.5px
+```
+
+This makes `spec.md:25` land precisely rather than generally. "Fill-versus-outline survives zoom that digits
+do not, so the lit tab is the signal and the counts are detail" is not a design aphorism — **it is a correct
+price paid against these specific numbers.** The node knew 8.5px digits were unreadable and gave the counts a
+fill fallback.
+
+The title got one step up the scale and no fallback. So the body's state is: it understood the problem, priced
+it for the least important text in the tile, and did not price it for the identity carrier.
+
+### Consequence for exit 1
+
+Exit 1 as written ("raise the type floor for tiles to 14px+ authored") was priced against the title alone. It
+is four rows wider than that: raising only `.node-title` leaves four caption rows at 8.5px on a tile whose
+spec claims a readable column. Combined with the side effect already recorded — larger text → larger tiles →
+more zooming out — exit 1 is now clearly the more expensive of the two.
+
+### Not a defect, recorded so nobody re-runs it
+
+The scale also holds `--type-hero: clamp(5.5px, 1.15vw, 9.5px)`, smaller than caption despite the name. Its
+sole consumer `.si-hero` (`:1520`) is `mono` + `white-space: pre` — ASCII art, where a glyph is a picture
+element — and it is outside the pane. Correct as authored.
+
+Spec: node-graph

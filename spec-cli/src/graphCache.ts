@@ -27,9 +27,10 @@ type BoardInputRevision = {
   projections: string
   combined: string
   fullParts: Record<string, string>
+  worktreeParts: Record<string, string>
   projectionIds: string[]
 }
-type SessionInputRevision = Pick<BoardInputRevision, 'sessions' | 'projections' | 'projectionIds'>
+type SessionInputRevision = Pick<BoardInputRevision, 'sessions' | 'projections' | 'projectionIds'> & { activeRoots: string[] }
 const DEBUG = process.env.SPEXCODE_BOARD_DEBUG === '1'
 
 function textOrNull(path: string): string | null {
@@ -153,20 +154,29 @@ function sessionInputRevision(): SessionInputRevision {
     textOrNull(sessionArtifactPath(id, 'prompt')),
   ] as const)
   const projections = digest(ids.map((id) => [id, sessionEvalProjection(id)]))
-  return { sessions: digest(sessionInputs), projections, projectionIds: ids }
+  const activeRoots = [...new Set(ids.flatMap((id) => {
+    const entry = readPublicRecordEntry(id)
+    return entry.kind === 'ok' && entry.raw.governed && !entry.raw.archived ? [entry.raw.worktree_path] : []
+  }))].sort()
+  return { sessions: digest(sessionInputs), projections, projectionIds: ids, activeRoots }
 }
 
 function boardInputRevision(board: Board | null): BoardInputRevision {
   const root = repoRoot()
   const session = sessionInputRevision()
-  const records = listSessionIds().map(readPublicRecordEntry).flatMap((entry) => entry.kind === 'ok' ? [entry.raw] : [])
-  const governed = records.filter((record) => record.governed).sort((a, b) => a.session_id.localeCompare(b.session_id))
-  const activeRoots = [...new Set(governed.filter((record) => !record.archived).map((record) => record.worktree_path))].sort()
+  // Durable active records are the current root set; a cached ordinary row may be stale and must not replace
+  // them. The one projection-only addition is explicit: listSessions republishes an archived-runtime hazard
+  // into the working set, and that marked row keeps its root monitored until cold state is repaired.
+  const activeRoots = [...new Set([
+    ...session.activeRoots,
+    ...(board?.sessions.flatMap((row) => row.archiveHazard ? [row.path] : []) ?? []),
+  ])].sort()
   const main = mainCheckout()
   const base = mainBranch()
   const mainTip = refSha(main, base)
   const nodeIds = (board?.nodes ?? []).map((node) => node.id)
   const issuesStamp = boardThreads({ host: resolveForgeHost(), state: residentForgeState() }, nodeIds).stamp
+  const worktreeParts = Object.fromEntries(activeRoots.map((worktree) => [worktree, digest(worktreeRevision(worktree))]))
   const fullInputs = {
     root: worktreeRevision(root),
     config: [
@@ -176,7 +186,7 @@ function boardInputRevision(board: Board | null): BoardInputRevision {
       [join(main, 'spexcode.local.json'), textOrNull(join(main, 'spexcode.local.json'))],
     ],
     main: { root: main, branch: base, tip: mainTip },
-    worktrees: activeRoots.map((worktree) => worktreeRevision(worktree)),
+    worktrees: worktreeParts,
     issuesStamp,
     identity: resolveProjectIdentity(root, root),
   }
@@ -187,6 +197,7 @@ function boardInputRevision(board: Board | null): BoardInputRevision {
     ...session,
     combined: digest([full, session.sessions, session.projections]),
     fullParts,
+    worktreeParts,
   }
 }
 
@@ -205,13 +216,19 @@ function revisionCarriedByBoard(sample: BoardInputRevision, board: Board): Board
     projections,
     combined: digest([full, sample.sessions, projections]),
     fullParts,
+    worktreeParts: sample.worktreeParts,
     projectionIds: sample.projectionIds,
   }
 }
 
 // A sessions splice reuses its base topology. It may sample fresh record/projection inputs, but it must never
 // certify that those old nodes carry a full revision sampled after the base was built.
-function revisionCarriedBySessionSplice(base: BoardInputRevision, sample: SessionInputRevision, board: Board, stable: boolean): BoardInputRevision {
+function revisionCarriedBySessionSplice(
+  base: BoardInputRevision,
+  sample: Pick<SessionInputRevision, 'sessions' | 'projections' | 'projectionIds'>,
+  board: Board,
+  stable: boolean,
+): BoardInputRevision {
   const boardProjections = new Map(board.sessions.map((session) => [session.id, session.evalSummary ?? null]))
   const projections = stable
     ? digest(sample.projectionIds.map((id) => [id, boardProjections.get(id) ?? null]))
@@ -222,6 +239,7 @@ function revisionCarriedBySessionSplice(base: BoardInputRevision, sample: Sessio
     projections,
     combined: digest([base.full, sample.sessions, projections]),
     fullParts: base.fullParts,
+    worktreeParts: base.worktreeParts,
     projectionIds: sample.projectionIds,
   }
 }
@@ -237,8 +255,38 @@ function revisionCarriedByPublishedSessionRebase(full: BoardInputRevision, publi
     projections: published.projections,
     combined: digest([full.full, published.sessions, published.projections]),
     fullParts: full.fullParts,
+    worktreeParts: full.worktreeParts,
     projectionIds: published.projectionIds,
   }
+}
+
+function carrySubtractiveWorktrees(base: BoardInputRevision, activeRoots: readonly string[]): { revision: BoardInputRevision; added: boolean } {
+  const active = new Set(activeRoots)
+  const known = Object.keys(base.worktreeParts)
+  if (activeRoots.some((root) => !(root in base.worktreeParts))) return { revision: base, added: true }
+  if (known.every((root) => active.has(root))) return { revision: base, added: false }
+  const worktreeParts = Object.fromEntries(Object.entries(base.worktreeParts).filter(([root]) => active.has(root)))
+  const fullParts = { ...base.fullParts, worktrees: digest(worktreeParts) }
+  const full = digest(fullParts)
+  return {
+    revision: {
+      ...base,
+      full,
+      fullParts,
+      worktreeParts,
+      combined: digest([full, base.sessions, base.projections]),
+    },
+    added: false,
+  }
+}
+
+function isPureSubtractiveWorktreeMove(base: BoardInputRevision, sample: BoardInputRevision): boolean {
+  const moved = Object.keys(sample.fullParts).filter((key) => sample.fullParts[key] !== base.fullParts[key])
+  if (moved.length !== 1 || moved[0] !== 'worktrees') return false
+  const current = Object.keys(sample.worktreeParts)
+  const previous = Object.keys(base.worktreeParts)
+  return current.length < previous.length
+    && current.every((root) => sample.worktreeParts[root] === base.worktreeParts[root])
 }
 
 // a build slower than this is LOGGED, never silently tolerated — the fail-loud regression alarm. Sized
@@ -320,11 +368,16 @@ function startSessionSplice(): Flight | null {
       const board = await spliceSessions(base)
       const after = sessionInputRevision()
       if (base !== cached || revision !== cachedRevision || generation !== topologyGeneration) continue
-      const stable = before.sessions === after.sessions && before.projections === after.projections
+      const stable = before.sessions === after.sessions && before.projections === after.projections &&
+        JSON.stringify(before.activeRoots) === JSON.stringify(after.activeRoots)
+      const projectedRoots = [...new Set(board.sessions.map((row) => row.path))].sort()
+      const rootTransition = carrySubtractiveWorktrees(revision, projectedRoots)
+      const carried = stable ? rootTransition.revision : revision
       cached = board
       cachedJson = null
-      cachedRevision = revisionCarriedBySessionSplice(revision, before, board, stable)
+      cachedRevision = revisionCarriedBySessionSplice(carried, before, board, stable)
       sessionProjectionPublication++
+      if (rootTransition.added) mergeDirty('full')
       if (!stable) {
         sessionOwed = true
         sessionGeneration++
@@ -384,6 +437,7 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
   let buildSessionGeneration = sessionGeneration
   let buildSessionProjectionPublication = sessionProjectionPublication
   let buildStartedWithSessionOwed = false
+  let buildAddedSessionRoot = false
   let completedRevision: BoardInputRevision | null = null
   // Do not invoke the producer inline. buildBoard() has an asynchronous signature but performs a sizeable
   // synchronous setup before its first await (Promise.all evaluates its arguments immediately). A stale HTTP
@@ -421,21 +475,23 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
         // the watcher event was about; an invalidation arriving after the sample keeps its own dirty window.
         if (prev && anchor && gen === sampledGen) {
           const fullMoved = before.full !== anchor.full
+          const subtractiveWorktreeMove = fullMoved && isPureSubtractiveWorktreeMove(anchor, before)
+          const structuralMoved = fullMoved && !subtractiveWorktreeMove
           const projectionMoved = before.sessions !== anchor.sessions || before.projections !== anchor.projections
           // A projection move nobody signalled is this validation doing the patrol's repair job.
-          if (projectionMoved && !sessionOwed && dirty !== 'sessions') {
+          if ((projectionMoved || subtractiveWorktreeMove) && !sessionOwed && dirty !== 'sessions') {
             gen++
             sessionOwed = true
             sessionGeneration++
           }
-          const owed = fullMoved ? 'full' : (sessionOwed || dirty === 'sessions') ? 'sessions' : 'none'
+          const owed = structuralMoved ? 'full' : (sessionOwed || dirty === 'sessions') ? 'sessions' : 'none'
           if (DEBUG && owed !== 'none') {
             const moved = Object.keys(before.fullParts).filter((key) => before.fullParts[key] !== anchor.fullParts[key])
             console.warn(`spec-cli: graph refresh revision moved — signalled=${dirty} scope=${owed} inputs=[${moved.join(', ')}]`)
           } else if (DEBUG && dirty !== 'none') {
             console.warn(`spec-cli: graph refresh discharged a ${dirty} signal — no graph input moved`)
           }
-          if (fullMoved) dirty = 'full'
+          if (structuralMoved) dirty = 'full'
           else if (sessionOwed || dirty === 'sessions') dirty = 'sessions'
           // Discharging CONSUMES the claim. Leaving it standing would make every later read re-enter this
           // validation, hold the board permanently stale/refreshing, and never converge.
@@ -475,7 +531,19 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
         // against a revision this board never carried, and the cache would converge on nothing. So a moved
         // half anchors on `before` — the conservative direction, which costs at most one extra rebuild and can
         // never certify unread bytes.
-        completedRevision = revisionCarriedByBoard(buildFullStable && buildSessionsStable ? after : before, board)
+        if (sessionsOnly && anchor) {
+          const projectedRoots = [...new Set(board.sessions.map((row) => row.path))].sort()
+          const rootTransition = carrySubtractiveWorktrees(anchor, projectedRoots)
+          buildAddedSessionRoot = rootTransition.added
+          completedRevision = revisionCarriedBySessionSplice(
+            rootTransition.revision,
+            before,
+            board,
+            buildFullStable && buildSessionsStable && !rootTransition.added,
+          )
+        } else {
+          completedRevision = revisionCarriedByBoard(buildFullStable && buildSessionsStable ? after : before, board)
+        }
         return board
       }))
         .then(resolveBuild, rejectBuild)
@@ -511,7 +579,7 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
       cachedRevision = completedRevision
       if (buildScope === 'full') topologyGeneration++
       else sessionProjectionPublication++
-      if (!buildFullStable) mergeDirty('full')
+      if (!buildFullStable || buildAddedSessionRoot) mergeDirty('full')
       traceCacheCommit(buildScope, buildStartedAt)
     }
     retryAt = 0

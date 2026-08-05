@@ -77,8 +77,19 @@ The graph is built **once per change, not once per poll — and only as much of 
   route-owned/full producer is running, the cache owes **both** a full convergence and a sessions splice. A
   'sessions' read with a cached graph takes the SPLICE path — `spliceSessions(prev)`: one fresh
   `listSessions()` bracketed only by the record/prompt/resident-projection carrier (never a root/worktree
-  `.spec` walk, issue read, identity read, or topology revision sample), prev's per-path ops reused, every node/eval/issue unit returned byte-identical — so a
-  lifecycle write never re-walks 180 spec files to ship a 1KB patch (the measured waste this scoping
+  `.spec` walk, issue read, identity read, or topology revision sample), with prev's per-path ops reused. Ordinary
+  lifecycle fields leave every node/eval/issue unit byte-identical. Archive and close are the one subtractive
+  topology transition already proven by that carrier: the splice removes overlays sourced by roots that left the
+  active session set, drops empty ghost nodes, re-derives affected status/parent facts, and carries the old full
+  revision minus those exact root entries. The active set is the row projection the splice actually publishes,
+  not a raw `archived` bit: an invalid cold witness or reloaded-runtime hazard remains visible and keeps its root
+  monitored. The subtractive path never reads a genuinely retired worktree. A root addition (create/resume) or
+  any retained root revision movement remains a full obligation, so subtractive publication cannot hide new work.
+  This classification belongs to the common `getBoard()` validation and publication path as well as delta delivery:
+  a root-set reduction is a splice only when every other full input and every retained root digest is unchanged.
+  Thus an ordinary route racing the lifecycle watcher cannot promote an archive into a full history build, while
+  an addition or a retained-root change cannot borrow the subtractive carrier.
+  A lifecycle write therefore never re-walks 180 spec files to ship a 1KB patch (the measured waste this scoping
   removed: ~250ms of unrelated fs work per push). A 'full' dirty (a ref move or worktree/.spec event) runs the
   whole `buildBoard()`, but its one structural builder does not queue that cheap projection: the splice inherits
   the last-good topology's full carrier and may publish first while the full builder remains single-flight. A

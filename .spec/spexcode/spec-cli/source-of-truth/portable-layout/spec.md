@@ -14,6 +14,7 @@ code:
 related:
   - spec-cli/src/layout-session-id.test.ts
   - spec-cli/src/session-public-projection.api.test.ts
+  - spec-cli/src/layout-overlay.api.test.ts
   - spexcode.json
   - spec-cli/templates/spexcode.json
   - .nvmrc
@@ -96,6 +97,11 @@ NOT `git worktree list`, so an unmanaged scratch worktree (`agent-*`) never appe
 ([[archive]]) is the one governed row that still enumerates but computes NO `ops`: that git-history probe is
 the seam's dominant per-row cost and shelving is the human declining to spend it, so its row is served bare
 and its cached delta is evicted rather than kept alive by a row nobody is watching.
+The graph supplies the exact ids from its already-frozen public session projection when it resolves this layout.
+That projection is the archive authority for graph overlays too: a valid cold archived row stays bare, while an
+invalid cold witness or resident-runtime hazard is projected back into the working set and retains its worktree
+delta. The full graph producer and the session splice therefore cannot disagree about whether that root contributes
+ops; callers that do not publish the graph's session state omit the projection and retain the raw-record default.
 
 Layout rows are a public record projection, not an internal-readiness view. `resolveLayout()` consumes the same
 layout-owned three-way parser as the session list and resource report: a valid launch-readiness-pending row

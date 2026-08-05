@@ -81,6 +81,13 @@ Every cell files its own transcript-backed reading on the most specific adapter 
 table files on this node. The campaign reuses one session per launcher to keep model spend bounded while still
 preserving real note-to-terminal channel transitions, and gives pi-family turns a wider first-token wall.
 
+Claude interactive delivery has one measured transport handoff: a session moved to a Claude background job is a
+fork whose daemon roster entry records `dispatch.launch.mode=resume`, `dispatch.launch.fork=true`, and the source
+transcript path. The adapter resolves that child by the governed source session id and sends the rendezvous
+`role`/`auth` handshake using the current roster `rvAuth` before the ordinary `reply` frame. It never guesses a
+token, prints one, or changes the pane/raw-key transport. A missing or unreadable fork entry preserves the normal
+launch-time socket path; the durable queue remains the acceptance boundary in either case.
+
 ## expanded spec
 
 The harness is resolved ONCE into the matching adapter; everything downstream calls the adapter. DETECTION is

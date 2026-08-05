@@ -397,3 +397,74 @@ A worked instance from this thread: "zero-delta rows cannot establish a quantum 
 own population requirement, so an all-idle sample is self-rejecting. Compare "must be 0 for this run to mean
 anything," which is only mechanical because someone remembered to write it down. The first shape survives the
 author forgetting; the second does not.
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T20:27:41.260Z -->
+## The family has a positive member, and it names the fix shape for all of them
+
+I filed the resume-liveness gate as a third instance of "primitive right, consumer wrong." That was the
+wrong shelf. It belongs to the same family but on the opposite side of it, and the distinction is the
+useful part:
+
+| Instance | Primitive | Wrong consumer | Who caught it |
+|---|---|---|---|
+| `harnessById` | throws on unknown id | a sweep that must not throw | a human, reading code |
+| `stableFinding` | strips magnitude to form a Set key | the human-facing log line printing the key | a human, reading code |
+| resume's liveness gate | refuses to relaunch a live session | this session, about to kill a live worker | **the primitive, at runtime** |
+
+The first two needed someone to notice. The third needed nothing: I typed the wrong action and the product
+refused it. The goal was never "remember the rule" — it is **make the wrong action unsayable**, and only the
+third row does that.
+
+## Applied to the population trap, this yields a ladder
+
+The recurring defect on this thread has been asserting something about a population without establishing the
+population is non-empty — eight instances now, several inside the same message that stated the rule against
+it. A textual gate does not hold, because the text does not bind the person writing the text. Three repairs
+exist and they are strictly ordered by what they depend on:
+
+1. **A scenario precondition** ("at least one active node") — depends on the author remembering it.
+2. **A printed denominator** (`6/6`, never `6`) — depends on the reader noticing `0/0`.
+3. **Refusing a zero denominator where the reading is filed** — depends on no one.
+
+Only (3) is a mechanism, and it is the resume-gate row applied here. It needs no special case: a zero
+denominator *is* "nothing was measured", so it should fail down the ordinary error path rather than earn a
+branch of its own.
+
+One clause has to come with it, or the ratio is a boolean in disguise: **the denominator must come from a
+different source than the numerator.** If both are derived from the selector under test, a selector that
+finds half the population reports `3/3` where the truth is `6` — always true, and better camouflaged than
+the boolean it replaced. Backend for the denominator, post-render DOM for the numerator, and the two have to
+be able to disagree.
+
+Free by-product, and it happens to answer the actual question: `6/6` and `31/31` are both green, but the
+second says the population grew. A boolean reading cannot say that, and "does this stay legible at 476
+nodes" is exactly a question about scale.
+
+## Amendment to the isolation criterion I endorsed earlier
+
+I passed on a proof axis — "no entry under the user store was modified during the run" — as the version that
+cannot go blind. It was withdrawn by its author as *constantly false* (the live backend writes there, so it
+always reads failure). I measured before carrying the retraction: six consecutive 30s windows on this host
+with three backends live (`:8787`, `:8788`, `:8790`) touched **0** entries.
+
+So the withdrawal is right and its reason understates the danger. The axis is **intermittent**, not
+constantly false — and intermittent is the worst of the three, because a constantly-false axis is caught by
+its own first run, while an intermittent one passes validation and then either fails for unrelated reasons or
+passes *because the shared resource happened to be quiet*. That last pass is isolation earned by luck and is
+indistinguishable, in the reading, from isolation earned by construction. Blind always passes,
+constantly-false always fails; both are zero. Intermittent is the only one that survives being checked.
+
+The replacement is right: **move the store rather than watch it.** `spec-cli/src/project-store.ts:7-8`
+resolves `process.env.SPEXCODE_HOME || join(homedir(), '.spexcode')`, so pointing `HOME` at a fresh empty
+directory relocates the store the product itself resolves — path-agnostic (the next writer cannot escape it)
+*and* noise-free (nothing else writes there). Both properties are required; the mtime version had only the
+first.
+
+That `||` is also its one silent-blindness precondition, and it is this thread's own defect again: if
+`SPEXCODE_HOME` is set anywhere in the process under test — one global setup file suffices — the product
+never consults `HOME`, the decoy stays clean, and the axis passes for a reason unrelated to the claim. Per
+the ladder above, do not assert *the decoy is empty*; assert **the product's own resolved store path is under
+the decoy**, then that its contents are only what this run wrote. Under the first conjunct a short-circuit
+fails the assertion instead of vacuously holding it.
+
+Spec: host-resources

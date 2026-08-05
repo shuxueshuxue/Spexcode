@@ -32,7 +32,7 @@ import { writeFileIfChanged } from './file-write.js'
 // payload shape. On the TS side the harness is derived from the selected launcher or ALL adapters at once
 // (materialize writes every harness's artifacts).
 
-export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-headless' | 'codex-headless' | 'opencode-headless' | 'pi-headless'
+export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'zcode' | 'claude-headless' | 'codex-headless' | 'opencode-headless' | 'pi-headless'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null; stopped?: boolean; archived?: boolean }
 export type HarnessLaunchReadyRecord = HarnessLivenessRecord & { governed?: boolean; runtimeDir: string }
 export type HarnessLaunchReadinessFence = {
@@ -149,7 +149,7 @@ export async function adapterLoadedReferenceState(
 export interface Harness {
   readonly id: HarnessId
   // the id baked into the materialized shim. Headless variants reuse their native family's shim.
-  readonly dispatchId: 'claude' | 'codex' | 'opencode' | 'pi'
+  readonly dispatchId: 'claude' | 'codex' | 'opencode' | 'pi' | 'zcode'
   // whether this harness runs without an interactive TUI. The dashboard launcher picker hides headless
   // adapters by default ([[launcher-visibility]]); CLI launcher resolution never consumes that policy.
   readonly headless: boolean
@@ -2233,6 +2233,9 @@ const CODEX_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToo
 // agent_settled → Stop). pi has no idle/attention or failed-stop event → no Notification/StopFailure, same
 // real gap as codex.
 const PI_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const
+// z-code reads Claude-compatible hooks but has neither the idle Notification nor StopFailure lifecycle event.
+// This is a real harness difference, not a TODO: the existing Claude-only idle state is unavailable.
+const ZCODE_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'] as const
 
 // the resolved base launcher command per harness (the wrapper that sets the config-dir env), shared by
 // launchCmd and baseCmd so the two never diverge: the launcher's pinned `cmd` wins. The plain command is only
@@ -2243,6 +2246,7 @@ const claudeBaseCmd = (cmd?: string) => cmd || 'claude'
 const codexBaseCmd = (cmd?: string) => cmd || 'codex'
 const piBaseCmd = (cmd?: string) => cmd || 'pi'   // pi runs tools without permission prompts — no yolo flag exists or is needed
 const opencodeBaseCmd = (cmd?: string) => cmd || 'opencode'
+const zcodeBaseCmd = (cmd?: string) => cmd || 'zcode'
 
 // @@@ opencodeLaunchCommand - the tail-branching launch script (the codex marker pattern, minus any server:
 // opencode is a per-session process like claude). The caller-appended tail ("$@") is EITHER one single-quoted
@@ -2277,6 +2281,9 @@ const socketListenerLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDi
 
 const socketListenerOrPidAliveLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane, socketLive) =>
   (tmuxAlive && (!!socketLive || pane?.pidAlive === true) ? 'online' : 'offline')
+
+const panePidLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane) =>
+  (tmuxAlive && pane?.pidAlive === true ? 'online' : 'offline')
 
 const recordOnline: Harness['liveness'] = (rec) => rec.stopped ? 'offline' : 'online'
 
@@ -2824,6 +2831,43 @@ export const piHeadlessHarness: Harness = {
   resumeArg: (rec) => `--session ${rec.session}`,
 }
 
+const ZCODE_CONTROL_UNAVAILABLE = 'zcode has no control channel; start a new session instead of delivering to an existing one'
+
+// z-code's app-server is stdin/stdout NDJSON, unlike Codex's Unix-socket WebSocket + thread RPC. This row
+// intentionally covers the one-turn `--prompt` launcher and Claude-compatible hooks only; control operations
+// refuse rather than pretending the incompatible protocol accepted them.
+export const zcodeHarness: Harness = {
+  id: 'zcode',
+  dispatchId: 'zcode',
+  headless: true,
+  launchOneShot: true,
+  events: ZCODE_EVENTS,
+  ownsRendezvous: false,
+  paneTitleIsSelfSummary: false,
+  launchCmd: (_id, _rt, cmd) => `${zcodeBaseCmd(cmd)} --prompt`,
+  baseCmd: zcodeBaseCmd,
+  sessionIdArg: () => '',
+  sessionEnvVar: 'ZCODE_SESSION_ID',
+  launchEnv: noLaunchEnv,
+  shimFile: (proj) => join(proj, '.zcode', 'settings.json'),
+  shimScope: 'tree',
+  worktreeHookAnchor: () => null,
+  contractFiles: (proj) => [join(proj, 'AGENTS.md')],
+  skillDir: (proj) => join(proj, '.zcode', 'skills'),
+  agentDir: (proj) => join(proj, '.zcode', 'agents'),
+  shim: (dispatch, spex) => buildShim('zcode', ZCODE_EVENTS, dispatch, spex),
+  writeTrust: () => [],
+  removeTrust: () => { /* z-code wrote no trust artifact */ },
+  clean(proj, arts, preserveProject) { cleanHarness(this, proj, arts, preserveProject) },
+  slashCommands: () => [],
+  liveness: panePidLiveness,
+  leafOwnerNeedle: (rec) => rec.session,
+  deliver: async () => { throw new Error(ZCODE_CONTROL_UNAVAILABLE) },
+  cleanupRuntime: async () => { /* one-shot z-code owns no SpexCode transport to remove */ },
+  coldRuntime: async () => ({ ok: true }),
+  resumeArg: () => { throw new Error(ZCODE_CONTROL_UNAVAILABLE) },
+}
+
 export const opencodeHarness: Harness = {
   id: 'opencode',
   dispatchId: 'opencode',
@@ -2896,7 +2940,7 @@ export const opencodeHeadlessHarness: Harness = {
 }
 
 // every adapter — materialize iterates this to write each harness's artifacts in one pass.
-export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness, claudeHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexHeadlessHarness]
+export const HARNESSES: readonly Harness[] = [claudeHarness, codexHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexHeadlessHarness]
 
 // the legacy/default adapter for old records and config defaults. New launches derive harness from a launcher.
 export const defaultHarness: Harness = claudeHarness

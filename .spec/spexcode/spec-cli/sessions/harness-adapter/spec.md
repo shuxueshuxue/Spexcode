@@ -23,7 +23,7 @@ related:
 ## raw source
 
 SpexCode integrates with whatever coding-agent harness the user runs — today Claude Code, Claude headless, Codex, Codex headless,
-OpenCode, pi ([[pi-harness]]), and pi headless ([[pi-headless]]), tomorrow others. Their differences are real and many. The rule (the project's own platform-boundary
+OpenCode, pi ([[pi-harness]]), pi headless ([[pi-headless]]), and z-code ([[zcode-harness]]), tomorrow others. Their differences are real and many. The rule (the project's own platform-boundary
 principle): **platform differences live at an adapter boundary; product semantics never know which harness
 is in play.** So there is ONE `Harness` interface, ONE implementation per harness, and an `if (codex)` /
 `if (claude)` branch ANYWHERE in product code (materialize, dispatch, sessions, board, slash) is forbidden —
@@ -33,9 +33,9 @@ that branching belongs to the harness detector and the adapter only.
 
 An adapter is accepted by LIVE BEHAVIOR, never by artifact inspection: pi's stop-gate bridge shipped with
 every mechanical proof green (shim written, manifest compiled, unit tests passing) while a real session
-silently dropped every stop-gate rejection and hung `active` forever. So a new or reworked harness adapter
-merges only with per-behavior eval readings, each measured through a REAL dispatched session of that
-harness, covering eight lifecycle behaviors: (1) **undeclared stop** — the gate's rejection reaches the
+silently dropped every stop-gate rejection and hung `active` forever. So a new or reworked adapter with a
+resident or controller-backed runtime merges only with per-behavior eval readings, each measured through a
+REAL dispatched session of that harness, covering eight lifecycle behaviors: (1) **undeclared stop** — the gate's rejection reaches the
 session and the record flows out of `active`; (2) **PreToolUse block** — a blocking hook genuinely stops
 the tool and the handler's own reason reaches the agent; (3) **ask** — `spex session ask --note` flips the
 record to `asking` with the note on the board; (4) **deliver + steer** — an idle send lands exactly once
@@ -56,9 +56,13 @@ the matrix's process-resident stop/resume and kill/offline rows with its no-TUI 
 readings, while delivery remains the shared app-server `turn/start`/`turn/steer` path. [[pi-headless]] replaces
 the process-resident liveness and idle-resume rows with record-backed liveness plus pi's text-mode
 rendezvous-steer/cold-resume readings.
+[[zcode-harness]] is a deliberate one-shot exception: its `--prompt` launcher has no reusable control
+channel, so its replacement scenario measures launch prompt receipt, hook gates, declaration, and process
+liveness. `deliver` and `resume` explicitly reject rather than impersonating a control transport; no false
+combination cell is filed for an operation z-code does not offer.
 
-Prompt delivery also carries a dense, rerunnable COMBINATION campaign across every registered interactive
-and headless adapter (currently four of each, including [[codex-headless]]): harness form x prompt origin (launch's first prompt, the terminal-free input route with
+Prompt delivery also carries a dense, rerunnable COMBINATION campaign across every registered adapter that
+declares a delivery path (currently four interactive and four controller-backed headless adapters, including [[codex-headless]]): harness form x prompt origin (launch's first prompt, the terminal-free input route with
 `replyVia:"note"`, and plain `spex session send`) x delivery timing (idle wake and in-turn steer/queue). Each
 runnable cell uses only those real product surfaces and proves four facts together: native delivery confirmed,
 the answer is readable at the requested/available user surface (`replyVia:"note"` and every headless default

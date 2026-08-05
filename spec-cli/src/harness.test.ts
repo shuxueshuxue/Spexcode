@@ -5,9 +5,9 @@ import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
-import { runtimeRoot } from './layout.js'
+import { runtimeRoot, sessionArtifactPath } from './layout.js'
 import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
@@ -2089,6 +2089,97 @@ test('deliverViaRendezvous: no socket returns a failed poke after its finite ret
   const r = await deliverViaRendezvous(`unit-rvd-none-${process.pid}-${Date.now()}`, 'nobody home')
   assert.equal(r.ok, false)
   assert.match(r.error ?? '', /rendezvous poke failed after 2 attempts/)
+})
+
+test('deliverViaClaudeRendezvous: a fork roster entry gets auth before the reply', async () => {
+  const dir = mkdtempSync(join(tmpdir(), `unit-claude-fork-rv-${process.pid}-`))
+  const daemon = join(dir, 'daemon')
+  mkdirSync(daemon)
+  const source = `source-${process.pid}-${Date.now()}`
+  const sock = join(dir, 'fork.sock')
+  const auth = 'a'.repeat(32)
+  writeFileSync(join(daemon, 'roster.json'), JSON.stringify({ workers: {
+    forked: {
+      startedAt: Date.now(), rendezvousSock: sock, rvAuth: auth,
+      dispatch: { launch: { mode: 'resume', fork: true, sessionId: join(dir, `${source}.jsonl`) } },
+    },
+  } }))
+  const frames: any[] = []
+  let pending = ''
+  const server = createServer((socket) => socket.on('data', (chunk) => {
+    pending += chunk.toString()
+    let nl
+    while ((nl = pending.indexOf('\n')) >= 0) {
+      const line = pending.slice(0, nl)
+      pending = pending.slice(nl + 1)
+      if (line) frames.push(JSON.parse(line))
+    }
+  }))
+  await new Promise<void>((resolve) => server.listen(sock, resolve))
+  const previous = process.env.CLAUDE_CONFIG_DIR
+  process.env.CLAUDE_CONFIG_DIR = dir
+  try {
+    const result = await deliverViaClaudeRendezvous(source, 'fork prompt', 'fork-mid')
+    assert.equal(result.ok, true, JSON.stringify(result))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.deepEqual(frames.map((frame) => frame.type ?? frame.role), ['controller', 'reply'])
+    assert.equal(frames[0].auth, auth)
+    assert.equal(frames[1].text, 'fork prompt')
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR
+    else process.env.CLAUDE_CONFIG_DIR = previous
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('deliverViaClaudeRendezvous: a moved stamp selects its exact successor before source fallback', async () => {
+  const dir = mkdtempSync(join(tmpdir(), `unit-claude-moved-rv-${process.pid}-`))
+  const home = mkdtempSync(join(tmpdir(), `unit-claude-moved-home-${process.pid}-`))
+  const daemon = join(dir, 'daemon')
+  mkdirSync(daemon)
+  const source = `source-${process.pid}-${Date.now()}`
+  const successor = `successor-${process.pid}-${Date.now()}`
+  const sock = join(dir, 'successor.sock')
+  const auth = 'b'.repeat(32)
+  writeFileSync(join(daemon, 'roster.json'), JSON.stringify({ workers: {
+    successor: { sessionId: successor, startedAt: Date.now(), rendezvousSock: sock, rvAuth: auth },
+  } }))
+  const frames: any[] = []
+  let pending = ''
+  const server = createServer((socket) => socket.on('data', (chunk) => {
+    pending += chunk.toString()
+    let nl
+    while ((nl = pending.indexOf('\n')) >= 0) {
+      const line = pending.slice(0, nl)
+      pending = pending.slice(nl + 1)
+      if (line) frames.push(JSON.parse(line))
+    }
+  }))
+  await new Promise<void>((resolve) => server.listen(sock, resolve))
+  const previousConfig = process.env.CLAUDE_CONFIG_DIR
+  const previousHome = process.env.SPEXCODE_HOME
+  process.env.CLAUDE_CONFIG_DIR = dir
+  process.env.SPEXCODE_HOME = home
+  try {
+    const stamp = sessionArtifactPath(source, 'moved')
+    mkdirSync(dirname(stamp), { recursive: true })
+    writeFileSync(stamp, successor)
+    const result = await deliverViaClaudeRendezvous(source, 'moved prompt', 'moved-mid', runtimeRoot())
+    assert.equal(result.ok, true, JSON.stringify(result))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.deepEqual(frames.map((frame) => frame.type ?? frame.role), ['controller', 'reply'])
+    assert.equal(frames[0].auth, auth)
+    assert.equal(frames[1].text, 'moved prompt')
+  } finally {
+    if (previousConfig === undefined) delete process.env.CLAUDE_CONFIG_DIR
+    else process.env.CLAUDE_CONFIG_DIR = previousConfig
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    rmSync(dir, { recursive: true, force: true })
+    rmSync(home, { recursive: true, force: true })
+  }
 })
 
 test('claude deliveryBlockedBy: the sessions panel refuses with the recovery named; a composer pane passes', () => {

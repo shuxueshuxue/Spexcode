@@ -82,11 +82,15 @@ table files on this node. The campaign reuses one session per launcher to keep m
 preserving real note-to-terminal channel transitions, and gives pi-family turns a wider first-token wall.
 
 Claude interactive delivery has one measured transport handoff: a session moved to a Claude background job is a
-fork whose daemon roster entry records `dispatch.launch.mode=resume`, `dispatch.launch.fork=true`, and the source
-transcript path. The adapter resolves that child by the governed source session id and sends the rendezvous
-`role`/`auth` handshake using the current roster `rvAuth` before the ordinary `reply` frame. It never guesses a
-token, prints one, or changes the pane/raw-key transport. A missing or unreadable fork entry preserves the normal
-launch-time socket path; the durable queue remains the acceptance boundary in either case.
+fork. When the successor's hook has persisted its exact Claude session id as `moved`, the adapter resolves the
+roster worker by that exact `worker.sessionId`; without a readable matching stamp, it falls back to the roster's
+`dispatch.launch.mode=resume`, `dispatch.launch.fork=true`, and source transcript path. In either case the roster
+supplies the live rendezvous socket and current `rvAuth`, so the adapter sends the `role`/`auth` handshake before
+the ordinary `reply` frame. The roster root is the launched source process's own `CLAUDE_CONFIG_DIR` field when
+that still-live process exposes it, then the backend environment/default fallback: a backend must not silently
+assume its own Claude home is the launcher's. It reads no other process environment fields. The adapter never
+guesses a token, prints one, or changes the pane/raw-key transport. A missing or unreadable fork entry preserves
+the normal launch-time socket path; the durable queue remains the acceptance boundary in either case.
 
 ## expanded spec
 

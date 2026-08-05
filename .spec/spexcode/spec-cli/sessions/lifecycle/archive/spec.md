@@ -55,9 +55,10 @@ or already-archived descendant at any depth in the same cold transition, while p
 for later same-thread resume. For adapters whose archive RPC can race native child creation, the complete target
 subtree census runs again after the mutation and before success. A new, missing, duplicated, or reassigned member
 in that interval refuses and compensates instead of filing a false zero-runtime proof.
-Archive eligibility reads the target's fresh native turn census, not its public lifecycle/status projection: an
-`inProgress` turn refuses with zero mutation, while a loaded target whose complete turn census has no
-`inProgress` turn may archive even if a hook-authored public status still reads working.
+Archive eligibility reads the target's live native turn state, not its public lifecycle/status projection: a turn in
+flight refuses with zero mutation, while a loaded target the runtime reports idle may archive even if a hook-authored
+public status still reads working. That live state comes from the census the ownership proof already performs, so
+eligibility never costs a transcript read — a target alive for weeks stays archivable.
 That rule is for reversible archive. A human-confirmed terminal `close` first passes the same exact target-ownership
 guard, then may invoke the adapter's exact native interrupt for its recorded target turn, wait for that turn to settle,
 and then repeat the complete cold proof

@@ -1114,9 +1114,14 @@ export async function codexLoadedReferenceIds(sock: string): Promise<{ ok: true;
   return result.ok ? { ok: true, referenceIds: result.ids } : result
 }
 
-const CODEX_TARGET_TURN_CENSUS_MS = 15_000
+const CODEX_RUNNING_TURN_READ_MS = 15_000
 
-function codexTargetTurnPresence(sock: string, threadId: string): Promise<{ ok: true; turnPresence: 'idle' | 'active' | 'unknown'; turnId?: string } | { ok: false; error: string }> {
+// @@@ presence vs identity - two different questions, deliberately not one helper.
+// A gate asks "is a turn in flight right now"; thread/list answers that for every thread at once, at a cost
+// that tracks the thread COUNT. Interrupt must additionally name the turn to interrupt, and only a turn read
+// carries the id — a cost that tracks that one thread's persisted HISTORY. So this read stays for interrupt,
+// where the target is by definition active and short-lived, and no gate may be routed back through it.
+function codexRunningTurn(sock: string, threadId: string): Promise<{ ok: true; turnPresence: 'idle' | 'active' | 'unknown'; turnId?: string } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
@@ -1125,7 +1130,7 @@ function codexTargetTurnPresence(sock: string, threadId: string): Promise<{ ok: 
       if (settled) return
       settled = true; clearTimeout(timer); try { conn.destroy() } catch {}; resolve(result)
     }
-    const timer = setTimeout(() => done({ ok: false, error: `Codex target thread ${threadId} turn census timed out after ${CODEX_TARGET_TURN_CENSUS_MS}ms` }), CODEX_TARGET_TURN_CENSUS_MS)
+    const timer = setTimeout(() => done({ ok: false, error: `Codex target thread ${threadId} turn census timed out after ${CODEX_RUNNING_TURN_READ_MS}ms` }), CODEX_RUNNING_TURN_READ_MS)
     conn.on('error', (error) => done({ ok: false, error: `Codex target thread ${threadId} turn census failed: ${rpcError(error)}` }))
     conn.on('close', () => { if (!settled) done({ ok: false, error: `Codex app-server closed during target thread ${threadId} turn census` }) })
     const send = (message: JsonRpc) => conn.write(wsText(JSON.stringify(message)))
@@ -1175,7 +1180,7 @@ async function interruptCodexTurn(rec: HarnessDeliveryRecord): Promise<DispatchR
   const generation = codexRuntimeGeneration(dir, endpoint)
   if (!generation) return { ok: false, error: 'Codex shared app-server generation is unproven' }
   const fence = { dir, endpoint, generation }
-  const before = await codexTargetTurnPresence(endpoint.socketPath, threadId)
+  const before = await codexRunningTurn(endpoint.socketPath, threadId)
   if (!before.ok) return { ok: false, error: before.error }
   if (codexRuntimeGeneration(dir, endpoint) !== generation)
     return { ok: false, error: 'shared Codex app-server generation changed during interrupt preflight' }
@@ -1186,7 +1191,7 @@ async function interruptCodexTurn(rec: HarnessDeliveryRecord): Promise<DispatchR
   if (!interrupted.ok) return { ok: false, error: interrupted.error }
   const deadline = Date.now() + CODEX_INTERRUPT_SETTLE_MS
   for (;;) {
-    const after = await codexTargetTurnPresence(endpoint.socketPath, threadId)
+    const after = await codexRunningTurn(endpoint.socketPath, threadId)
     if (!after.ok) return { ok: false, error: after.error }
     if (codexRuntimeGeneration(dir, endpoint) !== generation)
       return { ok: false, error: 'shared Codex app-server generation changed during interrupt settlement' }
@@ -1203,8 +1208,18 @@ export function codexThreadList(sock: string, params: Record<string, unknown>): 
   return codexThreadCollection(sock, params).then((result) => result.ok ? { ok: true, ids: result.ids } : result)
 }
 
+// Every thread/list row carries the app-server's live turn state for that thread, in the protocol's own
+// three variants. `notLoaded` duplicates what thread/loaded/list reports; `idle`/`active` answer the only
+// question a lifecycle gate asks. Any other shape is `unknown` and fails closed — never derived from
+// something cheaper.
+type CodexThreadStatus = 'notLoaded' | 'idle' | 'active' | 'unknown'
+const codexRowStatus = (row: { status?: unknown }): CodexThreadStatus => {
+  const type = (row.status as { type?: unknown } | null | undefined)?.type
+  return type === 'notLoaded' || type === 'idle' || type === 'active' ? type : 'unknown'
+}
+
 type CodexThreadCollectionResult =
-  | { ok: true; ids: string[]; parentById: Map<string, string | null> }
+  | { ok: true; ids: string[]; parentById: Map<string, string | null>; statusById: Map<string, CodexThreadStatus> }
   | { ok: false; error: string }
 
 function codexThreadCollection(sock: string, params: Record<string, unknown>): Promise<CodexThreadCollectionResult> {
@@ -1212,6 +1227,7 @@ function codexThreadCollection(sock: string, params: Record<string, unknown>): P
     ? params.sourceKinds
     : [...CODEX_THREAD_SOURCE_KINDS]
   const parentById = new Map<string, string | null>()
+  const statusById = new Map<string, CodexThreadStatus>()
   const conflictingParents = new Set<string>()
   return codexPagedIds(sock, 'thread/list', { ...params, sourceKinds, useStateDbOnly: true }, (item) => {
     if (typeof item === 'string') return item
@@ -1219,26 +1235,40 @@ function codexThreadCollection(sock: string, params: Record<string, unknown>): P
     return typeof id === 'string' ? id : null
   }, 'thread/list', (item) => {
     if (!item || typeof item !== 'object') return
-    const row = item as { id?: unknown; parentThreadId?: unknown }
+    const row = item as { id?: unknown; parentThreadId?: unknown; status?: unknown }
     if (typeof row.id !== 'string') return
     const parent = typeof row.parentThreadId === 'string' ? row.parentThreadId : null
     if (parentById.has(row.id) && parentById.get(row.id) !== parent) conflictingParents.add(row.id)
     parentById.set(row.id, parent)
+    // Parent ownership is a fact about the graph, so a disagreement across pages is a census fault.
+    // Turn state is live, so a mid-drain change is not a fault — it is simply no longer knowable here.
+    const status = codexRowStatus(row)
+    statusById.set(row.id, statusById.has(row.id) && statusById.get(row.id) !== status ? 'unknown' : status)
   }).then((result) => {
     if (!result.ok) return result
     if (conflictingParents.size) return { ok: false as const, error: `Codex thread/list returned conflicting parent ownership for ${[...conflictingParents].join(', ')}` }
-    return { ...result, parentById }
+    return { ...result, parentById, statusById }
   })
 }
+
+// The gate's question is about the tip — is a turn in flight right now — and thread/list already answers it
+// for every thread at once, at a cost that tracks how many threads exist. Reading turns instead costs the
+// target's whole persisted history against a fixed budget, so a long-lived session becomes unmutatable.
+const codexPresenceFromStatus = (status: CodexThreadStatus | undefined): SharedRuntimeMutationGuard['targetTurnPresence'] =>
+  status === 'idle' || status === 'active' ? status : 'unknown'
 
 async function codexTargetMutationGuard(threadId: string, dir = runtimeRoot(), endpoint = legacyCodexGenerationEndpoint(dir)): Promise<SharedRuntimeMutationGuard> {
   const generationBefore = codexMutationGeneration(dir, endpoint)
   if (!generationBefore) return { healthy: false, referenceIds: [], targetTurnPresence: 'unknown', descendantIds: [], error: 'Codex shared app-server generation is unproven' }
   const sock = endpoint.socketPath
-  const [loaded, activeDescendants, archivedDescendants] = await Promise.all([
+  // The descendant collections are ancestor-filtered and therefore exclude the target itself, so the
+  // target's own turn state comes from the whole-collection census. These run concurrently with the rest.
+  const [loaded, activeDescendants, archivedDescendants, activeList, archivedList] = await Promise.all([
     codexLoadedReferenceIds(sock),
     codexThreadList(sock, { ancestorThreadId: threadId, archived: false, sourceKinds: [] }),
     codexThreadList(sock, { ancestorThreadId: threadId, archived: true, sourceKinds: [] }),
+    codexThreadCollection(sock, { archived: false, sourceKinds: [] }),
+    codexThreadCollection(sock, { archived: true, sourceKinds: [] }),
   ])
   const referenceIds = loaded.ok ? loaded.referenceIds : []
   const descendantIds = activeDescendants.ok && archivedDescendants.ok
@@ -1247,12 +1277,11 @@ async function codexTargetMutationGuard(threadId: string, dir = runtimeRoot(), e
   if (!loaded.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: loaded.error }
   if (!activeDescendants.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: activeDescendants.error }
   if (!archivedDescendants.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: archivedDescendants.error }
-  let targetTurnPresence: SharedRuntimeMutationGuard['targetTurnPresence'] = 'none'
-  if (referenceIds.includes(threadId)) {
-    const target = await codexTargetTurnPresence(sock, threadId)
-    if (!target.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: target.error }
-    targetTurnPresence = target.turnPresence
-  }
+  if (!activeList.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: activeList.error }
+  if (!archivedList.ok) return { healthy: false, referenceIds, targetTurnPresence: 'unknown', descendantIds, error: archivedList.error }
+  const targetTurnPresence: SharedRuntimeMutationGuard['targetTurnPresence'] = referenceIds.includes(threadId)
+    ? codexPresenceFromStatus(activeList.statusById.get(threadId) ?? archivedList.statusById.get(threadId))
+    : 'none'
   if (codexRuntimeGeneration(dir, endpoint) !== generationBefore)
     return { healthy: false, referenceIds, targetTurnPresence, descendantIds, error: 'shared Codex app-server generation changed during target guard' }
   return { healthy: true, referenceIds, targetTurnPresence, descendantIds }
@@ -1304,8 +1333,8 @@ async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), exp
     codexLoadedReferenceIds(sock),
     codexThreadCollection(sock, { ancestorThreadId: threadId, archived: false, sourceKinds: [] }),
     codexThreadCollection(sock, { ancestorThreadId: threadId, archived: true, sourceKinds: [] }),
-    codexThreadList(sock, { archived: true, sourceKinds: [] }),
-    codexThreadList(sock, { archived: false, sourceKinds: [] }),
+    codexThreadCollection(sock, { archived: true, sourceKinds: [] }),
+    codexThreadCollection(sock, { archived: false, sourceKinds: [] }),
   ])
   if (codexRuntimeGeneration(dir, endpoint) !== generation)
     return { ok: false, reason: 'shared Codex app-server generation changed during subtree census' }
@@ -1357,18 +1386,20 @@ async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), exp
     }
   }
 
+  // Every subtree member was just proven to occur in exactly one whole-collection census, so that census
+  // already carries each one's live turn state. No second round of native reads, and therefore no second
+  // generation fence — nothing was read between the fence above and here.
+  const statusById = new Map([...activeList.statusById, ...archivedList.statusById])
   const loadedSet = new Set(loaded.referenceIds)
   const loadedSubtreeIds = subtreeIds.filter((id) => loadedSet.has(id))
-  const turnStates = await Promise.all(loadedSubtreeIds.map(async (id) => ({ id, state: await codexTargetTurnPresence(sock, id) })))
-  if (codexRuntimeGeneration(dir, endpoint) !== generation)
-    return { ok: false, reason: 'shared Codex app-server generation changed during subtree turn census' }
-  for (const { id, state } of turnStates) {
-    if (!state.ok) return { ok: false, reason: state.error }
-    if (state.turnPresence === 'active') return { ok: false, reason: `Codex subtree member ${id} has an active turn` }
-    if (state.turnPresence === 'unknown') return { ok: false, reason: `Codex subtree member ${id} turn state is unknown` }
+  for (const id of loadedSubtreeIds) {
+    const presence = codexPresenceFromStatus(statusById.get(id))
+    if (presence === 'active') return { ok: false, reason: `Codex subtree member ${id} has an active turn` }
+    if (presence === 'unknown') return { ok: false, reason: `Codex subtree member ${id} turn state is unknown` }
     if (archivedSet.has(id)) return { ok: false, reason: `Codex archived subtree member ${id} remains loaded` }
   }
 
+  // Proven, not assumed: a loaded target is one of the members the loop above just cleared.
   const targetTurnPresence: SharedRuntimeMutationGuard['targetTurnPresence'] = loadedSet.has(threadId) ? 'idle' : 'none'
   const guard: SharedRuntimeMutationGuard = {
     healthy: true,

@@ -12,6 +12,16 @@ import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt }
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
 const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
+// The real app-server stamps every thread/list row with its live turn state, and the adapter's gates read it
+// there. A fixture that omits `status` is declaring "nothing is running on this thread", so fill that in here
+// rather than in every handler; a fixture that means the opposite says so explicitly on the row.
+const withRowStatus = (message: any, result: unknown): unknown => {
+  if (message?.method !== 'thread/list' || !result || typeof result !== 'object') return result
+  const rows = (result as { data?: unknown }).data
+  if (!Array.isArray(rows)) return result
+  return { ...result, data: rows.map((row) =>
+    row && typeof row === 'object' && !('status' in row) ? { ...row, status: { type: 'idle' } } : row) }
+}
 const codexRpcFixture = (handler: (message: any, send: (value: unknown) => void) => unknown, lifecycle: {
   initialize?: (message: any, send: (value: unknown) => void) => unknown
   initialized?: (message: any, send: (value: unknown) => void) => unknown
@@ -35,9 +45,9 @@ const codexRpcFixture = (handler: (message: any, send: (value: unknown) => void)
       const result = handler(message, send)
       if (result === NO_RPC_RESPONSE) return
       if (result instanceof Promise) {
-        result.then((value) => send({ id: message.id, result: value ?? {} }))
+        result.then((value) => send({ id: message.id, result: withRowStatus(message, value) ?? {} }))
           .catch((error) => send({ id: message.id, error: { message: error instanceof Error ? error.message : String(error) } }))
-      } else send({ id: message.id, result: result ?? {} })
+      } else send({ id: message.id, result: withRowStatus(message, result) ?? {} })
     }
     catch (error) { send({ id: message.id, error: { message: error instanceof Error ? error.message : String(error) } }) }
   }
@@ -598,16 +608,15 @@ test('Codex archive refuses a shared generation swap during exact target guard b
   const root = runtimeRoot()
   const server = codexRpcFixture((message) => {
     if (message.method === 'thread/loaded/list') return { data: archived ? [] : [{ id: target }], nextCursor: null }
-    if (message.method === 'thread/turns/list') {
+    if (message.method === 'thread/archive') { archiveCalls++; archived = true; return {} }
+    if (message.method === 'thread/unarchive') { archived = false; return {} }
+    if (message.method === 'thread/list') {
+      // The collection census is where the cold proof reads the app-server, so it is where a mid-proof
+      // generation swap has to be caught.
       if (!swapped) {
         swapped = true
         writeFileSync(codexAppServerReceipt(root), `swapped fixture ${process.pid}\n`)
       }
-      return { data: [], nextCursor: null }
-    }
-    if (message.method === 'thread/archive') { archiveCalls++; archived = true; return {} }
-    if (message.method === 'thread/unarchive') { archived = false; return {} }
-    if (message.method === 'thread/list') {
       const data = message.params.ancestorThreadId ? [] : message.params.archived === archived ? [{ id: target }] : []
       return { data, nextCursor: null }
     }
@@ -621,7 +630,7 @@ test('Codex archive refuses a shared generation swap during exact target guard b
     owner = startCodexOwner(root)
     const result = await codexHarness.coldRuntime?.({ session: 'generation-fence-session', harnessSessionId: target })
     assert.equal(result?.ok, false)
-    if (result && !result.ok) assert.match(result.reason, /generation changed during subtree turn census/)
+    if (result && !result.ok) assert.match(result.reason, /generation changed during subtree census/)
     assert.equal(archiveCalls, 0, 'a generation swap never reaches thread/archive')
     assert.equal(archived, false)
   } finally {
@@ -663,14 +672,13 @@ test('Codex archive refuses an unknown exact loaded target and an unowned archiv
   let targetUnknown = true
   const server = codexRpcFixture((message) => {
     if (message.method === 'thread/loaded/list') return { data: [{ id: target }, { id: 'unrelated-sibling' }], nextCursor: null }
-    if (message.method === 'thread/turns/list') {
-      if (message.params.threadId === target) throw new Error('exact target read unavailable')
-      return { data: [], nextCursor: null }
-    }
     if (message.method === 'thread/list') {
       if (message.params.ancestorThreadId) return { data: !targetUnknown && message.params.archived
         ? [{ id: 'archived-native-child', parentThreadId: target }] : [], nextCursor: null }
-      return { data: message.params.archived ? [] : [{ id: target }], nextCursor: null }
+      // Two native sources contradicting each other — loaded/list holds the target, its own row says the
+      // app-server is not holding it — is exactly a presence the app-server did not report.
+      const targetRow = targetUnknown ? { id: target, status: { type: 'notLoaded' } } : { id: target }
+      return { data: message.params.archived ? [] : [targetRow], nextCursor: null }
     }
     throw new Error(`unexpected RPC ${message.method}`)
   })
@@ -683,7 +691,7 @@ test('Codex archive refuses an unknown exact loaded target and an unowned archiv
     owner = startCodexOwner(root)
     const unknown = await codexHarness.coldPreflight?.({ session: 'guarded-session', harnessSessionId: target })
     assert.equal(unknown?.ok, false)
-    if (unknown && !unknown.ok) assert.match(unknown.reason, /target read unavailable|turn state is unknown/)
+    if (unknown && !unknown.ok) assert.match(unknown.reason, /turn state is unknown/)
     targetUnknown = false
     const descendant = await codexHarness.coldPreflight?.({ session: 'guarded-session', harnessSessionId: target })
     assert.equal(descendant?.ok, false)
@@ -771,8 +779,8 @@ test('Codex archive cold-tears down the exact active and archived transitive des
     assert.equal(preflight?.ok, true)
     if (!preflight?.ok) throw new Error('owned subtree fixture did not obtain its adapter receipt')
     assert.deepEqual(await codexHarness.coldRuntime?.(rec, preflight.receipt), { ok: true })
-    assert.deepEqual(new Set(threadReads), new Set([target, activeChild, grandchild]),
-      'only loaded members of the exact target subtree are read')
+    assert.deepEqual(threadReads, [],
+      'the closure proof reads no thread transcript at all — not the subtree members, and so never the unrelated loaded sibling')
     assert.deepEqual(mutations, [
       `archive:${grandchild}`,
       `archive:${activeChild}`,
@@ -1209,30 +1217,25 @@ test('Codex cold retirement rejects a generation swap after target guard while c
   }
 })
 
-test('Codex archive uses the fresh inProgress turn, not stale thread status, as its mutation guard', async () => {
+test('Codex cold proof reads turn presence from the collection census it already performs', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
   const home = mkdtempSync(join(tmpdir(), 'spex-codex-archive-turn-race-'))
   process.env.SPEXCODE_HOME = home
   process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
   const target = 'archive-turn-race-target'
-  let targetTurn = 'inProgress'
+  let targetStatus = 'active'
   let archived = false
   const mutations: string[] = []
-  const turnCensuses: any[] = []
+  const turnReads: any[] = []
   const server = codexRpcFixture((message) => {
     if (message.method === 'thread/loaded/list') return { data: archived ? [{ id: 'unrelated-loaded-sibling' }] : [{ id: target }, { id: 'unrelated-loaded-sibling' }], nextCursor: null }
-    if (message.method === 'thread/turns/list') {
-      turnCensuses.push(message.params)
-      return message.params.threadId === target
-        ? { data: [{ id: 'target-turn', status: targetTurn }], nextCursor: null }
-        : { data: [], nextCursor: null }
-    }
+    if (message.method === 'thread/turns/list') { turnReads.push(message.params); return { data: [], nextCursor: null } }
     if (message.method === 'thread/archive') { archived = true; mutations.push('archive'); return {} }
     if (message.method === 'thread/unarchive') { archived = false; mutations.push('unarchive'); return {} }
     if (message.method === 'thread/list') {
       if (message.params.ancestorThreadId) return { data: [], nextCursor: null }
-      return { data: message.params.archived === archived ? [{ id: target }] : [], nextCursor: null }
+      return { data: message.params.archived === archived ? [{ id: target, status: { type: targetStatus } }] : [], nextCursor: null }
     }
     throw new Error(`unexpected RPC ${message.method}`)
   })
@@ -1247,14 +1250,13 @@ test('Codex archive uses the fresh inProgress turn, not stale thread status, as 
     const active = await codexHarness.coldRuntime?.({ session: 'archive-turn-race-session', harnessSessionId: target })
     assert.equal(active?.ok, false)
     if (active && !active.ok) assert.match(active.reason, /has an active turn/)
-    assert.deepEqual(mutations, [], 'a fresh inProgress target turn refuses before the archive mutation')
+    assert.deepEqual(mutations, [], 'an active target turn refuses before the archive mutation')
 
-    targetTurn = 'completed'
+    targetStatus = 'idle'
     assert.deepEqual(await codexHarness.coldRuntime?.({ session: 'archive-turn-race-session', harnessSessionId: target }), { ok: true })
-    assert.deepEqual(mutations, ['archive'], 'a complete idle turn census archives even while top-level thread status remains active')
-    assert.ok(turnCensuses.length >= 2)
-    assert.ok(turnCensuses.every((params) => JSON.stringify(params) === JSON.stringify({ threadId: target, limit: 1, sortDirection: 'desc', itemsView: 'notLoaded' })),
-      'the guard asks only for the newest turn with no item history')
+    assert.deepEqual(mutations, ['archive'], 'an idle target archives')
+    assert.deepEqual(turnReads, [],
+      'the cold proof never reads a thread transcript: that cost scales with history, against a fixed census budget')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await stopCodexOwner(owner)
@@ -1458,7 +1460,7 @@ test('Codex mutation guard promotes an exact v3 scope before target close proof'
     assert.deepEqual(guard, { healthy: true, referenceIds: [], targetTurnPresence: 'none', descendantIds: [] })
     if (!owner) throw new Error('Codex test owner started')
     assert.equal(verifyDetachedRuntime(owner.pid, codexAppServerReceipt(dir)).ok, true)
-    assert.equal(rpcCalls, 3, 'the close guard makes its normal loaded and descendant reads after migration')
+    assert.equal(rpcCalls, 5, 'the close guard makes its normal loaded, descendant, and whole-collection reads after migration')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await stopCodexOwner(owner)

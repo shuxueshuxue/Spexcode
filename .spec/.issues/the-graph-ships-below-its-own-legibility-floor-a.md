@@ -403,3 +403,356 @@ numerator the product itself specified:
    (enumeration for N ≤ 3, `+k` for N > 3).
 
 Spec: node-graph
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T21:16:23.510Z -->
+## Amendment 5: correcting Amendment 4 — the panel renders the title at 18px, and the ratio comes back
+
+**Amendment 4 contains a false claim. Retracting it here.**
+
+### What was wrong
+
+Amendment 4 stated:
+
+> "12px is the largest size at which this product ever renders a spec node's title on the desktop."
+
+That is false. I measured `.part-title` (`--type-control`, 12px, `styles.css:572`) and took it for the panel's
+node title. It is not: `.part-title` is the **section label** on a card header, carrying the literal strings
+"raw source (human)" and "expanded spec (agent)" (`NodeView.jsx:147`, titles from `:163`/`:166`),
+`text-transform: uppercase`.
+
+The node's identity is rendered one component away, at **`NodeView.jsx:201`**:
+
+```jsx
+<div className="pane-doc">
+  <h1># {node.title}</h1>
+```
+
+`.pane-doc h1` → `--type-heading` = **18px** (`styles.css:516`, token at `:32`) — the **top** of the type
+scale, not the bottom.
+
+So the sentence in Amendment 4 was refutable by opening one file, which is exactly the failure mode that
+amendment was trying to pre-empt on other grounds. Read Amendment 4 with that paragraph struck; nothing else
+in it depends on the claim.
+
+Cause worth naming, since it is the reusable part: **a plausible element bearing the right *kind* of content
+is the easiest wrong measurement to make.** "The panel's title styling" and "the styling of the panel's title"
+are different objects, and I measured the first while asking about the second.
+
+### The correction promotes the ratio instead of retiring it
+
+Amendment 2 demoted the size comparison to a footnote because it was cross-surface — a mobile 16px against a
+desktop 12px — where "two faces should differ for good reasons" is a fair rebuttal. That reasoning was sound
+for that axis. The real comparison is not on that axis at all:
+
+> **Same desktop, same product, same datum `node.title`: 18px in the detail panel, 10.2px rendered on the map
+> tile. A factor of 1.76.**
+
+There is no second face to appeal to, and the direction is the least defensible one available: the product
+*states* that this string is worth the top of its type scale, and then renders the same string at 10.2px on
+the surface built for scanning — the surface whose spec claims a "readable" column.
+
+**So the ratio returns to the primary evidence, on this axis.** The mobile `--type-title` comparison is
+withdrawn entirely; it was the weaker version of a real finding.
+
+### Also narrowing Amendment 4's contract argument
+
+Amendment 4 claimed the tooltip is "excluded by the same sentence that creates the obligation." That reads one
+notch past what `:25` says. Its conditions are "without expanding anything or moving the camera" — hovering
+does neither. The exclusion is not written.
+
+> Conditions travel with the obligation they qualify — but only the conditions actually written. An obligation
+> with named exclusions does not silently acquire another because the other is similar in spirit.
+
+### The argument that needs no exclusion, and no browser
+
+`:25` promises *"how many **places** are in motion"* — places being nodes. The tile's discs are **one per
+session** (`SpecNode.jsx:86`), which is a different quantity: one session touching three nodes is one disc and
+three places; three sessions touching one node each is three discs and three places.
+
+The promised quantity is not missing from the product. It is **computed** —
+
+```js
+const nodes = data.hiddenNodes || 0   // distinct nodes in motion in there, not a sum of the per-session tallies
+```
+
+(`SpecNode.jsx:68`, its own comment) — and its **only** consumer is the tooltip string at `:79`
+(`specNode.hiddenActive`, rendered as "N nodes being changed by M sessions").
+
+> **The board does not under-render the promised number. The promised number was computed and routed off the
+> board.**
+
+That holds at any zoom, needs no browser and no observer, and makes the enumeration branch fail twice over:
+even at 1:1 with the discs perfectly countable, counting them answers a different question than the one `:25`
+promises the board answers.
+
+So the browser pass owes two measurements and the third item needs none:
+
+1. a node title's rendered size ≥ its authored size, in the default view;
+2. with **N** sessions active inside a collapsed branch, whether **N** is recoverable from the tab;
+3. *(source only, already settled)* the discs count sessions while `:25` promises places, and `hiddenNodes` —
+   the promised quantity — reaches only the tooltip.
+
+Spec: node-graph
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T21:29:09.811Z -->
+## Amendment 6: retracting Amendment 5's central argument — the spec assigns the channel in the next clause
+
+**Amendment 5's section "The argument that needs no exclusion, and no browser" is false. Retracting it.**
+
+### What was wrong
+
+Amendment 5 argued that the discs count sessions while `:25` promises *places*, and that the promised quantity
+(`hiddenNodes`) was computed and routed off the board. Reading `:25` to the end of its own sentence kills both
+halves:
+
+> "...the `▸N` tab **fills with the lead hidden author's colour** ... and carries **one dot per distinct session
+> working inside**, capped with `+k`; **its tooltip names each session and how many nodes it touches in there**."
+
+1. **The disc rule is the spec's own.** `shown.map` producing one disc per session is compliance, not deviation.
+2. **The node-level count is assigned to the tooltip by the spec itself**, in the same clause. `hiddenNodes`
+   reaching only the tooltip is the specified behaviour, not a routing failure.
+
+And the promise is discharged by the channel the *following* sentence names: *"the lit tab is the signal and the
+counts are detail."* A **place** is a position on the board — which tabs are lit, and where they sit — not a
+node. That reading is delivered by fill, which is the property the spec says survives the shrink. My reading
+required *place = node* **and** required ignoring the second half of the same sentence.
+
+By the test established one round earlier — *does the original reasoning still hold on its own axis?* — there is
+no axis on which "the discs are the load-bearing aggregate" is true. So this is a retraction, not a narrowing.
+
+### The reusable cause, which is worth more than the correction
+
+This is the second time the same reading error produced a false finding. Both have the identical shape:
+
+| promise | channel assignment, in the next sentence |
+|---|---|
+| activity anywhere must be visible | "it is **not a camera driver**" |
+| the board reads how many places are in motion | "**the lit tab is the signal**, and the counts are detail" |
+
+> **A promise says something must exist; the assignment that follows says which channel carries it.** Quoting a
+> spec to justify a product change requires reading to the end of the paragraph, because the sentence that
+> constrains the implementation is systematically the one *after* the sentence that creates the obligation.
+
+That is an executable rule, not "read more carefully."
+
+### Two consequential demotions
+
+**The "selective payment" shape is withdrawn.** Its second half depended on the retracted claim. Its first half
+does not survive on its own either: the tile's version and badges are counts, and *"the counts are detail"* prices
+exactly that class. They were priced, not overlooked. No negligence narrative is available, and none is needed.
+
+**The disc-separation finding drops to a polish reading.** With the discs priced as detail by the spec and the
+node count assigned to the tooltip, "the separation renders at 0.85px" has **no promise standing behind it**. The
+arithmetic in Amendment 6's earlier draft is still true and still unconditional — it is simply no longer evidence
+of a contract violation. `devicePixelRatio` still belongs in any reading that touches it, for the reason given
+before (without it, two contradictory readings are both correct), but the claim it serves is now product quality,
+not a defect.
+
+### What the issue is actually left with — and it is one row wider than "just the title"
+
+The replacement offered was: everything on the tile is consistently, deliberately priced as detail, and the title
+is the only element of a different kind — it carries identity, not detail — and the only one with no downgrade
+clause. That is the right shape, but the boundary sits one element further out. The tile paragraph promises:
+
+> "a reader sees **at a glance** both *what this node is* and *who/when*."
+
+Three things, not one. And the spec's own row split is the pricing boundary:
+
+- **Row 1 — "identity & recency"**: `status dot · title` plus the recency signal. Both of its text elements are
+  named in the at-a-glance promise — *what this node is* and *when*.
+- **Row 2 — "marks & people"**: explicitly *"the denser cluster"*. Version and badges live here and are priced.
+  (*Who* also lives here, but is carried by avatars — shape and hue, the same shrink-immune channel as fill.)
+
+So the promised, text-rendered elements are **two**:
+
+```
+.node-title  --type-control  12px  ->  10.2px      identity; readable-column claim at the spec's opening
+.node-ago    --type-caption  10px  ->   8.5px      "when", named in the same at-a-glance sentence
+```
+
+(`styles.css:378`, `:379`; both on Row 1, `SpecNode.jsx:118` and `:124`.) `.node-ver` and the drift/issue badges
+share the 10px token but sit in the cluster the spec itself calls denser — **drop them from the issue.**
+
+### The remaining case
+
+1. **`.node-title` renders 10.2px against an authored 12px**, on the surface whose spec opens by claiming a
+   *"short, readable column"*. Unconditional, arithmetic.
+2. **Same desktop, same product, same datum `node.title`: 18px in the detail panel (`NodeView.jsx:201` ->
+   `.pane-doc h1` -> `--type-heading`), 10.2px on the map tile. 1.76x.** No second surface to appeal to, and the
+   direction is the least defensible one.
+3. **`.node-ago` renders 8.5px against an authored 10px**, carrying "when", which the same sentence promises at a
+   glance.
+4. **`0.85` appears in no `spec.md` and no `eval.md`.** The constant that produces every figure above is
+   unrecorded in the governed tree.
+
+Withdrawn from the issue: places-vs-sessions, the tooltip-routing argument, selective payment, the disc geometry,
+the dpr grading, `--type-hero`, the mobile `--type-title` comparison.
+
+Owed to a browser, recording `devicePixelRatio`: a Row 1 text element's rendered size >= its authored size, in the
+default view. That single measurement covers both surviving rows.
+
+Evidence grade: source verification and arithmetic. No filed reading.
+
+Spec: node-graph
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T21:34:54.236Z -->
+## Amendment 7: the criterion is the channel, not the row — and the closed classification it produces
+
+Amendment 6 drew the boundary at the spec's row split: Row 1 promised, Row 2 priced as "the denser cluster."
+**That boundary is wrong in one cell**, and correcting it yields a criterion that classifies every element on the
+tile, which is what keeps this issue from growing or shrinking by argument.
+
+### The at-a-glance promise crosses both rows
+
+`:29` promises *"what this node is"* **and** *"who/when"*. **"Who" is Row 2** — the live-editor avatars
+(`:33`). So Row 2 is not uniformly priced down; it contains a promised element. Avatars nonetheless raise no
+defect, because they ride the channel the spec itself certifies: shape and hue, not text.
+
+So row membership is not the discriminator. The spec supplies two independent rules, and the defect set is their
+intersection:
+
+- **the promise** (`:29`): what this node is, who, when.
+- **the channel** (`:25`): *"Fill-versus-outline survives zoom that digits do not."*
+
+> **promised × carried by text or digits = the defect set.**
+
+### Every element on the tile, classified
+
+| element | row | promised by `:29`? | channel | authored | @0.85 |
+|---|---|---|---|---|---|
+| `.node-title` | 1 | yes — *what this node is* | **text** | 12px | **10.2px** |
+| `.ov-mark` presence (`+ ~ ✕ →`) | 1 | yes — *when* ("touched now") | presence is binary, survives | 11px | 9.35px |
+| `.ov-mark` glyph identity (which op) | 1 | **no** — not identity, not who, not when | glyph shape only | 11px | 9.35px |
+| `.node-ago` ("3h") | 1 | yes — *when* | **digits** | 10px | **8.5px** |
+| `.node-dot` | 1 | state, per [[spec-node-states]] | colour + shape, survives | — | — |
+| avatars | 2 | yes — *who* | shape + hue, survives | — | — |
+| `.node-ver` (`v3`) | 2 | no — denser cluster | digits | 10px | 8.5px |
+| `⚠N`, issues, scenarios | 2 | no | digits | 10px | 8.5px |
+| `.av-more` (`+N`) | 2 | no — counts are detail | digits | 10px | 8.5px |
+
+**Exactly two rows are both promised and text-carried: `.node-title` and `.node-ago`.** Nothing else qualifies —
+the remainder is either unpromised (the Row 2 digit cluster, which `:25` explicitly prices as detail) or promised
+but riding a channel `:25` itself certifies as surviving (dot, glyph presence, avatars).
+
+The value of the table is its closure. A fifth candidate can no longer be added without landing in one of the two
+exempt categories, and neither surviving row can be dropped without contradicting one of the spec's own two rules.
+
+**`.ov-mark` is split deliberately.** It carries two payloads through one element, and the criterion applies per
+payload, not per element. Its *presence* discharges the promised "when" — any of the four glyphs says "now," so
+that half is binary and survives. Its *glyph identity* (added vs edited vs deleted vs moved) is carried by 9.35px
+glyph shape alone — hue names the author, the dashed ring names uncommitted, neither names the operation — so on
+channel grounds it is as fragile as any digit. It stays out of the defect set **because it is unpromised, not
+because it survives.** Listing it as one row with one channel would leave the closure open at exactly the joint
+someone will probe.
+
+### `.node-ago` has a stronger form than "it sits on the promised row"
+
+`:31` makes Row 1's recency signal a choice of two: with pending ops it is the op glyphs; without them it is *"the
+last-edited age, bare ('3h', '3 小时')."*
+
+> **The age is a digit, on the line `:29` promises is read at a glance, and the same document states that digits
+> do not survive the zoom.**
+
+Both the promise and its refutation are inside this one spec body — `:29`/`:31` against `:25`. No external
+legibility standard is needed, and unlike the title this does not even need the authored-versus-rendered
+comparison: the body prices the channel itself.
+
+**The slot's internal pricing was deliberate**, which forecloses the "nobody thought about it" reading: the
+with-ops branch is `--type-meta`, **11px** (`.ov-mark`, `styles.css:684`) — a step *larger* than the age's 10px.
+The design distinguished "moving now" from "last moved" inside one slot and paid more for the former.
+
+**Declaring its weight honestly:** `:31` also states the age is *"absent when there is no committed history"* and
+is replaced by glyphs when ops are pending. So it renders only on nodes that are committed and currently
+untouched — the quiet ones. It is a contract claim with low weight on any activity-centred surface. Stated here
+so that a reader who notices it does not treat it as concealed.
+
+### The case, as it now stands
+
+1. **`.node-title`** — promised (*what this node is*, plus the spec's opening claim of a "short, readable
+   column"), text-carried, authored 12px, renders 10.2px.
+2. **Same desktop, same product, same datum `node.title`** — 18px in the detail panel (`NodeView.jsx:201` →
+   `.pane-doc h1` → `--type-heading`) against 10.2px on the tile. **1.76×.**
+3. **`.node-ago`** — promised (*when*), digit-carried, and priced as non-surviving by `:25` in the same body.
+   Authored 10px, renders 8.5px. Contract claim, low demo weight.
+4. **`0.85`** appears in no `spec.md` and no `eval.md`.
+
+Withdrawn across amendments 5–7: places-versus-sessions, the tooltip-routing argument, selective payment, the disc
+geometry, the dpr grading, `--type-hero`, the mobile `--type-title` comparison, and Amendment 6's row-based
+boundary.
+
+Evidence grade: source verification and arithmetic throughout. No filed reading.
+
+Spec: node-graph
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T21:39:27.871Z -->
+## Amendment 8: correcting a citation in Amendment 7, and the closure re-verified per payload
+
+### The citation
+
+Amendment 7 cites `.ov-mark`'s `--type-meta` at `styles.css:684`. **That is the wrong line.** Measured in both
+the trunk and the worktree checkout, identically:
+
+```
+styles.css:27    --type-meta: 11px;                                  <- the token
+styles.css:684   .ov-marks { display: flex; gap: 3px; ... }          <- the flex container, no font-size
+styles.css:685   .ov-mark  { font-size: var(--type-meta); ... }      <- the rule that sets 11px
+```
+
+`684` names a rule with no `font-size` in it, so anyone checking the 11px figure at that line would find nothing
+supporting it and reasonably doubt the number. **Read Amendment 7's citation as `styles.css:685`.** The 11px
+figure and everything derived from it are unaffected — the deliberate within-slot pricing (11px for the with-ops
+branch against 10px for the age) stands.
+
+Worth recording, because the cause is not the one that looks obvious. A container and its child differing by a
+single `s` invites a substring-match error, and that is a real trap — the anchorable coordinate is the
+**(selector, property)** pair, not the selector, since `.ov-mark` as a query necessarily matches `.ov-marks`
+first. But that is not what happened here. The number came from a **range print** (`sed -n '683,687p'`), whose
+output must be decoded by *counting* from the start of the range; a blank line inside the range shifts every
+subsequent line by one, silently.
+
+> A labelled output (`grep -n`) carries the line number with the line. A range print requires the reader to
+> count, and counting is exactly what an invisible line breaks. Positional decoding of tool output is a second
+> source of wrong coordinates, independent of selector ambiguity.
+
+Also worth stating: two earlier discrepancies on this thread *were* explained by trunk-versus-worktree
+differences, and `diff -q` confirms these two `styles.css` files do still differ elsewhere — so that explanation
+was available here and is **false**. The `.ov-mark` rules are byte-identical at identical line numbers in both
+trees. A previously-correct explanation is a tempting wrong one.
+
+### The closure, now measured rather than asserted
+
+Amendment 7 argued the criterion applies per payload, not per element, and split `.ov-mark` on that basis. The
+remaining multi-payload elements have now been enumerated and classified, and the citations verified against
+source:
+
+| element | payload | promised by `:29`? | channel | verdict |
+|---|---|---|---|---|
+| `.ov-mark` | presence ("touched now") | yes — *when* | binary, survives | out: survives |
+| `.ov-mark` | which op (`+ ~ ✕ →`) | **no** | 9.35px glyph discrimination | out: unpromised |
+| `.node-dot` | four-state | no — `:31` defers to [[spec-node-states]] | colour block | out: unpromised |
+| `.pulse` | active-now motion (`styles.css:376-377`, `animation: pulse 1.6s infinite`) | arguably *when* | **animation** | out: survives |
+| avatar | who | yes — *who* | shape + hue | out: survives |
+| `.av-st-*` | liveness (`:415-417`, 3px ring; offline `opacity: .55`) | no — Row 2 denser cluster | colour ring | out: unpromised |
+
+**Six payloads, all out. The defect set is unchanged: `.node-title` and `.node-ago`.** The closure claim in
+Amendment 7 was itself an unverified assertion; it has now been checked and holds.
+
+A byproduct: the spec's channel pricing is a **gradient, not a dichotomy**, and all four tiers appear on this one
+tile —
+
+```
+animation  >  fill / shape / hue  >  glyph shape  >  digits
+```
+
+`:25` names only the endpoints ("fill-versus-outline survives zoom that digits do not"). The two middle tiers are
+what the classification above had to distinguish in order to close.
+
+### One caveat on the exits
+
+Raising the authored sizes fixes the floor violation but **enlarges the tiles**, so fewer fit on one screen. It
+does not reduce the need for a converged default view — it should not be chosen on the belief that it settles
+legibility as a side effect. The three exits (raise authored sizes / default zoom 1.0 / compensate inside the
+transform) remain a design choice recordable in the spec body with no measurement; only the fail→pass pair needs
+a browser.
+
+Spec: node-graph

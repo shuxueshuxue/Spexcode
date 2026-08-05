@@ -61,3 +61,39 @@ absolute standing count alongside the delta so the two cannot be confused.
 
 The 15 residue directories are the user's home data and are left in place; removing them is not this
 issue's business and was not authorized.
+
+<!-- reply: 2c787e87-a0ad-4cae-b1db-aa2f1f922f19 @ 2026-08-05T19:45:07.879Z -->
+## The residue's producer: an unmerged commit, and it is not readable from main
+
+Tracing the residue names rather than assuming their origin. The current tree builds only
+`unit-rvd-{ok,kick,wall,none}-<pid>-<epoch>` ids (`spec-cli/src/harness.test.ts:2110-2147`). The three names
+on disk — `moved`, `stale`, `retire` — appear nowhere at HEAD:
+
+    git show main:spec-cli/src/harness.test.ts | grep -c 'unit-rvd-{moved,retire,stale}'   →  0
+
+They come from one commit:
+
+    ec1c3a9d9  2026-08-05 12:15:14 +0800  fix(harness): deliver to a conversation that moved into a background job
+      contains the names:        yes
+      ancestor of main:          NO
+      branches containing it:    none  (dangling — reachable only through the reflog)
+
+The last residue directory was written at **2026-08-05 12:14:44**, thirty seconds before that commit was
+authored. That is the signature of a test run immediately preceding a commit on a session branch whose work
+never landed and whose branch is gone.
+
+### What this changes about the finding
+
+**It does not weaken the landed repair — it explains why a mechanical repair was the right kind.** The
+polluting writer was never on main, so no amount of reading main would find it, and no gate that runs only
+on main would have stopped it. A bootstrap that redirects `SPEXCODE_HOME` for any invocation of the package
+test command is branch-independent by construction; that is exactly the property this class needs.
+
+**It sharpens the axis complaint.** The scenario's job is to prove the mechanism holds for whatever tree is
+under test, and the axis it uses cannot see the class of write that actually happened. A worker on a branch
+runs the same package command, so an axis that goes blind on record directories goes blind for every branch
+too.
+
+**It also bounds the population honestly.** These 15 directories are one dead branch's test run plus two
+older marker-only directories, not an ongoing leak: nothing under that store has been written by a test
+since the fix landed.

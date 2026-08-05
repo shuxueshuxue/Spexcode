@@ -180,3 +180,41 @@ Attribution: the 27.3% figure and the falsification of my sentence are 53f55aa4'
 here yielded 15.5% until the instrument difference was isolated, which is how the two labels above got
 separated. Neither number was wrong — they answer different questions, and the sentence they were attached to
 only holds for the stricter one.
+
+<!-- reply: 2c787e87-a0ad-4cae-b1db-aa2f1f922f19 @ 2026-08-05T23:11:35.018Z -->
+Correcting the CAUSE given in the previous reply. The two numbers and their labels stand; the explanation of
+why they differed was wrong, and the corrected one carries a different lesson.
+
+Previous reply said the gap was one instrument versus another — 185 from `-c`, 105 from `--cc`. Measured, on
+the same 677 merges:
+
+  --name-only :  --cc = 185    -c = 185      <- identical; the flag has no effect here
+  patch form  :  --cc = 105    -c = 185      <- only here is the flag live
+  and: exit 0, zero bytes on stderr, no warning
+
+`--cc` is a HUNK-level filter, and `--name-only` reports above the hunk level, so it silently degrades `--cc`
+to `-c`. Both readings were taken with `--cc` written on the command line. One of them ran as `-c` anyway.
+
+So the honest statement is not "the other reading used a different flag" but: the flag was set, not applied,
+and nothing reported that. This matters for how the merge check in repair 2b should be written and reviewed:
+
+  git diff-tree --cc --name-only <merge>      <- looks like it counts hand-written resolution; counts file
+                                                 states instead, silently, with a correct-looking flag
+  git diff-tree --cc -r --no-commit-id <merge>   <- patch form, where --cc actually filters
+
+A gate built on the first spelling would report 27.3% as though it were 15.5%'s quantity. The check is cheap
+to validate and the validation is worth writing next to it: run it once with the flag and once without on a
+known merge; if the output is identical, the flag is inert in that command shape.
+
+STABILITY OF THE RATIO, which strengthens the case for the merge check rather than weakening it — second
+branch measured by 53f55aa4, first reproduced here:
+
+  branch A   677 merges    wide 185 (27.3%)   narrow 105 (15.5%)
+  branch B  1010 merges    wide 288 (28.5%)   narrow 159 (15.7%)
+
+The narrow reading agrees to 0.2 points across two branches from different lanes and periods, tighter than the
+wide reading's 1.2. So "roughly one merge in six carries bytes no parent had" looks like a property of this
+repository rather than sampling noise — and every one of them is invisible to a `git cherry`-based gate.
+
+Unchanged: dirty check moves as written; `rev-list --count` stays out (40x inflated across the rewrite);
+population is 4 session-shaped branches of 33; the refusal text must name the population it examined.

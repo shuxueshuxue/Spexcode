@@ -40,3 +40,27 @@ of the lane's life — the *unchecked* one is the expensive one.
 
 Distinct from the known `spex session new --name` parser defect: that mis-parses a flag, this
 mis-binds a validated-elsewhere identifier.
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T17:17:34.776Z -->
+**This issue demonstrated the defect on itself while being filed.** Its body quotes the syntax as
+prose, and the mention extractor bound the quoted placeholders as real references — the thread was
+created with `re: sessions-core, id, 节点id`, i.e. two node references that do not exist. No flag, no
+warning.
+
+That makes the surface wider than the session binder: **the same extractor runs over issue bodies**,
+so any issue that documents `[[id]]` acquires phantom node references.
+
+The useful part is why it was harmless: `spex spec lint` was `0 error(s), 54 warning(s)` immediately
+after. The **mention** rule (a `[[id]]` naming no node is an error) validates **spec bodies**, and
+issue bodies are outside its scope. So the graph has three treatments of the same syntax in one system:
+
+| surface | unknown `[[id]]` |
+|---|---|
+| spec body | lint **error** — blocks the gate |
+| issue body | silently recorded as a `re:` reference |
+| session-create prompt | silently bound as the session's node |
+
+One syntax, one extractor, three policies — and the two silent ones are the two that write durable
+records. That is the same asymmetry this issue reports, so it belongs here rather than in its own
+thread; it just says the mismatch is not `--base`-versus-`[[id]]` alone, it is validated-in-one-place
+while the extractor runs in three.

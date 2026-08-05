@@ -569,7 +569,7 @@ async function layoutDeltas(paths: string[], main: string, mainRef: string, main
   }
 }
 
-export async function resolveLayout(): Promise<Layout> {
+export async function resolveLayout(options: { activeSessionIds?: readonly string[] } = {}): Promise<Layout> {
   const root = repoRoot()
   const main = dirname(gitCommonDir())   // the main checkout — same answer from main OR any linked worktree
   const cfg = readConfig(main)
@@ -589,21 +589,24 @@ export async function resolveLayout(): Promise<Layout> {
   const publicEntries = listSessionIds().map((id) => readPublicRecordEntry(id))
     .filter((entry) => entry.kind === 'corrupt' ? entry.governed !== false : entry.kind === 'ok' && entry.raw.governed)
   const records = publicEntries.flatMap((entry) => entry.kind === 'ok' ? [entry] : [])
+  const projectedActive = options.activeSessionIds ? new Set(options.activeSessionIds) : null
+  const isActive = (record: RawRecord): boolean => projectedActive
+    ? projectedActive.has(record.session_id)
+    : !record.archived
   // main's tip, resolved ONCE per board read — a component of every worktree's overlay cache key
   // ([[worktree-linker]]: landed content must dissolve the ops it made moot).
   const mainSha = await (async () => {
     try { return (await gitA(['-C', main, 'rev-parse', '--verify', `${mainRef}^{commit}`])).trim() } catch { return '' }
   })()
-  const activePaths = records.filter(({ raw }) => !raw.archived).map(({ raw }) => raw.worktree_path)
+  const activePaths = records.filter(({ raw }) => isActive(raw)).map(({ raw }) => raw.worktree_path)
   const deltas = await layoutDeltas(activePaths, main, mainRef, mainSha)
   const rows = await Promise.all(records.map(({ raw: r, liveness }) => {
     const node = r.node ?? (r.branch && r.branch.startsWith(convention.branchPrefix) ? r.branch.slice(convention.branchPrefix.length) : null)
     const base: Worktree = { path: r.worktree_path, branch: r.branch, node, session: r.session_id, status: r.status, isMain: false, ...(liveness ? { liveness } : {}), ops: [] }
-    // @@@ archived rows cost nothing - a shelved session ([[archive]]) keeps its row (the record is the
-    // existence truth) but skips the per-worktree spec-delta entirely: that git-history probe is the board's
-    // dominant per-row cost, and shelving is exactly the human saying "stop spending attention here". So the
-    // price of a retained archive is one enumerated record, NOT a git walk per poll.
-    if (r.archived) return Promise.resolve(base)
+    // @@@ projected shelves cost nothing - a cold archived session ([[archive]]) keeps its record but leaves
+    // the working-set projection and skips the per-worktree spec delta. An archived runtime hazard is still
+    // projected active by listSessions, so it deliberately retains the same ops in both full and splice builds.
+    if (!isActive(r)) return Promise.resolve(base)
     return guardWorktree<Worktree>(r.worktree_path,
       (): Worktree => {
         const outcome = deltas.get(r.worktree_path)
@@ -625,9 +628,9 @@ export async function resolveLayout(): Promise<Layout> {
   const mainRow: Worktree = { path: main, branch: base, node: null, session: null, status: null, isMain: true, ops: [] }
   const worktrees = [mainRow, ...sessionWorktrees]
   // drop cache entries for worktrees that may no longer hold one — closed sessions (gone from the store) AND
-  // newly-archived ones (which no longer compute a delta), so archiving SELF-EVICTS its cached ops instead of
+  // newly-cold archived ones (which no longer compute a delta), so archiving SELF-EVICTS its cached ops instead of
   // stranding them in a map nothing prunes.
-  const live = new Set(records.filter(({ raw }) => !raw.archived).map(({ raw }) => raw.worktree_path))
+  const live = new Set(records.filter(({ raw }) => isActive(raw)).map(({ raw }) => raw.worktree_path))
   for (const k of [...deltaCache.keys()]) if (!live.has(k)) deltaCache.delete(k)
   return { main: convention.main || main || root, convention, worktrees }
 }

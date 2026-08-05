@@ -542,6 +542,11 @@ test('archiving a dirty worktree subtracts its overlays without a full git walk'
     assert.equal(hazard.sessions[0].archived, false, 'invalid cold state remains in the working-set projection')
     assert.ok(hazard.nodes.find((node: any) => node.id === 'child')?.overlays.some((overlay: any) => overlay.source === linked),
       'a projected archive hazard must retain its active-root overlays')
+    const hazardFullOracle = await board.buildBoard()
+    assert.equal(JSON.stringify(hazard.nodes), JSON.stringify(hazardFullOracle.nodes),
+      'the full producer must use the same projected hazard authority as the splice')
+    assert.equal(JSON.stringify(hazard.sessions), JSON.stringify(hazardFullOracle.sessions),
+      'the full and splice producers must publish the same hazard row')
     assert.equal((await cache.patrolBoard()).nodes, hazard.nodes,
       'the hazard root remains in the carried revision instead of disappearing on patrol')
 

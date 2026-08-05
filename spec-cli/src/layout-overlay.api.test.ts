@@ -68,7 +68,7 @@ function writeRecord(home: string, project: string, id: string, path: string, br
     harness_session_id: '',
     stopped: true,
     archived,
-    cold_proof: archived ? 'fixture-cold' : '',
+    cold_proof: archived ? `cold-v1|claude|${id}|no-resident-ref` : '',
     adapter_recovery: '',
     launcher: 'fixture',
     launch_cmd: 'true',
@@ -144,7 +144,6 @@ test('cold governed overlays are one public generation, not one Git fanout per s
     git(archived.path, 'add', '.spec')
     git(archived.path, 'commit', '-qm', 'archived edit')
     writeRecord(home, project, 'archived', archived.path, archived.branch, true)
-    expected.set('archived', [])
     writeRecord(home, project, 'missing', join(fixture, 'worktrees', 'missing'), 'node/missing')
 
     const bin = join(fixture, 'bin')
@@ -209,13 +208,18 @@ exec "${realGit}" "$@"
       assert.deepEqual(shape(layoutRow.ops), want, `/api/settings exact ${id} ops`)
       assert.deepEqual(shape(graphRow.ops), want, `/api/graph exact ${id} ops`)
     }
+    const archivedLayout = settings.layout.worktrees.find((row) => row.session === 'archived')
+    assert.ok(archivedLayout, '/api/settings keeps the clean archived record')
+    assert.deepEqual(archivedLayout.ops, [], '/api/settings spends no delta work on a clean archive')
+    assert.equal(graph.sessions.some((row) => row.id === 'archived'), false,
+      '/api/graph omits a clean archived row from its working-set projection')
     assert.equal(settings.layout.worktrees.some((row) => row.session === 'missing'), false, '/api/settings omits a missing worktree')
 
     const commands = readFileSync(argvLog, 'utf8').trim().split('\n').filter(Boolean)
     const batch = commands.filter((line) => line.includes(' diff-tree ') && line.includes(' --stdin ') && line.endsWith(' -- .spec'))
     const mergeBases = commands.filter((line) => line.includes(' merge-base ') && !line.includes('--is-ancestor'))
     assert.equal(batch.length, 1, `one clean-tree batch owns both public surfaces:\n${commands.join('\n')}`)
-    assert.equal(mergeBases.length, expected.size - 1, `one merge-base per non-archived worktree:\n${commands.join('\n')}`)
+    assert.equal(mergeBases.length, expected.size, `one merge-base per non-archived worktree:\n${commands.join('\n')}`)
 
     mkdirSync(join(project, '.spec', 'project', 'main-only'), { recursive: true })
     writeFileSync(join(project, '.spec', 'project', 'main-only', 'spec.md'), specBody('main-only'))
@@ -317,8 +321,8 @@ console.log(JSON.stringify({ graphFirst, settingsFirst }))
     })
     assert.equal(flightResult.status, 0, `generation-owned cancellation probe failed:\n${flightResult.stdout}\n${flightResult.stderr}`)
     assert.deepEqual(JSON.parse(flightResult.stdout.trim()), {
-      graphFirst: { graphResult: 'AbortError', rows: expected.size + 1 },
-      settingsFirst: { graphResult: 'AbortError', rows: expected.size + 1 },
+      graphFirst: { graphResult: 'AbortError', rows: expected.size + 2 },
+      settingsFirst: { graphResult: 'AbortError', rows: expected.size + 2 },
     })
 
     await stopChild(backend)

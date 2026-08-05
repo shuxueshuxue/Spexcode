@@ -53,12 +53,17 @@ const rowOps = (s: { path: string; archived?: boolean }, opsByPath: Record<strin
   (s.archived ? [] : opsByPath[s.path] || [])
 
 export async function buildBoard() {
-  // all three sources are warm-cheap and independent, so the board inherits their speed for free: loadSpecs
-  // REUSES the HEAD-keyed spec-history cache (the git-derived node data — see specs.ts/git.ts), resolveLayout
-  // reuses the per-worktree overlay cache and recomputes only the deltas that actually changed (the live
-  // OVERLAY), and listSessions takes its liveness from ONE batched tmux snapshot. Nothing here re-walks git.
+  // loadSpecs starts alongside the public session census and REUSES the HEAD-keyed spec-history cache. Layout
+  // then receives that census's projected-active ids so an archived runtime hazard contributes the same ops to
+  // the full producer that spliceSessions preserves. Its per-worktree cache still recomputes only changed deltas.
   const root = repoRoot()
-  const [layout, sessions, specs] = await Promise.all([resolveLayout(), listSessions(), loadSpecs()])
+  const sessionsPromise = listSessions()
+  const specsPromise = loadSpecs()
+  const sessions = await sessionsPromise
+  const [layout, specs] = await Promise.all([
+    resolveLayout({ activeSessionIds: sessions.map((session) => session.id) }),
+    specsPromise,
+  ])
   // the eval fold's freshness axes: WARM hits — loadSpecs already computed this HEAD's drift + history
   // indices, so these are the same cached walks, fetched once and reused for every measurable node (the history
   // index drives the rename-safe scenario axis, mirroring a spec node's own freshness).

@@ -354,12 +354,14 @@ surface:
   thread is loaded) `→ thread/read{includeTurns}`. That read decides the inject: if a turn is **in progress** (the
   thread has an `inProgress` turn), `turn/steer` injects the message INTO that live turn — the model reacts
   mid-turn ("inserted right after the running tool call completes"), it is NOT queued for after the turn ends;
-  if the thread is **idle**, `turn/start` opens a new turn. `turn/steer` REQUIRES the active turn id as its
-  `expectedTurnId` precondition (read from the thread, never from SpexCode's possibly-stale session status); a
-  turn that ends in the read→steer window fails that precondition and is retried as a `turn/start`. Either way
-  the app-server response confirms it landed. There is NO tmux prompt typing fallback for Codex: typed keys can
-  truncate and can only prove tmux accepted input, not that Codex accepted a
-  turn. The adapter uses one independent `thread/resume` connection to atomically subscribe to that owned
+if the thread is **idle**, `turn/start` opens a new turn. `turn/steer` REQUIRES the active turn id as its
+`expectedTurnId` precondition (read from the thread, never from SpexCode's possibly-stale session status); a
+turn that ends in the read→steer window fails that precondition and is retried as a `turn/start`. Either way
+the app-server response confirms it landed. There is NO tmux prompt typing fallback for Codex: typed keys can
+truncate and can only prove tmux accepted input, not that Codex accepted a
+turn. Its hard interrupt follows the same exact-native rule: read the newest `inProgress` turn through the
+owned generation, send `turn/interrupt {threadId, turnId}`, then re-read until it has settled; an idle thread is
+already interrupted, while a generation change, unreadable turn, or still-active turn refuses loudly. The adapter uses one independent `thread/resume` connection to atomically subscribe to that owned
   thread's outcome notifications. A live `turn/completed` with status `failed` carries the native error message
   and `completedAt`; `completed` and `interrupted` are controls and produce no lifecycle write. When a backend
   replacement joins a thread already in `systemError`, the same resume response's `initialTurnsPage` supplies

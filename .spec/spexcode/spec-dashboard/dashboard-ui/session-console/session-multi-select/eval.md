@@ -23,7 +23,8 @@ scenarios:
     expected: >
       One confirm modal (not one per session) titled "close N sessions?"; confirming fires all closes
       in the background, exits multi-select mode, and the closed rows disappear from every surface
-      after the board reload. Cancelling the confirm closes nothing.
+      after the board reload. A refused close reports the backend reason through the session action outcome
+      while the rejected row remains visible. Cancelling the confirm closes nothing.
     tags: [frontend-e2e]
   - name: nested-count-moves-with-selectable-row
     test: spec-dashboard/test/session-multi-select.e2e.mjs

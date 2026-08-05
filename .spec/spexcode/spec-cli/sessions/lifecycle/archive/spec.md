@@ -58,6 +58,10 @@ in that interval refuses and compensates instead of filing a false zero-runtime 
 Archive eligibility reads the target's fresh native turn census, not its public lifecycle/status projection: an
 `inProgress` turn refuses with zero mutation, while a loaded target whose complete turn census has no
 `inProgress` turn may archive even if a hook-authored public status still reads working.
+That rule is for reversible archive. A human-confirmed terminal `close` may first invoke the adapter's exact
+native interrupt for its recorded target turn, wait for that turn to settle, then repeat the complete cold proof
+before deleting anything. An unsupported, rejected, generation-swapped, unknown, or still-active interrupt is a
+loud close refusal; it never substitutes a PID signal, changes a sibling, or skips the ordinary cold proof.
 
 For a shared resident adapter, lifecycle mutation uses a target-scoped proof rather than the resource report's
 full projection. It first proves the shared PID/start/detached-receipt/socket generation, obtains the paginated loaded-ID

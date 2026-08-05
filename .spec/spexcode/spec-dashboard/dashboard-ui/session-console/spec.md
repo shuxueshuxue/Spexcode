@@ -257,7 +257,9 @@ Lifecycle actions consume both HTTP status and the structured `{ok,error}` body 
 a refused stop/close/relaunch remains visible instead of reading as a successful background no-op. Command Box
 and lifecycle actions use one selected-session, right-pane action-outcome mechanism: Command Box owns its
 outcome while it is open; an existing-session action owns its selected action/relaunch panel. The left session
-list is navigation-only and renders no action alert. Every outcome renders once and clears only as its owning
+list is navigation-only and renders no action alert. Bulk close leaves select mode immediately but aggregates every
+returned refusal into that same selected-session outcome, so an HTTP conflict never exists only in browser tooling.
+Every outcome renders once and clears only as its owning
 surface closes, changes session, or completes its success lifecycle; duplicate alerts make one failure look
 like two operations. **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
 reports `sending...`, while the latter reports the neutral `working...`; reusing delivery copy for relaunch,

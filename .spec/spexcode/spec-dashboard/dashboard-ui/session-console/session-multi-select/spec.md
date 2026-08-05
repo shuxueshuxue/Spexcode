@@ -50,7 +50,8 @@ confirm** naming **how many** sessions will go — not one prompt per session �
 Confirming **dismisses the prompt at once** and fires **all** the closes in the **background** — the same
 fire-and-forget the single close and the New Session launch use ([[session-console]]), never a frozen dialog
 watching N worktree removals run — then leaves multi-select mode and asks the board to reload, so the closed
-rows drop off every surface together. A close that fails is reconciled by the next board poll, never a silent
+rows drop off every surface together. A close that fails is reconciled by the next board poll and its returned reason is
+shown through the same session action outcome as a single close; HTTP 409 is never a console-only clue or a silent
 success. Cancelling, or pressing Esc, leaves the mode with nothing closed.
 
 The bulk-close bar and its confirm are this node's own surface (`SessionSelectBar.jsx`); the mode's state

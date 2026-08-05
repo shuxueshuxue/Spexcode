@@ -403,3 +403,93 @@ numerator the product itself specified:
    (enumeration for N ≤ 3, `+k` for N > 3).
 
 Spec: node-graph
+
+<!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T21:16:23.510Z -->
+## Amendment 5: correcting Amendment 4 — the panel renders the title at 18px, and the ratio comes back
+
+**Amendment 4 contains a false claim. Retracting it here.**
+
+### What was wrong
+
+Amendment 4 stated:
+
+> "12px is the largest size at which this product ever renders a spec node's title on the desktop."
+
+That is false. I measured `.part-title` (`--type-control`, 12px, `styles.css:572`) and took it for the panel's
+node title. It is not: `.part-title` is the **section label** on a card header, carrying the literal strings
+"raw source (human)" and "expanded spec (agent)" (`NodeView.jsx:147`, titles from `:163`/`:166`),
+`text-transform: uppercase`.
+
+The node's identity is rendered one component away, at **`NodeView.jsx:201`**:
+
+```jsx
+<div className="pane-doc">
+  <h1># {node.title}</h1>
+```
+
+`.pane-doc h1` → `--type-heading` = **18px** (`styles.css:516`, token at `:32`) — the **top** of the type
+scale, not the bottom.
+
+So the sentence in Amendment 4 was refutable by opening one file, which is exactly the failure mode that
+amendment was trying to pre-empt on other grounds. Read Amendment 4 with that paragraph struck; nothing else
+in it depends on the claim.
+
+Cause worth naming, since it is the reusable part: **a plausible element bearing the right *kind* of content
+is the easiest wrong measurement to make.** "The panel's title styling" and "the styling of the panel's title"
+are different objects, and I measured the first while asking about the second.
+
+### The correction promotes the ratio instead of retiring it
+
+Amendment 2 demoted the size comparison to a footnote because it was cross-surface — a mobile 16px against a
+desktop 12px — where "two faces should differ for good reasons" is a fair rebuttal. That reasoning was sound
+for that axis. The real comparison is not on that axis at all:
+
+> **Same desktop, same product, same datum `node.title`: 18px in the detail panel, 10.2px rendered on the map
+> tile. A factor of 1.76.**
+
+There is no second face to appeal to, and the direction is the least defensible one available: the product
+*states* that this string is worth the top of its type scale, and then renders the same string at 10.2px on
+the surface built for scanning — the surface whose spec claims a "readable" column.
+
+**So the ratio returns to the primary evidence, on this axis.** The mobile `--type-title` comparison is
+withdrawn entirely; it was the weaker version of a real finding.
+
+### Also narrowing Amendment 4's contract argument
+
+Amendment 4 claimed the tooltip is "excluded by the same sentence that creates the obligation." That reads one
+notch past what `:25` says. Its conditions are "without expanding anything or moving the camera" — hovering
+does neither. The exclusion is not written.
+
+> Conditions travel with the obligation they qualify — but only the conditions actually written. An obligation
+> with named exclusions does not silently acquire another because the other is similar in spirit.
+
+### The argument that needs no exclusion, and no browser
+
+`:25` promises *"how many **places** are in motion"* — places being nodes. The tile's discs are **one per
+session** (`SpecNode.jsx:86`), which is a different quantity: one session touching three nodes is one disc and
+three places; three sessions touching one node each is three discs and three places.
+
+The promised quantity is not missing from the product. It is **computed** —
+
+```js
+const nodes = data.hiddenNodes || 0   // distinct nodes in motion in there, not a sum of the per-session tallies
+```
+
+(`SpecNode.jsx:68`, its own comment) — and its **only** consumer is the tooltip string at `:79`
+(`specNode.hiddenActive`, rendered as "N nodes being changed by M sessions").
+
+> **The board does not under-render the promised number. The promised number was computed and routed off the
+> board.**
+
+That holds at any zoom, needs no browser and no observer, and makes the enumeration branch fail twice over:
+even at 1:1 with the discs perfectly countable, counting them answers a different question than the one `:25`
+promises the board answers.
+
+So the browser pass owes two measurements and the third item needs none:
+
+1. a node title's rendered size ≥ its authored size, in the default view;
+2. with **N** sessions active inside a collapsed branch, whether **N** is recoverable from the tab;
+3. *(source only, already settled)* the discs count sessions while `:25` promises places, and `hiddenNodes` —
+   the promised quantity — reaches only the tooltip.
+
+Spec: node-graph

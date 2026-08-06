@@ -90,7 +90,9 @@ fork. When the successor's hook has persisted its exact Claude session id as `mo
 roster worker by that exact `worker.sessionId`; without a readable matching stamp, it falls back to the roster's
 `dispatch.launch.mode=resume`, `dispatch.launch.fork=true`, and source transcript path. In either case the roster
 supplies the live rendezvous socket and current `rvAuth`, so the adapter sends the `role`/`auth` handshake before
-the ordinary `reply` frame. The roster root is the launched source process's own `CLAUDE_CONFIG_DIR` field when
+the ordinary `reply` frame. A roster entry whose socket cannot accept the handoff is stale transport, not an
+override forever: retry the source session's stamped launch-time socket before leaving the durable message owed.
+The roster root is the launched source process's own `CLAUDE_CONFIG_DIR` field when
 that still-live process exposes it, then the backend environment/default fallback: a backend must not silently
 assume its own Claude home is the launcher's. It reads no other process environment fields. The adapter never
 guesses a token, prints one, or changes the pane/raw-key transport. A missing or unreadable fork entry preserves

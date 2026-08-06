@@ -128,6 +128,3 @@ the status word for the `.sess-glyph` mark), and the Row-1 title ellipsis; class
 surfaces add there — like the eval tab's `.eval-*` verdict/transcript rules from the measure-and-score
 reframe, or the console list's own compact-face overrides ([[session-console]]) — are those features' churn,
 not session-activity's drift.
-
-The row's isolated-worktree evidence is a separate derived field contract: [[session-isolation]] owns the
-`source`/`branch` badge and deliberately keeps it distinct from this node's session-title precedence.

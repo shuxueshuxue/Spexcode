@@ -77,7 +77,6 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
   const ops = opSummary(s.ops)
   const headline = sessionHeadline(s)
   const statusWord = t(`status.${s.status}`)
-  const worktreeTitle = t('session.worktreeTitle', { branch: s.branch })
   return (
     <>
       {lead}
@@ -89,12 +88,6 @@ export function SessionRow({ s, locked, showAvatar = true, lead = null }) {
         <span className="sess-glyph" style={{ color: STATUS_COLOR[s.status] }} data-tip={statusWord} aria-label={statusWord}>{STATUS_GLYPH[s.status]}</span>
         {ops && <span className="sess-ops">{ops}</span>}
       </span>
-      {s.source && (
-        <span className="sess-worktree" data-tip={worktreeTitle} aria-label={worktreeTitle}>
-          <span className="sess-worktree-kind">{t('session.worktreeBadge')}</span>
-          {s.branch && <span className="sess-worktree-branch">{s.branch}</span>}
-        </span>
-      )}
       <span className="sess-id" data-tip={headline}>{headline}</span>
       {s.archiveHazard && <span className="sess-hazard" data-tip={s.archiveHazard} aria-label={s.archiveHazard}><Icon name="issue-opened" size={13} /></span>}
       {locked && <span className="sess-lock" data-tip={t('sessionWindow.lockedTitle')}><LockGlyph /></span>}

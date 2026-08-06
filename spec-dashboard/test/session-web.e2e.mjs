@@ -58,6 +58,21 @@ const startSlides = () => new Promise((resolveServer, reject) => {
 
 const slides = await startSlides()
 const WEB_URL = slides.url
+const waitFor = async (read, label, timeout = 45_000) => {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    const value = await read()
+    if (value) return value
+    await new Promise((resolveWait) => setTimeout(resolveWait, 250))
+  }
+  throw new Error(`timed out waiting for ${label}`)
+}
+const currentGraph = async (predicate) => {
+  const response = await fetch(`${BASE}/api/graph`)
+  if (!response.ok || response.headers.get('x-spexcode-graph')?.includes('stale')) return false
+  const board = await response.json()
+  return predicate(board) ? board : false
+}
 const webLabel = (() => {
   const url = new URL(WEB_URL)
   return `${url.hostname.replace(/^\[|\]$/g, '')}:${url.port}${url.pathname === '/' ? '' : url.pathname}`
@@ -86,6 +101,7 @@ try {
     assert.equal(command(SECOND_SESSION, 'files', 'add', SECOND_FILE), `posted ${SECOND_FILE}`)
     postedSecondFile = true
   }
+  await waitFor(() => currentGraph((board) => board.sessions?.some((session) => session.id === SESSION)), 'an authoritative initial graph')
 
   const page = await context.newPage()
   let previewRequests = 0
@@ -166,6 +182,9 @@ try {
 
   assert.equal(command(SESSION, 'web', 'add', WEB_URL), `posted ${canonicalWeb}`)
   postedWeb = true
+  await waitFor(() => currentGraph((board) => board.sessions?.some((session) => (
+    session.id === SESSION && session.web?.some((web) => web.url === canonicalWeb)
+  ))), 'the published web reference in an authoritative graph')
   const webTab = page.locator('.si-resource-tab').filter({ hasText: webLabel })
   await webTab.waitFor({ state: 'visible', timeout: 20_000 })
   assert.equal(await page.locator('.si-actions [data-resource-action="refresh"]').count(), 0, 'web resources do not get the file refresh action')

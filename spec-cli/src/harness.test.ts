@@ -2240,6 +2240,54 @@ test('deliverViaClaudeRendezvous: a moved stamp selects its exact successor befo
   }
 })
 
+test('deliverViaClaudeRendezvous: an unreachable moved successor falls back to the live source socket', async () => {
+  const dir = mkdtempSync(join(tmpdir(), `unit-claude-stale-moved-rv-${process.pid}-`))
+  const home = mkdtempSync(join(tmpdir(), `unit-claude-stale-moved-home-${process.pid}-`))
+  const daemon = join(dir, 'daemon')
+  mkdirSync(daemon)
+  const source = `source-${process.pid}-${Date.now()}`
+  const successor = `successor-${process.pid}-${Date.now()}`
+  const staleSock = join(dir, 'stale-successor.sock')
+  const sourceFrames: any[] = []
+  let pending = ''
+  const sourceServer = createServer((socket) => socket.on('data', (chunk) => {
+    pending += chunk.toString()
+    let nl
+    while ((nl = pending.indexOf('\n')) >= 0) {
+      const line = pending.slice(0, nl)
+      pending = pending.slice(nl + 1)
+      if (line) sourceFrames.push(JSON.parse(line))
+    }
+  }))
+  const previousConfig = process.env.CLAUDE_CONFIG_DIR
+  const previousHome = process.env.SPEXCODE_HOME
+  process.env.CLAUDE_CONFIG_DIR = dir
+  process.env.SPEXCODE_HOME = home
+  try {
+    const stamp = sessionArtifactPath(source, 'moved')
+    mkdirSync(dirname(stamp), { recursive: true })
+    writeFileSync(stamp, successor)
+    writeFileSync(join(daemon, 'roster.json'), JSON.stringify({ workers: {
+      successor: { sessionId: successor, startedAt: Date.now(), rendezvousSock: staleSock, rvAuth: 'c'.repeat(32) },
+    } }))
+    const sourceSock = stampRvSock(source, runtimeRoot())
+    await new Promise<void>((resolve) => sourceServer.listen(sourceSock, resolve))
+
+    const result = await deliverViaClaudeRendezvous(source, 'resumed source prompt', 'source-mid', runtimeRoot())
+    assert.equal(result.ok, true, JSON.stringify(result))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.deepEqual(sourceFrames, [{ type: 'reply', text: 'resumed source prompt', mid: 'source-mid' }])
+  } finally {
+    if (previousConfig === undefined) delete process.env.CLAUDE_CONFIG_DIR
+    else process.env.CLAUDE_CONFIG_DIR = previousConfig
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    await new Promise<void>((resolve) => sourceServer.close(() => resolve()))
+    rmSync(dir, { recursive: true, force: true })
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('claude deliveryBlockedBy: the sessions panel refuses with the recovery named; a composer pane passes', () => {
   const guard = claudeHarness.deliveryBlockedBy
   assert.ok(guard, 'claude carries the pane guard')

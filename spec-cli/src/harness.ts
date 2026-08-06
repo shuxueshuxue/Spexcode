@@ -610,25 +610,30 @@ function replyViaSocket(sock: string, text: string, mid?: string, auth?: string)
   })
 }
 const POKE_ATTEMPTS = 2
-export async function deliverViaRendezvous(id: string, text: string, mid?: string): Promise<DispatchResult> {
-  const sock = rvSock(id)
+async function pokeRendezvous(sock: string, text: string, mid?: string, auth?: string): Promise<DispatchResult> {
   let last: DispatchResult = { ok: false, error: 'not attempted' }
   for (let attempt = 0; attempt < POKE_ATTEMPTS; attempt++) {
-    last = await replyViaSocket(sock, text, mid)
+    last = await replyViaSocket(sock, text, mid, auth)
     if (last.ok) return last
   }
   return { ok: false, error: `rendezvous poke failed after ${POKE_ATTEMPTS} attempts: ${last.error ?? 'unknown error'}` }
 }
 
+export async function deliverViaRendezvous(id: string, text: string, mid?: string): Promise<DispatchResult> {
+  return pokeRendezvous(rvSock(id), text, mid)
+}
+
 export async function deliverViaClaudeRendezvous(id: string, text: string, mid?: string, runtimeDir?: string): Promise<DispatchResult> {
   const fork = claudeForkTransport(id, runtimeDir)
-  const sock = fork?.sock ?? rvSock(id)
-  let last: DispatchResult = { ok: false, error: 'not attempted' }
-  for (let attempt = 0; attempt < POKE_ATTEMPTS; attempt++) {
-    last = await replyViaSocket(sock, text, mid, fork?.auth)
-    if (last.ok) return last
-  }
-  return { ok: false, error: `rendezvous poke failed after ${POKE_ATTEMPTS} attempts: ${last.error ?? 'unknown error'}` }
+  const sourceSock = rvSock(id)
+  if (!fork) return pokeRendezvous(sourceSock, text, mid)
+
+  const forkResult = await pokeRendezvous(fork.sock, text, mid, fork.auth)
+  if (forkResult.ok || fork.sock === sourceSock) return forkResult
+
+  const sourceResult = await pokeRendezvous(sourceSock, text, mid)
+  if (sourceResult.ok) return sourceResult
+  return { ok: false, error: `fork rendezvous failed: ${forkResult.error}; source fallback failed: ${sourceResult.error}` }
 }
 
 export async function deliverViaSocketOrWake(

@@ -27,3 +27,36 @@ so the old sentence was true for 82% of the population, which is what let it sur
   so changing it makes those readings stale — but no spec body says what it should do
 
 The two remedies proposed in the body are unaffected; only the ownership sentence needed narrowing. Neither remedy has been implemented.
+
+<!-- reply: 0edd38cf-8197-44c6-876d-b63410c7ee4f @ 2026-08-06T11:09:29.031Z -->
+同一族的第二个实证,而且这次的来源有讽刺意味,值得记下来。
+
+2026-08-06 在同一台机器上清出**两批**泄漏的 `spex serve` 实例:
+
+```
+第一批(3 个):各约 38.8 CPU 小时,合计 ~116 CPU 小时,持续钉住 ~2.9 个核
+              端口 46641 / 36509 / 41139,来源是某 session 早前的测试跑
+第二批(2 对):cwd = /tmp/spex-passive-mention-project-{xhhOb3,fvyF6k}
+              其一跑了 16.6 小时、瞬时 ~100% CPU
+```
+
+**第二批的 supervisor 命令行指向 worktree `任务-让测试不要在用户-home-里铸永久目录`** ——
+即「阻止测试在用户 home 里铸永久目录」这项工作,**自己往 `/tmp` 漏了两套常驻后端**。
+清理某一类泄漏的工作,泄漏了同一类东西。
+
+## 为什么它一直没被发现
+
+1. **没有任何东西会喊。** 泄漏的是后台进程,不是失败的断言;测试通过、进程留下。
+2. **它伪装成环境噪音。** 这支队伍有一道 `load < 14` 的测试席位闸,**这些泄漏进程一直在分母里**,
+   于是「负载高」被当成团队自身并发的自然结果,而不是「有东西不该在这儿」。
+   一个用负载做判据的团队,恰恰最难发现常驻泄漏 —— 它表现为判据永远差一点点通不过。
+3. **按签名 kill 是禁止的**(同签名的 live 后端会被误杀),所以人只能逐个核对端口与 cwd 才敢动手,
+   成本高到没人会例行做。
+
+## 可考虑的方向
+
+- 测试夹具起的 `spex serve` 应带**可识别标记**(cwd 前缀已经有了 —— `/tmp/spex-*-project-*`),
+  让「列出所有非 live 的夹具后端」成为一条安全可跑的命令,而不是每次现场手工推理。
+- 或者夹具后端**自带寿命**:超过某个时长自行退出;测试进程消失后没有理由再活着。
+- `spex session resources` 目前把它们归到 `orphan / superseded backend generation`,但 `reclaim.eligible=false`,
+  即**报告了却不允许回收**。报告与可回收之间的这道缝,是它们能活 16 小时的直接原因。

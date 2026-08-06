@@ -8,12 +8,8 @@ code:
 ---
 Use noun-first CLI commands; `spex help` is the authoritative command map.
 
-Hand a human an artifact or local webpage with `spex session files add` or `spex session web add` when a human needs
-to inspect one, never copied bytes. `files add` records an absolute path beside the session record for the dashboard
-to download; `web add` records a live loopback URL for the dashboard to proxy when its preview opens. Do not paste an
-absolute path or a `host:port` into your reply instead: it resolves only on the machine where you are running. Do not
-stand up your own static server to make something viewable; `web add` the service that serves it. This is a prompt-only
-contract; no mechanism enforces it.
+Anything a human needs to inspect, whether a file or a local webpage, goes out through `spex session files add` or
+`spex session web add`: never paste an absolute path or `host:port`, and never start a static server yourself.
 
 When this session has a clearly running child session (`active` or `parked`), the parent is supervising rather
 than finished: declare `park`, not `done`/`awaiting`, until the child reports a settled state.

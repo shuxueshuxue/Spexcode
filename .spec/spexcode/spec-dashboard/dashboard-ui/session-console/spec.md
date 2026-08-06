@@ -223,7 +223,7 @@ and pointer-inert, preserving its warm transport. A selected **web** resource is
 (the picker, its tab, automatic opening for the selected session, or restoring that session's local surface) focus enters its
 same-origin iframe without an in-page click, so ordinary keys including arrows belong to the published page immediately. The
 dashboard's reserved controls stay reachable: its documented Alt chords relay back to the console, and Escape first peels the
-shared [[esc-layers]] top layer; only when that stack is empty does it return to the session's Terminal/Conversation sink. Thus a
+shared [[esc-layers]] top layer (including the open resource picker); only when that stack is empty does it return to the session's Terminal/Conversation sink. Thus a
 web frame cannot lock the dashboard controls, and one Escape never skips an overlay to switch the resource surface underneath it.
 TimelineChat's
 message composer is the shared [[composer]] textarea and auto-growth path, with the same Enter / Shift+Enter /

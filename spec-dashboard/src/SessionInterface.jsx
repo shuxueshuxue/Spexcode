@@ -19,10 +19,10 @@ import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl, PROJECT_BASE } from './project.js'
 import { inertChromePress } from './focus.js'
+import { useEscLayer } from './escStack.js'
 import RichText from './RichText.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
-const MAX_WARM_RESOURCE_TABS = 8
 
 // the attach affordance — the shared `paperclip` glyph ([[icon-system]], currentColor stroke, so it
 // inherits the .si-attach muted→blue hover), NOT a color emoji. BusyGlyph is the in-flight (uploading)
@@ -120,9 +120,14 @@ function SessionFiles({ session, onPreview, onDownload, onCopy }) {
   )
 }
 
-function SessionResourcePanel({ tab }) {
+function SessionResourcePanel({ tab, active = false, focusRequest = 0, onEscape }) {
   const t = useT()
   const [preview, setPreview] = useState({ phase: 'loading' })
+  const frameRef = useRef(null)
+  const activeRef = useRef(active)
+  const onEscapeRef = useRef(onEscape)
+  activeRef.current = active
+  onEscapeRef.current = onEscape
 
   useEffect(() => {
     if (tab.kind !== 'file') return
@@ -148,8 +153,55 @@ function SessionResourcePanel({ tab }) {
     return () => { cancelled = true; if (imageUrl) URL.revokeObjectURL(imageUrl) }
   }, [tab.kind, tab.sessionId, tab.value, tab.revision, t])
 
+  useEffect(() => {
+    if (tab.kind !== 'web') return undefined
+    const frame = frameRef.current
+    if (!frame) return undefined
+    let childWindow = null
+    const relayReservedKey = (event) => {
+      const dashboardKey = event.key === 'Escape' || (event.altKey && !event.metaKey && !event.ctrlKey)
+      if (!dashboardKey) return
+      const forwarded = new KeyboardEvent('keydown', {
+        key: event.key,
+        code: event.code,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        bubbles: true,
+        cancelable: true,
+      })
+      const consumed = !window.dispatchEvent(forwarded)
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        if (!consumed) onEscapeRef.current?.()
+      } else if (consumed) event.preventDefault()
+    }
+    const attach = () => {
+      childWindow?.removeEventListener('keydown', relayReservedKey, true)
+      childWindow = frame.contentWindow
+      childWindow?.addEventListener('keydown', relayReservedKey, true)
+    }
+    const onLoad = () => {
+      attach()
+      if (activeRef.current && document.visibilityState !== 'hidden') requestAnimationFrame(() => frame.contentWindow?.focus())
+    }
+    frame.addEventListener('load', onLoad)
+    attach()
+    return () => {
+      frame.removeEventListener('load', onLoad)
+      childWindow?.removeEventListener('keydown', relayReservedKey, true)
+    }
+  }, [tab.kind, tab.revision])
+
+  useEffect(() => {
+    if (tab.kind !== 'web' || !active || document.visibilityState === 'hidden') return undefined
+    const frame = requestAnimationFrame(() => frameRef.current?.contentWindow?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [tab.kind, tab.revision, active, focusRequest])
+
   if (tab.kind === 'web') {
-    return <iframe key={tab.revision} className="si-resource-web" src={webProxyUrl(tab.sessionId, tab.key)} title={tab.label} />
+    return <iframe ref={frameRef} key={tab.revision} className="si-resource-web" src={webProxyUrl(tab.sessionId, tab.key)} title={tab.label} />
   }
   return (
     <div className={`si-resource-file ${preview.phase}`} data-selectable>
@@ -302,6 +354,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [actionOutcome, setActionOutcome] = useState(null)
   const [commandOpen, setCommandOpen] = useState(false)
   const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
+  const [resourceFocusRequest, setResourceFocusRequest] = useState(0)
   const [dragTarget, setDragTarget] = useState(null)
   const [attachments, setAttachments] = useState([])
   const [resourceTabs, setResourceTabs] = useState([])
@@ -419,7 +472,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const showRelaunch = !shelvedSel && noLivePane && selSession?.status !== 'queued'
   const activeResourceId = active === 'new' ? null : resourceSurface[active] || null
   const activeResource = resourceTabs.find((tab) => tab.id === activeResourceId) || null
-  const resourceTabsAtCapacity = resourceTabs.length >= MAX_WARM_RESOURCE_TABS
   const resourceOptions = selSession ? [
     ...(selSession.files || []).map((path) => ({
       id: resourceTabKey(active, 'file', path), sessionId: active, kind: 'file', value: path, label: fileName(path), revision: 0,
@@ -429,16 +481,16 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     })),
   ].filter((option) => !resourceTabs.some((tab) => tab.id === option.id)) : []
 
-  const openResource = useCallback((tab, select = true) => {
-    if (!resourceTabs.some((current) => current.id === tab.id) && resourceTabs.length >= MAX_WARM_RESOURCE_TABS) {
-      setResourceMenu(false)
-      return
-    }
-    setResourceTabs((tabs) => tabs.some((current) => current.id === tab.id) ? tabs : [...tabs, tab])
-    if (select) setResourceSurface((surfaces) => ({ ...surfaces, [tab.sessionId]: tab.id }))
-    setResourceMenu(false)
+  const activateResource = (tab) => {
+    setResourceSurface((surfaces) => ({ ...surfaces, [tab.sessionId]: tab.id }))
+    setResourceFocusRequest((request) => request + 1)
     closeCommandBox()
-  }, [resourceTabs])
+  }
+  const openResource = (tab, select = true) => {
+    setResourceTabs((tabs) => tabs.some((current) => current.id === tab.id) ? tabs : [...tabs, tab])
+    if (select) activateResource(tab)
+    setResourceMenu(false)
+  }
   const closeResource = (tab) => {
     setResourceTabs((tabs) => tabs.filter((current) => current.id !== tab.id))
     setResourceSurface((surfaces) => surfaces[tab.sessionId] === tab.id ? { ...surfaces, [tab.sessionId]: null } : surfaces)
@@ -486,11 +538,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!previous) return
     const added = [...published].filter(([id]) => !previous.has(id)).map(([, tab]) => tab)
     if (!added.length) return
-    const room = Math.max(0, MAX_WARM_RESOURCE_TABS - resourceTabs.length)
-    const admitted = added.filter((tab) => !resourceTabs.some((current) => current.id === tab.id)).slice(0, room)
+    const admitted = added.filter((tab) => !resourceTabs.some((current) => current.id === tab.id))
     setResourceTabs((tabs) => [...tabs, ...admitted.filter((tab) => !tabs.some((current) => current.id === tab.id))])
     const selected = admitted.find((tab) => tab.sessionId === active)
-    if (selected) setResourceSurface((surfaces) => ({ ...surfaces, [active]: selected.id }))
+    if (selected) activateResource(selected)
   }, [sessions, active, resourceTabs])
 
   useEffect(() => {
@@ -503,13 +554,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     setResourceSurface((surfaces) => Object.fromEntries(Object.entries(surfaces).filter(([, id]) => !id || published.has(id))))
   }, [sessions])
 
+  useEscLayer(resourceMenu, () => setResourceMenu(false))
   useEffect(() => {
     if (!resourceMenu) return
     const closeOutside = (event) => { if (!resourcePickerRef.current?.contains(event.target)) setResourceMenu(false) }
-    const closeEscape = (event) => { if (event.key === 'Escape') setResourceMenu(false) }
     window.addEventListener('pointerdown', closeOutside)
-    window.addEventListener('keydown', closeEscape)
-    return () => { window.removeEventListener('pointerdown', closeOutside); window.removeEventListener('keydown', closeEscape) }
+    return () => window.removeEventListener('pointerdown', closeOutside)
   }, [resourceMenu])
   // the active session's Command Box draft (per-session, see `drafts`).
   const msg = drafts[active] || ''
@@ -1370,7 +1420,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       <div key={tab.id} className={`si-resource-tab${activeResource?.id === tab.id ? ' on' : ''}`}>
                         <button type="button" id={`si-resource-tab-${tab.id}`} role="tab" aria-selected={activeResource?.id === tab.id}
                           aria-controls={`si-resource-panel-${tab.id}`} className="si-resource-tab-main"
-                          onClick={() => setResourceSurface((surfaces) => ({ ...surfaces, [active]: tab.id }))}>
+                          onClick={() => activateResource(tab)}>
                           <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
                           <span>{tab.label}</span>
                         </button>
@@ -1397,9 +1447,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       <div className="si-resource-menu" role="menu" aria-label={t('session.resourceMenuLabel')}>
                         {resourceOptions.length ? resourceOptions.map((tab) => (
                           <button key={tab.id} type="button" className="si-resource-menu-row" role="menuitem"
-                            disabled={resourceTabsAtCapacity}
-                            data-tip={resourceTabsAtCapacity ? t('session.resourceTabLimit', { n: MAX_WARM_RESOURCE_TABS }) : undefined}
-                            aria-description={resourceTabsAtCapacity ? t('session.resourceTabLimit', { n: MAX_WARM_RESOURCE_TABS }) : undefined}
                             onClick={() => openResource(tab)}>
                             <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
                             <span>{tab.label}</span>
@@ -1494,7 +1541,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       visibility: shown ? 'visible' : 'hidden',
                       pointerEvents: shown ? 'auto' : 'none',
                     }}>
-                      <SessionResourcePanel tab={tab} />
+                      <SessionResourcePanel tab={tab} active={open && shown}
+                        focusRequest={shown ? resourceFocusRequest : 0}
+                        onEscape={() => activateTerminal(tab.sessionId)} />
                     </div>
                   )
                 })}

@@ -13,9 +13,10 @@ const CHROMIUM = process.env.CHROMIUM || '/snap/bin/chromium'
 const BASE = process.env.BASE || 'http://127.0.0.1:5177'
 const SESSION = process.env.SESSION
 const SECOND_SESSION = process.env.SECOND_SESSION
+const SECOND_FILE = process.env.SECOND_FILE
 const CLI = process.env.SPEXCODE_CLI || resolve(here, '..', '..', 'spec-cli', 'bin', 'spex.mjs')
 const OUT = resolve(process.env.OUT || '/tmp/session-web-e2e')
-if (!SESSION || !SECOND_SESSION) throw new Error('SESSION=<live-session-id> SECOND_SESSION=<second-live-session-id> are required')
+if (!SESSION || !SECOND_SESSION || !SECOND_FILE) throw new Error('SESSION=<live-session-id> SECOND_SESSION=<second-live-session-id> SECOND_FILE=<second-session-posted-file> are required')
 mkdirSync(OUT, { recursive: true })
 const FILE = resolve(process.env.FILE || join(OUT, 'posted-preview.md'))
 if (!process.env.FILE) writeFileSync(FILE, [
@@ -87,8 +88,6 @@ const context = await browser.newContext({
 let postedFile = false
 let postedWeb = false
 const extraFiles = []
-let postedSecondFile = false
-const SECOND_FILE = join(OUT, 'second-session-resource.txt')
 try {
   const canonicalWeb = new URL(WEB_URL).href
   if (command(SESSION, 'web', 'ls').split('\n').includes(canonicalWeb)) command(SESSION, 'web', 'retract', WEB_URL)
@@ -96,12 +95,11 @@ try {
     assert.equal(command(SESSION, 'files', 'add', FILE), `posted ${FILE}`)
     postedFile = true
   }
-  writeFileSync(SECOND_FILE, 'This resource belongs to the second live session.\n')
-  if (!command(SECOND_SESSION, 'files', 'ls').split('\n').includes(SECOND_FILE)) {
-    assert.equal(command(SECOND_SESSION, 'files', 'add', SECOND_FILE), `posted ${SECOND_FILE}`)
-    postedSecondFile = true
-  }
-  await waitFor(() => currentGraph((board) => board.sessions?.some((session) => session.id === SESSION)), 'an authoritative initial graph')
+  await waitFor(() => currentGraph((board) => {
+    const primary = board.sessions?.find((session) => session.id === SESSION)
+    const secondary = board.sessions?.find((session) => session.id === SECOND_SESSION)
+    return primary?.files?.includes(FILE) && secondary?.files?.includes(SECOND_FILE)
+  }), 'an authoritative initial graph with both published files')
 
   const page = await context.newPage()
   let previewRequests = 0
@@ -275,7 +273,7 @@ try {
   await secondResource.click()
   const secondTab = page.locator('.si-resource-tab').filter({ hasText: basename(SECOND_FILE) })
   await secondTab.waitFor({ state: 'visible', timeout: 20_000 })
-  await page.locator('.si-resource-file').waitFor({ state: 'visible' })
+  await page.locator('.si-resource-file:visible').waitFor({ state: 'visible' })
   assert.equal(await page.locator('.si-resource-layer').count(), 9,
     'the second session keeps its warm resource alongside the first session\'s eight')
   await page.locator(`[data-sid="${SESSION}"]`).click()
@@ -311,7 +309,6 @@ try {
 } finally {
   if (postedWeb) { try { command(SESSION, 'web', 'retract', WEB_URL) } catch {} }
   for (const path of extraFiles) { try { command(SESSION, 'files', 'retract', path) } catch {} }
-  if (postedSecondFile) { try { command(SECOND_SESSION, 'files', 'retract', SECOND_FILE) } catch {} }
   if (postedFile) { try { command(SESSION, 'files', 'retract', FILE) } catch {} }
   await context.close()
   await browser.close()

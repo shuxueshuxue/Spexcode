@@ -157,9 +157,11 @@ published reference closes its resource tab. An open resource tab is a **warm br
 surface: its file preview request or same-origin iframe stays mounted, including its scroll position and page state, while
 another resource, Terminal/Conversation, another session, or another routed page is selected; returning makes that same DOM
 instance visible rather than rereading or reloading it. Its lifetime is anchored to its live session, not its selected state:
-only the tab's explicit close, reference retraction, or session retirement releases it. To bound that retained work, the console
-keeps at most **eight** open warm resource tabs across all sessions. At the bound the picker disables unopened resources; it never
-silently evicts a warm tab, and closing one, retracting its reference, or retiring its session makes capacity available. The browser remembers each session's selected local surface: switching to another session and
+only the tab's explicit close, reference retraction, or session retirement releases it. Resource tabs and that session's warm
+terminal share this ownership boundary: there is **no cross-session resource-tab pool, admission limit, or eviction**. A global
+budget lets one live session starve another while terminals themselves remain unbounded; a per-session quota would still make a
+session's resources shorter-lived than its terminal for no product reason. Each session may therefore retain every resource tab it
+opens during that session's lifetime, independently of every other session. The browser remembers each session's selected local surface: switching to another session and
 back restores its resource tab when one was selected, or its Terminal/Conversation surface when that was selected;
 only an explicit press on Terminal/Conversation changes it back. This is dashboard-local presentation state, never
 session state or a backend write. Neither console adds a second native-event view. Session identity, lifecycle,
@@ -217,7 +219,13 @@ replaces either console with a bounded, top-anchored selectable file preview or 
 uses the same restricted renderer as other dashboard prose while raw HTML remains text. File text is the explicit
 native-selection exception to the panel's pointer-inert chrome, so drag and Ctrl/Cmd+C work while its non-focusable
 surface leaves the current terminal/composer sink alone. The inactive terminal layer is hidden
-and pointer-inert, preserving its warm transport. TimelineChat's
+and pointer-inert, preserving its warm transport. A selected **web** resource is its own input sink: on every selection
+(the picker, its tab, automatic opening for the selected session, or restoring that session's local surface) focus enters its
+same-origin iframe without an in-page click, so ordinary keys including arrows belong to the published page immediately. The
+dashboard's reserved controls stay reachable: its documented Alt chords relay back to the console, and Escape first peels the
+shared [[esc-layers]] top layer (including the open resource picker); only when that stack is empty does it return to the session's Terminal/Conversation sink. Thus a
+web frame cannot lock the dashboard controls, and one Escape never skips an overlay to switch the resource surface underneath it.
+TimelineChat's
 message composer is the shared [[composer]] textarea and auto-growth path, with the same Enter / Shift+Enter /
 IME-send boundary as Command Box; its docked mobile and desktop hosts do not invent a second textarea
 mechanism. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed

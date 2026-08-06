@@ -2,6 +2,7 @@
 // its initial graph, so a new published URL must arrive through the live graph update and auto-open one tab.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { createServer } from 'node:http'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -11,10 +12,11 @@ const PW = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/
 const CHROMIUM = process.env.CHROMIUM || '/snap/bin/chromium'
 const BASE = process.env.BASE || 'http://127.0.0.1:5177'
 const SESSION = process.env.SESSION
-const WEB_URL = process.env.WEB_URL
+const SECOND_SESSION = process.env.SECOND_SESSION
+const SECOND_FILE = process.env.SECOND_FILE
 const CLI = process.env.SPEXCODE_CLI || resolve(here, '..', '..', 'spec-cli', 'bin', 'spex.mjs')
 const OUT = resolve(process.env.OUT || '/tmp/session-web-e2e')
-if (!SESSION || !WEB_URL) throw new Error('SESSION=<live-session-id> WEB_URL=http://127.0.0.1:<port>/ are required')
+if (!SESSION || !SECOND_SESSION || !SECOND_FILE) throw new Error('SESSION=<live-session-id> SECOND_SESSION=<second-live-session-id> SECOND_FILE=<second-session-posted-file> are required')
 mkdirSync(OUT, { recursive: true })
 const FILE = resolve(process.env.FILE || join(OUT, 'posted-preview.md'))
 if (!process.env.FILE) writeFileSync(FILE, [
@@ -29,9 +31,49 @@ if (!process.env.FILE) writeFileSync(FILE, [
   ...Array.from({ length: 80 }, (_, index) => `Warm preview scroll line ${index + 1}.`),
 ].join('\n'))
 
-const command = (...args) => execFileSync(process.execPath, [CLI, 'session', ...args], {
-  cwd: process.cwd(), env: { ...process.env, SPEXCODE_SESSION_ID: SESSION }, encoding: 'utf8',
+const command = (sessionId, ...args) => execFileSync(process.execPath, [CLI, 'session', ...args], {
+  cwd: process.cwd(), env: { ...process.env, SPEXCODE_SESSION_ID: sessionId }, encoding: 'utf8',
 }).trim()
+
+const startSlides = () => new Promise((resolveServer, reject) => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+    response.end(`<!doctype html>
+<title>Keyboard slide proof</title>
+<main><output id="spex-web-proof">slide 1</output></main>
+<script>
+  let slide = 1
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowRight') return
+    slide += 1
+    document.querySelector('#spex-web-proof').textContent = 'slide ' + slide
+  })
+</script>`)
+  })
+  server.once('error', reject)
+  server.listen(0, '127.0.0.1', () => {
+    const address = server.address()
+    resolveServer({ server, url: `http://127.0.0.1:${address.port}/` })
+  })
+})
+
+const slides = await startSlides()
+const WEB_URL = slides.url
+const waitFor = async (read, label, timeout = 45_000) => {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    const value = await read()
+    if (value) return value
+    await new Promise((resolveWait) => setTimeout(resolveWait, 250))
+  }
+  throw new Error(`timed out waiting for ${label}`)
+}
+const currentGraph = async (predicate) => {
+  const response = await fetch(`${BASE}/api/graph`)
+  if (!response.ok || response.headers.get('x-spexcode-graph')?.includes('stale')) return false
+  const board = await response.json()
+  return predicate(board) ? board : false
+}
 const webLabel = (() => {
   const url = new URL(WEB_URL)
   return `${url.hostname.replace(/^\[|\]$/g, '')}:${url.port}${url.pathname === '/' ? '' : url.pathname}`
@@ -39,18 +81,27 @@ const webLabel = (() => {
 
 const { chromium } = await import(pathToFileURL(PW).href)
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true })
+const context = await browser.newContext({
+  viewport: { width: 1440, height: 900 },
+  recordVideo: { dir: OUT, size: { width: 1440, height: 900 } },
+})
 let postedFile = false
 let postedWeb = false
 const extraFiles = []
 try {
   const canonicalWeb = new URL(WEB_URL).href
-  if (command('web', 'ls').split('\n').includes(canonicalWeb)) command('web', 'retract', WEB_URL)
-  if (!command('files', 'ls').split('\n').includes(FILE)) {
-    assert.equal(command('files', 'add', FILE), `posted ${FILE}`)
+  if (command(SESSION, 'web', 'ls').split('\n').includes(canonicalWeb)) command(SESSION, 'web', 'retract', WEB_URL)
+  if (!command(SESSION, 'files', 'ls').split('\n').includes(FILE)) {
+    assert.equal(command(SESSION, 'files', 'add', FILE), `posted ${FILE}`)
     postedFile = true
   }
+  await waitFor(() => currentGraph((board) => {
+    const primary = board.sessions?.find((session) => session.id === SESSION)
+    const secondary = board.sessions?.find((session) => session.id === SECOND_SESSION)
+    return primary?.files?.includes(FILE) && secondary?.files?.includes(SECOND_FILE)
+  }), 'an authoritative initial graph with both published files')
 
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  const page = await context.newPage()
   let previewRequests = 0
   page.on('request', (request) => {
     if (request.url().includes('/files/download?') && request.url().includes('preview=1')) previewRequests += 1
@@ -127,8 +178,11 @@ try {
   })
   await page.screenshot({ path: join(OUT, 'file-resource-tab.png'), fullPage: true })
 
-  assert.equal(command('web', 'add', WEB_URL), `posted ${canonicalWeb}`)
+  assert.equal(command(SESSION, 'web', 'add', WEB_URL), `posted ${canonicalWeb}`)
   postedWeb = true
+  await waitFor(() => currentGraph((board) => board.sessions?.some((session) => (
+    session.id === SESSION && session.web?.some((web) => web.url === canonicalWeb)
+  ))), 'the published web reference in an authoritative graph')
   const webTab = page.locator('.si-resource-tab').filter({ hasText: webLabel })
   await webTab.waitFor({ state: 'visible', timeout: 20_000 })
   assert.equal(await page.locator('.si-actions [data-resource-action="refresh"]').count(), 0, 'web resources do not get the file refresh action')
@@ -137,6 +191,31 @@ try {
   const version = frame.locator('#spex-web-proof')
   await version.waitFor({ state: 'visible', timeout: 20_000 })
   const first = await version.textContent()
+  const webIframe = page.locator('.si-resource-web')
+  await page.waitForFunction(() => document.activeElement?.matches('.si-resource-web'))
+  assert.equal(await webIframe.evaluate((element) => document.activeElement === element), true,
+    'selecting a web resource must focus its iframe without a click inside the page')
+  await page.keyboard.press('ArrowRight')
+  await page.waitForFunction(() => document.querySelector('.si-resource-web')?.contentDocument?.querySelector('#spex-web-proof')?.textContent === 'slide 2')
+  assert.equal(await version.textContent(), 'slide 2', 'the first direct ArrowRight must reach the published page')
+  await page.keyboard.press('Alt+I')
+  await page.locator('.si-command-layer').waitFor({ state: 'visible' })
+  await page.keyboard.press('Escape')
+  await page.locator('.si-command-layer').waitFor({ state: 'hidden' })
+  await webTab.locator('.si-resource-tab-main').click()
+  await page.waitForFunction(() => document.activeElement?.matches('.si-resource-web'))
+  await page.locator('.si-tab-add').click()
+  await page.locator('.si-resource-menu').waitFor({ state: 'visible' })
+  await page.keyboard.press('Escape')
+  await page.locator('.si-resource-menu').waitFor({ state: 'hidden' })
+  assert.equal(await webTab.evaluate((element) => element.classList.contains('on')), true,
+    'Escape must close the resource picker before changing the selected web surface')
+  await page.keyboard.press('Escape')
+  await page.waitForFunction(() => document.querySelector('.si-tab[role="tab"].on')
+    && !document.querySelector('.si-resource-tab.on')
+    && document.activeElement?.matches('.xterm-helper-textarea, .m-input'))
+  await webTab.locator('.si-resource-tab-main').click()
+  await page.waitForFunction(() => document.activeElement?.matches('.si-resource-web'))
   const initialWeb = await page.locator('.si-resource-web').evaluate((element) => {
     window.__spexResourceFrame = element.contentWindow
     element.contentWindow?.scrollTo(0, 240)
@@ -168,24 +247,37 @@ try {
   assert.equal(warmResources.sameContentWindow, true, 'reselecting the web resource must keep the same iframe contentWindow')
   assert.equal(warmResources.returnedWebScroll, warmResources.initialWebScroll, 'reselecting the web resource must preserve its in-frame scroll')
 
-  const capacityFiles = Array.from({ length: 7 }, (_, index) => join(OUT, `resource-capacity-${index + 1}.txt`))
+  const capacityFiles = Array.from({ length: 6 }, (_, index) => join(OUT, `resource-capacity-${index + 1}.txt`))
   for (const path of capacityFiles) {
     writeFileSync(path, `resource capacity fixture ${basename(path)}\n`)
-    assert.equal(command('files', 'add', path), `posted ${path}`)
+    assert.equal(command(SESSION, 'files', 'add', path), `posted ${path}`)
     extraFiles.push(path)
   }
   await page.locator('.si-tab-add').click()
   const capacityPicker = page.locator('.si-resource-menu')
   await capacityPicker.getByRole('menuitem', { name: basename(capacityFiles[0]) }).waitFor({ state: 'visible', timeout: 20_000 })
-  for (const path of capacityFiles.slice(0, 6)) {
+  for (const path of capacityFiles) {
     await capacityPicker.getByRole('menuitem', { name: basename(path) }).click()
     await page.locator('.si-resource-tab').filter({ hasText: basename(path) }).waitFor({ state: 'visible' })
     await page.locator('.si-tab-add').click()
   }
-  const ninth = capacityPicker.getByRole('menuitem', { name: basename(capacityFiles[6]) })
-  assert.equal(await page.locator('.si-resource-layer').count(), 8, 'the console keeps at most eight mounted warm resource layers')
-  assert.equal(await ninth.isDisabled(), true, 'the ninth resource must be disabled instead of evicting a warm tab')
+  assert.equal(await page.locator('.si-resource-layer').count(), 8, 'the first live session keeps eight warm resource layers')
   await page.locator('.si-tab-add').click()
+
+  await page.locator(`[data-sid="${SECOND_SESSION}"]`).click()
+  await page.locator('.si-tab-add').click()
+  const secondPicker = page.locator('.si-resource-menu')
+  const secondResource = secondPicker.getByRole('menuitem', { name: basename(SECOND_FILE) })
+  await secondResource.waitFor({ state: 'visible', timeout: 20_000 })
+  assert.equal(await secondResource.isDisabled(), false, 'another session cannot exhaust this session\'s resource capacity')
+  await secondResource.click()
+  const secondTab = page.locator('.si-resource-tab').filter({ hasText: basename(SECOND_FILE) })
+  await secondTab.waitFor({ state: 'visible', timeout: 20_000 })
+  await page.locator('.si-resource-file:visible').waitFor({ state: 'visible' })
+  assert.equal(await page.locator('.si-resource-layer').count(), 9,
+    'the second session keeps its warm resource alongside the first session\'s eight')
+  await page.locator(`[data-sid="${SESSION}"]`).click()
+  await fileTab.waitFor({ state: 'visible' })
 
   await page.locator('.si-tab-add').click()
   const picker = page.locator('.si-resource-menu')
@@ -209,14 +301,16 @@ try {
   await page.locator('.si-resource-menu').getByRole('menuitem', { name: webLabel }).click()
   await page.locator('.si-resource-tab').filter({ hasText: webLabel }).waitFor({ state: 'visible' })
 
-  assert.equal(command('web', 'retract', WEB_URL), `retracted ${canonicalWeb}`)
+  assert.equal(command(SESSION, 'web', 'retract', WEB_URL), `retracted ${canonicalWeb}`)
   postedWeb = false
   await page.locator('.si-resource-tab').filter({ hasText: webLabel }).waitFor({ state: 'detached', timeout: 20_000 })
-  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first, warmResources }, null, 2) + '\n')
-  console.log(JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first, warmResources }))
+  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ session: SESSION, secondSession: SECOND_SESSION, file: FILE, web: WEB_URL, first, warmResources }, null, 2) + '\n')
+  console.log(JSON.stringify({ session: SESSION, secondSession: SECOND_SESSION, file: FILE, web: WEB_URL, first, warmResources }))
 } finally {
-  if (postedWeb) { try { command('web', 'retract', WEB_URL) } catch {} }
-  for (const path of extraFiles) { try { command('files', 'retract', path) } catch {} }
-  if (postedFile) { try { command('files', 'retract', FILE) } catch {} }
+  if (postedWeb) { try { command(SESSION, 'web', 'retract', WEB_URL) } catch {} }
+  for (const path of extraFiles) { try { command(SESSION, 'files', 'retract', path) } catch {} }
+  if (postedFile) { try { command(SESSION, 'files', 'retract', FILE) } catch {} }
+  await context.close()
   await browser.close()
+  await new Promise((resolveClose) => slides.server.close(resolveClose))
 }

@@ -206,14 +206,16 @@ scenarios:
       selected tab only for the selected session; neither clicking an already-open filename nor the plus picker duplicates an
       open resource or creates an overlay preview. A selected file has right-side refresh, download, and copy-path
       actions and no merge action; a selected web has none of those file actions; the Terminal surface has merge
-      and no resource actions. Switching through file, web, Terminal/Conversation, and a second session retains each
-      open resource's same DOM instance: the web iframe has the same contentWindow and preserved in-frame scroll,
-      while the file preview makes no second preview request and retains its preview scroll. Multiple open resources
-      remain isolated from each other's state. Refresh is the explicit exception: it rereads that file or recreates that
-      webpage frame only. Closing permits one later reopen, and retracting removes the tab because its authorization is
-      gone while the warm console remains hidden and pointer-inert underneath. No more than eight resource instances
-      remain mounted across sessions; the ninth unopened resource is disabled rather than evicting one, and capacity
-      returns only after an explicit close, reference retraction, or session retirement.
+      and no resource actions. Selecting the web tab focuses its iframe without a content click, and a direct ArrowRight
+      changes the published slide page; Escape closes a top resource-picker layer before a following Escape returns the
+      native console sink, while documented Alt dashboard chords remain live. Switching through file, web,
+      Terminal/Conversation, and a second session retains each open resource's same DOM instance: the web iframe has the
+      same contentWindow and preserved in-frame scroll, while the file preview makes no second preview request and retains
+      its preview scroll. Multiple open resources remain isolated from each other's state. Refresh is the explicit
+      exception: it rereads that file or recreates that webpage frame only. Closing permits one later reopen, and retracting
+      removes the tab because its authorization is gone while the warm console remains hidden and pointer-inert underneath.
+      Opening eight warm resources for one live session never disables or blocks another live session from opening and
+      retaining its own resource: resource tabs have no cross-session admission cap, eviction, or starvation.
   - name: session-remembers-its-local-surface
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/session-web.e2e.mjs

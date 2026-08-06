@@ -586,7 +586,6 @@ export default {
     addResourceTab: 'open a posted file or web service',
     resourceMenuLabel: 'posted files and web services',
     resourceMenuEmpty: 'all posted resources are already open',
-    resourceTabLimit: 'close a resource tab before opening another (maximum {n})',
     refreshResourceTab: 'refresh {name}',
     closeResourceTab: 'close {name}',
     surfaceLabel: 'current session surface',

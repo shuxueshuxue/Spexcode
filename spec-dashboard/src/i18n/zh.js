@@ -578,7 +578,6 @@ export default {
     addResourceTab: '打开已发布的文件或网页服务',
     resourceMenuLabel: '已发布的文件和网页服务',
     resourceMenuEmpty: '所有已发布资源均已打开',
-    resourceTabLimit: '请先关闭一个资源标签页（最多 {n} 个）',
     refreshResourceTab: '刷新 {name}',
     closeResourceTab: '关闭 {name}',
     surfaceLabel: '当前会话界面',

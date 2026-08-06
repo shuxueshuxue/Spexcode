@@ -22,6 +22,7 @@ import { inertChromePress } from './focus.js'
 import RichText from './RichText.js'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
+const MAX_WARM_RESOURCE_TABS = 8
 
 // the attach affordance — the shared `paperclip` glyph ([[icon-system]], currentColor stroke, so it
 // inherits the .si-attach muted→blue hover), NOT a color emoji. BusyGlyph is the in-flight (uploading)
@@ -418,6 +419,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const showRelaunch = !shelvedSel && noLivePane && selSession?.status !== 'queued'
   const activeResourceId = active === 'new' ? null : resourceSurface[active] || null
   const activeResource = resourceTabs.find((tab) => tab.id === activeResourceId) || null
+  const resourceTabsAtCapacity = resourceTabs.length >= MAX_WARM_RESOURCE_TABS
   const resourceOptions = selSession ? [
     ...(selSession.files || []).map((path) => ({
       id: resourceTabKey(active, 'file', path), sessionId: active, kind: 'file', value: path, label: fileName(path), revision: 0,
@@ -428,11 +430,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   ].filter((option) => !resourceTabs.some((tab) => tab.id === option.id)) : []
 
   const openResource = useCallback((tab, select = true) => {
+    if (!resourceTabs.some((current) => current.id === tab.id) && resourceTabs.length >= MAX_WARM_RESOURCE_TABS) {
+      setResourceMenu(false)
+      return
+    }
     setResourceTabs((tabs) => tabs.some((current) => current.id === tab.id) ? tabs : [...tabs, tab])
     if (select) setResourceSurface((surfaces) => ({ ...surfaces, [tab.sessionId]: tab.id }))
     setResourceMenu(false)
     closeCommandBox()
-  }, [])
+  }, [resourceTabs])
   const closeResource = (tab) => {
     setResourceTabs((tabs) => tabs.filter((current) => current.id !== tab.id))
     setResourceSurface((surfaces) => surfaces[tab.sessionId] === tab.id ? { ...surfaces, [tab.sessionId]: null } : surfaces)
@@ -480,10 +486,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     if (!previous) return
     const added = [...published].filter(([id]) => !previous.has(id)).map(([, tab]) => tab)
     if (!added.length) return
-    setResourceTabs((tabs) => [...tabs, ...added.filter((tab) => !tabs.some((current) => current.id === tab.id))])
-    const selected = added.find((tab) => tab.sessionId === active)
+    const room = Math.max(0, MAX_WARM_RESOURCE_TABS - resourceTabs.length)
+    const admitted = added.filter((tab) => !resourceTabs.some((current) => current.id === tab.id)).slice(0, room)
+    setResourceTabs((tabs) => [...tabs, ...admitted.filter((tab) => !tabs.some((current) => current.id === tab.id))])
+    const selected = admitted.find((tab) => tab.sessionId === active)
     if (selected) setResourceSurface((surfaces) => ({ ...surfaces, [active]: selected.id }))
-  }, [sessions, active])
+  }, [sessions, active, resourceTabs])
 
   useEffect(() => {
     const published = new Set()
@@ -1388,7 +1396,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     {resourceMenu && (
                       <div className="si-resource-menu" role="menu" aria-label={t('session.resourceMenuLabel')}>
                         {resourceOptions.length ? resourceOptions.map((tab) => (
-                          <button key={tab.id} type="button" className="si-resource-menu-row" role="menuitem" onClick={() => openResource(tab)}>
+                          <button key={tab.id} type="button" className="si-resource-menu-row" role="menuitem"
+                            disabled={resourceTabsAtCapacity}
+                            data-tip={resourceTabsAtCapacity ? t('session.resourceTabLimit', { n: MAX_WARM_RESOURCE_TABS }) : undefined}
+                            aria-description={resourceTabsAtCapacity ? t('session.resourceTabLimit', { n: MAX_WARM_RESOURCE_TABS }) : undefined}
+                            onClick={() => openResource(tab)}>
                             <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
                             <span>{tab.label}</span>
                           </button>
@@ -1474,7 +1486,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     </div>
                   )
                 })}
-                {activeResource && <SessionResourcePanel tab={activeResource} />}
+                {resourceTabs.map((tab) => {
+                  const shown = activeResource?.id === tab.id
+                  return (
+                    <div key={tab.id} className="si-resource-layer" style={{
+                      position: 'absolute', inset: 0,
+                      visibility: shown ? 'visible' : 'hidden',
+                      pointerEvents: shown ? 'auto' : 'none',
+                    }}>
+                      <SessionResourcePanel tab={tab} />
+                    </div>
+                  )
+                })}
                 {actionOutcome?.owner === 'panel' && !showRelaunch && !shelvedSel && (
                   <div className="si-action-outcome-float"><ActionOutcome outcome={actionOutcome} /></div>
                 )}

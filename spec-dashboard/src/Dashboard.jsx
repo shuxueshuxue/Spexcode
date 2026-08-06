@@ -138,39 +138,6 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
     specs.forEach((s) => { if (s.parent) m[s.parent] = (m[s.parent] || 0) + 1 })
     return m
   }, [specs])
-  // Collapse must not hide ACTIVITY: per node, the sessions with pending overlays among its STRICT
-  // descendants in the RAW tree, so a collapsed tile can advertise what is moving inside it. A node's
-  // own overlay is deliberately excluded — its own tile already shows it as row-1 glyphs.
-  // Post-order over the child map, so the whole tree costs one pass regardless of depth.
-  const hiddenActivity = useMemo(() => {
-    const kids = {}
-    specs.forEach((s) => { if (s.parent) (kids[s.parent] || (kids[s.parent] = [])).push(s) })
-    const bump = (m, o, n) => {
-      const cur = m.get(o.source)
-      if (cur) cur.nodes += n
-      else m.set(o.source, { source: o.source, seed: o.seed, label: o.label, nodes: n })
-    }
-    const agg = {}
-    const walk = (node) => {
-      if (agg[node.id]) return agg[node.id]                  // guard: a malformed parent cycle must not hang the board
-      const a = agg[node.id] = { nodes: 0, sessions: new Map() }
-      for (const kid of kids[node.id] || []) {
-        const sub = walk(kid)
-        // one session touching one node counts once, however many ops it has there
-        const own = new Map()
-        for (const o of kid.overlays || []) if (!own.has(o.source)) own.set(o.source, o)
-        for (const o of own.values()) bump(a.sessions, o, 1)
-        for (const e of sub.sessions.values()) bump(a.sessions, e, e.nodes)
-        // distinct nodes in motion, each counted once — deliberately NOT the sum of the per-session
-        // tallies, which counts a node twice when two sessions are both touching it
-        a.nodes += (own.size ? 1 : 0) + sub.nodes
-      }
-      return a
-    }
-    const rawIds = new Set(specs.map((s) => s.id))
-    specs.forEach((s) => { if (!s.parent || !rawIds.has(s.parent)) walk(s) })
-    return agg
-  }, [specs])
   // changed nodes from the RAW tree (so the o-cycle reaches collapsed subtrees), kept in backend order for a stable cycle
   const overlayNodes = useMemo(() => specs.filter((s) => s.overlays?.length), [specs])
 
@@ -289,14 +256,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
     const editorData = editors.map((e) => ({ id: e.id, status: e.status, node: e.node }))
     // collapsed = has children but its subtree is hidden (not on the expanded spine) -> show the ▸N hint.
     const kids = childCount[s.id] || 0
-    const collapsed = kids > 0 && !expanded.has(s.id)
-    // a collapsed tile also declares the sessions at work inside it, busiest first (ties by id, so the
-    // lead hue is stable across rebuilds); an expanded node hides nothing, so it declares nothing.
-    const act = collapsed ? hiddenActivity[s.id] : null
-    const hidden = act
-      ? [...act.sessions.values()].sort((a, b) => b.nodes - a.nodes || a.source.localeCompare(b.source))
-      : []
-    const extra = { editors: editorData, collapsed, childCount: kids, hidden, hiddenNodes: act?.nodes || 0 }
+    const extra = { editors: editorData, collapsed: kids > 0 && !expanded.has(s.id), childCount: kids }
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
       data: { ...s, ...extra },
@@ -305,7 +265,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
       draggable: false, selected: s.id === focusId, className,
     }
     })
-  }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded, hiddenActivity])
+  }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
 
   const edges = useMemo(() => {
     const tree = specs2.filter((s) => s.parent).map((s) => {

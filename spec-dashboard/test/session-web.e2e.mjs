@@ -25,6 +25,8 @@ if (!process.env.FILE) writeFileSync(FILE, [
   '<div data-untrusted="true">Raw markup must remain visible source.</div>',
   '',
   '## Second heading',
+  '',
+  ...Array.from({ length: 80 }, (_, index) => `Warm preview scroll line ${index + 1}.`),
 ].join('\n'))
 
 const command = (...args) => execFileSync(process.execPath, [CLI, 'session', ...args], {
@@ -39,6 +41,7 @@ const { chromium } = await import(pathToFileURL(PW).href)
 const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true })
 let postedFile = false
 let postedWeb = false
+const extraFiles = []
 try {
   const canonicalWeb = new URL(WEB_URL).href
   if (command('web', 'ls').split('\n').includes(canonicalWeb)) command('web', 'retract', WEB_URL)
@@ -48,6 +51,10 @@ try {
   }
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  let previewRequests = 0
+  page.on('request', (request) => {
+    if (request.url().includes('/files/download?') && request.url().includes('preview=1')) previewRequests += 1
+  })
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE })
   await page.goto(`${BASE}/#/sessions/${encodeURIComponent(SESSION)}`, { waitUntil: 'domcontentloaded' })
   await page.locator('.si-tab-add').waitFor({ state: 'visible', timeout: 20_000 })
@@ -107,10 +114,17 @@ try {
     '## Refreshed file content',
     '',
     'The right-side file action rereads this current path.',
+    '',
+    ...Array.from({ length: 80 }, (_, index) => `Refreshed warm preview scroll line ${index + 1}.`),
   ].join('\n'))
   await page.locator('.si-actions [data-resource-action="refresh"]').click()
   await resourceMarkdown.getByRole('heading', { name: 'Refreshed file content' }).waitFor({ state: 'visible' })
   assert.match(await resourceMarkdown.textContent(), /rereads this current path/, 'file refresh must reread the live path')
+  const previewRequestsBeforeRoundTrip = previewRequests
+  const initialFileScroll = await page.locator('.si-resource-file').evaluate((element) => {
+    element.scrollTop = Math.min(240, Math.max(0, element.scrollHeight - element.clientHeight))
+    return element.scrollTop
+  })
   await page.screenshot({ path: join(OUT, 'file-resource-tab.png'), fullPage: true })
 
   assert.equal(command('web', 'add', WEB_URL), `posted ${canonicalWeb}`)
@@ -123,6 +137,55 @@ try {
   const version = frame.locator('#spex-web-proof')
   await version.waitFor({ state: 'visible', timeout: 20_000 })
   const first = await version.textContent()
+  const initialWeb = await page.locator('.si-resource-web').evaluate((element) => {
+    window.__spexResourceFrame = element.contentWindow
+    element.contentWindow?.scrollTo(0, 240)
+    return { scrollY: element.contentWindow?.scrollY || 0 }
+  })
+
+  await fileTab.locator('.si-resource-tab-main').click()
+  await resourceMarkdown.getByRole('heading', { name: 'Preview starts here' }).waitFor({ state: 'visible' })
+  const returnedFile = await page.locator('.si-resource-file').evaluate((element) => ({ scrollTop: element.scrollTop }))
+  await page.locator('.si-tab[role="tab"]').click()
+  await webTab.locator('.si-resource-tab-main').click()
+  await version.waitFor({ state: 'visible', timeout: 20_000 })
+  const returnedWeb = await page.locator('.si-resource-web').evaluate((element) => ({
+    sameContentWindow: element.contentWindow === window.__spexResourceFrame,
+    scrollY: element.contentWindow?.scrollY || 0,
+  }))
+  const warmResources = {
+    previewRequests,
+    previewRequestsBeforeRoundTrip,
+    initialFileScroll,
+    returnedFileScroll: returnedFile.scrollTop,
+    initialWebScroll: initialWeb.scrollY,
+    returnedWebScroll: returnedWeb.scrollY,
+    sameContentWindow: returnedWeb.sameContentWindow,
+  }
+  writeFileSync(join(OUT, 'warm-resource-round-trip.json'), JSON.stringify(warmResources, null, 2) + '\n')
+  assert.equal(warmResources.previewRequests, warmResources.previewRequestsBeforeRoundTrip, 'reselecting the file resource must not request its preview again')
+  assert.equal(warmResources.returnedFileScroll, warmResources.initialFileScroll, 'reselecting the file resource must preserve its scroll')
+  assert.equal(warmResources.sameContentWindow, true, 'reselecting the web resource must keep the same iframe contentWindow')
+  assert.equal(warmResources.returnedWebScroll, warmResources.initialWebScroll, 'reselecting the web resource must preserve its in-frame scroll')
+
+  const capacityFiles = Array.from({ length: 7 }, (_, index) => join(OUT, `resource-capacity-${index + 1}.txt`))
+  for (const path of capacityFiles) {
+    writeFileSync(path, `resource capacity fixture ${basename(path)}\n`)
+    assert.equal(command('files', 'add', path), `posted ${path}`)
+    extraFiles.push(path)
+  }
+  await page.locator('.si-tab-add').click()
+  const capacityPicker = page.locator('.si-resource-menu')
+  await capacityPicker.getByRole('menuitem', { name: basename(capacityFiles[0]) }).waitFor({ state: 'visible', timeout: 20_000 })
+  for (const path of capacityFiles.slice(0, 6)) {
+    await capacityPicker.getByRole('menuitem', { name: basename(path) }).click()
+    await page.locator('.si-resource-tab').filter({ hasText: basename(path) }).waitFor({ state: 'visible' })
+    await page.locator('.si-tab-add').click()
+  }
+  const ninth = capacityPicker.getByRole('menuitem', { name: basename(capacityFiles[6]) })
+  assert.equal(await page.locator('.si-resource-layer').count(), 8, 'the console keeps at most eight mounted warm resource layers')
+  assert.equal(await ninth.isDisabled(), true, 'the ninth resource must be disabled instead of evicting a warm tab')
+  await page.locator('.si-tab-add').click()
 
   await page.locator('.si-tab-add').click()
   const picker = page.locator('.si-resource-menu')
@@ -149,10 +212,11 @@ try {
   assert.equal(command('web', 'retract', WEB_URL), `retracted ${canonicalWeb}`)
   postedWeb = false
   await page.locator('.si-resource-tab').filter({ hasText: webLabel }).waitFor({ state: 'detached', timeout: 20_000 })
-  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first }, null, 2) + '\n')
-  console.log(JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first }))
+  writeFileSync(join(OUT, 'result.json'), JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first, warmResources }, null, 2) + '\n')
+  console.log(JSON.stringify({ session: SESSION, file: FILE, web: WEB_URL, first, warmResources }))
 } finally {
   if (postedWeb) { try { command('web', 'retract', WEB_URL) } catch {} }
+  for (const path of extraFiles) { try { command('files', 'retract', path) } catch {} }
   if (postedFile) { try { command('files', 'retract', FILE) } catch {} }
   await browser.close()
 }

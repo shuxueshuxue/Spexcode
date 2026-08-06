@@ -8,11 +8,5 @@ code:
 ---
 ## Reproduce before you fix
 
-For a bug fix, use one scenario's fail→pass pair:
-
-1. **A, before editing:** find the violated scenario or add one to `eval.md`, run it against the old committed
-   behavior, and file `spex eval add <node> --scenario <s> --fail` with evidence of the failure.
-2. **B, after editing:** run the same scenario against the working tree until it passes; commit the verified
-   tree; then file `spex eval add <node> --scenario <s> --pass`. The reading's `codeSha` must be that commit.
-
-The pair is the repair proof. New intent has no prior failure to reproduce.
+For a bug fix, the fail→pass pair on one scenario is the repair proof. New intent has no prior failure to
+reproduce; `spex guide eval` has the A/B filing sequence.

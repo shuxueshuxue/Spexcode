@@ -101,6 +101,13 @@ code does it. Two optional level-2 headings split ground truth from detail:
 Bodies without those headings are read whole. Link sibling nodes with [[node-id]] — every link must name
 a REAL node (lint's mention rule; backtick a placeholder like \`[[node]]\` so it reads as sample text).
 
+COMMENT ALTITUDE: specs own intent, invariants, policy, and observable contracts; comments only navigate
+non-obvious local decisions. Put contract or intent in the owning spec body, not a code comment. Keep a short
+nearby comment only for ordering, platform behavior, measured pitfalls, or why a plausible alternative is
+unsafe; delete commentary that merely translates code or repeats a name/type. Preserve measured values,
+version-specific behavior, and rejected alternatives not in the spec. \`@@@title - explanation\` is reserved for
+genuinely tricky surviving local reasoning.
+
 WHAT lint CHECKS (spex spec lint; the pre-commit hook gates on errors):
   integrity  (error)  every code:/related: path exists — and every anchor RESOLVES: a dead anchor (unit
                       deleted/renamed), an ambiguous one (two same-named units in one file), a file that
@@ -144,7 +151,10 @@ Heuristic spec health is deliberately outside this production gate. Bare \`spex 
 altitude and breadth findings; the tidy workflow consumes that report and adds semantic judgment.
 
 LIFECYCLE: author each node on a node/<id> branch, one node per commit; \`spex spec lint\` must reach 0 errors
-before merge. \`spex init\` seeds the first tree; \`spex guide eval\` covers the sibling eval.md, the measurement file.`
+before merge. \`spex init\` seeds the first tree; \`spex guide eval\` covers the sibling eval.md, the measurement file.
+
+SHARED LANDING: if the shared checkout is mid-merge, wait. Never abort or resolve someone else's merge; if your
+own landing stops half-merged, abort it and report.`
 
 const EVAL = `spex guide eval — the eval.md file format
 
@@ -186,6 +196,13 @@ pre-commit \`internal check-staged\` BLOCKS the commit.
 
 BODY (after the frontmatter): prose naming the measurement method — YATU ("You As The User"): the agent
 looks at / calls the real product surface, not an internal helper chosen to make the evidence easy.
+
+REPAIR PROOF: for a bug fix, use one scenario's fail→pass pair. A, BEFORE EDITING: find the violated scenario
+or add one to \`eval.md\`, run it against the old committed behavior, and file
+\`spex eval add <node> --scenario <s> --fail\` with evidence of the failure. B, AFTER EDITING: run that same
+scenario against the working tree until it passes; commit the verified tree; then file
+\`spex eval add <node> --scenario <s> --pass\`. The reading's \`codeSha\` must be that commit. New intent has no
+prior failure to reproduce.
 
 MEASURING AND FILING: the agent runs the scenario however it likes (a browser run, an API
 transcript, a by-hand pass), compares the result to \`expected\`, and files it:

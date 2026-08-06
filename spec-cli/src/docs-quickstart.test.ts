@@ -50,3 +50,14 @@ test('spex guide setup page lists the full built-in registry in its adopt step',
   assert.ok(adopt, 'guide setup page lost its "Adopt a repo" step')
   assertInitCommand(adopt!, 'spex guide (setup)')
 })
+
+test('spex guides retain the operational detail omitted from always-on prompts', () => {
+  const evalGuide = guideText('eval')!
+  assert.match(evalGuide, /A, BEFORE EDITING:[\s\S]*?old committed behavior[\s\S]*?--fail/)
+  assert.match(evalGuide, /B, AFTER EDITING:[\s\S]*?commit the verified tree[\s\S]*?--pass/)
+  assert.match(evalGuide, /reading's `codeSha` must be that commit/)
+
+  const specGuide = guideText('spec')!
+  assert.match(specGuide, /COMMENT ALTITUDE:[\s\S]*?measured pitfalls[\s\S]*?@@@title - explanation/)
+  assert.match(specGuide, /SHARED LANDING:[\s\S]*?mid-merge, wait[\s\S]*?Never abort or resolve someone else's merge/)
+})

@@ -1,16 +1,16 @@
 ---
-concern: zcode cold /api/graph build is 14x over its own budget after the drift-count fix
+concern: an adopter cold /api/graph build is 14x over its own budget after the drift-count fix
 by: 9be33950-7166-40fd-8d62-5d3a3390cdf7
 status: open
 nodes: graph-cache
 created: 2026-08-05T09:11:12.557Z
 ---
 
-(no detail given — zcode cold /api/graph build is 14x over its own budget after the drift-count fix)
+(no detail given — an adopter cold /api/graph build is 14x over its own budget after the drift-count fix)
 
-## Measured (2026-08-05, mbp zcode deployment, toolchain f91f362c0)
+## Measured (2026-08-05, an adopter deployment, toolchain f91f362c0)
 
-The backend's own instrumentation, from the `zcode-backend` tmux pane immediately after a full restart:
+The backend's own instrumentation, from the adopter's backend tmux pane immediately after a full restart:
 
     spec-cli: /api/graph build took 21838ms (budget 1500ms) — full path is slow
 
@@ -83,7 +83,7 @@ tell that the background saturation is gone: the build no longer competes with a
 
 15.1s is still **10x over the 1500ms budget**. A `sample` of a cold build on the FIXED code shows the remainder
 is a different cost centre: `__open_nocancel` 983, `__getdirentries64` 819, `__open` 487, `stat` 359 — the
-`.spec` tree walk (417 nodes at zcode scale) plus git spawns, i.e. the graph build's own reads. Idle CPU of the
+`.spec` tree walk (417 nodes at adopter scale) plus git spawns, i.e. the graph build's own reads. Idle CPU of the
 server process is now ~0.7% for the port-holding child; the residual work of the supervisor loop is 339
 reads/second, which is still O(store size) per second and will grow, but at 15s of build time it is noise.
 
@@ -95,7 +95,7 @@ A second host now shows this issue's symptom, and because the two hosts disagree
 axis, the pair is a dimension test rather than a second anecdote. Measured tonight on the ThinkPad
 (the product repo's own backend, `:8787`, child running post-`c7cd1606e` code):
 
-| axis | mbp / zcode (this issue) | ThinkPad / spexcode (tonight) |
+| axis | adopter deployment (this issue) | ThinkPad / spexcode (tonight) |
 |---|---:|---:|
 | spec nodes | ~417 | **242** |
 | readings | — | 5,277 |
@@ -189,7 +189,7 @@ Two things fall out.
 mirror.**
 
     corpus                 nodes   readings
-    zcode-mirror             476       3023
+    <adopter-mirror>             476       3023
     spexcode trunk           242       4953
 
 242 nodes carrying 4953 readings. That is why a smaller-looking tree is slower, and it is the same

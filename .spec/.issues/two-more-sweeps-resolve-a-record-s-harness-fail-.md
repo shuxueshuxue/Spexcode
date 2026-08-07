@@ -27,7 +27,7 @@ unresolvable record aborts the whole sweep rather than one row:
 
 ## Why they did not fire tonight, and why that is not reassuring
 
-The live `zcode` skew on `:8790` hit only the resource sampler because the sampler runs in the **supervisor**,
+The live harness skew on `:8790` hit only the resource sampler because the sampler runs in the **supervisor**,
 which never hot-reloads itself (`supervise.ts:18`). These two sites run in the **child**, which reloaded four
 times and therefore resolves `zcode`. So tonight's specific skew is invisible here.
 

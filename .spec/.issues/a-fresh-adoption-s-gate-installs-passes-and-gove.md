@@ -47,4 +47,4 @@ production gate's contract alone — [[taste]] 3, spend complexity only where it
 An outward-contract change that can turn other adopters' currently-green gates red does not qualify
 as a narrow default next move. Recorded here so the decision has a durable home in the repo where the
 fix must land; the run's raw adoption-blocker measurements live in `spexcode-base`
-`studies/zcode-adoption-blockers/notes.md` (`3ac7008`).
+`studies/adoption-blockers/notes.md` (`3ac7008`).

@@ -94,7 +94,7 @@ projection work interleaving, not the board's synchronous summary.
 not.** Re-measured by @bd42c738 with instrumentation instead of stage timing:
 
 1. **The corpus I profiled cannot exhibit this defect.** Of the 1,144 distinct `codeSha` values in
-   `/home/jeffry/zcode-mirror`'s readings, **zero** are reachable from its HEAD (`f3fc224`), checked
+   `<adopter-mirror>`'s readings, **zero** are reachable from its HEAD (`f3fc224`), checked
    one by one with `merge-base --is-ancestor`. `eventsSince()` therefore returns null for all 86
    anchored demands and the selector queries actually reaching `anchorHitExists` there are **0, not
    73**. My "73 distinct anchor queries" counted deduplicated demands *present in the data* and

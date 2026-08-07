@@ -59,7 +59,7 @@ rendezvous-steer/cold-resume readings.
 [[zcode-harness]] is a deliberate one-shot exception: its `--prompt` launcher has no reusable control
 channel, so its replacement scenario measures launch prompt receipt, hook gates, declaration, and process
 liveness. `deliver` and `resume` explicitly reject rather than impersonating a control transport; no false
-combination cell is filed for an operation z-code does not offer.
+combination cell is filed for an operation that harness does not offer.
 
 Prompt delivery also carries a dense, rerunnable COMBINATION campaign across every registered adapter that
 declares a delivery path (currently four interactive and four controller-backed headless adapters, including [[codex-headless]]): harness form x prompt origin (launch's first prompt, the terminal-free input route with

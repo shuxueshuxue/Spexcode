@@ -32,7 +32,7 @@ Two candidate designs, neither of which should be picked without measurement:
 2. **Let the cockpit build it.** The cockpit already computes `reviewPayload(id)` before composing, so it
    could hand that payload down instead of letting the eval side re-enter through it — which dissolves the
    recursion structurally rather than avoiding it. But this puts a summary BUILD on a read path, and this
-   repo has just finished proving (see the zcode cold-graph issue) that synchronous work added to read paths
+   repo has just finished proving (see the adopter cold-graph issue) that synchronous work added to read paths
    is what makes this product feel dead. Nobody has measured what a cold `spex session review` would cost
    with a build in it.
 

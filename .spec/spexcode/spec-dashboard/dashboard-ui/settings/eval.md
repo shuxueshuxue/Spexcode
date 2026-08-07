@@ -38,6 +38,18 @@ scenarios:
       The terminal alone adopts the selected pixel size without remounting, dashboard UI text is unchanged,
       and the explicit choice survives reload. The terminal's detailed geometry/transport proof belongs to
       [[terminal-font-size]]; this scenario proves the real Settings surface drives it.
+  - name: default-session-surface-is-fallback
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-toolbar.e2e.mjs
+    description: >-
+      Open the real routed Settings page, select Conversation under default session view, then navigate to an
+      unchosen pane-backed session. Explicitly switch that session to Terminal, change the Settings default
+      away and back, then reload the session page.
+    expected: >-
+      Settings exposes a compact Terminal/Conversation segmented choice. Its value is browser- and
+      project-local and drives only sessions with no explicit base choice; the unchosen pane opens Conversation,
+      while the explicitly switched session remains Terminal after both default changes and reload. Headless
+      sessions remain Conversation and no backend session state is written.
 ---
 
 # settings — yatsu

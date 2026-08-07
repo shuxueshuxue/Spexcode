@@ -2,7 +2,7 @@
 title: session-console
 status: active
 hue: 280
-desc: The Enter surface — a two-pane session interface whose console is a live tmux terminal or the shared TimelineChat conversation for a headless session.
+desc: The Enter surface — a two-pane session interface whose console is a live tmux terminal or the shared TimelineChat Conversation, selected locally for a pane-backed session and fixed for a headless one.
 code:
   - spec-dashboard/src/SessionInterface.jsx#SessionInterface
 related:
@@ -10,6 +10,7 @@ related:
   - spec-dashboard/src/SessionWindow.jsx
   - spec-dashboard/src/session.js
   - spec-dashboard/src/sessionCommands.js
+  - spec-dashboard/src/sessionSurface.js
   - spec-dashboard/src/harness.jsx
   - spec-dashboard/src/launch.js
   - spec-dashboard/src/styles.css
@@ -115,13 +116,15 @@ through `launch.js`, while [[launch]]'s backend owner performs the command-plugi
 including CLI and direct API use. This tab owns only the desktop chrome around it (menus, focus discipline,
 background fire) and never expands a plugin body itself.
 
-An existing session's adapter chooses one real console surface. A pane-backed adapter shows its **live
-interactive tmux terminal** (SessionTerm) — the agent's own TUI is the default input surface — but only when
-its **liveness** ([[state]]) is live (`online`/`starting`). A headless adapter has no pane at any liveness;
-its main console is the shared `TimelineChat` conversation over [[session-timeline]]. The conversation stays
-mounted while an explicit offline state puts the same relaunch panel in front, so resuming reveals the preserved
-history immediately. That conversation is the whole terminal-free console, with no [[message-stream]]
-native-event drill-down. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
+An existing session has one visible **base surface**. A pane-backed adapter offers two mutually exclusive
+base surfaces: its live interactive tmux **Terminal** (SessionTerm), which is the default input surface, and
+the shared `TimelineChat` **Conversation** over [[session-timeline]]. A headless adapter has no pane at any
+liveness and is always Conversation. The toolbar toggle next to the top-right files control changes a
+pane-backed session between Terminal and Conversation; the icon always names the other destination, and no
+second terminal/conversation view is visible at once. The conversation stays mounted after its first visit while
+an explicit offline state puts the same relaunch panel in front, so resuming reveals the preserved history
+immediately. That conversation is the whole terminal-free console, with no [[message-stream]] native-event
+drill-down. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
 label**: a session whose process is gone reads `offline` whatever its authored lifecycle (`asking`,
 `review`, `error`, …), so it never mounts a tmux client against a dead id (which would leak tmux's bare
 "no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same
@@ -138,8 +141,8 @@ no nested levels, and no permanently reserved second-input strip. Its own prompt
 pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
 genuinely single-line **session toolbar** contains the current surface, its local resource tabs, evaluation, and
-available commands. A pane-backed session exposes its one **Terminal** tab; a headless session exposes its one
-TimelineChat **Conversation** surface. The visual tab sequence is its current surface, resource tabs, the
+available commands. The current base tab is **Terminal** or **Conversation** for a pane-backed session, and
+Conversation for a headless session. The visual tab sequence is its current surface, resource tabs, the
 **Eval** navigation tab, then the resource picker: this is one compact tab rail, with any remaining toolbar space
 separating it from command tools. A one-pixel divider and short gutter separate the picker from Eval; there is no
 matching divider after the plus. The picker itself is a compact circular plus control, so it reads as an add/open
@@ -163,10 +166,12 @@ only the tab's explicit close, reference retraction, or session retirement relea
 terminal share this ownership boundary: there is **no cross-session resource-tab pool, admission limit, or eviction**. A global
 budget lets one live session starve another while terminals themselves remain unbounded; a per-session quota would still make a
 session's resources shorter-lived than its terminal for no product reason. Each session may therefore retain every resource tab it
-opens during that session's lifetime, independently of every other session. The browser remembers each session's selected local surface: switching to another session and
-back restores its resource tab when one was selected, or its Terminal/Conversation surface when that was selected;
-only an explicit press on Terminal/Conversation changes it back. This is dashboard-local presentation state, never
-session state or a backend write. Neither console adds a second native-event view. Session identity, lifecycle,
+opens during that session's lifetime, independently of every other session. A selected resource tab is a
+temporary browser-local overlay of that session's base surface: closing it, pressing the base tab, or Esc from
+the resource returns to the same Terminal/Conversation base without changing that preference. The browser
+persists the pane-backed base choice per session and project; a session without an explicit choice resolves the
+Settings default, then Terminal. Switching sessions may restore its still-open resource overlay, but resource
+selection is never persisted or written to the session/backend. Neither console adds a second native-event view. Session identity, lifecycle,
 and liveness do **not** repeat here: the selected row in the
 left session list is the console's visible identity/state surface, so a second headline/status group only spends
 height and injects volatile prompt/HTML text into `aria-label` / `data-tip`. The Eval tab is a REAL anchor whose href is
@@ -214,10 +219,11 @@ the public terminal parser consumes those mode toggles at the adapter boundary. 
 one uninterrupted local selection even when a TUI redundantly reasserts its mouse modes, while wheel navigation
 continues through [[live-view]]'s explicit tmux-client control path.
 
-The desktop right pane has **one console slot with three truthful surfaces**. A pane-backed adapter mounts the
-warm, input-enabled `SessionTerm` described here. A headless adapter mounts the same `TimelineChat` used by the
-phone, with no terminal placeholder, tmux socket, or [[message-stream]] alternate view. A selected resource tab
-replaces either console with a bounded, top-anchored selectable file preview or same-origin web frame; Markdown
+The desktop right pane has **one console slot with two mutually exclusive base surfaces plus a resource overlay**.
+A pane-backed adapter keeps the warm, input-enabled `SessionTerm` described here and mounts the same
+`TimelineChat` used by the phone on first Conversation visit. A headless adapter mounts only that Conversation,
+with no terminal placeholder, tmux socket, or [[message-stream]] alternate view. A selected resource tab
+replaces either base surface with a bounded, top-anchored selectable file preview or same-origin web frame; Markdown
 uses the same restricted renderer as other dashboard prose while raw HTML remains text. File text is the explicit
 native-selection exception to the panel's pointer-inert chrome, so drag and Ctrl/Cmd+C work while its non-focusable
 surface leaves the current terminal/composer sink alone. The inactive terminal layer is hidden
@@ -305,11 +311,11 @@ cancel affordance — so one failed item never collapses a batch into a generic 
 
 Pane-backed terminals are **warm and always connected**: every live pane mounts and opens its socket when the
 console is first entered — never lazily on focus — and stays mounted even while the console is closed, so
-switching tabs **never loses your place** (socket + last painted buffer survive), New Session included. Headless
-sessions have no pane or socket to warm: their `TimelineChat` mounts when first selected (including a deep link),
-then remains mounted after deselection or going offline so its timeline cursor and rendered history survive
-revisits; its refresh timer runs only while selected. Unvisited headless rows remain inert and make no
-timeline/detail reads or polling timers. Hidden
+switching tabs **never loses your place** (socket + last painted buffer survive), New Session included. A
+pane-backed Conversation mounts only on its first visit, then remains mounted after deselection or going offline
+so its timeline cursor and rendered history survive revisits; its refresh timer runs only while selected.
+Headless sessions follow that same Conversation lifetime from their first selection. Unvisited Conversation
+surfaces remain inert and make no timeline/detail reads or polling timers. Hidden
 pane-backed layers remain laid out at the final terminal geometry under `visibility:hidden`, keeping their xterm
 and stable default renderer ready; switching changes visibility, not socket attachment or renderer identity. No pane loads a visibility-scoped WebGL addon,
 so hidden sessions neither expose an empty replacement renderer nor accumulate capped GPU contexts. [[live-view]]
@@ -329,12 +335,14 @@ key handling deliberately **falls through unhandled** so the window-level handle
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
 can actually own.) The **toolbar's command
-group** renders the same board-command registry. The independent top-right [[files]] icon is grey when the
+group** renders the same board-command registry. The top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
-hover tooltips. Clicking the filename opens or selects the singleton resource tab; the adjacent download and
-copy tools remain explicit icon actions, with download delegating to the authorized backend route. **Command Box** is present whenever live. The
+hover tooltips. It and the pane-backed Terminal/Conversation switch are adjacent icon controls, without a
+painted divider separating them from the other right-toolbar tools. Clicking the filename opens or selects the
+singleton resource tab; the adjacent download and copy tools remain explicit icon actions, with download
+delegating to the authorized backend route. **Command Box** is present whenever live. The
 right-side action group is surface-specific: every selected resource shows its one refresh tool; a selected web has
-no file download/copy or merge tool, and the Terminal surface alone shows the 24px **merge** tool. Merge is green and dispatchable only for the
+no file download/copy or merge tool, and the Terminal base surface alone shows the 24px **merge** tool. Merge is green and dispatchable only for the
 persisted `awaiting` + `proposal:merge` + `review` projection while liveness is `online`; `nothing`/done,
 close-pending, working, asking, and every non-online reading keep the tool muted and disabled, with a
 localized tooltip and accessible reason. Disabled merge never appears as a typed `/merge` command and never

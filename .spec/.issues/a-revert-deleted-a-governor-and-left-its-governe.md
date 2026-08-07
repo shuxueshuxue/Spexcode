@@ -1,7 +1,7 @@
 ---
 concern: A revert deleted a governor and left its governed file with no code: owner, so the delete-governor gate now blocks every branch that merges trunk instead of the commit that caused it
 by: 9be33950-7166-40fd-8d62-5d3a3390cdf7
-status: open
+status: landed
 nodes: spec-lint
 created: 2026-08-06T01:43:46.135Z
 ---

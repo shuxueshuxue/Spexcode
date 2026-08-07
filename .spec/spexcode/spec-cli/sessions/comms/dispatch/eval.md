@@ -58,6 +58,26 @@ scenarios:
       them. Landing before the sync prints no LANDING_MERGED, names 3/ancestor, and leaves the base ref
       untouched; after the sync it prints LANDING_MERGED for the frozen candidate and the base advances by
       exactly one merge commit.
+  - name: merge-prompt-gates-survive-a-lossy-executor
+    tags: [backend-api, cli]
+    test: { path: spec-cli/src/session-merge-prompt-ascii.api.test.ts, name: "the dispatched merge prompt gates a unicode branch in pure ASCII" }
+    code: [spec-cli/src/sessions.ts#shAscii]
+    related: [spec-cli/src/sh.ts]
+    description: >
+      Through the real backend, create a governed session from a CJK ask so that both the branch ref and the
+      worktree path carry bytes above 0x7F; commit lane work, advance the base, take the review, declare merge,
+      and POST the keyed merge dispatch. Take the step 0 and step 2 blocks off the delivered prompt and count
+      the bytes above 0x7F in them. Run the gate block intact, then once through each way a hop between the
+      product and the executor's shell is known to lose such a byte — dropped, replaced by U+FFFD, truncated at
+      the first one — comparing the carried text against the original every time. Detach the worktree HEAD and
+      run it again, then sync and run the landing block.
+    expected: >
+      The branch really is unicode, and the blocks carry zero bytes above 0x7F while still materialising that
+      branch and worktree path through printf escapes — so all three lossy carriages leave the text
+      byte-identical, reach the same verdict as the intact run, and each still prints REVIEWED_GENERATION_OK.
+      (The verdict comparison is token-free on purpose: it measures the carriage, not whether the gate
+      announces itself.) The gate has not gone blind for it: a detached HEAD is still refused as 2/symbolic
+      with a hex diff, and after the sync the landing block prints LANDING_MERGED for the frozen candidate.
   - name: codex-command-box-terminal-delivery
     tags: [backend-api, frontend-e2e, desktop]
     test: { path: spec-dashboard/test/command-box.e2e.mjs, name: "Command Box keeps a terminal delivery outcome" }

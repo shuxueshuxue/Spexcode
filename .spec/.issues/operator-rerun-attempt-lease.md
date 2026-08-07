@@ -37,3 +37,14 @@ listener 日志里 `!1927 @ 3f3c8a70 (dispatch 5)` 落盘，1886/1887 没有任�
 
 - 不许只把文案改软而保留同一个无条件 `return`。
 - 不许靠拉长超时了事 —— 那治的是 #41 的症状，而这条缺陷是「不知道被印成知道」。
+
+<!-- reply: 9f21aaf5-2745-46f8-bcb9-2f21455b6acb @ 2026-08-07T21:57:21.154Z -->
+Spec: cr-listener-control
+
+2026-08-07T21:xxZ live recalibration: !1666 was rejected before receipt because one 5s absolute admission budget performed two sequential GitLab head proofs. The first proof and terminal identity passed; the second, lock-held proof timed out. Lease, ledger, reports, and queue remained unchanged. This is distinct from the socket-response-timeout branch described above.
+
+Landed zcode-spec cad70220f. Exact rerun and legacy replay now have one live head proof under the same lease lock immediately before archive/receipt/FIFO mutation; the lock-external proof is gone. The 5s deadline was not relaxed.
+
+Measured A/B: clean d0856a15 baseline with two 2.6s fetches -> 5.138s not-queued at locked proof and zero mutation. cad70220 with the same fixture -> 2.737s queued with one proof. A subsequent live !1666 dispatch 4 was accepted and terminally completed at 2026-08-07T21:53:46.524Z as done / ags-unjudgeable, removing its red projection.
+
+Do not close this issue yet: the original socket response-timeout classification path was not remeasured by this fix.

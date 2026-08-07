@@ -13,7 +13,7 @@ const dashboard = readFileSync(join(here, 'Dashboard.jsx'), 'utf8')
 
 test('board-stable history and review identity preserve or reset the right state', () => {
   assert.match(page, /<EventDetail entry=\{entry\} history=\{detail\.history\}/)
-  assert.match(page, /<EventDetail[^>]*sourceKey=\{sessionId \|\| 'project'\}/)
+  assert.match(page, /<EventDetail[^>]*sourceKey=\{detail\.scope \|\| 'project'\}/)
 
   const identity = detail.match(/const readingIdentity[\s\S]*?const reviewIdentity[^\n]*/)?.[0] || ''
   assert.match(identity, /viewing\.ts/)
@@ -41,6 +41,18 @@ test('session model failures are distinct from genuine not-found states', () => 
   assert.match(page, /<EvalsGroup[\s\S]*error=\{error \? t\('sessionEval\.loadFailed'/)
   assert.match(page, /<DetailShell failure=\{t\('sessionEval\.loadFailed'/)
   assert.match(shell, /className="ds-page ds-missing ds-failed" role="alert"/)
+})
+
+test('detail source fallback, unmeasured declaration, and missing eval use separate faces', () => {
+  const zh = readFileSync(join(here, 'i18n', 'zh.js'), 'utf8')
+  const en = readFileSync(join(here, 'i18n', 'en.js'), 'utf8')
+  assert.match(page, /detail\?\.scopeFallback === 'trunk'/)
+  assert.match(page, /detail\?\.availability === 'unmeasured'/)
+  assert.match(page, /sourceKey=\{detail\.scope \|\| 'project'\}/)
+  for (const dict of [zh, en]) {
+    assert.match(dict, /evalUnmeasured:/)
+    assert.match(dict, /scopeFallback:/)
+  }
 })
 
 test('scoped detail fences epoch, generation, content, and summary before painting', () => {

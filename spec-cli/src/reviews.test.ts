@@ -127,6 +127,9 @@ test('one detail projection returns only selected history and at most five light
   assert.equal(detail.neighbors.total, 9)
   assert.equal(detail.neighbors.index, 4)
   assert.equal(detail.neighbors.order, 'default')
+  assert.equal(detail.availability, 'measured')
+  assert.equal(detail.scopeFallback, null)
+  assert.equal(detail.requestedScope, null)
   assert.equal(detail.revision, projectEvalDetail(items, history, 'n', 's4').revision)
   assert.notEqual(detail.revision, projectEvalDetail(items, history.slice(0, 1), 'n', 's4').revision)
   const scoped = { scope: 's', summary: { measured: 9, total: 9, pass: 5, fail: 4, review: 0, blind: 0, unknown: 0 } }
@@ -144,10 +147,27 @@ test('detail neighbor budget refills at boundaries and missing selections stay h
     evalRevision: { epoch: 'epoch', generation: 3, content: 'content' },
   })
   assert.equal(missing.selected, null)
+  assert.equal(missing.availability, 'missing')
   assert.equal(missing.neighbors.index, null)
   assert.equal(missing.neighbors.total, 8)
   assert.deepEqual(missing.evalRevision, { epoch: 'epoch', generation: 3, content: 'content' })
   assert.equal(missing.summary?.total, 8)
+})
+
+test('detail separates source fallback from declared-but-unmeasured and missing scenarios', () => {
+  const [blind] = trunkEvalReviewItems([{ id: 'n', scenarios: [{ name: 'never' }], evals: [] }])
+  const unmeasured = projectEvalDetail([blind], [], 'n', 'never')
+  assert.equal(unmeasured.selected, null)
+  assert.equal(unmeasured.history.length, 0)
+  assert.equal(unmeasured.availability, 'unmeasured')
+
+  const fallback = projectEvalDetail([{ node: 'n', scenario: 'read', filterKind: 'result' }], [{ scenario: 'read' }], 'n', 'read', {
+    requestedScope: 'gone-session', scopeFallback: 'trunk',
+  })
+  assert.equal(fallback.scope, null)
+  assert.equal(fallback.requestedScope, 'gone-session')
+  assert.equal(fallback.scopeFallback, 'trunk')
+  assert.equal(fallback.availability, 'measured')
 })
 
 test('eval verdict counts split freshness ONCE on the server, over the whole population, before the slice', () => {

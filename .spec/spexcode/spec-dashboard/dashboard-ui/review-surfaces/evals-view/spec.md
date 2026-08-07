@@ -86,8 +86,12 @@ filter (default off) picking the root.
   reload all share one destination, never guessed from a referrer, history state, or the originator's
   presence. A detail carries no terminal exit: its one small return arrow has one meaning, back to its
   canonical list. Browser Back keeps restoring the previous URL exactly (the anchor is an ordinary
-  push, it replaces nothing). An address naming no real eval renders an honest not-found with a link to
-  the list, never a silent rewrite to some other eval.
+  push, it replaces nothing). A detail names its source resolution and scenario availability separately:
+  an expired `scope:` reads trunk, keeps the address, and visibly says that its worktree is gone; a
+  declared scenario without a reading visibly says it is not yet measured; only a scenario absent from
+  trunk renders the honest not-found with a link to the list. `EvalDetailPage` consumes those explicit
+  response fields; it never infers availability from an empty selected row. None silently rewrites to
+  another eval.
 - **The detail page wears the shared [[review-chrome]] skeleton** (GitHub's issue-detail grammar): a
   header naming the scenario (title) and node, a status band (the ONE shared verdict visual + an A/B strip
   whose result buttons consume that same visual mapping), then a MAIN
@@ -150,8 +154,9 @@ filter (default off) picking the root.
   one), and browser Back walks the real history (a scoped list→detail push returns exactly to the scoped
   list URL) — never blended, never guessed from history.back or a referrer. Scope is the DATA
   SOURCE axis and is never conflated with `session:present|missing`, the source-session presence facet.
-  A dead or unknown scope id keeps its token and shows the honest empty/error face — the text itself is
-  the off-switch.
+  On a scoped DETAIL whose worktree has disappeared, the URL token stays as historical context but the
+  detail falls back to trunk and says so; this is a source-resolution fact, not an absent eval. Scoped
+  LIST source failure remains explicit rather than fabricated as an empty list.
   `#/sessions/<id>/eval[/<node>/<scenario>]` is a LEGACY address: the route
   layer normalizes it (replace) to the `#/evals` form — old links keep working, the old shape is never
   re-minted, and the console exposes only a door that navigates here. The scoped source has three honest

@@ -1,5 +1,20 @@
 ---
 scenarios:
+  - name: latest-working-note-opens-execution-trace
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/execution-trace.e2e.mjs
+    code: spec-dashboard/src/ExecutionTrace.jsx
+    related:
+      - spec-dashboard/src/TimelineChat.jsx
+      - spec-dashboard/src/data.js
+      - spec-dashboard/src/styles.css
+    description: >-
+      Through the running dashboard's real Sessions route, select Conversation for a live session, receive one
+      normalized latest-working-note execution frame, and click the note entry.
+    expected: >-
+      One compact working-note entry opens an execution pop-out. Its normalized read and command rows carry
+      their respective familiar icons and done/running states; no transcript envelope, argument, or output is
+      rendered by the browser.
   - name: conversation-is-the-only-headless-console
     tags: [frontend-e2e, desktop, mobile]
     description: >-

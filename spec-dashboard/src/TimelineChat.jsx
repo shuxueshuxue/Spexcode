@@ -7,6 +7,7 @@ import { useIsMobile } from './useIsMobile.js'
 import RichText, { richTextFromRange } from './RichText.js'
 import 'katex/dist/katex.min.css'
 import { ComposerTextarea, composingKey } from './Composer.jsx'
+import ExecutionTrace from './ExecutionTrace.jsx'
 
 // hour:minute for an event row; a short date for the day separators the timeline inserts when the
 // calendar day flips between neighbouring events.
@@ -348,6 +349,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
             <div className="m-ev-text"><RichText>{detail.prompt}</RichText></div>
           </details>
         )}
+        <ExecutionTrace sessionId={s.id} active={active} />
         {events === null
           ? <div className="m-empty">{t('common.loading')}</div>
           : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}

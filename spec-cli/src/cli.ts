@@ -474,9 +474,25 @@ if (cmd === 'serve') {
       console.log(`${rel} — no spec claims this yet (uncovered). If your change is substantive, give it a home before it drifts.`)
     } else if (owners.length === 0) {
       // related-only: lint's coverage is satisfied, so the per-edit hook stays silent (lint-consistent) —
-      // but a human asking gets the honest nuance: nothing tracks this file's drift.
+      // but a human asking gets the honest nuance about what does and does not track this file.
       if (has('actionable')) process.exit(0)
-      console.log(`${rel} — not governed (no code: claim), but referenced by ${names(related)} (related: coverage only). Nothing tracks its drift; if your change is substantive, consider giving it a governing home.`)
+      // @@@ both axes - "nothing tracks its drift" is a verdict about the WHOLE tracking model
+      // ([[governed-related]]: spec nodes AND eval scenarios), so it cannot be spoken from the spec axis
+      // alone — a scenario's code: anchor drives eval freshness with no spec claim involved. Derived, never
+      // asserted: a message that enumerates one axis cannot report what the other holds. The empty
+      // nodeCode fallback is exact HERE and only here — reaching this branch means no spec node code:-claims
+      // the file, so no scenario can anchor to it by inheriting its node's claim, only by an explicit one.
+      const { evalNodes, scenarioCodeAxis } = await import('../../spec-eval/src/scenarios.js')
+      const anchored: string[] = []
+      for (const n of evalNodes(process.cwd())) {
+        for (const sc of n.scenarios) {
+          if (scenarioCodeAxis(sc.code).paths.includes(rel)) anchored.push(`'${n.id}' scenario '${sc.name}'`)
+        }
+      }
+      const tracking = anchored.length
+        ? `Its drift is tracked on the eval axis only: ${anchored.length} scenario${anchored.length === 1 ? '' : 's'} anchor${anchored.length === 1 ? 's' : ''} freshness to it (${anchored.join(', ')}), so changing it makes those readings stale — but no spec body says what it should do`
+        : 'Nothing tracks its drift'
+      console.log(`${rel} — not governed (no code: claim), but referenced by ${names(related)} (related: coverage only). ${tracking}; if your change is substantive, consider giving it a governing home.`)
     } else if (whole.length <= maxOwners) {
       // a sanely-owned file is NOT actionable: --actionable callers (the per-edit spec-of-file hook) stay
       // silent here, so the annotation fires only on an OVER-owned or uncovered file — rare and worth acting on.

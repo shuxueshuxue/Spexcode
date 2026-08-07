@@ -94,7 +94,43 @@ scenarios:
       retired early) exits 2 as a plain unknown command with the `spex help` pointer.
     tags: [cli]
     code: [spec-cli/src/cli.ts, spec-cli/src/help.ts]
+  - name: owner-report-consults-both-tracking-axes
+    description: >
+      Ask the real CLI for `spec owner` on EVERY related-only file in the repository — each path some node
+      references but no node code:-claims — and classify which tracking sentence each answer used. Build both
+      the population and the per-file expectation from an independent parse of the .spec registry, not from
+      the CLI's own output, so the two sides can disagree; then check the named scenarios against that parse
+      by count and by identity on the most-anchored file. Also confirm the --actionable hook path is
+      unchanged for a related-only file.
+    expected: >
+      Every file the registry says has at least one scenario code: anchor gets the eval-axis report, and
+      every file it says has none keeps the older sentence — both counts complete, with zero disagreements
+      across the whole population. The anchored report names the anchoring scenarios by node and scenario
+      name and says the drift is tracked on the eval axis only while no spec body states what the file should
+      do; it never says nothing tracks its drift, because that sentence is a verdict about both axes and the
+      spec axis is empty here precisely when the eval axis is not. The named set equals the registry's code:
+      anchors for that path exactly — same count, same identities — which is what makes the reading
+      cross-source rather than a message quoting itself. The unanchored side is measured over its whole
+      population rather than one sampled file, because that side is the MAJORITY here and a criterion that
+      probes one of it goes green through a regression in the rest: the negative branch must stay reachable
+      for all of them, so the fix cannot trade a false universal for an unconditional claim. --actionable
+      still exits 0 silently for a related-only file either way, since a soft edge is not worth interrupting
+      an edit for.
+    tags: [cli]
+    code: [spec-cli/src/cli.ts]
+    related: [spec-eval/src/scenarios.ts, spec-cli/src/specs.ts]
 ---
 
 Measure through the real CLI binary (`node spec-cli/bin/spex.mjs …`), never by reading help.ts: run
 each probe, capture stdout/stderr + exit codes as the transcript, and file with `--result`.
+
+Spelling that path out matters asymmetrically, and the asymmetry runs opposite to where attention goes. In a
+worktree the bare word `spex` resolves to a globally installed copy of some other version, so a probe that
+reaches for it measures a different program than the tree under test. On the PASS side that mistake is
+self-announcing: the other program cannot produce the behaviour being claimed, so the reading fails rather
+than lies. On the FAIL side it is invisible — an older install and a not-yet-fixed tree emit byte-identical
+output — so the `--fail` half of a pair is precisely the one that can be measured with the wrong instrument
+and still look right. The invocation is therefore worth recording beside the fail reading, where nothing else
+would catch it, rather than beside the pass reading, where the measurement catches it for free. The same
+hazard reaches review: a reviewer standing in the worktree types the bare word, sees the old sentence, and
+concludes the fix is absent.

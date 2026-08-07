@@ -6,6 +6,7 @@ desc: Two relations on a node — GOVERN (the ONE source of truth; drives drift/
 related:
   - spec-cli/src/specs.ts
   - spec-cli/src/lint.ts
+  - spec-cli/src/cli.ts
   - spec-eval/src/cli.ts
 ---
 
@@ -48,6 +49,20 @@ as a scoped claim.
 **`spex owner <path>` reports both**, distinctly: the governor as the verdict, referencers as an "also
 referenced by … (related)" line. The per-edit `--actionable` hook still stays SILENT for a related-only
 file — a soft edge is not worth interrupting an edit for.
+
+Because the model has two axes, a report about what tracks a file has two axes to consult, and the sentence
+that goes wrong is the negative one. "Nothing tracks this file's drift" is a claim about the WHOLE model, so
+it may be spoken only after the eval axis has been asked as well: a scenario's `code:` anchor drives eval
+freshness with no spec claim involved anywhere, which is exactly the state a spec-axis enumeration cannot
+see. The report therefore derives the anchoring scenarios instead of concluding from the axis it happens to
+be holding — an enumeration cannot report what it is missing ([[cli-surface]] carries the same rule for the
+hub's own messages), and the fallback needs no special case: reaching that branch means no node `code:`-claims
+the file, so no scenario can anchor to it by inheriting its node's claim, only by an explicit one.
+
+A file in that position gets the worse half of each axis, and saying so is the point of the report: its
+readings go stale when it changes, so somebody IS told to re-measure, while no spec body says what it should
+have done. Maintenance signal without a contract is a real state, not a missing one, and naming it is what
+turns "nothing tracks this" from a dead end into the split-the-file or give-it-a-home move.
 
 **too-many-owners** — the file-rotated bound (the deterministic twin of [[doctor]]'s advisory breadth): a file governed by
 more than `maxOwners` nodes (default 3) fires one summary warning at `spex lint` (the commit gate blocks

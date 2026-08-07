@@ -143,7 +143,9 @@ TimelineChat **Conversation** surface. The visual tab sequence is its current su
 **Eval** navigation tab, then the resource picker: this is one compact tab rail, with any remaining toolbar space
 separating it from command tools. A one-pixel divider and short gutter separate the picker from Eval; there is no
 matching divider after the plus. The picker itself is a compact circular plus control, so it reads as an add/open
-action rather than an extension of Eval.
+action rather than an extension of Eval. It is deliberately a step smaller and quieter than a command tool — thin
+neutral ring, accent only on hover and focus: it opens a menu of things to look at, it does not act on the session,
+and a control sized and weighted like the merge/stop tools would claim authority it does not have.
 The plus lists the selected session's posted
 files and loopback web services ([[files]] / [[web]]) that are not already open. Selecting one creates one
 browser-local tab for that exact session/reference; closing it removes only that view and permits reopening from

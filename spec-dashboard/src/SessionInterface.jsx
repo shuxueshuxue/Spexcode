@@ -1441,7 +1441,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   </a>
 
                   <div ref={resourcePickerRef} className="si-resource-picker">
-                    <IconButton icon="plus" size={12} className="si-tab-add" label={t('session.addResourceTab')}
+                    <IconButton icon="plus" size={11} className="si-tab-add" label={t('session.addResourceTab')}
                       aria-expanded={resourceMenu} disabled={active === 'new'} onClick={() => setResourceMenu((open) => !open)} />
                     {resourceMenu && (
                       <div className="si-resource-menu" role="menu" aria-label={t('session.resourceMenuLabel')}>

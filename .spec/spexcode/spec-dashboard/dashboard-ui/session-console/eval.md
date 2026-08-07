@@ -219,15 +219,18 @@ scenarios:
       retaining its own resource: resource tabs have no cross-session admission cap, eviction, or starvation.
   - name: session-remembers-its-local-surface
     tags: [frontend-e2e, desktop]
-    test: spec-dashboard/test/session-web.e2e.mjs
+    test: spec-dashboard/test/session-toolbar.e2e.mjs
     description: >-
-      In Chromium, open one selected session's posted file or web resource tab, switch through a second session,
-      then return using the session list. Repeat after explicitly selecting Terminal/Conversation.
+      In Chromium, start with a pane-backed session on Terminal, switch to Conversation from the icon beside
+      the top-right files control, reload, and open then close a posted file resource. Separately set the
+      Settings default to Conversation, open an otherwise unchosen pane-backed session, explicitly switch it
+      to Terminal, change the default again, and reload.
     expected: >-
-      Returning restores the first session's last selected local surface: its resource tab remains selected until
-      the human explicitly selects Terminal/Conversation, after which returning shows that native surface. This
-      selection lives only in the dashboard's browser state; it writes neither the session record nor any backend
-      state.
+      Terminal and Conversation are mutually exclusive base surfaces. An explicit pane-backed choice persists
+      per browser/project/session across reloads and always wins over the Settings default; an unchosen session
+      follows that default, while headless stays Conversation. A resource tab is only a temporary local overlay:
+      closing it or returning with Escape restores the resolved base without changing it. Neither choice writes
+      a session record or backend state.
   - name: create-stays-on-new-and-close-falls-back
     tags: [frontend-e2e, desktop]
     description: >-

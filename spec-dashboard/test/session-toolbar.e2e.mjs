@@ -17,11 +17,11 @@ const board = await fetch(`${BASE}/api/graph`).then((response) => response.json(
 const claudeSlash = await fetch(`${BASE}/api/slash-commands?harness=claude`).then((response) => response.json())
 const SESSION = process.env.SESSION || board.sessions.find((session) => session.node === 'session-console')?.id
 if (!SESSION) throw new Error('no session-console session on the live board; pass SESSION=<id>')
-const SWITCH_SESSION = board.sessions.find((session) => session.id !== SESSION && !session.parent)?.id
+const SWITCH_SESSION = board.sessions.find((session) => session.id !== SESSION && !session.parent && !session.capabilities?.headless)?.id
 if (!SWITCH_SESSION) throw new Error('A→B→A proof needs a second top-level session row')
 
 const checks = []
-const result = { base: BASE, session: SESSION, checks, wide: null, narrow: null, themes: [], states: [], evalModels: [], requests: [], frames: [] }
+const result = { base: BASE, session: SESSION, checks, wide: null, narrow: null, themes: [], states: [], surfaces: [], evalModels: [], requests: [], frames: [] }
 const check = (name, ok, detail = null) => {
   checks.push({ name, ok, detail })
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail == null ? '' : ` - ${typeof detail === 'string' ? detail : JSON.stringify(detail)}`}`)
@@ -47,6 +47,8 @@ const toolbarProbe = (page) => page.evaluate(() => {
   const picker = document.querySelector('.si-resource-picker')
   const tabs = document.querySelector('.si-tabs')
   const term = document.querySelector('.si-term-body')
+  const files = document.querySelector('.si-files')
+  const surfaceSwitch = document.querySelector('[data-surface-switch]')
   const style = getComputedStyle(toolbar)
   return {
     bounds,
@@ -60,6 +62,8 @@ const toolbarProbe = (page) => page.evaluate(() => {
     tabs: rect(tabs),
     picker: { ...rect(picker), borderLeft: getComputedStyle(picker).borderLeftWidth, borderRight: getComputedStyle(picker).borderRightWidth },
     add: { ...rect(document.querySelector('.si-tab-add')), borderRadius: getComputedStyle(document.querySelector('.si-tab-add')).borderRadius },
+    files: { ...rect(files), borderLeft: getComputedStyle(files).borderLeftWidth },
+    surfaceSwitch: surfaceSwitch ? { ...rect(surfaceSwitch), target: surfaceSwitch.dataset.surfaceSwitch, label: surfaceSwitch.getAttribute('aria-label') } : null,
     roles: {
       tablists: toolbar.querySelectorAll('[role=tablist]').length,
       tabs: toolbar.querySelectorAll('[role=tab]').length,
@@ -179,6 +183,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
     && result.wide.picker.borderLeft === '1px' && result.wide.picker.borderRight === '0px' && result.wide.add.x > result.wide.picker.x && result.wide.add.width === 24 && result.wide.add.height === 24 && result.wide.add.borderRadius === '50%',
   { evalTab: result.wide.evalTab.box, picker: result.wide.picker, add: result.wide.add })
   check('toolbar chrome is distinct from terminal', result.wide.toolbarBackground !== result.wide.terminalBackground, { toolbar: result.wide.toolbarBackground, terminal: result.wide.terminalBackground })
+  check('the top-right files and surface controls have no artificial divider', result.wide.files.borderLeft === '0px' && result.wide.surfaceSwitch?.target === 'conversation', { files: result.wide.files, switch: result.wide.surfaceSwitch })
   check('toolbar commands are uniform localized icon tools', result.wide.actionDetails.length > 0 && result.wide.actionDetails.every((tool) => !tool.text && tool.icon && tool.label && tool.label === tool.tip && tool.box.width === 24 && tool.box.height === 24), result.wide.actionDetails)
   await page.screenshot({ path: join(OUT, 'B-wide-1440.png'), fullPage: true })
 
@@ -284,7 +289,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   await video.saveAs(join(OUT, 'B-toolbar.webm'))
 }
 
-async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme = 'minimal', status = 'working', liveness = 'online', proposal, lifecycle, archived = false, evalMode = 'mixed' }) {
+async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme = 'minimal', status = 'working', liveness = 'online', proposal, lifecycle, archived = false, evalMode = 'mixed', surfaceFile = false } = {}) {
   let evalReads = 0
   let mergeDispatches = 0
   const mergeKeys = []
@@ -323,6 +328,7 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
     session.proposal = proposal ?? (status === 'review' ? 'merge' : status === 'done' ? 'nothing' : status === 'close-pending' ? 'close' : null)
     session.liveness = liveness
     session.archived = archived
+    if (surfaceFile) session.files = ['/tmp/surface-proof.md']
     session.headline = 'An intentionally enormous <section data-test="headline-noise"> shared session headline for validating English and 中文 without moving commands or navigation'
     session.evalSummary = evalProjection(evalMode)
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) })
@@ -342,6 +348,11 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
     mergeDispatches++
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ dispatched: true }) })
   })
+  if (surfaceFile) {
+    await page.route('**/api/sessions/*/files/download?*', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'text/plain', body: 'surface resource proof' })
+    })
+  }
   page.on('request', (request) => {
     const url = new URL(request.url())
     if (url.pathname === '/api/evals' && (url.searchParams.get('q') || '').includes(`scope:${SESSION}`)) evalReads++
@@ -483,6 +494,81 @@ for (const evalMode of ['zero', 'error']) {
   const row = { first, refreshed, requests: evalReads(), frames }
   result.evalModels.push({ evalMode: 'refresh', ...row })
   check('graph-full refreshes the category glance with zero full-model reads', first.includes('1 unmeasured') && refreshed.includes('1 fresh pass') && row.requests === 0, row)
+  await context.close()
+}
+
+// One pane-backed session proves the mutually exclusive Conversation surface, its reload memory, and the
+// temporary resource overlay through the real browser UI. The file endpoint is fixture data only; selection,
+// focus, localStorage, and every view transition are the shipped dashboard code.
+{
+  const { context, page } = await fixturePage({ surfaceFile: true })
+  const toConversation = page.locator('[data-surface-switch="conversation"]')
+  await toConversation.click()
+  await page.locator('.si-term-body.is-conversation .tl-chat:visible').waitFor({ state: 'visible', timeout: 20_000 })
+  const firstConversation = await page.evaluate(() => ({
+    visibleLayers: [...document.querySelectorAll('.si-term-layer')]
+      .filter((layer) => getComputedStyle(layer).visibility === 'visible')
+      .map((layer) => ({ terminal: !!layer.querySelector('.xterm'), conversation: !!layer.querySelector('.tl-chat') })),
+    switchTarget: document.querySelector('[data-surface-switch]')?.getAttribute('data-surface-switch'),
+    mergeTools: document.querySelectorAll('.si-actions [data-command="merge"]').length,
+  }))
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await waitToolbar(page)
+  await page.locator('.si-term-body.is-conversation .tl-chat:visible').waitFor({ state: 'visible', timeout: 20_000 })
+  const afterReload = await page.evaluate(() => ({
+    switchTarget: document.querySelector('[data-surface-switch]')?.getAttribute('data-surface-switch'),
+    sessionSurface: JSON.parse(localStorage.getItem('spexcode.session-surface.v1.root') || '{}'),
+  }))
+  await page.locator('.si-files .si-tool').click()
+  const fileRow = page.locator('.si-files-row').filter({ hasText: 'surface-proof.md' })
+  await fileRow.locator('.si-files-name').click()
+  const resourceTab = page.locator('.si-resource-tab').filter({ hasText: 'surface-proof.md' })
+  await resourceTab.waitFor({ state: 'visible' })
+  await resourceTab.locator('.si-resource-tab-action').click()
+  await page.locator('.si-term-body.is-conversation .tl-chat:visible').waitFor({ state: 'visible', timeout: 20_000 })
+  const afterClose = await page.evaluate(() => ({
+    openResourceTabs: document.querySelectorAll('.si-resource-tab').length,
+    switchTarget: document.querySelector('[data-surface-switch]')?.getAttribute('data-surface-switch'),
+  }))
+  const row = { firstConversation, afterReload, afterClose }
+  result.surfaces.push({ name: 'pane-backed Conversation reload and resource return', ...row })
+  check('pane-backed Conversation is exclusive, survives reload, and resumes after resource close',
+    JSON.stringify(firstConversation.visibleLayers) === JSON.stringify([{ terminal: false, conversation: true }])
+      && firstConversation.switchTarget === 'terminal' && firstConversation.mergeTools === 0
+      && afterReload.switchTarget === 'terminal' && afterReload.sessionSurface.sessions?.[SESSION] === 'conversation'
+      && afterClose.openResourceTabs === 0 && afterClose.switchTarget === 'terminal', row)
+  await page.screenshot({ path: join(OUT, 'B-conversation-resource-return.png'), fullPage: true })
+  await context.close()
+}
+
+// Settings is the fallback, not an overwrite: its Conversation default reaches an unchosen pane-backed
+// session, while the session's later explicit Terminal choice survives a subsequent default change and reload.
+{
+  const { context, page } = await fixturePage()
+  await page.goto(`${BASE}/#/settings`, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'conversation', exact: true }).click()
+  await page.screenshot({ path: join(OUT, 'B-settings-session-surface.png'), fullPage: true })
+  await page.goto(`${BASE}/#/sessions/${SWITCH_SESSION}`, { waitUntil: 'domcontentloaded' })
+  await waitToolbar(page)
+  await page.locator('.si-term-body.is-conversation .tl-chat:visible').waitFor({ state: 'visible', timeout: 20_000 })
+  const defaultConversation = await page.evaluate(() => JSON.parse(localStorage.getItem('spexcode.session-surface.v1.root') || '{}'))
+  await page.locator('[data-surface-switch="terminal"]').click()
+  await page.locator('.si-term-body:not(.is-conversation)').waitFor({ state: 'visible', timeout: 20_000 })
+  await page.goto(`${BASE}/#/settings`, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'terminal', exact: true }).click()
+  await page.getByRole('button', { name: 'conversation', exact: true }).click()
+  await page.goto(`${BASE}/#/sessions/${SWITCH_SESSION}`, { waitUntil: 'domcontentloaded' })
+  await waitToolbar(page)
+  await page.locator('.si-term-body:not(.is-conversation)').waitFor({ state: 'visible', timeout: 20_000 })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await waitToolbar(page)
+  await page.locator('.si-term-body:not(.is-conversation)').waitFor({ state: 'visible', timeout: 20_000 })
+  const explicitTerminal = await page.evaluate(() => JSON.parse(localStorage.getItem('spexcode.session-surface.v1.root') || '{}'))
+  const row = { defaultConversation, explicitTerminal }
+  result.surfaces.push({ name: 'Settings default and explicit session priority', ...row })
+  check('Settings default only fills unchosen sessions; explicit Terminal survives a Conversation default',
+    defaultConversation.defaultSurface === 'conversation' && !defaultConversation.sessions?.[SWITCH_SESSION]
+      && explicitTerminal.defaultSurface === 'conversation' && explicitTerminal.sessions?.[SWITCH_SESSION] === 'terminal', row)
   await context.close()
 }
 

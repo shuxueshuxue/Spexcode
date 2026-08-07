@@ -18,6 +18,12 @@ import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl, PROJECT_BASE } from './project.js'
+import {
+  SESSION_SURFACE_CONVERSATION,
+  getSessionBaseSurface,
+  setSessionBaseSurface,
+  subscribeSessionSurface,
+} from './sessionSurface.js'
 import { inertChromePress } from './focus.js'
 import { useEscLayer } from './escStack.js'
 import RichText from './RichText.js'
@@ -359,6 +365,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [attachments, setAttachments] = useState([])
   const [resourceTabs, setResourceTabs] = useState([])
   const [resourceSurface, setResourceSurface] = useState({})
+  const [openedConversations, setOpenedConversations] = useState(() => new Set())
+  const [surfaceVersion, setSurfaceVersion] = useState(0)
   const [resourceMenu, setResourceMenu] = useState(false)
   const taRef = useRef(null)
   const msgRef = useRef(null)
@@ -367,6 +375,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
   const resourcePickerRef = useRef(null)
   const knownWebsRef = useRef(null)
+  useEffect(() => subscribeSessionSurface(() => setSurfaceVersion((version) => version + 1)), [])
   const listRef = useRef(null)
   const outcomeTimerRef = useRef(null)
   const attachmentsRef = useRef([])
@@ -460,8 +469,14 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const focusId = focusNode?.id || null
   const selSession = allSessions.find((s) => s.id === active)
   const terminalFree = isHeadlessSession(selSession)
-  const surfaceTabId = terminalFree ? 'si-conversation-tab' : 'si-terminal-tab'
-  const surfacePanelId = terminalFree ? 'si-conversation-panel' : 'si-terminal-panel'
+  const activeBaseSurface = terminalFree ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(active)
+  const conversationSurface = activeBaseSurface === SESSION_SURFACE_CONVERSATION
+  const surfaceTabId = conversationSurface ? 'si-conversation-tab' : 'si-terminal-tab'
+  const surfacePanelId = conversationSurface ? 'si-conversation-panel' : 'si-terminal-panel'
+  const baseSurfaceForSession = (id) => {
+    const session = allSessions.find((candidate) => candidate.id === id)
+    return isHeadlessSession(session) ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(id)
+  }
   const commandAvailable = uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
   const evalSummary = sessionEvalDisplay(active !== 'new' ? selSession?.evalSummary : null, boardLive)
   // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
@@ -574,13 +589,18 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     setOpened((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
     setSel(id)
   }
-  // Selecting a terminal is an action even when its id does not change. The request counter lets an already-
-  // selected tab restore native focus without coupling this shell to xterm's hidden textarea.
-  const activateTerminal = (id) => {
+  // A resource is temporary; this restores the resolved base surface. Only the explicit switch records a
+  // per-session preference, while selecting the current base merely returns from the overlay.
+  const showBaseSurface = (id, surface, remember = false) => {
     if (id === 'new') return
     selectSession(id)
     setResourceSurface((surfaces) => ({ ...surfaces, [id]: null }))
-    setTerminalFocusRequest((request) => request + 1)
+    if (surface === SESSION_SURFACE_CONVERSATION) {
+      setOpenedConversations((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+    } else {
+      setTerminalFocusRequest((request) => request + 1)
+    }
+    if (remember) setSessionBaseSurface(id, surface)
   }
 
   // fetch the `/` command list for the ACTIVE session's harness — recomputed when you switch tabs, so a codex
@@ -625,6 +645,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       return next
     })
   }, [allSessions, active])
+
+  useEffect(() => {
+    setOpenedConversations((prev) => {
+      const valid = new Set(allSessions.map((s) => s.id))
+      const next = new Set([...prev].filter((id) => valid.has(id)))
+      const selected = active === 'new' ? null : allSessions.find((s) => s.id === active)
+      if (selected && (isHeadlessSession(selected) || getSessionBaseSurface(selected.id) === SESSION_SURFACE_CONVERSATION)) next.add(selected.id)
+      if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev
+      return next
+    })
+  }, [allSessions, active, surfaceVersion])
 
   // a board chord (nn/dd) seeds this surface with an @-directive. Apply ONCE to the New draft, then clear it
   // upstream so a later reopen restores the user's own draft. Clobbering the draft is intended here.
@@ -1401,7 +1432,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               pointerEvents: active === 'new' ? 'none' : 'auto',
             }}
           >
-              <header className="si-tabbar" aria-label={t(terminalFree ? 'session.conversationToolbarLabel' : 'session.toolbarLabel')}>
+              <header className="si-tabbar" aria-label={t(conversationSurface ? 'session.conversationToolbarLabel' : 'session.toolbarLabel')}>
                 <div className="si-surface">
                   <div className="si-tabs" role="tablist" aria-label={t('session.surfaceLabel')}>
                     <button
@@ -1411,10 +1442,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       aria-selected={!activeResource}
                       aria-controls={`${surfacePanelId}-${active}`}
                       className={`si-tab${activeResource ? '' : ' on'}`}
-                      onClick={() => activateTerminal(active)}
+                      onClick={() => showBaseSurface(active, activeBaseSurface)}
                     >
-                      <Icon name={terminalFree ? 'message-square' : 'terminal'} size={13} />
-                      <span className="si-tab-label">{t(terminalFree ? 'session.tabConversation' : 'session.tabTerminal')}</span>
+                      <Icon name={conversationSurface ? 'message-square' : 'terminal'} size={13} />
+                      <span className="si-tab-label">{t(conversationSurface ? 'session.tabConversation' : 'session.tabTerminal')}</span>
                     </button>
                     {resourceTabs.filter((tab) => tab.sessionId === active).map((tab) => (
                       <div key={tab.id} className={`si-resource-tab${activeResource?.id === tab.id ? ' on' : ''}`}>
@@ -1475,7 +1506,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                         onClick={() => { void copyFilePath(activeResource.value) }} />
                     </>
                   )}
-                  {uiCmds.filter((c) => c.button && (!activeResource && (!terminalFree || c.name !== 'merge')))
+                  {uiCmds.filter((c) => c.button && (!activeResource && (activeBaseSurface === 'terminal' || c.name !== 'merge')))
                     // Resident right-anchored tools (Command Box) sort to the row's right edge; transient action
                     // buttons keep their registry order to its left. Stable sort preserves that left order.
                     .sort((a, b) => (a.anchor === 'right' ? 1 : 0) - (b.anchor === 'right' ? 1 : 0))
@@ -1498,19 +1529,32 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     )
                   })}
                 </div>
-                <SessionFiles
-                  session={selSession}
-                  onDownload={downloadFile}
-                  onCopy={copyFilePath}
-                  onPreview={(path) => openResource({
-                    id: resourceTabKey(active, 'file', path), sessionId: active, kind: 'file', value: path, label: fileName(path), revision: 0,
-                  })}
-                />
+                <div className="si-surface-tools" role="group" aria-label={t('session.surfaceToolsLabel')}>
+                  <SessionFiles
+                    session={selSession}
+                    onDownload={downloadFile}
+                    onCopy={copyFilePath}
+                    onPreview={(path) => openResource({
+                      id: resourceTabKey(active, 'file', path), sessionId: active, kind: 'file', value: path, label: fileName(path), revision: 0,
+                    })}
+                  />
+                  {!terminalFree && (
+                    <IconButton
+                      icon={conversationSurface ? 'terminal' : 'message-square'}
+                      size={14}
+                      className="si-tool sc-blue surface-switch"
+                      data-surface-switch={conversationSurface ? 'terminal' : 'conversation'}
+                      label={t(conversationSurface ? 'session.switchToTerminal' : 'session.switchToConversation')}
+                      aria-pressed={conversationSurface}
+                      onClick={() => showBaseSurface(active, conversationSurface ? 'terminal' : SESSION_SURFACE_CONVERSATION, true)}
+                    />
+                  )}
+                </div>
               </header>
               {/* The live terminal stays mounted when the Eval tab routes the app away (warm-terminals
                   contract); the routed session page is display-hidden, so socket + scroll survive. */}
               <div
-                className={`si-term-body${terminalFree ? ' is-conversation' : ''}${activeResource ? ' is-resource' : ''}`}
+                className={`si-term-body${conversationSurface ? ' is-conversation' : ''}${activeResource ? ' is-resource' : ''}`}
                 id={activeResource ? `si-resource-panel-${activeResource.id}` : `${surfacePanelId}-${active}`}
                 role="tabpanel"
                 aria-labelledby={activeResource ? `si-resource-tab-${activeResource.id}` : surfaceTabId}
@@ -1518,22 +1562,34 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               >
                 {/* live panes remain mounted for working sessions; a cold archive has no resident pane and yields
                     the surface to the flat shelf card, which is the only visible/clickable restore surface. */}
-                {[...opened].map((id) => {
-                  const session = sessions.find((candidate) => candidate.id === id)
+                {[...new Set([...opened, ...openedConversations])].map((id) => {
+                  const session = allSessions.find((candidate) => candidate.id === id)
                   const headless = isHeadlessSession(session)
-                  // the pane yields to whichever panel owns the surface — resume or the archive card.
-                  const shown = id === active && !activeResource && !showRelaunch && !shelvedSel
+                  const baseShown = id === active && !activeResource && !showRelaunch && !shelvedSel
+                  const terminalShown = baseShown && activeBaseSurface === 'terminal'
+                  const conversationShown = baseShown && (headless || activeBaseSurface === SESSION_SURFACE_CONVERSATION)
                   return (
-                    <div key={id} className="si-term-layer" style={{
-                      position: 'absolute', inset: 0,
-                      visibility: shown ? 'visible' : 'hidden',
-                      pointerEvents: shown ? 'auto' : 'none',
-                    }}>
-                      {headless
-                        ? <TimelineChat s={session} sessions={sessions} active={open && shown} />
-                        : <SessionTerm sessionId={id} active={open && shown}
-                            focused={open && shown && !commandOpen && !showRelaunch}
-                            focusRequest={id === active ? terminalFocusRequest : 0} />}
+                    <div key={id}>
+                      {!headless && opened.has(id) && (
+                        <div className="si-term-layer" style={{
+                          position: 'absolute', inset: 0,
+                          visibility: terminalShown ? 'visible' : 'hidden',
+                          pointerEvents: terminalShown ? 'auto' : 'none',
+                        }}>
+                          <SessionTerm sessionId={id} active={open && terminalShown}
+                            focused={open && terminalShown && !commandOpen && !showRelaunch}
+                            focusRequest={id === active ? terminalFocusRequest : 0} />
+                        </div>
+                      )}
+                      {(headless || openedConversations.has(id)) && (
+                        <div className="si-term-layer" style={{
+                          position: 'absolute', inset: 0,
+                          visibility: conversationShown ? 'visible' : 'hidden',
+                          pointerEvents: conversationShown ? 'auto' : 'none',
+                        }}>
+                          <TimelineChat s={session} sessions={sessions} active={open && conversationShown} />
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -1547,7 +1603,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     }}>
                       <SessionResourcePanel tab={tab} active={open && shown}
                         focusRequest={shown ? resourceFocusRequest : 0}
-                        onEscape={() => activateTerminal(tab.sessionId)} />
+                        onEscape={() => showBaseSurface(tab.sessionId, baseSurfaceForSession(tab.sessionId))} />
                     </div>
                   )
                 })}

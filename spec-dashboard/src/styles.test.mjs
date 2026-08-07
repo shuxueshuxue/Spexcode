@@ -98,10 +98,11 @@ test('browser page visibility reuses the terminal viewer lifecycle', () => {
   // ([[archive]]) — and a pane hidden behind either must stand down exactly like an unselected one rather than
   // keep driving a viewer nobody can see. BOTH conditions belong here: the relaunch and archive cases were
   // found independently, each as a live xterm eating its panel's own button, so dropping either re-opens it.
-  assert.match(sessionInterface, /const shown = id === active && !activeResource && !showRelaunch && !shelvedSel/)
-  assert.match(sessionInterface, /<SessionTerm sessionId=\{id\} active=\{open && shown\}/)
+  assert.match(sessionInterface, /const baseShown = id === active && !activeResource && !showRelaunch && !shelvedSel/)
+  assert.match(sessionInterface, /const terminalShown = baseShown && activeBaseSurface === 'terminal'/)
+  assert.match(sessionInterface, /<SessionTerm sessionId=\{id\} active=\{open && terminalShown\}/)
   // and it must be hidden AND pointer-inert, or a live xterm silently swallows the card's own button
-  assert.match(sessionInterface, /visibility: shown \? 'visible' : 'hidden',\s*\n\s*pointerEvents: shown \? 'auto' : 'none',/)
+  assert.match(sessionInterface, /visibility: terminalShown \? 'visible' : 'hidden',\s*\n\s*pointerEvents: terminalShown \? 'auto' : 'none',/)
 })
 
 test('document pages share one inset page-scroll geometry', () => {

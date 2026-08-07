@@ -11,6 +11,12 @@ import {
   TERMINAL_FONT_MAX,
   TERMINAL_FONT_STEP,
 } from './terminalFont.js'
+import {
+  SESSION_SURFACE_CONVERSATION,
+  SESSION_SURFACE_TERMINAL,
+  getDefaultSessionSurface,
+  setDefaultSessionSurface,
+} from './sessionSurface.js'
 
 // Shortcuts editor — one row per action; a click on a rebindable cell captures the next keypress.
 function Shortcuts({ t }) {
@@ -61,8 +67,10 @@ export default function Settings() {
   const { t, lang, setLang } = useI18n()
   const [theme, setThemeState] = useState(getTheme)   // the live-picked theme, echoed in the picker
   const [terminalFontSize, setTerminalFontSizeState] = useState(getTerminalFontSize)
+  const [defaultSessionSurface, setDefaultSessionSurfaceState] = useState(getDefaultSessionSurface)
   const pickTheme = (code) => { applyTheme(code); setThemeState(code) }
   const pickTerminalFontSize = (value) => setTerminalFontSizeState(setTerminalFontSize(value))
+  const pickDefaultSessionSurface = (surface) => setDefaultSessionSurfaceState(setDefaultSessionSurface(surface))
   return (
     <PageScroll className="page-settings-scroll">
       <div className="settings-body">
@@ -99,6 +107,25 @@ export default function Settings() {
       </section>
       <section className="legend-sec">
         <div className="legend-h">{t('settings.secTerminal')}</div>
+        <div className="set-terminal-surface">
+          <span>{t('settings.defaultSessionSurface')}</span>
+          <div className="set-langs" role="group" aria-label={t('settings.defaultSessionSurface')}>
+            <button
+              className={defaultSessionSurface === SESSION_SURFACE_TERMINAL ? 'set-lang on' : 'set-lang'}
+              onClick={() => pickDefaultSessionSurface(SESSION_SURFACE_TERMINAL)}
+              aria-pressed={defaultSessionSurface === SESSION_SURFACE_TERMINAL}
+            >
+              {t('session.tabTerminal')}
+            </button>
+            <button
+              className={defaultSessionSurface === SESSION_SURFACE_CONVERSATION ? 'set-lang on' : 'set-lang'}
+              onClick={() => pickDefaultSessionSurface(SESSION_SURFACE_CONVERSATION)}
+              aria-pressed={defaultSessionSurface === SESSION_SURFACE_CONVERSATION}
+            >
+              {t('session.tabConversation')}
+            </button>
+          </div>
+        </div>
         <label className="set-terminal-font">
           <span>{t('settings.terminalFontSize')}</span>
           <input

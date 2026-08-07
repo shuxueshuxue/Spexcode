@@ -372,9 +372,12 @@ test('public review and merge authority bind exact head and one durable dispatch
       stableAfterMove: { branchHead: stableAfterMove.body.branchHead, baseHead: stableAfterMove.body.baseHead },
       finalPromptCount: finalMergePrompts.length,
       promptBindsReviewedPair: keyedPrompt.includes(headThree) && keyedPrompt.includes(baseThree),
-      promptReprovesSymbolicBranch: keyedPrompt.includes('symbolic-ref --quiet --short HEAD'),
-      promptReprovesStoredRef: keyedPrompt.includes(`show-ref --verify --hash 'refs/heads/${sessionBranch}'`),
-      promptReprovesBaseRef: keyedPrompt.includes(`show-ref --verify --hash 'refs/heads/main'`),
+      promptReprovesSymbolicBranch: keyedPrompt.includes('symbolic-ref --quiet HEAD')
+        && keyedPrompt.includes(`want_ref='${Buffer.from(`refs/heads/${sessionBranch}`, 'utf8').toString('hex')}'`),
+      promptReprovesStoredRef: keyedPrompt.includes(`ref='refs/heads/${sessionBranch}'`)
+        && keyedPrompt.includes('show-ref --verify --hash "$ref"'),
+      promptReprovesBaseRef: keyedPrompt.includes(`base_ref='refs/heads/main'`)
+        && keyedPrompt.includes('show-ref --verify --hash "$base_ref"'),
       promptMergesExactObject: keyedPrompt.includes('merge --no-ff') && keyedPrompt.includes('"$candidate"'),
       rawKeyVisible: rawTimeline.includes('maintenance-release-1'),
     }

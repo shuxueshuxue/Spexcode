@@ -2686,26 +2686,55 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   }
 }
 
-function mergePrompt(mainPath: string, worktreePath: string, worktreeTop: string, branch: string, base: string, expectedBranchHead: string, expectedBaseHead: string, reason: string): string {
-  const mainQ = shQuote(mainPath), worktreeQ = shQuote(worktreePath), topQ = shQuote(worktreeTop)
-  const branchQ = shQuote(branch), refQ = shQuote(`refs/heads/${branch}`), baseRefQ = shQuote(`refs/heads/${base}`)
+// @@@ shAscii - a 7-bit ASCII shell word yielding EXACTLY these bytes. A dispatched prompt crosses a control
+// channel, the agent's own tool call, and a terminal before a shell parses it, and a byte above 0x7F can be
+// dropped, replaced by U+FFFD, or truncate the line at any of those hops — the measured field failure. Bytes
+// that are already safe ASCII stay literal (an ASCII repo's prompt is byte-identical to before); anything
+// else is rebuilt from POSIX `printf %b` octal escapes, taken from the RAW bytes with no normalization.
+function shAscii(value: string | Buffer): string {
+  const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value, 'utf8')
+  const safe = (b: number) => b >= 0x20 && b <= 0x7e
+  if (bytes.every(safe)) return shQuote(bytes.toString('latin1'))
+  let escaped = ''
+  for (const b of bytes) escaped += safe(b) && b !== 0x27 && b !== 0x5c ? String.fromCharCode(b) : `\\0${b.toString(8).padStart(3, '0')}`
+  return `"$(printf '%b' '${escaped}')"`
+}
+const hexBytes = (value: string | Buffer): string => (Buffer.isBuffer(value) ? value : Buffer.from(value, 'utf8')).toString('hex')
+
+// @@@ mergePrompt - every gate states its own verdict, in ASCII. Two things were wrong with a bare `&&` chain
+// of `test`s. It is silent on BOTH outcomes, so an agent shown "no output" cannot tell a held gate from a
+// broken one and conservatively refuses to land forever; and it compared unicode ref/path bytes as shell
+// strings, which only works if every hop to the executor carried them intact. So each item now reports its
+// own actual-vs-expected value, only the whole conjunction emits the success token, and every value that can
+// carry a byte above 0x7F travels as hex (compared straight off the pipe, before any shell string layer) or
+// as a printf-escaped literal. The conjunction itself is unchanged: all five, resp. three, checks together.
+function mergePrompt(mainPath: string, worktreePath: string, worktreeTop: Buffer, branch: string, base: string, expectedBranchHead: string, expectedBaseHead: string, reason: string): string {
+  const mainQ = shQuote(mainPath)
+  const mainA = shAscii(mainPath), worktreeA = shAscii(worktreePath)
+  const refA = shAscii(`refs/heads/${branch}`), baseRefA = shAscii(`refs/heads/${base}`), baseA = shAscii(base)
+  const topHexQ = shQuote(hexBytes(worktreeTop)), refHexQ = shQuote(hexBytes(`refs/heads/${branch}`))
   const reviewedQ = shQuote(expectedBranchHead), baseHeadQ = shQuote(expectedBaseHead)
-  const messageQ = shQuote(`merge ${branch}: ${reason}`)
+  const messageA = shAscii(`merge ${branch}: ${reason}`)
+  const hexPipe = `| tr -d '\\n' | od -An -tx1 | tr -d ' \\n'`
   return `Merge your branch \`${branch}\` into \`${base}\`, then propose close. You know this work, so resolve any conflicts yourself — in YOUR OWN worktree, never in the shared ${base} checkout.\n\n` +
-    `0. Re-prove the REVIEWED generation BEFORE changing anything. All five commands must succeed together; detached HEAD, another checked-out branch, a moved/missing branch/base ref, or any OID outside the reviewed pair means STOP and report stale review — do not sync or land:\n` +
-    `   test "$(git -C ${worktreeQ} rev-parse --show-toplevel)" = ${topQ} &&\n` +
-    `   test "$(git -C ${worktreeQ} symbolic-ref --quiet --short HEAD)" = ${branchQ} &&\n` +
-    `   test "$(git -C ${worktreeQ} rev-parse HEAD)" = ${reviewedQ} &&\n` +
-    `   test "$(git -C ${mainQ} show-ref --verify --hash ${refQ})" = ${reviewedQ} &&\n` +
-    `   test "$(git -C ${mainQ} show-ref --verify --hash ${baseRefQ})" = ${baseHeadQ}\n` +
+    `0. Re-prove the REVIEWED generation BEFORE changing anything. All five checks must hold together, and the block SAYS SO: reading \`REVIEWED_GENERATION_OK\` is the ONLY pass. A \`REVIEWED_GENERATION_FAIL <n>/<item>\` line — or no output at all — is a FAIL: STOP, report the stale review naming that item, and do not sync or land. (Detached HEAD, another checked-out branch, a moved/missing branch/base ref, or any OID outside the reviewed pair each surface as one of the five items.) Run the block AS WRITTEN — it is pure ASCII on purpose, and items 1 and 2 compare hex so a retyped or re-encoded copy cannot change what they mean:\n` +
+    `   wt=${worktreeA}; main_ck=${mainA}; ref=${refA}; base_ref=${baseRefA}\n` +
+    `   want_top=${topHexQ}; want_ref=${refHexQ}; want_reviewed=${reviewedQ}; want_base=${baseHeadQ}\n` +
+    `   g1=$(git -C "$wt" rev-parse --show-toplevel ${hexPipe}); test "$g1" = "$want_top" || echo "REVIEWED_GENERATION_FAIL 1/toplevel: hex [$g1] != [$want_top]"\n` +
+    `   g2=$(git -C "$wt" symbolic-ref --quiet HEAD ${hexPipe}); test "$g2" = "$want_ref" || echo "REVIEWED_GENERATION_FAIL 2/symbolic: hex [$g2] != [$want_ref]"\n` +
+    `   g3=$(git -C "$wt" rev-parse HEAD); test "$g3" = "$want_reviewed" || echo "REVIEWED_GENERATION_FAIL 3/wtHEAD: [$g3] != [$want_reviewed]"\n` +
+    `   g4=$(git -C "$main_ck" show-ref --verify --hash "$ref"); test "$g4" = "$want_reviewed" || echo "REVIEWED_GENERATION_FAIL 4/mainref: [$g4] != [$want_reviewed]"\n` +
+    `   g5=$(git -C "$main_ck" show-ref --verify --hash "$base_ref"); test "$g5" = "$want_base" || echo "REVIEWED_GENERATION_FAIL 5/baseref: [$g5] != [$want_base]"\n` +
+    `   test "$g1" = "$want_top" && test "$g2" = "$want_ref" && test "$g3" = "$want_reviewed" && test "$g4" = "$want_reviewed" && test "$g5" = "$want_base" && echo REVIEWED_GENERATION_OK\n` +
     `1. Sync first, where you work: \`git merge ${base}\` INTO your branch, resolve every conflict here, and re-run what proves your work. The ${base} checkout is the fleet's ONE landing door — a merge that stops to ask about conflicts holds it for everyone.\n` +
-    `2. Freeze the TESTED result immediately before landing and merge that exact object, never a moving branch name:\n` +
-    `   candidate=$(git -C ${worktreeQ} rev-parse HEAD) &&\n` +
-    `   test "$(git -C ${worktreeQ} symbolic-ref --quiet --short HEAD)" = ${branchQ} &&\n` +
-    `   test "$(git -C ${mainQ} show-ref --verify --hash ${refQ})" = "$candidate" &&\n` +
-    `   git -C ${mainQ} merge-base --is-ancestor ${base} "$candidate" &&\n` +
-    `   git -C ${mainQ} merge --no-ff -m ${messageQ} "$candidate"\n` +
-    `   If any check fails, ${base} or the branch moved while you tested: go back to step 0/review instead of landing.\n` +
+    `2. Freeze the TESTED result immediately before landing and merge that exact object, never a moving branch name. Same rules as step 0 — run it as written, and \`LANDING_MERGED <oid>\` is the ONLY proof it landed; it prints only after all three guards held AND the merge itself succeeded:\n` +
+    `   wt=${worktreeA}; main_ck=${mainA}; ref=${refA}; base_br=${baseA}; msg=${messageA}; want_ref=${refHexQ}\n` +
+    `   candidate=$(git -C "$wt" rev-parse HEAD)\n` +
+    `   c1=$(git -C "$wt" symbolic-ref --quiet HEAD ${hexPipe}); test "$c1" = "$want_ref" || echo "LANDING_FAIL 1/symbolic: hex [$c1] != [$want_ref]"\n` +
+    `   c2=$(git -C "$main_ck" show-ref --verify --hash "$ref"); test "$c2" = "$candidate" || echo "LANDING_FAIL 2/mainref: [$c2] != [$candidate]"\n` +
+    `   c3=0; git -C "$main_ck" merge-base --is-ancestor "$base_br" "$candidate" || { c3=1; echo "LANDING_FAIL 3/ancestor: [$candidate] does not contain the base branch; go back to step 1"; }\n` +
+    `   test "$c1" = "$want_ref" && test "$c2" = "$candidate" && test "$c3" = 0 && git -C "$main_ck" merge --no-ff -m "$msg" "$candidate" && echo "LANDING_MERGED $candidate"\n` +
+    `   No \`LANDING_MERGED\` line means nothing landed: a \`LANDING_FAIL\` names which guard, and its absence after the guards held means the merge itself failed. Either way ${base} or the branch moved while you tested — go back to step 0/review instead of landing.\n` +
     `3. A busy door is a wait, not a race: if the ${base} checkout is already mid-merge (an unresolved index), retry with a bounded wait — never abort or resolve someone else's in-progress merge. ` +
     `4. Verify it landed: \`${base}\`'s HEAD must now be the new merge commit and no merge may be left in progress — if YOUR merge went half-merged, run \`git -C ${mainQ} merge --abort\` and report it rather than leaving \`${base}\` mid-state. ` +
     `5. Once you've verified \`${base}\` advanced cleanly, propose close for the human — do NOT close it yourself.`
@@ -2815,8 +2844,10 @@ async function mergeSessionUnlocked(id: string, options: MergeSessionOptions = {
   const wt = await findWorktree(id)
   if (!wt || !wt.branch) return { dispatched: false, reason: 'no such session' }
   const branch = wt.branch, base = mainBranch()
-  let worktreeTop = wt.path
-  try { worktreeTop = realpathSync(wt.path) } catch { /* the locked proof reports the vanished worktree */ }
+  // Raw bytes, not a decoded-then-re-encoded string: the gate's expected hex must be what the filesystem
+  // holds, so no normalization can slip between what we promise and what git will print.
+  let worktreeTop = Buffer.from(wt.path, 'utf8')
+  try { worktreeTop = realpathSync(wt.path, { encoding: 'buffer' }) } catch { /* the locked proof reports the vanished worktree */ }
   const subject = (await gitA(['-C', main, 'log', '-1', '--format=%s', expectedBranchHead])).trim()
   const reason = subject.replace(/^spec:\s+/, '') || branch
   const r = await sendText(id, mergePrompt(main, wt.path, worktreeTop, branch, base, expectedBranchHead, expectedBaseHead, reason), undefined, {

@@ -89,7 +89,9 @@ filter (default off) picking the root.
   push, it replaces nothing). A detail names its source resolution and scenario availability separately:
   an expired `scope:` reads trunk, keeps the address, and visibly says that its worktree is gone; a
   declared scenario without a reading visibly says it is not yet measured; only a scenario absent from
-  trunk renders the honest not-found with a link to the list. None silently rewrites to another eval.
+  trunk renders the honest not-found with a link to the list. `EvalDetailPage` consumes those explicit
+  response fields; it never infers availability from an empty selected row. None silently rewrites to
+  another eval.
 - **The detail page wears the shared [[review-chrome]] skeleton** (GitHub's issue-detail grammar): a
   header naming the scenario (title) and node, a status band (the ONE shared verdict visual + an A/B strip
   whose result buttons consume that same visual mapping), then a MAIN

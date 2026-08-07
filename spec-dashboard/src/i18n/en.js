@@ -214,6 +214,8 @@ export default {
 
   reviewShell: {
     evalNotFound: ({ node, scenario }) => `no eval found for ${node} · ${scenario}`,
+    evalUnmeasured: 'this scenario has not been measured yet',
+    scopeFallback: 'this session worktree no longer exists; the readings below are from trunk',
     issueNotFound: ({ id }) => `no issue found for ${id}`,
     backToEvals: '← all evals',
     backToIssues: '← all issues',

@@ -213,6 +213,8 @@ export default {
 
   reviewShell: {
     evalNotFound: ({ node, scenario }) => `找不到 ${node} · ${scenario} 的评测`,
+    evalUnmeasured: '该场景尚未测量',
+    scopeFallback: '该 session 的工作区已不存在，下面是主干上的读数',
     issueNotFound: ({ id }) => `找不到 issue ${id}`,
     backToEvals: '← 全部评测',
     backToIssues: '← 全部 issues',

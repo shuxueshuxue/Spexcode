@@ -244,14 +244,15 @@ app.get('/api/evals/impact', etag(), async (c) => {
     : c.json({ error: 'no such review source' }, 404)
 })
 // ONE bounded detail response for both source roots: the selected scenario's complete A/B history and at
-// most five lightweight neighbors. It never serializes another scenario's history or the scoped model.
+// most five lightweight neighbors. A missing worktree scope resolves explicitly to trunk; it never
+// serializes another scenario's history or the scoped model.
 app.get('/api/evals/detail', etag(), async (c) => {
   await ensureBoardFileWatchers(c.req.query('scope')?.trim() || undefined)
   const node = c.req.query('node')?.trim()
   const scenario = c.req.query('scenario')?.trim()
   if (!node || !scenario) return c.json({ error: 'node and scenario are required' }, 400)
   const detail = await evalDetailReview(node, scenario, c.req.query('scope')?.trim() || null)
-  return detail ? c.json(detail) : c.json({ error: 'no such review source' }, 404)
+  return c.json(detail)
 })
 // the single-thread read ([[issues]]) behind `spex issue show <id>` — the SAME findIssue lookup, from the
 // resident forge slice (instant view, background reconcile — the list route's freshness contract). A local

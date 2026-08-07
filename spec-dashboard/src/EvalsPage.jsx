@@ -175,13 +175,18 @@ export function EvalDetailPage({ param, detail, sessionId, loading = false, erro
   }
   if (loading) return <div className="fv-note">{t('common.loading')}</div>
   const entry = detail?.selected || null
+  const sourceNotice = detail?.scopeFallback === 'trunk' ? t('reviewShell.scopeFallback') : null
   if (!entry) {
-    return <DetailShell missing={t('reviewShell.evalNotFound', { node, scenario: scenario || '' })} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
+    const missing = detail?.availability === 'unmeasured'
+      ? t('reviewShell.evalUnmeasured')
+      : t('reviewShell.evalNotFound', { node, scenario: scenario || '' })
+    return <DetailShell missing={sourceNotice ? <>{sourceNotice}<br />{missing}</> : missing} listHref={listHref} listLabel={t('reviewShell.backToEvals')} />
   }
   return (
     <div className="page-detail-stack">
+      {sourceNotice && <div className="fv-notice" role="status">{sourceNotice}</div>}
       {notice && <div className="fv-notice">{notice}</div>}
-      <EventDetail entry={entry} history={detail.history} sourceKey={sessionId || 'project'} specs={specs} sessions={sessions}
+      <EventDetail entry={entry} history={detail.history} sourceKey={detail.scope || 'project'} specs={specs} sessions={sessions}
         onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel}
         queue={queue} />
     </div>

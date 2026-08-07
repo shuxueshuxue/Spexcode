@@ -36,6 +36,28 @@ scenarios:
       count exactly. The accepted prompt binds both reviewed objects, requires the
       agent to re-prove worktree/symbolic-branch/stored-branch/canonical-base identity before change, and after
       sync merges the freshly frozen tested object rather than a branch name. No raw key is retained anywhere.
+  - name: merge-prompt-gates-are-observable
+    tags: [backend-api, cli]
+    test: { path: spec-cli/src/session-merge-prompt-observability.api.test.ts, name: "the dispatched merge prompt reports a distinguishable gate verdict" }
+    code: [spec-cli/src/sessions.ts#mergePrompt]
+    description: >
+      Through the real backend, create a governed fake-harness session, commit lane work, advance the base
+      under it, take the exact-head review, declare merge, and POST the keyed merge dispatch. Read the
+      delivered prompt off the session timeline and extract its step 0 and step 2 shell blocks the way an
+      executor would — the lines that open with an assignment or a command, shape-agnostic. Run the step 0
+      block with a real shell in the exact reviewed state, then once per falsified item: the base ref moved,
+      the worktree HEAD detached, the branch moved past its review, the worktree gone. Run the step 2 block
+      before syncing, while the branch does not yet contain the base, and again after. Read each run's stdout,
+      the item labels the block itself carries, the checks its verdict line conjoins, and the base ref before
+      and after every landing attempt.
+    expected: >
+      The reviewed state prints REVIEWED_GENERATION_OK. Every falsified run prints no OK token, differs from
+      the passing run's output (4 of 4), and names its failing item — 5/baseref, 2/symbolic, 3/wtHEAD,
+      1/toplevel. The block itself names all five items (1/toplevel, 2/symbolic, 3/wtHEAD, 4/mainref,
+      5/baseref) and its verdict line still conjoins exactly five checks, so observability dropped none of
+      them. Landing before the sync prints no LANDING_MERGED, names 3/ancestor, and leaves the base ref
+      untouched; after the sync it prints LANDING_MERGED for the frozen candidate and the base advances by
+      exactly one merge commit.
   - name: codex-command-box-terminal-delivery
     tags: [backend-api, frontend-e2e, desktop]
     test: { path: spec-dashboard/test/command-box.e2e.mjs, name: "Command Box keeps a terminal delivery outcome" }

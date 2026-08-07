@@ -36,17 +36,19 @@ const command = (sessionId, ...args) => execFileSync(process.execPath, [CLI, 'se
 }).trim()
 
 const startSlides = () => new Promise((resolveServer, reject) => {
+  let requests = 0
   const server = createServer((_request, response) => {
+    requests += 1
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     response.end(`<!doctype html>
 <title>Keyboard slide proof</title>
-<main><output id="spex-web-proof">slide 1</output></main>
+<main><output id="spex-web-proof">load ${requests}: slide 1</output></main>
 <script>
   let slide = 1
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'ArrowRight') return
     slide += 1
-    document.querySelector('#spex-web-proof').textContent = 'slide ' + slide
+    document.querySelector('#spex-web-proof').textContent = 'load ${requests}: slide ' + slide
   })
 </script>`)
   })
@@ -185,19 +187,27 @@ try {
   ))), 'the published web reference in an authoritative graph')
   const webTab = page.locator('.si-resource-tab').filter({ hasText: webLabel })
   await webTab.waitFor({ state: 'visible', timeout: 20_000 })
-  assert.equal(await page.locator('.si-actions [data-resource-action="refresh"]').count(), 0, 'web resources do not get the file refresh action')
+  const webRefresh = page.locator('.si-actions [data-resource-action="refresh"]')
+  assert.equal(await webRefresh.count(), 1, 'a selected web resource gets the same right-side refresh action')
   assert.equal(await page.locator('.si-actions [data-command="merge"]').count(), 0, 'merge remains hidden while web is selected')
   const frame = page.frameLocator('.si-resource-web')
   const version = frame.locator('#spex-web-proof')
   await version.waitFor({ state: 'visible', timeout: 20_000 })
   const first = await version.textContent()
+  await webRefresh.click()
+  await page.waitForFunction((previous) => document.querySelector('.si-resource-web')?.contentDocument?.querySelector('#spex-web-proof')?.textContent !== previous, first)
+  const refreshed = await version.textContent()
+  const initialLoad = Number(/^load (\d+): slide 1$/.exec(first)?.[1])
+  const refreshedLoad = Number(/^load (\d+): slide 1$/.exec(refreshed)?.[1])
+  assert.ok(refreshedLoad > initialLoad, 'web refresh must recreate the iframe and request the current service response')
+  await page.screenshot({ path: join(OUT, 'web-resource-refreshed.png'), fullPage: true })
   const webIframe = page.locator('.si-resource-web')
   await page.waitForFunction(() => document.activeElement?.matches('.si-resource-web'))
   assert.equal(await webIframe.evaluate((element) => document.activeElement === element), true,
     'selecting a web resource must focus its iframe without a click inside the page')
   await page.keyboard.press('ArrowRight')
-  await page.waitForFunction(() => document.querySelector('.si-resource-web')?.contentDocument?.querySelector('#spex-web-proof')?.textContent === 'slide 2')
-  assert.equal(await version.textContent(), 'slide 2', 'the first direct ArrowRight must reach the published page')
+  await page.waitForFunction((load) => document.querySelector('.si-resource-web')?.contentDocument?.querySelector('#spex-web-proof')?.textContent === `load ${load}: slide 2`, refreshedLoad)
+  assert.equal(await version.textContent(), `load ${refreshedLoad}: slide 2`, 'the first direct ArrowRight must reach the published page')
   await page.keyboard.press('Alt+I')
   await page.locator('.si-command-layer').waitFor({ state: 'visible' })
   await page.keyboard.press('Escape')

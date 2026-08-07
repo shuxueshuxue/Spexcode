@@ -1458,11 +1458,15 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
 
                 <div className="si-actions" role="group" aria-label={t('session.commandsLabel')}>
-                  {activeResource?.kind === 'file' && (
+                  {activeResource && (
                     <>
                       <IconButton icon="rotate-ccw" size={14} className="si-tool sc-blue refresh-resource" data-resource-action="refresh"
                         label={t('session.refreshResourceTab', { name: activeResource.label })}
                         onClick={() => refreshResource(activeResource)} />
+                    </>
+                  )}
+                  {activeResource?.kind === 'file' && (
+                    <>
                       <IconButton icon="download" size={14} className="si-tool sc-blue file-download" data-resource-action="download"
                         label={t('session.downloadFile')}
                         onClick={() => { void downloadFile(activeResource.sessionId, activeResource.value) }} />

@@ -149,11 +149,11 @@ files and loopback web services ([[files]] / [[web]]) that are not already open.
 browser-local tab for that exact session/reference; closing it removes only that view and permits reopening from
 the plus menu, never a duplicate. Clicking a filename in the top-right files dropdown uses this same open/select operation for its
 file row, so it cannot create a separate preview surface or a duplicate tab. A newly observed posted web service creates its one tab automatically, becoming
-selected only when its session already is. Each resource tab exposes a close icon. A selected **file** resource
-gets a right-side action group for **refresh**, **download**, and **copy path**. Refresh rereads the current file
-preview response; download and copy are the same actions offered by the files dropdown. A selected web resource
-has none of these file actions because reopening its same-origin frame is not a file read operation. Removing a
-published reference closes its resource tab. An open resource tab is a **warm browser instance**, not merely the selected
+selected only when its session already is. Each resource tab exposes a close icon and a right-side **refresh** action:
+for a file it rereads the current preview response, while for a web resource it recreates the same-origin iframe and
+requests the current local-service response. A selected file also gets **download** and **copy path**, the same actions
+offered by the files dropdown; those file-specific actions do not appear for a web resource. Removing a published
+reference closes its resource tab. An open resource tab is a **warm browser instance**, not merely the selected
 surface: its file preview request or same-origin iframe stays mounted, including its scroll position and page state, while
 another resource, Terminal/Conversation, another session, or another routed page is selected; returning makes that same DOM
 instance visible rather than rereading or reloading it. Its lifetime is anchored to its live session, not its selected state:
@@ -331,8 +331,8 @@ group** renders the same board-command registry. The independent top-right [[fil
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
 hover tooltips. Clicking the filename opens or selects the singleton resource tab; the adjacent download and
 copy tools remain explicit icon actions, with download delegating to the authorized backend route. **Command Box** is present whenever live. The
-right-side action group is surface-specific: a selected file shows its one refresh tool, a selected web shows
-neither refresh nor merge, and the Terminal surface alone shows the 24px **merge** tool. Merge is green and dispatchable only for the
+right-side action group is surface-specific: every selected resource shows its one refresh tool; a selected web has
+no file download/copy or merge tool, and the Terminal surface alone shows the 24px **merge** tool. Merge is green and dispatchable only for the
 persisted `awaiting` + `proposal:merge` + `review` projection while liveness is `online`; `nothing`/done,
 close-pending, working, asking, and every non-online reading keep the tool muted and disabled, with a
 localized tooltip and accessible reason. Disabled merge never appears as a typed `/merge` command and never

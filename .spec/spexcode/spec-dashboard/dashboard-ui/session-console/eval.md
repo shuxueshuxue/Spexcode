@@ -205,8 +205,9 @@ scenarios:
       The toolbar stays single-line while resource labels clip or scroll. A fresh web publication gets one
       selected tab only for the selected session; neither clicking an already-open filename nor the plus picker duplicates an
       open resource or creates an overlay preview. A selected file has right-side refresh, download, and copy-path
-      actions and no merge action; a selected web has none of those file actions; the Terminal surface has merge
-      and no resource actions. Selecting the web tab focuses its iframe without a content click, and a direct ArrowRight
+      actions and no merge action; a selected web has the same refresh action but no download, copy-path, or merge;
+      the Terminal surface has merge and no resource actions. Refreshing the web resource recreates its iframe and
+      requests a newer service response. Selecting the web tab focuses its iframe without a content click, and a direct ArrowRight
       changes the published slide page; Escape closes a top resource-picker layer before a following Escape returns the
       native console sink, while documented Alt dashboard chords remain live. Switching through file, web,
       Terminal/Conversation, and a second session retains each open resource's same DOM instance: the web iframe has the

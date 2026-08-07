@@ -214,6 +214,8 @@ export default {
 
   reviewShell: {
     evalNotFound: ({ node, scenario }) => `no eval found for ${node} · ${scenario}`,
+    evalUnmeasured: 'this scenario has not been measured yet',
+    scopeFallback: 'this session worktree no longer exists; the readings below are from trunk',
     issueNotFound: ({ id }) => `no issue found for ${id}`,
     backToEvals: '← all evals',
     backToIssues: '← all issues',
@@ -505,9 +507,6 @@ export default {
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? ' (uncommitted)' : ''}`,
     openIssues: ({ n }) => `${n} open issue${n === 1 ? '' : 's'} — open node info to read them`,
     expandable: ({ n }) => `${n} child${n === 1 ? '' : 'ren'} — focus to drill in`,
-    hiddenActive: ({ nodes, sessions }) =>
-      `${nodes} node${nodes === 1 ? '' : 's'} in here being worked on by ${sessions} session${sessions === 1 ? '' : 's'}:`,
-    hiddenAuthor: ({ label, n }) => `  ${label} — ${n} node${n === 1 ? '' : 's'}`,
   },
 
   // the node right-click menu ([[node-menu]]) — labels for the board's node verbs, mouse-side.
@@ -525,8 +524,6 @@ export default {
   session: {
     opsTitle: 'nodes this session is changing — right-click for session actions',
     lockTitle: 'right-click for session actions, including lock on graph',
-    worktreeBadge: 'WT',
-    worktreeTitle: ({ branch }) => branch ? `isolated worktree · ${branch}` : 'isolated worktree',
     newSession: 'New Session',
     newSessionTitle: 'New Session (⌥+N)',
     searchTitle: 'Search (⌥+/)',

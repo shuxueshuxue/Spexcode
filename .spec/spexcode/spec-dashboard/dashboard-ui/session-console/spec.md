@@ -55,7 +55,8 @@ hidden session from outside the list — including the graph's node menu — aut
 ancestor in the console's nesting forest, so the selected row is revealed instead of remaining hidden.
 Leaving the page never unmounts it — pane-backed terminals keep their sockets and scroll warm, while the selected
 terminal withdraws its [[live-view]] visibility claim until the shared pane opens again; a headless TimelineChat
-keeps its rendered timeline cursor, polls only while selected, and resumes from the latest board snapshot when selected again. Page display itself
+keeps its rendered timeline cursor, polls only while selected, and resumes from the latest board snapshot when selected again. Open resource tabs follow
+the same display-hidden lifetime: changing tab, session, or route never unmounts their preview or frame. Page display itself
 belongs to the shell's shared pane boundary ([[side-nav]]), so the console renders only content and never
 toggles its own display. The console **follows
 the app theme**: its chrome — the session list, right frame, and Command Box — uses the same palette tokens as
@@ -152,7 +153,15 @@ selected only when its session already is. Each resource tab exposes a close ico
 gets a right-side action group for **refresh**, **download**, and **copy path**. Refresh rereads the current file
 preview response; download and copy are the same actions offered by the files dropdown. A selected web resource
 has none of these file actions because reopening its same-origin frame is not a file read operation. Removing a
-published reference closes its resource tab. The browser remembers each session's selected local surface: switching to another session and
+published reference closes its resource tab. An open resource tab is a **warm browser instance**, not merely the selected
+surface: its file preview request or same-origin iframe stays mounted, including its scroll position and page state, while
+another resource, Terminal/Conversation, another session, or another routed page is selected; returning makes that same DOM
+instance visible rather than rereading or reloading it. Its lifetime is anchored to its live session, not its selected state:
+only the tab's explicit close, reference retraction, or session retirement releases it. Resource tabs and that session's warm
+terminal share this ownership boundary: there is **no cross-session resource-tab pool, admission limit, or eviction**. A global
+budget lets one live session starve another while terminals themselves remain unbounded; a per-session quota would still make a
+session's resources shorter-lived than its terminal for no product reason. Each session may therefore retain every resource tab it
+opens during that session's lifetime, independently of every other session. The browser remembers each session's selected local surface: switching to another session and
 back restores its resource tab when one was selected, or its Terminal/Conversation surface when that was selected;
 only an explicit press on Terminal/Conversation changes it back. This is dashboard-local presentation state, never
 session state or a backend write. Neither console adds a second native-event view. Session identity, lifecycle,
@@ -210,7 +219,13 @@ replaces either console with a bounded, top-anchored selectable file preview or 
 uses the same restricted renderer as other dashboard prose while raw HTML remains text. File text is the explicit
 native-selection exception to the panel's pointer-inert chrome, so drag and Ctrl/Cmd+C work while its non-focusable
 surface leaves the current terminal/composer sink alone. The inactive terminal layer is hidden
-and pointer-inert, preserving its warm transport. TimelineChat's
+and pointer-inert, preserving its warm transport. A selected **web** resource is its own input sink: on every selection
+(the picker, its tab, automatic opening for the selected session, or restoring that session's local surface) focus enters its
+same-origin iframe without an in-page click, so ordinary keys including arrows belong to the published page immediately. The
+dashboard's reserved controls stay reachable: its documented Alt chords relay back to the console, and Escape first peels the
+shared [[esc-layers]] top layer (including the open resource picker); only when that stack is empty does it return to the session's Terminal/Conversation sink. Thus a
+web frame cannot lock the dashboard controls, and one Escape never skips an overlay to switch the resource surface underneath it.
+TimelineChat's
 message composer is the shared [[composer]] textarea and auto-growth path, with the same Enter / Shift+Enter /
 IME-send boundary as Command Box; its docked mobile and desktop hosts do not invent a second textarea
 mechanism. TimelineChat's composer always sends `replyVia:"note"`: this is the fixed

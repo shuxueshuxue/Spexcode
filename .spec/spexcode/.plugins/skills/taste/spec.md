@@ -158,7 +158,7 @@ The principles, in the maintainer's own framing:
     arrived at from opposite directions, and both are *guards* rather than fixes: `docs-quickstart.test.ts`
     reconstructs the expected harness list from the live `NATIVE_HARNESS_IDS` registry, so registering a
     harness without updating the three surfaces that teach adoption (both READMEs' Quick start, `spex guide`'s
-    setup page) fails there — measured, on the author of this entry, within the hour of adding `zcode`;
+    setup page) fails there — measured, on the author of this entry, within the hour of adding a new harness;
     and `session-create-cli.test.ts` parses `cli.ts` with the TypeScript AST to derive three sets
     (the `VALUE_FLAGS` literal, every `flag('x')` value read, every `rejectUnknownFlags` allowlist) and
     assert their relationship with **no flag name written in the test at all**, so the next person who adds a

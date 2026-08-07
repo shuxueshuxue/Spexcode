@@ -638,14 +638,16 @@ scenarios:
       Start a real `claude --bg` job, create a real `--fork-session --resume` child, and ensure the source
       process's `CLAUDE_CONFIG_DIR` differs from or is absent on the backend when using a custom launcher. Let
       the successor hook persist `moved`, then POST one unique marker through `/api/sessions/<source>/input` on
-      the backend. Read both Claude transcripts by parsed record type and inspect only the relevant daemon
-      roster/process-environment fields without printing auth values.
+      the backend. Repeat after the roster endpoint becomes unreachable while the source session has resumed and
+      its stamped socket is live. Read both Claude transcripts by parsed record type and inspect only the relevant
+      daemon roster/process-environment fields without printing auth values.
     expected: >-
       The adapter discovers the roster via the source process's `CLAUDE_CONFIG_DIR`, selects the exact
       `worker.sessionId` named by `moved` (or, absent that match, the current worker whose launch is a fork of
       the source transcript), and sends the rendezvous auth frame before the reply. The child transcript receives
       a `queue-operation` enqueue for the marker while the source transcript receives no matching record. A
-      missing fork mapping keeps the ordinary launch-time socket path and never guesses credentials.
+      missing or unreachable fork mapping keeps the ordinary launch-time socket path and never guesses credentials;
+      the resumed source receives the marker once rather than leaving an online session permanently pending.
   # harness-delivery-campaign:end
 ---
 # eval.md — harness-adapter

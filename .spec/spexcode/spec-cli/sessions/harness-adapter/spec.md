@@ -59,7 +59,7 @@ rendezvous-steer/cold-resume readings.
 [[zcode-harness]] is a deliberate one-shot exception: its `--prompt` launcher has no reusable control
 channel, so its replacement scenario measures launch prompt receipt, hook gates, declaration, and process
 liveness. `deliver` and `resume` explicitly reject rather than impersonating a control transport; no false
-combination cell is filed for an operation z-code does not offer.
+combination cell is filed for an operation that harness does not offer.
 
 Prompt delivery also carries a dense, rerunnable COMBINATION campaign across every registered adapter that
 declares a delivery path (currently four interactive and four controller-backed headless adapters, including [[codex-headless]]): harness form x prompt origin (launch's first prompt, the terminal-free input route with
@@ -90,7 +90,9 @@ fork. When the successor's hook has persisted its exact Claude session id as `mo
 roster worker by that exact `worker.sessionId`; without a readable matching stamp, it falls back to the roster's
 `dispatch.launch.mode=resume`, `dispatch.launch.fork=true`, and source transcript path. In either case the roster
 supplies the live rendezvous socket and current `rvAuth`, so the adapter sends the `role`/`auth` handshake before
-the ordinary `reply` frame. The roster root is the launched source process's own `CLAUDE_CONFIG_DIR` field when
+the ordinary `reply` frame. A roster entry whose socket cannot accept the handoff is stale transport, not an
+override forever: retry the source session's stamped launch-time socket before leaving the durable message owed.
+The roster root is the launched source process's own `CLAUDE_CONFIG_DIR` field when
 that still-live process exposes it, then the backend environment/default fallback: a backend must not silently
 assume its own Claude home is the launcher's. It reads no other process environment fields. The adapter never
 guesses a token, prints one, or changes the pane/raw-key transport. A missing or unreadable fork entry preserves

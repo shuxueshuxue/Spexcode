@@ -36,7 +36,10 @@ the agent from one verb, picked by an optional topic:
 - **`spec` / `eval` → the agent-facing FILE-FORMAT manual.** The whole detail of the two authored
   artifacts — spec.md (frontmatter, body, the rules lint enforces) and eval.md (the scenario schema, how
   loss is measured and filed) — so an agent looks the format up on demand instead of reverse-engineering
-  it. The eval page is **prescriptive about evidence**: step-unfolding evidence carries a step-map — named
+  it. Compact always-on prompts point here for their operational detail: `eval` carries a bug fix's same-scenario
+  A/B sequence (old-commit failing reading, verified-tree commit, then passing reading anchored to that commit),
+  while `spec` carries comment altitude and the shared-checkout mid-merge recovery rule. The eval page is
+  **prescriptive about evidence**: step-unfolding evidence carries a step-map — named
   steps on the evidence's own axis, emitted by the run that produced it, never eyeballed off the artefact.
   A step name is a **short human label** for its moment, never a metadata channel — the run's identity,
   verdict, and extent all have canonical homes (the scenario's `test:` field, the reading's verdict, the

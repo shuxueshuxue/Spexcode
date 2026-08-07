@@ -42,6 +42,9 @@ export type PagedReview<T extends ReviewItem = ReviewItem> = {
 
 export type EvalDetailReview = {
   scope: string | null
+  requestedScope: string | null
+  scopeFallback: 'trunk' | null
+  availability: 'measured' | 'unmeasured' | 'missing'
   selected: ReviewItem | null
   history: ReviewItem[]
   neighbors: {
@@ -54,6 +57,16 @@ export type EvalDetailReview = {
   revision: string
   summary?: SessionEvals['summary']
   evalRevision?: SessionEvals['evalRevision']
+}
+
+type EvalDetailMetadata = {
+  scope?: string | null
+  requestedScope?: string | null
+  scopeFallback?: 'trunk' | null
+  summary?: SessionEvals['summary']
+  evalRevision?: SessionEvals['evalRevision']
+  // the scope's whole measured sequence, when `items` deliberately holds only the rendered window
+  sequence?: { node: string; scenario: string }[]
 }
 
 const revisionOf = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -259,16 +272,15 @@ export function projectEvalDetail(
   historySource: ReviewItem[],
   node: string,
   scenario: string,
-  metadata: {
-    scope?: string | null
-    summary?: SessionEvals['summary']
-    evalRevision?: SessionEvals['evalRevision']
-    // the scope's whole measured sequence, when `items` deliberately holds only the rendered window
-    sequence?: { node: string; scenario: string }[]
-  } = {},
+  metadata: EvalDetailMetadata = {},
 ): EvalDetailReview {
   const results = items.filter((item: any) => item.filterKind === EVAL_FILTER_KIND.RESULT)
   const selected = results.find((item) => evalItemKey(item) === `${node}\0${scenario}`) ?? null
+  const availability = selected
+    ? 'measured'
+    : items.some((item: any) => evalItemKey(item) === `${node}\0${scenario}` && item.filterKind === EVAL_FILTER_KIND.BLIND)
+      ? 'unmeasured'
+      : 'missing'
   const history = historySource.filter((reading: any) => String(reading.scenario) === scenario)
   const stateByKey = new Map(results.map((item: any) => [evalItemKey(item), String(item.state ?? evalReviewState(item))]))
   const sequence = metadata.sequence
@@ -276,12 +288,17 @@ export function projectEvalDetail(
   const neighbors = boundedEvalNeighbors(sequence, node, scenario,
     (row) => stateByKey.get(evalItemKey(row)) ?? 'empty')
   const scope = metadata.scope ?? null
+  const requestedScope = metadata.requestedScope ?? scope
+  const scopeFallback = metadata.scopeFallback ?? null
   return {
     scope,
+    requestedScope,
+    scopeFallback,
+    availability,
     selected,
     history,
     neighbors,
-    revision: revisionOf({ scope, selected, history, neighbors, summary: metadata.summary, evalRevision: metadata.evalRevision }),
+    revision: revisionOf({ scope, requestedScope, scopeFallback, availability, selected, history, neighbors, summary: metadata.summary, evalRevision: metadata.evalRevision }),
     ...(metadata.summary ? { summary: metadata.summary } : {}),
     ...(metadata.evalRevision ? { evalRevision: metadata.evalRevision } : {}),
   }
@@ -306,25 +323,30 @@ export function focusNodes(order: SessionEvalOrderRow[], node: string, scenario:
   return [...new Set([node, ...sequence.slice(Math.max(0, index - 6), index + 7).map((row) => row.node)])]
 }
 
-export async function evalDetailReview(node: string, scenario: string, scope?: string | null): Promise<EvalDetailReview | null> {
+async function trunkEvalDetailReview(node: string, scenario: string, metadata: EvalDetailMetadata = {}): Promise<EvalDetailReview> {
+  await getBoard()
+  const snapshot = readReviewSnapshot()
+  const sourceNode = snapshot.evalNodes.find((candidate) => candidate.id === node)
+  return projectEvalDetail(trunkEvalReviewItems(snapshot.evalNodes), sourceNode?.readings ?? [], node, scenario, metadata)
+}
+
+export async function evalDetailReview(node: string, scenario: string, scope?: string | null): Promise<EvalDetailReview> {
   if (scope) {
     // A detail renders ONE row plus at most five neighbours, but owes the whole population's index/total.
     // So name the window from the freshness-free sequence and let only those nodes pay the freshness pass;
     // a build that finds a full cached model ignores the pick and answers from it instead.
     const model = await buildSessionEvals(scope, (order) => focusNodes(order, node, scenario))
-    if (!model) return null
+    if (!model) return trunkEvalDetailReview(node, scenario, { requestedScope: scope, scopeFallback: 'trunk' })
     const sourceNode = model.nodes.find((candidate) => candidate.id === node)
     return projectEvalDetail(scopedEvalReviewItems(model), sourceNode?.evals ?? [], node, scenario, {
       scope,
+      requestedScope: scope,
       summary: model.summary,
       evalRevision: model.evalRevision,
       ...(model.order ? { sequence: measuredSequence(model.order) } : {}),
     })
   }
-  await getBoard()
-  const snapshot = readReviewSnapshot()
-  const sourceNode = snapshot.evalNodes.find((candidate) => candidate.id === node)
-  return projectEvalDetail(trunkEvalReviewItems(snapshot.evalNodes), sourceNode?.readings ?? [], node, scenario)
+  return trunkEvalDetailReview(node, scenario)
 }
 
 export function timelineEvalReviewItems(timeline: Awaited<ReturnType<typeof evalTimeline>>, node: string): ReviewItem[] {

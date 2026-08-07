@@ -45,6 +45,21 @@ scenarios:
       real eval renders the honest not-found face with a link back to #/evals — never a silent rewrite.
       Zero loss = list→detail is a real navigation, Back is the browser's, and every page is directly
       openable.
+  - name: detail-source-resolution-and-unmeasured-state
+    tags: [frontend-e2e, backend-api]
+    code: [spec-cli/src/index.ts, spec-cli/src/reviews.ts, spec-dashboard/src/EvalsPage.jsx]
+    description: >
+      Through a live backend and a real browser, open an Eval detail whose trunk history exists while its
+      `scope:` id names a removed session worktree, then inspect the bounded detail response and rendered
+      DOM. Separately open a declared trunk scenario with zero readings, and a node/scenario absent from
+      trunk. File the before/after evidence from the same expired-scope URL.
+    expected: >
+      The expired scope returns HTTP 200 with the trunk history, `scope: null`, its original
+      `requestedScope`, and `scopeFallback: "trunk"`; the page explicitly says that the session worktree
+      no longer exists and that the readings below are from trunk, never that the eval is missing. The
+      declared zero-reading scenario returns `availability: "unmeasured"` and visibly says the scenario
+      has not yet been measured, rather than a blank or a not-found face. Only a trunk-absent
+      node/scenario returns `availability: "missing"` and the not-found face. No branch invents a reading.
   - name: cold-detail-light-entry
     test: spec-dashboard/test/evals-light-entry.e2e.mjs
     tags: [frontend-e2e, desktop, mobile]

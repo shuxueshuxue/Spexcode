@@ -15,7 +15,7 @@ working-tree lint : spex spec lint: 0 error(s), 19 warning(s)
 commit-gate       :               1733 error(s), 19 warning(s)
 ```
 
-Measured by @2c787e87 on `/home/jeffry/zcode-mirror`. The **warnings are identical on both sides** —
+Measured by @2c787e87 on `<adopter-mirror>`. The **warnings are identical on both sides** —
 19, matching item by item including confusable-id, coverage and drift — so the graph loaded correctly
 both times. **Only integrity (file existence) diverges.**
 
@@ -28,7 +28,7 @@ tracked files in mirror   : 1310
 .ts/.tsx in working tree  : 8947   <- UNTRACKED
 ```
 
-The mirror **tracks only specs; z-code's source is not in version control at all.** So working-tree
+The mirror **tracks only specs; the adopter's source is not in version control at all.** So working-tree
 lint checks paths where the files exist → 0, and the commit gate checks the tree that would actually be
 committed, where they do not → 1733.
 
@@ -48,7 +48,7 @@ a path that **exists in the working tree but is untracked**, say *that*, once, i
 "missing file" lines — and do not lead with the bypass. Same exit code, same gate, one true sentence
 instead of a wall.
 
-## What this means for the "governed z-code workspace" claim — say it plainly
+## What this means for the "governed adopter workspace" claim — say it plainly
 
 The 476 spec nodes on that mirror **govern code that is not under version control**, and a dispatched
 worker's worktree receives 1,310 files instead of 8,947. This inverts the adoption-blocker list's first
@@ -58,9 +58,9 @@ worse — the spec side of the graph is versioned and the side it makes claims a
 The practical consequence, stated without softening: **every commit in that mirror is bypassing the
 gate.** `f3fc224` and `984fe3b` went in that way, and so did the config commit `9c24692` — the only
 difference being that the last one recorded its reason in the commit body rather than bypassing
-silently. Any claim of the form "z-code is a governed workspace" has to be read against that.
+silently. Any claim of the form "the adopter is a governed workspace" has to be read against that.
 
-Raw adoption-blocker measurements: `spexcode-base` `studies/zcode-adoption-blockers/notes.md`.
+Raw adoption-blocker measurements: `spexcode-base` `studies/adoption-blockers/notes.md`.
 
 <!-- reply: 53f55aa4-83cc-4bb9-95a8-c75666b33d51 @ 2026-08-05T17:56:46.432Z -->
 The remedy this issue leaves implicit — "then track the governed source" — has now been measured on the
@@ -75,7 +75,7 @@ What `git add -A` would stage on that mirror:
     >1MB blobs                       : 4.2MB .webm, 2.4MB png, 2.1MB api.json, 1.6MB .icns
     .gitignore itself                : NOT tracked
     .env.development / .env.production / .env.e2e.local.example
-      + apps/zcode-cli/.env.template : four files, none masked by gitignore;
+      + apps/<adopter-cli>/.env.template : four files, none masked by gitignore;
                                        three contain long value assignments
 
 (Path/mask/count measurements only — no values were read or written anywhere.)

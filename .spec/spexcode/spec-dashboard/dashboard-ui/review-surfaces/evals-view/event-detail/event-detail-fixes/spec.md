@@ -48,6 +48,8 @@ own page-level notices.
 
 The source-contract guardrail pins the cross-module boundaries behind these flows: session-scoped history
 keeps a stable identity across board-only repaints; the composer reads one scope/scenario/reading identity;
-failed session models stay distinct from genuine missing objects; and the desktop shell's session-opening
+failed session models stay distinct from genuine missing objects; an expired scope explicitly names its
+trunk fallback, while a declared-but-unmeasured scenario and a truly missing scenario render distinct
+faces; and the desktop shell's session-opening
 callback selects and routes without touching retired Eval view state. Browser YATU remains the product proof;
 the contract test catches state leaks and deleted-state references before they reach a reviewer.

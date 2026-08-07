@@ -213,6 +213,8 @@ export default {
 
   reviewShell: {
     evalNotFound: ({ node, scenario }) => `找不到 ${node} · ${scenario} 的评测`,
+    evalUnmeasured: '该场景尚未测量',
+    scopeFallback: '该 session 的工作区已不存在，下面是主干上的读数',
     issueNotFound: ({ id }) => `找不到 issue ${id}`,
     backToEvals: '← 全部评测',
     backToIssues: '← 全部 issues',
@@ -497,8 +499,6 @@ export default {
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? '（未提交）' : ''}`,
     openIssues: ({ n }) => `${n} 个待办 issue——打开节点信息查看`,
     expandable: ({ n }) => `${n} 个子节点——聚焦展开`,
-    hiddenActive: ({ nodes, sessions }) => `里面有 ${nodes} 个节点正被 ${sessions} 个 session 改动:`,
-    hiddenAuthor: ({ label, n }) => `  ${label}——${n} 个节点`,
   },
 
   // 节点右键菜单（[[node-menu]]）——板上节点动词的鼠标侧标签。
@@ -516,8 +516,6 @@ export default {
   session: {
     opsTitle: '此会话正在改动的节点 —— 右键打开会话操作',
     lockTitle: '右键打开会话操作，包括锁定到图谱',
-    worktreeBadge: 'WT',
-    worktreeTitle: ({ branch }) => branch ? `隔离工作树 · ${branch}` : '隔离工作树',
     newSession: '新建会话',
     newSessionTitle: '新建会话（⌥+N）',
     searchTitle: '搜索（⌥+/）',

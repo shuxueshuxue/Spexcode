@@ -221,8 +221,8 @@ state is reachable in principle and unreached by every harness that exists today
 
 **A long-lived-REPL harness has been covering for this product's own problems.** Claude and Codex sit in their
 REPL after finishing, staying online, keeping a watcher attached and liveness green — so an entire class of
-post-work timing path was never walked. z-code's one-shot shape walks it on the first attempt. That is the
-first real return on adopting z-code, and it has nothing to do with a demo.
+post-work timing path was never walked. that adopter's one-shot shape walks it on the first attempt. That is the
+first real return on an external adoption, and it has nothing to do with a demo.
 
 **Rebuilds are gated on someone listening.** With no delta subscriber the pipeline never builds — plain
 subscribers get the zero-cost notify, a closed dashboard costs nothing (both pollers stop with their last

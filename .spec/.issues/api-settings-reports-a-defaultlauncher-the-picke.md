@@ -47,9 +47,9 @@ shape is for the settings response to name the substitution (default configured 
 because X is hidden by `dashboard.showHeadlessLaunchers: false`), so the operator can see the gap
 without diffing two fields and knowing the filter rule.
 
-## Consequence for the z-code lane
+## Consequence for the adopter lane
 
-Before this was found, "offer z-code as a governed worker in the dashboard" was **not satisfiable at
+Before this was found, "offer that adopter as a governed worker in the dashboard" was **not satisfiable at
 all** through the product's own UI, whatever the config said. The mirror's own fix was pure config
 (`dashboard.showHeadlessLaunchers` + moving `sessions.defaultLauncher` from gitignored local into
 committed `spexcode.json`, since a launcher *name* is portable and only its `cmd` is a machine

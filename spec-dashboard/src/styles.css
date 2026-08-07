@@ -390,16 +390,6 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   padding: 2px 4px; pointer-events: none;
 }
 .spec-node.focused .node-expand { color: var(--blue); border-color: var(--blue); }
-/* a collapsed branch with work inside FILLS with the lead hidden author's hue (--ovh). Fill/no-fill is
-   the one signal that still reads when the tile's own digits have blurred away, so it carries the
-   "something is happening in there" meaning; the dots below only say how many sessions. */
-.node-expand.has-hidden {
-  background: var(--ovh); border-color: var(--ovh-ring); color: var(--ovh-fg);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ovh-ring) 32%, transparent);
-}
-.spec-node.focused .node-expand.has-hidden { color: var(--ovh-fg); border-color: var(--ovh-ring); }
-.hidden-dots { display: flex; align-items: center; gap: 1px; margin-left: 2px; }
-.hidden-dots i { width: 4px; height: 4px; border-radius: 50%; box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25); }
 
 /* ---- row 2: marks · editor avatars ---- */
 .node-editors { display: flex; align-items: center; gap: 3px; }
@@ -723,14 +713,6 @@ a.scenario-count:hover { background: var(--panel2); }
 /* row 1, the headline: the session's live self-summary (or prompt placeholder). flex:1 eats the line so the
    ever-changing tmux task description has room; min-width:0 lets the ellipsis engage in a flex child. */
 .sess-id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sess-worktree {
-  flex: none; min-width: 0; max-width: min(52%, 238px); display: inline-flex; align-items: center; gap: 4px;
-  padding: 1px 4px; border: 1px solid color-mix(in srgb, var(--green) 56%, var(--line)); border-radius: 3px;
-  color: color-mix(in srgb, var(--green) 78%, var(--ink)); font-size: var(--type-meta); line-height: var(--leading-tight);
-  white-space: nowrap; overflow: hidden;
-}
-.sess-worktree-kind { flex: none; font-weight: var(--weight-bold); }
-.sess-worktree-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .sess-lock { font-size: var(--type-caption); flex: none; line-height: var(--leading-none); filter: saturate(0); }
 .sess-meta {
   /* rendered before the headline in source (SessionRow) but kept visually LAST by order:1 in every flex
@@ -783,7 +765,6 @@ a.scenario-count:hover { background: var(--panel2); }
    ([[session-console]]) — the one difference is it KEEPS the avatar and stays on the board's warm paper. */
 .sesswin .sess-row { flex-wrap: nowrap; }
 .sesswin .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; }
-.sesswin .sess-worktree { max-width: 60%; }
 .sesswin-zone {
   --zh: var(--muted);
   display: flex; align-items: center; gap: 7px; padding: 8px 9px 2px;
@@ -1035,7 +1016,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-item.on::before { content: none; }   /* selected caret removed — the highlight wash is enough (per request) */
 /* meta collapses inline (no full-width row-2 wrap) so the whole face stays on one line */
 .si-item .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; opacity: 1; overflow: visible; }
-.si-item .sess-worktree { max-width: 58%; }
 .si-item .sess-lock { color: var(--muted); }
 /* headline reveal ([[session-activity]]) — the one-line ellipsis is a RESTING state, not a hard clip: the
    SELECTED row un-truncates its headline (wraps to full text in place) so any title reads in full without
@@ -1056,7 +1036,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-item.on { display: block; }
 .si-item.on .sess-lead { float: left; margin-right: 7px; }
 .si-item.on .sess-meta { float: right; margin: 0 0 0 8px; }
-.si-item.on .sess-worktree { float: right; max-width: 52%; margin: 0 0 0 6px; }
 .si-item.on .sess-id { display: block; max-height: 3lh; white-space: normal; overflow: clip; overflow-wrap: anywhere; }
 .si-tree-row { --sess-fold-pad-x: 12px; }
 /* A selected headline can grow to three lines; its disclosure stays beside line one rather than centring in
@@ -1670,6 +1649,8 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-resource-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 210px; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px color-mix(in srgb, var(--ink) 12%, transparent); }
 .si-resource-menu-row { width: 100%; min-width: 0; display: flex; align-items: center; gap: 7px; padding: 6px 7px; color: var(--ink2); background: transparent; border: 0; border-radius: 4px; font-family: var(--mono); font-size: var(--type-control); text-align: left; cursor: pointer; }
 .si-resource-menu-row:hover, .si-resource-menu-row:focus-visible { color: var(--blue); background: var(--panel2); }
+.si-resource-menu-row:disabled { color: var(--muted); cursor: not-allowed; }
+.si-resource-menu-row:disabled:hover { color: var(--muted); background: transparent; }
 .si-resource-menu-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-resource-menu-empty { display: block; padding: 7px; color: var(--muted); font-family: var(--mono); font-size: var(--type-control); }
 
@@ -2019,7 +2000,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .m-sess-row:active { background: var(--panel); }
 .m-sess-row .sess-id { flex: 1; min-width: 0; font-weight: var(--weight-bold); color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-sess-row .sess-meta { flex: none; width: auto; min-width: 0; margin-top: 0; margin-left: auto; font-size: var(--type-control); }
-.m-sess-row .sess-worktree { max-width: 48%; font-size: var(--type-control); }
 .m-sess-row .sess-glyph { font-size: var(--type-body); width: 14px; }
 .m-sess-row .sess-ops { color: var(--muted); }   /* mobile keeps the tally muted, not the overlay hue */
 .m-sess-tree-row { --sess-fold-pad-x: 14px; }

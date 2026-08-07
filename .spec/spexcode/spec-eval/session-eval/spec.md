@@ -244,8 +244,9 @@ derived, never hand-tagged) and `#/evals/<node>/<scenario>?q=scope:<id>` (the [[
 A/B history walks the WORKTREE-rooted readings — the live, remarkable reading of a still-open branch,
 what a CI/MR note links; merging first is not required, and the inert `?format=html` export is not the
 link). The face fetches `/api/evals` pages for lists and `/api/evals/detail` for the selected scenario's
-complete history plus at most five lightweight neighbors. Both are worktree-rooted under `scope:<id>` and
-carry no diff enrichment or inlined evidence bytes. It rides the tiered loading every eval face shares: rows first,
+complete history plus at most five lightweight neighbors. A live `scope:<id>` is worktree-rooted; when a
+historical detail's worktree no longer exists, that bounded detail explicitly resolves to trunk instead of
+pretending the scenario disappeared. It carries no diff enrichment or inlined evidence bytes. It rides the tiered loading every eval face shares: rows first,
 evidence streamed from `/api/evidence` only on the detail page. The console and phone session surfaces expose
 **DOORS** that are REAL ANCHORS — the console tab bar's `eval ↗` entry and the phone session header's
 eval button carry the canonical scoped-list address as their literal href ([[address-routing]]'s one

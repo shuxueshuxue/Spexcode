@@ -30,6 +30,10 @@ HTTP entrypoint — a Hono app that wires the loaders and the session state mach
 the file this node governs (the deeper mechanism lives in its [[source-of-truth]] subtree; the
 eval endpoints' contract belongs to [[spec-eval]], so their churn — the eval-blob comment reframed to
 serve a transcript or image, not just pixels — is that subtree's evolution, not spec-cli's drift).
+Its bounded Eval-detail route resolves a requested worktree scope before it resolves the addressed
+scenario: a vanished scope is explicitly reported as a fallback to trunk, while a declared-but-unmeasured
+scenario and a scenario absent from trunk remain separate response states. The HTTP seam never turns one
+of those facts into another by returning a generic missing review source.
 
 A CLI output contract, in the same fail-loud spirit: a verb with unbounded stdout (`issues --json`,
 `board`, `review --json`, `eval ls --json`, …) must FULLY reach a pipe. `process.exit()` force-quits

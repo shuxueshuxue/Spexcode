@@ -72,6 +72,13 @@ A focused detail has measured only what it renders, so it omits the counts inste
 browser therefore fences on the content revision, which is the stronger identity, and compares counts only
 when they are present.
 
+The detail source and scenario are two independent facts. `scope` names the resolved source and
+`requestedScope` preserves what the address asked for; when that worktree is gone, `scopeFallback: "trunk"`
+states that the response is the trunk reading rather than a failed source. `availability` is exactly
+`measured`, `unmeasured` (a declared scenario with no reading), or `missing` (no such trunk declaration).
+Thus a source disappearance never impersonates a missing eval, and an unmeasured declaration never becomes
+an empty detail or a not-found object.
+
 A detail response is bounded in COST the same way it is bounded in bytes. Sequence — which scenarios are in
 play, in what order, and therefore the selected row's `index` and the source `total` — is derived from
 identity and filed time alone, never from freshness, so it is read for the whole population without a single

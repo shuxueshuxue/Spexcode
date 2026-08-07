@@ -84,7 +84,44 @@ re-running its proof, it freezes the tested result as an object id, re-proves th
 ref, and merges that exact object rather than the moving branch name. It then verifies the base HEAD advanced
 with no merge left in progress, runs `git merge --abort` if anything went half-merged, and proposes close once
 verified — so the final generation fence lives at the agent's actual landing boundary, not only in the
-server's earlier read, and the base is never left half-merged. Async: `POST
+server's earlier read, and the base is never left half-merged.
+
+**A gate whose verdict lives only in an exit code is not a gate its executor can read.** Both of those
+blocks are handed to an AGENT, and an agent's window renders a silent command as "no output" — while a bare
+`&&` chain of `test`s is equally silent when it holds and when it breaks. The two outcomes then arrive
+identical, and the only safe reading of an ambiguous gate is the pessimistic one, so a branch sitting in
+exactly its reviewed generation is refused as a stale review, permanently, by a correct agent. That is not
+an agent bug: a prompt that asks for a decision must hand over something to decide on. So each block
+**carries its own verdict**. It prints ONE success token — `REVIEWED_GENERATION_OK` for the generation
+re-proof, `LANDING_MERGED <oid>` for the landing — and the prompt states the rule beside it: seeing that
+token is the only pass, and absent output is a fail, not an unknown. Failure is diagnosable in the same
+breath, because each item reports its own actual-vs-expected value under a stable `<n>/<item>` label
+(`1/toplevel`, `2/symbolic`, `3/wtHEAD`, `4/mainref`, `5/baseref`; `1/symbolic`, `2/mainref`, `3/ancestor`),
+so a genuine stale review says WHICH generation moved instead of refusing blank. None of this loosens the
+gate: the verdict line still conjoins every check, and the merge still runs only inside that conjunction.
+
+**The block is also 7-bit ASCII, because the trip to the executor is not a byte-transparent channel.** It
+crosses the control channel, the agent's own tool call, and a terminal before a shell parses it, and such a
+hop can drop a byte above 0x7F, substitute U+FFFD for it, or stop the text at the first one. A gate that
+compares unicode ref and path bytes as shell strings holds only if every hop carried them intact — and on the
+fleet one did not, refusing a branch that was exactly its reviewed generation. Every session slug here is
+derived from the human's own words, so a unicode branch is the ordinary case, not an edge one. Which hop lost
+the byte is not recoverable from the refusal and does not need to be: instead, NO comparison in the block
+depends on a byte above 0x7F surviving. The two values that carry arbitrary text — the worktree top-level and
+the symbolic ref, taken in its full `refs/heads/…` form rather than the shortened one — are compared as hex
+read straight off git's pipe, before any shell string layer touches them; object ids are ASCII by
+construction and stay plain; and the path and ref the commands need as ARGUMENTS are materialised from POSIX
+`printf %b` octal escapes. A pure-ASCII value is emitted as the ordinary quoted literal, so a project without
+unicode names sees the prompt it always saw. What the block prints is ASCII as well, so a failing item's
+actual value stays readable through a lossy display — the field report that opened this could only say
+`node/<?>`.
+
+Two premises hold that up and belong here rather than in a guess about them. **The expected side is derived
+from raw bytes** — the filesystem's own bytes for the worktree path — and never from a normalized or
+re-encoded string: a normalization applied to both sides would agree with itself and hide exactly the fault
+it was meant to catch. And **git is not the fragile part**: `rev-parse --show-toplevel` and `symbolic-ref`
+emit their bytes raw, `core.quotePath` governing neither, measured identical across shells and locales. The
+repair does not ask git to change; it stops requiring a byte-transparent path to the shell. Async: `POST
 /api/sessions/:id/merge` returns `{dispatched:true}` once the merge prompt is appended (409 only when the
 record cannot accept it). The server no longer bumps `merges` on a click.
 

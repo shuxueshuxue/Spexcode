@@ -68,8 +68,8 @@ function runBlock(block: string[], cwd: string): Run {
   return { stdout: result.stdout ?? '', stderr: result.stderr ?? '', status: result.status }
 }
 
-const gateItem = (run: Run) => run.stdout.match(/REVIEWED_GENERATION_FAIL\s+(\S+)/)?.[1] ?? null
-const landItem = (run: Run) => run.stdout.match(/LANDING_FAIL\s+(\S+)/)?.[1] ?? null
+const gateItem = (run: Run) => run.stdout.match(/REVIEWED_GENERATION_FAIL\s+(\S+):/)?.[1] ?? null
+const landItem = (run: Run) => run.stdout.match(/LANDING_FAIL\s+(\S+):/)?.[1] ?? null
 const saysOk = (run: Run) => /(^|\n)REVIEWED_GENERATION_OK\b/.test(run.stdout)
 
 test('the dispatched merge prompt reports a distinguishable gate verdict', { timeout: 180_000 }, async () => {
@@ -217,8 +217,8 @@ test('the dispatched merge prompt reports a distinguishable gate verdict', { tim
       movedHeadRun: { saysOk: saysOk(movedHeadRun), item: gateItem(movedHeadRun) },
       missingWorktreeRun: { saysOk: saysOk(missingWorktreeRun), item: gateItem(missingWorktreeRun) },
       failuresUnlikeThePass: `${failureRuns.filter((run) => run.stdout !== reviewedRun.stdout).length} of ${failureRuns.length}`,
-      gateItemsNamed: [...new Set(gate.join('\n').match(/REVIEWED_GENERATION_FAIL\s+(\S+)/g) ?? [])]
-        .map((hit) => hit.split(/\s+/)[1]).sort(),
+      gateItemsNamed: [...new Set(gate.join('\n').match(/REVIEWED_GENERATION_FAIL\s+\S+:/g) ?? [])]
+        .map((hit) => hit.split(/\s+/)[1].replace(/:$/, '')).sort(),
       gateVerdictChecks: (gate[gate.length - 1]?.match(/\btest /g) ?? []).length,
       landingBeforeSync: {
         merged: landingBeforeSync.stdout.includes('LANDING_MERGED'),

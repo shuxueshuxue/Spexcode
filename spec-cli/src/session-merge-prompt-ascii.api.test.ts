@@ -187,6 +187,9 @@ test('the dispatched merge prompt gates a unicode branch in pure ASCII', { timeo
       const run = runBlock(text, fixture)
       return { changed: text !== gate, sameVerdict: run.status === intact.status, saysOk: saysOk(run) }
     }
+    // Every carriage is measured against the SAME reviewed generation as the intact run, before anything
+    // below moves the worktree — otherwise a later checkout, not the carriage, is what changed the verdict.
+    const dropped = survives(carried.drop), replaced = survives(carried.replace), truncated = survives(carried.truncate)
 
     git(worktree, 'checkout', '-q', '--detach')
     const detached = runBlock(gate, fixture)
@@ -202,9 +205,7 @@ test('the dispatched merge prompt gates a unicode branch in pure ASCII', { timeo
       landingBlockHighBytes: highBytes(landing),
       usesPrintfEscapes: gate.includes(`printf '%b'`) && landing.includes(`printf '%b'`),
       intact: { saysOk: saysOk(intact) },
-      dropped: survives(carried.drop),
-      replaced: survives(carried.replace),
-      truncated: survives(carried.truncate),
+      dropped, replaced, truncated,
       detached: { saysOk: saysOk(detached), item: gateItem(detached) },
       landed: { merged: landed.stdout.includes(`LANDING_MERGED ${syncedHead}`) },
     }

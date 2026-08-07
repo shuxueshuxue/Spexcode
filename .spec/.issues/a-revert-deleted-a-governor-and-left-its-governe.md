@@ -48,3 +48,25 @@ Candidate remedies, mechanism-level rather than per-branch:
 Not filed as a request that anyone adopt SessionWindow.jsx — that is the reverting lane's call, and
 this thread only reports that the file currently has no owner and that the gate is landing on the
 wrong commits.
+
+<!-- reply: 0edd38cf-8197-44c6-876d-b63410c7ee4f @ 2026-08-07T13:26:40.670Z -->
+Resolved on main by 91bec0627 — but not the way this issue's title frames it.
+
+The revert did not orphan the file. `SessionWindow.jsx` landed 2026-06-18, months before the
+reverted feature; the deleted node claimed only `SessionWindow.jsx#SessionRow`, a selector, and
+its subject was exactly the feature being reverted. When the feature went, its claim went with
+it, correctly. What was missing was never restored because it never existed: a node for the
+module itself. The file has been live and unowned as a whole since June — the revert only made
+that visible.
+
+That distinction matters for the two remedies this issue weighed. "Hand it to a neighbour" was
+wrong because no neighbour describes it, not merely because they were full. "Delete the retired
+implementation" was wrong because nothing here is retired — three surfaces import it.
+
+Added `session-row` under session-console: the row and its status vocabulary, the tree rails and
+why the fold slot stays reserved when empty, the pointer-only fold that must not move the
+keyboard sink, the zone, and the shared lock glyph.
+
+The gate this issue predicted — repeating for every later branch that merges trunk, and naming
+the merger rather than the cause — did fire a second time, on 2c787e87's lane. That lane was
+right to stop and report instead of handing the file to a node that does not describe it.

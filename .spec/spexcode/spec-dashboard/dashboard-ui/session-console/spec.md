@@ -68,7 +68,8 @@ with a dense 204px default) and a right area that
 **morphs** by what's focused. The list's **top button row** holds three equal compact pills above the session rows, kept out of the `↑/↓`
 path down to a session: the `＋` New Session button, the **archive** star ([[archive]] — permanently present,
 showing no numeric count), and a **Search** button, the click twin of the ⌥+/ palette
-([[session-search]] owns that contract). The list is bounded by the routed page's viewport: when its visible
+([[session-search]] owns that contract). New and the archive door are mutually exclusive destinations, so opening
+the shelf clears New's visual active treatment without changing the selected tab. The list is bounded by the routed page's viewport: when its visible
 zones and rows exceed that height, the list owns the vertical scrollbar instead of growing behind the page
 pane's clipped edge.
 

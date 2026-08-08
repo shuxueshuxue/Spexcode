@@ -1305,7 +1305,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               onError={(message) => setActionOutcome({ owner: 'panel', phase: 'failed', message })} />
           ) : (
           <div className="si-toprow">
-            <button type="button" className={active === 'new' ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => { setShowShelf(false); setSel('new') }}>
+            <button type="button" className={active === 'new' && !viewingShelf ? 'si-pill new on' : 'si-pill new'} data-tip={t('session.newSessionTitle')} aria-label={t('session.newSessionTitle')} onClick={() => { setShowShelf(false); setSel('new') }}>
               <span className="si-pill-glyph"><Icon name="plus" size={15} strokeWidth={2} /></span>
             </button>
             {/* permanent AND always live — a control that is visible but does nothing reads as broken, and a

@@ -1114,7 +1114,7 @@ if (cmd === 'serve') {
     // (codex loads that worktree's config/hooks/AGENTS.md), store the new id on the governed record (keyed by
     // SPEXCODE_SESSION_ID), fire the launch prompt as the FIRST turn — materializing the rollout — and print the
     // thread id. The launch script then `resume`s it in the visible TUI.
-    const { codexStartThread, codexTurn, waitForCodexRollout, codexBinary, codexSupportsBypassHookTrust } = await import('./harness.js')
+    const { codexStartThread, codexTurn, waitForCodexRollout, codexBinary, codexSupportsBypassHookTrust, codexLauncherThreadPolicy } = await import('./harness.js')
     const { markHarnessSessionId } = await import('./sessions.js')
     const sock = process.argv[4], cwd = process.argv[5]
     const prompt = process.argv.slice(6).join(' ')
@@ -1122,12 +1122,13 @@ if (cmd === 'serve') {
     // On the bypass-trust path (the codex install supports the flag → materialize skipped writeCodexTrust's hash),
     // the thread the BACKEND owns must carry `bypass_hook_trust` in thread/start's config so the app-server fires
     // the worktree's local hooks — mirror materialize's capability decision so the two stay in lockstep.
-    const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(process.env.SPEXCODE_CODEX_CMD || 'codex'))
+    const launcherCmd = process.env.SPEXCODE_CODEX_CMD || 'codex'
+    const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(launcherCmd))
     // The governed record id rides into the thread's own shell environment (shell_environment_policy.set), so
     // every command this thread spawns knows which session it is — the codex equivalent of the launch-injected
     // id claude gets. codex-launch is exactly where both ids are known ([[harness-adapter]]).
     const ownId = process.env.SPEXCODE_SESSION_ID?.trim()
-    const r = await codexStartThread(sock, cwd, bypassHookTrust, ownId ? { SPEXCODE_SESSION_ID: ownId } : undefined)
+    const r = await codexStartThread(sock, cwd, bypassHookTrust, ownId ? { SPEXCODE_SESSION_ID: ownId } : undefined, codexLauncherThreadPolicy(launcherCmd))
     if (!r.ok) { console.error(r.error); process.exit(1) }
     if (prompt) {
       const t = await codexTurn(sock, r.threadId, prompt, cwd)

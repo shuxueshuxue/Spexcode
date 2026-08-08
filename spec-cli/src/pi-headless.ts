@@ -15,6 +15,8 @@ const PKG = fileURLToPath(new URL('..', import.meta.url))
 const SPEX = join(PKG, 'bin', 'spex.mjs')
 const CONTROL_TIMEOUT_MS = 30_000
 const START_TIMEOUT_MS = 30_000
+const TERM_EXIT_GRACE_MS = 500
+const KILL_EXIT_GRACE_MS = 2_000
 
 /** The resident controller socket is distinct from pi's per-turn rendezvous socket. */
 export const piHeadlessSock = (id: string) => join(tmpdir(), `spexcode-ph-${id}.sock`)
@@ -28,6 +30,19 @@ export const deliverViaPiHeadless = (rec: HarnessDeliveryRecord, text: string) =
     name: 'pi-headless', session: rec.session, timeoutMs: CONTROL_TIMEOUT_MS,
     rejected: 'pi-headless controller rejected the request',
   })
+
+// The resident controller and a running pi turn own two per-session listeners. The generic lifecycle
+// teardown has already proved and removed the exact controller leaf before this runs; cold filing is valid
+// only once neither listener can still accept work for this session.
+export async function piHeadlessColdRuntime(rec: Pick<HarnessDeliveryRecord, 'session'>): Promise<DispatchResult> {
+  const { listenerAt, rvSock } = await import('./harness.js')
+  const paths = [piHeadlessSock(rec.session), rvSock(rec.session)]
+  const probes = await Promise.all(paths.map((path) => listenerAt(path)))
+  const pending = paths.filter((_, index) => probes[index] !== 'dead')
+  return pending.length
+    ? { ok: false, error: `pi-headless runtime is still ${probes.some((probe) => probe === 'live') ? 'live' : 'unproven'} (${pending.join(', ')})` }
+    : { ok: true }
+}
 
 export class PiHeadlessController {
   private server: Server | null = null
@@ -64,15 +79,33 @@ export class PiHeadlessController {
     if (this.closing) return
     this.closing = true
     const child = this.child
-    if (child && child.process.exitCode === null) child.process.kill('SIGTERM')
-    await new Promise<void>((resolve) => {
-      if (!this.server) return resolve()
-      this.server.close(() => resolve())
-    })
-    // same proof-before-removal rule as every other teardown (harness.ts unlinkSocks): a socket path is keyed
-    // by session id alone, so only a listener PROVEN dead is ours to unlink.
-    const { rvSock, unlinkSocks } = await import('./harness.js')
-    await unlinkSocks(this.socketPath, rvSock(this.id))
+    try {
+      if (child) await this.terminateTurn(child)
+    } finally {
+      await new Promise<void>((resolve) => {
+        if (!this.server) return resolve()
+        this.server.close(() => resolve())
+      })
+      // same proof-before-removal rule as every other teardown (harness.ts unlinkSocks): a socket path is keyed
+      // by session id alone, so only a listener PROVEN dead is ours to unlink.
+      const { rvSock, unlinkSocks } = await import('./harness.js')
+      await unlinkSocks(this.socketPath, rvSock(this.id))
+    }
+  }
+
+  private async terminateTurn(turn: ChildTurn): Promise<void> {
+    if (turn.process.exitCode !== null) return
+    try { turn.process.kill('SIGTERM') } catch { /* the child can leave between the exit check and signal */ }
+    if (await this.waitForExit(turn, TERM_EXIT_GRACE_MS)) return
+    try { turn.process.kill('SIGKILL') } catch { /* already gone */ }
+    await withTimeout(turn.exited, KILL_EXIT_GRACE_MS, `pi-headless turn did not exit for session ${this.id}`)
+  }
+
+  private async waitForExit(turn: ChildTurn, timeoutMs: number): Promise<boolean> {
+    try {
+      await withTimeout(turn.exited, timeoutMs, 'turn exit grace elapsed')
+      return true
+    } catch { return false }
   }
 
   private accept(socket: Socket): void {

@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { PiHeadlessController, deliverViaPiHeadless, piHeadlessSock } from './pi-headless.js'
+import { PiHeadlessController, deliverViaPiHeadless, piHeadlessColdRuntime, piHeadlessSock } from './pi-headless.js'
 import { HARNESSES, piHarness, piHeadlessHarness } from './harness.js'
 
 const waitFor = async (check: () => boolean, timeoutMs = 5_000) => {
@@ -54,4 +54,19 @@ process.stdout.write('pi fixture\\n')
   assert.deepEqual(args[1].slice(0, 3), ['-p', '--session', id])
   assert.equal(args.some((argv) => argv.includes('--mode')), false, 'controller keeps pi in default text mode')
   assert.equal(existsSync(piHeadlessSock(id)), true)
+})
+
+test('pi-headless cold proof accepts only dead controller and rendezvous listeners', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-pi-headless-cold-proof-'))
+  const id = `pi-headless-cold-proof-${process.pid}`
+  const controller = new PiHeadlessController(id, join(root, 'runtime'), 'true', process.cwd())
+  t.after(async () => {
+    await controller.close()
+    rmSync(root, { recursive: true, force: true })
+  })
+  await controller.start()
+  const live = await piHeadlessColdRuntime({ session: id })
+  assert.equal(live.ok, false, 'a listening controller cannot be filed as cold')
+  await controller.close()
+  assert.deepEqual(await piHeadlessColdRuntime({ session: id }), { ok: true })
 })

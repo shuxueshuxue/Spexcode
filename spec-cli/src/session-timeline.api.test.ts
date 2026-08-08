@@ -2,11 +2,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { listenerAt, rvSock } from './harness.js'
+import { piHeadlessSock } from './pi-headless.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const spex = join(here, '..', 'bin', 'spex.mjs')
@@ -246,6 +248,8 @@ test('YATU: pi-headless defaults launch and CLI send replies to durable notes', 
   let backend: ChildProcess | null = null
   const base = `http://127.0.0.1:${port}`
   let id = ''
+  let path = ''
+  let branch = ''
   try {
     writeFileSync(fakePi, `
 import { appendFileSync } from 'node:fs'
@@ -281,7 +285,7 @@ process.exit(result.status === null ? 1 : result.status)
     })
     const createdText = await created.text()
     assert.equal(created.status, 201, createdText)
-    id = (JSON.parse(createdText) as { id: string }).id
+    ;({ id, path, branch } = JSON.parse(createdText) as { id: string; path: string; branch: string })
     await waitFor(async () => {
       const timeline = await fetch(`${base}/api/sessions/${id}/timeline`)
       if (!timeline.ok) return false
@@ -311,6 +315,22 @@ process.exit(result.status === null ? 1 : result.status)
     assert.deepEqual(body.events.filter((event) => event.kind === 'sent').map((event) => [event.text, event.replyVia]), [['HEADLESS_CLI_QUESTION', 'note']])
     const session = await fetch(`${base}/api/sessions/${id}`).then((r) => r.json() as Promise<{ note?: string }>)
     assert.equal(session.note, 'HEADLESS_CLI_ANSWER')
+
+    const pidPath = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id, 'agent.pid')
+    const controllerPid = Number(readFileSync(pidPath, 'utf8').trim())
+    const rendezvous = rvSock(id)
+    const closed = await fetch(`${base}/api/sessions/${id}/close`, { method: 'POST' })
+    const closedText = await closed.text()
+    assert.equal(closed.status, 200, closedText)
+    assert.deepEqual(JSON.parse(closedText), { ok: true })
+    assert.equal(existsSync(join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id)), false, 'close removes the session store')
+    assert.equal(existsSync(path), false, 'close removes the worktree')
+    assert.equal(spawnSync('git', ['branch', '--list', branch], { cwd: project, encoding: 'utf8' }).stdout.trim(), '', 'close removes the branch')
+    assert.notEqual(spawnSync('tmux', ['-L', tmux, 'has-session', '-t', id], { encoding: 'utf8' }).status, 0, 'close removes the target tmux session')
+    assert.equal(await listenerAt(piHeadlessSock(id)), 'dead', 'close proves the controller listener is gone')
+    assert.equal(await listenerAt(rendezvous), 'dead', 'close proves the pi rendezvous listener is gone')
+    assert.throws(() => process.kill(controllerPid, 0), /ESRCH/, 'close removes the exact controller leaf')
+    id = ''
   } finally {
     if (id) await fetch(`${base}/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
     if (backend) await stop(backend)

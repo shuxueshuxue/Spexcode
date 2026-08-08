@@ -1307,6 +1307,39 @@ test('Codex native interrupt addresses the fresh active turn and waits until it 
   }
 })
 
+test('Codex interrupt waits for an exact generation proof that is still being published', { skip: platform() !== 'linux' }, async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-interrupt-generation-publication-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const target = 'interrupt-generation-publication-thread'
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/turns/list') return { data: [], nextCursor: null }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const root = runtimeRoot()
+  const socket = codexAppServerSock(root)
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  let publish: NodeJS.Timeout | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    publish = setTimeout(() => { owner = startCodexOwner(root) }, 50)
+    assert.deepEqual(await codexHarness.interrupt?.({ session: 'interrupt-generation-publication-session', harnessSessionId: target, runtimeDir: root }), { ok: true })
+    assert.ok(owner, 'the interrupt proceeds only after the exact detached generation is published')
+  } finally {
+    if (publish) clearTimeout(publish)
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('Codex archive re-censuses native descendants after mutation and compensates a late child', async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR

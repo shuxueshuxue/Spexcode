@@ -36,6 +36,13 @@ spawns `pi -p --session <id> <msg>` to wake the exact saved conversation; `--ses
 path because it can silently create a new session. The controller remains resident so the tmux window is a
 stable home for later deliveries and resumes.
 
+The resident controller is a normal session-owned leaf, not a shared adapter runtime: launch registers its PID,
+whose argv carries the governed session id. Terminal close therefore has one finite proof chain: the identity-checked
+leaf and its target tmux session are gone, then both the controller socket and pi rendezvous listener must reject a
+connect probe before cold filing can commit. A live or unproven listener keeps the row intact; a readable record with
+those four target resources gone has no adapter-specific refusal left and proceeds through the ordinary worktree,
+branch, and record removal.
+
 Each controller child reports a non-zero exit through the shared [[harness-adapter]] turn-outcome seam. The active
 undeclared record therefore becomes `error` with the pi turn's exit code, while zero exits and an agent-authored
 declaration that landed before teardown remain authoritative. Record-backed `online` still describes a controller

@@ -93,6 +93,12 @@ death: nothing is retired, nothing is re-pinned, and both the launch and resume 
 boundary may hand a client an endpoint it has not proven live; a printed socket that cannot be connected is
 the same defect as a wrong one.
 
+An operation may wait only for the finite publication interval in which the same endpoint has not yet assembled
+its PID, detached receipt, and socket proof. It retries a complete fresh proof under one bounded operation budget;
+it never sends native work from an incomplete observation or carries any partial proof into the next attempt. Once
+a generation was proved, a different PID, receipt, or socket identity is a generation change, not publication lag,
+and it refuses immediately.
+
 ### Lifecycle safety
 
 Target archive and archived close prove/unload only the target's bound generation and native

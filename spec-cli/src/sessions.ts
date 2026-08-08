@@ -178,6 +178,7 @@ const TMUX_PROBE_TIMEOUT_MS = 4000
 // A destructive close already names one target, so it can afford the longer bounded probe without making
 // every dashboard refresh wait behind an overloaded tmux server.
 const TARGET_PROBE_TIMEOUT_MS = 15000
+const TARGET_TMUX_CLOSE_SETTLE_MS = 3000
 async function tmux(args: string[], timeoutMs?: number): Promise<string> {
   const { stdout } = await pexec('tmux', ['-L', TMUX_SOCK, ...args], { encoding: 'utf8', ...(timeoutMs ? { timeout: timeoutMs, killSignal: 'SIGKILL' as const } : {}) })
   return stdout
@@ -794,6 +795,21 @@ async function liveSnapshot(targetId?: string): Promise<LiveSnap> {
     else if (listening[i] === 'unproven') unproven.add(id)
   })
   return { probeFailed: false, windows, titles, sockets, unproven }
+}
+
+async function assertTargetTmuxAbsent(id: string, phase: string): Promise<void> {
+  const deadline = Date.now() + TARGET_TMUX_CLOSE_SETTLE_MS
+  let probeFailed = false
+  do {
+    const snap = await liveSnapshot(id)
+    if (!snap.probeFailed && !snap.windows.has(id)) return
+    probeFailed ||= snap.probeFailed
+    if (Date.now() >= deadline) break
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  } while (true)
+  throw new ResourceConflict(probeFailed
+    ? `refusing to stop ${id}: target tmux absence is unproven ${phase}`
+    : `refusing to stop ${id}: target tmux session remains ${phase}`)
 }
 
 // Avoid process spawns on the hot path; old sessions without agent.pid remain warm-tier only.
@@ -3014,6 +3030,7 @@ async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = f
   // wrapper. Kill that session-id unconditionally; runtimeOwnership only changes the PID/argv proof, never the
   // exact tmux teardown.
   await tmuxOk(['kill-session', '-t', id])
+  await assertTargetTmuxAbsent(id, 'after kill')
   if (leaf) await killAgentProcess(id, assertOwned, leaf)
   launchedAt.delete(id)
   await harness.cleanupRuntime(rec)
@@ -3124,13 +3141,10 @@ async function archiveSessionUnlocked(id: string, on = true): Promise<boolean> {
     coldCommitted = true
     const latest = readRecord(id)
     if (!latest) throw new ResourceConflict(`refusing to archive ${id}: session record disappeared before filing`)
-    const finalSnap = await liveSnapshot(id)
-    if (finalSnap.probeFailed) throw new ResourceConflict(`refusing to archive ${id}: final liveness probe failed; the leaf may still be live`)
-    const finalLv = h.runtimeOwnership === 'adapter'
-      ? (finalSnap.windows.has(id) ? 'online' : 'offline')
-      : liveness({ ...latest, archived: false, stopped: false }, finalSnap)
-    if (finalLv === 'unknown' || finalLv === 'starting' || finalLv === 'online')
-      throw new ResourceConflict(`refusing to archive ${id}: leaf became ${finalLv} before filing`)
+    // The leaf identity kill and adapter cold proof established process/transport absence. Record-backed
+    // adapters intentionally project online until the archive write, so display liveness is not physical
+    // evidence here. A target pane appearing after the stop proof is the remaining shared runtime witness.
+    await assertTargetTmuxAbsent(id, 'before archive filing')
     writeRecord({ ...latest, archived: true, stopped: true, coldProof: coldProofFor(latest), adapterRecovery: null })
   } catch (error) {
     if (coldCommitted) {

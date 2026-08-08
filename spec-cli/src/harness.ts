@@ -12,7 +12,7 @@ import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
 import { claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
 import { opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
-import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless } from './pi-headless.js'
+import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless, piHeadlessColdRuntime } from './pi-headless.js'
 import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath } from './layout.js'
 import { git } from './git.js'
 import { shQuote } from './sh.js'
@@ -1144,6 +1144,21 @@ export async function codexLoadedReferenceIds(sock: string): Promise<{ ok: true;
 }
 
 const CODEX_RUNNING_TURN_READ_MS = 15_000
+const CODEX_COLD_PREFLIGHT_MAX_ATTEMPTS = 6
+const CODEX_COLD_PREFLIGHT_RETRY_MS = 250
+const CODEX_COLD_PREFLIGHT_DEADLINE_MS = 30_000
+
+async function waitForCodexGeneration(dir: string, endpoint: CodexGenerationEndpoint): Promise<string | null> {
+  const deadline = Date.now() + CODEX_COLD_PREFLIGHT_DEADLINE_MS
+  for (let attempt = 0; attempt < CODEX_COLD_PREFLIGHT_MAX_ATTEMPTS; attempt++) {
+    const generation = codexRuntimeGeneration(dir, endpoint)
+    if (generation) return generation
+    if (attempt === CODEX_COLD_PREFLIGHT_MAX_ATTEMPTS - 1 || Date.now() >= deadline) break
+    const delay = Math.min(CODEX_COLD_PREFLIGHT_RETRY_MS * 2 ** attempt, deadline - Date.now())
+    await new Promise((resolve) => setTimeout(resolve, delay))
+  }
+  return null
+}
 
 // @@@ presence vs identity - two different questions, deliberately not one helper.
 // A gate asks "is a turn in flight right now"; thread/list answers that for every thread at once, at a cost
@@ -1206,8 +1221,8 @@ async function interruptCodexTurn(rec: HarnessDeliveryRecord): Promise<DispatchR
   const dir = rec.runtimeDir || runtimeRoot()
   const endpoint = codexEndpointForRecord(rec, dir)
   if (!endpoint) return { ok: false, error: 'no exact Codex generation binding is registered for this target' }
-  const generation = codexRuntimeGeneration(dir, endpoint)
-  if (!generation) return { ok: false, error: 'Codex shared app-server generation is unproven' }
+  const generation = await waitForCodexGeneration(dir, endpoint)
+  if (!generation) return { ok: false, error: 'Codex shared app-server generation remained unproven while waiting to interrupt' }
   const fence = { dir, endpoint, generation }
   const before = await codexRunningTurn(endpoint.socketPath, threadId)
   if (!before.ok) return { ok: false, error: before.error }
@@ -1355,8 +1370,10 @@ function isEndpointLike(value: unknown): value is CodexGenerationEndpoint {
 
 async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), expectedGeneration?: string, endpoint = legacyCodexGenerationEndpoint(dir)): Promise<CodexColdPreflight> {
   const generation = expectedGeneration ?? codexMutationGeneration(dir, endpoint)
-  if (!generation || codexRuntimeGeneration(dir, endpoint) !== generation)
-    return { ok: false, reason: 'Codex shared app-server generation is unproven or changed before subtree census' }
+  if (!generation)
+    return { ok: false, reason: 'Codex shared app-server generation is temporarily unproven before subtree census' }
+  if (codexRuntimeGeneration(dir, endpoint) !== generation)
+    return { ok: false, reason: 'Codex shared app-server generation changed before subtree census' }
   const sock = endpoint.socketPath
   const [loaded, activeDescendants, archivedDescendants, archivedList, activeList] = await Promise.all([
     codexLoadedReferenceIds(sock),
@@ -1460,11 +1477,8 @@ async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), exp
 // A busy app-server can refuse one WebSocket census while accepting the next. The refusal is transport-local,
 // so retry the complete proof (including generation fencing) within the terminal operation's finite budget;
 // semantic ownership refusals still return immediately and never turn into repeated native reads.
-const CODEX_COLD_PREFLIGHT_MAX_ATTEMPTS = 6
-const CODEX_COLD_PREFLIGHT_RETRY_MS = 250
-const CODEX_COLD_PREFLIGHT_DEADLINE_MS = 30_000
 const isTransientCodexCensusFailure = (reason: string): boolean =>
-  /(?:timed out|connection|closed during|refused .*census|census failed|app-server busy)/i.test(reason)
+  /(?:temporarily unproven|timed out|connection|closed during|refused .*census|census failed|app-server busy)/i.test(reason)
 
 async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expectedGeneration?: string, endpoint = legacyCodexGenerationEndpoint(dir)): Promise<CodexColdPreflight> {
   const deadline = Date.now() + CODEX_COLD_PREFLIGHT_DEADLINE_MS
@@ -2512,12 +2526,11 @@ export const codexHarness: Harness = {
     const dir = runtimeRoot()
     const endpoint = codexEndpointForRecord(rec, dir)
     if (!endpoint) return { ok: false, reason: 'no exact Codex generation binding is registered for this target' }
-    const generationBefore = codexRuntimeGeneration(dir, endpoint)
-    if (!generationBefore) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
-    const result = await codexColdPreflight(threadId, dir, generationBefore, endpoint)
+    const result = await codexColdPreflight(threadId, dir, undefined, endpoint)
+    if (!result.ok) return result
+    const generationBefore = result.receipt.generation
     if (codexRuntimeGeneration(dir, endpoint) !== generationBefore)
       return { ok: false, reason: 'shared Codex app-server generation changed during cold retirement guard' }
-    if (!result.ok) return result
     if (!result.alreadyCold)
       return { ok: false, reason: `Codex target subtree ${result.receipt.activeIds.join(', ')} is not fully archived` }
     return { ok: true, alreadyCold: true }
@@ -2535,14 +2548,12 @@ export const codexHarness: Harness = {
     const endpoint = codexEndpointForRecord(rec, dir)
     if (!endpoint) return { ok: false, reason: 'no exact Codex generation binding is registered for this target' }
     const sock = endpoint.socketPath
-    const generationBefore = codexRuntimeGeneration(dir, endpoint)
-    if (!generationBefore) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
     if (suppliedReceipt !== undefined && (!isCodexColdPlan(suppliedReceipt) || suppliedReceipt.threadId !== threadId))
       return { ok: false, reason: 'Codex cold teardown receipt is missing, malformed, or names a different target' }
     const frozenPlan = isCodexColdPlan(suppliedReceipt) ? suppliedReceipt : null
-    if (frozenPlan && (frozenPlan.generation !== generationBefore || frozenPlan.endpoint.id !== endpoint.id))
+    if (frozenPlan && (frozenPlan.endpoint.id !== endpoint.id || codexRuntimeGeneration(dir, endpoint) !== frozenPlan.generation))
       return { ok: false, reason: 'shared Codex app-server generation changed after archive preflight' }
-    const preflight = await codexColdPreflight(threadId, dir, frozenPlan?.generation ?? generationBefore, endpoint)
+    const preflight = await codexColdPreflight(threadId, dir, frozenPlan?.generation, endpoint)
     if (!preflight.ok) return preflight
     const plan = frozenPlan ?? preflight.receipt
     if (frozenPlan && (!sameIdSet(frozenPlan.descendantIds, preflight.receipt.descendantIds) ||
@@ -2824,13 +2835,18 @@ export const piHeadlessHarness: Harness = {
   ...piHarness,
   id: 'pi-headless',
   headless: true,
-  runtimeOwnership: 'adapter',
+  // The controller is a per-session process launched in the target tmux pane. Its launch-registered PID
+  // and argv session id are exact leaf ownership evidence; record-backed liveness does not make it shared.
+  runtimeOwnership: 'leaf',
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => piHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), piBaseCmd(cmd)),
   liveness: recordOnline,
   deliver: deliverViaPiHeadless,
   cleanupRuntime: (rec) => unlinkSocks(piHeadlessSock(rec.session), rvSock(rec.session)),
-  coldRuntime: async () => ({ ok: false, reason: 'pi-headless has no exact resident unload verification' }),
+  coldRuntime: async (rec) => {
+    const result = await piHeadlessColdRuntime(rec)
+    return result.ok ? { ok: true } : { ok: false, reason: result.error || 'pi-headless runtime remains unproven' }
+  },
   deliveryBlockedBy: undefined,
   resumeArg: (rec) => `--session ${rec.session}`,
 }

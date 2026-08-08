@@ -7,6 +7,7 @@ export type ExecutionStep = Readonly<{
   id: string
   kind: ExecutionStepKind
   label: string
+  detail?: string
   state: 'running' | 'done'
 }>
 export type ExecutionTrace = Readonly<{
@@ -64,6 +65,56 @@ function toolLabel(name: string, kind: ExecutionStepKind): string {
   return name.trim() || labels[kind]
 }
 
+const sensitive = /(token|secret|password|authorization|bearer|cookie|credential|api[_-]?key|private[ _-]?key)/i
+const detailFields = [
+  ['cmd', 'cmd'], ['command', 'command'], ['path', 'path'], ['file_path', 'path'],
+  ['query', 'query'], ['pattern', 'pattern'], ['url', 'url'], ['workdir', 'in'],
+] as const
+
+function recordInput(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>
+  if (typeof value !== 'string') return null
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+  } catch { return null }
+}
+
+function sensitiveInput(value: unknown): boolean {
+  if (typeof value === 'string') return sensitive.test(value)
+  if (Array.isArray(value)) return value.some(sensitiveInput)
+  if (value && typeof value === 'object') return Object.entries(value as Record<string, unknown>)
+    .some(([key, entry]) => sensitive.test(key) || sensitiveInput(entry))
+  return false
+}
+
+function compactValue(key: string, value: string | number | boolean): string {
+  const text = String(value).trim()
+  if (key === 'path' || key === 'file_path' || key === 'workdir') {
+    const parts = text.replace(/\\/g, '/').split('/').filter(Boolean)
+    return parts.slice(-2).join('/') || text
+  }
+  return text.length > 96 ? `${text.slice(0, 95)}…` : text
+}
+
+function toolDetail(payload: Record<string, unknown>): string | undefined {
+  const input = recordInput(payload.input ?? payload.arguments ?? payload.args)
+  if (!input || sensitiveInput(input)) return undefined
+  const details: string[] = []
+  for (const [key, title] of detailFields) {
+    const value = input[key]
+    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') continue
+    details.push(`${title}: ${compactValue(key, value)}`)
+    if (details.length === 2) break
+  }
+  const lineStart = input.line_start
+  const lineEnd = input.line_end
+  if (details.length < 2 && (typeof lineStart === 'number' || typeof lineEnd === 'number')) {
+    details.push(`lines: ${typeof lineStart === 'number' ? lineStart : 1}-${typeof lineEnd === 'number' ? lineEnd : lineStart}`)
+  }
+  return details.length ? details.join(' · ') : undefined
+}
+
 function applyRolloutEvent(trace: CachedTrace, value: unknown, ordinal: number): void {
   if (!value || typeof value !== 'object') return
   const event = value as Record<string, unknown>
@@ -83,7 +134,8 @@ function applyRolloutEvent(trace: CachedTrace, value: unknown, ordinal: number):
     const name = field(payload, 'name', 'tool_name') || 'tool'
     const id = field(payload, 'call_id', 'id') || `tool-${ordinal}`
     const kind = toolKind(name)
-    trace.steps.push({ id, kind, label: toolLabel(name, kind), state: 'running' })
+    const detail = toolDetail(payload)
+    trace.steps.push({ id, kind, label: toolLabel(name, kind), ...(detail ? { detail } : {}), state: 'running' })
     return
   }
   if (event.type === 'response_item' && payload.type === 'custom_tool_call_output') {

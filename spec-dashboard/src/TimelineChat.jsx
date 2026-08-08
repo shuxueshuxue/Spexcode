@@ -349,10 +349,10 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
             <div className="m-ev-text"><RichText>{detail.prompt}</RichText></div>
           </details>
         )}
-        <ExecutionTrace sessionId={s.id} active={active} />
         {events === null
           ? <div className="m-empty">{t('common.loading')}</div>
           : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
+        <ExecutionTrace sessionId={s.id} active={active} />
       </div>
       {copyStatus && (
         <div className={`m-copy-status ${copyStatus}`} role="status" aria-live="polite" aria-atomic="true">

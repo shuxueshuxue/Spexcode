@@ -25,7 +25,7 @@ export default function ExecutionTrace({ sessionId, active }) {
     <>
       <button type="button" className="m-execution-entry" onClick={() => setOpen(true)}
         aria-label={t('session.executionOpen')}>
-        <Icon name="command" size={15} />
+        <Icon name="list-checks" size={15} />
         <span>{execution.workingNote}</span>
         <Icon name="chevron-right" size={15} />
       </button>
@@ -38,7 +38,10 @@ export default function ExecutionTrace({ sessionId, active }) {
               ? execution.steps.map((step) => (
                 <li key={step.id} className={`execution-step ${step.state}`}>
                   <Icon name={STEP_ICON[step.kind] || 'command'} size={16} />
-                  <span className="execution-step-label">{step.label}</span>
+                  <span className="execution-step-copy">
+                    <span className="execution-step-label">{step.label}</span>
+                    {step.detail && <span className="execution-step-detail">{step.detail}</span>}
+                  </span>
                   <span className="execution-step-state">{t(step.state === 'running' ? 'session.executionRunning' : 'session.executionDone')}</span>
                 </li>
               ))

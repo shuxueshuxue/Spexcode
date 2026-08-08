@@ -75,7 +75,7 @@ test('YATU: execution API and SSE expose only the latest Codex working note and 
     mkdirSync(dirname(rollout), { recursive: true })
     writeFileSync(rollout, [
       line({ type: 'event_msg', payload: { type: 'agent_message', phase: 'commentary', message: 'inspect the session trace' } }),
-      line({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'tool-1', name: 'read_file', arguments: 'PRIVATE_ARGUMENT' } }),
+      line({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'tool-1', name: 'read_file', arguments: JSON.stringify({ path: '/project/spec.md', line_start: 1, line_end: 8 }) } }),
     ].join(''))
 
     backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), index], {
@@ -90,8 +90,8 @@ test('YATU: execution API and SSE expose only the latest Codex working note and 
     assert.equal(snapshot.status, 200)
     const body = await snapshot.json() as { workingNote: string; steps: Array<{ kind: string; state: string }> }
     assert.equal(body.workingNote, 'inspect the session trace')
-    assert.deepEqual(body.steps, [{ id: 'tool-1', kind: 'read', label: 'read_file', state: 'running' }])
-    assert.doesNotMatch(JSON.stringify(body), /PRIVATE_ARGUMENT/)
+    assert.deepEqual(body.steps, [{ id: 'tool-1', kind: 'read', label: 'read_file', detail: 'path: project/spec.md · lines: 1-8', state: 'running' }])
+    assert.doesNotMatch(JSON.stringify(body), /PRIVATE_OUTPUT/)
 
     const stream = await fetch(`${base}/api/sessions/${id}/execution/stream`)
     assert.equal(stream.status, 200)

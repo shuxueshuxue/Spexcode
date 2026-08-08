@@ -10,11 +10,11 @@ scenarios:
       - spec-dashboard/src/styles.css
     description: >-
       Through the running dashboard's real Sessions route, select Conversation for a live session, receive one
-      normalized latest-working-note execution frame, and click the note entry.
+      normalized latest-working-note execution frame at the bottom of the conversation, and click the note entry.
     expected: >-
-      One compact working-note entry opens an execution pop-out. Its normalized read and command rows carry
-      their respective familiar icons and done/running states; no transcript envelope, argument, or output is
-      rendered by the browser.
+      One compact working-note entry is the newest timeline row and opens an execution pop-out. Its normalized
+      read and command rows carry their respective familiar icons, backend-sanitized details, and done/running
+      states in chronological order; no transcript envelope, raw argument, or output is rendered by the browser.
   - name: conversation-is-the-only-headless-console
     tags: [frontend-e2e, desktop, mobile]
     description: >-

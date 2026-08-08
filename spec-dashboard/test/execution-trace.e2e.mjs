@@ -27,8 +27,8 @@ try {
           revision: 'fixture-1',
           workingNote: 'Inspecting the live execution trace',
           steps: [
-            { id: 'read', kind: 'read', label: 'read_file', state: 'done' },
-            { id: 'run', kind: 'command', label: 'exec_command', state: 'running' },
+            { id: 'read', kind: 'read', label: 'read_file', detail: 'path: src/trace.ts · lines: 1-60', state: 'done' },
+            { id: 'run', kind: 'command', label: 'exec_command', detail: 'cmd: npm test', state: 'running' },
           ],
         }), 50)
       }
@@ -55,6 +55,7 @@ try {
   const entry = page.locator('.m-execution-entry:visible')
   await entry.waitFor({ state: 'visible', timeout: 30_000 })
   assert.match(await entry.textContent() || '', /Inspecting the live execution trace/)
+  assert.equal(await entry.evaluate((element) => element.parentElement?.lastElementChild === element), true)
   await entry.click()
 
   const modal = page.locator('.execution-trace-modal:visible')
@@ -63,14 +64,15 @@ try {
     note: element.querySelector('.execution-note')?.textContent?.trim(),
     rows: [...element.querySelectorAll('.execution-step')].map((row) => ({
       label: row.querySelector('.execution-step-label')?.textContent?.trim(),
+      detail: row.querySelector('.execution-step-detail')?.textContent?.trim(),
       state: row.querySelector('.execution-step-state')?.textContent?.trim(),
       icon: !!row.querySelector('svg'),
     })),
   }))
   assert.equal(steps.note, 'Inspecting the live execution trace')
   assert.deepEqual(steps.rows, [
-    { label: 'read_file', state: 'done', icon: true },
-    { label: 'exec_command', state: 'running', icon: true },
+    { label: 'read_file', detail: 'path: src/trace.ts · lines: 1-60', state: 'done', icon: true },
+    { label: 'exec_command', detail: 'cmd: npm test', state: 'running', icon: true },
   ])
   await page.screenshot({ path: `${OUT}/execution-trace.png`, fullPage: true })
 } finally {

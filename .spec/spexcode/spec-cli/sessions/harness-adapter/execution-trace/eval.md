@@ -8,10 +8,11 @@ scenarios:
       - spec-cli/src/session-execution.api.test.ts
     description: >-
       Feed a Codex rollout containing an earlier commentary note, a later working note, tool arguments, tool
-      output, and a final incremental completion through the adapter parser.
+      output, one safe structured input, and a final incremental completion through the adapter parser.
     expected: >-
       Only the last working note and its following typed steps survive. A completion updates its matching row
-      incrementally; older notes, arguments, and output are absent from the normalized object.
+      incrementally; safe structured input becomes a short detail while sensitive arguments and output are
+      absent from the normalized object.
 ---
 
 The HTTP scenario under [[session-execution]] is the product-level proof. This narrow parser scenario guards the

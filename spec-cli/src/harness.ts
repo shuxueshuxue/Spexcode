@@ -19,6 +19,7 @@ import { shQuote } from './sh.js'
 import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from './process-identity.js'
 import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
 import { writeFileIfChanged } from './file-write.js'
+import { codexRolloutPath, noExecutionTrace, readCodexExecutionTrace, type ExecutionTrace } from './execution-trace.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -183,6 +184,9 @@ export interface Harness {
   // instead of showing the folder name. This is the ONLY harness branch in the headline path: the capability
   // is data on the adapter, not an `if (codex)` in sessions.ts.
   readonly paneTitleIsSelfSummary: boolean
+  // The adapter-only native transcript reader. Its compact result has no raw envelope, argument, output, or
+  // reasoning data; product surfaces receive only the latest working note and typed tool steps.
+  executionTrace(threadId: string): ExecutionTrace | null
   // --- launch / sessionId ---
   // the base agent command. Claude: `claude …`; Codex starts a project-scoped app-server and launches the
   // visible TUI with `--remote` pointed at it. `cmd` is the SESSION's persisted launcher command
@@ -1942,19 +1946,14 @@ export function codexTurn(sock: string, threadId: string, text: string, cwd?: st
 // thread/start+turn but does NOT persist the rollout for its first ~2-4s (a warm-up window) — the SAME thread's
 // rollout just lands a few seconds LATE (not lost). Handing the id to `resume` before then is the "no rollout
 // found for thread id" failure, so codex-launch WAITS for the rollout to land before it trusts the id.
-const codexSessionsDir = () => join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'sessions')
 // does a rollout file for this thread id exist yet? Rollouts are grouped by date; walk day-dirs newest-first
 // (lexical order = chronological on zero-padded YYYY/MM/DD) and return on first hit — the fresh rollout lives in
 // the newest real dir, so the common case reads one dir. The walk is exhaustive, never capped at "the newest few
 // dirs": future-dated junk under sessions/ (a test once planted 2099/12/* in the real CODEX_HOME) sorts above
 // every real day-dir, and a cap let three such dirs mask ALL real rollouts — every codex launch then failed
 // "persisted no rollout" with the rollout sitting on disk. A full walk is a readdir per day-dir — still cheap.
-export function codexRolloutExists(threadId: string, root = codexSessionsDir()): boolean {
-  const kids = (d: string) => { try { return readdirSync(d).sort().reverse() } catch { return [] as string[] } }
-  for (const y of kids(root)) for (const m of kids(join(root, y))) for (const d of kids(join(root, y, m))) {
-    if (kids(join(root, y, m, d)).some((f) => f.includes(threadId))) return true
-  }
-  return false
+export function codexRolloutExists(threadId: string, root?: string): boolean {
+  return codexRolloutPath(threadId, root) !== null
 }
 // The same day-dir walk, answering how big that rollout is. `thread/archive` on a LOADED thread flushes the
 // thread's in-memory rollout inside the server's shutdown_and_wait before it commits, so this size IS the work
@@ -1962,12 +1961,9 @@ export function codexRolloutExists(threadId: string, root = codexSessionsDir()):
 // `0`, not an error: a thread that has started but not yet persisted (thread/start alone writes none, and a
 // fresh app-server lags 2-4s) has nothing to flush, so refusing it would be a false refusal. Only a file that
 // exists and cannot be measured is unreadable, and that fails closed rather than passing as small.
-export function codexRolloutBytes(threadId: string, root = codexSessionsDir()): { bytes: number } | { unreadable: true } {
-  const kids = (d: string) => { try { return readdirSync(d).sort().reverse() } catch { return [] as string[] } }
-  for (const y of kids(root)) for (const m of kids(join(root, y))) for (const d of kids(join(root, y, m))) {
-    const hit = kids(join(root, y, m, d)).find((f) => f.includes(threadId))
-    if (hit) { try { return { bytes: statSync(join(root, y, m, d, hit)).size } } catch { return { unreadable: true } } }
-  }
+export function codexRolloutBytes(threadId: string, root?: string): { bytes: number } | { unreadable: true } {
+  const path = codexRolloutPath(threadId, root)
+  if (path) { try { return { bytes: statSync(path).size } } catch { return { unreadable: true } } }
   return { bytes: 0 }
 }
 // poll until the thread's rollout lands (resume-ready) or the budget runs out. Returns false on timeout so the
@@ -2339,6 +2335,7 @@ export const claudeHarness: Harness = {
   events: CLAUDE_EVENTS,
   ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
   paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
+  executionTrace: noExecutionTrace,
   launchCmd: (_id, _rt, cmd) => claudeBaseCmd(cmd),  // claude's full invocation IS its base command (the tail is appended by the caller)
   baseCmd: claudeBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
@@ -2439,6 +2436,7 @@ export const codexHarness: Harness = {
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
+  executionTrace: readCodexExecutionTrace,
   launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
   baseCmd: codexBaseCmd,
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
@@ -2786,6 +2784,7 @@ export const piHarness: Harness = {
   events: PI_EVENTS,
   ownsRendezvous: true,                              // the generated extension binds rvSock(id) and speaks the reclaude protocol
   paneTitleIsSelfSummary: false,                     // pi's pane title is not an agent-written task summary → headline uses the prompt preview
+  executionTrace: noExecutionTrace,
   launchCmd: (_id, _rt, cmd) => `${piBaseCmd(cmd)} --approve`,   // --approve = one-run project trust (belt to writeTrust's braces)
   baseCmd: piBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // caller pins the exact session id, claude-style (created if missing)
@@ -2849,6 +2848,7 @@ export const zcodeHarness: Harness = {
   events: ZCODE_EVENTS,
   ownsRendezvous: false,
   paneTitleIsSelfSummary: false,
+  executionTrace: noExecutionTrace,
   launchCmd: (_id, _rt, cmd) => `${zcodeBaseCmd(cmd)} --prompt`,
   baseCmd: zcodeBaseCmd,
   sessionIdArg: () => '',
@@ -2882,6 +2882,7 @@ export const opencodeHarness: Harness = {
   // socket the launch env hands it, so the shared reply poke and socket-listener liveness are reused verbatim.
   ownsRendezvous: true,
   paneTitleIsSelfSummary: false,                     // opencode's TUI title is not the agent's live task self-summary → headline uses the prompt
+  executionTrace: noExecutionTrace,
   launchCmd: (_id, _rt, cmd) => opencodeLaunchCommand(opencodeBaseCmd(cmd)),   // the tail-branching script (prompt vs --resume/--continue marker)
   baseCmd: opencodeBaseCmd,
   sessionIdArg: () => '',                            // opencode mints its own session id; the plugin's first event reports it back (opencode-capture)

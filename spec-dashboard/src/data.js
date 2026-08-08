@@ -207,6 +207,32 @@ export async function loadSessionTimeline(id) {
   return res.json()
 }
 
+// The execution stream is already normalized by the harness adapter. This client only decodes its compact
+// JSON projection; it never receives a transcript path or parses native tool envelopes.
+export function subscribeSessionExecution(id, onExecution) {
+  let es = null
+  let closed = false
+  const reopen = () => { try { es?.close() } catch { /* an already-closed EventSource is harmless */ } ; open() }
+  const deadman = createDeadman(() => {
+    if (closed) return
+    reopen()
+    deadman.arm()
+  })
+  const receive = (event) => {
+    deadman.arm()
+    try { onExecution(JSON.parse(event.data)) } catch { /* a bad frame is skipped; the next revision replaces it */ }
+  }
+  const open = () => {
+    if (closed) return
+    try { es = new EventSource(sessionUrl(id, 'execution', 'stream')) } catch { es = null; return }
+    es.addEventListener('execution', receive)
+    es.addEventListener('ping', () => deadman.arm())
+  }
+  open()
+  deadman.arm()
+  return () => { closed = true; deadman.disarm(); try { es?.close() } catch { /* already closed */ } }
+}
+
 // the session record detail (full originating prompt on top of the board row) behind /api/sessions/:id.
 export async function loadSessionDetail(id) {
   const res = await apiFetch(sessionUrl(id))

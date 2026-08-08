@@ -22,6 +22,7 @@ import { gitA, gitTry, repoRoot } from './git.js'
 import { cockpitReview } from './cockpit.js'
 import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
+import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
 import { readBlobByHash } from '../../spec-eval/src/evaltab.js'
 import { putBlob } from '../../spec-eval/src/cache.js'
@@ -510,6 +511,14 @@ app.get('/api/sessions/:id/capture', async (c) => {
   if (r.reason === 'offline') return c.text('session offline (no live pane)', 409)
   return c.text('capture failed', 502)
 })
+// A live adapter-owned execution observation, intentionally distinct from the durable conversation timeline.
+// The response carries only the backend-normalized latest working note and typed tool rows; no transcript bytes
+// or parser schema cross this API boundary.
+app.get('/api/sessions/:id/execution', (c) => {
+  const execution = readSessionExecution(c.req.param('id') || '')
+  return execution ? c.json(execution) : c.json({ error: 'no such session' }, 404)
+})
+app.get('/api/sessions/:id/execution/stream', (c) => sessionExecutionStream(c))
 // the session's persisted interaction history ([[session-timeline]]): authored status transitions (with the
 // FULL note text) + delivered prompts, timestamped, oldest first — what a terminal-free surface renders as
 // the conversation. `?limit=<n>` caps the tail (default 500). 404 for an unknown/non-governed id.

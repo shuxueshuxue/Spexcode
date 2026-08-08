@@ -508,7 +508,8 @@ function writeRecord(rec: SessRec): void {
   }
 }
 
-type WatchEntry = { watcher: string; createdAt: string }
+export type WatchSource = 'manual' | 'parent'
+type WatchEntry = { watcher: string; createdAt: string; sources: WatchSource[] }
 export type SessionWatch = { target: string; createdAt: string }
 const watchPath = (target: string) => sessionArtifactPath(target, 'watchers.json')
 
@@ -516,6 +517,7 @@ function readWatchEntries(target: string): WatchEntry[] {
   try {
     const raw = JSON.parse(readFileSync(watchPath(target), 'utf8')) as unknown
     if (!Array.isArray(raw)) return []
+    const parent = readRecord(target)?.parent ?? ''
     const seen = new Set<string>()
     return raw.flatMap((entry): WatchEntry[] => {
       if (!entry || typeof entry !== 'object') return []
@@ -523,7 +525,13 @@ function readWatchEntries(target: string): WatchEntry[] {
       const createdAt = (entry as WatchEntry).createdAt
       if (!watcher || typeof watcher !== 'string' || typeof createdAt !== 'string' || seen.has(watcher)) return []
       seen.add(watcher)
-      return [{ watcher, createdAt }]
+      const rawSources = (entry as { sources?: unknown }).sources
+      const sources: WatchSource[] = Array.isArray(rawSources)
+        ? [...new Set(rawSources.filter((source): source is WatchSource => source === 'manual' || source === 'parent'))]
+        // The former one-source format cannot name an origin. Its child pointer is the only durable witness
+        // that this watcher was installed for parent supervision; every other legacy row is a manual watch.
+        : [watcher === parent ? 'parent' : 'manual']
+      return sources.length ? [{ watcher, createdAt, sources }] : []
     })
   } catch { return [] }
 }
@@ -536,6 +544,27 @@ function writeWatchEntries(target: string, entries: WatchEntry[]): void {
   const tmp = join(dir, `.watchers.json.${process.pid}.tmp`)
   writeFileSync(tmp, JSON.stringify(entries, null, 2) + '\n')
   renameSync(tmp, path)
+}
+
+function addWatchSource(entries: WatchEntry[], watcher: string, source: WatchSource): { entries: WatchEntry[]; added: boolean } {
+  const existing = entries.find((entry) => entry.watcher === watcher)
+  if (!existing) return { entries: [...entries, { watcher, createdAt: new Date().toISOString(), sources: [source] }], added: true }
+  if (existing.sources.includes(source)) return { entries, added: false }
+  return {
+    entries: entries.map((entry) => entry === existing ? { ...entry, sources: [...entry.sources, source] } : entry),
+    added: true,
+  }
+}
+
+function removeWatchSource(entries: WatchEntry[], watcher: string, source: WatchSource): { entries: WatchEntry[]; removed: boolean } {
+  let removed = false
+  const next = entries.flatMap((entry): WatchEntry[] => {
+    if (entry.watcher !== watcher || !entry.sources.includes(source)) return [entry]
+    removed = true
+    const sources = entry.sources.filter((candidate) => candidate !== source)
+    return sources.length ? [{ ...entry, sources }] : []
+  })
+  return { entries: next, removed }
 }
 
 function managedWatchRecord(id: string): SessRec {
@@ -564,7 +593,7 @@ function scheduleWatchNotifications(target: SessRec): void {
   })
 }
 
-export async function subscribeSessionWatch(watcher: string, targets: string[]): Promise<{ watched: string[] }> {
+export async function subscribeSessionWatch(watcher: string, targets: string[], source: WatchSource = 'manual'): Promise<{ watched: string[] }> {
   managedWatchRecord(watcher)
   const watched: string[] = []
   for (const target of [...new Set(targets)]) {
@@ -572,9 +601,8 @@ export async function subscribeSessionWatch(watcher: string, targets: string[]):
     const targetRecord = managedWatchRecord(target)
     withRecordLockSync(target, () => {
       const entries = readWatchEntries(target)
-      if (!entries.some((entry) => entry.watcher === watcher)) {
-        writeWatchEntries(target, [...entries, { watcher, createdAt: new Date().toISOString() }])
-      }
+      const next = addWatchSource(entries, watcher, source)
+      if (next.added) writeWatchEntries(target, next.entries)
     })
     const delivered = await sendText(watcher, watchMessage(targetRecord), target)
     if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
@@ -603,9 +631,9 @@ export function cancelSessionWatch(watcher: string, targets: string[]): number {
   for (const target of [...new Set(targets)]) {
     withRecordLockSync(target, () => {
       const entries = readWatchEntries(target)
-      const kept = entries.filter((entry) => entry.watcher !== watcher)
-      if (kept.length !== entries.length) {
-        writeWatchEntries(target, kept)
+      const next = removeWatchSource(entries, watcher, 'manual')
+      if (next.removed) {
+        writeWatchEntries(target, next.entries)
         cancelled++
       }
     })
@@ -655,11 +683,12 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
       try {
         for (const snapshot of snapshots) {
           const { record, watchers } = snapshot
-          const hadNewParent = watchers.some((entry) => entry.watcher === parent)
-          const retainedNewParent = watchers.find((entry) => entry.watcher === parent)
-          const nextWatchers = watchers.filter((entry) => entry.watcher !== record.parent && entry.watcher !== parent)
-          nextWatchers.push(retainedNewParent ?? { watcher: parent, createdAt: new Date().toISOString() })
-          writeWatchEntries(snapshot.id, nextWatchers)
+          const hadNewParent = watchers.some((entry) => entry.watcher === parent && entry.sources.includes('parent'))
+          const withoutFormerParent = record.parent
+            ? removeWatchSource(watchers, record.parent, 'parent').entries
+            : watchers
+          const nextWatchers = addWatchSource(withoutFormerParent, parent, 'parent').entries
+          if (nextWatchers !== watchers) writeWatchEntries(snapshot.id, nextWatchers)
           if (record.parent !== parent) writeRecord({ ...record, parent })
           if (record.parent !== parent || !hadNewParent) notify.push({ ...record, parent })
         }

@@ -225,6 +225,7 @@ test('session new from a governed parent establishes its child watch before prin
   assert.equal(watchers.length, 1)
   assert.equal(watchers[0].watcher, WATCH_PARENT)
   assert.equal(typeof watchers[0].createdAt, 'string')
+  assert.deepEqual(watchers[0].sources, ['parent'])
   const messages = timelineText(parentDir)
   assert.match(messages, new RegExp(WATCH_CHILD))
 })

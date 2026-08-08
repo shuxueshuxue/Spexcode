@@ -38,20 +38,23 @@ waits on the target's log in its own background command instead.
 
 ## expanded spec
 
-**`spex session watch <SEL...>` establishes a relation and exits.** When the caller's own session and every
-selected target are governed records in the same store, the command adds the caller once to each target's
-`watchers.json`. That file, co-located with the target's timeline, is the ONE truth: its authoring path reads
-only that small list when it writes a state transition, appends a normal `sent` event to each watcher's
-timeline, and enqueues the same ordinary prompt for adapter delivery. A busy or offline watcher therefore
-receives the next retry exactly like a normal `spex session send`; an available watcher receives a terminal
-insert in its current turn. Installation also sends the target's current authored state, so a relationship
-created just after a fast child launch has a truthful starting point.
+**`spex session watch <SEL...>` establishes a manual relation and exits.** When the caller's own session and every
+selected target are governed records in the same store, the command adds the caller's `manual` source to each
+target's `watchers.json`. That file, co-located with the target's timeline, is the ONE truth: every watcher row
+has one watcher id and a small set of sources (`manual` and, when the tree owns it, `parent`). The transition hot
+path projects those rows to unique watcher ids, appends one normal `sent` event to each watcher's timeline, and
+enqueues one ordinary prompt for adapter delivery. A busy or offline watcher therefore receives the next retry
+exactly like a normal `spex session send`; an available watcher receives a terminal insert in its current turn.
+Installation also sends the target's current authored state, so a relationship created just after a fast child
+launch has a truthful starting point.
 
 `spex session watch list` scans targets' `watchers.json` files to show the caller's relations, and
-`spex session watch cancel <SEL...>` removes the caller from the selected targets. That scan is a manual
-management read, never a transition hot path. There is no second watcher-to-target index, heartbeat, TTL, or
-background daemon to reconcile. A removed target takes its watchers file with it; a missing watcher record is
-discarded when the target next emits or a list is read.
+`spex session watch cancel <SEL...>` removes only that caller's `manual` source from the selected targets.
+It does not dissolve an overlapping `parent` source: a still-parented child must remain supervised. Conversely,
+[[session-reparent]] moves only the `parent` source, so a former parent with an independent manual watch remains
+subscribed after the tree edge moves. That scan is a manual management read, never a transition hot path. There
+is no second watcher-to-target index, heartbeat, TTL, or background daemon to reconcile. A removed target takes
+its watchers file with it; a missing watcher record is discarded when the target next emits or a list is read.
 
 **The unmanaged fallback is still following.** If the caller has no governed session address, `watch` writes
 no unusable subscription and instead names `spex session wait <SEL...>` as the command the harness must run

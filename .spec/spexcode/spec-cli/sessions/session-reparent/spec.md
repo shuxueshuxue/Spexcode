@@ -31,21 +31,25 @@ ungoverned session loudly. One child can be active or in a harness turn: reparen
 process nor authored lifecycle, and its next record transition simply observes the new watcher set.
 
 For each child, the operation holds that child's ordinary record lock while it replaces the durable
-`parent` pointer and its target-owned `watchers.json` relation: the former parent is removed and the new
-parent is present exactly once. The old record is never asked to run a cancellation, so an offline or dead
-former supervisor is ordinary input. The same transaction holds each affected target delivery queue and the
-former parent's sender lock, so it revokes that former parent's **unhanded** messages to each moved child;
-the child's immutable timeline remains audit history. A message already claimed by the adapter before the
-transaction gets the queue lock may arrive before reparent returns, but an unhanded stale `continue` cannot
-arrive afterwards. This is a transfer of supervision, not a general messaging ACL: a still-live former
-session may deliberately send a new peer message later. After the rewrite commits, the new parent is sent the
-child's current authored state through normal dispatch, matching an ordinary `session watch` installation.
+`parent` pointer and its target-owned `watchers.json` relation: the former parent's `parent` source is removed
+and the new parent owns that source exactly once. A watcher row may also carry an independent `manual` source;
+reparent never removes or duplicates it. Thus an old parent that manually watches the child still receives
+updates after the tree edge moves, while a parent-only relation is cleanly transferred. The old record is never
+asked to run a cancellation, so an offline or dead former supervisor is ordinary input. The same transaction
+holds each affected target delivery queue and the former parent's sender lock, so it revokes that former
+parent's **unhanded** messages to each moved child; the child's immutable timeline remains audit history. A
+message already claimed by the adapter before the transaction gets the queue lock may arrive before reparent
+returns, but an unhanded stale `continue` cannot arrive afterwards. This is a transfer of supervision, not a
+general messaging ACL: a still-live former session may deliberately send a new peer message later. After the
+rewrite commits, the new parent is sent the child's current authored state through normal dispatch, matching
+the parent-source installation.
 
 The command validates the complete batch before changing the first child and reports the committed child
 ids. A filesystem failure rolls back the in-memory watch rewrite for that child before releasing its lock;
 there is no second index or daemon reconciliation. Reads rebuild the tree from each child record, so the
 next `session ls` or graph request immediately shows the new parentage. Repeating the same move is
-idempotent: it preserves one new-parent watch and repairs a lingering old-parent watch.
+idempotent: it preserves one new-parent `parent` source and repairs a lingering old-parent `parent` source
+without changing any manual source.
 
 It is an owner-style manager write: a reachable backend performs it through its API; a local invocation
 may take the same locks only after proving no backend is listening, while an explicit remote `--api` is

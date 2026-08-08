@@ -129,11 +129,37 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.doesNotMatch(source, /si-action-error|setActErr|<aside[^>]*>[\s\S]{0,400}ActionOutcome/)
 })
 
-test('bulk close returns every refusal to the shared action outcome', () => {
+test('bulk archive and close return every refusal to the shared action outcome', () => {
   assert.match(selectBar, /const body = await response\.json\(\)\.catch\(\(\) => null\)/)
   assert.match(selectBar, /!response\.ok \|\| body\?\.ok === false/)
   assert.match(selectBar, /onError\?\.\(failures\.join\('\\n'\)\)/)
+  assert.match(selectBar, /icon="star"[\s\S]{0,180}setConfirming\('archive'\)/)
+  assert.match(selectBar, /icon="trash"[\s\S]{0,180}setConfirming\('close'\)/)
+  assert.match(selectBar, /`\/api\/sessions\/\$\{id\}\/\$\{verb\}`/)
   assert.match(source, /<SessionSelectBar[\s\S]{0,300}onError=\{\(message\) => setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)\}/)
+})
+
+test('select mode uses the existing reparent route through a drag-handle icon', () => {
+  assert.match(source, /const \[reparentDrag, setReparentDrag\] = useState\(null\)/)
+  assert.match(source, /apiFetch\('\/api\/sessions\/reparent'/)
+  assert.match(source, /body: JSON\.stringify\(\{ children: \[child\], parent \}\)/)
+  assert.match(source, /className="si-drag-handle" data-drag-handle draggable role="img"/)
+  assert.match(source, /<Icon name="grip-vertical" size=\{14\}/)
+  assert.match(source, /onDrop=\{selecting \? \(event\) => dropSessionOn\(event, s\.id\) : undefined\}/)
+  assert.match(css, /\.si-drag-handle\s*\{[^}]*cursor:\s*grab;/s)
+  assert.match(css, /\.si-tree-row\.reparent-target > \.si-item/)
+  assert.match(icons, /'grip-vertical':/)
+  assert.match(focus, /const DRAG_PRESS_TARGETS = '\[draggable="true"\]'/)
+})
+
+test('archive shares the right-click danger group and asks for confirmation', () => {
+  assert.match(contextMenu, /const \[archiving, setArchiving\] = useState\(null\)/)
+  assert.match(contextMenu, /<ContextMenuItem icon="star" danger onClick=\{startArchive\}>/)
+  assert.match(contextMenu, /<ContextMenuItem icon="trash" danger onClick=\{startClose\}>/)
+  assert.match(contextMenu, /apiFetch\(`\/api\/sessions\/\$\{id\}\/archive`/)
+  assert.match(contextMenu, /title=\{t\('sessionWindow\.archiveTitle'/)
+  assert.match(en, /archiveConfirm: 'This files the session out of the active working set/)
+  assert.match(zh, /archiveConfirm: '这会将会话移出活动工作区/)
 })
 
 test('only corrupt rows expose the witnessed quarantine control', () => {

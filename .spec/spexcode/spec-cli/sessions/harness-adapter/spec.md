@@ -7,6 +7,8 @@ code:
   - spec-cli/src/harness.ts
 related:
   - spec-cli/src/headless-controller.ts
+  - spec-cli/src/execution-trace.ts
+  - spec-cli/src/session-execution.ts
   - spec-cli/src/sh.ts
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/materialize.ts
@@ -115,6 +117,13 @@ surface:
 - **slashCommands()** — the `/` menu, computed the way THAT harness computes its own (Claude: a captured
   built-in set + `.claude/commands/**` + skills; Codex: its built-ins + `~/.codex/prompts/**` + plugin
   commands). Decoupled from execution — see `slash-commands.ts` (today Claude-only; becomes the Claude impl).
+- **executionTrace(thread)** — the one read-only transcript seam. An adapter that has a native transcript
+  locates and incrementally parses its own current thread, then returns only the last working note plus the
+  small typed tool-step projection after it. It never returns raw envelopes, arguments, outputs, reasoning, or
+  another message history. An adapter without a transcript primitive returns no trace through the same method;
+  session and HTTP code only consume that normalized result and never branch on a harness id. The transcript is
+  an ephemeral adapter observation, never a second SpexCode session record: [[message-stream]] owns the one
+  conversation entry and its REST/SSE transport.
 - **events / shim** — which lifecycle events to bind, and the per-harness hook shim that points each at the
   dispatcher (`.claude/settings.json` vs `.codex/hooks.json` vs pi's generated `.pi/extensions/spexcode.ts` —
   the shim's `content` is whatever FILE that harness discovers, not necessarily a hooks JSON; pi has no

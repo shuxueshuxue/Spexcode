@@ -181,9 +181,11 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   check('toolbar omits duplicate identity and headline payload', result.wide.identityCount === 0 && !result.wide.text.includes(result.wide.sidebarHeadline) && !result.wide.html.includes(result.wide.sidebarHeadline), { identityCount: result.wide.identityCount, toolbar: result.wide.text, sidebar: result.wide.sidebarHeadline })
   check('Eval is a canonical real navigation tab', result.wide.evalTab.tag === 'A' && decodeURIComponent(result.wide.evalTab.href).includes(`scope:${SESSION}`), result.wide.evalTab)
   check('Eval directly follows the current resource-tab strip', Math.abs(result.wide.tabs.right - result.wide.evalTab.box.x) <= 1, { tabs: result.wide.tabs, evalTab: result.wide.evalTab.box })
-  check('resource picker is divided from Eval and its plus is circular', Math.abs(result.wide.evalTab.box.right - result.wide.picker.x) <= 1
-    && result.wide.picker.borderLeft === '1px' && result.wide.picker.borderRight === '0px' && result.wide.add.x > result.wide.picker.x && result.wide.add.width === 24 && result.wide.add.height === 24 && result.wide.add.borderRadius === '50%',
-  { evalTab: result.wide.evalTab.box, picker: result.wide.picker, add: result.wide.add })
+  check('resource picker is divided from Eval and its plus is a circle quieter than a command tool', Math.abs(result.wide.evalTab.box.right - result.wide.picker.x) <= 1
+    && result.wide.picker.borderLeft === '1px' && result.wide.picker.borderRight === '0px' && result.wide.add.x > result.wide.picker.x
+    && result.wide.add.width === 20 && result.wide.add.height === 20 && result.wide.add.borderRadius === '50%'
+    && result.wide.add.width < (result.wide.actionDetails[0]?.box?.width ?? 0),
+  { evalTab: result.wide.evalTab.box, picker: result.wide.picker, add: result.wide.add, tool: result.wide.actionDetails[0]?.box })
   check('toolbar chrome is distinct from terminal', result.wide.toolbarBackground !== result.wide.terminalBackground, { toolbar: result.wide.toolbarBackground, terminal: result.wide.terminalBackground })
   check('the top-right tools are one continuous icon row', result.wide.files.borderLeft === '0px' && result.wide.files.gapFromLastCommand <= 3.5 && result.wide.surfaceSwitch?.target === 'conversation', { files: result.wide.files, switch: result.wide.surfaceSwitch })
   check('toolbar commands are uniform localized icon tools', result.wide.actionDetails.length > 0 && result.wide.actionDetails.every((tool) => !tool.text && tool.icon && tool.label && tool.label === tool.tip && tool.box.width === 24 && tool.box.height === 24), result.wide.actionDetails)

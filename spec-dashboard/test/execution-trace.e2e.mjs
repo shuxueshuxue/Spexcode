@@ -81,6 +81,17 @@ try {
   const expandedHeight = await rows.nth(0).evaluate((element) => element.getBoundingClientRect().height)
   assert.ok(expandedHeight > collapsedHeight)
 
+  await page.evaluate(() => window.executionSource.emit('execution', {
+    revision: 'fixture-1b', turnId: 'fixture-turn-1', workingNote: 'Inspecting the live execution trace',
+    steps: [
+      { id: 'read', kind: 'read', label: 'read_file', detail: 'path: src/trace.ts · lines: 1-60', state: 'done' },
+      { id: 'run', kind: 'command', label: 'exec_command', detail: 'cmd: npm test', state: 'done' },
+    ],
+  }))
+  assert.equal(await toggles.nth(0).getAttribute('aria-expanded'), 'true')
+  assert.equal(await modal.locator('.execution-step-detail').textContent(), 'path: src/trace.ts · lines: 1-60')
+  assert.equal(await rows.nth(1).locator('.execution-step-state').textContent(), 'done')
+
   await toggles.nth(1).click()
   assert.equal(await toggles.nth(0).getAttribute('aria-expanded'), 'true')
   assert.equal(await toggles.nth(1).getAttribute('aria-expanded'), 'true')
@@ -96,10 +107,14 @@ try {
   await entry.waitFor({ state: 'hidden', timeout: 5_000 })
   await modal.waitFor({ state: 'hidden', timeout: 5_000 })
   await page.evaluate(() => window.executionSource.emit('execution', {
-    revision: 'fixture-3', turnId: 'fixture-turn-2', workingNote: 'Current turn work', steps: [],
+    revision: 'fixture-3', turnId: 'fixture-turn-2', workingNote: 'Current turn work',
+    steps: [{ id: 'new-turn-step', kind: 'read', label: 'read_file', detail: 'path: src/current.ts', state: 'running' }],
   }))
   await entry.waitFor({ state: 'visible', timeout: 5_000 })
   assert.match(await entry.textContent() || '', /Current turn work/)
+  await entry.click()
+  await modal.waitFor({ state: 'visible', timeout: 5_000 })
+  assert.equal(await modal.locator('.execution-step-toggle').getAttribute('aria-expanded'), 'false')
 } finally {
   await browser.close()
 }

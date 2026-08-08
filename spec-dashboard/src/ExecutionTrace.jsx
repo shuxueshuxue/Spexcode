@@ -20,7 +20,7 @@ export default function ExecutionTrace({ sessionId, active }) {
     return subscribeSessionExecution(sessionId, setExecution)
   }, [sessionId, active])
   useEffect(() => { if (!execution?.workingNote) setOpen(false) }, [execution?.workingNote])
-  useEffect(() => setExpanded(new Set()), [execution?.revision])
+  useEffect(() => setExpanded(new Set()), [execution?.turnId, execution?.workingNote])
 
   if (!execution?.workingNote) return null
   const toggleDetail = (id) => setExpanded((current) => {

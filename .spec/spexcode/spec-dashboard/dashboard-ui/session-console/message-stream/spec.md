@@ -30,7 +30,8 @@ is the newest timeline entry. The click opens a transient execution pop-out whos
 chronological order, with the newest tool action at the bottom. Its fixed dummy vocabulary is:
 `command`, `read`, `write`, `search`, or `tool`, plus `running`/`done`. A row can additionally show one
 backend-sanitized detail. Details start collapsed: a compact row shows only its tool, state, and disclosure
-control, while expanding that row reveals its own allowlisted detail without opening or changing any sibling.
+control, while expanding that row reveals its own allowlisted detail without opening or changing any sibling. A
+same-turn live revision retains expanded rows; a changed displayed turn or working note starts disclosure closed.
 The renderer never knows a harness id, transcript path, envelope schema, raw tool arguments, tool result, or
 reasoning text. Its only job is to paint the backend's small projection and choose a familiar icon for the given
 kind.

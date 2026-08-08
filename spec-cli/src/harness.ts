@@ -19,7 +19,7 @@ import { shQuote } from './sh.js'
 import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from './process-identity.js'
 import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
 import { writeFileIfChanged } from './file-write.js'
-import { codexRolloutPath, noExecutionTrace, readCodexExecutionTrace, type ExecutionTrace, type ExecutionTurn } from './execution-trace.js'
+import { codexRolloutPath, noExecutionTrace, readCodexExecutionTrace, readLocalStoreExecutionTrace, readProjectJsonlExecutionTrace, readSessionJsonlExecutionTrace, type ExecutionTrace, type ExecutionTurn } from './execution-trace.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -185,7 +185,7 @@ export interface Harness {
   // is data on the adapter, not an `if (codex)` in sessions.ts.
   readonly paneTitleIsSelfSummary: boolean
   // The adapter-only native transcript reader. Its compact result has no raw envelope, argument, output, or
-  // reasoning data; product surfaces receive only the latest working note and typed tool steps for `turn`.
+  // reasoning data; product surfaces receive only the latest working note and typed tool steps.
   executionTrace(threadId: string, turn: ExecutionTurn | null): ExecutionTrace | null
   // --- launch / sessionId ---
   // the base agent command. Claude: `claude …`; Codex starts a project-scoped app-server and launches the
@@ -2335,7 +2335,7 @@ export const claudeHarness: Harness = {
   events: CLAUDE_EVENTS,
   ownsRendezvous: true,                              // reclaude opens the rendezvous control socket (prompt delivery + liveness)
   paneTitleIsSelfSummary: true,                      // claude writes its live task summary into the OSC pane title → headline derives from it
-  executionTrace: noExecutionTrace,
+  executionTrace: readProjectJsonlExecutionTrace,
   launchCmd: (_id, _rt, cmd) => claudeBaseCmd(cmd),  // claude's full invocation IS its base command (the tail is appended by the caller)
   baseCmd: claudeBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
@@ -2436,7 +2436,7 @@ export const codexHarness: Harness = {
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
-  executionTrace: (threadId, turn) => readCodexExecutionTrace(threadId, undefined, turn),
+  executionTrace: readCodexExecutionTrace,
   launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
   baseCmd: codexBaseCmd,
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
@@ -2784,7 +2784,7 @@ export const piHarness: Harness = {
   events: PI_EVENTS,
   ownsRendezvous: true,                              // the generated extension binds rvSock(id) and speaks the reclaude protocol
   paneTitleIsSelfSummary: false,                     // pi's pane title is not an agent-written task summary → headline uses the prompt preview
-  executionTrace: noExecutionTrace,
+  executionTrace: readSessionJsonlExecutionTrace,
   launchCmd: (_id, _rt, cmd) => `${piBaseCmd(cmd)} --approve`,   // --approve = one-run project trust (belt to writeTrust's braces)
   baseCmd: piBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // caller pins the exact session id, claude-style (created if missing)
@@ -2882,7 +2882,7 @@ export const opencodeHarness: Harness = {
   // socket the launch env hands it, so the shared reply poke and socket-listener liveness are reused verbatim.
   ownsRendezvous: true,
   paneTitleIsSelfSummary: false,                     // opencode's TUI title is not the agent's live task self-summary → headline uses the prompt
-  executionTrace: noExecutionTrace,
+  executionTrace: readLocalStoreExecutionTrace,
   launchCmd: (_id, _rt, cmd) => opencodeLaunchCommand(opencodeBaseCmd(cmd)),   // the tail-branching script (prompt vs --resume/--continue marker)
   baseCmd: opencodeBaseCmd,
   sessionIdArg: () => '',                            // opencode mints its own session id; the plugin's first event reports it back (opencode-capture)

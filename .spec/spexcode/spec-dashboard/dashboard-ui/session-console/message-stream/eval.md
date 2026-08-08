@@ -13,8 +13,10 @@ scenarios:
       normalized latest-working-note execution frame at the bottom of the conversation, and click the note entry.
     expected: >-
       One compact working-note entry is the newest timeline row and opens an execution pop-out. Its normalized
-      read and command rows carry their respective familiar icons, backend-sanitized details, and done/running
-      states in chronological order; no transcript envelope, raw argument, or output is rendered by the browser.
+      read and command rows carry their respective familiar icons and done/running states in chronological order.
+      Safe details start hidden; each row expands independently and gains height only for its own allowlisted
+      detail. A same-turn update retains an expanded row, while a changed turn starts its rows collapsed. No
+      transcript envelope, raw argument, sensitive input, or output is rendered by the browser.
   - name: conversation-is-the-only-headless-console
     tags: [frontend-e2e, desktop, mobile]
     description: >-

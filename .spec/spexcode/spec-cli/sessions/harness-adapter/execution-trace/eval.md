@@ -7,13 +7,14 @@ scenarios:
     related:
       - spec-cli/src/session-execution.api.test.ts
     description: >-
-      Feed a rollout containing an earlier commentary note, a later working note, tool arguments, tool
-      output, one safe structured input, and a final incremental completion through the adapter parser.
+      Feed each base adapter reader an older native turn, the selected current-turn boundary, private reasoning,
+      ordinary assistant working prose, structured tool input, and a matching completion.
     expected: >-
-      Only the last working note and its following typed steps for the exact current turn survive. A completion
-      updates its matching row incrementally; a later human boundary hides the old slice before its own working
-      note arrives; safe structured input becomes a short detail while sensitive arguments and output are absent
-      from the normalized object.
+      Before the first durable human send, each reader exposes the latest native launch slice with a null turn
+      id. After a selector exists, each reader accepts only its selected current turn, takes the last displayable
+      assistant prose, and keeps only later typed tool rows. A matching completion updates its row; safe
+      structured input becomes a short detail while sensitive arguments, output, private reasoning, and earlier
+      turns are absent from the normalized object. The four headless rows inherit their base readers.
 ---
 
 The HTTP scenario under [[session-execution]] is the product-level proof. This narrow parser scenario guards the

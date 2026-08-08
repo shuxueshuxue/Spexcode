@@ -2083,13 +2083,16 @@ a.scenario-count:hover { background: var(--panel2); }
 .execution-trace-modal { width: min(520px, calc(100vw - 28px)); }
 .execution-note { padding: 0 0 10px; color: var(--ink2); font-size: var(--type-body); line-height: var(--leading-relaxed); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .execution-steps { display: flex; flex-direction: column; gap: 2px; padding: 10px 0 0; margin: 0; list-style: none; }
-.execution-step { display: flex; align-items: flex-start; gap: 8px; min-height: 32px; padding: 6px 7px; font-family: var(--mono); font-size: var(--type-control); color: var(--ink2); border-bottom: 1px solid var(--line); }
+.execution-step { min-height: 32px; font-family: var(--mono); font-size: var(--type-control); color: var(--ink2); border-bottom: 1px solid var(--line); }
 .execution-step:last-child { border-bottom: 0; }
-.execution-step > svg { flex: none; margin-top: 2px; color: var(--blue); }
-.execution-step-copy { flex: 1; display: grid; min-width: 0; gap: 2px; }
+.execution-step-toggle, .execution-step-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 7px; color: inherit; font: inherit; text-align: left; background: transparent; border: 0; }
+.execution-step-toggle { cursor: pointer; }
+.execution-step-toggle:hover { background: color-mix(in srgb, var(--blue) 5%, transparent); }
+.execution-step-toggle > svg:first-child, .execution-step-row > svg:first-child { color: var(--blue); }
+.execution-step-toggle > svg:last-child { color: var(--muted); }
 .execution-step-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.execution-step-detail { min-width: 0; overflow: hidden; color: var(--muted); font-size: var(--type-caption); text-overflow: ellipsis; white-space: nowrap; }
-.execution-step-state { flex: none; padding-top: 2px; color: var(--muted); font-size: var(--type-caption); }
+.execution-step-detail { padding: 0 30px 8px; overflow-wrap: anywhere; color: var(--muted); font-size: var(--type-caption); line-height: var(--leading-relaxed); }
+.execution-step-state { color: var(--muted); font-size: var(--type-caption); }
 .execution-step.running .execution-step-state { color: var(--orange); }
 .execution-empty { padding: 8px 7px; color: var(--muted); font-size: var(--type-control); }
 

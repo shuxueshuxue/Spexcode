@@ -7,6 +7,7 @@ const CHROMIUM = process.env.SPEXCODE_CHROMIUM_PATH || '/snap/bin/chromium'
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:5199'
 const SESSION_ID = process.env.SESSION_ID
 const OUT = process.env.OUT || '/tmp/execution-trace-e2e'
+const SENSITIVE = 'PRIVATE_INPUT_SHOULD_NOT_RENDER'
 if (!SESSION_ID) throw new Error('SESSION_ID=<real-session-id> is required')
 mkdirSync(OUT, { recursive: true })
 
@@ -15,8 +16,8 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
 const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
 
 try {
-  // The backend API test owns the real rollout/SSE proof. This browser fixture represents the already-normalized
-  // wire object so the UI assertion cannot accidentally duplicate native transcript parsing.
+  // The backend API test owns the real transcript/SSE proof. This fixture is the normalized wire object, so UI
+  // coverage cannot accidentally duplicate native parsing or pass raw source fields into the browser.
   await context.addInitScript(() => {
     localStorage.setItem('spexcode.session-surface.v1.root', JSON.stringify({ defaultSurface: 'conversation', sessions: {} }))
     class ExecutionSource {
@@ -64,31 +65,56 @@ try {
 
   const modal = page.locator('.execution-trace-modal:visible')
   await modal.waitFor({ state: 'visible', timeout: 5_000 })
-  const steps = await modal.evaluate((element) => ({
-    note: element.querySelector('.execution-note')?.textContent?.trim(),
-    rows: [...element.querySelectorAll('.execution-step')].map((row) => ({
-      label: row.querySelector('.execution-step-label')?.textContent?.trim(),
-      detail: row.querySelector('.execution-step-detail')?.textContent?.trim(),
-      state: row.querySelector('.execution-step-state')?.textContent?.trim(),
-      icon: !!row.querySelector('svg'),
-    })),
+  assert.equal(await modal.locator('.execution-note').textContent(), 'Inspecting the live execution trace')
+  const rows = modal.locator('.execution-step')
+  const toggles = modal.locator('.execution-step-toggle')
+  assert.equal(await rows.count(), 2)
+  assert.equal(await toggles.count(), 2)
+  assert.equal(await toggles.nth(0).getAttribute('aria-expanded'), 'false')
+  assert.equal(await toggles.nth(1).getAttribute('aria-expanded'), 'false')
+  const collapsedHeight = await rows.nth(0).evaluate((element) => element.getBoundingClientRect().height)
+  assert.equal(await modal.locator('.execution-step-detail').count(), 0)
+
+  await toggles.nth(0).click()
+  assert.equal(await toggles.nth(0).getAttribute('aria-expanded'), 'true')
+  assert.equal(await modal.locator('.execution-step-detail').textContent(), 'path: src/trace.ts · lines: 1-60')
+  const expandedHeight = await rows.nth(0).evaluate((element) => element.getBoundingClientRect().height)
+  assert.ok(expandedHeight > collapsedHeight)
+
+  await page.evaluate(() => window.executionSource.emit('execution', {
+    revision: 'fixture-1b', turnId: 'fixture-turn-1', workingNote: 'Inspecting the live execution trace',
+    steps: [
+      { id: 'read', kind: 'read', label: 'read_file', detail: 'path: src/trace.ts · lines: 1-60', state: 'done' },
+      { id: 'run', kind: 'command', label: 'exec_command', detail: 'cmd: npm test', state: 'done' },
+    ],
   }))
-  assert.equal(steps.note, 'Inspecting the live execution trace')
-  assert.deepEqual(steps.rows, [
-    { label: 'read_file', detail: 'path: src/trace.ts · lines: 1-60', state: 'done', icon: true },
-    { label: 'exec_command', detail: 'cmd: npm test', state: 'running', icon: true },
-  ])
+  assert.equal(await toggles.nth(0).getAttribute('aria-expanded'), 'true')
+  assert.equal(await modal.locator('.execution-step-detail').textContent(), 'path: src/trace.ts · lines: 1-60')
+  assert.equal(await rows.nth(1).locator('.execution-step-state').textContent(), 'done')
+
+  await toggles.nth(1).click()
+  assert.equal(await toggles.nth(0).getAttribute('aria-expanded'), 'true')
+  assert.equal(await toggles.nth(1).getAttribute('aria-expanded'), 'true')
+  const payload = await modal.textContent() || ''
+  assert.match(payload, /path: src\/trace\.ts · lines: 1-60/)
+  assert.match(payload, /cmd: npm test/)
+  assert.doesNotMatch(payload, new RegExp(SENSITIVE))
+  await page.screenshot({ path: `${OUT}/execution-trace.png`, fullPage: true })
+
   await page.evaluate(() => window.executionSource.emit('execution', {
     revision: 'fixture-2', turnId: 'fixture-turn-2', workingNote: null, steps: [],
   }))
   await entry.waitFor({ state: 'hidden', timeout: 5_000 })
   await modal.waitFor({ state: 'hidden', timeout: 5_000 })
   await page.evaluate(() => window.executionSource.emit('execution', {
-    revision: 'fixture-3', turnId: 'fixture-turn-2', workingNote: 'Current turn work', steps: [],
+    revision: 'fixture-3', turnId: 'fixture-turn-2', workingNote: 'Current turn work',
+    steps: [{ id: 'new-turn-step', kind: 'read', label: 'read_file', detail: 'path: src/current.ts', state: 'running' }],
   }))
   await entry.waitFor({ state: 'visible', timeout: 5_000 })
   assert.match(await entry.textContent() || '', /Current turn work/)
-  await page.screenshot({ path: `${OUT}/execution-trace.png`, fullPage: true })
+  await entry.click()
+  await modal.waitFor({ state: 'visible', timeout: 5_000 })
+  assert.equal(await modal.locator('.execution-step-toggle').getAttribute('aria-expanded'), 'false')
 } finally {
   await browser.close()
 }

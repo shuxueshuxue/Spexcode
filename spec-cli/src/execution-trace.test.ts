@@ -18,15 +18,15 @@ test('Codex execution trace keeps only the latest working note and its normalize
       line({ type: 'event_msg', payload: { type: 'agent_message', phase: 'commentary', message: 'old working note' } }),
       line({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'old', name: 'exec_command', arguments: 'SECRET_OLD_ARGUMENT' } }),
       line({ type: 'event_msg', payload: { type: 'agent_message', phase: 'commentary', message: 'current working note' } }),
-      line({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'read', name: 'read_file', arguments: 'SECRET_READ_ARGUMENT' } }),
+      line({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'read', name: 'read_file', arguments: JSON.stringify({ path: '/project/src/trace.ts', line_start: 4, line_end: 12 }) } }),
       line({ type: 'response_item', payload: { type: 'custom_tool_call_output', call_id: 'read', output: 'SECRET_READ_OUTPUT' } }),
-      line({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'run', name: 'exec_command', arguments: 'SECRET_RUN_ARGUMENT' } }),
+      line({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'run', name: 'exec_command', arguments: JSON.stringify({ cmd: 'printf SECRET_RUN_ARGUMENT' }) } }),
     ].join(''))
 
     const first = readCodexExecutionTrace(thread, root)
     assert.equal(first.workingNote, 'current working note')
     assert.deepEqual(first.steps, [
-      { id: 'read', kind: 'read', label: 'read_file', state: 'done' },
+      { id: 'read', kind: 'read', label: 'read_file', detail: 'path: src/trace.ts · lines: 4-12', state: 'done' },
       { id: 'run', kind: 'command', label: 'exec_command', state: 'running' },
     ])
     assert.doesNotMatch(JSON.stringify(first), /SECRET_|old working note/)

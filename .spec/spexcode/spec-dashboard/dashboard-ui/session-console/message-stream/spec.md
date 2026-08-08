@@ -21,11 +21,14 @@ what was said and declared. A harness transcript is neither a second conversatio
 record. It is an adapter-local, ephemeral observation of work in progress.
 
 When the selected session's adapter can read that observation, the backend projects exactly one **latest
-working note** and the normalized tool steps that follow it. TimelineChat renders the note as one compact,
-clickable entry. The click opens a transient execution pop-out whose rows are a fixed dummy vocabulary:
-`command`, `read`, `write`, `search`, or `tool`, plus `running`/`done`. The renderer never knows a harness id,
-transcript path, envelope schema, tool arguments, tool result, reasoning text, or raw assistant message. Its
-only job is to paint the backend's small projection and choose a familiar icon for the given kind.
+working note** and the normalized tool steps that follow it. TimelineChat renders the note after its durable
+conversation history, so the current work is the newest timeline entry. The click opens a transient execution
+pop-out whose rows retain the adapter's chronological order, with the newest tool action at the bottom. Its fixed
+dummy vocabulary is:
+`command`, `read`, `write`, `search`, or `tool`, plus `running`/`done`. A row can additionally show one
+backend-sanitized detail beneath its tool name. The renderer never knows a harness id, transcript path,
+envelope schema, raw tool arguments, tool result, reasoning text, or raw assistant message. Its only job is to
+paint the backend's small projection and choose a familiar icon for the given kind.
 
 The phrase "latest" is literal: a later working note replaces the prior note and its steps. Earlier
 commentary, prior turns, and every other transcript field stay private. A source without a readable working

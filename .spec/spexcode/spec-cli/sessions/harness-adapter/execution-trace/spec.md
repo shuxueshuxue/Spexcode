@@ -18,7 +18,9 @@ tool list. It reads a growing rollout incrementally, retains unfinished trailing
 slice when a newer commentary working note arrives.
 
 For Codex, one custom tool call becomes one `command`, `read`, `write`, `search`, or generic `tool` step. Its
-matching output flips that step from running to done. The projection never contains tool arguments, output,
+matching output flips that step from running to done. A step may carry one compact detail derived from a small
+allowlist of structured input fields. The adapter truncates it, shortens paths, and omits it entirely when the
+input contains credential-like keys or values. The projection never contains raw tool arguments, output,
 reasoning, prior commentary, transcript paths, or raw native envelopes. An absent rollout is an empty trace,
 not an error or a fabricated conversation entry. [[session-execution]] owns the public HTTP/SSE read of this
 value; [[harness-adapter]] owns the registry capability that calls it.

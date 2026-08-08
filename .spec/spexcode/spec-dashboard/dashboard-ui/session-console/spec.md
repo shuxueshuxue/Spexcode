@@ -332,11 +332,11 @@ chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥
 key handling deliberately **falls through unhandled** so the window-level handler
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit
 that shaped the old chord: **⌘/Ctrl shortcuts remain native/browser-owned**, while ⌥ is the modifier the app
-can actually own.) The **toolbar's command
-group** renders the same board-command registry. The top-right [[files]] icon is grey when the
+can actually own.) The toolbar's **one right-side tool group** renders the same board-command registry. The top-right [[files]] icon is grey when the
 selected session's projected path list is empty; otherwise it opens a file-name-only list whose full paths live in
 hover tooltips. It and the pane-backed Terminal/Conversation switch are adjacent icon controls, without a
-painted divider separating them from the other right-toolbar tools. Clicking the filename opens or selects the
+painted divider, wrapper boundary, or extra gutter separating them from the other right-toolbar tools: the whole
+right edge uses one shared icon gap and one outer padding. Clicking the filename opens or selects the
 singleton resource tab; the adjacent download and copy tools remain explicit icon actions, with download
 delegating to the authorized backend route. **Command Box** is present whenever live. The
 right-side action group is surface-specific: every selected resource shows its one refresh tool; a selected web has

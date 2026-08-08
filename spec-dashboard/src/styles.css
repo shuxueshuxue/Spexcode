@@ -1676,7 +1676,6 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-eval-phase { flex: 0 0 auto; color: var(--muted); }
 
 .si-actions { flex: 0 0 auto; min-width: 0; margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 0 4px; }
-.si-surface-tools { flex: 0 0 auto; display: flex; align-items: center; gap: 3px; padding: 0 4px; }
 .si-files { position: relative; display: flex; align-items: center; padding: 0; }
 .si-files-menu { position: absolute; top: calc(100% + 4px); right: 4px; z-index: 20; width: max-content; max-width: min(360px, calc(100vw - 24px)); max-height: min(320px, 55vh); overflow-y: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 2px 8px color-mix(in srgb, var(--ink) 12%, transparent); }
 .si-files-row { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) repeat(2, 26px); align-items: center; gap: 2px; }
@@ -1700,7 +1699,6 @@ a.scenario-count:hover { background: var(--panel2); }
   .si-eval-label, .si-eval-stats .secondary { display: none; }
   .si-eval-tab { gap: 4px; padding-inline: 6px; }
   .si-actions { gap: 2px; padding-inline: 4px; }
-  .si-surface-tools { gap: 2px; padding-inline: 3px; }
   .si-resource-tab-main { max-width: 110px; }
 }
 @container (max-width: 390px) {

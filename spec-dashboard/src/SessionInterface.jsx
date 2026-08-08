@@ -1488,7 +1488,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   </div>
                 </div>
 
-                <div className="si-actions" role="group" aria-label={t('session.commandsLabel')}>
+                <div className="si-actions" role="group" aria-label={t('session.toolbarToolsLabel')}>
                   {activeResource && (
                     <>
                       <IconButton icon="rotate-ccw" size={14} className="si-tool sc-blue refresh-resource" data-resource-action="refresh"
@@ -1528,8 +1528,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       />
                     )
                   })}
-                </div>
-                <div className="si-surface-tools" role="group" aria-label={t('session.surfaceToolsLabel')}>
                   <SessionFiles
                     session={selSession}
                     onDownload={downloadFile}

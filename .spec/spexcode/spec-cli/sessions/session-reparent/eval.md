@@ -3,18 +3,21 @@ scenarios:
   - name: move-children-and-watch-relation
     description: >
       With three real governed sessions in one project store, make two children point to an offline former
-      parent and register that former parent in both target watcher files. Keep one child in an active turn,
-      then run `spex session reparent <child-a> <child-b> --to <replacement>`. Inspect `session ls`, each
-      record and watcher relation, the replacement's received current-state notices, and a later child
-      declaration.
+      parent. Give child A an overlapping `parent` and `manual` source for that former parent, and child B
+      only the `parent` source. Keep one child in an active turn, then run `spex session reparent <child-a>
+      <child-b> --to <replacement>`. Inspect `session ls`, each record and watcher relation, the
+      replacement's received current-state notices, and a later child declaration.
     expected: >
       The command exits successfully without signalling or restarting either child. Both list-tree rows move
-      to the replacement immediately; each child has the replacement as parent and exactly one watcher,
-      with the former parent absent. The replacement receives each current state and the later transition;
-      the former parent receives no new transition. A pending former-parent `continue` never reaches either
-      child after the transfer, while its accepted historical timeline line is not erased.
+      to the replacement immediately; each child has the replacement as parent and exactly one replacement
+      watcher carrying `parent`. Child A retains the former parent's `manual` source while child B drops its
+      now-empty former-parent row. The replacement receives each current state and later transition; the
+      former parent receives child A's later transition only through its surviving manual relation. A pending
+      former-parent `continue` never reaches either child after the transfer, while its accepted historical
+      timeline line is not erased.
     tags: [cli, backend-api]
-    code: spec-cli/src/session-reparent.ts
+    test: "spec-cli/src/session-reparent.test.ts"
+    code: [spec-cli/src/session-reparent.ts, spec-cli/src/sessions.ts]
   - name: backendless-owner-fallback
     description: >
       Stop the project's backend after creating governed parent and child records, then run the same

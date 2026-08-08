@@ -2,15 +2,17 @@ import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { harnessById } from './harness.js'
 import { readAliasedRawRecord } from './layout.js'
-import type { ExecutionStep } from './execution-trace.js'
+import { currentHumanTurn } from './session-timeline.js'
+import type { ExecutionStep, ExecutionTurn } from './execution-trace.js'
 
 export type SessionExecution = Readonly<{
   revision: string
+  turnId: string | null
   workingNote: string | null
   steps: readonly ExecutionStep[]
 }>
 
-const absentExecution = (): SessionExecution => ({ revision: '0', workingNote: null, steps: [] })
+const absentExecution = (turn: ExecutionTurn | null = null): SessionExecution => ({ revision: `turn:${turn?.token ?? '0'}`, turnId: turn?.token ?? null, workingNote: null, steps: [] })
 
 // This is deliberately a read projection. Native transcript bytes stay within the adapter, while the API owns
 // only enough information for the frontend's fixed renderer to paint the current execution slice.
@@ -18,15 +20,16 @@ export function readSessionExecution(id: string): SessionExecution | null {
   let record: ReturnType<typeof readAliasedRawRecord>
   try { record = readAliasedRawRecord(id) } catch { return null }
   if (!record?.governed) return null
+  const turn = currentHumanTurn(id)
   const threadId = typeof record.harness_session_id === 'string' ? record.harness_session_id : ''
-  if (!threadId) return absentExecution()
+  if (!threadId) return absentExecution(turn)
   try {
     const trace = harnessById(typeof record.harness === 'string' && record.harness ? record.harness : 'claude')
-      .executionTrace(threadId)
-    return trace || absentExecution()
+      .executionTrace(threadId, turn)
+    return trace || absentExecution(turn)
   } catch {
     // A missing/unreadable native source is an absent transient trace, not a synthetic conversation failure.
-    return absentExecution()
+    return absentExecution(turn)
   }
 }
 

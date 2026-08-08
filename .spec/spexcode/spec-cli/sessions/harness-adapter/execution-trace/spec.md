@@ -13,9 +13,18 @@ related:
 # execution-trace
 
 The harness adapter is the only layer allowed to know where its native transcript lives or how its JSON lines
-are shaped. `execution-trace.ts` turns that private input into `workingNote`, `revision`, and a compact ordered
-tool list. It reads a growing rollout incrementally, retains unfinished trailing bytes, and resets the visible
-slice when a newer commentary working note arrives.
+are shaped. `execution-trace.ts` turns that private input into an opaque `turnId`, `workingNote`, `revision`,
+and a compact ordered tool list. It reads a growing rollout incrementally, retains unfinished trailing bytes,
+and resets the visible slice when a newer commentary working note arrives.
+
+A live trace is strictly attached to the current human working turn. The accepted human message's durable
+timeline `mid` is the opaque binding token and its `ts` is the acceptance boundary: the session reader
+reconstructs both after restart and passes them to every adapter through the same `executionTrace` seam. An adapter
+returns no visible note or step until its native transcript has reached the exact matching user-message boundary;
+when its native source has no matching id, it may use an unambiguous user boundary at or after the acceptance time.
+A newer or mismatched native user boundary also makes the prior slice unavailable. Native timestamps and file
+ordinals establish transcript order, but never identify the turn by themselves. The normalized `turnId` is a
+binding token only, never a transcript path, native id, or envelope field.
 
 For Codex, one custom tool call becomes one `command`, `read`, `write`, `search`, or generic `tool` step. Its
 matching output flips that step from running to done. A step may carry one compact detail derived from a small

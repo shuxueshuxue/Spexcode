@@ -5,7 +5,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { appendSent, lastHumanSendVia, readTimeline, sentDispatchReceipt, settleSentDispatch, timelineEvents } from './session-timeline.js'
+import { appendSent, currentHumanTurn, lastHumanSendVia, readTimeline, sentDispatchReceipt, settleSentDispatch, timelineEvents } from './session-timeline.js'
 import { pendingMessages } from './delivery-queue.js'
 import { rvSock } from './harness.js'
 import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
@@ -200,6 +200,14 @@ test('lastHumanSendVia: agent-to-agent sends neither set nor clear the human cha
 test('lastHumanSendVia: status events are ignored — only sent events carry a channel', () => {
   const home = seedTimeline([sent(null, 'note'), { ts: '2026-07-16T00:00:01.000Z', kind: 'status', status: 'active', proposal: null, note: null }])
   withHome(home, () => assert.equal(lastHumanSendVia(ID), 'note'))
+})
+
+test('currentHumanTurn is reconstructed from the latest durable human send', () => {
+  const first = sent(null)
+  const second = sent('aaaa1111-2222-3333-4444-555555555555')
+  const third = sent(null)
+  const home = seedTimeline([first, second, third])
+  withHome(home, () => assert.deepEqual(currentHumanTurn(ID), { token: third.mid, acceptedAt: third.ts }))
 })
 
 test('composeSessionPrompt owns headless defaults, explicit overrides, and final launch ordering', async () => {

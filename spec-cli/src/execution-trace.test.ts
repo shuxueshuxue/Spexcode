@@ -39,3 +39,43 @@ test('Codex execution trace keeps only the latest working note and its normalize
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('execution trace withholds a prior slice until the exact current turn reaches the native rollout', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-execution-trace-'))
+  const thread = 'turn-fence-thread'
+  const dir = join(root, '2026', '08', '08')
+  const rollout = join(dir, `rollout-456-${thread}.jsonl`)
+  const previousTurn = '11111111-1111-4111-8111-111111111111'
+  const currentTurn = '22222222-2222-4222-8222-222222222222'
+  const previous = { token: previousTurn, acceptedAt: '2026-08-08T00:00:00.000Z' }
+  const current = { token: currentTurn, acceptedAt: '2026-08-08T00:01:00.000Z' }
+  mkdirSync(dir, { recursive: true })
+  try {
+    writeFileSync(rollout, [
+      line({ type: 'event_msg', payload: { type: 'user_message', client_id: previousTurn } }),
+      line({ type: 'event_msg', payload: { type: 'agent_message', phase: 'commentary', message: 'previous turn note' } }),
+      line({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'previous-tool', name: 'read_file', arguments: JSON.stringify({ path: '/project/old.ts' }) } }),
+    ].join(''))
+
+    assert.equal(readCodexExecutionTrace(thread, root, previous).workingNote, 'previous turn note')
+    const waiting = readCodexExecutionTrace(thread, root, current)
+    assert.equal(waiting.revision.startsWith(`${currentTurn}:`), true)
+    assert.deepEqual({ turnId: waiting.turnId, workingNote: waiting.workingNote, steps: waiting.steps }, { turnId: currentTurn, workingNote: null, steps: [] })
+
+    appendFileSync(rollout, line({ type: 'event_msg', payload: { type: 'agent_message', phase: 'commentary', message: 'stale continuation' } }))
+    assert.equal(readCodexExecutionTrace(thread, root, current).workingNote, null)
+
+    appendFileSync(rollout, [
+      line({ type: 'event_msg', payload: { type: 'user_message', client_id: currentTurn } }),
+      line({ type: 'event_msg', payload: { type: 'agent_message', phase: 'commentary', message: 'current turn note' } }),
+      line({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'current-tool', name: 'read_file', arguments: JSON.stringify({ path: '/project/current.ts' }) } }),
+    ].join(''))
+    const attached = readCodexExecutionTrace(thread, root, current)
+    assert.equal(attached.turnId, currentTurn)
+    assert.equal(attached.workingNote, 'current turn note')
+    assert.deepEqual(attached.steps, [{ id: 'current-tool', kind: 'read', label: 'read_file', detail: 'path: project/current.ts', state: 'running' }])
+    assert.equal(readCodexExecutionTrace(thread, root, previous).workingNote, null)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

@@ -42,7 +42,9 @@ The public event sequence has two kinds, one JSON line per event:
   guarantees notes are stored whole).
 - **sent** `{ts, mid, text, from, replyVia?}` — a message addressed to this session. `from` = the sending
   session, null = a human. `mid` is a unique per-message id: it is what a reader's cursor names, so the
-  same message can never be injected twice and never needs a separate idempotency ledger. The recorded
+  same message can never be injected twice and never needs a separate idempotency ledger. The newest human
+  `mid` and `ts` also bind the current live execution observation; they are derived from this durable log at
+  read time, never cached as server-local state. The recorded
   text is the message BEFORE mechanism inserts — hints are transport, not conversation. A caller-authorized
   merge may also store a private `dispatchReceipt` on that SAME sent line: operation plus SHA-256 request and
   payload digests, never the raw key, together with the exact already-composed transport bytes needed to

@@ -3,6 +3,7 @@ import { existsSync, readFileSync, appendFileSync, mkdirSync, statSync, readdirS
 import { basename, join } from 'node:path'
 import { sessionStoreDir, sessionArtifactPath, readAliasedRawRecord } from './layout.js'
 import type { Lifecycle, Proposal } from './sessions.js'
+import type { ExecutionTurn } from './execution-trace.js'
 
 // @@@ session-timeline - the session's append-only log in its global store dir: every authored-lifecycle
 // transition (status + proposal + the FULL note text) and every message addressed to it. It is what a
@@ -211,6 +212,16 @@ export function lastHumanSendVia(id: string): 'note' | null {
   for (let i = evs.length - 1; i >= 0; i--) {
     const e = evs[i]
     if (e.kind === 'sent' && e.from == null) return e.replyVia === 'note' ? 'note' : null
+  }
+  return null
+}
+
+// The current human turn is a durable fact from the accepted-message log, not a backend-local generation.
+export function currentHumanTurn(id: string): ExecutionTurn | null {
+  const evs = timelineEvents(id)
+  for (let i = evs.length - 1; i >= 0; i--) {
+    const e = evs[i]
+    if (e.kind === 'sent' && e.from == null) return { token: e.mid, acceptedAt: e.ts }
   }
   return null
 }

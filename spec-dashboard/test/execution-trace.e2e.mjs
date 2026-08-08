@@ -23,14 +23,18 @@ try {
       constructor(url) {
         this.url = url
         this.listeners = new Map()
-        if (url.includes('/execution/stream')) setTimeout(() => this.emit('execution', {
-          revision: 'fixture-1',
-          workingNote: 'Inspecting the live execution trace',
-          steps: [
-            { id: 'read', kind: 'read', label: 'read_file', detail: 'path: src/trace.ts · lines: 1-60', state: 'done' },
-            { id: 'run', kind: 'command', label: 'exec_command', detail: 'cmd: npm test', state: 'running' },
-          ],
-        }), 50)
+        if (url.includes('/execution/stream')) {
+          window.executionSource = this
+          setTimeout(() => this.emit('execution', {
+            revision: 'fixture-1',
+            turnId: 'fixture-turn-1',
+            workingNote: 'Inspecting the live execution trace',
+            steps: [
+              { id: 'read', kind: 'read', label: 'read_file', detail: 'path: src/trace.ts · lines: 1-60', state: 'done' },
+              { id: 'run', kind: 'command', label: 'exec_command', detail: 'cmd: npm test', state: 'running' },
+            ],
+          }), 50)
+        }
       }
       addEventListener(type, listener) {
         const listeners = this.listeners.get(type) || []
@@ -74,6 +78,16 @@ try {
     { label: 'read_file', detail: 'path: src/trace.ts · lines: 1-60', state: 'done', icon: true },
     { label: 'exec_command', detail: 'cmd: npm test', state: 'running', icon: true },
   ])
+  await page.evaluate(() => window.executionSource.emit('execution', {
+    revision: 'fixture-2', turnId: 'fixture-turn-2', workingNote: null, steps: [],
+  }))
+  await entry.waitFor({ state: 'hidden', timeout: 5_000 })
+  await modal.waitFor({ state: 'hidden', timeout: 5_000 })
+  await page.evaluate(() => window.executionSource.emit('execution', {
+    revision: 'fixture-3', turnId: 'fixture-turn-2', workingNote: 'Current turn work', steps: [],
+  }))
+  await entry.waitFor({ state: 'visible', timeout: 5_000 })
+  assert.match(await entry.textContent() || '', /Current turn work/)
   await page.screenshot({ path: `${OUT}/execution-trace.png`, fullPage: true })
 } finally {
   await browser.close()

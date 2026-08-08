@@ -19,7 +19,7 @@ import { shQuote } from './sh.js'
 import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from './process-identity.js'
 import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
 import { writeFileIfChanged } from './file-write.js'
-import { codexRolloutPath, noExecutionTrace, readCodexExecutionTrace, type ExecutionTrace } from './execution-trace.js'
+import { codexRolloutPath, noExecutionTrace, readCodexExecutionTrace, type ExecutionTrace, type ExecutionTurn } from './execution-trace.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -185,8 +185,8 @@ export interface Harness {
   // is data on the adapter, not an `if (codex)` in sessions.ts.
   readonly paneTitleIsSelfSummary: boolean
   // The adapter-only native transcript reader. Its compact result has no raw envelope, argument, output, or
-  // reasoning data; product surfaces receive only the latest working note and typed tool steps.
-  executionTrace(threadId: string): ExecutionTrace | null
+  // reasoning data; product surfaces receive only the latest working note and typed tool steps for `turn`.
+  executionTrace(threadId: string, turn: ExecutionTurn | null): ExecutionTrace | null
   // --- launch / sessionId ---
   // the base agent command. Claude: `claude …`; Codex starts a project-scoped app-server and launches the
   // visible TUI with `--remote` pointed at it. `cmd` is the SESSION's persisted launcher command
@@ -2436,7 +2436,7 @@ export const codexHarness: Harness = {
   events: CODEX_EVENTS,
   ownsRendezvous: false,                             // no reclaude daemon — liveness + prompts through the project app-server socket
   paneTitleIsSelfSummary: false,                     // codex's pane title is a spinner + the cwd folder name, NOT a task summary → headline uses the prompt
-  executionTrace: readCodexExecutionTrace,
+  executionTrace: (threadId, turn) => readCodexExecutionTrace(threadId, undefined, turn),
   launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
   baseCmd: codexBaseCmd,
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)

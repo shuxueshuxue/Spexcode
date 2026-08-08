@@ -10,8 +10,13 @@ export type ExecutionStep = Readonly<{
   detail?: string
   state: 'running' | 'done'
 }>
+export type ExecutionTurn = Readonly<{
+  token: string
+  acceptedAt: string
+}>
 export type ExecutionTrace = Readonly<{
   revision: string
+  turnId: string | null
   workingNote: string | null
   steps: readonly ExecutionStep[]
 }>
@@ -19,12 +24,15 @@ export type ExecutionTrace = Readonly<{
 type CachedTrace = {
   size: number
   remainder: Buffer
+  nativeTurnId: string | null
+  nativeTurnAt: string | null
   workingNote: string | null
   steps: ExecutionStep[]
 }
 
 const cache = new Map<string, CachedTrace>()
-const emptyTrace = (): ExecutionTrace => ({ revision: '0', workingNote: null, steps: [] })
+const traceRevision = (turn: ExecutionTurn | null, size = 0): string => `${turn?.token ?? '0'}:${size}`
+const emptyTrace = (turn: ExecutionTurn | null = null, size = 0): ExecutionTrace => ({ revision: traceRevision(turn, size), turnId: turn?.token ?? null, workingNote: null, steps: [] })
 
 // Codex owns both this native on-disk rollout format and the exact place its transcript lives. The caller only
 // receives this module's compact projection, never the file path or one of its native envelopes.
@@ -121,6 +129,14 @@ function applyRolloutEvent(trace: CachedTrace, value: unknown, ordinal: number):
   const payload = event.payload && typeof event.payload === 'object' ? event.payload as Record<string, unknown> : null
   if (!payload) return
 
+  if (event.type === 'event_msg' && payload.type === 'user_message') {
+    trace.nativeTurnId = field(payload, 'client_id')
+    trace.nativeTurnAt = text(event.timestamp)
+    trace.workingNote = null
+    trace.steps = []
+    return
+  }
+
   // Codex writes working commentary as event_msg/agent_message. A later note begins a new visible execution
   // slice, deliberately discarding prior commentary and tool history.
   if (event.type === 'event_msg' && payload.type === 'agent_message' && payload.phase === 'commentary') {
@@ -176,18 +192,24 @@ function readFrom(path: string, start: number): Buffer | null {
   finally { if (fd !== null) closeSync(fd) }
 }
 
-export function readCodexExecutionTrace(threadId: string, root = codexSessionsDir()): ExecutionTrace {
+function matchesCurrentTurn(trace: CachedTrace, turn: ExecutionTurn | null): boolean {
+  if (!turn) return true
+  if (trace.nativeTurnId) return trace.nativeTurnId === turn.token
+  return !!trace.nativeTurnAt && trace.nativeTurnAt >= turn.acceptedAt
+}
+
+export function readCodexExecutionTrace(threadId: string, root = codexSessionsDir(), turn: ExecutionTurn | null = null): ExecutionTrace {
   const path = codexRolloutPath(threadId, root)
-  if (!path) return emptyTrace()
+  if (!path) return emptyTrace(turn)
   let size: number
-  try { size = statSync(path).size } catch { return emptyTrace() }
+  try { size = statSync(path).size } catch { return emptyTrace(turn) }
 
   const prior = cache.get(path)
   const trace = prior && prior.size <= size
     ? { ...prior, steps: [...prior.steps] }
-    : { size: 0, remainder: Buffer.alloc(0), workingNote: null, steps: [] as ExecutionStep[] }
+    : { size: 0, remainder: Buffer.alloc(0), nativeTurnId: null, nativeTurnAt: null, workingNote: null, steps: [] as ExecutionStep[] }
   const appended = readFrom(path, trace.size)
-  if (appended === null) return emptyTrace()
+  if (appended === null) return emptyTrace(turn)
   const { lines, remainder } = completeLines(Buffer.concat([trace.remainder, appended]))
   for (const [index, line] of lines.entries()) {
     try { applyRolloutEvent(trace, JSON.parse(line.toString('utf8')), trace.size + index) } catch { /* an incomplete/corrupt native line is not a UI event */ }
@@ -195,7 +217,8 @@ export function readCodexExecutionTrace(threadId: string, root = codexSessionsDi
   trace.size = size
   trace.remainder = remainder
   cache.set(path, trace)
-  return { revision: String(size), workingNote: trace.workingNote, steps: trace.steps }
+  if (!matchesCurrentTurn(trace, turn)) return emptyTrace(turn, size)
+  return { revision: traceRevision(turn, size), turnId: turn?.token ?? null, workingNote: trace.workingNote, steps: trace.steps }
 }
 
-export const noExecutionTrace = (): ExecutionTrace | null => null
+export const noExecutionTrace = (_threadId: string, _turn: ExecutionTurn | null): ExecutionTrace | null => null

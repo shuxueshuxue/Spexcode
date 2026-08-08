@@ -170,6 +170,8 @@ test('the dispatched merge prompt reports a distinguishable gate verdict', { tim
       .map((event: any) => event.text as string)
       .find((text: string) => text.includes(reviewedHead) && text.includes(reviewedBase)) ?? ''
     assert.ok(prompt, 'no merge prompt on the session timeline')
+    assert.match(prompt, /task is complete with no need to retain its worktree, run `spex session done --propose close` as your FINAL action/)
+    assert.match(prompt, /Otherwise declare the state that is true/)
 
     // Nothing below asks the backend anything: the agent's shell is the executor from here on.
     await stopBackend()

@@ -250,6 +250,10 @@ project's eventual source migration remains an explicit reviewed change rather t
   `awaiting`/`merge`/`review` proposal while liveness is `online`; every other proposal, lifecycle, or
   liveness reading is muted, disabled, and names its reason. This is an affordance over the existing
   record projection, never a new merge, commit-gate, or lifecycle transition.
+  After verified landing, close-pending is for a finished task whose worktree is no longer needed; otherwise the
+  agent declares the state that is true. `nothing` remains the choice when the worktree should stay available
+  without a merge proposal. The first-stop teaching carries the same boundary, so unfinished work stays
+  review/asking rather than inviting discard.
 - **`StopFailure` → `error`**; **headless turn non-zero exit → `error`**, but only as an `active` compare-and-set
   so a declaration written before child teardown wins; **`Notification(idle_prompt)` → `idle`**. All Stop-gate
   git goes through the shared `git()` helper, so a stray exported git dir can't misdirect repo discovery.

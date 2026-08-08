@@ -20,20 +20,25 @@ related:
 what was said and declared. A harness transcript is neither a second conversation nor a durable SpexCode
 record. It is an adapter-local, ephemeral observation of work in progress.
 
-When the selected session's adapter can read that observation, the backend projects exactly one **latest
-working note** and the normalized tool steps that follow it. TimelineChat renders the note after its durable
-conversation history, so the current work is the newest timeline entry. The click opens a transient execution
-pop-out whose rows retain the adapter's chronological order, with the newest tool action at the bottom. Its fixed
-dummy vocabulary is:
+The backend derives a current-turn selector from the newest durable human send, then asks the selected adapter
+for exactly one **latest working note** and the normalized tool steps that follow it. The selector is fresh for
+each read and never becomes transcript state. An adapter first maps its native user boundary to that selector,
+then considers only later native events: a later user boundary clears the projection. It exposes the last
+displayable assistant working prose in that slice, skips structured/private reasoning, and attaches only its
+following tool steps. TimelineChat renders the note after its durable conversation history, so the current work
+is the newest timeline entry. The click opens a transient execution pop-out whose rows retain the adapter's
+chronological order, with the newest tool action at the bottom. Its fixed dummy vocabulary is:
 `command`, `read`, `write`, `search`, or `tool`, plus `running`/`done`. A row can additionally show one
-backend-sanitized detail beneath its tool name. The renderer never knows a harness id, transcript path,
-envelope schema, raw tool arguments, tool result, reasoning text, or raw assistant message. Its only job is to
-paint the backend's small projection and choose a familiar icon for the given kind.
+backend-sanitized detail. Details start collapsed: a compact row shows only its tool, state, and disclosure
+control, while expanding that row reveals its own allowlisted detail without opening or changing any sibling.
+The renderer never knows a harness id, transcript path, envelope schema, raw tool arguments, tool result, or
+reasoning text. Its only job is to paint the backend's small projection and choose a familiar icon for the given
+kind.
 
-The phrase "latest" is literal: a later working note replaces the prior note and its steps. Earlier
-commentary, prior turns, and every other transcript field stay private. A source without a readable working
-note has no entry at all; a source that cannot be read or whose format is unsupported also has no entry, rather
-than displaying a partial raw transcript or an invented error conversation.
+The phrase "latest" is literal: a later displayable working note replaces the prior note and its steps. Earlier
+commentary, prior turns, structured reasoning, tool arguments/results, and every other transcript field stay
+private. A source that cannot be read or whose current selector does not yet map to a native user boundary has no
+entry, rather than displaying a partial raw transcript or an invented error conversation.
 
 `GET /api/sessions/:id/execution` returns the current compact projection. Its companion
 `GET /api/sessions/:id/execution/stream` writes that same projection once, then sends only changed revisions

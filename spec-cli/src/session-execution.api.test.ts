@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -47,7 +47,13 @@ async function nextSse(reader: ReadableStreamDefaultReader<Uint8Array>): Promise
   return new TextDecoder().decode(result.value)
 }
 
-test('YATU: execution API and SSE expose only the latest Codex working note and normalized tool steps', { timeout: 60_000 }, async () => {
+function executionFrame(frame: string): { revision: string; turnId: string | null; workingNote: string | null; steps: Array<{ id: string; state: string }> } {
+  const line = frame.split('\n').find((value) => value.startsWith('data: '))
+  assert.ok(line, `missing execution frame data: ${frame}`)
+  return JSON.parse(line.slice('data: '.length))
+}
+
+test('YATU: execution REST and SSE replace a prior trace at accepted human-turn boundaries', { timeout: 90_000 }, async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-execution-api-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
@@ -57,6 +63,11 @@ test('YATU: execution API and SSE expose only the latest Codex working note and 
   const port = await freePort()
   const rollout = join(codexHome, 'sessions', '2026', '08', '07', `rollout-123-${thread}.jsonl`)
   let backend: ChildProcess | null = null
+  const launch = () => spawn(process.execPath, ['--import', import.meta.resolve('tsx'), index], {
+    cwd: project,
+    env: { ...process.env, PORT: String(port), SPEXCODE_HOME: home, CODEX_HOME: codexHome, SPEXCODE_TMUX: `execution-api-${port}` },
+    stdio: 'ignore', detached: true,
+  })
   try {
     mkdirSync(join(project, '.spec', 'project'), { recursive: true })
     writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n# project\n')
@@ -78,17 +89,14 @@ test('YATU: execution API and SSE expose only the latest Codex working note and 
       line({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'tool-1', name: 'read_file', arguments: JSON.stringify({ path: '/project/spec.md', line_start: 1, line_end: 8 }) } }),
     ].join(''))
 
-    backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), index], {
-      cwd: project,
-      env: { ...process.env, PORT: String(port), SPEXCODE_HOME: home, CODEX_HOME: codexHome, SPEXCODE_TMUX: `execution-api-${port}` },
-      stdio: 'ignore', detached: true,
-    })
+    backend = launch()
     const base = `http://127.0.0.1:${port}`
     await waitFor(() => fetch(`${base}/health`).then((response) => response.ok).catch(() => false), 'backend health')
 
     const snapshot = await fetch(`${base}/api/sessions/${id}/execution`)
     assert.equal(snapshot.status, 200)
-    const body = await snapshot.json() as { workingNote: string; steps: Array<{ kind: string; state: string }> }
+    const body = await snapshot.json() as { turnId: string | null; workingNote: string; steps: Array<{ kind: string; state: string }> }
+    assert.equal(body.turnId, null)
     assert.equal(body.workingNote, 'inspect the session trace')
     assert.deepEqual(body.steps, [{ id: 'tool-1', kind: 'read', label: 'read_file', detail: 'path: project/spec.md · lines: 1-8', state: 'running' }])
     assert.doesNotMatch(JSON.stringify(body), /PRIVATE_OUTPUT/)
@@ -99,9 +107,61 @@ test('YATU: execution API and SSE expose only the latest Codex working note and 
     const reader = stream.body.getReader()
     const first = await nextSse(reader)
     assert.match(first, /event: execution/)
-    appendFileSync(rollout, line({ type: 'response_item', payload: { type: 'custom_tool_call_output', call_id: 'tool-1', output: 'PRIVATE_OUTPUT' } }))
-    const changed = await nextSse(reader)
-    assert.match(changed, /"state":"done"/)
+
+    const accepted = await fetch(`${base}/api/sessions/${id}/input`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'text', text: 'begin the next turn' }),
+    })
+    assert.equal(accepted.status, 200)
+    assert.equal((await accepted.json() as { ok: boolean }).ok, true)
+    const timeline = await fetch(`${base}/api/sessions/${id}/timeline`)
+    assert.equal(timeline.status, 200)
+    const events = (await timeline.json() as { events: Array<{ kind: string; from?: string | null; mid?: string }> }).events
+    const turnId = events.reduce<string | undefined>((latest, event) => (
+      event.kind === 'sent' && event.from == null && event.mid ? event.mid : latest
+    ), undefined)
+    assert.ok(turnId)
+
+    const invalidated = executionFrame(await nextSse(reader))
+    assert.deepEqual(invalidated, { revision: invalidated.revision, turnId, workingNote: null, steps: [] })
+    assert.notEqual(invalidated.revision, executionFrame(first).revision)
+    await reader.cancel()
+
+    await stop(backend)
+    backend = launch()
+    await waitFor(() => fetch(`${base}/health`).then((response) => response.ok).catch(() => false), 'restarted backend health')
+    const afterRestart = await fetch(`${base}/api/sessions/${id}/execution`)
+    assert.equal(afterRestart.status, 200)
+    assert.deepEqual(await afterRestart.json(), { revision: `${turnId}:${Buffer.byteLength(readFileSync(rollout))}`, turnId, workingNote: null, steps: [] })
+
+    const resumed = await fetch(`${base}/api/sessions/${id}/execution/stream`)
+    assert.equal(resumed.status, 200)
+    assert.ok(resumed.body)
+    const resumedReader = resumed.body.getReader()
+    assert.deepEqual(executionFrame(await nextSse(resumedReader)), { revision: `${turnId}:${Buffer.byteLength(readFileSync(rollout))}`, turnId, workingNote: null, steps: [] })
+
+    appendFileSync(rollout, [
+      line({ type: 'event_msg', payload: { type: 'user_message', client_id: turnId } }),
+      line({ type: 'event_msg', payload: { type: 'agent_message', phase: 'commentary', message: 'work for the current turn' } }),
+      line({ type: 'response_item', payload: { type: 'custom_tool_call', call_id: 'tool-2', name: 'read_file', arguments: JSON.stringify({ path: '/project/current.ts' }) } }),
+    ].join(''))
+    const attached = executionFrame(await nextSse(resumedReader))
+    assert.deepEqual({
+      revision: attached.revision,
+      turnId,
+      workingNote: 'work for the current turn',
+      steps: attached.steps.map((step) => ({ id: step.id, state: step.state })),
+    }, {
+      revision: attached.revision,
+      turnId,
+      workingNote: 'work for the current turn',
+      steps: [{ id: 'tool-2', state: 'running' }],
+    })
+    const restAttached = await fetch(`${base}/api/sessions/${id}/execution`)
+    assert.equal((await restAttached.json() as { turnId: string; workingNote: string }).turnId, turnId)
+    appendFileSync(rollout, line({ type: 'response_item', payload: { type: 'custom_tool_call_output', call_id: 'tool-2', output: 'PRIVATE_OUTPUT' } }))
+    const completed = executionFrame(await nextSse(resumedReader))
+    assert.deepEqual(completed.steps.map((step) => ({ id: step.id, state: step.state })), [{ id: 'tool-2', state: 'done' }])
+    await resumedReader.cancel()
     await reader.cancel()
   } finally {
     if (backend) await stop(backend)

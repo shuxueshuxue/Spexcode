@@ -124,6 +124,10 @@ try {
     window.EventSource = class DisabledEventSource { constructor() { throw new Error('fixture disables SSE') } }
   })
   const page = await context.newPage()
+  let archiveRequests = 0
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && /\/api\/sessions\/[^/]+\/archive$/.test(new URL(request.url()).pathname)) archiveRequests++
+  })
   await page.route('**/api/graph*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) }))
   await page.goto(`${base}/#/sessions`, { waitUntil: 'domcontentloaded' })
 
@@ -168,6 +172,7 @@ try {
   assert.ok(await archiveItem.evaluate((item) => item.classList.contains('danger')))
   await archiveItem.click()
   await page.getByRole('dialog', { name: /archive/i }).waitFor({ state: 'visible' })
+  assert.equal(archiveRequests, 0, 'archive waits for confirmation')
   await page.screenshot({ path: `${out}/select-mode-reparent.png` })
 } finally {
   await context?.close()

@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
+import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot, sessionArtifactPath } from './layout.js'
 import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from './process-identity.js'
@@ -1664,6 +1664,46 @@ test('codex launch EXPORTS the launcher cmd so codex-launch probes the SAME code
   assert.ok(cmd.indexOf('export SPEXCODE_CODEX_CMD') < cmd.indexOf('internal codex-launch "$sock"'))
 })
 
+test('codex launcher autonomy flags map to the backend-owned thread policy', () => {
+  const yolo = { approvalPolicy: 'never', sandbox: 'danger-full-access' }
+  assert.deepEqual(codexLauncherThreadPolicy('codex --yolo'), yolo)
+  assert.deepEqual(codexLauncherThreadPolicy('codex --dangerously-bypass-approvals-and-sandbox'), yolo)
+  assert.deepEqual(codexLauncherThreadPolicy("codex --ask-for-approval='never' --sandbox 'danger-full-access'"), yolo)
+  assert.deepEqual(codexLauncherThreadPolicy('codex -a on-request -s workspace-write'), {
+    approvalPolicy: 'on-request', sandbox: 'workspace-write',
+  })
+  assert.deepEqual(codexLauncherThreadPolicy('codex --model yolo-model'), {})
+  assert.deepEqual(codexLauncherThreadPolicy('codex -c note="--yolo"'), {}, 'a config value must not grant full access')
+})
+
+test('codex thread/start sends the pinned launcher policy through the real RPC boundary', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-codex-start-policy-'))
+  const socket = join(dir, 'app-server.sock')
+  let startParams: Record<string, unknown> | undefined
+  const server = codexRpcFixture((message) => {
+    if (message.method !== 'thread/start') throw new Error(`unexpected RPC ${message.method}`)
+    startParams = message.params
+    return { thread: { id: 'thread-yolo' } }
+  })
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    const result = await codexStartThread(socket, '/worktree', true, { SPEXCODE_SESSION_ID: 'rec-42' }, codexLauncherThreadPolicy('codex --yolo'))
+    assert.deepEqual(result, { ok: true, threadId: 'thread-yolo' })
+    assert.deepEqual(startParams, {
+      cwd: '/worktree',
+      approvalPolicy: 'never',
+      sandbox: 'danger-full-access',
+      config: {
+        bypass_hook_trust: true,
+        shell_environment_policy: { set: { SPEXCODE_SESSION_ID: 'rec-42' } },
+      },
+    })
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('codexRolloutExists finds a thread by id only once its rollout file lands on disk', () => {
   const home = mkdtempSync(join(tmpdir(), 'cx-home-'))
   const day = join(home, '2026', '07', '03')
@@ -2338,10 +2378,13 @@ test('a codex thread is created carrying its session identity, and the visible T
   // that leak was github#76. codex's own `shell_environment_policy.set` gives the thread its identity instead,
   // through the ONE channel that reaches a thread: thread/start's config override map (verified live — the
   // thread's shell reports exactly the injected record id, with nothing of the launcher's env).
-  const params = codexStartThreadParams('/wt', true, { SPEXCODE_SESSION_ID: 'rec-42' }) as {
-    cwd: string; config: { bypass_hook_trust: boolean; shell_environment_policy: { set: Record<string, string> } }
+  const params = codexStartThreadParams('/wt', true, { SPEXCODE_SESSION_ID: 'rec-42' }, codexLauncherThreadPolicy('codex --yolo')) as {
+    cwd: string; approvalPolicy: string; sandbox: string
+    config: { bypass_hook_trust: boolean; shell_environment_policy: { set: Record<string, string> } }
   }
   assert.equal(params.cwd, '/wt')
+  assert.equal(params.approvalPolicy, 'never')
+  assert.equal(params.sandbox, 'danger-full-access')
   assert.equal(params.config.bypass_hook_trust, true)
   assert.deepEqual(params.config.shell_environment_policy.set, { SPEXCODE_SESSION_ID: 'rec-42' })
   // no identity to inject → no policy key at all (an override map we do not need is one we do not send)

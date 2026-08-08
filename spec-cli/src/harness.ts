@@ -716,6 +716,32 @@ export function activeTurnIdFromThread(readResult: unknown): string | null {
 export function codexBinary(codexCmd: string): string {
   return codexCmd.trim().split(/\s+/)[0] || 'codex'
 }
+
+export type CodexThreadPolicy = {
+  approvalPolicy?: 'untrusted' | 'on-request' | 'never'
+  sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access'
+}
+
+const regexEscape = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const codexOptionValue = <T extends string>(command: string, flags: readonly string[], values: readonly T[]): T | undefined => {
+  const flagPattern = flags.map(regexEscape).join('|')
+  const valuePattern = values.map(regexEscape).join('|')
+  const matcher = new RegExp(`(?:^|\\s)(?:${flagPattern})(?:=|\\s+)['"]?(${valuePattern})['"]?(?=$|\\s)`, 'g')
+  let found: T | undefined
+  for (const match of command.matchAll(matcher)) found = match[1] as T
+  return found
+}
+
+// A backend-owned thread never runs the launcher CLI that would interpret these flags. Translate the
+// documented Codex autonomy flags at the adapter boundary so thread/start and the visible TUI share one policy.
+export function codexLauncherThreadPolicy(command: string): CodexThreadPolicy {
+  if (/(?:^|\s)(?:--yolo|--dangerously-bypass-approvals-and-sandbox)(?=$|\s)/.test(command)) {
+    return { approvalPolicy: 'never', sandbox: 'danger-full-access' }
+  }
+  const approvalPolicy = codexOptionValue(command, ['--ask-for-approval', '-a'], ['untrusted', 'on-request', 'never'] as const)
+  const sandbox = codexOptionValue(command, ['--sandbox', '-s'], ['read-only', 'workspace-write', 'danger-full-access'] as const)
+  return { ...(approvalPolicy ? { approvalPolicy } : {}), ...(sandbox ? { sandbox } : {}) }
+}
 // codex >=0.142 adds `--dangerously-bypass-hook-trust` — run our OWN (vetted) dispatch hooks without a persisted
 // trusted_hash. We PREFER it over reverse-engineering codexHookHash: that hash is pinned to one codex version's
 // format and silently breaks on a bump (codex then skips ALL our hooks -> no Stop gate, no mark-active, sessions
@@ -1785,19 +1811,18 @@ export function codexSharedRuntimeProbe(dir = runtimeRoot(), endpoint = legacyCo
 // fires the first turn; there is no capture hook and no rollout/cwd scan. Same WS framing as codexThreadId.
 // Never throws.
 // @@@ codexStartThreadParams - what a BACKEND-owned thread is created with. `config` is the per-request
-// override map (the only channel that reaches a thread): `bypass_hook_trust` so our hooks run, and
-// `shell_environment_policy.set` so every command this thread spawns carries the governed record id. The
-// latter is codex's answer to a structural fact — a codex tool shell descends from the SHARED app-server, so
-// it must inherit no identity and be given its own instead (verified live: the shell reports exactly the
-// injected id, and the launcher's env leaks nothing).
-export function codexStartThreadParams(cwd?: string, bypassHookTrust = false, shellEnv?: Record<string, string>): Record<string, unknown> {
+// override map carries `bypass_hook_trust` so our hooks run and `shell_environment_policy.set` so every
+// command this thread spawns carries the governed record id. The typed approval/sandbox fields carry the
+// pinned launcher's autonomy policy; putting those flags only on the later remote TUI cannot change the thread
+// the backend already created.
+export function codexStartThreadParams(cwd?: string, bypassHookTrust = false, shellEnv?: Record<string, string>, policy: CodexThreadPolicy = {}): Record<string, unknown> {
   const config = {
     ...(bypassHookTrust ? { bypass_hook_trust: true } : {}),
     ...(shellEnv && Object.keys(shellEnv).length ? { shell_environment_policy: { set: shellEnv } } : {}),
   }
-  return { ...(cwd ? { cwd } : {}), ...(Object.keys(config).length ? { config } : {}) }
+  return { ...(cwd ? { cwd } : {}), ...policy, ...(Object.keys(config).length ? { config } : {}) }
 }
-export function codexStartThread(sock: string, cwd?: string, bypassHookTrust = false, shellEnv?: Record<string, string>): Promise<{ ok: true; threadId: string } | { ok: false; error: string }> {
+export function codexStartThread(sock: string, cwd?: string, bypassHookTrust = false, shellEnv?: Record<string, string>, policy: CodexThreadPolicy = {}): Promise<{ ok: true; threadId: string } | { ok: false; error: string }> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
@@ -1833,7 +1858,7 @@ export function codexStartThread(sock: string, cwd?: string, bypassHookTrust = f
         // stamps the governed record id there at thread creation, the same moment and the same knowledge with
         // which a claude launch bakes it into its agent's env. Identity then arrives per-thread, needing no
         // alias, no store lookup, and no cwd anywhere downstream.
-        return send({ id: 2, method: 'thread/start', params: codexStartThreadParams(cwd, bypassHookTrust, shellEnv) })
+        return send({ id: 2, method: 'thread/start', params: codexStartThreadParams(cwd, bypassHookTrust, shellEnv, policy) })
       }
       if (m.id === 2 && m.result) {
         const tid = (m.result as { thread?: { id?: string } })?.thread?.id

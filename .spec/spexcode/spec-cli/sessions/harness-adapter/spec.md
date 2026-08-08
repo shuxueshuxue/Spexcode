@@ -222,7 +222,11 @@ surface:
   divergence is the only case that costs a store read: when the two ids agree, nothing is read.
 - **launch / sessionId** — the launch command and id model: Claude `claude --session-id <uuid> [--worktree]`
   (caller chooses the id); Codex `codex` under the launcher's configured approval/sandbox policy (id is codex-assigned — the backend
-  owns it via `thread/start` at launch and resumes by it). The agent-typed CLI resolves its own id via the
+  owns it via `thread/start` at launch and resumes by it). Because that backend-owned thread exists BEFORE the
+  visible remote TUI, the adapter translates Codex's documented launcher autonomy flags (`--yolo` /
+  `--dangerously-bypass-approvals-and-sandbox`, `-a` / `--ask-for-approval`, and `-s` / `--sandbox`) into the
+  typed `thread/start` approval/sandbox fields; a flag present only on the later `--remote resume` command is
+  not policy delivery. The agent-typed CLI resolves its own id via the
   harness's env (`CLAUDE_CODE_SESSION_ID` / …). Codex's app-server is a per-PROJECT daemon shared across every
   worktree's threads, so it is started in the STABLE per-project runtime dir — never a caller's transient
   worktree: a daemon that inherited a worktree cwd is bricked when that worktree is later removed (its cwd goes

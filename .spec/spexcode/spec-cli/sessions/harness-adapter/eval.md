@@ -398,6 +398,22 @@ scenarios:
       injected per command by codex itself and survives. The failure this locks: daemons here ran for days
       handing a long-closed session's id to every later thread's tool shell, which is how a stranger's
       session ended up on other sessions' commits (github#76).
+  - name: codex-launcher-policy-reaches-backend-thread
+    tags: [backend-api, cli]
+    code: spec-cli/src/harness.ts#codexStartThreadParams
+    related: spec-cli/src/cli.ts
+    description: >-
+      Through the REAL dashboard/app-server launch path, configure a Codex launcher whose pinned command is
+      `codex --yolo`, create a fresh session, and compare the durable session record's `launch_cmd` with the
+      actual Codex rollout `turn_context` written by the backend-owned thread's first turn. Do not substitute
+      `codex exec` or a directly launched TUI: the measurement must cross SpexCode's `thread/start` boundary.
+    expected: >-
+      The session keeps the exact `codex --yolo` launcher command, and every turn context created from that
+      backend-owned thread reports approval policy `never` with sandbox mode `danger-full-access`; no command
+      can stop for an approval prompt. The failure this locks: SpexCode put `--yolo` only on the later visible
+      `--remote resume` TUI while creating the thread first with Codex defaults (`on-request` plus
+      `workspace-write`), so the displayed launch command promised YOLO but the running agent still asked the
+      human to approve tools.
   - name: codex-dispatched-thread-fires-lifecycle-hooks
     tags: [backend-api]
     description: >-

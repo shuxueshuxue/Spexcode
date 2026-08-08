@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
 import { loadSessionTimeline, loadSessionDetail, sendSessionText } from './data.js'
 import { useT } from './i18n/index.jsx'
@@ -141,6 +141,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   const [sendErr, setSendErr] = useState(null)
   const [copyStatus, setCopyStatus] = useState(null)
   const scrollRef = useRef(null)
+  const timelineContentRef = useRef(null)
   const inputRef = useRef(null)
   const selectionDragRef = useRef(null)
   const timelineRangeRef = useRef(null)
@@ -174,8 +175,20 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
   useEffect(() => { if (active) load() }, [s.status, s.note, load, active])
   // chat-style pinning that respects the thumb: follow new entries only while the reader is already at
   // the bottom — a reader parked up in history is never yanked down by a poll.
+  const followTimelineTail = useCallback(() => {
+    const timeline = scrollRef.current
+    if (timeline && pinnedRef.current) timeline.scrollTop = timeline.scrollHeight
+  }, [])
   const onScroll = () => { const el = scrollRef.current; if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48 }
-  useEffect(() => { const el = scrollRef.current; if (el && pinnedRef.current) el.scrollTop = el.scrollHeight }, [events])
+  useLayoutEffect(followTimelineTail, [events, followTimelineTail])
+  useLayoutEffect(() => {
+    if (!active || typeof ResizeObserver !== 'function') return undefined
+    const content = timelineContentRef.current
+    if (!content) return undefined
+    const observer = new ResizeObserver(followTimelineTail)
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [active, followTimelineTail])
 
   const clearSelection = () => {
     timelineRangeRef.current = null
@@ -201,7 +214,6 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
     const timeline = scrollRef.current
     const target = e.target
     if (e.button !== 0 || !timeline || !(target instanceof Element)) return
-    clearSelection()
     const control = target.closest(SELECTION_CONTROLS)
     if (control && timeline.contains(control)) return
     if (target === timeline) {
@@ -219,6 +231,7 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
         ? lineRangeAtPoint(timeline, e.clientX, e.clientY)
         : rangeAtPoint(timeline, e.clientX, e.clientY)
     if (!anchor) return
+    clearSelection()
     e.preventDefault()
     selectionDragRef.current = { mode, anchor: anchor.cloneRange(), x: e.clientX, y: e.clientY }
     if (mode !== SelectionMode.NORMAL) {
@@ -343,16 +356,18 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
     <div className="tl-chat">
       <div className="m-timeline" ref={scrollRef} onScroll={onScroll}
         onMouseDownCapture={inertChromePress} onMouseDown={beginTimelineSelection}>
-        {detail?.prompt && (
-          <details className="m-ev m-ev-prompt">
-            <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
-            <div className="m-ev-text"><RichText>{detail.prompt}</RichText></div>
-          </details>
-        )}
-        {events === null
-          ? <div className="m-empty">{t('common.loading')}</div>
-          : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
-        <ExecutionTrace sessionId={s.id} active={active} />
+        <div ref={timelineContentRef}>
+          {detail?.prompt && (
+            <details className="m-ev m-ev-prompt">
+              <summary>{t('mobile.asked')}{s.created ? ` · ${dayOf(s.created)} ${timeOf(s.created)}` : ''}</summary>
+              <div className="m-ev-text"><RichText>{detail.prompt}</RichText></div>
+            </details>
+          )}
+          {events === null
+            ? <div className="m-empty">{t('common.loading')}</div>
+            : rows.length === 0 ? <div className="m-empty">{t('mobile.noEvents')}</div> : rows}
+          <ExecutionTrace sessionId={s.id} active={active} />
+        </div>
       </div>
       {copyStatus && (
         <div className={`m-copy-status ${copyStatus}`} role="status" aria-live="polite" aria-atomic="true">

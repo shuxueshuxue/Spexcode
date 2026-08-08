@@ -102,6 +102,9 @@ The two planes, made native to touch:
   but respects the thumb: it opens pinned to the newest entry and follows new ones ONLY while the
   reader is already at the bottom — a reader parked up in history is never yanked down by the
   poll (an unchanged poll answer keeps the old array identity, so nothing re-renders at all).
+  The tail condition follows the rendered conversation body, not only durable timeline events: a compact live
+  execution entry that appears or changes height keeps a reader already at the tail there, while a reader in
+  history remains where they placed the thumb.
   Timeline refreshes are likewise interaction-inert: while the composer owns focus, a poll or board
   push neither replaces that input nor loses its unsent draft; while the reader drags a selection
   through a note or message, refresh work neither remounts the conversation nor clears its custom

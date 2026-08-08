@@ -114,8 +114,12 @@ scenarios:
       then double-click again but keep the second press down and drag across at least three known words, and
       triple-click the note. Read the actual `timeline-sel` Range text after each gesture and assert exact character
       text, exact one-word text, continuous anchor-word-through-focus-word text with a multi-word count, and the
-      complete note text respectively — non-empty alone is not evidence. Copy the highlighted text, exercise a
-      plain click, a composer press, Escape, and the details summary. On desktop keep two headless sessions mounted
+      complete note text respectively — non-empty alone is not evidence. Continue the browser click sequence through
+      details four and five, then assert the LINE Range remains. Copy the highlighted text, exercise a
+      plain click, a composer press, Escape, and the details summary while retaining a selected Range. On desktop,
+      while at the tail of an overflowing timeline, receive a normalized live execution entry and grow its rendered
+      height, then verify both stay at the tail; move to history and verify a later growth does not pull the reader.
+      Keep two headless sessions mounted
       and verify the second remains the sole active sink. Record both viewports as video.
     expected: |
       Every refresh leaves the composer as document.activeElement and preserves the complete unsent
@@ -130,9 +134,10 @@ scenarios:
       mousedown detail, never a late dblclick/tripleclick override: NORMAL returns the exact character span, WORD
       returns exactly one word on a stationary double-click and the complete multi-word span when its second press
       drags, and LINE returns the complete note. Every mode leaves `window.getSelection()` empty and the same
-      composer focused; Ctrl/Cmd+C returns the full highlighted Range. Escape, a new gesture, or a composer press
-      deletes the highlight without moving focus. A plain timeline click produces no highlight, details summaries
-      still toggle, and the active TimelineChat alone exposes `data-focus-sink`; with two warm desktop layers
+      composer focused; Ctrl/Cmd+C returns the full highlighted Range. Details beyond LINE leave that Range intact,
+      as does a summary toggle; Escape, a new gesture, or a composer press deletes it without moving focus. A plain
+      timeline click produces no highlight, and a live execution entry's insertion or height growth follows only a
+      reader already at the tail. The active TimelineChat alone exposes `data-focus-sink`; with two warm desktop layers
       mounted, switching to the second makes its composer the sole sink. Phone and desktop satisfy the same shared
       TimelineChat contract.
   - name: timeline-focus-on-active

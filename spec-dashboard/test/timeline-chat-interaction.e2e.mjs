@@ -26,6 +26,33 @@ const context = await browser.newContext({
   recordVideo: { dir: out, size: { width: 1280, height: 900 } },
   permissions: ['clipboard-read', 'clipboard-write'],
 })
+await context.addInitScript(() => {
+  const NativeEventSource = window.EventSource
+  const sources = new Set()
+  class ExecutionFixtureSource {
+    constructor(url, init) {
+      if (!String(url).includes('/execution/stream')) return new NativeEventSource(url, init)
+      this.listeners = new Map()
+      sources.add(this)
+    }
+    addEventListener(type, listener) {
+      const listeners = this.listeners.get(type) || []
+      listeners.push(listener)
+      this.listeners.set(type, listeners)
+    }
+    removeEventListener(type, listener) {
+      this.listeners.set(type, (this.listeners.get(type) || []).filter((item) => item !== listener))
+    }
+    emit(data) {
+      for (const listener of this.listeners.get('execution') || []) {
+        listener(new MessageEvent('execution', { data: JSON.stringify(data) }))
+      }
+    }
+    close() { sources.delete(this) }
+  }
+  window.EventSource = ExecutionFixtureSource
+  window.__emitExecutionFixture = (data) => { for (const source of sources) source.emit(data) }
+})
 const page = await context.newPage()
 const started = Date.now()
 const events = [{ at: 0, step: 'start TimelineChat interaction run' }]
@@ -54,7 +81,10 @@ async function waitForParkedFixtures() {
     if (primary?.capabilities?.headless && primary.status === 'parked'
       && secondary?.capabilities?.headless && secondary.status === 'parked') {
       const timeline = await fetch(`${base}${timelinePath(sessionId)}`).then((response) => response.json())
-      if (timeline.events?.some((event) => event.kind === 'status' && event.note === FIXTURE_MARKDOWN)) return
+      if (timeline.events?.some((event) => (
+        (event.kind === 'status' && event.note === FIXTURE_MARKDOWN)
+        || (event.kind === 'sent' && event.text === FIXTURE_MARKDOWN)
+      ))) return
     }
     await new Promise((resolveWait) => setTimeout(resolveWait, 1_000))
   }
@@ -302,6 +332,24 @@ async function clickWithDetail(point, detail) {
   await page.mouse.click(point.x, point.y, { clickCount: detail })
 }
 
+async function clickSequence(point, clickCount) {
+  await page.evaluate(() => {
+    const details = []
+    const listener = (event) => {
+      if (event.target instanceof Element && event.target.closest('.m-timeline')) details.push(event.detail)
+    }
+    window.__timelineDetailProbe = { details, listener }
+    document.addEventListener('mousedown', listener, true)
+  })
+  await page.mouse.click(point.x, point.y, { clickCount })
+  return page.evaluate(() => {
+    const probe = window.__timelineDetailProbe
+    document.removeEventListener('mousedown', probe.listener, true)
+    delete window.__timelineDetailProbe
+    return probe.details
+  })
+}
+
 async function verifySelectionModes(viewport, inputHandle, note, noteHandle) {
   const fixture = await noteSelectionFixture(note, noteHandle)
   assert.ok(fixture.nestedCount >= 3, `rich fixture lost inline code/link/math nesting: ${fixture.nestedCount}`)
@@ -370,6 +418,16 @@ async function verifySelectionModes(viewport, inputHandle, note, noteHandle) {
   mark(viewport, `LINE exact whole note (${line.pass ? 'pass' : 'fail'}, ${line.text.length} chars)`)
   await page.waitForTimeout(1_000)
 
+  const beyondLineDetails = await clickSequence(fixture.linePoint, 5)
+  const beyondLine = await readTimelineSelection(inputHandle)
+  beyondLine.pass = beyondLine.focus && beyondLine.native === '' && beyondLine.text === fixture.lineExpected
+    && beyondLine.highlight && JSON.stringify(beyondLineDetails) === JSON.stringify([1, 2, 3, 4, 5])
+  await showReadout(viewport, 'four-plus click keeps LINE range', {
+    focus: beyondLine.focus, selection: beyondLine.text, typed: beyondLineDetails.join(','), pass: beyondLine.pass,
+  })
+  mark(viewport, `four-plus click keeps LINE range (${beyondLine.pass ? 'pass' : 'fail'}, details=${beyondLineDetails.join(',')})`)
+  await page.waitForTimeout(800)
+
   await page.keyboard.press('Escape')
   const afterEscape = await readTimelineSelection(inputHandle)
   afterEscape.pass = afterEscape.focus && afterEscape.native === '' && !afterEscape.highlight && afterEscape.text === ''
@@ -380,12 +438,13 @@ async function verifySelectionModes(viewport, inputHandle, note, noteHandle) {
   await page.waitForTimeout(800)
 
   return {
-    pass: normal.pass && word.pass && wordDrag.pass && line.pass && afterEscape.pass,
+    pass: normal.pass && word.pass && wordDrag.pass && line.pass && beyondLine.pass && afterEscape.pass,
     fixture,
     normal,
     word,
     wordDrag,
     line,
+    beyondLine: { ...beyondLine, details: beyondLineDetails },
     afterEscape,
   }
 }
@@ -490,16 +549,75 @@ async function verifyDetailsToggle(viewport, inputHandle) {
   if (!await summary.count()) return { pass: false, reason: 'prompt summary is missing' }
   const details = summary.locator('..')
   const before = await details.evaluate((element) => element.open)
+  const highlightBefore = await readTimelineSelection(inputHandle)
   await summary.click()
   const after = await details.evaluate((element) => element.open)
-  const focus = await page.evaluate((input) => document.activeElement === input, inputHandle)
-  const pass = before !== after && focus
+  const highlightAfter = await readTimelineSelection(inputHandle)
+  const pass = before !== after && highlightBefore.focus && highlightAfter.focus
+    && highlightBefore.highlight && highlightBefore.native === '' && highlightAfter.native === ''
+    && highlightAfter.highlight && highlightAfter.text === highlightBefore.text
   await showReadout(viewport, 'details summary native toggle', {
-    focus, draft: await page.locator('.m-input:visible').inputValue(), selection: '', typed: 'n/a', pass,
+    focus: highlightAfter.focus, draft: await page.locator('.m-input:visible').inputValue(),
+    selection: highlightAfter.text, typed: 'selection retained', pass,
   })
   mark(viewport, `details summary toggle (${pass ? 'pass' : 'fail'})`)
   await page.waitForTimeout(800)
-  return { pass, before, after, focus }
+  return { pass, before, after, highlightBefore, highlightAfter }
+}
+
+async function nextFrame() {
+  await page.evaluate(() => new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame))))
+}
+
+async function timelineMetrics() {
+  return page.locator('.m-timeline:visible').evaluate((element) => ({
+    scrollTop: element.scrollTop,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+    gap: element.scrollHeight - element.clientHeight - element.scrollTop,
+  }))
+}
+
+async function verifyExecutionTail(viewport) {
+  const timeline = page.locator('.m-timeline:visible')
+  await timeline.evaluate((element) => {
+    element.style.flex = 'none'
+    element.style.height = '150px'
+    element.scrollTop = element.scrollHeight
+  })
+  const before = await timelineMetrics()
+  assert.ok(before.scrollHeight > before.clientHeight, `${viewport}: tail fixture must overflow its real scrollport`)
+
+  await page.evaluate(() => window.__emitExecutionFixture({
+    revision: 'tail-insert',
+    workingNote: 'Live execution entry arrived after the reader reached the tail',
+    steps: [],
+  }))
+  const entry = page.locator('.m-execution-entry:visible')
+  await entry.waitFor({ state: 'visible', timeout: 5_000 })
+  await nextFrame()
+  const insertion = await timelineMetrics()
+
+  await entry.evaluate((element) => { element.style.height = '120px' })
+  await nextFrame()
+  const growth = await timelineMetrics()
+
+  await timeline.evaluate((element) => { element.scrollTop = 0 })
+  await entry.evaluate((element) => { element.style.height = '180px' })
+  await nextFrame()
+  const history = await timelineMetrics()
+
+  const pass = insertion.gap <= 1 && insertion.scrollHeight > before.scrollHeight
+    && growth.gap <= 1 && growth.scrollHeight > insertion.scrollHeight
+    && history.scrollTop === 0 && history.gap > 1
+  const focus = await page.locator('.m-input:visible').evaluate((input) => document.activeElement === input)
+  await showReadout(viewport, 'execution entry insertion and growth follow only the tail', {
+    focus, selection: '',
+    typed: `gaps ${insertion.gap.toFixed(0)}/${growth.gap.toFixed(0)}/${history.gap.toFixed(0)}`, pass,
+  })
+  mark(viewport, `execution tail insertion/growth/history (${pass ? 'pass' : 'fail'})`)
+  await page.waitForTimeout(900)
+  return { pass, before, insertion, growth, history }
 }
 
 async function verifyComposerPress(viewport, inputHandle) {
@@ -541,7 +659,7 @@ async function verifyComposerPress(viewport, inputHandle) {
 async function runViewport(name, viewport) {
   await page.setViewportSize(viewport)
   await openTimeline(sessionId)
-  const note = page.locator('.m-ev-note:visible').filter({ hasText: FIXTURE_MARKER }).last()
+  const note = page.locator('.m-ev-note:visible, .m-ev-text:visible').filter({ hasText: FIXTURE_MARKER }).last()
   await note.waitFor({ state: 'visible', timeout: 30_000 })
   const noteHandle = await note.elementHandle()
   assert.ok(noteHandle, 'rich fixture note has no stable element handle')
@@ -624,12 +742,13 @@ async function runViewport(name, viewport) {
   assert.equal(wordBeforeComposer.text, selectionModes.fixture.singleExpected,
     `${name}: composer-press setup missed its stable WORD target`)
 
-  const composerPress = await verifyComposerPress(name, inputHandle)
   const detailsToggle = await verifyDetailsToggle(name, inputHandle)
+  const composerPress = await verifyComposerPress(name, inputHandle)
+  const executionTail = name === 'desktop' ? await verifyExecutionTail(name) : null
   const secondSink = name === 'desktop' ? await verifySecondConversationSink(name) : null
   const result = {
     viewport: name, gestureFocusPass, gestureFocusSamples: firstDrag.focusSamples,
-    dragPass, selectionPass, keyMatrix, selectionModes, clickPass, composerPress, detailsToggle,
+    dragPass, selectionPass, keyMatrix, selectionModes, clickPass, composerPress, detailsToggle, executionTail,
     secondSink, selectedBefore, selectedAfter, nativeSelectionBefore: firstDrag.selection,
     highlightBefore: firstDrag.highlight,
   }
@@ -642,6 +761,10 @@ try {
   await runViewport('desktop', { width: 1280, height: 800 })
   await runViewport('mobile', { width: 390, height: 844 })
   console.log(JSON.stringify({ results }, null, 2))
+  const summaryPath = join(out, 'timeline-chat-interaction.json')
+  const timelineOutputPath = join(out, 'timeline-chat-interaction.timeline.json')
+  writeFileSync(summaryPath, `${JSON.stringify({ results }, null, 2)}\n`)
+  writeFileSync(timelineOutputPath, `${JSON.stringify({ v: 2, axis: 'time', events }, null, 2)}\n`)
   for (const result of results) {
     assert.equal(result.gestureFocusPass, true, `${result.viewport} composer lost focus during pointer gesture`)
     assert.equal(result.dragPass, true, `${result.viewport} drag did not keep the exact composer focused`)
@@ -659,12 +782,9 @@ try {
     assert.equal(result.clickPass, true, `${result.viewport} plain click did not return composer typing`)
     assert.equal(result.composerPress.pass, true, `${result.viewport} composer press did not retire the external selection`)
     assert.equal(result.detailsToggle.pass, true, `${result.viewport} details summary did not toggle natively`)
+    if (result.executionTail) assert.equal(result.executionTail.pass, true, 'execution entry did not follow the pinned timeline tail')
     if (result.secondSink) assert.equal(result.secondSink.pass, true, 'second warm headless layer did not own the exact sink')
   }
-  const summaryPath = join(out, 'timeline-chat-interaction.json')
-  const timelineOutputPath = join(out, 'timeline-chat-interaction.timeline.json')
-  writeFileSync(summaryPath, `${JSON.stringify({ results }, null, 2)}\n`)
-  writeFileSync(timelineOutputPath, `${JSON.stringify({ v: 2, axis: 'time', events }, null, 2)}\n`)
   const video = page.video()
   await context.close()
   console.log(JSON.stringify({ ok: true, results, video: await video.path(), timeline: timelineOutputPath, summary: summaryPath }, null, 2))

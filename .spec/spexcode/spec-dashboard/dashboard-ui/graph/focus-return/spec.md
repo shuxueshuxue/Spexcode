@@ -12,6 +12,7 @@ related:
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/SessionInterface.jsx
+  - spec-dashboard/src/TimelineChat.jsx
 ---
 # focus-return
 
@@ -45,7 +46,8 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
   Highlight Range, never a document Selection. That driver ports xterm.js `SelectionService`'s mousedown
   `MouseEvent.detail` modes rather than layering late click handlers over a drag: NORMAL extends by character,
   WORD keeps a double-click-and-drag snapped from its anchor word through its landing word, and LINE selects a
-  whole note. Drag, double-click, double-click-and-drag, and triple-click selection therefore remain visible and
+  whole note. Only one of those valid text presses starts a new selection: an excluded control or a consecutive
+  press after LINE leaves the current Range intact. Drag, double-click, double-click-and-drag, and triple-click selection therefore remain visible and
   copyable without a native press ever extinguishing the sink. Buttons, links, summaries, roles, and editable
   controls are outside that driver, while their click actions still work under the same inert press. A surface or
   menu attaches this one capture-phase guard, and then most pops need no return because focus never left: the

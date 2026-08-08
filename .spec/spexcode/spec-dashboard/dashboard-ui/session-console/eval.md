@@ -191,8 +191,9 @@ scenarios:
       The visual and keyboard sequence is current surface/resource tabs, the real Eval navigation tab, its
       following resource-picker plus button, then command tools. This tab sequence is compact: a one-pixel
       divider and short gutter distinguish Eval from a compact circular plus control; its right side has no
-      matching divider. There is no flexible spacer or separate Eval control between the resource tabs, Eval,
-      and picker.
+      matching divider. That plus stays visibly subordinate to the command tools — a smaller box than a tool's,
+      a thin neutral ring at rest, accent only under hover or keyboard focus. There is no flexible spacer or
+      separate Eval control between the resource tabs, Eval, and picker.
   - name: posted-resources-are-singleton-tabs
     tags: [frontend-e2e, desktop, cli, backend-api]
     test: spec-dashboard/test/session-web.e2e.mjs

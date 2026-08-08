@@ -59,7 +59,8 @@ test('session toolbar resolves a Terminal or Conversation base before resource t
   assert.doesNotMatch(css, /\.si-files\s*\{[^}]*border-left:/s)
   assert.doesNotMatch(css, /\.si-surface\s*\{[^}]*border-right:/s)
   assert.match(css, /\.si-resource-picker\s*\{[^}]*border-left:\s*1px solid var\(--line\);/s)
-  assert.match(css, /\.si-tab-add\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*border-radius:\s*50%;/s)
+  assert.match(css, /\.si-tab-add\s*\{[^}]*width:\s*20px;[^}]*height:\s*20px;[^}]*border-radius:\s*50%;/s)
+  assert.match(source, /icon="plus" size=\{11\} className="si-tab-add"/)
 })
 
 test('file rows keep host paths off the label and reserve that detail for the copy tool', () => {

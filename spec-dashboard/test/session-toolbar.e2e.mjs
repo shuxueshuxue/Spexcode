@@ -49,6 +49,8 @@ const toolbarProbe = (page) => page.evaluate(() => {
   const term = document.querySelector('.si-term-body')
   const files = document.querySelector('.si-files')
   const surfaceSwitch = document.querySelector('[data-surface-switch]')
+  const commandTools = [...toolbar.querySelectorAll('.si-actions [data-command]')]
+  const lastCommandTool = commandTools.at(-1)
   const style = getComputedStyle(toolbar)
   return {
     bounds,
@@ -62,15 +64,15 @@ const toolbarProbe = (page) => page.evaluate(() => {
     tabs: rect(tabs),
     picker: { ...rect(picker), borderLeft: getComputedStyle(picker).borderLeftWidth, borderRight: getComputedStyle(picker).borderRightWidth },
     add: { ...rect(document.querySelector('.si-tab-add')), borderRadius: getComputedStyle(document.querySelector('.si-tab-add')).borderRadius },
-    files: { ...rect(files), borderLeft: getComputedStyle(files).borderLeftWidth },
+    files: { ...rect(files), borderLeft: getComputedStyle(files).borderLeftWidth, gapFromLastCommand: lastCommandTool ? files.getBoundingClientRect().left - lastCommandTool.getBoundingClientRect().right : null },
     surfaceSwitch: surfaceSwitch ? { ...rect(surfaceSwitch), target: surfaceSwitch.dataset.surfaceSwitch, label: surfaceSwitch.getAttribute('aria-label') } : null,
     roles: {
       tablists: toolbar.querySelectorAll('[role=tablist]').length,
       tabs: toolbar.querySelectorAll('[role=tab]').length,
       selected: toolbar.querySelector('[role=tab]')?.getAttribute('aria-selected'),
-      actions: [...toolbar.querySelectorAll('.si-actions button')].map((button) => button.dataset.command),
+      actions: commandTools.map((button) => button.dataset.command),
     },
-    actionDetails: [...toolbar.querySelectorAll('.si-actions button')].map((button) => {
+    actionDetails: commandTools.map((button) => {
       const buttonStyle = getComputedStyle(button)
       return {
         name: button.dataset.command,
@@ -185,7 +187,7 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
     && result.wide.add.width < (result.wide.actionDetails[0]?.box?.width ?? 0),
   { evalTab: result.wide.evalTab.box, picker: result.wide.picker, add: result.wide.add, tool: result.wide.actionDetails[0]?.box })
   check('toolbar chrome is distinct from terminal', result.wide.toolbarBackground !== result.wide.terminalBackground, { toolbar: result.wide.toolbarBackground, terminal: result.wide.terminalBackground })
-  check('the top-right files and surface controls have no artificial divider', result.wide.files.borderLeft === '0px' && result.wide.surfaceSwitch?.target === 'conversation', { files: result.wide.files, switch: result.wide.surfaceSwitch })
+  check('the top-right tools are one continuous icon row', result.wide.files.borderLeft === '0px' && result.wide.files.gapFromLastCommand <= 3.5 && result.wide.surfaceSwitch?.target === 'conversation', { files: result.wide.files, switch: result.wide.surfaceSwitch })
   check('toolbar commands are uniform localized icon tools', result.wide.actionDetails.length > 0 && result.wide.actionDetails.every((tool) => !tool.text && tool.icon && tool.label && tool.label === tool.tip && tool.box.width === 24 && tool.box.height === 24), result.wide.actionDetails)
   await page.screenshot({ path: join(OUT, 'B-wide-1440.png'), fullPage: true })
 

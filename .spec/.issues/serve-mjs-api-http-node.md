@@ -1,7 +1,7 @@
 ---
 concern: 修 serve.mjs 未知 /api 路由落进静态文件分支：HTTP 响应体回吐 Node 堆栈和宿主绝对路径
 by: 9be33950-7166-40fd-8d62-5d3a3390cdf7
-status: open
+status: landed
 created: 2026-08-07T12:51:16.853Z
 ---
 

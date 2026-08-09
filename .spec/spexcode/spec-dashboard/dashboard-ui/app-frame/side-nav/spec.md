@@ -26,7 +26,7 @@ restores the list.
 
 ## expanded spec
 
-- **One rail, five pages — every entry a real anchor.** A slim always-visible icon rail on the app's left
+- **One rail, five pages — every entry a real anchor.** A compact, always-visible **44px** icon rail on the app's left
   edge is the page switch: Spec Node Graph, Session Board, Evals, Issues, and Settings pinned at the
   bottom. Evals and Issues are
   distinct rail entries, each with its own glyph and i18n label — **Evals above Issues** (evals lead: the
@@ -40,7 +40,9 @@ restores the list.
   acts — the link navigates, the chip menu opens — without moving DOM focus, so the rail never
   becomes the focus-return ticket and closing an overlay can never land focus on the top-left chip
   (where, as a menu trigger, it would swallow the node popup's keys). Keyboard Tab still reaches
-  every entry, and a Tab-focused control keeps its native Enter/Space activation.
+  every entry, and a Tab-focused control keeps its native Enter/Space activation. Desktop entries use a
+  centered **32px** square target: the tight horizontal gutter keeps the rail subordinate to the page while
+  retaining an unambiguous pointer and keyboard destination.
 - **The URL is the page state — query string included.** Routes are hash paths — `#/graph` (home; any
   unknown hash lands here) or `#/graph/<node>` (a shareable spec-node focus), `#/sessions` (+
   `#/sessions/<sel>` deep-linking a tab), `#/evals` (+
@@ -90,7 +92,7 @@ restores the list.
 - **Catalog-gated project switching, never project management.** Under the multi-project gateway
   ([[projects-hub]]) a `/p/<id>/` rail keeps the persistent current-project chip pinned above the five
   project-owned page entries. Its mark and label come from the route-matched [[project-identity]], never
-  an initial derived from whichever board loaded last. Its 31px mark sits 2.5px inside the 36px rail hit
+  an initial derived from whichever board loaded last. Its 27px mark sits 2.5px inside the 32px rail hit
   target, halving the former 5px mark-to-border gap. It keeps the rail's neutral, borderless chrome at
   rest; the standard rail background appears only on hover or while its menu is open. A SUCCESSFUL catalog probe gives that chip a menu for same-tab project
   switching plus an "All projects" door to the global `/projects` hub. Every menu row leads with the

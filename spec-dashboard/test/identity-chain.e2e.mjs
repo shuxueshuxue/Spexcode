@@ -151,8 +151,8 @@ async function assertProjectChipChrome(page) {
   assert.deepEqual(idle, { backgroundColor: 'rgba(0, 0, 0, 0)', borderTopWidth: '0px' },
     'the project chip matches a neutral rail button until it is hovered or opened')
   const [chipBox, markBox] = await Promise.all([chip.boundingBox(), chip.locator('.identity-iconify').boundingBox()])
-  assert.deepEqual(chipBox && { width: chipBox.width, height: chipBox.height }, { width: 36, height: 36 })
-  assert.deepEqual(markBox && { width: markBox.width, height: markBox.height }, { width: 31, height: 31 })
+  assert.deepEqual(chipBox && { width: chipBox.width, height: chipBox.height }, { width: 32, height: 32 })
+  assert.deepEqual(markBox && { width: markBox.width, height: markBox.height }, { width: 27, height: 27 })
   assert.ok(chipBox && markBox && Math.abs(markBox.x - chipBox.x - 2.5) < 0.01 && Math.abs(markBox.y - chipBox.y - 2.5) < 0.01,
     'the mark halves the former 5px gap to the removed border')
 

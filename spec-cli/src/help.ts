@@ -87,7 +87,7 @@ you are running in, mid-turn. Your own ending is a declaration: \`done --propose
     quarantine: ['spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]',
       'Move only an unreadable record after the backend proves every named residue absent. --thread is an adapter-native conversation id, never the SpexCode session id; omit it for Claude. Quarantine and --restore both require the original exact id because corrupt rows are outside selectors.', ['project-bound']],
     done: ['spex session done --propose merge|nothing|close [--note T]',
-      '`merge` declares review: committed work ready for human review, and it is the ONLY declaration that offers a clickable merge. `nothing` declares done: committed work, but no merge proposal. `close` declares close-pending: PROPOSE discarding this worktree — the human closes it. This declaration is how a session ends itself; never run `session close` on your own id.'],
+      '`merge` declares review: committed work ready for human review, and it is the ONLY declaration that offers a clickable merge. `nothing` is a trap: it writes no state and tells the agent to choose merge, close, ask, or park. `close` declares close-pending: PROPOSE discarding this worktree — the human closes it. This declaration is how a session ends itself; never run `session close` on your own id.'],
     park: ['spex session park --note <what-you-await>',
       'Declare parked only when a managed watch delivery or real background task will wake your own session. It self-resumes; waiting for a human is asking, not parked.'],
     ask: ['spex session ask --note <your-question>',

@@ -7,8 +7,8 @@ scenarios:
       active/undeclared): feed stop-gate.sh a real Stop payload against a governed session record, exactly
       as dispatch.sh does, and capture both block reasons.
     expected: >-
-      The first block prints the full teaching text — the five-choice menu with each choice's application
-      condition, plus the declare-LAST ordering discipline (the declaration is the turn's final call; any
+      The first block prints the full teaching text — four real states plus the `nothing` trap, each with its
+      application condition, plus the declare-LAST ordering discipline (the declaration is the turn's final call; any
       later tool call honestly re-flips the record to active). Every later undeclared stop in the SAME
       session prints a one-line reason instead, and that line is self-explanatory: it still carries the
       command menu, the declare-LAST reminder, and a recovery entry (spex help session) from which an agent

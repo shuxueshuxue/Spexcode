@@ -16,9 +16,10 @@ related:
 
 ## raw source
 
-The product tree remains the source of truth for SpexCode guidance. An independent documentation repository
-consumes sealed artifacts rather than this checkout, and its own polling, review, and deployment gates remain
-explicit.
+The product tree remains the source of truth for SpexCode guidance. Before documentation cutover, the existing
+public authored Guide and Blog pages, theme assets, and generated Reference are imported as a hash-verified,
+docs-owned snapshot. An independent documentation repository consumes that baseline and sealed artifacts rather
+than this checkout, and its own review and deployment gates remain explicit.
 
 ## expanded spec
 
@@ -27,6 +28,25 @@ explicit.
 copy contract. The documentation repository neither reads `guide.ts` nor writes back to it; source changes flow
 one way through the catalog producer. The catalog's internal schema and generation remain its own concern. This
 node owns only the delivery envelope and the consumer protocol around that catalog.
+
+### Content-preserving migration baseline
+
+Before cutover, the existing public authored English and Chinese Guide and Blog Markdown pages, theme assets, and
+generated Reference Markdown are imported into the documentation repository as a docs-owned snapshot. The import
+preserves the page and asset bytes without prose rewrites. Its checked-in manifest names every source path and file
+hash, with category counts for the 16 authored Guide/Blog pages, 3 theme assets, and 239 generated Reference pages;
+the documentation repository verifies its own checked-in bytes against that manifest.
+
+The documentation consumer never reads a product checkout, source directory, or `.spec` tree. It neither runs the
+product Reference generator nor retains a product checkout as an input to build, verification, review, or
+deployment. After import, the migration snapshot belongs to the documentation repository; the product repository
+does not deploy it or write back to it.
+
+The baseline can advance only through a reviewed immutable producer snapshot that identifies its source revision
+and exact content hashes before it replaces the committed baseline. A checkout, moving branch or ref, server
+filesystem copy, or local generator output cannot advance it. This migration baseline does not make Reference
+snapshots automatically publishable, discoverable, or applied: a producer snapshot protocol for future Reference
+changes remains separate work.
 
 ### Sealed source release
 
@@ -78,8 +98,9 @@ contact a public documentation server.
 
 ### Consumer protocol
 
-The documentation repository configures the producer release feed and the catalog schemas it accepts. Its poller
-does the following as one serialized update attempt:
+For the sealed Guidance catalog, the documentation repository configures the producer release feed and the catalog
+schemas it accepts. Its poller does the following as one serialized update attempt. This protocol does not apply the
+migration baseline or define the separate future Reference snapshot protocol.
 
 1. Acquire a consumer-side concurrency lock scoped to that documentation repository and producer. The lock covers
    discovery, download, verification, rendering, and proposal creation, so two pollers cannot create competing

@@ -27,6 +27,20 @@ scenarios:
       contains no documentation deployment or public-docs request.
     code: .github/workflows/guidance-release.yml
     test: scripts/guidance-release.test.mjs
+  - name: content-preserving-docs-migration-baseline
+    tags: [cli]
+    code: .spec/spexcode/spec-cli/guide/guidance-docs-contract/spec.md
+    description: >-
+      At the reviewed external documentation-consumer migration change, run its normal Verify command and strict
+      MkDocs build. Inspect the checked-in snapshot manifest and consumer contract, comparing the declared paths,
+      SHA-256 hashes, and category counts directly with the verified migration result.
+    expected: >-
+      Verification passes for 258 of 258 declared files: 16 public authored English and Chinese Guide/Blog Markdown
+      pages, 3 theme assets, and 239 generated Reference Markdown pages. The consumer reads only its checked-in
+      docs-owned snapshot, never a product checkout or `.spec` tree, and the baseline admits an advance only from a
+      reviewed immutable producer snapshot. No automatic Reference producer snapshot protocol is claimed or used.
 ---
 Measured through the real product CLI producer and the release workflow's checked publishing contract. The
 workflow's remote GitHub write remains intentionally disabled until its repository variable is explicitly enabled.
+The migration-baseline scenario measures the reviewed documentation consumer through its normal verification and
+strict MkDocs build; it does not operate a product checkout, deployment, or future Reference producer protocol.

@@ -17,7 +17,8 @@ scenarios:
       separate session, race two same-key requests and kill the isolated backend exactly after receipt append and
       before queue rename, restart, and replay. In another isolated session, kill the backend after the adapter's
       one handover and settlement append but before pending removal; then restart both backend and agent. After one
-      settled handover, set the first fixture active and later archive it, replaying in both states. Read records,
+      settled handover, set the first fixture active and later archive it, replaying in both states. In a separate
+      settled CLI fixture, re-declare merge without moving either head, then merge and retry again. Read records,
       raw/public timelines, native fake-harness output, and pending debt.
     expected: >
       Active, non-merge-proposal, unkeyed, missing-field, malformed, stale-branch, and stale-base requests fail
@@ -33,7 +34,9 @@ scenarios:
       adapter call; after the agent also restarts, old-plus-new native output still contains exactly one handover and
       the queue is absent. Missing/mismatched receipt identity remains owed and stops the pass. Replays after that
       settlement, including after active and archived transitions, preserve record bytes, queue, and native delivery
-      count exactly. The accepted prompt binds both reviewed objects, requires the
+      count exactly. A renewed `awaiting` + `merge` declaration advances the reviewed epoch even when branch/base
+      heads are unchanged: it accepts and hands over one fresh second prompt, while a retry within that renewed epoch
+      replays it without a third prompt. The accepted prompt binds both reviewed objects, requires the
       agent to re-prove worktree/symbolic-branch/stored-branch/canonical-base identity before change, and after
       sync merges the freshly frozen tested object rather than a branch name. No raw key is retained anywhere.
   - name: merge-prompt-gates-are-observable

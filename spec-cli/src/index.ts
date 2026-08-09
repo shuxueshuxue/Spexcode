@@ -584,7 +584,8 @@ app.post('/api/sessions/:id/resume', async (c) => {
   return c.json(r, r.ok ? 200 : (r.refused ? 409 : 404))
 })
 // A reviewed dispatch to the session's own agent (it runs the merge), never a server merge. The caller returns
-// the exact branch/base OIDs with a durable key; sessions.ts validates and accepts them once before ensure-live.
+// the exact branch/base OIDs plus durable review declaration epoch with a durable key; sessions.ts validates
+// and accepts them once before ensure-live.
 app.post('/api/sessions/:id/merge', async (c) => {
   const requestKey = c.req.header('idempotency-key')
   if (requestKey === undefined) {
@@ -601,17 +602,18 @@ app.post('/api/sessions/:id/merge', async (c) => {
   }
   const input = body as Record<string, unknown>
   const keys = Object.keys(input)
-  const allowed = new Set(['expectedBranchHead', 'expectedBaseHead'])
+  const allowed = new Set(['expectedBranchHead', 'expectedBaseHead', 'expectedReviewEpoch'])
   if (keys.some((key) => !allowed.has(key))) {
     return c.json({ dispatched: false, reason: `unknown session-merge field(s): ${keys.filter((key) => !allowed.has(key)).join(', ')}`, code: 'session_merge_invalid_request' }, 400)
   }
-  if (typeof input.expectedBranchHead !== 'string' || typeof input.expectedBaseHead !== 'string') {
-    return c.json({ dispatched: false, reason: 'expectedBranchHead and expectedBaseHead must be strings', code: 'session_merge_invalid_request' }, 400)
+  if (typeof input.expectedBranchHead !== 'string' || typeof input.expectedBaseHead !== 'string' || typeof input.expectedReviewEpoch !== 'number') {
+    return c.json({ dispatched: false, reason: 'expectedBranchHead and expectedBaseHead must be strings and expectedReviewEpoch must be a number', code: 'session_merge_invalid_request' }, 400)
   }
   const r = await mergeSession(c.req.param('id'), {
     requestKey,
     expectedBranchHead: input.expectedBranchHead,
     expectedBaseHead: input.expectedBaseHead,
+    expectedReviewEpoch: input.expectedReviewEpoch,
   })
   return c.json(r, r.dispatched ? 200 : (r.status ?? 409))
 })

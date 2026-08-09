@@ -57,6 +57,9 @@ therefore lives only as long as its browser subscriber, never as an orphaned ups
 closes. The terminal WebSocket follows the same paired-half rule at its upgrade seam.
 Published-session-web HTTP and WebSocket traffic use that same exchange rather than a second preview server;
 the session list remains the authorization boundary before a loopback connection is opened.
+For a posted web URL, the preview root forwards that exact endpoint, while every following relative-resource
+route resolves from the posted document's directory (a trailing slash is already that directory), matching
+browser URL resolution; the shared target derivation applies this rule to both HTTP and WebSocket traffic.
 
 **With a password, the gate is a designed login, not the browser's Basic dialog.** An unauthenticated
 visitor gets a styled login page; the posted password is compared in constant time and, on success, mints

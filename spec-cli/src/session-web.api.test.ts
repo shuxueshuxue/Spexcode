@@ -94,11 +94,13 @@ test('session web CLI records a live loopback URL and the host gateway authorize
 
     const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: id }
     const postedUrl = `http://127.0.0.1:${servicePort}/base/`
+    const postedDocumentUrl = `http://127.0.0.1:${servicePort}/a/b/page.html`
     const add = await runCli(project, env, 'session', 'web', 'add', postedUrl)
     assert.deepEqual({ code: add.code, out: add.out.trim(), requests }, { code: 0, out: `posted ${postedUrl}`, requests: 0 })
     assert.deepEqual(JSON.parse(readFileSync(sessionWebsPath(id), 'utf8')), [postedUrl])
+    assert.deepEqual(await runCli(project, env, 'session', 'web', 'add', postedDocumentUrl), { code: 0, out: `posted ${postedDocumentUrl}\n`, err: '' })
     const listed = await runCli(project, env, 'session', 'web', 'ls')
-    assert.deepEqual({ code: listed.code, out: listed.out.trim() }, { code: 0, out: postedUrl })
+    assert.deepEqual({ code: listed.code, out: listed.out.trim() }, { code: 0, out: `${postedUrl}\n${postedDocumentUrl}` })
     const invalid = await runCli(project, env, 'session', 'web', 'add', 'https://127.0.0.1:4443/')
     assert.equal(invalid.code, 1)
     assert.match(invalid.err, /web URL must be http/)
@@ -133,6 +135,12 @@ test('session web CLI records a live loopback URL and the host gateway authorize
     const second = await fetch(`http://127.0.0.1:${gatewayPort}${prefix}/page?x=1`)
     assert.deepEqual({ status: second.status, body: await second.text() }, { status: 200, body: 'second page:/base/page?x=1' })
 
+    const documentPrefix = `/p/${encodeURIComponent(projectId)}/web/${id}/${sessionWebKey(postedDocumentUrl)}`
+    const documentRoot = await fetch(`http://127.0.0.1:${gatewayPort}${documentPrefix}/`)
+    assert.deepEqual({ status: documentRoot.status, body: await documentRoot.text() }, { status: 200, body: 'second page:/a/b/page.html' })
+    const documentResource = await fetch(`http://127.0.0.1:${gatewayPort}${documentPrefix}/mermaid.min.js?x=2`)
+    assert.deepEqual({ status: documentResource.status, body: await documentResource.text() }, { status: 200, body: 'second page:/a/b/mermaid.min.js?x=2' })
+
     const ipv6Port = await freePort('::1')
     ipv6Service = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/plain' })
@@ -146,12 +154,16 @@ test('session web CLI records a live loopback URL and the host gateway authorize
     assert.deepEqual(await runCli(project, env, 'session', 'web', 'retract', ipv6Url), { code: 0, out: `retracted ${ipv6Url}\n`, err: '' })
     const forbidden = await fetch(`http://127.0.0.1:${gatewayPort}/p/${encodeURIComponent(projectId)}/web/${id}/not-posted/`)
     assert.deepEqual({ status: forbidden.status, body: await forbidden.text(), requests }, {
-      status: 403, body: 'that web service was not posted by this session', requests: 3,
+      status: 403, body: 'that web service was not posted by this session', requests: 5,
     })
     const upgraded = await requestUpgrade(gatewayPort, `${prefix}/socket?debug=1`)
     assert.match(upgraded, /^HTTP\/1\.1 101 Switching Protocols/m)
     assert.match(upgraded, /web-ok/)
     assert.equal(upgradePath, '/base/socket?debug=1')
+    const documentUpgraded = await requestUpgrade(gatewayPort, `${documentPrefix}/socket?debug=2`)
+    assert.match(documentUpgraded, /^HTTP\/1\.1 101 Switching Protocols/m)
+    assert.match(documentUpgraded, /web-ok/)
+    assert.equal(upgradePath, '/a/b/socket?debug=2')
 
     const deadPort = await freePort()
     const deadUrl = `http://127.0.0.1:${deadPort}/`
@@ -161,6 +173,8 @@ test('session web CLI records a live loopback URL and the host gateway authorize
 
     const retract = await runCli(project, env, 'session', 'web', 'retract', postedUrl)
     assert.deepEqual({ code: retract.code, out: retract.out.trim() }, { code: 0, out: `retracted ${postedUrl}` })
+    assert.deepEqual(JSON.parse(readFileSync(sessionWebsPath(id), 'utf8')), [postedDocumentUrl, deadUrl])
+    assert.deepEqual(await runCli(project, env, 'session', 'web', 'retract', postedDocumentUrl), { code: 0, out: `retracted ${postedDocumentUrl}\n`, err: '' })
     assert.deepEqual(JSON.parse(readFileSync(sessionWebsPath(id), 'utf8')), [deadUrl])
   } finally {
     process.chdir(oldCwd)

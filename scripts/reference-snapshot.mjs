@@ -22,7 +22,7 @@ function required(value, name) {
 }
 
 function walk(directory) {
-  const entries = readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name, 'en'))
+  const entries = readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0)
   const files = []
   for (const entry of entries) {
     const path = join(directory, entry.name)
@@ -84,7 +84,7 @@ function navTree(pages) {
   }
   const node = (directory) => {
     const page = byDirectory.get(directory)
-    const childDirectories = (children.get(directory) ?? []).sort((left, right) => left.localeCompare(right, 'en'))
+    const childDirectories = (children.get(directory) ?? []).sort((left, right) => left < right ? -1 : left > right ? 1 : 0)
     return { title: page.title, path: page.path, children: childDirectories.map(node) }
   }
   return node('')
@@ -109,7 +109,7 @@ export function createReferenceSnapshot({ root: projectRoot = root, revision }) 
       source: { path: sourcePath, sha256: sourceHash, revision: sourceRevision },
     }
   })
-  pages.sort((left, right) => left.path.localeCompare(right.path, 'en'))
+  pages.sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
   const seen = new Set()
   for (const page of pages) {
     if (seen.has(page.path)) fail(`duplicate Reference page path ${page.path}`)

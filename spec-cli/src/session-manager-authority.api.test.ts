@@ -232,14 +232,19 @@ test('public review and merge authority bind exact head and one durable dispatch
     const reviewTwo = await request(baseB, `/api/sessions/${id}/review`)
     assert.equal(reviewTwo.status, 200, reviewTwo.text)
 
+    let reviewEpoch = 0
     const merge = (base: string, key: string | null, expectedBranchHead: string, expectedBaseHead: string, extra: Record<string, unknown> = {}) => request(base, `/api/sessions/${id}/merge`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(key !== null ? { 'Idempotency-Key': key } : {}) },
-      body: JSON.stringify({ expectedBranchHead, expectedBaseHead, ...extra }),
+      body: JSON.stringify({ expectedBranchHead, expectedBaseHead, expectedReviewEpoch: reviewEpoch, ...extra }),
     })
-    const declare = (proposal: 'merge') => execFileSync(process.execPath, [
-      tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', proposal, '--note', `authority ${proposal}`,
-    ], { cwd: worktree, env: { ...env, SPEXCODE_SESSION_ID: id }, encoding: 'utf8' })
+    const declare = (proposal: 'merge') => {
+      const output = execFileSync(process.execPath, [
+        tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', proposal, '--note', `authority ${proposal}`,
+      ], { cwd: worktree, env: { ...env, SPEXCODE_SESSION_ID: id }, encoding: 'utf8' })
+      reviewEpoch++
+      return output
+    }
     const declareLegacyNothing = () => execFileSync(process.execPath, [
       tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'internal', 'session-state', 'awaiting', '--propose', 'nothing', '--note', 'authority legacy nothing',
     ], { cwd: worktree, env: { ...env, SPEXCODE_SESSION_ID: id }, encoding: 'utf8' })
@@ -460,7 +465,7 @@ test('public review and merge authority bind exact head and one durable dispatch
     const siblingMerge = await request(baseA, `/api/sessions/${siblingId}/merge`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Idempotency-Key': 'maintenance-release-1' },
-      body: JSON.stringify({ expectedBranchHead: siblingReview.body.branchHead, expectedBaseHead: siblingReview.body.baseHead }),
+      body: JSON.stringify({ expectedBranchHead: siblingReview.body.branchHead, expectedBaseHead: siblingReview.body.baseHead, expectedReviewEpoch: siblingReview.body.reviewEpoch }),
     })
     const siblingTimeline = await request(baseA, `/api/sessions/${siblingId}/timeline`)
     assert.deepEqual({ status: siblingMerge.status, dispatched: siblingMerge.body.dispatched, replayed: siblingMerge.body.replayed === true }, { status: 200, dispatched: true, replayed: false })
@@ -485,17 +490,53 @@ test('public review and merge authority bind exact head and one durable dispatch
     execFileSync(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', 'merge'], {
       cwd: cliDetail.path, env: { ...env, SPEXCODE_SESSION_ID: cliId }, encoding: 'utf8',
     })
+    const cliReview = await request(baseA, `/api/sessions/${cliId}/review`)
+    assert.equal(cliReview.status, 200, cliReview.text)
     const cliOutput = execFileSync(process.execPath, [
       tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'merge', cliId, '--api', baseA,
     ], { cwd: project, env, encoding: 'utf8' })
     const cliReplayOutput = execFileSync(process.execPath, [
       tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'merge', cliId, '--api', baseA,
     ], { cwd: project, env, encoding: 'utf8' })
-    const cliTimeline = await request(baseA, `/api/sessions/${cliId}/timeline`)
+    const cliCaptureBeforeRefresh = await request(baseA, `/api/sessions/${cliId}/capture`)
+    const cliTimelineBeforeRefresh = await request(baseA, `/api/sessions/${cliId}/timeline`)
+
+    // A renewed declaration has the same Git pair but is a fresh merge authority. This failed before the
+    // epoch joined the client key: the second CLI dispatch replayed the settled first receipt and sent no prompt.
+    execFileSync(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', 'merge'], {
+      cwd: cliDetail.path, env: { ...env, SPEXCODE_SESSION_ID: cliId }, encoding: 'utf8',
+    })
+    const refreshedCliReview = await request(baseA, `/api/sessions/${cliId}/review`)
+    assert.equal(refreshedCliReview.status, 200, refreshedCliReview.text)
+    const cliRefreshOutput = execFileSync(process.execPath, [
+      tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'merge', cliId, '--api', baseA,
+    ], { cwd: project, env, encoding: 'utf8' })
+    const cliRefreshReplayOutput = execFileSync(process.execPath, [
+      tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'merge', cliId, '--api', baseA,
+    ], { cwd: project, env, encoding: 'utf8' })
+    const cliCaptureAfterRefresh = await request(baseA, `/api/sessions/${cliId}/capture`)
+    const cliTimelineAfterRefresh = await request(baseA, `/api/sessions/${cliId}/timeline`)
+    const cliRefreshObserved = {
+      sameHeads: cliReview.body.branchHead === refreshedCliReview.body.branchHead && cliReview.body.baseHead === refreshedCliReview.body.baseHead,
+      epochs: [cliReview.body.reviewEpoch, refreshedCliReview.body.reviewEpoch],
+      settledBeforeRefresh: (cliCaptureBeforeRefresh.text.match(/FAKE-HARNESS REPLY Merge your branch/g) ?? []).length,
+      promptCountBeforeRefresh: cliTimelineBeforeRefresh.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length,
+      settledAfterRefresh: (cliCaptureAfterRefresh.text.match(/FAKE-HARNESS REPLY Merge your branch/g) ?? []).length,
+      promptCountAfterRefresh: cliTimelineAfterRefresh.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length,
+    }
     assert.match(cliOutput, /merge dispatched/)
     assert.match(cliReplayOutput, /merge dispatched/)
-    assert.equal(cliTimeline.body.events.filter((event: any) => event.kind === 'sent' && /^Merge your branch/.test(event.text)).length, 1)
-    console.log(`manager-authority-cli ${JSON.stringify({ dispatched: true, replayed: true, promptCount: 1 })}`)
+    assert.match(cliRefreshOutput, /merge dispatched/)
+    assert.match(cliRefreshReplayOutput, /merge dispatched/)
+    assert.deepEqual(cliRefreshObserved, {
+      sameHeads: true,
+      epochs: [1, 2],
+      settledBeforeRefresh: 1,
+      promptCountBeforeRefresh: 1,
+      settledAfterRefresh: 2,
+      promptCountAfterRefresh: 2,
+    })
+    console.log(`manager-authority-cli-refresh ${JSON.stringify(cliRefreshObserved)}`)
 
     const crashCreated = await request(baseA, '/api/sessions', {
       method: 'POST',
@@ -522,7 +563,7 @@ test('public review and merge authority bind exact head and one durable dispatch
     const crashMerge = () => request(baseA, `/api/sessions/${crashId}/merge`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Idempotency-Key': 'crash-after-receipt' },
-      body: JSON.stringify({ expectedBranchHead: crashReview.body.branchHead, expectedBaseHead: crashReview.body.baseHead }),
+      body: JSON.stringify({ expectedBranchHead: crashReview.body.branchHead, expectedBaseHead: crashReview.body.baseHead, expectedReviewEpoch: crashReview.body.reviewEpoch }),
     })
     writeFileSync(crashArm, 'armed\n')
     const crashAttemptsPromise = Promise.allSettled([crashMerge(), crashMerge()])
@@ -593,7 +634,7 @@ test('public review and merge authority bind exact head and one durable dispatch
     const settlementMerge = () => request(baseA, `/api/sessions/${settlementId}/merge`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Idempotency-Key': 'crash-after-settlement' },
-      body: JSON.stringify({ expectedBranchHead: settlementReview.body.branchHead, expectedBaseHead: settlementReview.body.baseHead }),
+      body: JSON.stringify({ expectedBranchHead: settlementReview.body.branchHead, expectedBaseHead: settlementReview.body.baseHead, expectedReviewEpoch: settlementReview.body.reviewEpoch }),
     })
     writeFileSync(settlementCrashArm, 'armed\n')
     const settlementAttempt = settlementMerge().then(() => false, () => true)

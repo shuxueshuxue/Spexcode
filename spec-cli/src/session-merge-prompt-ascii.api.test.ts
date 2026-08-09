@@ -150,19 +150,19 @@ test('the dispatched merge prompt gates a unicode branch in pure ASCII', { timeo
     writeFileSync(join(project, 'base.txt'), 'base moved\n')
     git(project, 'add', 'base.txt')
     git(project, 'commit', '-qm', 'base moves under the lane')
+    execFileSync(process.execPath, [
+      tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', 'merge', '--note', 'ascii fixture',
+    ], { cwd: worktree, env: { ...env, SPEXCODE_SESSION_ID: id }, encoding: 'utf8' })
+
     const review = await request(base, `/api/sessions/${id}/review`)
     assert.equal(review.status, 200, review.text)
     const reviewedHead = review.body.branchHead as string
     const reviewedBase = review.body.baseHead as string
 
-    execFileSync(process.execPath, [
-      tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', 'merge', '--note', 'ascii fixture',
-    ], { cwd: worktree, env: { ...env, SPEXCODE_SESSION_ID: id }, encoding: 'utf8' })
-
     const dispatched = await request(base, `/api/sessions/${id}/merge`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'Idempotency-Key': 'merge-prompt-ascii-1' },
-      body: JSON.stringify({ expectedBranchHead: reviewedHead, expectedBaseHead: reviewedBase }),
+      body: JSON.stringify({ expectedBranchHead: reviewedHead, expectedBaseHead: reviewedBase, expectedReviewEpoch: review.body.reviewEpoch }),
     })
     assert.equal(dispatched.status, 200, dispatched.text)
 

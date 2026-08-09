@@ -111,18 +111,20 @@ advanced with no half-merge, then propose CLOSE (not merge — the commit gate e
 human. Async + fail-loud: `{dispatched:true}` once the prompt is appended, else `{dispatched:false, reason}`
 (HTTP 409 / non-zero) only when the record rejects it. Landing is thus the
 agent's verified act, never a server merge. The dispatch boundary nevertheless admits only a governed session
-currently declaring `awaiting` + `proposal=merge`, with an `Idempotency-Key` and the exact `branchHead` /
-`baseHead` pair returned by review. It validates the record and both Git refs before reopening or appending
+currently declaring `awaiting` + `proposal=merge`, with an `Idempotency-Key`, the exact `branchHead` /
+`baseHead` pair, and the durable `reviewEpoch` returned by review. Every explicit renewed merge declaration
+advances that epoch even if the pair did not move. It validates the record declaration epoch and both Git refs before reopening or appending
 anything. Acceptance is one existing durable timeline receipt carrying the exact owed transport form, reconciled
 with the existing delivery queue under its lock; only after that recoverable receipt exists does
 the server ensure the original agent is live and drain the debt. Native CLI and dashboard clients derive their
-retry key from the exact session route and reviewed head pair instead of volatile client state, so the same decision
-replays the same acceptance even after either client restarts. Key ownership is deliberately route-local: the same
-raw key may authorize an independent decision on another session, while the same route/key with another pair is a
-loud 409. Before handover, same-route/same-key/same-pair retries reconstruct any queue debt lost after the receipt
+retry key from the exact session route, reviewed head pair, and review epoch instead of volatile client state, so the
+same decision replays the same acceptance even after either client restarts. A renewed declaration therefore creates
+a fresh authorized request even when its heads match a settled earlier merge dispatch. Key ownership is deliberately
+route-local: the same raw key may authorize an independent decision on another session, while the same route/key
+with another pair or epoch is a loud 409. Before handover, same-route/same-key/same-pair-and-epoch retries reconstruct any queue debt lost after the receipt
 write and resume delivery; after the adapter accepts it, a private settlement in that same timeline makes every later
 replay response-only, with no resume, unarchive, lifecycle, or queue mutation. The raw key is never persisted. Thus
-review SHOWS a stable decision, merge binds exactly that decision, and the agent still ENFORCES the tested landing
+review SHOWS a stable declaration generation and Git decision, merge binds exactly that decision, and the agent still ENFORCES the tested landing
 itself.
 
 Two read verbs round out the manager surface, both backend-computed so a client (incl. a REMOTE one over

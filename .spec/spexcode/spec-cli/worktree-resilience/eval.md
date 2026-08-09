@@ -20,8 +20,8 @@ scenarios:
       Node's default print-stack-and-exit. The live backend lists every existing worktree and answers /health
       throughout — a live session never disappears from the board for a poll, and a transient fault never kills
       the server.
-    code: spec-cli/src/resilience.ts
-    related: [spec-cli/src/layout.ts, spec-cli/src/git.ts]
+    code: packages/l0/src/resilience.ts
+    related: [packages/l0/src/layout.ts, packages/l0/src/git.ts]
 ---
 # eval.md — worktree-resilience
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ScoreBadge, readingScore, ScenarioCount, TabCount, TagChips } from './score.jsx'
-import { EVAL_FILTER_KIND, evidenceList, filterMenuGroups } from './reviewFilters.js'
+import { EVAL_FILTER_KIND, evidenceList, filterMenuGroups } from '@spexcode/l0'
 import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
@@ -10,7 +10,7 @@ import { apiUrl } from './project.js'
 import { addressHash, evalAddress, reviewListAddress } from './address.js'
 import { Icon } from './icons.jsx'
 import { CompactReviewFilter, nextQuery, ReviewState } from './ReviewShell.jsx'
-import { EVAL_QUERY_DEFAULT, setToken } from './reviewQuery.js'
+import { EVAL_QUERY_DEFAULT, setToken } from '@spexcode/l0'
 import { useReviewPage } from './reviewPage.js'
 
 export const PANES = [

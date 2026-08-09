@@ -7,7 +7,14 @@
   "bin": {
     "spex": "spec-cli/bin/spex.mjs"
   },
+  "workspaces": [
+    "packages/*",
+    "spec-cli",
+    "spec-eval",
+    "spec-forge"
+  ],
   "files": [
+    "packages/l0",
     "spec-cli/src",
     "!spec-cli/src/**/*.test.ts",
     "spec-cli/bin",
@@ -18,9 +25,6 @@
     "spec-forge/src",
     "!spec-forge/src/**/*.test.ts",
     "spec-dashboard/dist",
-    "spec-dashboard/src/reviewFilters.js",
-    "spec-dashboard/src/reviewQuery.js",
-    "spec-dashboard/src/session.js",
     "README.md"
   ],
   "engines": {
@@ -37,6 +41,7 @@
     "prepack": "node scripts/sync-init-plugins.mjs --check && node scripts/prepack.mjs"
   },
   "dependencies": {
+    "@spexcode/l0": "file:packages/l0",
     "tsx": "^4.19.2"
   },
   "optionalDependencies": {

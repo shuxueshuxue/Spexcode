@@ -9,7 +9,7 @@ code:
 related:
   - spec-cli/src/supervise.ts
   - spec-cli/src/cli.ts
-  - spec-cli/src/layout.ts
+  - packages/l0/src/layout.ts
   - spec-cli/src/login-page.ts
   - spec-cli/src/gateway.test.ts
 ---

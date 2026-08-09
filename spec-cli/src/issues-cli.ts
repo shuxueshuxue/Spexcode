@@ -3,7 +3,7 @@ import { closeIssue, createIssue, findIssue, isRemark, mergedIssues, promote, ty
 import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { currentSession, issuesEnabled, reply, resolveRemark, retractRemark } from './localIssues.js'
 import { summarizeLoopIn } from './mentions.js'
-import { loadSpecsLite } from './specs.js'
+import { loadSpecsLite } from '@spexcode/l0'
 
 // @@@ issues-cli - the `spex issue` / `spex remark` CLI surface: argv parsing, console output, exit codes.
 // It lives ABOVE the eval layer, which is the whole point. These handlers used to sit in `issues.ts` and

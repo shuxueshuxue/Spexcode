@@ -1,7 +1,7 @@
 import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { harnessById } from './harness.js'
-import { readAliasedRawRecord } from './layout.js'
+import { readAliasedRawRecord } from '@spexcode/l0'
 import { currentHumanTurn } from './session-timeline.js'
 import type { ExecutionStep, ExecutionTurn } from './execution-trace.js'
 

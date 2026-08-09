@@ -1,9 +1,9 @@
 import { mkdirSync, readFileSync, rmSync, chmodSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { git, gitBinary } from './git.js'
+import { git, gitBinary } from '@spexcode/l0'
 import { writeManagedBlock, removeManagedBlock } from './harness.js'
-import { encodeProject, runtimeRoot, treeSlotDir } from './layout.js'
+import { encodeProject, runtimeRoot, treeSlotDir } from '@spexcode/l0'
 import { writeFileIfChanged } from './file-write.js'
 
 // the three field-sharpened edges this module owes ([[content-filter]]):

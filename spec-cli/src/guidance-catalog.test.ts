@@ -4,10 +4,10 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { buildGuidanceCatalog, GUIDANCE_CATALOG_SCHEMA, GUIDANCE_PAYLOAD_NAME, GUIDANCE_SCHEMA_VERSION } from './guidance-catalog.js'
-import { repoRoot } from './git.js'
+import { repoRoot } from '@spexcode/l0'
 import { guideCatalogEntries } from './guide.js'
 import { helpCatalogEntries } from './help.js'
-import { loadAgentConfig, loadConfig, loadHookConfig, loadReviewConfig, loadSkillConfig, loadSystemConfig } from './specs.js'
+import { loadAgentConfig, loadConfig, loadHookConfig, loadReviewConfig, loadSkillConfig, loadSystemConfig } from '@spexcode/l0'
 
 const digest = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex')
 

@@ -9,7 +9,7 @@ related:
   - spec-cli/src/index.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
-  - spec-cli/src/git.ts
+  - packages/l0/src/git.ts
   - spec-cli/test/cockpit-eval-readout.mjs
   - spec-eval/src/sessioneval.ts
 ---

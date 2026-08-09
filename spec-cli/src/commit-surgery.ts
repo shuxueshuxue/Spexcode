@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { relative } from 'node:path'
 import { materialize, stripSpexcodeBlock, GENERATED_MARK } from './materialize.js'
 import { HARNESSES } from './harness.js'
-import { gitBinary } from './git.js'
+import { gitBinary } from '@spexcode/l0'
 
 // GIT ENV, deliberately INVERTED from git.ts's git(): every call here PRESERVES the hook's environment —
 // GIT_INDEX_FILE must be honored so the surgery reads/writes the EXACT index this commit is being built

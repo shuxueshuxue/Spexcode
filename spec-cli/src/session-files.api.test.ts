@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilesPath } from './session-files.js'
-import { sessionStoreDir } from './layout.js'
+import { sessionStoreDir } from '@spexcode/l0'
 import { tsxBin } from './tsx-bin.js'
 
 const here = dirname(fileURLToPath(import.meta.url))

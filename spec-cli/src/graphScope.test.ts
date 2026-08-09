@@ -69,7 +69,7 @@ function baseRecord() {
 // dynamic-import handles, resolved below only when git is available (see RIG NOTE).
 let board: typeof import('./board.js')
 let cache: typeof import('./graphCache.js')
-let layout: typeof import('./layout.js')
+let layout: typeof import('@spexcode/l0')
 let evalProjection: typeof import('../../spec-eval/src/sessioneval.js')
 
 function writeSessionRecord(over: Record<string, unknown>) {
@@ -152,7 +152,7 @@ if (gitOk) {
 
   board = await import('./board.js')
   cache = await import('./graphCache.js')
-  layout = await import('./layout.js')
+  layout = await import('@spexcode/l0')
   evalProjection = await import('../../spec-eval/src/sessioneval.js')
 
   writeSessionRecord({ status: 'active', note: 'first' })   // one governed record in the isolated store

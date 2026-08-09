@@ -1,12 +1,7 @@
 import { deriveStatus } from './specs.js'
-import { driftIndex, historyIndex } from './git.js'
-import { evalContext, evalTimelines } from '../../spec-eval/src/evaltab.js'
-import { evalNodesAsync } from '../../spec-eval/src/scenarios.js'
 import { resolveProjectIdentity } from './project-identity.js'
-import { sessionEvalProjections } from '../../spec-eval/src/sessioneval.js'
 import { publishReviewSnapshot } from './reviewSnapshot.js'
-// @ts-expect-error Shared browser/server scoring keeps graph summary counts aligned with review rows.
-import { evalReviewState } from '../../spec-dashboard/src/reviewFilters.js'
+import { evalReviewState } from './review/reviewFilters.js'
 
 // a ghost (added) node's parent: the existing node whose directory is the longest prefix of the new one.
 function resolveParent(path: string, byDir: Record<string, string>): string | null {
@@ -31,6 +26,8 @@ export type BoardSnapshot = {
   issues: any[]
   issuesStamp: string
   forgeRevision: string
+  evalTimelines: Map<string, any>
+  sessionEvalProjections: Map<string, any>
 }
 
 // The server-only review snapshot keeps latest readings verbatim. Graph JSON receives only counts.
@@ -59,12 +56,7 @@ export function nodeEvalSummary(scenarios: { name: string }[], readings: any[]) 
 const rowOps = (s: { path: string; archived?: boolean }, opsByPath: Record<string, any[]>): any[] =>
   (s.archived ? [] : opsByPath[s.path] || [])
 
-export async function buildBoard({ root, specs, layout, sessions, issues: merged, issuesStamp, forgeRevision }: BoardSnapshot) {
-  // the eval fold's freshness axes: WARM hits — loadSpecs already computed this HEAD's drift + history
-  // indices, so these are the same cached walks, fetched once and reused for every measurable node (the history
-  // index drives the rename-safe scenario axis, mirroring a spec node's own freshness).
-  const idx = await driftIndex(root)
-  const hidx = await historyIndex(root)
+export async function buildBoard({ root, specs, layout, sessions, issues: merged, issuesStamp, forgeRevision, evalTimelines, sessionEvalProjections }: BoardSnapshot) {
   const worktrees = layout.worktrees.filter((w) => !w.isMain)
   // resolveLayout already zeroed ops for unmanaged worktrees, so this is just "has pending changes".
   const opWts = worktrees.filter((w) => w.ops && w.ops.length)
@@ -144,31 +136,25 @@ export async function buildBoard({ root, specs, layout, sessions, issues: merged
     }
   }
 
-  // Reconcile current Evals once. Latest rows/declarations stay server-only for paged review; graph nodes
-  // receive the explicit per-state count projection and nothing row-shaped.
-  // evalContext reuses the specs + driftIndex above; evalTimeline short-circuits non-measurable nodes. The
-  // eval-file walk rides fs/promises ([[graph-cache]]) so it yields the event loop instead of stalling /health.
-  const ynodes = await evalNodesAsync(root)
-  const ectx = await evalContext(root, specs, idx, hidx, undefined, ynodes)
-  const timelines = await evalTimelines(nodes.map((n) => n.id), ectx)
-  const evalReviewNodes = timelines.map((tl, index) => {
-    const n = nodes[index]
-    if (!tl.hasEvalFile) return null
-    const latest = latestPerScenario(tl.readings)
-    n.reviewSummary = { ...(n.reviewSummary || {}), evals: nodeEvalSummary(tl.scenarios, latest) }
-    return { id: n.id, hue: n.hue, scenarios: tl.scenarios, evals: latest, readings: tl.readings }
-  }).filter((node): node is NonNullable<typeof node> => node !== null)
+  // The L1 adapter calculates current eval timelines once. Latest rows/declarations stay server-only for
+  // paged review; graph nodes receive the explicit per-state count projection and nothing row-shaped.
+  const evalReviewNodes = nodes.flatMap((n) => {
+    const timeline = evalTimelines.get(n.id)
+    if (!timeline?.hasEvalFile) return []
+    const latest = latestPerScenario(timeline.readings)
+    n.reviewSummary = { ...(n.reviewSummary || {}), evals: nodeEvalSummary(timeline.scenarios, latest) }
+    return [{ id: n.id, hue: n.hue, scenarios: timeline.scenarios, evals: latest, readings: timeline.readings }]
+  })
 
   publishReviewSnapshot({ issues: merged, evalNodes: evalReviewNodes, forgeRevision })
 
   const opsByPath: Record<string, any[]> = {}
   opWts.forEach((w) => { opsByPath[w.path] = w.ops })
-  const evalProjections = sessionEvalProjections(sessions)
   const sess = sessions.map((s) => ({
     ...s,
     source: s.path,
     ops: rowOps(s, opsByPath),
-    evalSummary: evalProjections.get(s.id),
+    evalSummary: sessionEvalProjections.get(s.id),
   }))
 
   // One resolved identity projection feeds title, favicon, rail, and catalog compatibility. A worktree
@@ -181,14 +167,18 @@ export async function buildBoard({ root, specs, layout, sessions, issues: merged
 // @@@ spliceSessions — the SESSIONS-ONLY producer ([[graph-cache]]). A session-scoped change (a lifecycle
 // write, a liveness/activity poll flip) reshapes only the board's `sessions` rows — the node/meta units are
 // untouched — so the cache re-derives ONLY the sessions and splices them onto the previous board verbatim,
-// skipping the whole loadSpecs/layout/eval assembly a full buildBoard() pays. Pure aside from listSessions:
+// skipping the whole loadSpecs/layout/eval assembly a full buildBoard() pays. The adapter supplies every
+// live input:
 // each row is decorated EXACTLY as buildBoard's sess mapping (`{...s, source: s.path, ops}`), and every
 // path's `ops` is REUSED from the previous board (a path→ops map). A session path absent in `prev` gets []
 // — a brand-new worktree has no pending spec ops yet, and any later ops-CHANGING event (a commit, a
 // worktree `.spec` edit) is refs/worktree-scoped, i.e. a FULL rebuild, never a sessions splice. So the
 // splice is byte-indistinguishable from a full rebuild whenever only session state moved.
-export async function spliceSessions(prev: Awaited<ReturnType<typeof buildBoard>>, sessions: any[]): Promise<Awaited<ReturnType<typeof buildBoard>>> {
-  const evalProjections = sessionEvalProjections(sessions)
+export async function spliceSessions(
+  prev: Awaited<ReturnType<typeof buildBoard>>,
+  sessions: any[],
+  sessionEvalProjections: Map<string, any>,
+): Promise<Awaited<ReturnType<typeof buildBoard>>> {
   const activeSources = new Set(sessions.map((session) => session.path))
   const opsByPath: Record<string, any[]> = {}
   for (const s of prev.sessions) opsByPath[s.source] = s.ops
@@ -196,7 +186,7 @@ export async function spliceSessions(prev: Awaited<ReturnType<typeof buildBoard>
     ...s,
     source: s.path,
     ops: rowOps(s, opsByPath),
-    evalSummary: evalProjections.get(s.id),
+    evalSummary: sessionEvalProjections.get(s.id),
   }))
   // Archive and close are subtractive topology changes: their worktree leaves the working set, so its
   // overlays must leave in the same cheap publication as its row. Filtering the already-built units is exact

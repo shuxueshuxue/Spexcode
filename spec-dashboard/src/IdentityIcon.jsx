@@ -4,7 +4,7 @@ import { Icon, IconButton } from './icons.jsx'
 import {
   DEFAULT_GATEWAY_ICON, DEFAULT_PROJECT_ICON, IDENTITY_PRESETS, identityFaviconHref as faviconHref,
   identityPreset, isIconifyIcon,
-} from '../../spec-cli/src/identity-presets.js'
+} from '@spexcode/l0'
 
 export { DEFAULT_GATEWAY_ICON, DEFAULT_PROJECT_ICON, IDENTITY_PRESETS }
 export const identityFaviconHref = faviconHref

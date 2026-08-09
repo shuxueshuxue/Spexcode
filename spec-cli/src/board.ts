@@ -1,11 +1,14 @@
-import { loadSpecs } from './specs.js'
-import { resolveLayout } from './layout.js'
+import { loadSpecs } from '@spexcode/l0'
+import { resolveLayout } from '@spexcode/l0'
 import { listSessions } from './sessions.js'
-import { repoRoot } from './git.js'
+import { driftIndex, historyIndex, repoRoot } from '@spexcode/l0'
 import { residentForgeRevision, residentForgeState } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { boardThreads } from './issues.js'
-import { buildBoard as assembleBoard, spliceSessions as spliceBoardSessions, type BoardSnapshot } from './graph.js'
+import { buildBoard as assembleBoard, spliceSessions as spliceBoardSessions, type BoardSnapshot } from '@spexcode/l0'
+import { evalContext, evalTimelines } from '../../spec-eval/src/evaltab.js'
+import { evalNodesAsync } from '../../spec-eval/src/scenarios.js'
+import { sessionEvalProjections } from '../../spec-eval/src/sessioneval.js'
 
 // The application adapter is the sole reader of runtime/forge state. graph.ts only receives this result.
 export async function boardSnapshot(): Promise<BoardSnapshot> {
@@ -20,10 +23,19 @@ export async function boardSnapshot(): Promise<BoardSnapshot> {
     { host: resolveForgeHost(), state: residentForgeState() },
     nodeIds,
   )
-  return { root, specs, layout, sessions, issues, issuesStamp, forgeRevision: residentForgeRevision() }
+  const [idx, hidx, evalNodes] = await Promise.all([driftIndex(root), historyIndex(root), evalNodesAsync(root)])
+  const context = await evalContext(root, specs, idx, hidx, undefined, evalNodes)
+  const timelines = await evalTimelines(nodeIds, context)
+  return {
+    root, specs, layout, sessions, issues, issuesStamp, forgeRevision: residentForgeRevision(),
+    evalTimelines: new Map(nodeIds.map((nodeId, index) => [nodeId, timelines[index]])),
+    sessionEvalProjections: sessionEvalProjections(sessions),
+  }
 }
 
 export const buildBoard = async () => assembleBoard(await boardSnapshot())
 
-export const spliceSessions = async (prev: Awaited<ReturnType<typeof buildBoard>>) =>
-  spliceBoardSessions(prev, await listSessions())
+export const spliceSessions = async (prev: Awaited<ReturnType<typeof buildBoard>>) => {
+  const sessions = await listSessions()
+  return spliceBoardSessions(prev, sessions, sessionEvalProjections(sessions))
+}

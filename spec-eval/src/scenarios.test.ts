@@ -8,7 +8,7 @@ import { parseScenarios, validateScenarios, evalNodes, evalNodesAsync, resolveEv
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, type Reading } from './sidecar.js'
 import { changedSince, staleAxes } from './freshness.js'
 import { putBlob, listBlobs, gc, resolveBlob, MISS_BLOB, isStrayBlob } from './cache.js'
-import type { DriftIndex } from '../../spec-cli/src/git.js'
+import type { DriftIndex } from '@spexcode/l0'
 import type { ScenarioIndex } from './scenariofresh.js'
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'eval-test-'))

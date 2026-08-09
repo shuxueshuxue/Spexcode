@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Icon, IconButton } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
 import { useEscLayer } from './escStack.js'
-import { scanQuery, suggestAt } from './reviewQuery.js'
+import { scanQuery, suggestAt } from '@spexcode/l0'
 import { PageScroll } from './PageScroll.jsx'
 import { paginationTokens } from './reviewPage.js'
 

@@ -16,7 +16,7 @@ scenarios:
       path: spec-cli/src/uninstall.test.ts
       name: init → materialize → uninstall forgets every derived artifact for Claude-only and Codex-only repos
     related:
-      - spec-cli/src/layout.ts#runtimeRoot
+      - packages/l0/src/layout.ts#runtimeRoot
       - spec-cli/src/uninstall.ts#uninstall
       - spec-cli/src/uninstall.test.ts
 ---

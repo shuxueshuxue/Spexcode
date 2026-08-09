@@ -1,6 +1,6 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync } from 'node:fs'
 import { join } from 'node:path'
-import { runtimeRoot, sessionArtifactPath, sessionStoreDir } from './layout.js'
+import { runtimeRoot, sessionArtifactPath, sessionStoreDir } from '@spexcode/l0'
 
 // @@@ delivery-queue - what a session still OWES its agent. The log ([[session-timeline]]) is the record and
 // grows forever; this is the debt and is consumed, so it lives in its own small file whose resting state is

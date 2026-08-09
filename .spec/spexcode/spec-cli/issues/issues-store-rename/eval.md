@@ -3,7 +3,7 @@ scenarios:
   - name: migrate-on-first-touch
     tags: [cli]
     code: spec-cli/src/localIssues.ts
-    related: [spec-cli/src/git.ts]
+    related: [packages/l0/src/git.ts]
     description: >-
       A scratch repo whose store is the pre-rename `.spec/.forum/` holding several committed threads (one
       with a multi-post reply history), and no `.spec/.issues/`. Run the toolchain's first store touch — a

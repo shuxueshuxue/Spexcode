@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, readdirSync }
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { envSessionId, readAliasedRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
+import { envSessionId, readAliasedRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from '@spexcode/l0'
 
 // Reproduces the live codex interactive-attribution bug: design C runs ONE shared per-project codex
 // app-server launched with the FIRST session's SPEXCODE_SESSION_ID baked in. The agent's shell tool (its

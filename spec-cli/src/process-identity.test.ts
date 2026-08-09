@@ -11,7 +11,7 @@ import {
   verifyDetachedRuntime,
   writeDetachedRuntimeReceipt,
   type ProcessAdapter,
-} from './process-identity.js'
+} from '@spexcode/l0'
 
 type FakeState = { start: string | null; processGroupId: number | null; linuxSessionId: number | null }
 

@@ -3,9 +3,9 @@ title: icon presets
 hue: 185
 desc: The one identity icon resolver over local presets and the established Iconify namespace, including validation, aliases, SVG serialization, and favicon hrefs.
 code:
-  - spec-cli/src/identity-presets.js
+  - packages/l0/src/identity-presets.js
 related:
-  - spec-cli/src/identity-presets.d.ts
+  - packages/l0/src/identity-presets.d.ts
   - spec-dashboard/src/IdentityIcon.jsx
 ---
 # icon-presets

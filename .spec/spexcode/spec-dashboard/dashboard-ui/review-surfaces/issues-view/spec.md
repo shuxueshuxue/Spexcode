@@ -13,7 +13,7 @@ related:
   - spec-dashboard/src/Evidence.jsx
   - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/src/mentions.jsx
-  - spec-dashboard/src/reviewFilters.js
+  - packages/l0/src/review/reviewFilters.js
   - spec-dashboard/src/Thread.jsx
   - spec-dashboard/src/textarea.js
   - spec-dashboard/test/new-issue-page.e2e.mjs

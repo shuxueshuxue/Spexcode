@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { appendSent, currentHumanTurn, lastHumanSendVia, readTimeline, sentDispatchReceipt, settleSentDispatch, timelineEvents } from './session-timeline.js'
 import { pendingMessages } from './delivery-queue.js'
 import { rvSock } from './harness.js'
-import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from './layout.js'
+import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from '@spexcode/l0'
 import { cancelSessionWatch, composeSessionPrompt, listSessionWatches, markState, sendText, subscribeSessionWatch, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
 // The reply-channel signal must be SYMMETRIC (the [[session-timeline]] write surface): the phone's

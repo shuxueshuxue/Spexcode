@@ -7,7 +7,7 @@ code:
   - spec-forge/src/resident.ts#refreshIfStale
   - spec-forge/src/resident.ts#refreshForgeNow
 related:
-  - spec-cli/src/graph.ts
+  - packages/l0/src/graph.ts
   - spec-dashboard/src/IssueCard.jsx
   - spec-dashboard/src/SpecNode.jsx
 ---

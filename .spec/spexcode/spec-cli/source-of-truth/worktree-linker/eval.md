@@ -14,8 +14,8 @@ scenarios:
       A worktree merely BEHIND an advanced main likewise stays at zero — both phantom classes dead, real
       proposals intact.
     tags: [backend-api]
-    code: spec-cli/src/git.ts#worktreeSpecDelta
-    related: [spec-cli/src/layout.ts, spec-cli/src/git.test.ts]
+    code: packages/l0/src/git.ts#worktreeSpecDelta
+    related: [packages/l0/src/layout.ts, spec-cli/src/git.test.ts]
 ---
 
 Measure through the real product surface: a scratch adopter project served by `spex serve`, a governed

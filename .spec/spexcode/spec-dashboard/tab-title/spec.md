@@ -6,8 +6,8 @@ desc: The route-selected resolved identity names the browser tab and project-own
 code:
   - spec-dashboard/index.html
 related:
-  - spec-cli/src/graph.ts
-  - spec-cli/src/layout.ts
+  - packages/l0/src/graph.ts
+  - packages/l0/src/layout.ts
   - spec-dashboard/src/data.js
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/IdentityIcon.jsx

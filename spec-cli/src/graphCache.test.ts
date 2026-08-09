@@ -51,7 +51,7 @@ process.chdir(project)
 
 const cache = await import('./graphCache.js')
 const graph = await import('./board.js')
-const git = await import('./git.js')
+const git = await import('@spexcode/l0')
 
 // Production graph-cache always lives behind a referenced server socket. Keep the fixture at that same
 // lifecycle altitude so its deliberately-unref'ed background-start timer can run before test teardown.

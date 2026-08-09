@@ -15,8 +15,8 @@
 // renames any legacy `.spec/.forum` to `.spec/.issues` on the first store touch after a toolchain update.
 import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmdirSync, statSync } from 'node:fs'
 import { join, dirname, resolve as resolvePath } from 'node:path'
-import { git, headSha, repoRoot } from './git.js'
-import { mainCheckout, envSessionId, readConfig } from './layout.js'
+import { git, headSha, repoRoot } from '@spexcode/l0'
+import { mainCheckout, envSessionId, readConfig } from '@spexcode/l0'
 import { parseMentions } from './mentions.js'
 import type { Issue, Reply } from './issues.js'
 

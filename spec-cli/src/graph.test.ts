@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { latestPerScenario, nodeEvalSummary } from './graph.js'
+import { latestPerScenario, nodeEvalSummary } from '@spexcode/l0'
 import { threadStamp } from './issues.js'
 
 // Pins the board's eval-summary contract ([[graph-lean]]): the fold keeps the latest reading per scenario

@@ -1,9 +1,9 @@
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from './git.js'
-import { loadSpecs, parseFrontmatter } from './specs.js'
-import { readJsonConfig } from './layout.js'
-import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, resolveAnchor, resolveSelectors, windowEvents, anchorHitQueries } from './anchors.js'
+import { repoRoot, git, sourceIndexes, rowsFor, treeFilePaths, treeFileText, withEventLedgerBuild, type DriftPathEvent } from '@spexcode/l0'
+import { loadSpecs, parseFrontmatter } from '@spexcode/l0'
+import { readJsonConfig } from '@spexcode/l0'
+import { extractors, extractorFor, extOf, parseCodeEntry, relationClaimsPath, resolveAnchor, resolveSelectors, windowEvents, anchorHitQueries } from '@spexcode/l0'
 import { DEFAULT_TEST_GLOBS, sourcePolicyDescription, trackedSourceFiles } from './source-files.js'
 
 export type Finding = { level: 'error' | 'warn'; rule: string; spec?: string; file?: string; msg: string }

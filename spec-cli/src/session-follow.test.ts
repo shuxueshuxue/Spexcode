@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { followSessions, launchEvent, sessionEvent, type FollowOutcome } from './session-follow.js'
 import { advanceFollow, followCursor } from './session-cursors.js'
 import { recordStatus } from './session-timeline.js'
-import { sessionStoreDir } from './layout.js'
+import { sessionStoreDir } from '@spexcode/l0'
 import type { Session } from './sessions.js'
 
 // Following is reading a LOG past a cursor ([[session-follow]]). Everything below is driven by appending lines

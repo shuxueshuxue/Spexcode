@@ -4,7 +4,7 @@ import {
   EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, effectiveTokens, hasLegacyParams,
   legacyQueryText, normalizeQuery, queryParam, readToken, sameQuery, scanQuery, scopedEvalQuery,
   reviewRouteQuery, serialize, setToken, suggestAt, tokenize,
-} from './reviewQuery.js'
+} from '@spexcode/l0'
 
 // The ONE token-text engine ([[review-query]]): parse loses nothing, surgery preserves strangers,
 // legacy params replay as the full visible state, and autocomplete stays bounded to page-supplied

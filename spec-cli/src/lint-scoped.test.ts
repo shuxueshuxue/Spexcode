@@ -5,9 +5,9 @@ import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { extractors } from './anchors.js'
+import { extractors } from '@spexcode/l0'
 import { specLint } from './lint.js'
-import { eventLedgerDiagnosticsForTests, historyEventCachePathForTests, resetEventLedgerDiagnosticsForTests, resetHistoryCachesForTests } from './git.js'
+import { eventLedgerDiagnosticsForTests, historyEventCachePathForTests, resetEventLedgerDiagnosticsForTests, resetHistoryCachesForTests } from '@spexcode/l0'
 
 // [[code-anchor]] YATU CLI cases — the runtime semantics of measured multi-selectors and scoped
 // related, through the REAL `spex spec lint` in throwaway git repos (real stderr + exit code, never

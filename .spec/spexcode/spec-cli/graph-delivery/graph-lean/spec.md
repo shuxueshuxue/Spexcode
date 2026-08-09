@@ -4,11 +4,11 @@ status: active
 hue: 175
 desc: The graph payload is a lean summary — no Issues/Evals row arrays, only explicit per-node counts and identity needed by first paint; every row list is demand-paged elsewhere.
 code:
-  - spec-cli/src/graph.ts#buildBoard
+  - packages/l0/src/graph.ts#buildBoard
 related:
   - spec-cli/src/board.ts
   - spec-cli/src/graph.test.ts
-  - spec-cli/src/reviewSnapshot.ts
+  - packages/l0/src/reviewSnapshot.ts
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/corpus.js

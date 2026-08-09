@@ -6,7 +6,7 @@ desc: One seam between SpexCode and the coding-agent harness (Claude Code, Codex
 code:
   - spec-cli/src/harness.ts
 related:
-  - spec-cli/src/harness-identity.ts
+  - packages/l0/src/harness-identity.ts
   - spec-cli/src/harness-identity.test.ts
   - spec-cli/src/headless-controller.ts
   - spec-cli/src/execution-trace.ts

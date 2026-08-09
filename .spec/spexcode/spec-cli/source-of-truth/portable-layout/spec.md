@@ -5,14 +5,14 @@ session: sess-merge
 hue: 160
 desc: Where things live — main, worktree→node mapping, the spec root node — is detected policy, never a baked-in name.
 code:
-  - spec-cli/src/layout.ts#resolveLayout
-  - spec-cli/src/layout.ts#layoutDeltas
-  - spec-cli/src/layout.ts#mainRoot
-  - spec-cli/src/layout.ts#mainBranch
-  - spec-cli/src/layout.ts#readJsonConfig
-  - spec-cli/src/layout.ts#readUploadPolicy
+  - packages/l0/src/layout.ts#resolveLayout
+  - packages/l0/src/layout.ts#layoutDeltas
+  - packages/l0/src/layout.ts#mainRoot
+  - packages/l0/src/layout.ts#mainBranch
+  - packages/l0/src/layout.ts#readJsonConfig
+  - packages/l0/src/layout.ts#readUploadPolicy
 related:
-  - spec-cli/src/harness-identity.ts
+  - packages/l0/src/harness-identity.ts
   - spec-cli/src/layout-session-id.test.ts
   - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/src/layout-overlay.api.test.ts
@@ -35,7 +35,7 @@ are tracked, and nothing machine-specific leaks into the tree — so a clean che
 
 ## expanded spec
 
-`spec-cli/src/layout.ts` is the one seam. `resolveLayout()` answers — where is main, **which branch is
+`packages/l0/src/layout.ts` is the one seam. `resolveLayout()` answers — where is main, **which branch is
 its source of truth**, how to enumerate the other checkouts, how each declares its node — and exposes the
 result at `GET /api/settings` (its `layout` half). Everything downstream consumes the resolved layout, never a hardcoded path or
 branch name.

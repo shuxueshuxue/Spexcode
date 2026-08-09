@@ -1,4 +1,4 @@
-import { loadSpecsLite } from './specs.js'
+import { loadSpecsLite } from '@spexcode/l0'
 import { rankDocs, type RankInput } from './ranker.js'
 
 export type SearchResult = { id: string; title: string; path: string; score: number; snippet: string }

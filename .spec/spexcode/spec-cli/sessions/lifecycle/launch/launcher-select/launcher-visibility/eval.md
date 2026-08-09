@@ -14,7 +14,7 @@ scenarios:
     code: spec-cli/src/harness.ts
     related:
       - spec-cli/src/index.ts
-      - spec-cli/src/layout.ts
+      - packages/l0/src/layout.ts
       - spec-dashboard/src/SessionInterface.jsx
 ---
 

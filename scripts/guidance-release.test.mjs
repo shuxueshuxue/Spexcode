@@ -99,10 +99,10 @@ test('workflow allows a gated manual bootstrap and validates immutable release a
     "      - '.spec/spexcode/.plugins/**'",
     "      - 'spec-cli/bin/spex.mjs'",
     "      - 'spec-cli/src/guidance-catalog.ts'",
-    "      - 'spec-cli/src/git.ts'",
+    "      - 'packages/l0/src/git.ts'",
     "      - 'spec-cli/src/guide.ts'",
     "      - 'spec-cli/src/help.ts'",
-    "      - 'spec-cli/src/specs.ts'",
+    "      - 'packages/l0/src/specs.ts'",
     "      - 'scripts/guidance-release.mjs'",
   ].join('\n')
   assert.match(workflow, /^on:\n  workflow_dispatch:\n  push:\n/m)

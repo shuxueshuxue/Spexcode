@@ -16,7 +16,7 @@ import {
   browseProjectDirectories, addKnownProjectWithSetup,
   reconcileProjects, reconcileNow, startHostDashboard, type EndpointRecord,
 } from './host.js'
-import { encodeProject } from './layout.js'
+import { encodeProject } from '@spexcode/l0'
 import { tsxBin } from './tsx-bin.js'
 import { setAdminPassword } from './gateway-auth.js'
 

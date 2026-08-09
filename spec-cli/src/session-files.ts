@@ -1,6 +1,6 @@
 import { accessSync, constants, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, isAbsolute, resolve } from 'node:path'
-import { readRecordEntry, sessionArtifactPath } from './layout.js'
+import { readRecordEntry, sessionArtifactPath } from '@spexcode/l0'
 
 export class SessionFileError extends Error {
   constructor(readonly status: 400 | 403 | 404 | 500, message: string) {

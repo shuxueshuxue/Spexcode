@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, appendFileSync, mkdirSync, statSync, readdirSync, openSync, closeSync, readSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { sessionStoreDir, sessionArtifactPath, readAliasedRawRecord } from './layout.js'
+import { sessionStoreDir, sessionArtifactPath, readAliasedRawRecord } from '@spexcode/l0'
 import type { Lifecycle, Proposal } from './sessions.js'
 import type { ExecutionTurn } from './execution-trace.js'
 

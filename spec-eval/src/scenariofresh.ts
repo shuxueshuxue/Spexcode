@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
-import { batchBlobTexts, batchRevisionOids, git, gitA, gitTry, headSha } from '../../spec-cli/src/git.js'
+import { batchBlobTexts, batchRevisionOids, git, gitA, gitTry, headSha } from '@spexcode/l0'
 import { parseScenarios } from './scenarios.js'
-import { rootSlots, touchRoot as touchRootLru } from '../../spec-cli/src/root-lru.js'
+import { rootSlots, touchRoot as touchRootLru } from '@spexcode/l0'
 
 const RS = '\x1e'
 

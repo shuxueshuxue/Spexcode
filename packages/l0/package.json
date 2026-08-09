@@ -1,0 +1,15 @@
+{
+  "name": "@spexcode/l0",
+  "version": "0.6.2",
+  "type": "module",
+  "description": "SpexCode's dependency-minimal spec graph core.",
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

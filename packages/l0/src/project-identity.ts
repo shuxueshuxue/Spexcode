@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { spexcodeHome } from './layout.js'
+import { spexcodeHome } from './project-store.js'
 import {
   resolvedIdentityIcon, DEFAULT_GATEWAY_ICON, DEFAULT_PROJECT_ICON, requireIdentityChoice,
 } from './identity-presets.js'

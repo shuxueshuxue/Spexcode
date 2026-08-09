@@ -6,8 +6,8 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import { putBlob, MISS_BLOB } from './cache.js'
-import { driftIndex, historyIndex } from '../../spec-cli/src/git.js'
-import { loadSpecs } from '../../spec-cli/src/specs.js'
+import { driftIndex, historyIndex } from '@spexcode/l0'
+import { loadSpecs } from '@spexcode/l0'
 import { evalContext, evalTimeline, readBlobByHash } from './evaltab.js'
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'evaltab-test-'))

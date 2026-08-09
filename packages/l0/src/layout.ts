@@ -6,7 +6,6 @@ import { guardWorktree } from './resilience.js'
 import { HARNESS_IDENTITIES, type HarnessId } from './harness-identity.js'
 import { encodeProject, projectRuntimeRoot, spexcodeHome } from './project-store.js'
 
-export { encodeProject, spexcodeHome } from './project-store.js'
 
 export type Config = {
   main?: string                    // path to the source-of-truth checkout (default: the `main` worktree)

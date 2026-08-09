@@ -6,7 +6,7 @@ import { useT } from './i18n/index.jsx'
 import { rankDocs } from '../../spec-cli/src/ranker.ts'
 import { useSpecCorpus } from './corpus.js'
 import { evalAddress, graphNodeAddress, issueAddress, sessionAddress } from './address.js'
-import { EVAL_FILTER_KIND } from './reviewFilters.js'
+import { EVAL_FILTER_KIND } from '@spexcode/l0'
 import { useReviewPage } from './reviewPage.js'
 
 // a scenario row's dot reads its satisfaction the way the tile/panel do (score.jsx): green fresh pass · red

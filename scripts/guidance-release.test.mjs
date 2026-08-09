@@ -90,8 +90,23 @@ test('product producer emits the real catalog beside its sealed manifest', () =>
   }
 })
 
-test('workflow is disabled by default and validates immutable release assets on rerun', () => {
+test('workflow allows a gated manual bootstrap and validates immutable release assets on rerun', () => {
   const workflow = readFileSync(join(root, '.github', 'workflows', 'guidance-release.yml'), 'utf8')
+  const pushFilter = [
+    '  push:',
+    '    branches: [main]',
+    '    paths:',
+    "      - '.spec/spexcode/.plugins/**'",
+    "      - 'spec-cli/bin/spex.mjs'",
+    "      - 'spec-cli/src/guidance-catalog.ts'",
+    "      - 'spec-cli/src/git.ts'",
+    "      - 'spec-cli/src/guide.ts'",
+    "      - 'spec-cli/src/help.ts'",
+    "      - 'spec-cli/src/specs.ts'",
+    "      - 'scripts/guidance-release.mjs'",
+  ].join('\n')
+  assert.match(workflow, /^on:\n  workflow_dispatch:\n  push:\n/m)
+  assert.ok(workflow.includes(pushFilter))
   assert.match(workflow, /if: vars\.SPEXCODE_GUIDANCE_RELEASE_PUBLISH == 'true'/)
   assert.match(workflow, /gh release view/)
   assert.match(workflow, /gh release download/)

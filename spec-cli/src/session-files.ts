@@ -12,8 +12,9 @@ export class SessionFileError extends Error {
 type SessionFileLock = <T>(id: string, body: () => T) => T
 
 export const SESSION_FILE_PREVIEW_MAX_BYTES = 2 * 1024 * 1024
-export type SessionFilePreviewKind = 'text' | 'image'
-const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.markdown', '.json', '.yaml', '.yml', '.toml', '.ini', '.log', '.csv', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.css', '.html', '.xml', '.py', '.go', '.rs', '.java', '.sh', '.sql'])
+export type SessionFilePreviewKind = 'text' | 'image' | 'html'
+const HTML_EXTENSIONS = new Set(['.html', '.htm'])
+const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.markdown', '.json', '.yaml', '.yml', '.toml', '.ini', '.log', '.csv', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.css', '.xml', '.py', '.go', '.rs', '.java', '.sh', '.sql'])
 const IMAGE_TYPES: Record<string, string> = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp',
 }
@@ -113,6 +114,7 @@ export function openSessionFile(id: string, path: string): { path: string; name:
 export function sessionFilePreviewKind(path: string): { kind: SessionFilePreviewKind; contentType: string } | null {
   const extension = basename(path).toLowerCase().match(/\.[^.]+$/)?.[0]
   if (!extension) return null
+  if (HTML_EXTENSIONS.has(extension)) return { kind: 'html', contentType: 'text/html; charset=utf-8' }
   if (TEXT_EXTENSIONS.has(extension)) return { kind: 'text', contentType: 'text/plain; charset=utf-8' }
   const contentType = IMAGE_TYPES[extension]
   return contentType ? { kind: 'image', contentType } : null

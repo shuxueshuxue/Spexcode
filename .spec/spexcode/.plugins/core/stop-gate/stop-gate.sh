@@ -129,7 +129,7 @@ fi
 # of the full-to-terse information gap is recoverable from the entry, none of it from memory.
 taught="$sdir/stop-gate-taught"
 if [ -f "$taught" ]; then
-  printf '{"decision":"block","reason":"undeclared stop — declare the ONE true state as your LAST call: `%s session <done --propose merge (review; ONLY clickable merge)|nothing (done; no merge)|close (close-pending) / park (parked; managed watch delivery or real background wake-up) / ask (asking; human reply)>`. Conditions: `%s help session`."}\n' "$S" "$S"
+  printf '{"decision":"block","reason":"undeclared stop — declare the ONE true state as your LAST call: `%s session <done --propose merge (review; ONLY clickable merge)|nothing (done; no merge)|close (close-pending; no posted artifact waiting)|park (parked; managed watch delivery or real background wake-up) / ask (asking; human reply or posted artifact review)>`. Conditions: `%s help session`."}\n' "$S" "$S"
   exit 0
 fi
 touch "$taught" 2>/dev/null || true
@@ -143,5 +143,9 @@ touch "$taught" 2>/dev/null || true
 # tool calls honestly re-flips the record to active (mark-active, by design) and re-blocks the next stop;
 # this block text is the one place every undeclared stopper is guaranteed to read, so the teaching that
 # kills the park->block->re-park loop at its source lives here.
+if [ -s "$sdir/files.json" ] && grep -qE '"[^"]+"' "$sdir/files.json"; then
+  printf '{"decision":"block","reason":"a posted file/web artifact still needs human inspection; declare `spex session ask --note ...`, and declare it last."}\n'
+  exit 0
+fi
 printf '{"decision":"block","reason":"Your session state is a CLAIM the graph, your supervisor, and other agents act on — not a box to tick to end the turn. Stopping undeclared makes your outcome a guess. Pick the ONE that is TRUE right now and run `%s session <choice>`, choosing the <choice> whose condition holds:\\n  • done --propose merge  — spec+code COMMITTED on the branch and genuinely ready for human review. It declares REVIEW and is the ONLY proposal that offers a clickable merge.\\n  • done --propose nothing — committed, but you are NOT proposing a merge; paused for the human to look. It declares DONE, never a merge.\\n  • done --propose close — task finished, work landed (or none to merge), and worktree no longer needed: propose human close. It declares CLOSE-PENDING, not merge. Never run `session close` on your own id.\\n  • ask --note <your-question> — you need the human: a real question, or you are simply stopped awaiting direction. It declares ASKING and resumes only when they reply.\\n  • park --note <what-you-await> — ONLY when a real wake-up will resume you: a managed spex session watch subscription whose send delivery reaches you, or a spex session wait you backgrounded/a running build/job. It declares PARKED and self-resumes. With neither, you are waiting on the human: use ask, never park as a default.\\n\\nDECLARE LAST, THEN STOP: finish everything else in the turn first — speak, send your messages, establish managed watches or arm background waits — and make the declaration your FINAL call. Any tool call AFTER it flips your record back to active (mark-active, by design: activity is activity), so the next stop re-blocks and demands a fresh declaration; declaring last kills that loop at its source.\\n\\n(This full explanation shows once per session; later undeclared stops get a one-line reminder. `%s help session` re-explains the choices any time.)"}\n' "$S" "$S"
 exit 0

@@ -77,6 +77,9 @@ function FileTextPreview({ path, text }) {
     ? <RichText className="si-file-markdown">{text}</RichText>
     : <pre className="si-file-text">{text}</pre>
 }
+function FileHtmlPreview({ path, html }) {
+  return <iframe className="si-file-html" sandbox="" srcDoc={html} title={fileName(path)} referrerPolicy="no-referrer" />
+}
 const webName = (url) => {
   try {
     const parsed = new URL(url)
@@ -147,12 +150,13 @@ function SessionResourcePanel({ tab, active = false, focusRequest = 0, onEscape 
         const body = await response.json().catch(() => null)
         throw new Error(body?.error || t('session.filePreviewFailed', { status: response.status }))
       }
-      if (response.headers.get('X-Spexcode-Preview-Kind') === 'image') {
+      const previewKind = response.headers.get('X-Spexcode-Preview-Kind')
+      if (previewKind === 'image') {
         imageUrl = URL.createObjectURL(await response.blob())
         if (!cancelled) setPreview({ phase: 'image', url: imageUrl })
       } else {
         const text = await response.text()
-        if (!cancelled) setPreview({ phase: 'text', text })
+        if (!cancelled) setPreview({ phase: previewKind === 'html' ? 'html' : 'text', text })
       }
     }).catch((error) => {
       if (!cancelled) setPreview({ phase: 'error', message: error instanceof Error ? error.message : String(error) })
@@ -215,6 +219,7 @@ function SessionResourcePanel({ tab, active = false, focusRequest = 0, onEscape 
       {preview.phase === 'loading' && <Icon name="loader" size={18} className="si-attach-busy" />}
       {preview.phase === 'error' && <p className="si-file-preview-error" role="alert">{preview.message}</p>}
       {preview.phase === 'text' && <FileTextPreview path={tab.value} text={preview.text} />}
+      {preview.phase === 'html' && <FileHtmlPreview path={tab.value} html={preview.text} />}
       {preview.phase === 'image' && <img src={preview.url} alt={fileName(tab.value)} />}
     </div>
   )

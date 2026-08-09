@@ -2,12 +2,13 @@
 // file through the public CLI. The script captures the empty/live toolbar states and verifies the browser's
 // click reaches the authorized download route.
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const PW = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const BASE = process.env.BASE || 'http://127.0.0.1:5177'
 const SESSION = process.env.SESSION
+const HTML_FILE = process.env.HTML_FILE
 const OUT = process.env.OUT || '/tmp/session-files-e2e'
 if (!SESSION) throw new Error('pass SESSION=<id> after publishing the test artifact with spex session files add')
 mkdirSync(OUT, { recursive: true })
@@ -24,7 +25,9 @@ try {
   await page.screenshot({ path: join(OUT, disabled ? 'files-empty.png' : 'files-live.png'), fullPage: true })
   if (disabled) throw new Error('session has no posted files; empty-state screenshot captured, then publish an artifact and rerun')
   await button.click()
-  const row = page.locator('.si-files-row').first()
+  const row = HTML_FILE
+    ? page.locator('.si-files-row').filter({ hasText: basename(HTML_FILE) }).first()
+    : page.locator('.si-files-row').first()
   const name = row.locator('.si-files-name')
   await name.waitFor({ state: 'visible' })
   const copy = row.locator('.si-files-copy')
@@ -49,6 +52,17 @@ try {
   if (!await resourceTab.evaluate((element) => element.classList.contains('on')))
     throw new Error('clicking the filename must select the same resource tab opened by the toolbar picker')
   await page.locator('.si-resource-file').waitFor({ state: 'visible' })
+  if (HTML_FILE) {
+    const frame = page.locator('.si-file-html')
+    await frame.waitFor({ state: 'visible' })
+    if ((await frame.getAttribute('sandbox')) !== '') throw new Error('HTML previews must use a script-free sandbox')
+    if (await page.locator('.si-file-text').count()) throw new Error('HTML previews must not render source in a preformatted text block')
+    const renderedHeading = page.frameLocator('.si-file-html').locator('#proof')
+    await renderedHeading.waitFor({ state: 'visible' })
+    if (await renderedHeading.textContent() !== 'Rendered HTML') throw new Error('the posted HTML must render its document content')
+    if (await page.frameLocator('.si-file-html').locator('body').getAttribute('data-script-ran'))
+      throw new Error('sandboxed HTML previews must not execute scripts')
+  }
   if (await page.locator('.si-file-preview-backdrop').count())
     throw new Error('a files-menu preview must not create a second pop-out surface')
   const resourceActions = page.locator('.si-actions [data-resource-action]')

@@ -51,6 +51,7 @@ test('public session files CLI stores a live path and the backend authorizes onl
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
   const artifact = join(fixture, 'artifact.txt')
+  const htmlArtifact = join(fixture, 'artifact.html')
   const unposted = join(fixture, 'private.txt')
   const neverPosted = join(fixture, 'never-posted.txt')
   const unpreviewable = join(fixture, 'diagram.svg')
@@ -69,6 +70,7 @@ test('public session files CLI stores a live path and the backend authorizes onl
     git(project, 'add', '.')
     git(project, 'commit', '-qm', 'fixture')
     writeFileSync(artifact, 'before\n')
+    writeFileSync(htmlArtifact, '<!doctype html><h1 id="proof">Rendered HTML</h1><script>document.body.dataset.scriptRan = "yes"</script>\n')
     writeFileSync(unposted, 'private\n')
     writeFileSync(unpreviewable, '<svg/>\n')
 
@@ -108,6 +110,14 @@ test('public session files CLI stores a live path and the backend authorizes onl
     assert.equal(preview.status, 200)
     assert.equal(preview.headers.get('X-Spexcode-Preview-Kind'), 'text')
     assert.equal(await preview.text(), 'after\n')
+    const addHtml = await runCli(project, env, 'session', 'files', 'add', '../artifact.html')
+    assert.equal(addHtml.code, 0, addHtml.err)
+    const htmlAbsolute = resolve(project, '../artifact.html')
+    const htmlPreview = await fetch(`${base}/api/sessions/${id}/files/download?path=${encodeURIComponent(htmlAbsolute)}&preview=1`)
+    assert.equal(htmlPreview.status, 200)
+    assert.equal(htmlPreview.headers.get('X-Spexcode-Preview-Kind'), 'html')
+    assert.equal(htmlPreview.headers.get('Content-Type'), 'text/html; charset=utf-8')
+    assert.match(await htmlPreview.text(), /<h1 id="proof">Rendered HTML<\/h1>/)
     const addUnpreviewable = await runCli(project, env, 'session', 'files', 'add', '../diagram.svg')
     assert.equal(addUnpreviewable.code, 0, addUnpreviewable.err)
     const unsupported = await fetch(`${base}/api/sessions/${id}/files/download?path=${encodeURIComponent(resolve(project, '../diagram.svg'))}&preview=1`)
@@ -139,6 +149,11 @@ test('public session files CLI stores a live path and the backend authorizes onl
     assert.deepEqual({ code: retractUnpreviewable.code, out: retractUnpreviewable.out.trim() }, {
       code: 0,
       out: `retracted ${resolve(project, '../diagram.svg')}`,
+    })
+    const retractHtml = await runCli(project, env, 'session', 'files', 'retract', '../artifact.html')
+    assert.deepEqual({ code: retractHtml.code, out: retractHtml.out.trim() }, {
+      code: 0,
+      out: `retracted ${resolve(project, '../artifact.html')}`,
     })
     assert.deepEqual(JSON.parse(readFileSync(sessionFilesPath(id), 'utf8')), [])
   } finally {

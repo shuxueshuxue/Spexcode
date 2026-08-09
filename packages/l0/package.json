@@ -7,7 +7,9 @@
     "src"
   ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./review": "./src/review/index.js",
+    "./identity": "./src/identity-presets.js"
   },
   "engines": {
     "node": ">=22"

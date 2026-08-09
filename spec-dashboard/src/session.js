@@ -1,4 +1,4 @@
-import { sessionHandle, sessionHeadline, sessionPresent, sessionTitle } from '@spexcode/l0'
+import { sessionHandle, sessionHeadline, sessionPresent, sessionTitle } from '@spexcode/l0/review'
 
 export { sessionHandle, sessionHeadline, sessionPresent, sessionTitle }
 

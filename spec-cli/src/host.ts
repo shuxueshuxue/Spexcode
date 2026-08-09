@@ -20,7 +20,7 @@ import { git } from '@spexcode/l0'
 import { serveStatic, resolveDistDir, ensureDashboardBuilt } from './gateway.js'
 import { startHubGateway, type HubExtensions } from './gateway-hub.js'
 import { tsxBin } from './tsx-bin.js'
-import { DEFAULT_PROJECT_ICON, requireIdentityChoice } from '@spexcode/l0'
+import { DEFAULT_PROJECT_ICON, requireIdentityChoice } from '@spexcode/l0/identity'
 import {
   resolveProjectIdentity, writeGatewayIcon, type ResolvedIdentity,
 } from '@spexcode/l0'

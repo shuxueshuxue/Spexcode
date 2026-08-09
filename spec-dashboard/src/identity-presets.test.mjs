@@ -6,7 +6,7 @@ import {
   isIconifyIcon,
   requireIdentityChoice,
   resolvedIdentityIcon,
-} from '@spexcode/l0'
+} from '@spexcode/l0/identity'
 
 test('preset favicons are local SVG data while legacy icon forms remain valid', () => {
   const preset = identityFaviconHref('compass')

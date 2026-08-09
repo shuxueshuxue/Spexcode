@@ -14,7 +14,7 @@ Identity icons are named values, not page-local drawings. One browser-safe resol
 registry's stable ids, accessible labels, palette, view box, and geometry, plus the established broad Iconify
 `prefix:name` namespace that the original tab identity accepted through `api.iconify.design`. Backend
 validation, the dashboard renderer, and the compact searchable/source-filtered chooser consume that same
-contract. The existing `dashboard.icon` field stores the chosen human-readable value; no catalog result is
+contract through the dedicated `@spexcode/l0/identity` package entry, never the Node core entry. The existing `dashboard.icon` field stores the chosen human-readable value; no catalog result is
 copied into another identity field. Emoji, arbitrary Iconify names, and URLs already authored directly remain
 valid through the adapter; structured chooser writes accept canonical registry ids and well-formed Iconify
 names, while rejecting other new arbitrary strings.

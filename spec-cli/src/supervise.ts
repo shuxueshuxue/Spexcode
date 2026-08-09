@@ -45,6 +45,7 @@ const watchRoots = [
   here,                                  // spec-cli/src — the backend's own source
   join(repoRoot, 'spec-forge', 'src'),
   join(repoRoot, 'spec-eval', 'src'),
+  join(repoRoot, 'packages', 'l0', 'src'),
 ]
 
 // @@@ instance identity - one id for this serve's whole lifetime, minted at supervisor start and handed to

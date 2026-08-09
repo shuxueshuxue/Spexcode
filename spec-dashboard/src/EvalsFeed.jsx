@@ -1,7 +1,7 @@
 import { sessionHeadline } from './session.js'
 import { FacetMenu, ListPage, ReviewListRow, ReviewState, SecondaryFilters } from './ReviewShell.jsx'
-import { EVAL_QUERY_DEFAULT, readToken, setToken } from '@spexcode/l0'
-import { EVAL_FILTER_KIND, kindsOf } from '@spexcode/l0'
+import { EVAL_QUERY_DEFAULT, readToken, setToken } from '@spexcode/l0/review'
+import { EVAL_FILTER_KIND, kindsOf } from '@spexcode/l0/review'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 

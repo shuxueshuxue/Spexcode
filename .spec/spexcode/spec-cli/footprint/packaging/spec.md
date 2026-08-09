@@ -8,6 +8,8 @@ code:
 related:
   - packages/l0/package.json
   - packages/l0/src/index.ts
+  - packages/l0/src/review/index.js
+  - packages/l0/src/identity-presets.js
   - spec-cli/src/cli.ts
   - package.json
   - package-lock.json
@@ -43,10 +45,14 @@ scaffolding only, not an extra normal-adopter step.
 The installable unit remains the **monorepo root**, now with one real workspace package: `@spexcode/l0`.
 Its source lives at `packages/l0/src`; the root manifest declares `packages/*`, `spec-cli`, `spec-eval`, and
 `spec-forge` as workspaces, depends on the local L0 package, and ships `packages/l0` in its explicit `files`
-allowlist. `@spexcode/l0` has one package export, `.`: L1 consumers import its named core and shared-review
-symbols through the bare package name rather than reaching into source files. Its `readSpecs(root)` entry is
-the root-explicit L0 reader. The package is intentionally not `private`, so this workspace has the same npm
-resolution boundary an adopter receives; this refactor does not publish it or prepare any registry action.
+allowlist. `@spexcode/l0` has three deliberately narrow package exports. `.` is the Node-side core entry and
+owns the root-explicit `readSpecs(root)` reader. `./review` is the browser-safe review domain only: its
+filter, query, and session presentation functions have no Node, React, store, endpoint, or service
+dependency. `./identity` is the same kind of browser-safe identity registry shared by validation and
+rendering. The dashboard imports only those named pure-domain entries; it never imports `.` and therefore
+cannot pull Node-only graph/store modules into Vite. No source-file subpaths are exported. The package is
+intentionally not `private`, so this workspace has the same npm resolution boundary an adopter receives;
+this refactor does not publish it or prepare any registry action.
 
 The root tarball otherwise preserves the runtime layout: `spec-cli/{src,bin,templates,hooks}`, the siblings
 `spec-eval/src` and `spec-forge/src`, and `spec-dashboard/dist`. The dist is the one shipped artifact not in git, so it is built

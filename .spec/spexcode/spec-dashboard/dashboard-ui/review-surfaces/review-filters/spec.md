@@ -6,6 +6,7 @@ desc: One pure Issues/Evals filter engine with domain data adapters — the sing
 code:
   - packages/l0/src/review/reviewFilters.js
 related:
+  - packages/l0/src/review/index.js
   - spec-cli/src/reviews.ts
   - spec-dashboard/src/ReviewShell.jsx
   - spec-dashboard/src/IssuesPage.jsx
@@ -27,7 +28,8 @@ related:
 # review-filters
 
 Issues and Evals travel through **one filtering mechanism** wherever they are listed. Its pure module lives
-in `@spexcode/l0`, so the server and dashboard import the same implementation. A domain adapter is
+at `@spexcode/l0/review`, the browser-safe package entry shared by the server and dashboard; that entry
+contains no Node, React, store, endpoint, or service dependency. A domain adapter is
 data: it names searchable fields, real facets, section membership (with honest concrete-status spellings),
 absent-field behavior, option labels, and the one source-session PRESENCE join ([[live-session-filter]] —
 `session:present|missing`, never liveness). The engine normalizes state, applies every active dimension

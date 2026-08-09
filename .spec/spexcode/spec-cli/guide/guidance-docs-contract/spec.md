@@ -3,8 +3,14 @@ title: guidance docs contract
 status: active
 hue: 200
 desc: Guidance leaves the product repository only as a sealed, versioned catalog release; an independent documentation repository polls, verifies, reviews, and deploys that release without reading or writing product sources.
+code:
+  - scripts/guidance-release.mjs
 related:
   - spec-cli/src/guide.ts
+  - spec-cli/src/guidance-catalog.ts
+  - scripts/guidance-release.test.mjs
+  - .github/workflows/guidance-release.yml
+  - .github/workflows/ci.yml
 ---
 # guidance docs contract
 
@@ -43,6 +49,31 @@ release feed may help a consumer discover candidates, but it is not an authority
 pointer: after choosing a candidate, every read is pinned to the release's immutable asset identity and verified
 against the manifest. The product repository retains the generator input and the release provenance; the
 artifact is a derived, read-only projection and can never become a second editable source of guidance.
+
+### Product producer
+
+`scripts/guidance-release.mjs` is the product-side producer. It runs the real `spex guidance` export from a
+clean checkout at the supplied Git revision, writes its exact bytes as the payload named by that export, and
+writes `guidance-release.json` beside it. The manifest has this one current shape:
+
+- `schema: "spexcode.guidance-release/v1"`;
+- `producer.repository`, `producer.release`, and `producer.revision`; and
+- `catalog.schema`, `catalog.name`, `catalog.bytes`, `catalog.sha256`, and `catalog.retrieval`, where retrieval
+  is the GitHub release-asset identity `{ kind, repository, release, asset }`.
+
+The producer refuses a dirty checkout, a revision other than `HEAD`, a catalog whose declared revision or source
+revision disagrees, an unsafe asset name, and an existing destination asset. Its byte count and digest are derived
+from the exact written catalog buffer. It has no documentation-server client, deploy behavior, or writable
+guidance source.
+
+`.github/workflows/guidance-release.yml` runs only for relevant guidance-source changes pushed to `main`, and its
+single publish job is absent unless repository variable `SPEXCODE_GUIDANCE_RELEASE_PUBLISH` is exactly `true`.
+That off-by-default gate is at job scope, before checkout or credentials. For revision `R`, the producer release
+is tag `guidance-R`; the workflow either creates that non-latest GitHub release with only the two generated assets,
+or, on a rerun, verifies its target revision, complete asset-name set, and downloaded byte equality with the newly
+generated pair. It never uses an overwrite/clobber upload. Publishing a correction therefore means a new committed
+revision and tag, never changing an existing release asset. This workflow publishes source artifacts only: it does
+not deploy documentation or contact a public documentation server.
 
 ### Consumer protocol
 

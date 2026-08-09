@@ -58,10 +58,11 @@ Clicking the filename opens or selects that path's existing [[session-console]] 
 creates a second pop-out reader. Its neighbouring download tool retains the direct download, while the copy
 tool remains the only control that exposes the absolute path. Preview renders
 raster PNG, JPEG, GIF, or WebP images, and text extensions as text. `.md` and `.markdown` use the dashboard's
-existing restricted Markdown renderer; every other text extension stays verbatim. The renderer treats raw HTML
-as text rather than executable dashboard markup. Text is served as `text/plain`; the resource tab is
+existing restricted Markdown renderer; every other text extension stays verbatim. Standalone `.html` and `.htm`
+files render in a sandboxed iframe with scripts disabled, while raw HTML inside Markdown remains text rather than
+executable dashboard markup. Text is served as `text/plain`; the resource tab is
 selectable/copyable and top-anchored, so a newly opened long file begins at byte zero rather than centring and
-clipping its first lines. Images arrive as a response blob in an image element. SVG, HTML, PDF, archives,
+clipping its first lines. Images arrive as a response blob in an image element. SVG, PDF, archives,
 binaries, and unknown extensions have no preview and answer a named
 `415` directing the human to download them. That restricted set costs convenient PDF/SVG viewing, but keeps
 untrusted content out of the dashboard document rather than gambling on a safe renderer.

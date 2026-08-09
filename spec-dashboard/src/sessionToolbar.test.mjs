@@ -85,12 +85,17 @@ test('file rows keep host paths off the label and reserve that detail for the co
 
 test('file previews use the one selectable resource tab, render Markdown safely, and menus stay quiet', () => {
   assert.match(source, /function FileTextPreview\(\{ path, text \}\) \{[\s\S]*?<RichText className="si-file-markdown">\{text\}<\/RichText>/)
+  assert.match(source, /function FileHtmlPreview\(\{ path, html \}\) \{[\s\S]*?className="si-file-html"[\s\S]*?sandbox=""[\s\S]*?srcDoc=\{html\}/)
+  assert.match(source, /const previewKind = response\.headers\.get\('X-Spexcode-Preview-Kind'\)/)
+  assert.match(source, /previewKind === 'html' \? 'html' : 'text'/)
+  assert.match(source, /preview\.phase === 'html'[\s\S]*?<FileHtmlPreview path=\{tab\.value\} html=\{preview\.text\} \/>/)
   assert.match(source, /className=\{`si-resource-file \$\{preview\.phase\}`\} data-selectable/)
   assert.doesNotMatch(source, /si-file-preview-(?:backdrop|body|head)/)
   assert.match(focus, /const SELECTABLE_PRESS_TARGETS = '\[data-selectable\]'/)
   assert.match(focus, /if \(el\.closest\(SELECTABLE_PRESS_TARGETS\)\) return/)
   assert.match(css, /\.si-resource-file\s*\{[^}]*user-select:\s*text;/s)
   assert.match(css, /\.si-resource-file\.loading, \.si-resource-file\.error, \.si-resource-file\.image\s*\{[^}]*place-items:\s*center;/s)
+  assert.match(css, /\.si-file-html\s*\{[^}]*height:\s*100%;[^}]*border:\s*0;/s)
   assert.match(css, /\.si-resource-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)
   assert.match(css, /\.si-files-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)
   assert.match(css, /\.sess-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)

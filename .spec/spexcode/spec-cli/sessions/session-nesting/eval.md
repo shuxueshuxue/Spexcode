@@ -58,8 +58,9 @@ scenarios:
       from the CHILD's right-click menu while intercepting the manager write, and record the rendered drag
       state, target state, and each request body.
     expected: >-
-      Dragging starts only after motion and the original row dims while a fixed, full session-row ghost follows
-      the pointer. A valid TARGET is visibly highlighted even beneath that ghost and receives exactly
+      Dragging starts only after motion and the original row dims while a fixed, full session-row ghost — the
+      source headline and live status still visible — follows the pointer. A valid TARGET is visibly highlighted
+      even beneath that ghost and receives exactly
       `{children:[CHILD], parent:TARGET}`. A nested child exposes a top-level drop zone that highlights on
       hover and sends exactly `{children:[CHILD], parent:null}`. The context menu offers `remove from parent`
       only for a nested row and sends that same null-parent write. Self, present-parent, and descendant targets

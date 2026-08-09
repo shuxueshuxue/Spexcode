@@ -384,6 +384,19 @@ if (cmd === 'serve') {
   const host = flag('host') ?? '127.0.0.1'
   if (!Number.isInteger(port)) { console.error('spex dashboard: --port must be an integer'); process.exit(2) }
   startHostDashboard({ port, host })
+} else if (cmd === 'guidance') {
+  rejectUnknownFlags('spex guidance', 3, ['out', 'json'])
+  const { buildGuidanceCatalog } = await import('./guidance-catalog.js')
+  const catalog = buildGuidanceCatalog()
+  const out = flag('out')
+  if (has('out') && !out) { console.error('spex guidance: --out expects a file path'); process.exit(2) }
+  if (out) {
+    catalog.write(out)
+    console.log(out)
+    process.exit(0)
+  }
+  process.stdout.write(catalog.exportJson())
+  await flushExit(0)
 } else if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   // `spex help <cmd>` drills into one command; bare help is the map. Both name the next layer down.
   const { commandHelp, overviewHelp } = await import('./help.js')

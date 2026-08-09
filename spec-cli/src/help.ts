@@ -239,6 +239,15 @@ Loopback-only by default; --host widens the bind — the admin surface stays loc
 an admin password exists, and ungated projects serve open.`,
     see: 'spex serve (each project\'s backend) · spex serve ui (explicit one-backend pairing)',
   },
+  guidance: {
+    line: 'guidance              export the immutable guidance catalog index  [--out <path>]',
+    body: `Usage: spex guidance [--out <path>] [--json]
+
+Prints the deterministic, schema-versioned guidance index. Entries point at the authoritative active plugin,
+help, and guide sources with content hashes and git revision provenance; the export never embeds prompt prose.
+--out writes the same bytes to a file instead of stdout.`,
+    see: 'spex help · spex guide (the source guidance surfaces)',
+  },
 
   // ── the noun drawers ──────────────────────────────────────────────────────
   spec: {
@@ -444,6 +453,23 @@ export function commandHelp(name: string, verb?: string): string | null {
   return `${header}${e.body}${e.see ? `\n\nsee also: ${e.see}` : ''}\n\nmap: spex help · skills: spex guide`
 }
 
+export type HelpCatalogEntry = Readonly<{ id: string; title: string; text: string }>
+
+// The guidance catalog consumes this registry projection rather than copying help prose or maintaining a
+// second command list. Each returned text is exactly what the corresponding public help probe prints.
+export function helpCatalogEntries(): readonly HelpCatalogEntry[] {
+  const entries: HelpCatalogEntry[] = [{ id: 'overview', title: 'spex help', text: overviewHelp() }]
+  for (const name of Object.keys(ENTRIES).sort()) {
+    const text = commandHelp(name)
+    if (text) entries.push({ id: name, title: `spex help ${name}`, text })
+  }
+  for (const verb of Object.keys(sessionHelpDefinitions()).sort()) {
+    const text = commandHelp('session', verb)
+    if (text) entries.push({ id: `session.${verb}`, title: `spex session ${verb} --help`, text })
+  }
+  return entries
+}
+
 export function sessionLaunchReceipt(id: string, managedWatch = false): string {
   return `spex: launched session ${id}
   current result: the session JSON is on stdout now; \`spex session ls ${id}\` is the later one-shot snapshot
@@ -469,6 +495,7 @@ Project verbs (implicit object = this project)
   ${ENTRIES.uninstall.line}
   ${ENTRIES.serve.line}
   ${ENTRIES.dashboard.line}
+  ${ENTRIES.guidance.line}
 
 Noun drawers
   ${ENTRIES.spec.line}

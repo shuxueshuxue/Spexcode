@@ -43,12 +43,14 @@ scenarios:
       their caveats (watch never exits; wait is edge-triggered; send --keys is last-resort/unstable) and
       shared safety notes (SEL grammar on selector verbs; project-bound warning on writes), plus the
       map/guide footer; (3)
-      `spex guide eval` — the skill page must footer back to the help layers. Also probe the
+      `spex guidance --help` and `spex guide eval` — the immutable guidance export must be discoverable in the
+      project-verb map, and the skill page must footer back to the help layers. Also probe the
       dead-ends: `spex nosuch`, `spex help nosuch`, `spex guide nosuch`, bare `spex internal`, and an
       unknown drawer verb (`spex spec nosuch`) must each fail loud AND name the layer to return to;
       `spex session new --help` must print help without creating a session.
     expected: >
-      Every probe answers with the right layer and a pointer onward — no output that strands the
+      Every probe answers with the right layer and a pointer onward — guidance is a read-only project verb whose
+      help names its source-index/export contract, with no output that strands the
       reader, no repeated full session drawer from a noun-verb probe, no side effect from a --help probe,
       and no machine-plumbing verb (internal trunk / check-staged / session-state / nudge / codex-launch)
       on the `spex help` map.

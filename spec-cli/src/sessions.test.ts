@@ -789,12 +789,18 @@ test('a successful archive clears a prior adapter recovery marker so the cold se
 
 test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
+  const previousCwd = process.cwd()
   const originalShared = codexHarness.sharedRuntimes
   const originalCleanup = codexHarness.cleanupRuntime
   const home = mkdtempSync(join(tmpdir(), 'spex-queued-close-'))
-  const main = mainRoot()
+  const project = join(home, 'project')
   const branches: string[] = []
   const paths: string[] = []
+  mkdirSync(project)
+  execFileSync('git', ['init', '-q', '-b', 'main', project])
+  execFileSync('git', ['-C', project, '-c', 'user.name=Queue Close Fixture', '-c', 'user.email=queue-close@example.test', 'commit', '--allow-empty', '-q', '-m', 'fixture: queue close root'])
+  process.chdir(project)
+  const main = mainRoot()
   process.env.SPEXCODE_HOME = home
 
   const prepare = (suffix: string, thread = '') => {
@@ -885,6 +891,7 @@ test('public close cancels a clean never-launched queue without entering the unr
     }
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    process.chdir(previousCwd)
     rmSync(home, { recursive: true, force: true })
   }
 })

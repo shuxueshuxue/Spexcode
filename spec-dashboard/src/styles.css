@@ -1439,8 +1439,8 @@ a.scenario-count:hover { background: var(--panel2); }
 .fv-new-hint { font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); }
 .fv-new-actions { display: flex; align-items: center; gap: 8px; }
 .fv-new-actions .fv-cancel { display: inline-flex; align-items: center; text-decoration: none; }
-/* a brief @-dispatch summary echoed after a write. */
-.fv-notice { padding: 6px 16px; font-family: var(--mono); font-size: var(--type-meta); color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--paper)); border-bottom: 1px solid var(--line); }
+/* a persistent source-resolution fact, not a write acknowledgement. */
+.fv-source-notice { padding: 6px 16px; font-family: var(--mono); font-size: var(--type-meta); color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--paper)); border-bottom: 1px solid var(--line); }
 .fv-error { margin: 4px 0 8px; font-family: var(--mono); font-size: var(--type-meta); color: var(--red); }
 .fv-actions .fv-error { margin: 0; }
 /* the compose blocks — the docked reply composer and the New-thread form. The reply composer is ONE
@@ -2429,6 +2429,35 @@ a.scenario-count:hover { background: var(--panel2); }
 }
 .ui-tip[data-place='top'] .ui-tip-arrow { bottom: -4.5px; transform: rotate(45deg); }
 .ui-tip[data-place='bottom'] .ui-tip-arrow { top: -4.5px; transform: rotate(225deg); }
+
+/* [[transient-notices]]: fixed feedback belongs above page content, but yields to menus and modals. */
+.tn-viewport {
+  position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 50;
+  display: grid; justify-items: end; gap: 8px; width: min(400px, calc(100vw - 32px)); pointer-events: none;
+}
+.tn-notice {
+  --tn-tone: var(--blue);
+  width: 100%; box-sizing: border-box; display: grid; grid-template-columns: 16px minmax(0, 1fr) 24px; align-items: start; gap: 9px;
+  padding: 9px 8px 9px 10px; color: var(--ink2); background: color-mix(in srgb, var(--panel) 96%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tn-tone) 42%, var(--line)); border-left: 3px solid var(--tn-tone); border-radius: 7px;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--ink) 15%, transparent); font-family: var(--mono); font-size: var(--type-control);
+  line-height: var(--leading-relaxed); pointer-events: auto; animation: tn-arrive .16s ease-out both;
+}
+.tn-notice.success { --tn-tone: var(--green); }
+.tn-notice.error { --tn-tone: var(--red); }
+.tn-icon { margin-top: 1px; color: var(--tn-tone); }
+.tn-message { min-width: 0; overflow-wrap: anywhere; }
+.tn-dismiss {
+  width: 24px; height: 24px; display: inline-grid; place-items: center; margin: -3px -2px 0 0; padding: 0;
+  color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer;
+}
+.tn-dismiss:hover { color: var(--ink2); background: color-mix(in srgb, var(--line) 45%, transparent); }
+.tn-dismiss:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+@keyframes tn-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 640px) {
+  .tn-viewport { right: max(10px, env(safe-area-inset-right)); bottom: calc(68px + env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 20px)); }
+}
+@media (prefers-reduced-motion: reduce) { .tn-notice { animation: none; } }
 
 /* ================================================================================================
    projects hub ([[projects-hub]]) — the global `/projects` catalog page, the unified credential card,

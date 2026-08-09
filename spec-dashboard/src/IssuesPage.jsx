@@ -9,6 +9,7 @@ import { DetailShell, FacetMenu, ListPage, ReviewListRow, ReviewState, Secondary
 import { ISSUE_QUERY_DEFAULT, queryParam, readToken, reviewRouteQuery, setToken } from './reviewQuery.js'
 import { reviewActorName } from './reviewFilters.js'
 import { reviewPageNumber, useReviewPage } from './reviewPage.js'
+import { useTransientNotice } from './TransientNotice.jsx'
 import { navigate, routeHash, useRoute } from './route.js'
 import { detailBackHash } from './address.js'
 import { Icon } from './icons.jsx'
@@ -55,7 +56,7 @@ const facetOptions = (data, key, allLabel, labelValue = (value) => value) => (da
   label: option.value === '' ? allLabel : labelValue(option.value),
 }))
 
-export function IssuesListPage({ data, loading, error, query, notice }) {
+export function IssuesListPage({ data, loading, error, query }) {
   const t = useT()
   if (data && !data.enabled) return <div className="fv-note">{t('session.issuesOff')}</div>
 
@@ -118,7 +119,6 @@ export function IssuesListPage({ data, loading, error, query, notice }) {
 
   return (
     <ListPage
-      notice={notice}
       loading={loading}
       error={error}
       title={t('reviewList.issuesTitle')}
@@ -167,7 +167,7 @@ export function IssuesListPage({ data, loading, error, query, notice }) {
 // composer docked at its foot, and the store/originator/node/permalink metadata in the SIDE rail (reflowed
 // above the body at phone width). One thread surface for both stores; the only store-specific affordances
 // are metadata. Sign/accept/reject are not product verbs.
-export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpenSession, onWrite, notice }) {
+export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpenSession, onWrite }) {
   const t = useT()
   const local = th.store === 'local'
   const isConcluded = concluded(th)
@@ -253,7 +253,6 @@ export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpe
         />
       }
     >
-      {notice && <div className="fv-notice">{notice}</div>}
       {th.body && <div className="fvd-body"><SpecBody body={th.body} /></div>}
       {/* a reply that is a REMARK gets its resolve/retract verb here too ([[remark-substrate]] — a remark
           can host on an issue, not only a scenario); the shared Thread UI enforces nothing itself. */}
@@ -295,6 +294,7 @@ function useIssueDetail(id, freshness) {
 
 export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [], issuesStamp = null }) {
   const t = useT()
+  const { notify } = useTransientNotice()
   const { param, query } = useRoute()
   const composing = param === NEW_PARAM
   const text = String(query.q ?? '').trim() || ISSUE_QUERY_DEFAULT
@@ -310,8 +310,7 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
   const presenceKey = useMemo(() => sessions.map((s) => s.id).join(','), [sessions])
   const list = useReviewPage('issues', text, page, { enabled: !param || composing, refreshKey: `${issuesStamp ?? ''}|${presenceKey}` })
   const detail = useIssueDetail(composing ? null : param, issuesStamp)
-  const [notice, setNotice] = useState('')
-  const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
+  const flash = (outcomes) => { if (outcomes) notify(outcomes) }
   const onWrite = async (outcomes) => { flash(outcomes); await (param ? detail.reload() : list.reload()) }
 
   if (composing) {
@@ -331,9 +330,9 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
       return <DetailShell missing={t('reviewShell.issueNotFound', { id: param })} listHref={routeHash('issues')} listLabel={t('reviewShell.backToIssues')} />
     }
     return <IssueDetailPage issue={detail.issue} specs={specs} sessions={sessions} onFocusNode={onFocusNode}
-      onOpenSession={onOpenSession} onWrite={onWrite} notice={notice} />
+      onOpenSession={onOpenSession} onWrite={onWrite} />
   }
-  return <IssuesListPage data={list.data} loading={list.loading} error={list.error} query={query} notice={notice} />
+  return <IssuesListPage data={list.data} loading={list.loading} error={list.error} query={query} />
 }
 
 // canonical store display names — the permalink label derives from the issue's OWN `store` identity

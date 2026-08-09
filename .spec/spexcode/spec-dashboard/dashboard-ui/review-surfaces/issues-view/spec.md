@@ -121,7 +121,9 @@ verbs the CLI uses.
   ([[event-detail]] docks the same component, `Thread.jsx`): a quiet bordered container, a borderless
   writing surface floored at two lines that auto-grows through [[composer]], the action row always visible —
   the `@`/`[[` trigger buttons opening the shared [[mentions]] autocomplete, the host lifecycle actions,
-  and an icon-only Send at the row's end; a failed send surfaces its error in that row. **Close issue**
+  and an icon-only Send at the row's end; a failed send surfaces its error in that row. A successful
+  `@` dispatch echo is instead a completed acknowledgement through [[transient-notices]], never an
+  in-flow detail banner. **Close issue**
   and **Promote** live in that action row (GitHub's grammar — lifecycle acts on the conversation), each
   through the ONE store-routed verb; sign/accept/reject are not product verbs. Replies post as `'human'`
   via `replyIssue` — a local reply git-commits, a forge reply posts a REAL comment — then the list
@@ -148,7 +150,8 @@ verbs the CLI uses.
   link (local infers `nodes:`, a forge post writes the `Spec:` marker from the same prose), and the rail
   shows the link being made instead of stating a rule the writer cannot see. On a page the autocomplete
   opens downward under the caret — no pop-out boundary to clear. Enter in the title and ⌘/⌃⏎ in the
-  description both submit; a refused write surfaces its error in the action row. **Create lands on the issue
+  description both submit; a refused write surfaces its error in the action row, while a successful
+  dispatch outcome uses [[transient-notices]]' shared short-lived stack. **Create lands on the issue
   it just made**: the response's id is navigated to with REPLACE ([[side-nav]]: automatic state-naming
   replaces), so the spent compose address leaves no emptied form in history and Back returns to the list.
   Cancel is the SAME derived list anchor the back anchor uses, never `history.back`; Esc routes nothing.

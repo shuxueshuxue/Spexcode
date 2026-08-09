@@ -9,6 +9,7 @@ import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
 import { apiUrl } from './project.js'
 import { reviewPageNumber, useReviewPage } from './reviewPage.js'
+import { useTransientNotice } from './TransientNotice.jsx'
 
 // The Evals surface ([[evals-view]]): GitHub-style TWO pages over one route family. `#/evals` is the LIST
 // page — the [[evals-feed]] rows through the shared [[review-chrome]] ListPage, the whole face ONE token
@@ -114,7 +115,7 @@ export function EvalScopeDoor({ sessionId }) {
 // The LIST page (`#/evals[?query]`): the session scope's back door + unknown-coverage status + export door
 // leading the one [[evals-feed]] list INSIDE its shared PageScroll. All filter state is the URL's one token text; the scope: token
 // (default absent = the merged trunk) is the door into any session's un-merged worktree evals.
-export function EvalsListPage({ sessionId, pageData, loading, error, sessions, queryText, onQueryText, hrefFor, hrefForPage, notice }) {
+export function EvalsListPage({ sessionId, pageData, loading, error, sessions, queryText, onQueryText, hrefFor, hrefForPage }) {
   const t = useT()
   const unknown = pageData?.unknown || 0
   const empty = sessionId && !loading && !error && (pageData?.sourceTotal ?? 0) === 0 ? t('sessionEval.none') : null
@@ -138,7 +139,7 @@ export function EvalsListPage({ sessionId, pageData, loading, error, sessions, q
   ) : null
   return (
     <EvalsGroup pageData={pageData} loading={loading} sessions={sessions}
-      queryText={queryText} onQueryText={onQueryText} hrefFor={hrefFor} notice={notice} leading={leading}
+      queryText={queryText} onQueryText={onQueryText} hrefFor={hrefFor} leading={leading}
       error={error ? t('sessionEval.loadFailed', { reason: error }) : null} empty={empty}
       pagination={pageData ? {
         page: pageData.page, pageCount: pageData.pageCount, prev: pageData.prev, next: pageData.next,
@@ -152,7 +153,7 @@ export function EvalsListPage({ sessionId, pageData, loading, error, sessions, q
 // The DETAIL page (`#/evals/<node>/<scenario>[?q=scope:<id>]`): the [[event-detail]] workspace for one
 // scenario, standalone — directly openable, browser Back the return path. The session scope hands the
 // WORKTREE-rooted A/B history down; an address naming no real eval renders the honest not-found.
-export function EvalDetailPage({ param, detail, sessionId, loading = false, error, specs, sessions, listHref, backHref, backLabel, onOpenSession, onFocusNode, onWrite, notice }) {
+export function EvalDetailPage({ param, detail, sessionId, loading = false, error, specs, sessions, listHref, backHref, backLabel, onOpenSession, onFocusNode, onWrite }) {
   const t = useT()
   const i = param.indexOf('/')
   const node = i > 0 ? param.slice(0, i) : param
@@ -184,8 +185,7 @@ export function EvalDetailPage({ param, detail, sessionId, loading = false, erro
   }
   return (
     <div className="page-detail-stack">
-      {sourceNotice && <div className="fv-notice" role="status">{sourceNotice}</div>}
-      {notice && <div className="fv-notice">{notice}</div>}
+      {sourceNotice && <div className="fv-source-notice" role="status">{sourceNotice}</div>}
       <EventDetail entry={entry} history={detail.history} sourceKey={detail.scope || 'project'} specs={specs} sessions={sessions}
         onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel}
         queue={queue} />
@@ -195,6 +195,7 @@ export function EvalDetailPage({ param, detail, sessionId, loading = false, erro
 
 export default function EvalsPage({ specs = EMPTY_SPECS, sessions = [], issuesStamp = null, reloadBoard, onOpenSession, onFocusNode = null }) {
   const t = useT()
+  const { notify } = useTransientNotice()
   const { param, query } = useRoute()
   // the worktree DATA-SOURCE axis ([[evals-view]]): the scope: token inside the one q param — never
   // conflated with session:present|missing, the source-session presence facet.
@@ -204,11 +205,9 @@ export default function EvalsPage({ specs = EMPTY_SPECS, sessions = [], issuesSt
   const queryText = String(query.q ?? '').trim() || EVAL_QUERY_DEFAULT
   const page = reviewPageNumber(query.page)
   const list = useReviewPage('evals', queryText, page, { enabled: !param, refreshKey: specs })
-  const [notice, setNotice] = useState('')
-
   // a remark's dispatch echo ([[mentions]], mirrors [[issues-view]]): the write's outcomes summary
-  // ('@ new→<session>') flashes as a notice, so an @-dispatch is never silent.
-  const flash = (outcomes) => { if (outcomes) { setNotice(outcomes); setTimeout(() => setNotice(''), 6000) } }
+  // ('@ new→<session>') reaches the shared notice surface, so an @-dispatch is never silent.
+  const flash = (outcomes) => { if (outcomes) notify(outcomes) }
   const onWrite = async (outcomes) => {
     flash(outcomes)
     await reloadBoard?.()
@@ -235,7 +234,7 @@ export default function EvalsPage({ specs = EMPTY_SPECS, sessions = [], issuesSt
     ? <EvalDetailPage param={param} detail={detail.data && detail.data !== false ? detail.data : null} sessionId={sessionId}
         loading={detail.data === null} error={detail.error} specs={specs}
         sessions={sessions} listHref={listHref} backHref={backHref} backLabel={backLabel}
-        onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} notice={notice} />
+        onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} />
     : <EvalsListPage sessionId={sessionId} pageData={list.data} loading={list.loading} error={list.error} sessions={sessions}
-        queryText={query.q || ''} onQueryText={onQueryText} hrefFor={hrefFor} hrefForPage={hrefForPage} notice={notice} />
+        queryText={query.q || ''} onQueryText={onQueryText} hrefFor={hrefFor} hrefForPage={hrefForPage} />
 }

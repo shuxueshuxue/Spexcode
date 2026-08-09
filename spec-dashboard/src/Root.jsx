@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
+import { TransientNoticeProvider } from './TransientNotice.jsx'
 import { navigate, useRoute } from './route.js'
 import { useT } from './i18n/index.jsx'
 import { useIsMobile } from './useIsMobile.js'
@@ -58,8 +59,10 @@ export default function Root() {
   const lightweight = coldReviewRoute && !boardStarted
 
   return (
-    <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-      {lightweight ? <ReviewEntry page={page} /> : <App />}
-    </Suspense>
+    <TransientNoticeProvider>
+      <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
+        {lightweight ? <ReviewEntry page={page} /> : <App />}
+      </Suspense>
+    </TransientNoticeProvider>
   )
 }

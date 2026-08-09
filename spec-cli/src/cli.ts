@@ -385,11 +385,23 @@ if (cmd === 'serve') {
   if (!Number.isInteger(port)) { console.error('spex dashboard: --port must be an integer'); process.exit(2) }
   startHostDashboard({ port, host })
 } else if (cmd === 'guidance') {
-  rejectUnknownFlags('spex guidance', 3, ['out', 'json'])
+  let out: string | undefined
+  for (let i = 3; i < process.argv.length; i++) {
+    const token = process.argv[i]
+    if (token === '--json') continue
+    if (token === '--out') {
+      if (out !== undefined) { console.error('spex guidance: --out may appear only once'); process.exit(2) }
+      const value = process.argv[++i]
+      if (!value || value.startsWith('--')) { console.error('spex guidance: --out expects a file path'); process.exit(2) }
+      out = value
+      continue
+    }
+    if (token.startsWith('--')) { console.error(`spex guidance: unknown flag ${token}`); process.exit(2) }
+    console.error(`spex guidance: unexpected argument '${token}'`)
+    process.exit(2)
+  }
   const { buildGuidanceCatalog } = await import('./guidance-catalog.js')
   const catalog = buildGuidanceCatalog()
-  const out = flag('out')
-  if (has('out') && !out) { console.error('spex guidance: --out expects a file path'); process.exit(2) }
   if (out) {
     catalog.write(out)
     console.log(out)

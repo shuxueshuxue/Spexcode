@@ -12,7 +12,7 @@ import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVa
 import { processStartToken } from './process-identity.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
-import { gitCommonDir, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
+import { mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from './layout.js'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
 
@@ -792,7 +792,7 @@ test('public close cancels a clean never-launched queue without entering the unr
   const originalShared = codexHarness.sharedRuntimes
   const originalCleanup = codexHarness.cleanupRuntime
   const home = mkdtempSync(join(tmpdir(), 'spex-queued-close-'))
-  const main = dirname(gitCommonDir())
+  const main = mainRoot()
   const branches: string[] = []
   const paths: string[] = []
   process.env.SPEXCODE_HOME = home
@@ -802,6 +802,7 @@ test('public close cancels a clean never-launched queue without entering the unr
     const branch = `test/queued-close-${suffix}-${process.pid}-${Date.now()}`
     const path = join(home, `${suffix}-worktree`)
     execFileSync('git', ['-C', main, 'worktree', 'add', '-q', '-b', branch, path, 'main'])
+    assert.notEqual(execFileSync('git', ['-C', main, 'rev-parse', '--verify', `${branch}^{commit}`], { encoding: 'utf8' }).trim(), '')
     branches.push(branch); paths.push(path)
     mkdirSync(sessionStoreDir(id), { recursive: true })
     writeFileSync(sessionRecordPath(id), `${JSON.stringify({

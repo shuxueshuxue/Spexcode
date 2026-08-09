@@ -232,8 +232,8 @@ project's eventual source migration remains an explicit reviewed change rather t
   writes NO files into the worktree (the runtime lives in the global store, [[runtime]]), every dirty path is
   genuine work, with no runtime-file filtering to do. Being 0 ahead of the base branch rejects only
   **`merge`**, the one claim it contradicts: `merge` asserts there is committed work to land, while
-  `nothing` is retained only to render historical records. The public `done --propose nothing` command is a
-  trap: it writes no state and tells the agent to choose merge, close, ask, or park. That removes a default
+  `nothing` is retained only to render historical records. The public `done --propose nothing` command is an
+  intended trap: it writes no state and tells the agent to choose merge, close, ask, or park. That removes a default
   "keep it just in case" completion face without rewriting old timeline truth; propose-**close** is exempt
   entirely. A **declare gate** blocks a stop while still `active`, auto-defaulting on the forced continuation
   to **`asking`** (the stopped agent needs a human prompt to resume — it never fakes a self-resuming `parked`
@@ -245,7 +245,12 @@ project's eventual source migration remains an explicit reviewed change rather t
   The teaching names the complete declared face: `done --propose merge` is **review** — the sole proposal
   that offers a human-clickable merge; `done --propose close` is **close-pending**; `ask` is **asking** for a
   human reply; and `park` is **parked**, waiting only for a managed watch delivery or real background wake-up.
-  `done --propose nothing` is instead a correction prompt that records no terminal state. The dashboard keeps the merge tool's fixed slot
+  `done --propose nothing` is instead an intended correction prompt that records no terminal state. Its
+  branches name the operative facts: `merge` is committed spec and code not yet landed in `main`; `close` is
+  complete work that landed (or had nothing to land), is verified, and leaves neither a needed worktree nor a
+  posted artifact awaiting human inspection; `ask` is human input, direction, or that inspection; `park` is a
+  managed delivery or background job that resumes a named next action — watching terminal children is not a
+  wake-up. The dashboard keeps the merge tool's fixed slot
   for every selected session, but enables and paints it green only for the persisted
   `awaiting`/`merge`/`review` proposal while liveness is `online`; every other proposal, lifecycle, or
   liveness reading is muted, disabled, and names its reason. This is an affordance over the existing

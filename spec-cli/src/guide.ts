@@ -197,11 +197,11 @@ pre-commit \`internal check-staged\` BLOCKS the commit.
 BODY (after the frontmatter): prose naming the measurement method — YATU ("You As The User"): the agent
 looks at / calls the real product surface, not an internal helper chosen to make the evidence easy.
 
-REPAIR PROOF: for a bug fix, use one scenario's fail→pass pair. A, BEFORE EDITING: find the violated scenario
+REPAIR EVIDENCE: for a bug fix, use one scenario's fail→pass pair. A, BEFORE EDITING: find the violated scenario
 or add one to \`eval.md\`, run it against the old committed behavior, and file
 \`spex eval add <node> --scenario <s> --fail\` with evidence of the failure. B, AFTER EDITING: run that same
 scenario against the working tree until it passes; commit the verified tree; then file
-\`spex eval add <node> --scenario <s> --pass\`. The reading's \`codeSha\` must be that commit. New intent has no
+\`spex eval add <node> --scenario <s> --pass\`. The measurement's \`codeSha\` must be that commit. New intent has no
 prior failure to reproduce.
 
 MEASURING AND FILING: the agent runs the scenario however it likes (a browser run, an API
@@ -255,7 +255,7 @@ off the surface under test. A ratio whose halves share one source says only "wha
 selector that silently drops half the population reports \`3 of 3\` when the truth is 6. Two weaker defences
 that do not substitute — a precondition sentence depends on the next author remembering it, a printed
 denominator depends on a reader noticing it. Nothing here enforces either (the schema has no population
-field), so treat a zero-population run as a NON-reading and do not file it. Cheaper than any of that, when
+field), so treat a zero-population run as a NON-measurement and do not file it. Cheaper than any of that, when
 you can get it: restate the claim over something the product CANNOT make empty. "every active node's name is
 readable" needs someone to arrange activity and goes vacuous when nobody does; "the rendered size never falls
 below the authored size" is a property of the viewport itself, true of a one-node graph, and has no
@@ -263,7 +263,7 @@ population to get wrong. A claim with no population beats a well-reported one.
 RENDERED GEOMETRY (browser): measure the rendered BOX, never the authored STYLE. An ancestor CSS \`transform\`
 — the ordinary zoom/pan wrapper on a canvas or graph view — does NOT change computed style, so
 \`getComputedStyle(el).fontSize\` answers the AUTHORED size while the screen shows that size times the
-ancestor scale, and the reading is a SILENT FALSE PASS. (No numbers here on purpose: the authored size is
+ancestor scale, and the measurement is a SILENT FALSE PASS. (No numbers here on purpose: the authored size is
 whatever this project's stylesheet says today, and a manual that hard-codes one teaches a constant that
 drifts — read it off the tree you are measuring.) Go through \`getBoundingClientRect()\` (it carries the
 ancestor scale) and derive the effective size from the box, or from a known string's width. This is also why
@@ -676,5 +676,20 @@ export function guideText(topic?: string): string | null {
 // topic is added beside it, and it did: `files` and `web` shipped while the error still named four.
 export function guideTopics(): string[] {
   return Object.keys(TOPICS)
+}
+
+export type GuideCatalogEntry = Readonly<{ id: string; title: string; text: string }>
+
+// The catalog indexes the same rendered pages the CLI serves. Keeping this projection beside TOPICS makes a
+// newly registered page automatically appear in the export and in the unknown-topic diagnostic.
+export function guideCatalogEntries(): readonly GuideCatalogEntry[] {
+  const entries: GuideCatalogEntry[] = []
+  const setup = guideText()
+  if (setup) entries.push({ id: 'setup', title: 'spex guide', text: setup })
+  for (const topic of guideTopics()) {
+    const text = guideText(topic)
+    if (text) entries.push({ id: topic, title: `spex guide ${topic}`, text })
+  }
+  return entries
 }
 import { uploadPolicyDefaults } from './layout.js'

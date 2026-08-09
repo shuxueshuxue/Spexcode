@@ -27,7 +27,10 @@ async function refusedPort(): Promise<number> {
 }
 
 function writeCachedSession(home: string): void {
-  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: pkgRoot, encoding: 'utf8' }).trim()
+  const worktree = join(home, 'cached-worktree')
+  mkdirSync(worktree)
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: worktree })
+  execFileSync('git', ['-c', 'user.name=cache-fixture', '-c', 'user.email=cache@example.test', 'commit', '--allow-empty', '-qm', 'fixture'], { cwd: worktree })
   const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: pkgRoot, encoding: 'utf8' }).trim())
   const dir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', ID)
   mkdirSync(dir, { recursive: true })

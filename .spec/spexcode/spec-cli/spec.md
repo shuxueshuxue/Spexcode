@@ -12,6 +12,7 @@ related:
   - spec-cli/src/supervise.ts
   - spec-cli/src/listen.ts
   - spec-cli/src/slash-commands.ts
+  - spec-cli/src/guidance-catalog.ts
 ---
 # spec-cli
 
@@ -142,6 +143,9 @@ board — incl. a **brand-new, still-untracked node** as an all-additions diff, 
 node shows its body not nothing), `/api/settings` (the resolved
 [[portable-layout]]), and `/api/plugins` + `/api/slash-commands` (the
 `/` dropdown — config-root plugins declaring `surface: command`, plus the Claude-Code command union).
+The read-only guidance catalog ([[guidance-catalog]]) is exposed at `/api/guidance` and by the deterministic
+`spex guidance` CLI entry point; it carries source references and hashes, never a second copy of plugin/help/guide
+prose.
 
 Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:
 `/api/sessions` list + spawn; per-session `resume`/`interrupt`/`review`/`close`/`quarantine`, plus reads `review` (the merge

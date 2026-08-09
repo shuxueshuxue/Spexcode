@@ -55,7 +55,7 @@ test('spex guides retain the operational detail omitted from always-on prompts',
   const evalGuide = guideText('eval')!
   assert.match(evalGuide, /A, BEFORE EDITING:[\s\S]*?old committed behavior[\s\S]*?--fail/)
   assert.match(evalGuide, /B, AFTER EDITING:[\s\S]*?commit the verified tree[\s\S]*?--pass/)
-  assert.match(evalGuide, /reading's `codeSha` must be that commit/)
+  assert.match(evalGuide, /measurement's `codeSha` must be that commit/)
 
   const specGuide = guideText('spec')!
   assert.match(specGuide, /COMMENT ALTITUDE:[\s\S]*?measured pitfalls[\s\S]*?@@@title - explanation/)

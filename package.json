@@ -32,6 +32,7 @@
     "lint": "node scripts/sync-init-plugins.mjs --check && cd spec-cli && npm run -s lint",
     "sync:init-plugins": "node scripts/sync-init-plugins.mjs --write",
     "test:init-plugins": "node --test scripts/sync-init-plugins.test.mjs",
+    "test:docs-release": "node --test scripts/docs-release.test.mjs scripts/reference-snapshot.test.mjs",
     "hooks": "bash scripts/install-hooks.sh",
     "prepack": "node scripts/sync-init-plugins.mjs --check && node scripts/prepack.mjs"
   },

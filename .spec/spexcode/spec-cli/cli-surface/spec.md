@@ -25,7 +25,7 @@ dead-end, and no removed spelling may fail mutely: it names its replacement.
 **The grammar.** `spex <noun> <verb> [object] [flags]` — the verb is always the token immediately
 after its noun, so an id can never occupy a verb slot and no id is a reserved word. Six noun drawers
 (`spec` · `session` · `eval` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
-`init` · `materialize` · `doctor` · `serve` · `dashboard` · `uninstall`) allowed only because their
+`init` · `materialize` · `doctor` · `serve` · `dashboard` · `guidance` · `uninstall`) allowed only because their
 object is invariably THIS project (`dashboard`'s object is the HOST's project set — still no free
 object slot), plus the two help surfaces (`help` · `guide`). A bare noun prints its
 drawer's help and exits clean — there is no implicit default action. A verb reused across drawers

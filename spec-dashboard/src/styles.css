@@ -1094,11 +1094,16 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-pill.shelf:hover { color: var(--yellow); }
 .si-pill.shelf.on { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 16%, var(--panel2)); border-color: var(--yellow); }
 .si-empty { padding: 18px 12px; text-align: center; font-family: var(--mono); font-size: var(--type-meta); color: var(--muted); }
-/* multi-select bar ([[session-multi-select]]) — takes the top row's slot while selecting: a live pick count
-   pushes the destructive delete + cancel to the right. Delete reuses the orange `.sess-rename-btn.danger`. */
+/* multi-select bar ([[session-multi-select]]) — a live count plus adjacent icon-only archive/close actions. */
 .si-selbar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .si-selcount { flex: 1; font-family: var(--mono); font-size: var(--type-meta); color: var(--ink2); }
 .si-selbar .sess-rename-btn { padding: 4px 10px; font-size: var(--type-meta); }
+.si-select-action {
+  flex: none; width: 24px; height: 24px; display: inline-grid; place-items: center; padding: 0;
+  background: transparent; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; color: var(--orange);
+}
+.si-select-action:hover { background: color-mix(in srgb, var(--orange) 14%, var(--panel)); border-color: var(--orange); }
+.si-select-action:disabled { opacity: .5; cursor: not-allowed; }
 /* row checkbox shown only while selecting — an empty square that fills blue-with-a-tick when picked. */
 .si-check {
   flex: none; width: 13px; height: 13px; border: 1.5px solid var(--muted); border-radius: 3px; box-sizing: border-box;
@@ -1108,9 +1113,18 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   content: ''; position: absolute; left: 3.5px; top: 1px; width: 3px; height: 6px;
   border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
 }
-/* The real fold pod is an absolute sibling of the row button. Mirror the checkbox's 13px width + the
-   row's 7px column gap so it stays over the hidden slot that moved with the rest of the row face. */
-.si-item:has(> .si-check) + .sess-fold-control { margin-left: 20px; }
+.si-drag-slot { flex: none; width: 14px; height: 14px; }
+.si-drag-handle {
+  position: absolute; z-index: 3; left: 32px; top: 50%; width: 14px; height: 14px; padding: 0;
+  transform: translateY(-50%); display: grid; place-items: center; background: transparent; border: none;
+  color: var(--muted); cursor: grab;
+}
+.si-drag-handle:hover { color: var(--blue); }
+.si-drag-handle:active { cursor: grabbing; }
+/* The real fold pod is an absolute sibling of the row button. Mirror checkbox + grip width and gaps so it
+   remains aligned with the hidden fold slot after select mode inserts both leading controls. */
+.si-item:has(> .si-check) ~ .sess-fold-control { margin-left: 41px; }
+.si-tree-row.reparent-target > .si-item { outline: 1px solid var(--blue); outline-offset: -1px; background: color-mix(in srgb, var(--blue) 12%, var(--panel2)); }
 /* a picked row wears the same soft blue wash as the selected tab, so the checklist reads at a glance. */
 .si-item.picked { background: color-mix(in srgb, var(--blue) 12%, var(--panel2)); }
 .si-item.picked:hover { background: color-mix(in srgb, var(--blue) 20%, var(--panel2)); }
@@ -1714,6 +1728,7 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-files-download, .si-files-copy { flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: 4px; cursor: pointer; }
 .si-file-text { width: 100%; min-height: 100%; box-sizing: border-box; display: block; margin: 0; padding: 12px; color: var(--ink); font-family: var(--mono); font-size: var(--type-control); line-height: var(--leading-relaxed); white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
 .si-file-markdown { box-sizing: border-box; min-height: 100%; padding: 14px 16px; color: var(--ink); font-size: var(--type-body); line-height: var(--leading-relaxed); cursor: text; }
+.si-file-html { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
 .si-file-preview-error { max-width: 460px; margin: 18px; color: var(--red); font-family: var(--mono); font-size: var(--type-control); line-height: var(--leading-relaxed); text-align: center; overflow-wrap: anywhere; }
 .si-resource-file, .si-resource-web { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; min-height: 0; border: 0; }
 .si-resource-file { overflow: auto; background: var(--paper); user-select: text; -webkit-user-select: text; }

@@ -362,6 +362,8 @@ export default {
     select: 'select…',
     detach: 'remove from parent',
     archive: 'archive',
+    archiveTitle: 'archive “{name}”?',
+    archiveConfirm: 'This files the session out of the active working set and stops its runtime. Its worktree and conversation stay available for resume.',
     resume: 'resume & relaunch',
     quarantine: 'quarantine record',
     quarantineTitle: 'quarantine unreadable record',
@@ -386,11 +388,13 @@ export default {
     attachCopied: 'copied',
   },
 
-  // the multi-select bar + bulk-close confirm ([[session-multi-select]]). The verb is `close` — the SAME
-  // one the single-row menu uses ([[session-rename]]) — not a third "delete" word, since it fires the same
-  // close endpoint per session.
+  // the multi-select bar's sourced lifecycle controls ([[session-multi-select]]).
   sessionSelect: {
     selected: ({ n }) => `${n} selected`,
+    drag: 'drag onto a session to make it the parent',
+    archive: 'archive',
+    archiveTitle: ({ n }) => (n === 1 ? 'archive 1 session?' : `archive ${n} sessions?`),
+    archiveConfirm: 'This archives every selected session, stopping its runtime while retaining its worktree and conversation.',
     close: 'close',
     closeTitle: ({ n }) => (n === 1 ? 'close 1 session?' : `close ${n} sessions?`),
     closeConfirm: 'This closes every selected session and removes its worktree. Any uncommitted changes are lost.',

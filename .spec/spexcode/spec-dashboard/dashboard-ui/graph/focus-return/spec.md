@@ -52,6 +52,9 @@ One decoupled mechanism, so an overlay need not know where focus belongs and the
   controls are outside that driver, while their click actions still work under the same inert press. A surface or
   menu attaches this one capture-phase guard, and then most pops need no return because focus never left: the
   ticket stays pinned to the real input region instead of getting polluted by the button that opened the pop.
+  A session tree drag grip is the one additional native gesture: it is a non-focusable `draggable` icon, so the
+  guard leaves its pointer-down intact for the browser's drag lifecycle while it still cannot become the return
+  ticket or steal the active sink.
 
 The **sink** is the notes-app axiom made concrete: a surface names where focus rests when nothing else claims it.
 For a terminal-free conversation it is continuous through chrome presses and text selection; the textarea's own

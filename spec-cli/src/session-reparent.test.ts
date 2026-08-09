@@ -33,7 +33,7 @@ function writeSession(home: string, id: string, parent: string | null): string {
   return dir
 }
 
-function watchers(dir: string): { watcher: string; createdAt: string }[] {
+function watchers(dir: string): { watcher: string; createdAt: string; sources?: string[] }[] {
   const path = join(dir, 'watchers.json')
   return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : []
 }
@@ -104,7 +104,8 @@ test('session reparent rewrites parent/watch through live backend and only falls
   const childBDir = writeSession(home, childB, oldParent)
   writeSession(home, oldParent, null)
   writeSession(home, newParent, null)
-  for (const dir of [childADir, childBDir]) writeFileSync(join(dir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z' }]) + '\n')
+  writeFileSync(join(childADir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent', 'manual'] }]) + '\n')
+  writeFileSync(join(childBDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')
   writeFileSync(join(childADir, 'pending.json'), JSON.stringify([{ mid: 'old-parent-command', text: 'stale continue', from: oldParent }]) + '\n')
   const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '', PORT: String(await freePort()) }
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
@@ -116,10 +117,19 @@ test('session reparent rewrites parent/watch through live backend and only falls
     const online = await runCli(['session', 'reparent', childA, childB, '--to', newParent, '--api', `http://127.0.0.1:${port}`], env)
     assert.equal(online.code, 0, online.err)
     assert.match(online.out, new RegExp(`reparented .*${newParent}`))
-    for (const dir of [childADir, childBDir]) {
-      assert.equal(parentOf(dir), newParent)
-      assert.deepEqual(watchers(dir).map((entry) => entry.watcher), [newParent])
-    }
+    assert.equal(parentOf(childADir), newParent)
+    assert.deepEqual(watchers(childADir), [
+      { watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['manual'] },
+      { watcher: newParent, createdAt: watchers(childADir)[1].createdAt, sources: ['parent'] },
+    ])
+    assert.equal(parentOf(childBDir), newParent)
+    assert.deepEqual(watchers(childBDir).map((entry) => [entry.watcher, entry.sources]), [[newParent, ['parent']]])
+    const oldParentTimelineBefore = timelineText(sessionDir(home, oldParent))
+    const manualWatchState = await runCli(['session', 'done', '--propose', 'merge', '--session', childA, '--api', `http://127.0.0.1:${port}`], env)
+    assert.equal(manualWatchState.code, 0, manualWatchState.err)
+    await waitFor(async () => timelineText(sessionDir(home, oldParent)).length > oldParentTimelineBefore.length,
+      'the former parent\'s overlapping manual watch must survive reparent')
+    assert.match(timelineText(sessionDir(home, oldParent)), /review/)
     assert.deepEqual(pendingFrom(childADir), [], 'a moved child does not retain an undelivered command from its former supervisor')
     const newParentTimeline = timelineText(sessionDir(home, newParent))
     assert.match(newParentTimeline, new RegExp(childA))
@@ -132,25 +142,27 @@ test('session reparent rewrites parent/watch through live backend and only falls
     assert.equal(detached.status, 200)
     assert.deepEqual(await detached.json(), { children: [childA], parent: null, notified: [] })
     assert.equal(parentOf(childADir), null)
-    assert.deepEqual(watchers(childADir), [], 'detaching removes the former parent watch')
+    assert.deepEqual(watchers(childADir), [
+      { watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['manual'] },
+    ], 'detaching removes only the former parent source')
     assert.deepEqual(pendingFrom(childADir), [], 'detaching revokes an undelivered command from the former parent')
 
     await stop(backend)
     const childCDir = writeSession(home, 'reparent-child-c', oldParent)
-    writeFileSync(join(childCDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z' }]) + '\n')
+    writeFileSync(join(childCDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')
     const local = await runCli(['session', 'reparent', 'reparent-child-c', '--to', newParent], env)
     assert.equal(local.code, 0, local.err)
     assert.match(local.err, /reparenting in-process/)
     assert.equal(parentOf(childCDir), newParent)
-    assert.deepEqual(watchers(childCDir).map((entry) => entry.watcher), [newParent])
+    assert.deepEqual(watchers(childCDir).map((entry) => [entry.watcher, entry.sources]), [[newParent, ['parent']]])
 
     const childDDir = writeSession(home, 'reparent-child-d', oldParent)
-    writeFileSync(join(childDDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z' }]) + '\n')
+    writeFileSync(join(childDDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')
     const remote = await runCli(['session', 'reparent', 'reparent-child-d', '--to', newParent, '--api', `http://127.0.0.1:${await freePort()}`], env)
     assert.equal(remote.code, 1)
     assert.match(remote.err, /no backend reachable/)
     assert.equal(parentOf(childDDir), oldParent)
-    assert.deepEqual(watchers(childDDir).map((entry) => entry.watcher), [oldParent])
+    assert.deepEqual(watchers(childDDir).map((entry) => [entry.watcher, entry.sources]), [[oldParent, ['parent']]])
   } finally {
     await stop(backend)
     rmSync(home, { recursive: true, force: true })

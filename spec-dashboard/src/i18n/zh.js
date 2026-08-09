@@ -361,6 +361,8 @@ export default {
     select: '多选…',
     detach: '解除父级关系',
     archive: '归档',
+    archiveTitle: '归档“{name}”？',
+    archiveConfirm: '这会将会话移出活动工作区并停止运行时，工作树与对话会保留以供恢复。',
     resume: '恢复并重新启动',
     quarantine: '隔离记录',
     quarantineTitle: '隔离不可读记录',
@@ -384,9 +386,13 @@ export default {
     attachCopied: '已复制',
   },
 
-  // 多选栏 + 批量关闭确认（[[session-multi-select]]）。动词用「关闭」——与单行菜单相同，不是第三个「删除」词。
+  // 多选栏中的受控生命周期动作（[[session-multi-select]]）。
   sessionSelect: {
     selected: ({ n }) => `已选 ${n} 个`,
+    drag: '拖到另一个会话以设为其子会话',
+    archive: '归档',
+    archiveTitle: ({ n }) => `归档 ${n} 个会话？`,
+    archiveConfirm: '这会归档每个选中的会话，停止运行时，但保留其工作树与对话。',
     close: '关闭',
     closeTitle: ({ n }) => `关闭 ${n} 个会话？`,
     closeConfirm: '这将关闭每个选中的会话并删除其工作树。任何未提交的更改都会丢失。',

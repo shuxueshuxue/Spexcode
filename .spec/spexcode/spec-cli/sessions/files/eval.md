@@ -51,6 +51,15 @@ scenarios:
       The single resource-tab surface renders restricted Markdown, not a raw preformatted source dump; raw HTML
       remains inert text. The first rendered content is visible at scroll position zero, and the human can select
       and copy document text without the hidden terminal consuming the gesture.
+  - name: html-previews-rendered-in-a-script-free-frame
+    tags: [frontend-e2e, backend-api]
+    test: spec-dashboard/test/session-files.e2e.mjs
+    description: >-
+      Publish a real `.html` file through the CLI, open it from the selected session's files menu, and inspect
+      the resulting resource tab in Chromium.
+    expected: >-
+      The file renders as HTML inside the resource tab instead of a raw source `<pre>`. The preview is a sandboxed
+      iframe without script execution or dashboard DOM access, while the adjacent download action remains available.
   - name: download-is-authorized-and-missing-paths-fail-loud
     tags: [backend-api]
     test: spec-cli/src/session-files.api.test.ts

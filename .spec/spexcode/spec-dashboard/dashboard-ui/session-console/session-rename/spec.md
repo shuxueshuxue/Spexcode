@@ -59,10 +59,10 @@ success.
 The menu also carries a **reset order** item — shown only when the row has been dragged out of birth order —
 which belongs to the session list's drag-to-reorder gesture ([[session-console]]; it clears that row's manual
 sort-key), not to this node's rename/close contract; it rides in this pop-over because the same right-click
-is where a human reaches for it. **Archive** ([[archive]]) rides the same way, and is the clearest contrast
-with close beside it: one item naming the move out of the row's current state, acting at once with no confirm,
-because it is reversible from this very menu — the confirm below is earned by destroying work, not by being a
-right-click.
+is where a human reaches for it. **Archive** ([[archive]]) rides the same way, but joins close in the menu's
+danger group and opens its own confirmation: filing a session out of the active working set is a deliberate
+lifecycle boundary even though resume remains available. Its confirmation commits through the same archive
+route; it never becomes a record-only shortcut.
 
 The menu's second item, **close**, runs the same human-only worktree removal as the typed `/close` command,
 but behind a **confirm prompt** — a right-click is easy to mis-aim and the removal is destructive, so unlike
@@ -114,7 +114,9 @@ The same menu also hosts [[session-multi-select]]'s select item and [[attach-men
 so these verbs extend one menu instead of creating parallel gestures or pop-overs. A row with a parent also
 gets **remove from parent**: it dismisses the menu and submits the console's ordinary reparent write with a
 null parent, leaving top-level rows free of a disabled or meaningless item. This is the direct counterpart to
-the console tree's root drop zone ([[session-nesting]]), not a dashboard-only record edit.
+the console tree's root drop zone ([[session-nesting]]), not a dashboard-only record edit. It removes only
+the child relation's `parent` watch source; an independent manual observer remains a separate deliberate
+relation, never collateral damage from this menu action.
 
 Its surface mounts the shared [[context-menu-chrome]]: compact icon-led text rows, grouped commands, and a
 separate destructive close row. This node supplies the session actions; it never forks the menu chrome.

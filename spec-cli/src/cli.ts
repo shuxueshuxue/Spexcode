@@ -685,7 +685,7 @@ if (cmd === 'serve') {
     let watchEstablished = false
     if (created.parent && created.parent === ownSessionId()) {
       try {
-        await subscribeSessionWatch(created.parent, [created.id])
+        await subscribeSessionWatch(created.parent, [created.id], 'parent')
         watchEstablished = true
       } catch (error) {
         console.error(`spex session new: child ${created.id} was created, but its managed watch was not established: ${error instanceof Error ? error.message : String(error)}`)

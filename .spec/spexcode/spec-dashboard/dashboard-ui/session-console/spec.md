@@ -288,8 +288,9 @@ Lifecycle actions consume both HTTP status and the structured `{ok,error}` body 
 a refused stop/close/relaunch remains visible instead of reading as a successful background no-op. Command Box
 and lifecycle actions use one selected-session, right-pane action-outcome mechanism: Command Box owns its
 outcome while it is open; an existing-session action owns its selected action/relaunch panel. The left session
-list is navigation-only and renders no action alert. Bulk close leaves select mode immediately but aggregates every
-returned refusal into that same selected-session outcome, so an HTTP conflict never exists only in browser tooling.
+  list is navigation-only and renders no action alert. Bulk archive and close leave select mode immediately but
+  aggregate every returned refusal into that same selected-session outcome, so an HTTP conflict never exists only
+  in browser tooling.
 Every outcome renders once and clears only as its owning
 surface closes, changes session, or completes its success lifecycle; duplicate alerts make one failure look
 like two operations. **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
@@ -301,10 +302,12 @@ that precedence. `[[node]]` resolves at send to the node id plus its live `spec.
 passive [[mentions]] reference retained in the selected session's prompt. File paste, drop, and pick reuse
 [[file-attach]].
 
-A **right-click on a session row** opens its context menu — **lock on graph**, rename or close
-([[session-rename]]), select for bulk close ([[session-multi-select]]), and **attach** for a live row
-([[attach-menu]], which hands over the `spex session attach <id>` command to join the session's real tmux) —
-coexisting with the context-menu suppression. Lock on graph locks the board to that session and navigates to
+A **right-click on a session row** opens its context menu — **lock on graph**, rename, archive or close
+([[session-rename]] / [[archive]]), select for bulk archive/close and drag-to-reparent
+([[session-multi-select]]), and **attach** for a live row ([[attach-menu]], which hands over the
+`spex session attach <id>` command to join the session's real tmux) — coexisting with the context-menu
+suppression. Archive and close share the menu's danger group and each confirms before its lifecycle request.
+Lock on graph locks the board to that session and navigates to
 `#/graph`; it has no pending-ops precondition, so an ops-less session still lands on the graph with the lock
 banner explaining the empty grip. The shared `sessionName` puts a rename first in the label precedence.
 Context menus and anchored dropdowns use their border with shallow ambient depth only; they do not cast a bright

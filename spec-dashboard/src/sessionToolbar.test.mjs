@@ -85,12 +85,17 @@ test('file rows keep host paths off the label and reserve that detail for the co
 
 test('file previews use the one selectable resource tab, render Markdown safely, and menus stay quiet', () => {
   assert.match(source, /function FileTextPreview\(\{ path, text \}\) \{[\s\S]*?<RichText className="si-file-markdown">\{text\}<\/RichText>/)
+  assert.match(source, /function FileHtmlPreview\(\{ path, html \}\) \{[\s\S]*?className="si-file-html"[\s\S]*?sandbox=""[\s\S]*?srcDoc=\{html\}/)
+  assert.match(source, /const previewKind = response\.headers\.get\('X-Spexcode-Preview-Kind'\)/)
+  assert.match(source, /previewKind === 'html' \? 'html' : 'text'/)
+  assert.match(source, /preview\.phase === 'html'[\s\S]*?<FileHtmlPreview path=\{tab\.value\} html=\{preview\.text\} \/>/)
   assert.match(source, /className=\{`si-resource-file \$\{preview\.phase\}`\} data-selectable/)
   assert.doesNotMatch(source, /si-file-preview-(?:backdrop|body|head)/)
   assert.match(focus, /const SELECTABLE_PRESS_TARGETS = '\[data-selectable\]'/)
   assert.match(focus, /if \(el\.closest\(SELECTABLE_PRESS_TARGETS\)\) return/)
   assert.match(css, /\.si-resource-file\s*\{[^}]*user-select:\s*text;/s)
   assert.match(css, /\.si-resource-file\.loading, \.si-resource-file\.error, \.si-resource-file\.image\s*\{[^}]*place-items:\s*center;/s)
+  assert.match(css, /\.si-file-html\s*\{[^}]*height:\s*100%;[^}]*border:\s*0;/s)
   assert.match(css, /\.si-resource-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)
   assert.match(css, /\.si-files-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)
   assert.match(css, /\.sess-menu\s*\{[^}]*box-shadow:\s*0 2px 8px color-mix\(in srgb, var\(--ink\) 12%, transparent\);/s)
@@ -153,11 +158,37 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.doesNotMatch(source, /si-action-error|setActErr|<aside[^>]*>[\s\S]{0,400}ActionOutcome/)
 })
 
-test('bulk close returns every refusal to the shared action outcome', () => {
+test('bulk archive and close return every refusal to the shared action outcome', () => {
   assert.match(selectBar, /const body = await response\.json\(\)\.catch\(\(\) => null\)/)
   assert.match(selectBar, /!response\.ok \|\| body\?\.ok === false/)
   assert.match(selectBar, /onError\?\.\(failures\.join\('\\n'\)\)/)
+  assert.match(selectBar, /icon="star"[\s\S]{0,180}setConfirming\('archive'\)/)
+  assert.match(selectBar, /icon="trash"[\s\S]{0,180}setConfirming\('close'\)/)
+  assert.match(selectBar, /`\/api\/sessions\/\$\{id\}\/\$\{verb\}`/)
   assert.match(source, /<SessionSelectBar[\s\S]{0,300}onError=\{\(message\) => setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)\}/)
+})
+
+test('select mode uses the existing reparent route through a drag-handle icon', () => {
+  assert.match(source, /const \[reparentDrag, setReparentDrag\] = useState\(null\)/)
+  assert.match(source, /apiFetch\('\/api\/sessions\/reparent'/)
+  assert.match(source, /body: JSON\.stringify\(\{ children: \[child\], parent \}\)/)
+  assert.match(source, /className="si-drag-handle" data-drag-handle draggable role="img"/)
+  assert.match(source, /<Icon name="grip-vertical" size=\{14\}/)
+  assert.match(source, /onDrop=\{selecting \? \(event\) => dropSessionOn\(event, s\.id\) : undefined\}/)
+  assert.match(css, /\.si-drag-handle\s*\{[^}]*cursor:\s*grab;/s)
+  assert.match(css, /\.si-tree-row\.reparent-target > \.si-item/)
+  assert.match(icons, /'grip-vertical':/)
+  assert.match(focus, /const DRAG_PRESS_TARGETS = '\[draggable="true"\]'/)
+})
+
+test('archive shares the right-click danger group and asks for confirmation', () => {
+  assert.match(contextMenu, /const \[archiving, setArchiving\] = useState\(null\)/)
+  assert.match(contextMenu, /<ContextMenuItem icon="star" danger onClick=\{startArchive\}>/)
+  assert.match(contextMenu, /<ContextMenuItem icon="trash" danger onClick=\{startClose\}>/)
+  assert.match(contextMenu, /apiFetch\(`\/api\/sessions\/\$\{id\}\/archive`/)
+  assert.match(contextMenu, /title=\{t\('sessionWindow\.archiveTitle'/)
+  assert.match(en, /archiveConfirm: 'This files the session out of the active working set/)
+  assert.match(zh, /archiveConfirm: '这会将会话移出活动工作区/)
 })
 
 test('only corrupt rows expose the witnessed quarantine control', () => {

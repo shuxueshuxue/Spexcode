@@ -32,9 +32,10 @@ reply-hint uses (in the CLI's own process) and passes it as `parent` in the `POS
 `newSession` writes it into the child's `session.json` ([[runtime]]) as a durable field, and it rides onto the
 public `Session` type and `/api/graph`. A human running `spex new` from a plain shell has no session id →
 `parent` stays null, so no phantom nesting — the same no-sender rule [[agent-reply-channel]] already uses.
-After a successful child create, the parent performs the thin `spex session watch <child>` call. The nesting
-field remains provenance and layout only; the ordinary watch relation owns status delivery and is independently
-visible/cancellable through `watch list` and `watch cancel`.
+After a successful child create, the parent installs the `parent` source through the same durable watcher
+mechanism [[session-reparent]] later moves. The nesting field remains provenance and layout only; the sourced
+watch relation owns status delivery. It is deliberately distinct from a human's `watch` command: cancelling a
+manual watch cannot dissolve parent supervision, and moving parentage cannot erase a coincident manual watch.
 
 **Nesting is DERIVED at read time, never a stored mutation on children.** Each session points only at its
 DIRECT parent; the tree is rebuilt on every board read. A child nests under its parent ONLY IF that parent is
@@ -93,6 +94,6 @@ genuinely needs the human. Strengthened in the `supervisor` config plugin.
 
 The original spawner is the normal source of a parent edge, but supervision recovery may deliberately change
 that durable edge through [[session-reparent]]. The tree remains a read-time fold: it has no stored parent
-collection and no migration of a missing parent. Reparent changes the child's one pointer and its independent
-watch relation together; `parent: null` deliberately removes both for an explicit top-level detach. Ordinary
-view reads still need no repair daemon.
+collection and no migration of a missing parent. Reparent changes the child's one pointer and the matching
+`parent` watch source together; `parent: null` removes that source for an explicit top-level detach while
+leaving any independent manual watch intact. Ordinary view reads still need no repair daemon.

@@ -113,7 +113,7 @@ test('document pages share one inset page-scroll geometry', () => {
 })
 
 test('desktop navigation rail stays compact without changing its icon grammar', () => {
-  assert.match(css, /\.side-rail\s*\{[^}]*flex:\s*0 0 44px;[^}]*align-items:\s*center;/s)
+  assert.match(css, /\.side-rail\s*\{[^}]*flex:\s*0 0 40px;[^}]*align-items:\s*center;/s)
   assert.match(css, /\.rail-btn\s*\{[^}]*width:\s*32px;[^}]*height:\s*32px;[^}]*justify-content:\s*center;/s)
 })
 

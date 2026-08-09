@@ -265,7 +265,7 @@ export function sessionArtifactPath(id: string, name: string): string { return j
 export type RawRecord = {
   session_id: string; governed: boolean; worktree_path: string; branch: string | null
   node: string | null; title: string | null; name: string | null; parent?: string | null
-  status: string; proposal: string | null; merges: number; note: string | null
+  status: string; proposal: string | null; merges: number; review_epoch?: number; note: string | null
   sortkey: number | null; createdAt: number; harness?: string; harness_session_id?: string
   stopped?: boolean
   archived?: boolean  // the human ARCHIVED this session ([[archive]]) — only a proven cold/offline row; absent → false on old records

@@ -906,7 +906,8 @@ if (cmd === 'serve') {
     const r = await clientMerge(id, {
       expectedBranchHead: review.branchHead,
       expectedBaseHead: review.baseHead,
-      requestKey: createHash('sha256').update(`spexcode-cli-session-merge\0${id}\0${review.branchHead}\0${review.baseHead}`).digest('hex'),
+      expectedReviewEpoch: review.reviewEpoch,
+      requestKey: createHash('sha256').update(`spexcode-cli-session-merge\0${id}\0${review.branchHead}\0${review.baseHead}\0${review.reviewEpoch}`).digest('hex'),
     })
     if (r.dispatched) console.log(`merge dispatched to ${id} — its agent is landing the merge`)
     else console.error(`merge dispatch failed: ${r.reason}`)

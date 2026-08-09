@@ -357,8 +357,11 @@ right-side action group is surface-specific: every selected resource shows its o
 no file download/copy or merge tool, and the Terminal base surface alone shows the 24px **merge** tool. Merge is green and dispatchable only for the
 persisted `awaiting` + `proposal:merge` + `review` projection while liveness is `online`; `nothing`/done,
 close-pending, working, asking, and every non-online reading keep the tool muted and disabled, with a
-localized tooltip and accessible reason. Disabled merge never appears as a typed `/merge` command and never
-dispatches. Command Box is the resident tool and always sits at the group's right edge; merge and relaunch
+localized tooltip and accessible reason. On each activation, the console reads that review authority and sends
+its branch head, base head, and durable review declaration epoch; its merge idempotency key derives from all
+three. A retry in one epoch therefore reuses one response-only delivery receipt, while an agent's renewed
+`awaiting` + `proposal:merge` declaration advances the epoch and gives unchanged heads a distinct authorized
+delivery. Disabled merge never appears as a typed `/merge` command and never dispatches. Command Box is the resident tool and always sits at the group's right edge; merge and relaunch
 occupy the fixed tools to its left on the Terminal surface, so proposal/lifecycle/liveness changes do not move
 merge. Every visible
 action uses one shared compact icon-toolbutton primitive and a familiar [[icon-system]] / Lucide mark

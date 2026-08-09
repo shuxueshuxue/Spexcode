@@ -237,14 +237,17 @@ test('public review and merge authority bind exact head and one durable dispatch
       headers: { 'content-type': 'application/json', ...(key !== null ? { 'Idempotency-Key': key } : {}) },
       body: JSON.stringify({ expectedBranchHead, expectedBaseHead, ...extra }),
     })
-    const declare = (proposal: 'merge' | 'nothing') => execFileSync(process.execPath, [
+    const declare = (proposal: 'merge') => execFileSync(process.execPath, [
       tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'session', 'done', '--propose', proposal, '--note', `authority ${proposal}`,
+    ], { cwd: worktree, env: { ...env, SPEXCODE_SESSION_ID: id }, encoding: 'utf8' })
+    const declareLegacyNothing = () => execFileSync(process.execPath, [
+      tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'internal', 'session-state', 'awaiting', '--propose', 'nothing', '--note', 'authority legacy nothing',
     ], { cwd: worktree, env: { ...env, SPEXCODE_SESSION_ID: id }, encoding: 'utf8' })
 
     const activeBefore = await request(baseA, `/api/sessions/${id}`)
     const activeRefusal = await merge(baseA, 'state-active', headTwo, baseTwo)
     const activeAfter = await request(baseA, `/api/sessions/${id}`)
-    declare('nothing')
+    declareLegacyNothing()
     const nothingBefore = await request(baseA, `/api/sessions/${id}`)
     const nothingRefusal = await merge(baseA, 'state-nothing', headTwo, baseTwo)
     const nothingAfter = await request(baseA, `/api/sessions/${id}`)

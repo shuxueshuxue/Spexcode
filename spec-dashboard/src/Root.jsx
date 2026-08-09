@@ -11,10 +11,6 @@ const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
 const IssuesPage = lazy(() => import('./IssuesPage.jsx'))
 const MobileApp = lazy(() => import('./MobileApp.jsx'))
 
-function focusNode(id) {
-  navigate('graph', id)
-}
-
 const openSession = (id) => navigate('sessions', id)
 
 function ReviewEntry({ page }) {
@@ -38,8 +34,8 @@ function ReviewEntry({ page }) {
         <div className={`page-pane page-${page}`}>
           <Suspense fallback={loading}>
             {page === 'evals'
-              ? <EvalsPage onOpenSession={openSession} onFocusNode={focusNode} />
-              : <IssuesPage onOpenSession={openSession} onFocusNode={focusNode} />}
+              ? <EvalsPage onOpenSession={openSession} />
+              : <IssuesPage onOpenSession={openSession} />}
           </Suspense>
         </div>
       </div>

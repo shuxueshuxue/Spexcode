@@ -648,6 +648,9 @@ a.scenario-count:hover { background: var(--panel2); }
 .search-item .tag-chips { flex: none; }
 .issue-labels { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; vertical-align: middle; }
 .issue-label { display: block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: var(--type-caption); font-weight: var(--weight-semibold); line-height: var(--leading-ui); color: var(--issue-label-fg, var(--ink2)); background: var(--issue-label-bg, var(--paper)); border: 1px solid var(--issue-label-border, var(--line)); border-radius: 3px; padding: 0 4px; }
+.issue-label.selectable { cursor: pointer; text-align: left; }
+.issue-label.selectable:hover { text-decoration: underline; }
+.issue-label.selectable:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .issue-card { display: block; max-width: 100%; min-width: 0; box-sizing: border-box; overflow: hidden; padding: 5px 6px; border-radius: 5px; text-decoration: none; }
 .issue-card + .issue-card { margin-top: 2px; }
 .issue-card:hover { background: var(--panel2); }
@@ -1226,23 +1229,27 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .pane-eval-list-door:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .pane-eval-list-door-row { position: sticky; top: -16px; z-index: 6; display: flex; justify-content: flex-end; margin: -8px 0 8px; background: var(--paper); }
 /* ONE row grammar for BOTH pages: desktop ~64px; the same markup grows and restacks on a phone. */
-.lp-row { display: block; width: 100%; min-width: 0; min-height: 64px; box-sizing: border-box; text-align: left; text-decoration: none; color: var(--ink2); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); cursor: pointer; }
+.lp-row { position: relative; display: block; width: 100%; min-width: 0; min-height: 64px; box-sizing: border-box; text-align: left; color: var(--ink2); background: none; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); cursor: pointer; }
+.lp-row-link { position: absolute; inset: 0; z-index: 0; color: inherit; text-decoration: none; }
 .lp-row:last-child { border-bottom: 0; border-radius: 0 0 6px 6px; }
 .lp-row:hover { background: var(--panel2); }
 .lp-row.cur { background: color-mix(in srgb, var(--blue) 12%, var(--paper)); box-shadow: inset 2px 0 0 var(--blue); }
 .lp-row.inert { cursor: default; }
 .lp-row.inert:hover { background: none; }
-.rl-row-grid { min-height: 64px; box-sizing: border-box; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; column-gap: 10px; padding: 10px 16px; }
+.rl-row-grid { position: relative; z-index: 1; min-height: 64px; box-sizing: border-box; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; column-gap: 10px; padding: 10px 16px; pointer-events: none; }
+.rl-row-grid a, .rl-row-grid button { pointer-events: auto; }
 .rl-row-state { width: 16px; height: 16px; margin-top: 2px; display: grid; place-items: center; }
 .rl-row-body { min-width: 0; }
 .rl-row-title { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; min-width: 0; color: var(--ink); font-size: var(--type-subtitle); font-weight: var(--weight-semibold); line-height: var(--leading-ui); }
 .rl-row-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rl-row-meta { min-width: 0; display: flex; align-items: center; gap: 4px 8px; margin-top: 3px; color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-ui); }
-.rl-row-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-row-meta > :is(span, a) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; text-decoration: none; }
 .rl-row-aside { align-self: center; display: flex; align-items: center; justify-content: flex-end; gap: 7px; padding-left: 12px; color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
 .rl-tag { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 6px; color: var(--muted); background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; }
 .rl-tag.in-session { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 35%, var(--line)); }
-.rl-tag.node { color: var(--ink2); }
+.rl-tag.node { color: var(--ink2); text-decoration: none; }
+.rl-tag.node:hover { text-decoration: underline; }
+.rl-tag.node:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .rl-comments { display: inline-flex; align-items: center; gap: 4px; }
 .review-state { flex: none; display: inline-flex; align-items: center; gap: 5px; line-height: var(--leading-none); }
 .review-state-icon { flex: none; display: grid; place-items: center; line-height: var(--leading-none); }
@@ -1356,7 +1363,7 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   .rl-row-title-text { display: -webkit-box; overflow: hidden; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
   .rl-row-title .issue-labels { margin-top: 4px; }
   .rl-row-meta { flex-wrap: nowrap; margin-top: 5px; }
-  .rl-row-meta > span { max-width: 100%; }
+  .rl-row-meta > :is(span, a) { max-width: 100%; }
   .rl-row-aside { grid-column: 2; align-self: start; justify-content: flex-start; flex-wrap: wrap; gap: 5px; margin-top: 6px; padding-left: 0; }
   .rl-menu { max-width: calc(100vw - 34px); }
   .ds-cols { display: flex; flex-direction: column; gap: 0; }
@@ -2263,7 +2270,9 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .eval-datafold:not([open]) > summary.eval-datahead { border-bottom: none; }
 
 /* ---- evals feed ([[evals-feed]]) — structured ListView rows, media strictly lazy. ---- */
-.ef-node { flex: 0 1 auto; max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-meta); opacity: .9; }
+.ef-node { flex: 0 1 auto; max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-meta); opacity: .9; text-decoration: none; }
+.ef-node:hover { text-decoration: underline; }
+.ef-node:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 /* the full-width list page has room — the node name breathes there (58px was the slim-column budget). */
 .lp-row .ef-node { max-width: 180px; }
 /* the human sign-off on a row ([[human-ok]]): a settled approval mark on an ok'd reading, and the quiet
@@ -2287,7 +2296,9 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .an-stale b { color: var(--ink2); font-weight: var(--weight-bold); }
 .an-stale-files { opacity: 0.85; }
 .an-title { font-weight: var(--weight-bold); font-size: var(--type-subtitle); color: var(--ink); }
-.an-node { font-size: var(--type-meta); color: var(--muted); }
+.an-node { font-size: var(--type-meta); color: var(--muted); text-decoration: none; }
+.an-node:hover { text-decoration: underline; }
+.an-node:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .an-expected { font-size: var(--type-control); color: var(--ink2); padding: 8px 0 0; }
 .an-comments-head { font-size: var(--type-caption); font-weight: var(--weight-bold); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--ink2); }
 /* the still gallery — every image entry stacked on the stage, each click-to-enlarge. Media keeps its

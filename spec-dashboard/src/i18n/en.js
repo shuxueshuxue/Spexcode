@@ -193,6 +193,7 @@ export default {
     facetFreshness: 'Freshness',
     facetKind: 'Evidence',
     facetAuthor: 'Author',
+    facetLabel: 'Label',
     facetNode: 'Spec node',
     facetFiler: 'Filer',
     facetState: 'State',

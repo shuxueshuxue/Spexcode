@@ -11,7 +11,7 @@ import GraphStats from './GraphStats.jsx'
 import SideBar from './SideBar.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import { useRoute, navigate } from './route.js'
-import { graphNodeAddress, navigateAddress } from './address.js'
+import { navigateAddress } from './address.js'
 import { layout, X_GAP, Y_GAP } from './data.js'
 import { createMomentumScroll } from './scroll.js'
 import { cycleNext } from './cycle.js'
@@ -663,11 +663,11 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
       </PagePane>
       {/* the Evals page ([[evals-view]]) — its own top-level route; the feed rides the app's board poll */}
       <PagePane active={page === 'evals'} className="page-evals">
-        <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} onFocusNode={(id) => onNavigateAddress(graphNodeAddress(id))} />
+        <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} />
       </PagePane>
       {/* the Issues page ([[issues-view]]) — its own route; its paged reads follow the board's issue stamp */}
       <PagePane active={page === 'issues'} className="page-issues">
-        <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} onFocusNode={(id) => onNavigateAddress(graphNodeAddress(id))} />
+        <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />
       </PagePane>
       {/* the settings page ([[settings]]) — same sections as ever, now a routed page instead of a popup */}
       <PagePane active={page === 'settings'} className="page-settings">

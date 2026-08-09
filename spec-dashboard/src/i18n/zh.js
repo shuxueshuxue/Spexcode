@@ -192,6 +192,7 @@ export default {
     facetFreshness: '新鲜度',
     facetKind: '证据',
     facetAuthor: '发起者',
+    facetLabel: '标签',
     facetNode: '规格节点',
     facetFiler: '提交者',
     facetState: '状态',

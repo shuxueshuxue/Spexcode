@@ -361,7 +361,7 @@ test('responsive ListView matches the measured 32/48/64 desktop and 390px reflow
   assert.match(shell, /className="rl-facet-label-mobile" aria-hidden="true">\{selectedLabel \|\| label\}/)
   assert.match(css, /\.rl-facet-wrap\.mobile-stay \.rl-facet \{ max-width: 64px; gap: 3px; padding: 0 3px;/)
   assert.match(css, /\.rl-secondary-filters-trigger:not\(\.compact\) \{ gap: 3px; padding: 0 4px; \}/)
-  assert.match(css, /\.rl-row-title\s*\{[^}]*-webkit-line-clamp:\s*3;/s)
+  assert.match(css, /\.rl-row-title-text\s*\{[^}]*-webkit-line-clamp:\s*3;/s)
 })
 
 test('shared list empty state distinguishes a vacant dataset from a filtered zero', () => {
@@ -541,18 +541,30 @@ test('one side-rail value primitive renders every detail metadata row on both pa
   // the issue detail names its own id under a localized Issue label; nodes/store/permalink/forge-by all
   // ride SideValue — the page keeps no parallel inline variant (fv-by / fv-chip / fv-link are gone)
   assert.match(issues, /<SideSection label=\{t\('detail\.sideIssue'\)\}>\s*<SideValue text=\{th\.id\} mono \/>/)
-  assert.match(issues, /<SideValue key=\{id\} text=\{id\} mono tip=\{t\('session\.issuesFocusNode'\)\} onClick=\{\(\) => onFocusNode\?\.\(id\)\} \/>/)
+  assert.match(issues, /<SideValue key=\{id\} text=\{id\} mono tip=\{t\('session\.issuesFocusNode'\)\} href=\{addressHash\(graphNodeAddress\(id\)\)\} \/>/)
   for (const src of [issues, detail]) assert.doesNotMatch(src, /fv-by|fv-chip|fv-link|ds-side-line/)
   assert.doesNotMatch(css, /\.fv-by|\.fv-chip|\.fv-link \{|\.ds-side-line|\.fv-originator-who/)
-  // the eval detail shows its spec node as a REAL labeled ref through the shell's graph-focus door
+  // the eval detail shows its spec node as a REAL labeled ref through the one graph address projection
   assert.match(detail, /<SideSection label=\{t\('detail\.sideNode'\)\}>/)
-  assert.match(detail, /onClick=\{onFocusNode \? \(\) => onFocusNode\(entry\.node\) : null\}/)
-  assert.match(dashboard, /<EvalsPage[^>]*onFocusNode=/)
+  assert.match(detail, /href=\{addressHash\(graphNodeAddress\(entry\.node\)\)\}/)
+  assert.doesNotMatch(detail, /onFocusNode/)
   // localized type labels exist in both dictionaries
   for (const dict of [en, zh]) {
     assert.match(dict, /sideIssue:/)
     assert.match(dict, /sideNode:/)
   }
+})
+
+test('list metadata keeps native controls beside the real detail anchor', () => {
+  assert.match(shell, /<a className="lp-row-link" href=\{row\.href\}>/)
+  assert.match(css, /\.lp-row-link \{ position: absolute; inset: 0; z-index: 0;/)
+  assert.match(css, /\.rl-row-grid \{ position: relative; z-index: 1;[\s\S]*pointer-events: none;/)
+  assert.match(css, /\.rl-row-grid a, \.rl-row-grid button \{ pointer-events: auto; \}/)
+  assert.match(issues, /IssueLabels labels=\{th\.labels\} onSelect=\{\(name\) => surgery\('label', name\)\}/)
+  assert.match(issues, /<a className="rl-tag node" href=\{addressHash\(graphNodeAddress\(th\.nodes\[0\]\)\)\}>/)
+  assert.match(evals, /<a className="ef-node" href=\{addressHash\(graphNodeAddress\(e\.node\)\)\}/)
+  assert.match(evals, /filedBy', \{ by: reviewActorName\(e\.by\) \}/)
+  assert.match(issues, /ISSUE_QUERY_KEYS = \['is', 'state', 'store', 'author', 'node', 'label', 'session'\]/)
 })
 
 test('media keeps intrinsic geometry — shrink-only, no flex-stretch, no forced width', () => {

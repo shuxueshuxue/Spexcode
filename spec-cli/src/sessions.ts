@@ -201,7 +201,7 @@ export type SessRec = {
   session: string; governed: boolean; worktreePath: string; branch: string | null
   node: string | null; title: string | null; name: string | null
   parent: string | null   // the spawning session's id ([[session-nesting]]); null for a top-level launch
-  status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
+  status: Lifecycle; proposal: Proposal | null; merges: number; reviewEpoch: number; note: string | null
   sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
   stopped: boolean       // explicit human stop; liveness metadata, never an agent-authored lifecycle value
   archived: boolean      // shelved by the human ([[archive]]) — only clean after coldProof is written
@@ -396,7 +396,9 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
   return {
     session: raw.session_id, governed: !!raw.governed, worktreePath: raw.worktree_path || '', branch: raw.branch || null,
     node: raw.node || null, title: raw.title || null, name: raw.name || null, parent: raw.parent || null,
-    status, proposal, merges: Number(raw.merges) || 0, note: raw.note || null, sortKey, createdAt: Number(raw.createdAt) || 0,
+    status, proposal, merges: Number(raw.merges) || 0,
+    reviewEpoch: Number.isSafeInteger(raw.review_epoch) && raw.review_epoch! >= 0 ? raw.review_epoch! : 0,
+    note: raw.note || null, sortKey, createdAt: Number(raw.createdAt) || 0,
     harness: raw.harness || 'claude',   // records written before the harness field default to claude
     harnessSessionId: raw.harness_session_id || null,
     stopped: !!raw.stopped,             // records written before explicit stop tracking were not stopped
@@ -462,6 +464,7 @@ function writeRecord(rec: SessRec): void {
     status: rawLifecycleStatus(rec),
     proposal: rec.proposal ?? '',
     merges: rec.merges,
+    review_epoch: rec.reviewEpoch,
     note: rec.note ?? '',
     sortkey: rec.sortKey ?? '',
     createdAt: rec.createdAt,
@@ -2276,7 +2279,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           let rec: SessRec = {
             session: id, governed: true, worktreePath: path, branch,
             node: ref || null, title, name, parent: parent && parent !== id ? parent : null,
-            status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
+            status: 'queued', proposal: null, merges: 0, reviewEpoch: 0, note: null, sortKey: null, createdAt: Date.now(),
             harness: h.id, harnessSessionId: null, stopped: false, archived: false, coldProof: null, adapterRecovery: null, launcher: chosen.name,
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
             ...(base ? { base } : {}),
@@ -2517,9 +2520,15 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
   return withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
     if (!rec) return false
+    const proposal = status === 'awaiting' ? (opts.proposal ?? 'nothing') : null
+    // @@@ reviewEpoch - an explicit renewed merge declaration is new human-review authority even when its
+    // visible state and Git heads are unchanged. Its durable generation keeps a fresh request distinct from
+    // retrying the already accepted request for the prior declaration.
+    const reviewEpoch = status === 'awaiting' && proposal === 'merge' ? rec.reviewEpoch + 1 : rec.reviewEpoch
     writeRecord({
       ...rec, status,
-      proposal: status === 'awaiting' ? (opts.proposal ?? 'nothing') : null,
+      proposal,
+      reviewEpoch,
       note: opts.note ?? null,
     })
     return true
@@ -2631,6 +2640,7 @@ export type ReviewPayload = {
   id: string; node: string | null; branch: string | null
   branchHead: string         // immutable session-branch object whose committed review facts describe
   baseHead: string           // immutable canonical-base object from the same ref snapshot
+  reviewEpoch: number        // durable awaiting+merge declaration generation that authorizes this review
   label: string              // the session's identity, derived ONCE via deriveLabel — the review surface renders THIS, never its own node||branch||id chain
   ahead: number              // commits the node branch is ahead of main
   dirtyNonRuntime: number    // uncommitted files excluding SpexCode's own runtime files
@@ -2723,7 +2733,7 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   // path is genuine work — this is just the total uncommitted count.
   const dirtyNonRuntime = statusOut.split('\n').filter(Boolean).map(porcelainPath).length
   return {
-    id, node: wt.rec.node, branch: wt.branch, branchHead, baseHead,
+    id, node: wt.rec.node, branch: wt.branch, branchHead, baseHead, reviewEpoch: wt.rec.reviewEpoch,
     label: deriveLabel({ id, name: wt.rec.name, node: wt.rec.node, title: wt.rec.title, branch: wt.branch }),
     ahead: Number(aheadOut.trim()) || 0,
     dirtyNonRuntime, diff,
@@ -2787,9 +2797,9 @@ function mergePrompt(mainPath: string, worktreePath: string, worktreeTop: Buffer
 }
 
 export type MergeSessionResult =
-  | { dispatched: true; replayed?: boolean; expectedBranchHead: string; expectedBaseHead: string }
-  | { dispatched: false; reason: string; code?: 'session_merge_invalid_request' | 'session_merge_key_reused' | 'session_merge_head_changed' | 'session_merge_branch_unproven' | 'session_merge_not_proposed'; status?: 400 | 409 }
-export type MergeSessionOptions = { requestKey?: string; expectedBranchHead?: string; expectedBaseHead?: string }
+  | { dispatched: true; replayed?: boolean; expectedBranchHead: string; expectedBaseHead: string; reviewEpoch: number }
+  | { dispatched: false; reason: string; code?: 'session_merge_invalid_request' | 'session_merge_key_reused' | 'session_merge_head_changed' | 'session_merge_branch_unproven' | 'session_merge_not_proposed' | 'session_merge_review_changed'; status?: 400 | 409 }
+export type MergeSessionOptions = { requestKey?: string; expectedBranchHead?: string; expectedBaseHead?: string; expectedReviewEpoch?: number }
 
 function normalizeMergeKey(raw: string | undefined): string | null {
   if (raw === undefined) return null
@@ -2854,18 +2864,21 @@ async function mergeSessionUnlocked(id: string, options: MergeSessionOptions = {
   if (!requestKey) {
     return { dispatched: false, reason: 'Idempotency-Key must be 1-128 visible ASCII characters', code: 'session_merge_invalid_request', status: 400 }
   }
-  const expectedBranchHead = options.expectedBranchHead, expectedBaseHead = options.expectedBaseHead
-  if (expectedBranchHead === undefined || expectedBaseHead === undefined) {
-    return { dispatched: false, reason: 'expectedBranchHead and expectedBaseHead are required with Idempotency-Key', code: 'session_merge_invalid_request', status: 400 }
+  const expectedBranchHead = options.expectedBranchHead, expectedBaseHead = options.expectedBaseHead, expectedReviewEpoch = options.expectedReviewEpoch
+  if (expectedBranchHead === undefined || expectedBaseHead === undefined || expectedReviewEpoch === undefined) {
+    return { dispatched: false, reason: 'expectedBranchHead, expectedBaseHead, and expectedReviewEpoch are required with Idempotency-Key', code: 'session_merge_invalid_request', status: 400 }
   }
   const main = mainRoot()
   if (!isGitObjectId(main, expectedBranchHead) || !isGitObjectId(main, expectedBaseHead)) {
     return { dispatched: false, reason: 'expectedBranchHead and expectedBaseHead must be full lowercase native Git object ids', code: 'session_merge_invalid_request', status: 400 }
   }
+  if (!Number.isSafeInteger(expectedReviewEpoch) || expectedReviewEpoch < 0) {
+    return { dispatched: false, reason: 'expectedReviewEpoch must be a non-negative safe integer', code: 'session_merge_invalid_request', status: 400 }
+  }
   const idempotency = {
     operation: 'merge' as const,
     requestDigest: digest(`spexcode-session-merge\0${requestKey}`),
-    payloadHash: digest(JSON.stringify({ expectedBranchHead, expectedBaseHead })),
+    payloadHash: digest(JSON.stringify({ expectedBranchHead, expectedBaseHead, expectedReviewEpoch })),
   }
   const prior = await acceptedMergeDispatch(id, idempotency)
   if (prior) {
@@ -2873,7 +2886,7 @@ async function mergeSessionUnlocked(id: string, options: MergeSessionOptions = {
       return { dispatched: false, reason: 'Idempotency-Key is already bound to another session-merge payload', code: 'session_merge_key_reused', status: 409 }
     }
     await replayAcceptedMerge(id, idempotency, prior)
-    return { dispatched: true, replayed: true, expectedBranchHead, expectedBaseHead }
+    return { dispatched: true, replayed: true, expectedBranchHead, expectedBaseHead, reviewEpoch: expectedReviewEpoch }
   }
   const [branchObject, baseObject] = await Promise.all([
     gitTry(['-C', main, 'cat-file', '-e', `${expectedBranchHead}^{commit}`]),
@@ -2905,6 +2918,9 @@ async function mergeSessionUnlocked(id: string, options: MergeSessionOptions = {
       if (!rec.governed || rec.status !== 'awaiting' || rec.proposal !== 'merge') {
         throw conflict(`session ${id} is not a governed awaiting merge proposal`, 'session_merge_not_proposed')
       }
+      if (rec.reviewEpoch !== expectedReviewEpoch) {
+        throw conflict(`review declaration changed: expected epoch ${expectedReviewEpoch}, found ${rec.reviewEpoch}`, 'session_merge_review_changed')
+      }
       if (rec.worktreePath !== wt.path || rec.branch !== branch) {
         throw conflict(`session branch identity changed before merge acceptance`, 'session_merge_branch_unproven')
       }
@@ -2918,7 +2934,7 @@ async function mergeSessionUnlocked(id: string, options: MergeSessionOptions = {
   if (r.code === 'dispatch_key_reused') {
     return { dispatched: false, reason: 'Idempotency-Key is already bound to another session-merge payload', code: 'session_merge_key_reused', status: 409 }
   }
-  if (r.code === 'session_merge_not_proposed' || r.code === 'session_merge_branch_unproven' || r.code === 'session_merge_head_changed') {
+  if (r.code === 'session_merge_not_proposed' || r.code === 'session_merge_branch_unproven' || r.code === 'session_merge_head_changed' || r.code === 'session_merge_review_changed') {
     return { dispatched: false, reason: r.error || 'merge authority refused', code: r.code, status: 409 }
   }
   if (!r.ok) return { dispatched: false, reason: r.error || 'could not dispatch merge prompt' }
@@ -2926,7 +2942,7 @@ async function mergeSessionUnlocked(id: string, options: MergeSessionOptions = {
   // reviewed CAS; a failed relaunch leaves the one queued debt for the ordinary delivery supervisor.
   await resumeSession(id, { guard: false })
   await drainSession(id)
-  return { dispatched: true, replayed: r.replayed === true, expectedBranchHead, expectedBaseHead }
+  return { dispatched: true, replayed: r.replayed === true, expectedBranchHead, expectedBaseHead, reviewEpoch: expectedReviewEpoch }
 }
 export const mergeSession = (id: string, options: MergeSessionOptions = {}): Promise<MergeSessionResult> =>
   mergeSessionUnlocked(id, options)

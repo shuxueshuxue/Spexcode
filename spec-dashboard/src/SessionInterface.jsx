@@ -46,11 +46,12 @@ const BYTES_PER_GIBIBYTE = BYTES_PER_MEBIBYTE * MEBIBYTES_PER_GIBIBYTE
 let nextAttachmentKey = 0
 
 const attachmentKey = () => globalThis.crypto?.randomUUID?.() || `attachment-${Date.now()}-${++nextAttachmentKey}`
-const mergeRequestKey = (branchHead, baseHead) => {
+const mergeRequestKey = (branchHead, baseHead, reviewEpoch) => {
   const pairs = `${branchHead}${baseHead}`.match(/../g)
   if (!pairs || pairs.some((pair) => !/^[0-9a-f]{2}$/.test(pair))) throw new Error('session review returned invalid Git object ids')
+  if (!Number.isSafeInteger(reviewEpoch) || reviewEpoch < 0) throw new Error('session review returned invalid declaration epoch')
   const bytes = String.fromCharCode(...pairs.map((pair) => Number.parseInt(pair, 16)))
-  return `merge-${btoa(bytes).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')}`
+  return `merge-${btoa(bytes).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')}-${reviewEpoch}`
 }
 
 const HERO_WORDMARK = [
@@ -1214,11 +1215,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     try {
       const response = await fetch(apiUrl(`/api/sessions/${active}/review`))
       const review = await response.json().catch(() => null)
-      if (!response.ok || typeof review?.branchHead !== 'string' || typeof review?.baseHead !== 'string') {
+      if (!response.ok || typeof review?.branchHead !== 'string' || typeof review?.baseHead !== 'string' || !Number.isSafeInteger(review?.reviewEpoch) || review.reviewEpoch < 0) {
         setActionOutcome({ owner, phase: 'failed', message: review?.error || `session review refused (HTTP ${response.status})` })
         return false
       }
-      return await act('merge', { expectedBranchHead: review.branchHead, expectedBaseHead: review.baseHead }, owner, { 'Idempotency-Key': mergeRequestKey(review.branchHead, review.baseHead) })
+      return await act('merge', { expectedBranchHead: review.branchHead, expectedBaseHead: review.baseHead, expectedReviewEpoch: review.reviewEpoch }, owner, { 'Idempotency-Key': mergeRequestKey(review.branchHead, review.baseHead, review.reviewEpoch) })
     } catch (error) {
       setActionOutcome({ owner, phase: 'failed', message: error instanceof Error ? error.message : String(error) })
       return false

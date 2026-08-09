@@ -49,6 +49,18 @@ scenarios:
       and the JS bundle both under a third); the SSE stream carries NO content-encoding (the exclusion —
       an event must never sit in a zlib buffer) and the triggered event still arrives on the debounce
       scale. The upstream is untouched: only the gateway compresses.
+  - name: posted-web-resource-directory-resolution
+    tags: [backend-api, cli]
+    test: spec-cli/src/session-web.api.test.ts
+    code: spec-cli/src/gateway.ts
+    description: >
+      In an isolated project, use the real `spex session web add` CLI to publish both a document URL
+      (`/a/b/page.html`) and a directory URL (`/base/`) to one loopback service, then request each through
+      its host-gateway preview route, including a document sibling resource and a raw WebSocket upgrade.
+    expected: >
+      The document preview root reaches `/a/b/page.html`; its `mermaid.min.js` sibling and WebSocket route
+      reach `/a/b/mermaid.min.js` and `/a/b/socket` rather than paths beneath `page.html`. The directory
+      control remains green: its page and WebSocket routes reach `/base/page` and `/base/socket`.
   - name: proxy-connection-reclamation
     tags: [backend-api, frontend-e2e, desktop]
     code: spec-cli/src/gateway.ts

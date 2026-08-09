@@ -79,6 +79,10 @@ if the best-effort store/worktree watchers are unavailable; the patrol is recove
 acknowledgement. Cancelling does nothing. The menu carries only the
 decisive **close**, never the soft `/stop` — stopping-to-resume is a Command Box verb on a live session.
 
+Both lifecycle confirms open with their destructive commit button focused, so a plain **Enter** confirms the
+visible archive or close action. Escape, Cancel, and a backdrop click remain cancellation paths; Enter does
+not weaken the preceding right-click confirmation boundary.
+
 A close refusal is a visible action failure, not a silent background no-op: the backend returns a non-2xx
 structured error when its ownership guard commits no removal, and the console keeps the selected row while
 showing that diagnostic **once** through its shared action-error surface. A refusal never weakens the guard merely to

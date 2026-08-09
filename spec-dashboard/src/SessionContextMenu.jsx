@@ -247,7 +247,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
             <p className="sess-confirm-msg">{t('sessionWindow.archiveConfirm')}</p>
             <div className="sess-rename-actions">
               <button type="button" className="sess-rename-btn" onClick={() => setArchiving(null)}>{t('common.cancel')}</button>
-              <button type="button" className="sess-rename-btn danger" onClick={confirmArchive}>{t('sessionWindow.archive')}</button>
+              <button type="button" className="sess-rename-btn danger" onClick={confirmArchive} autoFocus>{t('sessionWindow.archive')}</button>
             </div>
           </div>
         </Modal>
@@ -263,7 +263,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
             <p className="sess-confirm-msg">{t('sessionWindow.closeConfirm')}</p>
             <div className="sess-rename-actions">
               <button type="button" className="sess-rename-btn" onClick={() => setClosing(null)}>{t('common.cancel')}</button>
-              <button type="button" className="sess-rename-btn danger" onClick={confirmClose}>{t('sessionWindow.close')}</button>
+              <button type="button" className="sess-rename-btn danger" onClick={confirmClose} autoFocus>{t('sessionWindow.close')}</button>
             </div>
           </div>
         </Modal>

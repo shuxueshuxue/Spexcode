@@ -339,7 +339,9 @@ matter which input has focus (the guaranteed up/down switch a work console gives
 reserves **⌥+Shift+↓ to expand and ⌥+Shift+↑ to collapse** the selected row's existing [[session-nesting]]
 fold. It consumes those chords before the ordinary ⌥+↑/↓ session move, so selection never changes; a leaf or
 already-matching state is a no-op. Unmodified arrows and every editable control keep their native key, and the
-action never changes session data. **⌥+N** reaching the New Session composer is no longer this console's own
+action never changes session data. A transient overlay's own focused control also keeps its native keys: the
+window router yields before any New-tab or list shortcut when the event target is inside a `data-focus-overlay`,
+so a visible confirm's Enter cannot launch a New Session behind it. **⌥+N** reaching the New Session composer is no longer this console's own
 chord — it belongs to [[side-nav]]'s app-global ⌥ command family (⌥N / ⌥F / ⌥1..⌥5), which the console's
 key handling deliberately **falls through unhandled** so the window-level handler
 routes it and tmux never sees `M-n`/`M-f`/`M-digit`. (The family is ⌥-based for the same hard browser limit

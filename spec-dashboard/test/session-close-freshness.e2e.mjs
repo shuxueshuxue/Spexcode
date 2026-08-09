@@ -160,7 +160,7 @@ try {
   await page.screenshot({ path: join(out, 'close-confirm.png'), fullPage: true })
   const [response] = await Promise.all([
     page.waitForResponse((r) => new URL(r.url()).pathname === `/api/sessions/${sessionId}/close` && r.request().method() === 'POST'),
-    confirm.locator('button.sess-rename-btn.danger').click(),
+    page.keyboard.press('Enter'),
   ])
   assert.equal(response.ok(), true, 'close response must succeed before freshness is measured')
   const responseAt = Date.now()

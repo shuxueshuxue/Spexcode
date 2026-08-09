@@ -19,6 +19,9 @@ const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
 const out = resolve(process.env.OUT || '/tmp/session-multi-select-e2e')
 const parentId = 'select-mode-parent'
 const childId = 'select-mode-child'
+const events = []
+let videoStartedAt = 0
+const step = (label) => events.push({ at: Date.now() - videoStartedAt, step: label })
 
 const freePort = () => new Promise((resolvePort, reject) => {
   const server = net.createServer()
@@ -63,6 +66,8 @@ let backend
 let vite
 let browser
 let context
+let page
+let videoPath = null
 
 try {
   mkdirSync(join(project, '.spec', 'fixture'), { recursive: true })
@@ -119,16 +124,21 @@ try {
 
   const { chromium } = await import(pathToFileURL(playwrightPath).href)
   browser = await chromium.launch({ executablePath: chromiumPath, headless: true })
-  context = await browser.newContext({ viewport: { width: 900, height: 720 } })
+  context = await browser.newContext({ viewport: { width: 900, height: 720 }, recordVideo: { dir: out, size: { width: 900, height: 720 } } })
+  videoStartedAt = Date.now()
   await context.addInitScript(() => {
     window.EventSource = class DisabledEventSource { constructor() { throw new Error('fixture disables SSE') } }
   })
-  const page = await context.newPage()
+  page = await context.newPage()
   let archiveRequests = 0
+  let closeRequests = 0
   page.on('request', (request) => {
     if (request.method() === 'POST' && /\/api\/sessions\/[^/]+\/archive$/.test(new URL(request.url()).pathname)) archiveRequests++
+    if (request.method() === 'POST' && /\/api\/sessions\/[^/]+\/close$/.test(new URL(request.url()).pathname)) closeRequests++
   })
   await page.route('**/api/graph*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) }))
+  await page.route('**/api/sessions/*/archive', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }))
+  await page.route('**/api/sessions/*/close', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) }))
   await page.goto(`${base}/#/sessions`, { waitUntil: 'domcontentloaded' })
 
   const treeRow = page.locator(`.si-tree-row:has(> .si-item[data-sid="${parentId}"])`)
@@ -141,6 +151,7 @@ try {
 
   await row.click({ button: 'right' })
   await page.getByRole('menuitem', { name: /select/i }).click()
+  step('enter multi-select')
   const dragHandle = treeRow.locator('> .si-drag-handle')
   const archiveButton = page.getByRole('button', { name: /^archive$/i })
   const closeButton = page.getByRole('button', { name: /^close$/i })
@@ -165,22 +176,64 @@ try {
   const reparentRequest = page.waitForRequest((request) => request.url().endsWith('/api/sessions/reparent') && request.method() === 'POST')
   await dragHandle.dragTo(childRow)
   assert.deepEqual((await reparentRequest).postDataJSON(), { children: [parentId], parent: childId })
+  step('reparent request sent')
 
-  await page.getByRole('button', { name: /cancel/i }).click()
+  await archiveButton.click()
+  const bulkArchiveConfirm = page.getByRole('dialog', { name: /archive/i })
+  await bulkArchiveConfirm.waitFor({ state: 'visible' })
+  const bulkArchiveCommit = bulkArchiveConfirm.locator('button.sess-rename-btn.danger')
+  assert.equal(await bulkArchiveCommit.evaluate((button) => document.activeElement === button), true, 'bulk archive confirm focuses its commit button')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(100)
+  assert.equal(await bulkArchiveConfirm.count(), 0, 'Enter dismisses the bulk archive confirm')
+  await bulkArchiveConfirm.waitFor({ state: 'detached' })
+  await archiveButton.waitFor({ state: 'detached' })
+  assert.equal(archiveRequests, 1, 'Enter confirms bulk archive')
+  step('Enter confirmed bulk archive')
+
+  await row.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /select/i }).click()
+  const bulkCloseButton = page.getByRole('button', { name: /^close$/i })
+  await bulkCloseButton.click()
+  const bulkCloseConfirm = page.getByRole('dialog', { name: /close/i })
+  await bulkCloseConfirm.waitFor({ state: 'visible' })
+  const bulkCloseCommit = bulkCloseConfirm.locator('button.sess-rename-btn.danger')
+  assert.equal(await bulkCloseCommit.evaluate((button) => document.activeElement === button), true, 'bulk close confirm focuses its commit button')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(100)
+  assert.equal(await bulkCloseConfirm.count(), 0, 'Enter dismisses the bulk close confirm')
+  await bulkCloseConfirm.waitFor({ state: 'detached' })
+  await bulkCloseButton.waitFor({ state: 'detached' })
+  assert.equal(closeRequests, 1, 'Enter confirms bulk close')
+  step('Enter confirmed bulk close')
+
   await row.click({ button: 'right' })
   const archiveItem = page.getByRole('menuitem', { name: /^archive$/i })
   assert.ok(await archiveItem.evaluate((item) => item.classList.contains('danger')))
   await archiveItem.click()
-  await page.getByRole('dialog', { name: /archive/i }).waitFor({ state: 'visible' })
-  assert.equal(archiveRequests, 0, 'archive waits for confirmation')
+  const archiveConfirm = page.getByRole('dialog', { name: /archive/i })
+  await archiveConfirm.waitFor({ state: 'visible' })
+  assert.equal(archiveRequests, 1, 'row archive waits for confirmation')
+  const archiveCommit = archiveConfirm.locator('button.sess-rename-btn.danger')
+  assert.equal(await archiveCommit.evaluate((button) => document.activeElement === button), true, 'row archive confirm focuses its commit button')
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(100)
+  assert.equal(await archiveConfirm.count(), 0, 'Enter dismisses the row archive confirm')
+  await archiveConfirm.waitFor({ state: 'detached' })
+  assert.equal(archiveRequests, 2, 'Enter confirms archive')
+  step('Enter confirmed row archive')
   await page.screenshot({ path: `${out}/select-mode-reparent.png` })
 } finally {
+  const video = page?.video()
   await context?.close()
+  videoPath = video ? await video.path().catch(() => null) : null
   await browser?.close()
   await vite?.close()
   await stop(backend)
   rmSync(fixture, { recursive: true, force: true })
+  writeFileSync(`${out}/timeline.json`, JSON.stringify({ v: 2, axis: 'time', events }, null, 2) + '\n')
 }
 
 if (!existsSync(join(out, 'select-mode-reparent.png'))) throw new Error('browser proof did not render a screenshot')
-console.log(`session multi-select proof: ${out}`)
+if (!videoPath) throw new Error('browser proof did not record a video')
+console.log(JSON.stringify({ ok: true, out, video: videoPath, timeline: join(out, 'timeline.json') }))

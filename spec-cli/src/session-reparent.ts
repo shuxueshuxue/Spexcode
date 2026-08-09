@@ -8,13 +8,14 @@ export class SessionReparentRequestError extends Error {
   }
 }
 
-export function parseReparentRequest(body: unknown): { children: string[]; parent: string } {
+export function parseReparentRequest(body: unknown): { children: string[]; parent: string | null } {
   if (!body || typeof body !== 'object') throw new SessionReparentRequestError('reparent body must be JSON')
   const raw = body as { children?: unknown; parent?: unknown }
   if (!Array.isArray(raw.children) || !raw.children.length || raw.children.some((id) => typeof id !== 'string' || !id.trim()))
     throw new SessionReparentRequestError('reparent children must be one or more session ids')
-  if (typeof raw.parent !== 'string' || !raw.parent.trim()) throw new SessionReparentRequestError('reparent parent must be a session id')
-  return { children: raw.children.map((id) => id.trim()), parent: raw.parent.trim() }
+  if (raw.parent !== null && (typeof raw.parent !== 'string' || !raw.parent.trim()))
+    throw new SessionReparentRequestError('reparent parent must be a session id or null')
+  return { children: raw.children.map((id) => id.trim()), parent: raw.parent === null ? null : raw.parent.trim() }
 }
 
 export async function reparentRequest(body: unknown): Promise<SessionReparentResult> {
@@ -22,7 +23,7 @@ export async function reparentRequest(body: unknown): Promise<SessionReparentRes
   return reparentSessionRecords(request.children, request.parent)
 }
 
-export async function reparentSessions(children: string[], parent: string): Promise<SessionReparentResult> {
+export async function reparentSessions(children: string[], parent: string | null): Promise<SessionReparentResult> {
   try {
     return await clientReparent(children, parent)
   } catch (error) {

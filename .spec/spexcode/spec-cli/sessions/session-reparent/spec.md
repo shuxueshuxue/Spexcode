@@ -2,7 +2,7 @@
 title: session-reparent
 status: active
 hue: 300
-desc: Move governed child sessions to a new supervisor as one lock-protected parent-and-watch rewrite, without depending on the former parent being alive.
+desc: Move governed child sessions to a new supervisor or top level as one lock-protected parent-and-watch rewrite, without depending on the former parent being alive.
 code:
   - spec-cli/src/session-reparent.ts
 related:
@@ -30,6 +30,12 @@ rejects a child that is its own parent or would make a parent cycle, and names a
 ungoverned session loudly. One child can be active or in a harness turn: reparent changes neither its
 process nor authored lifecycle, and its next record transition simply observes the new watcher set.
 
+The same manager API also accepts `parent: null` for an explicit move to the top level. That is a detach,
+not an invented root session: the child has no parent pointer and no target-owned `parent` source afterwards.
+An independent manual watch remains its own relation. The
+desktop console uses it for its root drop zone and its `remove from parent` row action; the selector-based
+CLI keeps its explicit `--to <parent-SEL>` spelling.
+
 For each child, the operation holds that child's ordinary record lock while it replaces the durable
 `parent` pointer and its target-owned `watchers.json` relation: the former parent's `parent` source is removed
 and the new parent owns that source exactly once. A watcher row may also carry an independent `manual` source;
@@ -42,7 +48,8 @@ message already claimed by the adapter before the transaction gets the queue loc
 returns, but an unhanded stale `continue` cannot arrive afterwards. This is a transfer of supervision, not a
 general messaging ACL: a still-live former session may deliberately send a new peer message later. After the
 rewrite commits, the new parent is sent the child's current authored state through normal dispatch, matching
-the parent-source installation.
+the parent-source installation. For a top-level detach there is no new target lock, parent source, or
+notification; the same old-parent queue revocation applies while an unrelated manual source remains intact.
 
 The command validates the complete batch before changing the first child and reports the committed child
 ids. A filesystem failure rolls back the in-memory watch rewrite for that child before releasing its lock;

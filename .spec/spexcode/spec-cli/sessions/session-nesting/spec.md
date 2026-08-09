@@ -58,6 +58,14 @@ belonging is *drawn*, like a notes-app tree, not a blank margin. Recursive to an
 by default, so a fleet reads as one row until
 opened; ↑/↓ nav walks the VISIBLE rows, so a hidden child is never a nav ghost.
 
+The desktop console is also the one mutable tree surface. A primary-pointer drag starts only after a small
+movement threshold, then the source row fades and its **whole session row** (headline and live status included)
+follows the pointer as a fixed ghost. A compatible target row gains a clear drop treatment; releasing there
+reparents to that row. A dragged child also reveals a compact root drop zone above the list, whose release
+detaches it to top level. The source itself, its existing parent, and any descendant are never targets, so a
+drag cannot create a cycle or spend a write on a no-op. Releasing away from a target changes nothing. The
+map-side glance and mobile list remain read-only tree presentations rather than acquiring a second drag model.
+
 The desktop console layers one chord over the existing session-tab navigation: **⌥+Shift+↓ expands the
 currently selected parent session and ⌥+Shift+↑ collapses it**. These chords are consumed before the ordinary
 ⌥+↑/↓ tab move, so they never change session selection; when the selected row has no matching state they are
@@ -87,4 +95,5 @@ genuinely needs the human. Strengthened in the `supervisor` config plugin.
 The original spawner is the normal source of a parent edge, but supervision recovery may deliberately change
 that durable edge through [[session-reparent]]. The tree remains a read-time fold: it has no stored parent
 collection and no migration of a missing parent. Reparent changes the child's one pointer and the matching
-`parent` watch source together; ordinary view reads still need no repair daemon.
+`parent` watch source together; `parent: null` removes that source for an explicit top-level detach while
+leaving any independent manual watch intact. Ordinary view reads still need no repair daemon.

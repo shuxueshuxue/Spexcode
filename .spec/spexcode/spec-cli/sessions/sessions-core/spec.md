@@ -46,7 +46,9 @@ it names `spex session done --propose close` as the final action only when the t
 is no longer needed; otherwise the agent declares the state that is true.
 [[session-reparent]] uses that same target ownership: it takes the ordinary record locks while changing a
 child's parent pointer and watcher list, then delegates current-state delivery to the existing dispatch path.
-The core never asks a former watcher to participate in its own removal.
+The core never asks a former watcher to participate in its own removal. A null replacement parent is the
+same transaction's top-level detach: it removes the former relation and its pending delivery without creating
+a root record, new watcher, or notification.
 A launch record carries the selected launcher name, its resolved harness, and the exact pinned
 `launch_cmd`; session lifecycle and comms call that one interactive adapter directly rather than routing on a
 second product dimension. The session's node is derived only from the raw prompt's first `[[id]]` topic

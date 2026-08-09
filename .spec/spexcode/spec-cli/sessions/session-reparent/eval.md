@@ -28,6 +28,20 @@ scenarios:
       failure and leaves the child's parent and watcher relation unchanged.
     tags: [cli, backend-api]
     code: spec-cli/src/session-reparent.ts
+  - name: top-level-detach-revokes-former-supervision
+    description: >-
+      Through a live backend with one governed CHILD under a former PARENT, give the parent a target-owned
+      watch and an unhanded queued continue message. Submit the public reparent request with
+      `{children:[CHILD], parent:null}`, then inspect the response, child record, watcher file, and pending
+      delivery queue.
+    expected: >-
+      The response names CHILD with `parent:null` and no notified parent. The durable child parent is null,
+      its former parent's `parent` source and unhanded queue entry are gone, while any independent `manual`
+      source remains. No root record, replacement parent source, or current-state notification is created; the
+      child process and immutable history remain untouched.
+    tags: [backend-api]
+    test: spec-cli/src/session-reparent.test.ts
+    code: [spec-cli/src/session-reparent.ts, spec-cli/src/sessions.ts]
 ---
 
 # measuring session-reparent

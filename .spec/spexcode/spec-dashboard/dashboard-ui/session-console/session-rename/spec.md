@@ -111,7 +111,12 @@ and the current TUI or Command Box keeps focus, never a stolen-focus gap.
 The pop-over is the one home for row-level session actions. Its **lock on graph** item invokes the console's
 existing lock action and routes to `#/graph`; [[session-console]] owns that lock's no-pending-ops semantics.
 The same menu also hosts [[session-multi-select]]'s select item and [[attach-menu]]'s live-only attach item,
-so these verbs extend one menu instead of creating parallel gestures or pop-overs.
+so these verbs extend one menu instead of creating parallel gestures or pop-overs. A row with a parent also
+gets **remove from parent**: it dismisses the menu and submits the console's ordinary reparent write with a
+null parent, leaving top-level rows free of a disabled or meaningless item. This is the direct counterpart to
+the console tree's root drop zone ([[session-nesting]]), not a dashboard-only record edit. It removes only
+the child relation's `parent` watch source; an independent manual observer remains a separate deliberate
+relation, never collateral damage from this menu action.
 
 Its surface mounts the shared [[context-menu-chrome]]: compact icon-led text rows, grouped commands, and a
 separate destructive close row. This node supplies the session actions; it never forks the menu chrome.

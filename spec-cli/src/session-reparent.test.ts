@@ -135,6 +135,18 @@ test('session reparent rewrites parent/watch through live backend and only falls
     assert.match(newParentTimeline, new RegExp(childA))
     assert.match(newParentTimeline, new RegExp(childB))
 
+    writeFileSync(join(childADir, 'pending.json'), JSON.stringify([{ mid: 'new-parent-command', text: 'stale continue', from: newParent }]) + '\n')
+    const detached = await fetch(`http://127.0.0.1:${port}/api/sessions/reparent`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ children: [childA], parent: null }),
+    })
+    assert.equal(detached.status, 200)
+    assert.deepEqual(await detached.json(), { children: [childA], parent: null, notified: [] })
+    assert.equal(parentOf(childADir), null)
+    assert.deepEqual(watchers(childADir), [
+      { watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['manual'] },
+    ], 'detaching removes only the former parent source')
+    assert.deepEqual(pendingFrom(childADir), [], 'detaching revokes an undelivered command from the former parent')
+
     await stop(backend)
     const childCDir = writeSession(home, 'reparent-child-c', oldParent)
     writeFileSync(join(childCDir, 'watchers.json'), JSON.stringify([{ watcher: oldParent, createdAt: '2026-08-04T00:00:00.000Z', sources: ['parent'] }]) + '\n')

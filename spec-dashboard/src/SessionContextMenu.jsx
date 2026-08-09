@@ -8,7 +8,7 @@ import { archiveEligible } from './sessionCommands.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
-export default function SessionContextMenu({ menu, onClose, onChanged, onLock, onMultiSelect, onError }) {
+export default function SessionContextMenu({ menu, onClose, onChanged, onLock, onMultiSelect, onDetach, onError }) {
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
   const [archiving, setArchiving] = useState(null) // the session whose archive-confirm prompt is open | null
@@ -64,6 +64,12 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
   const startSelect = (e) => {
     e.stopPropagation()
     onMultiSelect?.(menu.session)
+    onClose()
+  }
+
+  const detach = (e) => {
+    e.stopPropagation()
+    onDetach?.(menu.session)
     onClose()
   }
 
@@ -192,6 +198,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
               <ContextMenuItem icon="terminal" onClick={startAttach}>{t('sessionWindow.attach')}</ContextMenuItem>
             )}
             <ContextMenuItem icon="list-checks" onClick={startSelect}>{t('sessionWindow.select')}</ContextMenuItem>
+            {menu.session.parent && <ContextMenuItem icon="corner-up-left" onClick={detach}>{t('sessionWindow.detach')}</ContextMenuItem>}
             {/* Resume is the cold row's non-destructive exit; filing moves to the danger group below. */}
             {menu.session.archived && <ContextMenuItem icon="star-filled" onClick={resume}>{t('sessionWindow.resume')}</ContextMenuItem>}
             {menu.session.status === 'corrupt' && (

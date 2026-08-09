@@ -47,6 +47,23 @@ scenarios:
       same fold state as its leading count pod, without changing selection or session data. On a leaf the chord
       is consumed as a no-op, so it cannot move the tab selection. No second tree or persisted expansion state
       is introduced.
+  - name: whole-row-drag-reparents-and-detaches
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
+    code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/styles.css, spec-dashboard/src/SessionContextMenu.jsx]
+    related: [spec-cli/src/session-reparent.ts]
+    description: >-
+      In the running desktop console, reveal one nested CHILD and an unrelated live TARGET. Pointer-drag the
+      CHILD row onto TARGET, then drag it into the revealed top-level drop zone. Repeat the top-level detach
+      from the CHILD's right-click menu while intercepting the manager write, and record the rendered drag
+      state, target state, and each request body.
+    expected: >-
+      Dragging starts only after motion and the original row dims while a fixed, full session-row ghost follows
+      the pointer. A valid TARGET is visibly highlighted even beneath that ghost and receives exactly
+      `{children:[CHILD], parent:TARGET}`. A nested child exposes a top-level drop zone that highlights on
+      hover and sends exactly `{children:[CHILD], parent:null}`. The context menu offers `remove from parent`
+      only for a nested row and sends that same null-parent write. Self, present-parent, and descendant targets
+      do not become drops or writes.
   - name: triangle-colour-is-an-informational-rollup
     tags: [frontend-e2e, desktop]
     description: >

@@ -261,8 +261,8 @@ function nothingProposalTrap(): never {
   console.error('`spex session done --propose nothing` is an intended trap: no state was recorded.')
   console.error('Choose the true destination:')
   console.error('  `merge` - committed spec and code have not landed in `main`.')
-  console.error('  `close` - work is complete: it has landed (or had nothing to land), is verified, and no worktree or posted artifact needs human inspection.')
-  console.error('  `ask` - human input, direction, or posted-artifact inspection is needed.')
+  console.error('  `close` - work is complete: it has landed (or had nothing to land), is verified, and no worktree, human decision/follow-up, or posted artifact needs human inspection.')
+  console.error('  `ask` - human input or direction is needed, including an answered exploratory question or handoff awaiting follow-up, or a posted artifact needs inspection.')
   console.error('  `park` - a managed delivery or background job will resume a named next action; watching terminal children is not a wake-up.')
   process.exit(2)
 }

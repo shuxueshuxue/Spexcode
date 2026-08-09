@@ -1056,11 +1056,11 @@ a.scenario-count:hover { background: var(--panel2); }
   border-color: var(--green); color: var(--green);
 }
 .si-session-drag-ghost {
-  position: fixed; z-index: 50; box-sizing: border-box; display: flex; align-items: center;
+  position: fixed; z-index: 52; box-sizing: border-box; display: flex; align-items: center;
   padding: 5px 12px; background: var(--paper); border: 1px solid var(--line);
   border-left: 3px solid var(--ov, var(--blue)); box-shadow: 0 8px 20px color-mix(in srgb, var(--ink) 22%, transparent);
   color: var(--ink2); font-family: var(--mono); font-size: var(--type-caption); line-height: var(--line-session-row);
-  opacity: .96; pointer-events: none; transform: rotate(-1deg);
+  opacity: .96; pointer-events: none; transform: translate(10px, -8px) rotate(-1deg);
 }
 body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !important; user-select: none !important; }
 /* A selected headline can grow to three lines; its disclosure stays beside line one rather than centring in
@@ -1113,18 +1113,9 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   content: ''; position: absolute; left: 3.5px; top: 1px; width: 3px; height: 6px;
   border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg);
 }
-.si-drag-slot { flex: none; width: 14px; height: 14px; }
-.si-drag-handle {
-  position: absolute; z-index: 3; left: 32px; top: 50%; width: 14px; height: 14px; padding: 0;
-  transform: translateY(-50%); display: grid; place-items: center; background: transparent; border: none;
-  color: var(--muted); cursor: grab;
-}
-.si-drag-handle:hover { color: var(--blue); }
-.si-drag-handle:active { cursor: grabbing; }
-/* The real fold pod is an absolute sibling of the row button. Mirror checkbox + grip width and gaps so it
-   remains aligned with the hidden fold slot after select mode inserts both leading controls. */
-.si-item:has(> .si-check) ~ .sess-fold-control { margin-left: 41px; }
-.si-tree-row.reparent-target > .si-item { outline: 1px solid var(--blue); outline-offset: -1px; background: color-mix(in srgb, var(--blue) 12%, var(--panel2)); }
+/* The real fold pod is an absolute sibling of the row button. Move it with the checkbox so it remains aligned
+   with the hidden fold slot in the whole-row drag surface. */
+.si-item:has(> .si-check) ~ .sess-fold-control { margin-left: 20px; }
 /* a picked row wears the same soft blue wash as the selected tab, so the checklist reads at a glance. */
 .si-item.picked { background: color-mix(in srgb, var(--blue) 12%, var(--panel2)); }
 .si-item.picked:hover { background: color-mix(in srgb, var(--blue) 20%, var(--panel2)); }

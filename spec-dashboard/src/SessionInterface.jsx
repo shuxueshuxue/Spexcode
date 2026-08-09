@@ -357,7 +357,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [ctxMenu, setCtxMenu] = useState(null) // session-row right-click menu { x, y, session } — row-level actions live here
   const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
   const [picked, setPicked] = useState(() => new Set()) // the ids ticked for bulk close while `selecting`
-  const [reparentDrag, setReparentDrag] = useState(null) // { source, target } while the select-mode drag handle is held
   const [slashCmds, setSlashCmds] = useState([])   // the `/` command list (built-in + user/project/skill), fetched once
   // Command Box drafts are keyed by session id and survive close/reopen, tab switches, and route changes.
   const [drafts, setDrafts] = useState({})
@@ -386,7 +385,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const sessionDragRef = useRef(null)
   const suppressSessionClickRef = useRef(null)
   const knownWebsRef = useRef(null)
-  const reparentDragSourceRef = useRef(null)
   useEffect(() => subscribeSessionSurface(() => setSurfaceVersion((version) => version + 1)), [])
   const listRef = useRef(null)
   const outcomeTimerRef = useRef(null)
@@ -502,7 +500,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     }
   }, [allSessions, expandFolds, reload])
   const startSessionDrag = useCallback((event, session) => {
-    if (event.button !== 0 || selecting || viewingShelf) return
+    if (event.button !== 0 || viewingShelf) return
     const bounds = event.currentTarget.getBoundingClientRect()
     const drag = {
       id: session.id, session, width: bounds.width, height: bounds.height,
@@ -548,7 +546,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     sessionDragRef.current = { onMove, onUp }
     window.addEventListener('mousemove', onMove, true)
     window.addEventListener('mouseup', onUp, true)
-  }, [allSessions, changeSessionParent, selecting, viewingShelf])
+  }, [allSessions, changeSessionParent, viewingShelf])
   useEffect(() => () => {
     const drag = sessionDragRef.current
     if (!drag) return
@@ -1238,8 +1236,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
 
   // multi-select mode ([[session-multi-select]]): the right-click "select" enters it, pre-ticking the row that
   // was clicked; leaving clears both the mode and the picks.
-  const enterSelect = (session) => { setSelecting(true); setPicked(new Set([session.id])); setReparentDrag(null); reparentDragSourceRef.current = null }
-  const exitSelect = () => { setSelecting(false); setPicked(new Set()); setReparentDrag(null); reparentDragSourceRef.current = null }
+  const enterSelect = (session) => { setSelecting(true); setPicked(new Set([session.id])) }
+  const exitSelect = () => { setSelecting(false); setPicked(new Set()) }
   const togglePick = (id) => setPicked((prev) => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id); else next.add(id)
@@ -1247,47 +1245,6 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   })
   // after a bulk lifecycle action: leave the mode and re-read the board so every row converges together.
   const onBulkClosed = () => { exitSelect(); reload?.() }
-  const startReparentDrag = (event, source) => {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', source)
-    reparentDragSourceRef.current = source
-    setReparentDrag({ source, target: null })
-  }
-  const dragOverSession = (event, target) => {
-    const source = event.dataTransfer.getData('text/plain') || reparentDragSourceRef.current
-    if (!source || source === target) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    setReparentDrag((current) => current?.source === source && current.target === target ? current : { source, target })
-  }
-  const leaveSessionDrag = (event) => {
-    if (event.currentTarget.contains(event.relatedTarget)) return
-    setReparentDrag((current) => current ? { ...current, target: null } : null)
-  }
-  const dropSessionOn = async (event, parent) => {
-    const child = event.dataTransfer.getData('text/plain') || reparentDragSourceRef.current
-    event.preventDefault()
-    setReparentDrag(null)
-    reparentDragSourceRef.current = null
-    if (!child || child === parent) return
-    setActionOutcome({ owner: 'panel', phase: 'pending', message: t('session.outcomeWorking') })
-    try {
-      const response = await apiFetch('/api/sessions/reparent', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ children: [child], parent }),
-      })
-      const body = await response.json().catch(() => null)
-      if (!response.ok || body?.ok === false) {
-        setActionOutcome({ owner: 'panel', phase: 'failed', message: body?.error || `session reparent refused (HTTP ${response.status})` })
-      } else {
-        setActionOutcome(null)
-      }
-    } catch (error) {
-      setActionOutcome({ owner: 'panel', phase: 'failed', message: error instanceof Error ? error.message : String(error) })
-    } finally {
-      await reload?.()
-    }
-  }
-
   // `runners` binds each board-command name to the closure that DOES it — the SAME closure the toolbar
   // tool and Command Box row call; `uiCmds` narrows the registry to current session state.
   const runners = {
@@ -1481,11 +1438,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             const isPicked = selecting && picked.has(s.id)
             return (
               <div key={s.id} data-session-drop-id={s.id}
-                className={`sess-tree-row si-tree-row${sessionDrag?.id === s.id ? ' dragging' : ''}${sessionDrag?.target === s.id ? ' drop-target' : ''}${reparentDrag?.target === s.id ? ' reparent-target' : ''}`}
+                className={`sess-tree-row si-tree-row${sessionDrag?.id === s.id ? ' dragging' : ''}${sessionDrag?.target === s.id ? ' drop-target' : ''}`}
                 style={{ '--sess-fold-indent': `${it.depth * 14}px` }}
-                onDragOver={selecting ? (event) => dragOverSession(event, s.id) : undefined}
-                onDragLeave={selecting ? leaveSessionDrag : undefined}
-                onDrop={selecting ? (event) => dropSessionOn(event, s.id) : undefined}>
+              >
                 <button
                   type="button"
                   data-sid={s.id}
@@ -1505,12 +1460,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   data-tip={s.ops?.length ? t('session.opsTitle') : t('session.lockTitle')}
                 >
                   {selecting && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
-                  {selecting && <span className="si-drag-slot" aria-hidden="true" />}
                   <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
                 </button>
-                {selecting && <span className="si-drag-handle" data-drag-handle draggable role="img" data-tip={t('sessionSelect.drag')}
-                  aria-label={t('sessionSelect.drag')} onDragStart={(event) => startReparentDrag(event, s.id)}
-                  onDragEnd={() => { reparentDragSourceRef.current = null; setReparentDrag(null) }}><Icon name="grip-vertical" size={14} /></span>}
                 {it.expandable && <FoldPod expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggleFold(s.id)} />}
               </div>
             )

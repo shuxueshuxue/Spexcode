@@ -19,6 +19,7 @@ const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
 const out = resolve(process.env.OUT || '/tmp/session-multi-select-e2e')
 const parentId = 'select-mode-parent'
 const childId = 'select-mode-child'
+const targetId = 'select-mode-target'
 const events = []
 let videoStartedAt = 0
 const step = (label) => events.push({ at: Date.now() - videoStartedAt, step: label })
@@ -82,7 +83,7 @@ try {
   git(project, 'add', '.')
   git(project, 'commit', '-qm', 'seed')
 
-  for (const [id, parent] of [[parentId, ''], [childId, parentId]]) {
+  for (const [id, parent] of [[parentId, ''], [childId, parentId], [targetId, '']]) {
     const dir = join(home, 'projects', projectKey, 'sessions', id)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'session.json'), JSON.stringify(record(id, parent), null, 2) + '\n')
@@ -120,7 +121,7 @@ try {
     session.lifecycle = 'active'
     session.liveness = 'online'
   }
-  assert.deepEqual(graph.sessions.map((session) => session.id).sort(), [childId, parentId])
+  assert.deepEqual(graph.sessions.map((session) => session.id).sort(), [childId, parentId, targetId])
 
   const { chromium } = await import(pathToFileURL(playwrightPath).href)
   browser = await chromium.launch({ executablePath: chromiumPath, headless: true })
@@ -152,31 +153,42 @@ try {
   await row.click({ button: 'right' })
   await page.getByRole('menuitem', { name: /select/i }).click()
   step('enter multi-select')
-  const dragHandle = treeRow.locator('> .si-drag-handle')
   const archiveButton = page.getByRole('button', { name: /^archive$/i })
   const closeButton = page.getByRole('button', { name: /^close$/i })
-  await dragHandle.waitFor({ state: 'visible' })
-  assert.equal(await dragHandle.getAttribute('draggable'), 'true')
+  assert.equal(await treeRow.locator('> .si-drag-handle').count(), 0, 'the whole row, not a grip, is draggable')
   assert.equal(await archiveButton.textContent(), '')
   assert.equal(await closeButton.textContent(), '')
   const after = { checkbox: await row.locator('.si-check').boundingBox(), count: await count.boundingBox(), headline: await headline.boundingBox() }
   assert.ok(before.count && before.headline && after.checkbox && after.count && after.headline)
   const countShift = after.count.x - before.count.x
   const headlineShift = after.headline.x - before.headline.x
-  assert.ok(headlineShift > 0, 'checkbox and drag slot shift the row face right')
+  assert.ok(headlineShift > 0, 'checkbox shifts the row face right')
   assert.ok(Math.abs(countShift - headlineShift) < 0.5, 'nested count stays aligned with the shifted row face')
   assert.ok(after.checkbox.x + after.checkbox.width <= after.count.x, 'checkbox and nested-session count do not overlap')
+  await page.screenshot({ path: `${out}/select-mode-entered.png` })
 
   await count.click()
-  const childRow = page.locator(`.si-item[data-sid="${childId}"]`)
-  await childRow.waitFor({ state: 'visible' })
+  const targetRow = page.locator(`.si-item[data-sid="${targetId}"]`)
+  await targetRow.waitFor({ state: 'visible' })
   await page.route('**/api/sessions/reparent', (route) => route.fulfill({
-    status: 200, contentType: 'application/json', body: JSON.stringify({ children: [parentId], parent: childId, notified: [parentId] }),
+    status: 200, contentType: 'application/json', body: JSON.stringify({ children: [parentId], parent: targetId, notified: [parentId] }),
   }))
   const reparentRequest = page.waitForRequest((request) => request.url().endsWith('/api/sessions/reparent') && request.method() === 'POST')
-  await dragHandle.dragTo(childRow)
-  assert.deepEqual((await reparentRequest).postDataJSON(), { children: [parentId], parent: childId })
-  step('reparent request sent')
+  const sourceBox = await row.boundingBox()
+  const targetBox = await targetRow.boundingBox()
+  assert.ok(sourceBox && targetBox, 'source and target rows are rendered')
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2 + 12, sourceBox.y + sourceBox.height / 2)
+  const ghost = page.locator('.si-session-drag-ghost')
+  await ghost.waitFor({ state: 'visible' })
+  assert.ok(await row.evaluate((element) => element.parentElement.classList.contains('dragging')), 'the whole source row dims while it is dragged')
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2)
+  await page.waitForFunction((id) => document.querySelector(`[data-sid="${id}"]`)?.parentElement?.classList.contains('drop-target'), targetId)
+  await page.screenshot({ path: `${out}/select-mode-whole-row-drag.png` })
+  await page.mouse.up()
+  assert.deepEqual((await reparentRequest).postDataJSON(), { children: [parentId], parent: targetId })
+  step('whole-row reparent request sent')
 
   await archiveButton.click()
   const bulkArchiveConfirm = page.getByRole('dialog', { name: /archive/i })
@@ -235,5 +247,7 @@ try {
 }
 
 if (!existsSync(join(out, 'select-mode-reparent.png'))) throw new Error('browser proof did not render a screenshot')
+if (!existsSync(join(out, 'select-mode-entered.png'))) throw new Error('browser proof did not capture multi-select mode')
+if (!existsSync(join(out, 'select-mode-whole-row-drag.png'))) throw new Error('browser proof did not capture the whole-row drag state')
 if (!videoPath) throw new Error('browser proof did not record a video')
 console.log(JSON.stringify({ ok: true, out, video: videoPath, timeline: join(out, 'timeline.json') }))

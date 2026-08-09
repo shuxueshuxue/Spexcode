@@ -2,7 +2,7 @@
 title: session-multi-select
 status: active
 hue: 20
-desc: Right-click → "select" turns the session list into a multi-select mode with checkboxes, compact bulk archive/close controls, and drag-to-reparent handles.
+desc: Right-click → "select" turns the session list into a multi-select mode with checkboxes, compact bulk archive/close controls, and whole-row drag-to-reparent.
 code:
   - spec-dashboard/src/SessionSelectBar.jsx
 related:
@@ -21,7 +21,7 @@ run of finished or dead worktrees has piled up and a human wants them all gone. 
 ten right-clicks, ten confirms. So the same right-click that renames or closes a single row also offers
 **select** — it flips the session list into a **multi-select mode** where rows are checkboxes, not tabs, and
 bulk archive or **close** can act on every picked session, each behind one confirm. The same mode also makes the
-session tree editable: a row's drag handle can be dropped on another row to make it that row's child.
+session tree editable: dragging a whole row onto another row makes it that row's child.
 
 ## expanded spec
 
@@ -32,10 +32,11 @@ would remove just it. Entering the mode is the only new job the menu item does; 
 
 In multi-select mode the list stops being a tab picker and becomes a **checklist**. Every session row shows a
 checkbox and a **click toggles that row's pick** instead of switching the right pane — the terminal you were
-watching stays put, because ticking sessions to remove must never yank you onto a different one. Beside that
-checkbox sits a compact drag-handle icon. Dragging it keeps the row's selection semantics inert; dropping it
-onto another session asks the existing `POST /api/sessions/reparent` authority to make the dragged session a
-child of that target. The browser never mutates a tree locally: cycle, self-parent, and concurrent-state
+watching stays put, because ticking sessions to remove must never yank you onto a different one. The same
+whole row uses the console's ordinary primary-pointer drag: a short click remains a pick, while a drag past the
+movement threshold fades the source and carries its full-row ghost to a receiving row or the top-level drop
+zone. Dropping it onto another session asks the existing `POST /api/sessions/reparent` authority to make the
+dragged session a child of that target. The browser never mutates a tree locally: cycle, self-parent, and concurrent-state
 refusals are backend results shown through the normal action outcome, and a successful request reloads the
 board's derived forest. The right-click session menu is **suppressed** while selecting (the gesture that opens
 single-row actions would fight the bulk one), so its lock-on-graph action is unavailable too. Zone grouping and

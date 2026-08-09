@@ -5,7 +5,7 @@ scenarios:
       On the session console (#/sessions), right-click a session row and pick "select…" from the
       context menu. The list should enter multi-select mode: the New/Search top row is replaced by a
       select bar reading "1 selected" with icon-only archive and close tools plus a cancel control,
-      and the right-clicked row shows a ticked checkbox and drag handle. Clicking other rows toggles
+      and the right-clicked row shows a ticked checkbox while its full body remains the drag surface. Clicking other rows toggles
       their checkbox (and the count) instead of switching the right pane. Cancel leaves the mode
       untouched.
     expected: >
@@ -29,13 +29,15 @@ scenarios:
     tags: [frontend-e2e]
   - name: drag-reparent-and-archive-danger
     description: >
-      In multi-select mode, drag a session row by its grip onto a different session row, then leave
+      In multi-select mode, primary-pointer drag a session row from its body (not a grip) onto a different session row, then leave
       the mode and choose archive from that row's normal context menu. While a row is selected, also open
       the bulk archive and close confirms; press Enter in each. Verify that no lifecycle request was made
       before either confirm opened, and then count the resulting requests.
     expected: >
-      The drag sends exactly one POST /api/sessions/reparent with the dragged id in children and the
-      drop target as parent; no local tree mutation stands in for that request. In the ordinary menu,
+      A short row click still changes only its check; after the movement threshold the source row dims, a
+      full-row ghost floats clear of the highlighted drop target, and the drag sends exactly one
+      POST /api/sessions/reparent with the dragged id in children and the drop target as parent; no local tree
+      mutation stands in for that request. In the ordinary menu,
       archive shares the danger section with close and opens an archive confirmation before any archive
       endpoint is called. Bulk archive and close each open one confirm; their destructive commit button is
       focused, so Enter closes that dialog and sends exactly one request per selected row to the matching
@@ -59,5 +61,5 @@ scenarios:
 
 Measured by driving the real dashboard in a browser against an isolated running `spex serve` with a few
 live sessions: right-click a row, read the popped menu and the resulting select bar / checkboxes from the
-live DOM, drag through the rendered grip, and open the archive confirmation — comparing the on-screen
+live DOM, drag the rendered row body, and open the archive confirmation — comparing the on-screen
 result and outgoing reparent payload to `expected`, never by reasoning about the source.

@@ -137,7 +137,7 @@ test('session tree drag moves the whole row and can detach a nested session', ()
   assert.match(css, /\.si-tree-row\.dragging > \.si-item \{ opacity: \.28; \}/)
   assert.match(css, /\.si-tree-row\.drop-target > \.si-item \{/)
   assert.match(css, /\.si-root-drop\.on \{/)
-  assert.match(css, /\.si-session-drag-ghost \{[\s\S]{0,520}pointer-events: none;/)
+  assert.match(css, /\.si-session-drag-ghost \{[\s\S]{0,520}z-index: 52;[\s\S]{0,520}pointer-events: none; transform: translate\(10px, -8px\) rotate\(-1deg\);/)
 })
 
 test('archive refresh cannot override a human shelf toggle without a selection transition', () => {
@@ -168,17 +168,16 @@ test('bulk archive and close return every refusal to the shared action outcome',
   assert.match(source, /<SessionSelectBar[\s\S]{0,300}onError=\{\(message\) => setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)\}/)
 })
 
-test('select mode uses the existing reparent route through a drag-handle icon', () => {
-  assert.match(source, /const \[reparentDrag, setReparentDrag\] = useState\(null\)/)
+test('select mode reuses the whole-row pointer drag', () => {
   assert.match(source, /apiFetch\('\/api\/sessions\/reparent'/)
-  assert.match(source, /body: JSON\.stringify\(\{ children: \[child\], parent \}\)/)
-  assert.match(source, /className="si-drag-handle" data-drag-handle draggable role="img"/)
-  assert.match(source, /<Icon name="grip-vertical" size=\{14\}/)
-  assert.match(source, /onDrop=\{selecting \? \(event\) => dropSessionOn\(event, s\.id\) : undefined\}/)
-  assert.match(css, /\.si-drag-handle\s*\{[^}]*cursor:\s*grab;/s)
-  assert.match(css, /\.si-tree-row\.reparent-target > \.si-item/)
-  assert.match(icons, /'grip-vertical':/)
-  assert.match(focus, /const DRAG_PRESS_TARGETS = '\[draggable="true"\]'/)
+  assert.match(source, /if \(event\.button !== 0 \|\| viewingShelf\) return/)
+  assert.match(source, /onMouseDown=\{\(e\) => startSessionDrag\(e, s\)\}/)
+  assert.match(source, /\{selecting && <span className=\{`si-check\$\{isPicked \? ' on' : ''\}`/)
+  assert.doesNotMatch(source, /reparentDrag|si-drag-handle|draggable/)
+  assert.doesNotMatch(css, /si-drag-handle|si-drag-slot|reparent-target/)
+  assert.match(css, /\.si-item:has\(> \.si-check\) ~ \.sess-fold-control \{ margin-left: 20px; \}/)
+  assert.doesNotMatch(icons, /'grip-vertical':/)
+  assert.doesNotMatch(focus, /DRAG_PRESS_TARGETS/)
 })
 
 test('archive shares the right-click danger group and asks for confirmation', () => {

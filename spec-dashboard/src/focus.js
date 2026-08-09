@@ -57,7 +57,6 @@ export function returnFocus() {
 // never move focus anyway).
 const NATIVE_PRESS_TARGETS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm'
 const SELECTABLE_PRESS_TARGETS = '[data-selectable]'
-const DRAG_PRESS_TARGETS = '[draggable="true"]'
 
 // scrollbar presses only ever target the scrollable HTMLElement itself — an SVG target (an icon
 // glyph on a button) reports clientWidth/Height 0 and would false-positive as a gutter press.
@@ -73,7 +72,6 @@ export function inertChromePress(e) {
   if (!(el instanceof Element)) return
   if (el.closest(NATIVE_PRESS_TARGETS)) return
   if (el.closest(SELECTABLE_PRESS_TARGETS)) return
-  if (el.closest(DRAG_PRESS_TARGETS)) return
   if (inScrollbarGutter(el, e)) return
   e.preventDefault()
 }

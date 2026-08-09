@@ -222,7 +222,8 @@ CLI `spex session archive <SEL>` and `POST /api/sessions/:id/archive` perform co
 uses the same resume endpoint, so every restore observes `starting -> online` and preserves the conversation.
 
 Filing is a **row** decision as much as a console one, so it is also on the session row's right-click menu —
-one item that names the move OUT of the row's current state rather than a pair where one is always inert. It
-acts immediately, with no confirm: `close` earns its prompt by destroying work, while a prompt guarding a
-reversible act is friction pretending to be care. It sits with the row's other non-destructive actions, never
-grouped with close, so a mis-aimed right-click can cost you a moment's confusion but never the work.
+one item that names the move OUT of the row's current state rather than a pair where one is always inert. The
+row menu treats archive and close as the same deliberate lifecycle boundary: both live in its danger group and
+both open a confirm pop-out. Archive remains reversible, but filing a session out of the active working set is
+important enough to make the action explicit; the confirm commits through the existing `/archive` route, never
+a record-only shortcut. Resume is the inverse cold-row action and remains outside this danger pair.

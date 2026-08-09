@@ -448,7 +448,7 @@ export function sessionLaunchReceipt(id: string, managedWatch = false): string {
   return `spex: launched session ${id}
   current result: the session JSON is on stdout now; \`spex session ls ${id}\` is the later one-shot snapshot
   next lifecycle change: ${managedWatch
-    ? `managed watch registered — this parent receives ${id}'s state changes through its normal send queue; \`spex session watch cancel ${id}\` ends it`
+    ? `managed watch registered (parent source) — this parent receives ${id}'s state changes through its normal send queue; \`spex session reparent ${id} --to <parent>\` moves it, while \`watch cancel\` affects only manual watches`
     : `background \`spex session wait ${id}\` (edge-triggered; exits on the next non-actionable→actionable transition); \`spex session watch ${id}\` registers send-backed delivery when the caller is governed`}; \`spex session watch stream ${id}\` NEVER EXITS
   response channel: \`spex session send ${id} "<msg>"\`; \`send --keys\` is an UNSTABLE LAST RESORT after a plain send cannot land`
 }

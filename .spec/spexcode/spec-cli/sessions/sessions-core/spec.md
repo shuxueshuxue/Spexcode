@@ -35,7 +35,12 @@ durable watch relation is stored once as a target-owned `watchers.json` here bec
 is the only hot path that must find its watchers. After a state record commits, it snapshots that small list
 and uses the existing send queue to notify each watcher only after releasing the target's lock; no monitor
 loop, second transport, or bidirectional index enters the shared layer. `wait` remains the cursor-backed
-reader fallback for callers with no governed delivery address.
+reader fallback for callers with no governed delivery address. A watcher identity owns a small independent
+source set: `manual` comes from the explicit watch command and `parent` comes from the tree relationship.
+The entry persists while either source exists, and the transition path projects the source set to one watcher
+id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Creation and
+[[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
+source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.
 The manager's merge dispatch prompt owns the post-landing handoff: once the verified base branch has advanced,
 it names `spex session done --propose close` as the final action only when the task is complete and its worktree
 is no longer needed; otherwise the agent declares the state that is true.

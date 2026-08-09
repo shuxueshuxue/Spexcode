@@ -41,6 +41,9 @@ The entry persists while either source exists, and the transition path projects 
 id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Creation and
 [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
 source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.
+The manager's merge dispatch prompt owns the post-landing handoff: once the verified base branch has advanced,
+it names `spex session done --propose close` as the final action only when the task is complete and its worktree
+is no longer needed; otherwise the agent declares the state that is true.
 [[session-reparent]] uses that same target ownership: it takes the ordinary record locks while changing a
 child's parent pointer and watcher list, then delegates current-state delivery to the existing dispatch path.
 The core never asks a former watcher to participate in its own removal.

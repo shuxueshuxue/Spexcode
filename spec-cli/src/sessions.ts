@@ -2761,7 +2761,7 @@ function mergePrompt(mainPath: string, worktreePath: string, worktreeTop: Buffer
   const reviewedQ = shQuote(expectedBranchHead), baseHeadQ = shQuote(expectedBaseHead)
   const messageA = shAscii(`merge ${branch}: ${reason}`)
   const hexPipe = `| tr -d '\\n' | od -An -tx1 | tr -d ' \\n'`
-  return `Merge your branch \`${branch}\` into \`${base}\`, then propose close. You know this work, so resolve any conflicts yourself — in YOUR OWN worktree, never in the shared ${base} checkout.\n\n` +
+  return `Merge your branch \`${branch}\` into \`${base}\`, then settle the session honestly. You know this work, so resolve any conflicts yourself — in YOUR OWN worktree, never in the shared ${base} checkout.\n\n` +
     `0. Re-prove the REVIEWED generation BEFORE changing anything. All five checks must hold together, and the block SAYS SO: reading \`REVIEWED_GENERATION_OK\` is the ONLY pass. A \`REVIEWED_GENERATION_FAIL <n>/<item>\` line — or no output at all — is a FAIL: STOP, report the stale review naming that item, and do not sync or land. (Detached HEAD, another checked-out branch, a moved/missing branch/base ref, or any OID outside the reviewed pair each surface as one of the five items.) Run the block AS WRITTEN — it is pure ASCII on purpose, and items 1 and 2 compare hex so a retyped or re-encoded copy cannot change what they mean:\n` +
     `   wt=${worktreeA}; main_ck=${mainA}; ref=${refA}; base_ref=${baseRefA}\n` +
     `   want_top=${topHexQ}; want_ref=${refHexQ}; want_reviewed=${reviewedQ}; want_base=${baseHeadQ}\n` +
@@ -2782,7 +2782,7 @@ function mergePrompt(mainPath: string, worktreePath: string, worktreeTop: Buffer
     `   No \`LANDING_MERGED\` line means nothing landed: a \`LANDING_FAIL\` names which guard, and its absence after the guards held means the merge itself failed. Either way ${base} or the branch moved while you tested — go back to step 0/review instead of landing.\n` +
     `3. A busy door is a wait, not a race: if the ${base} checkout is already mid-merge (an unresolved index), retry with a bounded wait — never abort or resolve someone else's in-progress merge. ` +
     `4. Verify it landed: \`${base}\`'s HEAD must now be the new merge commit and no merge may be left in progress — if YOUR merge went half-merged, run \`git -C ${mainQ} merge --abort\` and report it rather than leaving \`${base}\` mid-state. ` +
-    `5. Once you've verified \`${base}\` advanced cleanly, propose close for the human — do NOT close it yourself.`
+    `5. Once you've verified \`${base}\` advanced cleanly, and this task is complete with no need to retain its worktree, run \`spex session done --propose close\` as your FINAL action. This declares CLOSE-PENDING for the human; do NOT run \`spex session close\`. Otherwise declare the state that is true.`
 }
 
 export type MergeSessionResult =

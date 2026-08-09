@@ -1,0 +1,87 @@
+name: publish-docs-release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.spec/**'
+      - 'spec-cli/bin/spex.mjs'
+      - 'spec-cli/src/guidance-catalog.ts'
+      - 'spec-cli/src/git.ts'
+      - 'spec-cli/src/guide.ts'
+      - 'spec-cli/src/help.ts'
+      - 'spec-cli/src/specs.ts'
+      - 'scripts/docs-release.mjs'
+      - 'scripts/reference-snapshot.mjs'
+
+jobs:
+  publish:
+    if: vars.SPEXCODE_DOCS_RELEASE_PUBLISH == 'true'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    concurrency:
+      group: docs-release-${{ github.sha }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Install packed root
+        run: npm ci
+      - name: Install spec-cli
+        working-directory: spec-cli
+        run: npm ci
+      - name: Emit sealed docs assets
+        env:
+          DOCS_RELEASE_TAG: docs-${{ github.sha }}
+        run: >-
+          node scripts/docs-release.mjs
+          --out-dir .docs-release
+          --repository "$GITHUB_REPOSITORY"
+          --release "$DOCS_RELEASE_TAG"
+          --revision "$GITHUB_SHA"
+      - name: Create or validate immutable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOCS_RELEASE_TAG: docs-${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          expected=(.docs-release/*.json)
+          if [ "${#expected[@]}" -ne 3 ]; then
+            echo "expected exactly three generated docs assets" >&2
+            exit 1
+          fi
+          if gh release view "$DOCS_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            draft="$(gh release view "$DOCS_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"
+            if [ "$draft" != false ]; then
+              echo "release $DOCS_RELEASE_TAG is a draft, not a published immutable release" >&2
+              exit 1
+            fi
+            target="$(gh release view "$DOCS_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)"
+            if [ "$target" != "$GITHUB_SHA" ]; then
+              echo "release $DOCS_RELEASE_TAG targets $target, not $GITHUB_SHA" >&2
+              exit 1
+            fi
+            mapfile -t published < <(gh release view "$DOCS_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)
+            mapfile -t expected_names < <(printf '%s\n' "${expected[@]##*/}" | sort)
+            if [ "${published[*]}" != "${expected_names[*]}" ]; then
+              echo "release asset names differ from the generated trio" >&2
+              exit 1
+            fi
+            mkdir downloaded
+            for asset in "${expected_names[@]}"; do
+              gh release download "$DOCS_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir downloaded
+              cmp -- ".docs-release/$asset" "downloaded/$asset"
+            done
+          else
+            gh release create "$DOCS_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Docs $GITHUB_SHA" --notes "Immutable Guidance and Reference snapshot for $GITHUB_SHA." --latest=false \
+              "${expected[@]}"
+          fi

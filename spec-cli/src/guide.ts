@@ -677,4 +677,19 @@ export function guideText(topic?: string): string | null {
 export function guideTopics(): string[] {
   return Object.keys(TOPICS)
 }
+
+export type GuideCatalogEntry = Readonly<{ id: string; title: string; text: string }>
+
+// The catalog indexes the same rendered pages the CLI serves. Keeping this projection beside TOPICS makes a
+// newly registered page automatically appear in the export and in the unknown-topic diagnostic.
+export function guideCatalogEntries(): readonly GuideCatalogEntry[] {
+  const entries: GuideCatalogEntry[] = []
+  const setup = guideText()
+  if (setup) entries.push({ id: 'setup', title: 'spex guide', text: setup })
+  for (const topic of guideTopics()) {
+    const text = guideText(topic)
+    if (text) entries.push({ id: topic, title: `spex guide ${topic}`, text })
+  }
+  return entries
+}
 import { uploadPolicyDefaults } from './layout.js'

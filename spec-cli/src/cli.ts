@@ -384,6 +384,31 @@ if (cmd === 'serve') {
   const host = flag('host') ?? '127.0.0.1'
   if (!Number.isInteger(port)) { console.error('spex dashboard: --port must be an integer'); process.exit(2) }
   startHostDashboard({ port, host })
+} else if (cmd === 'guidance') {
+  let out: string | undefined
+  for (let i = 3; i < process.argv.length; i++) {
+    const token = process.argv[i]
+    if (token === '--json') continue
+    if (token === '--out') {
+      if (out !== undefined) { console.error('spex guidance: --out may appear only once'); process.exit(2) }
+      const value = process.argv[++i]
+      if (!value || value.startsWith('--')) { console.error('spex guidance: --out expects a file path'); process.exit(2) }
+      out = value
+      continue
+    }
+    if (token.startsWith('--')) { console.error(`spex guidance: unknown flag ${token}`); process.exit(2) }
+    console.error(`spex guidance: unexpected argument '${token}'`)
+    process.exit(2)
+  }
+  const { buildGuidanceCatalog } = await import('./guidance-catalog.js')
+  const catalog = buildGuidanceCatalog()
+  if (out) {
+    catalog.write(out)
+    console.log(out)
+    process.exit(0)
+  }
+  process.stdout.write(catalog.exportJson())
+  await flushExit(0)
 } else if (cmd === undefined || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   // `spex help <cmd>` drills into one command; bare help is the map. Both name the next layer down.
   const { commandHelp, overviewHelp } = await import('./help.js')

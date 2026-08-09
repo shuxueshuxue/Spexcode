@@ -37,6 +37,7 @@ import { resolveProjectIdentity } from './project-identity.js'
 import { evalDetailReview, evalsReview, issuesReview } from './reviews.js'
 import { collectResourceReport, ResourceConflict } from './host-resources.js'
 import { reparentRequest, SessionReparentRequestError } from './session-reparent.js'
+import { buildGuidanceCatalog } from './guidance-catalog.js'
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.
@@ -220,6 +221,9 @@ app.get('/api/settings', async (c) => c.json({
 // `?surface=review` lists the review-track presets instead ([[review-commands]] — the eval detail's
 // remark-composer `/` dropdown); the exposed surfaces stay this explicit whitelist, never a passthrough.
 app.get('/api/plugins', (c) => c.json(c.req.query('surface') === 'review' ? loadReviewConfig() : loadConfig()))
+// Read-only, deterministic projection over the authoritative plugin/help/guide surfaces. The response carries
+// exact rendered guidance plus provenance so decoupled consumers need no checkout or shared source directory.
+app.get('/api/guidance', (c) => c.json(buildGuidanceCatalog().toJSON()))
 // the ISSUES read surface ([[issues]]) for the dashboard's issues page — the merged list over every store
 // (local threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim
 // (the dashboard computes nothing over it: no re-sort, no salience ranking). The `enabled` flag mirrors

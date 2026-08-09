@@ -197,6 +197,7 @@ try {
   await page.mouse.up()
   await targetDrop
   assert.deepEqual(reparentRequests.at(-1), { children: [child.id], parent: reparentTarget.id })
+  mark('whole-row drag reparent')
   record('SessionInterface', 'whole-row drag reparent', reparentTarget.id)
 
   const rootSource = page.locator(`.si-item[data-sid="${child.id}"]`)
@@ -215,6 +216,7 @@ try {
   await page.mouse.up()
   await rootRequest
   assert.deepEqual(reparentRequests.at(-1), { children: [child.id], parent: null })
+  mark('root-zone detaches parent')
   record('SessionInterface', 'root-zone detaches parent', true)
 
   await rootSource.click({ button: 'right' })
@@ -224,6 +226,7 @@ try {
   await detach.click()
   await menuRequest
   assert.deepEqual(reparentRequests.at(-1), { children: [child.id], parent: null })
+  mark('context menu detaches parent')
   record('SessionInterface', 'context menu detaches parent', true)
 
   // Compare the two real product surfaces. Fully disclose the dashboard forest, read its DOM order, then

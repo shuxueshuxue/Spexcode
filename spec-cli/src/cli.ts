@@ -258,8 +258,12 @@ const DECLARED = ' — recorded; the human sees it in the dashboard. This declar
 // @@@ the sweep never includes THIS session - the nudge names sessions as sweepable, and it is read at the one moment a session is thinking about closing. Said loosely it reads as permission to close yourself, which deletes the worktree the reading agent is running in. So the target is scoped to sessions the agent spawned, and the exclusion is stated rather than implied.
 const CLOSE_CLEANUP = '\n\nBefore this worktree closes, check whether you left anything running that you started to test this change — a background process, a dev or preview server, a bound port, a throwaway session you spawned. If nothing depends on it anymore, shut it down, or it keeps running as an orphan. Leave anything meant to keep running: a service you deliberately stood up, a production build, anything other work relies on. What matters is whether it still needs to exist after this task, not whether you started it. If unsure, leave it. This sweep never includes THIS session: you have PROPOSED that the human close it, and closing your own session would delete the worktree you are running in. This is a reminder to check, not a required step.'
 function nothingProposalTrap(): never {
-  console.error('`spex session done --propose nothing` is a trap: no state was recorded.')
-  console.error('Choose one real destination: `merge` for committed work awaiting review; `close` for completed work with no reason to retain its worktree; `ask` for human input or inspection; `park` only for a real wake-up that will resume your next action.')
+  console.error('`spex session done --propose nothing` is an intended trap: no state was recorded.')
+  console.error('Choose the true destination:')
+  console.error('  `merge` - committed spec and code have not landed in `main`.')
+  console.error('  `close` - work is complete: it has landed (or had nothing to land), is verified, and no worktree or posted artifact needs human inspection.')
+  console.error('  `ask` - human input, direction, or posted-artifact inspection is needed.')
+  console.error('  `park` - a managed delivery or background job will resume a named next action; watching terminal children is not a wake-up.')
   process.exit(2)
 }
 

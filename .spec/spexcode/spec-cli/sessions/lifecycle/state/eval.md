@@ -169,9 +169,12 @@ scenarios:
       From the real CLI, invoke both `spex session done` and `spex session done --propose nothing` before
       any state-writer resolution, then inspect their stdout, stderr, exit code, and the current session record.
     expected: >-
-      Both invocations exit 2, write no lifecycle/proposal change, and explain that `nothing` is a trap. The
-      prompt names merge, close, ask, and park with their real decision boundary; it never presents a generic
-      done/retention state as a successful default.
+      Both invocations exit 2, write no lifecycle/proposal change, and explain that `nothing` is an intended
+      trap. The prompt says merge is committed spec/code not yet landed in `main`; close is work landed (or
+      nothing to land), verified, and without a worktree or posted artifact needing human inspection; ask is
+      human input, direction, or inspection; park is a managed delivery/background job resuming a named action,
+      never a watch on terminal children. It never presents a generic done/retention state as a successful
+      default.
   - name: no-record-diagnosis-self-explains
     tags: [backend-api]
     description: >-

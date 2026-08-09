@@ -108,7 +108,7 @@ session. This is a removal signpost, not a second node-binding input.
 file's real `code:` owners) — is namespaced under `spex internal`, absent from the map; its usage
 text tells a stray human which porcelain they probably wanted. The typeable worker declarations
 (`session done|park|ask`) stay porcelain: an agent types them. `session done --propose nothing` is an
-intentional correction entry rather than a state write: it exits non-zero after naming merge, close, ask, and
+intended correction trap rather than a state write: it exits non-zero after naming merge, close, ask, and
 park as the only real destinations, so an agent cannot accidentally retain a completed lane by default.
 
 **The three-layer help journey** — each layer states what the next one is for, so the reader always

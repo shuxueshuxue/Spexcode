@@ -59,8 +59,11 @@ test('done nothing traps before it can write a terminal state', () => {
       })
       assert.equal(result.status, 2)
       assert.equal(result.stdout, '')
-      assert.match(result.stderr, /done --propose nothing.*trap: no state was recorded/)
-      assert.match(result.stderr, /merge.*close.*ask.*park/)
+      assert.match(result.stderr, /done --propose nothing.*intended trap: no state was recorded/)
+      assert.match(result.stderr, /merge.*not landed in `main`/)
+      assert.match(result.stderr, /close.*has landed.*verified.*posted artifact/)
+      assert.match(result.stderr, /ask.*human input.*posted-artifact inspection/)
+      assert.match(result.stderr, /park.*managed delivery.*background job.*terminal children.*wake-up/)
       assert.equal(readFileSync(record, 'utf8'), before)
     }
   } finally { rmSync(home, { recursive: true, force: true }) }

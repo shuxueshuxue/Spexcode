@@ -79,7 +79,7 @@ test('the live rename command resolves to the self-rename prompt through the sha
   assert.equal(await resolveCommandPrompt('/not-a-preset'), '/not-a-preset')
 })
 
-test('Codex registration does not persist an unbound thread when exact generation binding fails', () => {
+test('Codex registration does not persist an unbound thread when exact generation binding fails', serial, () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousGeneration = process.env.SPEXCODE_CODEX_GENERATION
   const home = mkdtempSync(join(tmpdir(), 'spex-codex-registration-'))
@@ -110,7 +110,7 @@ test('Codex registration does not persist an unbound thread when exact generatio
   }
 })
 
-test('session-create API rejects stale fields before entering the transaction', async () => {
+test('session-create API rejects stale fields before entering the transaction', serial, async () => {
   const stale = await sessionCreateRequest({ prompt: 'probe', launcher: 'claude', mode: 'headless' })
   assert.deepEqual(stale, { status: 400, error: 'unknown session-create field: mode' })
 
@@ -736,7 +736,7 @@ test('archive returns the exact adapter receipt when filing fails after cold run
   }
 })
 
-test('a successful archive clears a prior adapter recovery marker so the cold session can close', async () => {
+test('a successful archive clears a prior adapter recovery marker so the cold session can close', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = codexHarness.sharedRuntimes
   const originalColdPreflight = codexHarness.coldPreflight
@@ -787,7 +787,7 @@ test('a successful archive clears a prior adapter recovery marker so the cold se
   }
 })
 
-test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', async () => {
+test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = codexHarness.sharedRuntimes
   const originalCleanup = codexHarness.cleanupRuntime

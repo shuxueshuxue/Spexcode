@@ -26,20 +26,20 @@ async function refusedPort(): Promise<number> {
   return port
 }
 
-function writeCachedSession(home: string): () => void {
-  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: pkgRoot, encoding: 'utf8' }).trim()
+function writeCachedSession(home: string): void {
+  const worktree = join(home, 'cached-worktree')
+  mkdirSync(worktree)
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: worktree })
+  execFileSync('git', ['-c', 'user.name=cache-fixture', '-c', 'user.email=cache@example.test', 'commit', '--allow-empty', '-qm', 'fixture'], { cwd: worktree })
   const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: pkgRoot, encoding: 'utf8' }).trim())
-  const branch = `cache-fallback-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-  execFileSync('git', ['branch', branch, 'HEAD'], { cwd: pkgRoot })
   const dir = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', ID)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'session.json'), `${JSON.stringify({
-    session_id: ID, governed: true, worktree_path: worktree, branch, node: 'remote-client', title: 'cached read', name: '', parent: null,
+    session_id: ID, governed: true, worktree_path: worktree, branch: 'main', node: 'remote-client', title: 'cached read', name: '', parent: null,
     status: 'awaiting', proposal: 'nothing', merges: 0, note: 'durable cache', sortkey: null, createdAt: Date.now(), harness: 'claude',
     harness_session_id: '', stopped: false, archived: false, launcher: 'fixture', launch_cmd: 'true',
   }, null, 2)}\n`)
   writeFileSync(join(dir, 'prompt'), 'read local session cache\n')
-  return () => { execFileSync('git', ['branch', '-D', branch], { cwd: pkgRoot, stdio: 'ignore' }) }
 }
 
 async function runCli(args: string[], env: NodeJS.ProcessEnv): Promise<{ code: number | null; stdout: string; stderr: string }> {
@@ -54,7 +54,7 @@ async function runCli(args: string[], env: NodeJS.ProcessEnv): Promise<{ code: n
 test('cache reads use the local store with unknown liveness only when no backend is reachable', { timeout: 30_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-client-cache-'))
   const port = await refusedPort()
-  const removeBranch = writeCachedSession(home)
+  writeCachedSession(home)
   const env: NodeJS.ProcessEnv = { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '', PORT: String(port) }
   for (const key of ['SPEXCODE_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'CODEX_THREAD_ID', 'PI_SESSION_ID', 'OPENCODE_SESSION_ID']) delete env[key]
   try {
@@ -75,14 +75,13 @@ test('cache reads use the local store with unknown liveness only when no backend
     assert.match(review.stdout, new RegExp(`"id": "${ID}"`))
     assert.match(review.stderr, /source: local session store \(liveness unknown\)/)
   } finally {
-    removeBranch()
     rmSync(home, { recursive: true, force: true })
   }
 })
 
 test('explicit remote routing stays loud when its port is unreachable', { timeout: 15_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-client-cache-'))
-  const removeBranch = writeCachedSession(home)
+  writeCachedSession(home)
   try {
     const result = await runCli(['session', 'ls', '--json', '--api', `http://127.0.0.1:${await refusedPort()}`], { ...process.env, SPEXCODE_HOME: home, SPEXCODE_API_URL: '' })
     assert.equal(result.code, 1)
@@ -90,14 +89,13 @@ test('explicit remote routing stays loud when its port is unreachable', { timeou
     assert.doesNotMatch(result.stderr, /source: local session store/)
     assert.equal(result.stdout, '')
   } finally {
-    removeBranch()
     rmSync(home, { recursive: true, force: true })
   }
 })
 
 test('a backend HTTP 500 is not replaced by the local cache', { timeout: 15_000 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-client-cache-'))
-  const removeBranch = writeCachedSession(home)
+  writeCachedSession(home)
   const server = createServer((_req, res) => { res.writeHead(500); res.end('broken backend') })
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
@@ -112,7 +110,6 @@ test('a backend HTTP 500 is not replaced by the local cache', { timeout: 15_000 
   } finally {
     server.close()
     await once(server, 'close')
-    removeBranch()
     rmSync(home, { recursive: true, force: true })
   }
 })

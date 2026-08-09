@@ -1,10 +1,5 @@
-import { loadSpecs, deriveStatus } from './specs.js'
-import { resolveLayout } from './layout.js'
-import { listSessions } from './sessions.js'
-import { repoRoot, driftIndex, historyIndex } from './git.js'
-import { residentForgeRevision, residentForgeState } from '../../spec-forge/src/resident.js'
-import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
-import { boardThreads } from './issues.js'
+import { deriveStatus } from './specs.js'
+import { driftIndex, historyIndex } from './git.js'
 import { evalContext, evalTimelines } from '../../spec-eval/src/evaltab.js'
 import { evalNodesAsync } from '../../spec-eval/src/scenarios.js'
 import { resolveProjectIdentity } from './project-identity.js'
@@ -25,6 +20,18 @@ function resolveParent(path: string, byDir: Record<string, string>): string | nu
 }
 
 const OVERLAY_TO_PATH = Symbol('overlay-to-path')
+
+// The graph owns only the composition of these frozen inputs. Session enumeration and forge/issue reads
+// belong to the CLI/server adapter, so this module has no hidden runtime-system fallback.
+export type BoardSnapshot = {
+  root: string
+  specs: any[]
+  layout: { worktrees: any[] }
+  sessions: any[]
+  issues: any[]
+  issuesStamp: string
+  forgeRevision: string
+}
 
 // The server-only review snapshot keeps latest readings verbatim. Graph JSON receives only counts.
 export function latestPerScenario<T extends { scenario: string }>(readings: T[]): T[] {
@@ -52,18 +59,7 @@ export function nodeEvalSummary(scenarios: { name: string }[], readings: any[]) 
 const rowOps = (s: { path: string; archived?: boolean }, opsByPath: Record<string, any[]>): any[] =>
   (s.archived ? [] : opsByPath[s.path] || [])
 
-export async function buildBoard() {
-  // loadSpecs starts alongside the public session census and REUSES the HEAD-keyed spec-history cache. Layout
-  // then receives that census's projected-active ids so an archived runtime hazard contributes the same ops to
-  // the full producer that spliceSessions preserves. Its per-worktree cache still recomputes only changed deltas.
-  const root = repoRoot()
-  const sessionsPromise = listSessions()
-  const specsPromise = loadSpecs()
-  const sessions = await sessionsPromise
-  const [layout, specs] = await Promise.all([
-    resolveLayout({ activeSessionIds: sessions.map((session) => session.id) }),
-    specsPromise,
-  ])
+export async function buildBoard({ root, specs, layout, sessions, issues: merged, issuesStamp, forgeRevision }: BoardSnapshot) {
   // the eval fold's freshness axes: WARM hits — loadSpecs already computed this HEAD's drift + history
   // indices, so these are the same cached walks, fetched once and reused for every measurable node (the history
   // index drives the rename-safe scenario axis, mirroring a spec node's own freshness).
@@ -126,21 +122,16 @@ export async function buildBoard() {
     }),
     ...Object.values(ghostById),
   ]
-  // Reconcile Issues once. Full rows stay in the server-only review snapshot; graph nodes get counts and
-  // open identity only, enough for tile/stat/tree glances without reconstructing the list.
+  // The outer adapter reads Issues once. Full rows stay in the server-only review snapshot; graph nodes get
+  // counts and open identity only, enough for tile/stat/tree glances without reconstructing the list.
   const isOpen = (i: { status: string }) => i.status === 'open'
-  // ONE store walk yielding both halves ([[issues]] boardThreads): the ISSUE surfaces get the split
-  // population, the freshness carrier gets the whole store.
-  const forgeState = residentForgeState()
-  const forgeRevision = residentForgeRevision()
-  const { issues: merged, stamp: issuesStamp } = boardThreads({ host: resolveForgeHost(), state: forgeState }, nodes.map((n) => n.id))
   // `issuesStamp` above is that ONE board-level freshness stamp, over EVERY thread — noded or nodeless,
   // both stores, BOTH remark hosts. It is folded from the whole store and NOT from the split `merged`: a
   // scenario-hosted remark lands on an eval track the issue read splits out ([[eval-issue-split]]), so a
   // carrier folded over the issue half alone left an open READING blind to every remark on it — the write
   // moved no board byte, [[graph-delta]] correctly suppressed the no-change broadcast, and the push never
   // fired at all. The per-node fold below stays [[graph-lean]]-slim (no reply payloads).
-  const issuesByNode: Record<string, ReturnType<typeof boardThreads>['issues']> = {}
+  const issuesByNode: Record<string, any[]> = {}
   for (const issue of merged)
     for (const nid of issue.nodes) (issuesByNode[nid] ??= []).push(issue)
   for (const n of nodes) {
@@ -196,8 +187,7 @@ export async function buildBoard() {
 // — a brand-new worktree has no pending spec ops yet, and any later ops-CHANGING event (a commit, a
 // worktree `.spec` edit) is refs/worktree-scoped, i.e. a FULL rebuild, never a sessions splice. So the
 // splice is byte-indistinguishable from a full rebuild whenever only session state moved.
-export async function spliceSessions(prev: Awaited<ReturnType<typeof buildBoard>>): Promise<Awaited<ReturnType<typeof buildBoard>>> {
-  const sessions = await listSessions()
+export async function spliceSessions(prev: Awaited<ReturnType<typeof buildBoard>>, sessions: any[]): Promise<Awaited<ReturnType<typeof buildBoard>>> {
   const evalProjections = sessionEvalProjections(sessions)
   const activeSources = new Set(sessions.map((session) => session.path))
   const opsByPath: Record<string, any[]> = {}

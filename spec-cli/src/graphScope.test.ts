@@ -67,7 +67,7 @@ function baseRecord() {
 }
 
 // dynamic-import handles, resolved below only when git is available (see RIG NOTE).
-let board: typeof import('./graph.js')
+let board: typeof import('./board.js')
 let cache: typeof import('./graphCache.js')
 let layout: typeof import('./layout.js')
 let evalProjection: typeof import('../../spec-eval/src/sessioneval.js')
@@ -150,7 +150,7 @@ if (gitOk) {
   delete process.env.SPEXCODE_SESSION_ID
   process.chdir(proj)
 
-  board = await import('./graph.js')
+  board = await import('./board.js')
   cache = await import('./graphCache.js')
   layout = await import('./layout.js')
   evalProjection = await import('../../spec-eval/src/sessioneval.js')

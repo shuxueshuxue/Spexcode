@@ -1,7 +1,7 @@
 ---
 concern: 修 operator rerun 超时被印成终态结论「未入队」：同一请求零状态变化重试即成功，人却被指向 attempt lease
 by: 9be33950-7166-40fd-8d62-5d3a3390cdf7
-status: open
+status: landed
 created: 2026-08-07T12:51:55.307Z
 ---
 

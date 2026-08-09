@@ -26,7 +26,7 @@ restores the list.
 
 ## expanded spec
 
-- **One rail, five pages — every entry a real anchor.** A compact, always-visible **44px** icon rail on the app's left
+- **One rail, five pages — every entry a real anchor.** A compact, always-visible **40px** icon rail on the app's left
   edge is the page switch: Spec Node Graph, Session Board, Evals, Issues, and Settings pinned at the
   bottom. Evals and Issues are
   distinct rail entries, each with its own glyph and i18n label — **Evals above Issues** (evals lead: the

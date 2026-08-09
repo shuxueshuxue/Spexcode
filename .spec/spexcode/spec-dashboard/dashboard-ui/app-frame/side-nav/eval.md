@@ -13,10 +13,12 @@ scenarios:
       issues, settings — evals above issues), never a Projects page entry. Each click swaps the main area
       to that page and the hash reads #/graph, #/sessions/…, #/evals, #/issues, #/settings respectively,
       with the clicked rail entry accented; Back returns to the previous page; a direct load at #/settings
-      opens on the settings page (no flash through the graph). The legacy scoped projects hash performs
-      one full-page redirect to `/projects`, where the global management page renders. Zero loss = the
-      scoped rail, the URL, and the visible page never disagree while project management has one home.
-    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js]
+      opens on the settings page (no flash through the graph). The desktop rail is 40px wide and its
+      centered page/project targets stay 32px square. The legacy scoped projects hash performs one
+      full-page redirect to `/projects`, where the global management page renders. Zero loss = the scoped
+      rail, the URL, and the visible page never disagree while project management has one home.
+    code: [spec-dashboard/src/SideBar.jsx, spec-dashboard/src/route.js, spec-dashboard/src/styles.css]
+    test: spec-dashboard/test/identity-chain.e2e.mjs
   - name: offline-switcher-is-inert
     tags: [frontend-e2e, desktop]
     description: >

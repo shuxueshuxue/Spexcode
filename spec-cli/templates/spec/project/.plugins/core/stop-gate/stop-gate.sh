@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # @@@ stop-gate - a blocking Stop hook with TWO jobs, each with a HARD loop-break (never blocks more than
 # once on the same cause, never leaks a dishonest stop):
-#   (A) COMMIT GATE — a done/merge proposal (awaiting + merge|nothing) is rejected while the node branch has
+#   (A) COMMIT GATE — a done/merge proposal (awaiting + merge; legacy nothing remains readable) is rejected while the node branch has
 #       uncommitted work or 0 commits ahead of main; the dogfood ritual commits BEFORE proposing. Clean ->
 #       allow; dirty -> block once with the reason, escape on the continuation to `asking` (needs the human).
 #   (B) DECLARE GATE — a session may not stop in an undeclared (`active`) state:
 #         declared (awaiting/parked/error/asking) . allow (the agent reported; nothing to do)
 #         active, first stop  (stop_hook_active false) .. block ONCE — instruct the agent to declare
-#         active, the continuation (stop_hook_active true) auto-declare a safe default (awaiting/nothing if
-#                                          committed, else `asking` — needs the human) and allow. Guaranteed to end.
+#         active, the continuation (stop_hook_active true) auto-declare `asking` and allow. Guaranteed to end
+#                                          without inventing a completion state.
 # $SPEX is the PATH-independent CLI invocation (abs tsx + cli) injected by settingsArg, so the gate's own
 # auto-default AND the command it shows the agent both work even when `spex` is absent from PATH.
 # @@@ global store + governed gate - state lives in the per-session GLOBAL record session.json (keyed by the
@@ -70,7 +70,8 @@ eval_advisory() {
   printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "$esc"
 }
 
-# @@@ commit gate - a declaration of done/merge (awaiting + proposal merge|nothing) is only honest once the
+# @@@ commit gate - a declaration of done/merge (awaiting + proposal merge; legacy nothing is accepted only
+# for backward-readable records) is only honest once the
 # node branch carries the work as COMMITS: the dogfood ritual commits spec+code BEFORE any proposal, yet a
 # dashboard-launched agent kept proposing merge with 0 commits / a dirty tree. So before allowing such a
 # declaration we run the deterministic check (`spex internal commit-gate`, which goes through git.ts's git()
@@ -79,8 +80,8 @@ eval_advisory() {
 # it) escape the loop by downgrading to `asking` (needs the human) with a clear note, so a FALSE "ready to
 # merge" never stands. (A propose-close declaration is exempt — it discards the worktree, so commits are moot.)
 # The PROPOSAL rides into the check: `merge` claims there is committed work to land (so 0-ahead blocks too),
-# `nothing` claims only that the work is committed (so a clean tree is the whole gate — a lane whose work
-# already merged may pause for the human without minting an empty commit to get through).
+# New public `done --propose nothing` calls trap before this hook; keep its legacy branch so historic records
+# stop normally instead of becoming corrupt.
 if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$proposal" = nothing ]; }; then
   if gatemsg=$($S internal commit-gate "$proposal" 2>&1); then
     # nudge ONCE: emit on the natural stop, but STAY SILENT on the forced re-stop the additionalContext
@@ -98,23 +99,13 @@ if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$propos
   exit 0
 fi
 
-# any OTHER already-declared state (parked / error / asking / awaiting+close) -> let it stop.
+# Any other declared state (parked / error / asking / awaiting+close, plus legacy awaiting+nothing) stops.
 [ "${status:-active}" != "active" ] && exit 0
 
 if [ "$cont" = true ]; then
-  # the forced continuation also stopped without declaring -> escape the loop, don't block. Keep the commit
-  # gate airtight: default to awaiting/nothing only when the tree is actually clean; otherwise an undeclared
-  # stop with uncommitted work becomes `asking` (needs the human), never a false awaiting/done. The default
-  # IS `nothing`, so it is judged as `nothing` — an already-merged lane defaults honestly instead of being
-  # pushed to `asking` for having nothing left ahead of main.
-  if $S internal commit-gate nothing >/dev/null 2>&1; then
-    $S internal session-state awaiting --session "$sid" --propose nothing --note "auto: stopped without declaring" >/dev/null 2>&1 || true
-    # NOTE: no eval nudge on the auto-declare path. It only runs on the forced continuation (cont=true),
-    # where a guarded advisory could never fire anyway, and an unguarded one was a second loop vector (a
-    # mark-active tool call could re-enter this branch). The clean-done path above is the single nudge site.
-  else
-    $S session ask --session "$sid" --note "auto: stopped without declaring and with uncommitted work — commit your spec+code on the node branch, then declare" >/dev/null 2>&1 || true
-  fi
+  # The forced continuation also stopped without declaring. Escape into asking: no default may invent a
+  # completed lane, and the stopped agent now needs a human prompt to choose merge, close, ask, or park.
+  $S session ask --session "$sid" --note "auto: stopped without declaring — choose merge, close, ask, or park; done --propose nothing records no state" >/dev/null 2>&1 || true
   exit 0
 fi
 
@@ -129,19 +120,23 @@ fi
 # of the full-to-terse information gap is recoverable from the entry, none of it from memory.
 taught="$sdir/stop-gate-taught"
 if [ -f "$taught" ]; then
-  printf '{"decision":"block","reason":"undeclared stop — declare the ONE true state as your LAST call: `%s session <done --propose merge (review; ONLY clickable merge)|nothing (done; no merge)|close (close-pending) / park (parked; managed watch delivery or real background wake-up) / ask (asking; human reply)>`. Conditions: `%s help session`."}\n' "$S" "$S"
+  printf '{"decision":"block","reason":"undeclared stop — declare the ONE true state as your LAST call: `%s session <done --propose merge (review; ONLY clickable merge)|close (close-pending; settled, no human decision/follow-up or posted artifact waiting)|park (parked; real wake-up + next action) / ask (asking; human reply/direction, including exploratory answer or handoff)>`. `done --propose nothing` is a trap: it writes no state and names these choices. Conditions: `%s help session`."}\n' "$S" "$S"
   exit 0
 fi
 touch "$taught" 2>/dev/null || true
 # The full reason names the PATH-independent CLI ($S) ONCE as a shared `<CLI> session <choice>` prefix, then
-# lists the five choices as a compact newline menu of bare subcommands — so the terminal output stays legible
-# instead of repeating the long abs path per option. It EMPHASIZES that each state is a CLAIM others act on
-# (not a box to tick to end the turn) and gives the precise APPLICATION CONDITION for each — so the agent
-# picks the TRUE one. park is policed hardest because a false park (no real background task) reads on the
+# lists the four real states plus the `nothing` trap as a compact newline menu of bare subcommands — so the
+# terminal output stays legible instead of repeating the long abs path per option. It EMPHASIZES that each
+# state is a CLAIM others act on (not a box to tick to end the turn) and gives the precise APPLICATION CONDITION
+# for each — so the agent picks the TRUE one. park is policed hardest because a false park (no real background task) reads on the
 # board as "fine, self-resuming" when the agent actually needs the human, which is the most damaging mislabel.
 # It ends with the ORDERING discipline — declare LAST, then stop — because a declaration followed by more
 # tool calls honestly re-flips the record to active (mark-active, by design) and re-blocks the next stop;
 # this block text is the one place every undeclared stopper is guaranteed to read, so the teaching that
 # kills the park->block->re-park loop at its source lives here.
-printf '{"decision":"block","reason":"Your session state is a CLAIM the graph, your supervisor, and other agents act on — not a box to tick to end the turn. Stopping undeclared makes your outcome a guess. Pick the ONE that is TRUE right now and run `%s session <choice>`, choosing the <choice> whose condition holds:\\n  • done --propose merge  — spec+code COMMITTED on the branch and genuinely ready for human review. It declares REVIEW and is the ONLY proposal that offers a clickable merge.\\n  • done --propose nothing — committed, but you are NOT proposing a merge; paused for the human to look. It declares DONE, never a merge.\\n  • done --propose close — you PROPOSE discarding this worktree; the human performs the close. It declares CLOSE-PENDING, not merge. This is how a session ends ITSELF — never run `session close` on your own id, which would delete your worktree mid-turn.\\n  • ask --note <your-question> — you need the human: a real question, or you are simply stopped awaiting direction. It declares ASKING and resumes only when they reply.\\n  • park --note <what-you-await> — ONLY when a real wake-up will resume you: a managed spex session watch subscription whose send delivery reaches you, or a spex session wait you backgrounded/a running build/job. It declares PARKED and self-resumes. With neither, you are waiting on the human: use ask, never park as a default.\\n\\nDECLARE LAST, THEN STOP: finish everything else in the turn first — speak, send your messages, establish managed watches or arm background waits — and make the declaration your FINAL call. Any tool call AFTER it flips your record back to active (mark-active, by design: activity is activity), so the next stop re-blocks and demands a fresh declaration; declaring last kills that loop at its source.\\n\\n(This full explanation shows once per session; later undeclared stops get a one-line reminder. `%s help session` re-explains the choices any time.)"}\n' "$S" "$S"
+if [ -s "$sdir/files.json" ] && grep -qE '"[^"]+"' "$sdir/files.json"; then
+  printf '{"decision":"block","reason":"a posted file/web artifact still needs human inspection; declare `spex session ask --note ...`, and declare it last."}\n'
+  exit 0
+fi
+printf '{"decision":"block","reason":"Your session state is a CLAIM the graph, your supervisor, and other agents act on — not a box to tick to end the turn. Stopping undeclared makes your outcome a guess. Pick the ONE that is TRUE right now and run `%s session <choice>`, choosing the <choice> whose condition holds:\\n  • done --propose merge  — spec+code COMMITTED on the branch and genuinely ready for human review. It declares REVIEW and is the ONLY proposal that offers a clickable merge.\\n  • done --propose nothing — TRAP: records no state. Choose merge, close, ask, or park below.\\n  • done --propose close — task genuinely settled, work landed (or none to merge), worktree no longer needed, and no human decision, follow-up, or posted artifact awaits inspection: propose human close. It declares CLOSE-PENDING, not merge. Never run `session close` on your own id.\\n  • ask --note <your-question> — you need the human: a real question or direction, an answered exploratory question or handoff awaiting their follow-up, or posted-artifact inspection. It declares ASKING and resumes only when they reply.\\n  • park --note <what-you-await> — ONLY when a real wake-up will resume a named next action: a managed watch delivery or background task. A watch on terminal children is not a wake-up. It declares PARKED and self-resumes.\\n\\nDECLARE LAST, THEN STOP: finish everything else in the turn first — speak, send your messages, establish managed watches or arm background waits — and make the declaration your FINAL call. Any tool call AFTER it flips your record back to active (mark-active, by design: activity is activity), so the next stop re-blocks and demands a fresh declaration; declaring last kills that loop at its source.\\n\\n(This full explanation shows once per session; later undeclared stops get a one-line reminder. `%s help session` re-explains the choices any time.)"}\n' "$S" "$S"
 exit 0

@@ -8,8 +8,10 @@ scenarios:
       as dispatch.sh does, and capture both block reasons.
     expected: >-
       The first block prints the full teaching text — four real states plus the `nothing` trap, each with its
-      application condition, plus the declare-LAST ordering discipline (the declaration is the turn's final call; any
-      later tool call honestly re-flips the record to active). Every later undeclared stop in the SAME
+      application condition, including that close-pending is only settled work with no outstanding human
+      decision/follow-up and that an answered exploratory question or handoff awaiting direction is asking,
+      plus the declare-LAST ordering discipline (the declaration is the turn's final call; any later tool call
+      honestly re-flips the record to active). Every later undeclared stop in the SAME
       session prints a one-line reason instead, and that line is self-explanatory: it still carries the
       command menu, the declare-LAST reminder, and a recovery entry (spex help session) from which an agent
       that never saw the full text — a compacted context — can rebuild every choice's condition. The full

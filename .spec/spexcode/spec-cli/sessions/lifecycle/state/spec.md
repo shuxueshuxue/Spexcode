@@ -47,7 +47,7 @@ is what opens its terminal / diff / live-view. Each record carries a **`governed
 ([[sessions-core]]) sets it true; a user-self-launched agent has no governed record (a non-board session). The
 `governed` flag is the explicit boundary that the old "is there a `.session/` dir" presence implied — see the
 Hooks split below. The statuses: `active` (working / undeclared this turn), `awaiting`
-(a proposal — review, done, or close-pending, by kind), `parked` (waiting on a managed watch delivery or background task;
+(a proposal — review or close-pending; historical `nothing` records remain readable as done), `parked` (waiting on a managed watch delivery or background task;
 **self-resumes** — nothing for a human to do), `error` (a turn died), `asking` (stopped and **needs the
 human** — a question, or the stop-gate's auto-default for an undeclared/uncommitted stop), `queued` (held
 below the cap — [[launch]]), and `idle` (stopped at the prompt without declaring). `merges` is a metadata
@@ -232,28 +232,27 @@ project's eventual source migration remains an explicit reviewed change rather t
   writes NO files into the worktree (the runtime lives in the global store, [[runtime]]), every dirty path is
   genuine work, with no runtime-file filtering to do. Being 0 ahead of the base branch rejects only
   **`merge`**, the one claim it contradicts: `merge` asserts there is committed work to land, while
-  `nothing` asserts the opposite — committed, but not proposing a merge, paused for the human — which a lane
-  whose work ALREADY landed states truthfully. Gating `nothing` on ahead-of-main left such a lane exactly one
-  way through, an empty commit, so a check about honesty bought a lie in git history; propose-**close** is
-  exempt entirely. A **declare gate** blocks a stop while still `active`,
-  auto-defaulting on the forced continuation to **`asking`** (the stop needs a human — it never fakes a
-  self-resuming `parked`), or to `awaiting`/`nothing` only when the tree is actually clean.
+  `nothing` is retained only to render historical records. The public `done --propose nothing` command is a
+  trap: it writes no state and tells the agent to choose merge, close, ask, or park. That removes a default
+  "keep it just in case" completion face without rewriting old timeline truth; propose-**close** is exempt
+  entirely. A **declare gate** blocks a stop while still `active`, auto-defaulting on the forced continuation
+  to **`asking`** (the stopped agent needs a human prompt to resume — it never fakes a self-resuming `parked`
+  or a completed `nothing`).
   The block reason gives each option its **application condition**, not a menu: a state is a claim others
   act on, so the agent picks the TRUE one. **`parked` is policed hardest** — claim it only when a real
   managed watch delivery or background task will wake you; with neither running to resume you the stop is `asking`, never a false
   `parked` the board misreads as self-resuming while you actually need the human.
   The teaching names the complete declared face: `done --propose merge` is **review** — the sole proposal
-  that offers a human-clickable merge; `done --propose nothing` is **done** without proposing a merge;
-  `done --propose close` is **close-pending**; `ask` is **asking** for a human reply; and `park` is
-  **parked**, waiting only for a managed watch delivery or real background wake-up. The dashboard keeps the merge tool's fixed slot
+  that offers a human-clickable merge; `done --propose close` is **close-pending**; `ask` is **asking** for a
+  human reply; and `park` is **parked**, waiting only for a managed watch delivery or real background wake-up.
+  `done --propose nothing` is instead a correction prompt that records no terminal state. The dashboard keeps the merge tool's fixed slot
   for every selected session, but enables and paints it green only for the persisted
   `awaiting`/`merge`/`review` proposal while liveness is `online`; every other proposal, lifecycle, or
   liveness reading is muted, disabled, and names its reason. This is an affordance over the existing
   record projection, never a new merge, commit-gate, or lifecycle transition.
   After verified landing, close-pending is for a finished task whose worktree is no longer needed; otherwise the
-  agent declares the state that is true. `nothing` remains the choice when the worktree should stay available
-  without a merge proposal. The first-stop teaching carries the same boundary, so unfinished work stays
-  review/asking rather than inviting discard.
+  agent declares the state that is true. The first-stop teaching carries the same boundary, so unfinished work
+  stays review/asking rather than inviting discard.
 - **`StopFailure` → `error`**; **headless turn non-zero exit → `error`**, but only as an `active` compare-and-set
   so a declaration written before child teardown wins; **`Notification(idle_prompt)` → `idle`**. All Stop-gate
   git goes through the shared `git()` helper, so a stray exported git dir can't misdirect repo discovery.

@@ -36,9 +36,9 @@ send's append-backed text and raw-key warning, quarantine's exact-witness/restor
 conversation id rather than the SpexCode session id, and is omitted for Claude), selector grammar, and project-bound write warning cannot drift between a drawer
 manual and copied verb manuals. Existing session verbs and spellings keep their behaviour; this is a help
 projection change only. The declaration entries project [[state]]'s current vocabulary rather than inventing
-another lifecycle: `done --propose merge` means review and the sole clickable merge proposal, `nothing` means
-done without merge, `close` means close-pending, while ask/park name asking/parked and their distinct wake-up
-owners.
+another lifecycle: `done --propose merge` means review and the sole clickable merge proposal, `nothing` is a
+no-write trap that sends the agent to merge, close, ask, or park, `close` means close-pending, while ask/park
+name asking/parked and their distinct wake-up owners.
 
 `spex session new --help` lists its optional `--name <name>` alongside the prompt and launcher inputs. The
 name is the new record's initial display override; it does not enter, replace, or alter the launch prompt.

@@ -136,7 +136,7 @@ scenarios:
     tags: [backend-api]
     description: >-
       Declare a close proposal for a governed session (`spex session done --propose close`) and read the
-      command's confirmation output; then declare a merge (or nothing) proposal and read that output too.
+      command's confirmation output; then declare a merge proposal and invoke the `nothing` trap too.
     expected: >-
       The propose-close confirmation carries the plain, advisory cleanup reminder — reclaim the ephemeral
       things you started to test this change (a stray process, a dev/preview server, a bound port, a throwaway
@@ -144,19 +144,19 @@ scenarios:
       stated as a nudge and not a gate. The sweep's scope is stated, not implied: it names the sessions the
       agent SPAWNED, and it says in words that THIS session is excluded — the declaration proposes that the
       human close this worktree, and closing your own session would delete the worktree you are running in.
-      The merge/nothing confirmations do NOT carry it. The reminder is project-agnostic (no repo-specific
-      paths), so it reads the same in any adopted project.
+      The merge confirmation does not carry it. The `nothing` invocation exits non-zero, records no state, and
+      does not carry it either. The reminder is project-agnostic (no repo-specific paths), so it reads the same
+      in any adopted project.
   - name: long-note-truncation-transparent
     tags: [backend-api]
     description: >-
-      With an isolated SPEXCODE_HOME and a governed record, declare each note-carrying state — `spex session
-      done --propose nothing --note <n>`, `ask --note <n>`, `park --note <n>` — with THREE shapes of note:
+      With an isolated SPEXCODE_HOME and a governed record, declare each ordinary note-carrying state —
+      `ask --note <n>` and `park --note <n>` — with THREE shapes of note:
       one long single-line note over the table's display cap, one SHORT MULTI-LINE note under that cap, and
       one short single-line note that nothing cuts. Read (1) the record's stored note, (2) the declaration's
       echo, (3) the `spex ls` NOTE column, and (4) the derived dashboard headline.
     expected: >-
-      The note reaches the record IN FULL for all three verbs (done included — it must not silently drop its
-      --note). The explicit table NOTE column cuts only when its display limit bites, and that cut is
+      The note reaches the record IN FULL for both verbs. The explicit table NOTE column cuts only when its display limit bites, and that cut is
       TRANSPARENT to the author: taught ONCE per session, its echo states the note's length, the table's first
       NOTE_BOARD_LIMIT display columns, and where the full text is readable (the session record / `spex ls
       --json` / `spex review`); SUBSEQUENT cut declarations carry no repeat. The dashboard headline remains the

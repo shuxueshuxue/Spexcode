@@ -192,7 +192,9 @@ needs-you/running/offline status partitions, no lifecycle triage, and no active 
 the third of three equal pills in
 the list header beside New and Search, and it is **permanent**: a control that appears only when it has
 contents cannot be found when you want it, and its absence would be the only thing telling you the archive
-exists at all. The star carries **no numeric count** — the archive is a destination, not a backlog meter — and stays **live**:
+exists at all. New and the archive door are mutually exclusive destinations, so opening the shelf clears New's
+visual active treatment without changing the selected tab. The star carries **no numeric count** — the archive is a
+destination, not a backlog meter — and stays **live**:
 a permanently-visible control that silently does nothing reads as broken, so pressing it at zero opens the
 archive and says `nothing archived` rather than swallowing the press. Reaching an archived session from outside the list
 (URL, search, an originator chip) lands the view on the side that holds it, the same promise the

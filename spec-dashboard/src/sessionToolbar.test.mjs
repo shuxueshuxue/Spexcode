@@ -111,6 +111,10 @@ test('archive door stays icon-only regardless of archived session count', () => 
   assert.doesNotMatch(source, /si-pill-count/)
 })
 
+test('archive door suppresses the New Session highlight while the shelf is open', () => {
+  assert.match(source, /className=\{active === 'new' && !viewingShelf \? 'si-pill new on' : 'si-pill new'\}/)
+})
+
 test('archive refresh cannot override a human shelf toggle without a selection transition', () => {
   assert.match(source, /const selectedArchived = active !== 'new'[\s\S]{0,160}\.archived/)
   assert.match(source, /setShowShelf\(selectedArchived\)[\s\S]{0,100}\}, \[open, active, selectedArchived\]\)/)

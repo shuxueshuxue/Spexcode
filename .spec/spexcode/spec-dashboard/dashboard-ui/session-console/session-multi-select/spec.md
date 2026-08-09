@@ -56,6 +56,9 @@ reconciled by the next board poll and its returned reason is shown through the s
 single close; HTTP 409 is never a console-only clue or a silent success. Cancelling, or pressing Esc, leaves
 the mode with nothing changed.
 
+Each bulk lifecycle confirm focuses its destructive commit button on open, so a plain **Enter** confirms the
+visible archive or close action. Escape, Cancel, and a backdrop click still cancel without issuing a request.
+
 The select bar and its confirms are this node's own surface (`SessionSelectBar.jsx`); mode state (picks,
 drag source/target, and row toggle-instead-of-switch behaviour) lives in the list that owns the rows
 ([[session-console]]'s `SessionInterface`), and the menu item that turns the mode on is a one-line hook into

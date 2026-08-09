@@ -30,12 +30,17 @@ scenarios:
   - name: drag-reparent-and-archive-danger
     description: >
       In multi-select mode, drag a session row by its grip onto a different session row, then leave
-      the mode and choose archive from that row's normal context menu.
+      the mode and choose archive from that row's normal context menu. While a row is selected, also open
+      the bulk archive and close confirms; press Enter in each. Verify that no lifecycle request was made
+      before either confirm opened, and then count the resulting requests.
     expected: >
       The drag sends exactly one POST /api/sessions/reparent with the dragged id in children and the
       drop target as parent; no local tree mutation stands in for that request. In the ordinary menu,
-      archive shares the danger section with close and opens an archive confirmation before any
-      archive endpoint is called.
+      archive shares the danger section with close and opens an archive confirmation before any archive
+      endpoint is called. Bulk archive and close each open one confirm; their destructive commit button is
+      focused, so Enter closes that dialog and sends exactly one request per selected row to the matching
+      endpoint, then leaves multi-select mode. Escape, Cancel, and a backdrop click still cancel without a
+      lifecycle request.
     tags: [frontend-e2e, backend-api, desktop]
     test: "spec-dashboard/test/session-multi-select.e2e.mjs"
   - name: nested-count-moves-with-selectable-row

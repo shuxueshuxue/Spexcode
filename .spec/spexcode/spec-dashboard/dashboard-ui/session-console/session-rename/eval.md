@@ -37,13 +37,14 @@ scenarios:
       node/branch handle), so the human reads the very words they right-clicked; the terminal toolbar remains
       free of duplicate identity text.
   - name: close-confirm-removes-row
+    test: spec-dashboard/test/session-close-freshness.e2e.mjs
     tags: [frontend-e2e, desktop]
     description: >
       Through the running dashboard in a real browser, open the console (Enter), right-click a session row,
       and pick "close". A confirm prompt (the shared modal, its commit button styled as the destructive
       verb) must appear FIRST — close is not a one-click action on the menu. Press cancel and confirm the row
-      is untouched; then right-click → close → confirm and watch the row. Screenshot the confirm prompt and
-      the list after confirming.
+      is untouched; then right-click → close → press Enter and watch the row. Screenshot the confirm prompt
+      and the list after confirming.
     expected: |
       Picking "close" opens a confirm prompt rather than closing immediately (a right-click is easy to
       mis-aim and the worktree removal is destructive). Cancelling does nothing — the row stays. Confirming
@@ -51,6 +52,19 @@ scenarios:
       removal runs — and fires the human-only worktree removal in the background; the board reload when it
       lands drops the closed row off every surface. This is the same removal the (now-absent) header close
       once did, behind a guard.
+      The confirm action has focus on open, so plain Enter is that same confirmation rather than an inert key
+      or an activation behind the dialog.
+  - name: archive-confirm-with-enter
+    test: spec-dashboard/test/session-multi-select.e2e.mjs
+    tags: [frontend-e2e, desktop]
+    description: >
+      Through the running dashboard in a real browser, right-click an ordinary session row and pick
+      "archive". Verify that no archive request has been sent before confirmation, then press Enter while the
+      archive dialog is visible and observe the outgoing request and the dismissed dialog.
+    expected: >
+      Archive remains behind its confirmation boundary: opening the dialog causes no lifecycle request. The
+      archive commit action has focus on open, so one plain Enter dismisses the dialog and sends exactly one
+      POST to that row's archive endpoint; Escape, Cancel, and a backdrop click still send none.
   - name: close-refusal-is-visible
     tags: [frontend-e2e, backend-api, desktop]
     description: >

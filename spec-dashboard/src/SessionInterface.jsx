@@ -1333,6 +1333,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         commandAvailable, setCommandOpen, closeCommandBox, expanded, foldableIds, toggleFold,
       } = stateRef.current
       if (!open || searchOpen) return   // panel hidden, OR the search palette modal is open above us and owns the keys: nothing here listens
+      if (e.target?.closest?.('[data-focus-overlay]')) return // a transient modal owns its focused control's native keys
       // Reserved Alt+I toggles Command Box before xterm. Matched by
       // e.code (the physical I key) because ⌥I on a mac prints a dead-key glyph, not 'i'. The chord is a
       // SINGLE Alt modifier + I. Command/Ctrl variants remain native/browser shortcuts.

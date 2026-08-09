@@ -58,7 +58,7 @@ export default function SessionSelectBar({ ids, onCancel, onClosed, onError }) {
             <p className="sess-confirm-msg">{t(`sessionSelect.${confirming}Confirm`)}</p>
             <div className="sess-rename-actions">
               <button type="button" className="sess-rename-btn" onClick={() => setConfirming(null)}>{t('common.cancel')}</button>
-              <button type="button" className="sess-rename-btn danger" onClick={confirmAction}>{t(`sessionSelect.${confirming}`)}</button>
+              <button type="button" className="sess-rename-btn danger" onClick={confirmAction} autoFocus>{t(`sessionSelect.${confirming}`)}</button>
             </div>
           </div>
         </Modal>

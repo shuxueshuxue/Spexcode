@@ -314,6 +314,20 @@ scenarios:
       shared action-error surface and preserves the row. A verified submission removes the row from the active
       dashboard without inventing a lifecycle, while the matching API resource report has no corrupt owner.
       Restore returns the same corrupt row rather than a runtime or readable replacement record.
+  - name: lifecycle-confirm-owns-enter
+    tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/session-multi-select.e2e.mjs
+    code: spec-dashboard/src/SessionInterface.jsx#SessionInterface
+    related: [spec-dashboard/src/SessionSelectBar.jsx, spec-dashboard/src/SessionContextMenu.jsx]
+    description: >-
+      Keep the console on its New Session tab, enter multi-select mode, then open the bulk archive and close
+      confirms in a real browser. For each dialog, verify its destructive button has focus and press Enter
+      through the page-level keyboard; then repeat with a row's ordinary archive confirm.
+    expected: >-
+      A focused lifecycle confirm owns Enter even while the underlying console's selected tab is New: each
+      press dismisses only the visible dialog and sends the matching lifecycle request exactly once. The New
+      Session router never launches a session behind an overlay, and opening any confirm causes no request
+      until its own commit gesture.
 ---
 
 Measure these scenarios through the running dashboard and real sessions. Dynamic focus, terminal input,

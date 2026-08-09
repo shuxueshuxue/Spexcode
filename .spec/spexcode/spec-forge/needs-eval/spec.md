@@ -8,6 +8,8 @@ code:
   - spec-forge/src/needs-eval.ts#isNeedsEval
 related:
   - spec-forge/src/cli.ts
+  - spec-forge/src/needs-eval.test.ts
+  - spec-forge/src/__fixtures__/github-forge.json
 ---
 # needs-eval
 

@@ -13,6 +13,7 @@ import { useTransientNotice } from './TransientNotice.jsx'
 import { navigate, routeHash, useRoute } from './route.js'
 import { detailBackHash } from './address.js'
 import { Icon } from './icons.jsx'
+import IssueLabels from './IssueLabels.jsx'
 
 // The Issues surface ([[issues-view]]): GitHub-style pages over ONE route family, all wearing the shared
 // [[review-chrome]]. `#/issues` is the LIST page — the merged local+forge list (store-tagged, API
@@ -85,7 +86,7 @@ export function IssuesListPage({ data, loading, error, query }) {
         <>
           <ReviewListRow
             state={<ReviewState kind="issue" state={status} />}
-            title={th.concern}
+            title={<><span className="rl-row-title-text">{th.concern}</span><IssueLabels labels={th.labels} /></>}
             meta={(
               <>
                 <span data-tip={th.id}>{issueNumber(th.id)}</span>
@@ -174,6 +175,7 @@ export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpe
   const [acting, setActing] = useState('')   // the lifecycle action in flight — one at a time
   const [actErr, setActErr] = useState('')
   const nodes = Array.isArray(th.nodes) ? th.nodes : []
+  const labels = Array.isArray(th.labels) ? th.labels : []
   const replies = Array.isArray(th.replies) ? th.replies : []
   const status = th.status || 'open'
   const run = (name, fn) => async () => {
@@ -213,6 +215,11 @@ export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpe
             <SideValue text={th.store} className={`fv-store fv-store-${local ? 'local' : 'forge'}`} />
             {th.url && <SideValue text={t('session.issuesOpenOnStore', { store: storeDisplayName(th.store) })} href={th.url} external />}
           </SideSection>
+          {labels.length > 0 && (
+            <SideSection label={t('detail.sideLabels')}>
+              <IssueLabels labels={labels} />
+            </SideSection>
+          )}
           {/* the originator (who filed) + whether their session is still ALIVE — a local thread's `by` is a
               session id (join it against the board for liveness, click through when live); a forge issue's
               `by` is a github login that resolves to no session, so it stays a plain labeled value. */}

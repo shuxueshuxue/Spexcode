@@ -226,6 +226,7 @@ export default {
     sideFiler: 'filed by',
     sideOk: 'human-ok',
     sideStore: 'store',
+    sideLabels: 'labels',
     sideOriginator: 'opened by',
     sideNodes: 'spec nodes',
     backToEvals: 'back to evals',

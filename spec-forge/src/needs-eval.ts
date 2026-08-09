@@ -6,7 +6,7 @@ export const NEEDS_EVAL = 'needs-eval'
 const BODY_MARKER = new RegExp(`^\\s*${NEEDS_EVAL}\\s*:?\\s*$`, 'im')
 
 export function isNeedsEval(issue: ForgeIssue): boolean {
-  if (issue.labels.some((l) => l.trim().toLowerCase() === NEEDS_EVAL)) return true
+  if (issue.labels.some((l) => l.name.trim().toLowerCase() === NEEDS_EVAL)) return true
   return BODY_MARKER.test(issue.body || '')
 }
 

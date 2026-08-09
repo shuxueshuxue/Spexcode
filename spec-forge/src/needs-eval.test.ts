@@ -15,12 +15,12 @@ const NODE_IDS = ['sessions', 'dashboard-issues', 'links', 'forge-cache', 'port'
 
 test('isNeedsEval: a label or a bare body line flags; a trailing-content line or no mark does not', () => {
   const base: ForgeIssue = { number: 0, title: 't', url: 'u', state: 'open', body: '', labels: [], author: 'a', createdAt: 't', comments: [] }
-  assert.equal(isNeedsEval({ ...base, labels: ['bug', NEEDS_EVAL] }), true)    // label
-  assert.equal(isNeedsEval({ ...base, labels: ['Needs-Eval'] }), true)          // label, case-insensitive
+  assert.equal(isNeedsEval({ ...base, labels: [{ name: 'bug' }, { name: NEEDS_EVAL }] }), true)    // label
+  assert.equal(isNeedsEval({ ...base, labels: [{ name: 'Needs-Eval' }] }), true)                    // label, case-insensitive
   assert.equal(isNeedsEval({ ...base, body: 'context\nneeds-eval\n' }), true)   // bare body line
   assert.equal(isNeedsEval({ ...base, body: '  NEEDS-EVAL:  ' }), true)         // indented, optional colon, ci
   assert.equal(isNeedsEval({ ...base, body: 'needs-eval: spec-forge' }), false) // trailing content ⇒ not a flag
-  assert.equal(isNeedsEval({ ...base, body: 'Spec: links', labels: ['bug'] }), false) // no mark at all
+  assert.equal(isNeedsEval({ ...base, body: 'Spec: links', labels: [{ name: 'bug' }] }), false) // no mark at all
 })
 
 test('resolveEvalPending: flagged OPEN issues invert to node → pending, via marker and transitively', () => {
@@ -51,7 +51,7 @@ test('resolveEvalPending: no flagged issues → empty', () => {
   const unflagged = fixture.issues.map((i) => ({
     ...i,
     body: i.body.replace(/needs-eval/gi, 'x'),
-    labels: i.labels.filter((l) => l.toLowerCase() !== NEEDS_EVAL),
+    labels: i.labels.filter((l) => l.name.toLowerCase() !== NEEDS_EVAL),
   }))
   assert.deepEqual(resolveEvalPending(unflagged, fixture.prs, NODE_IDS), [])
 })

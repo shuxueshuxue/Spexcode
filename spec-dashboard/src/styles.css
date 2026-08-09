@@ -646,6 +646,8 @@ a.scenario-count:hover { background: var(--panel2); }
   background: var(--paper); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; white-space: nowrap; }
 /* in the search row the chips sit between title and path — keep them from being squeezed out. */
 .search-item .tag-chips { flex: none; }
+.issue-labels { display: inline-flex; flex-wrap: wrap; gap: 3px; min-width: 0; vertical-align: middle; }
+.issue-label { display: block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: var(--type-caption); font-weight: var(--weight-semibold); line-height: var(--leading-ui); color: var(--issue-label-fg, var(--ink2)); background: var(--issue-label-bg, var(--paper)); border: 1px solid var(--issue-label-border, var(--line)); border-radius: 3px; padding: 0 4px; }
 .issue-card { display: block; max-width: 100%; min-width: 0; box-sizing: border-box; overflow: hidden; padding: 5px 6px; border-radius: 5px; text-decoration: none; }
 .issue-card + .issue-card { margin-top: 2px; }
 .issue-card:hover { background: var(--panel2); }
@@ -655,6 +657,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .issue-card-state .review-state-label { font-size: var(--type-caption); text-transform: uppercase; }
 .issue-card-title { display: block; font-size: var(--type-meta); line-height: var(--leading-ui); color: var(--ink2);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.issue-card > .issue-labels { margin-top: 4px; }
 
 .pane-issues { flex: 1; min-width: 0; padding: 16px 20px; overflow: auto; }
 .pane-issues.empty { color: var(--muted); font-size: var(--type-body); }
@@ -1232,7 +1235,8 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .rl-row-grid { min-height: 64px; box-sizing: border-box; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: start; column-gap: 10px; padding: 10px 16px; }
 .rl-row-state { width: 16px; height: 16px; margin-top: 2px; display: grid; place-items: center; }
 .rl-row-body { min-width: 0; }
-.rl-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: var(--type-subtitle); font-weight: var(--weight-semibold); line-height: var(--leading-ui); }
+.rl-row-title { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px; min-width: 0; color: var(--ink); font-size: var(--type-subtitle); font-weight: var(--weight-semibold); line-height: var(--leading-ui); }
+.rl-row-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rl-row-meta { min-width: 0; display: flex; align-items: center; gap: 4px 8px; margin-top: 3px; color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); line-height: var(--leading-ui); }
 .rl-row-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rl-row-aside { align-self: center; display: flex; align-items: center; justify-content: flex-end; gap: 7px; padding-left: 12px; color: var(--muted); font-family: var(--mono); font-size: var(--type-meta); }
@@ -1348,7 +1352,9 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   .rl-secondary-filter-count.for-mobile { display: inline-flex; }
   .rl-secondary-filters.active-mobile .rl-secondary-filters-trigger { color: var(--ink); background: color-mix(in srgb, var(--line) 45%, transparent); }
   .rl-row-grid { min-height: 112px; grid-template-columns: 16px minmax(0, 1fr); padding: 14px 16px; }
-  .rl-row-title { display: -webkit-box; overflow: hidden; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+  .rl-row-title { display: block; overflow: hidden; }
+  .rl-row-title-text { display: -webkit-box; overflow: hidden; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+  .rl-row-title .issue-labels { margin-top: 4px; }
   .rl-row-meta { flex-wrap: nowrap; margin-top: 5px; }
   .rl-row-meta > span { max-width: 100%; }
   .rl-row-aside { grid-column: 2; align-self: start; justify-content: flex-start; flex-wrap: wrap; gap: 5px; margin-top: 6px; padding-left: 0; }

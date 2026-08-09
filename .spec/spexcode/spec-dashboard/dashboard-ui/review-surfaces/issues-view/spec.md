@@ -12,6 +12,7 @@ related:
   - spec-dashboard/src/Composer.jsx
   - spec-dashboard/src/Evidence.jsx
   - spec-dashboard/src/IssueCard.jsx
+  - spec-dashboard/src/IssueLabels.jsx
   - spec-dashboard/src/mentions.jsx
   - spec-dashboard/src/reviewFilters.js
   - spec-dashboard/src/Thread.jsx
@@ -83,14 +84,16 @@ verbs the CLI uses.
   dropdown; an unknown or historical value still submits and yields the honest filtered zero. An ACTIVE
   menu value whose data option disappeared keeps its cheap All off-switch — and the visible text is
   always the canonical release — so data disappearance cannot trap the list behind an invisible filter.
-  New remains the page-title action. No assignee/labels/project
-  theatre is invented for a model that has none. An actually empty issue store says there are no issues
+  New remains the page-title action. Forge-supplied labels are issue metadata, not SpexCode facets: every
+issue surface uses the one chip primitive to show their names, platform background colors, and readable
+foreground color where supplied or derivable; local threads honestly have no chips. No assignee/project
+theatre is invented for a model that has none. An actually empty issue store says there are no issues
   yet; a non-empty store reduced to zero by section/query/facets instead says this view has no matching
   issues, through [[review-chrome]]'s shared empty-state contract.
 - **The row leads with the issue, never its plumbing.** A structured two-level row: the **status mark** (GitHub
   Primer's 16px `issue-opened` octicon in the semantic open green; every concluded state — local
   `landed`, forge `closed` — the `issue-closed` ring+check in the one closed purple; never a CSS dot),
-  then the wrapping concern; under it the real issue identity, originator, and opened time; at the right
+  then the wrapping concern and its platform label chips; under it the real issue identity, originator, and opened time; at the right
   the comment count and store/node facts that exist. At 390px those facts join the secondary line and the
   title may wrap without horizontal overflow. **The store is metadata, never identity**: it never leads a
   row and never sits on a title.
@@ -107,7 +110,7 @@ verbs the CLI uses.
   full slug, truncatable — a bare `#slug` reads as a node), the store tag, the ORIGINATOR + liveness (a
   local thread's `by` is a session id — a
   live one is a click-through chip to `#/sessions/<id>`, painted by the board's STATUS_COLOR join; a
-  forge login stays a plain labeled value), the spec-node refs under their localized label (click
+  forge login stays a plain labeled value), the platform label chips under their localized label, the spec-node refs under their localized label (click
   focuses the graph), and a forge permalink
   labeled with the store's concrete display name ("Open on GitHub"/"Open on GitLab" — canonical
   display-name data, never a URL sniff, never the word "forge"; a local issue renders none). At phone

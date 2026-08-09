@@ -1,4 +1,4 @@
-import type { ForgeIssue, ForgePR } from '../../spec-forge/src/port.js'
+import type { ForgeIssue, ForgeLabel, ForgePR } from '../../spec-forge/src/port.js'
 import { resolveLinks } from '../../spec-forge/src/links.js'
 import { FORGE_DRIVERS, forgeDriverFor, forgeIssueStores, resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, issuesEnabled, replyLocalIssue, parseEvalConcern } from './localIssues.js'
@@ -22,6 +22,7 @@ export type Reply = {
   resolvedBy?: string
 }
 export const isRemark = (r: Reply): boolean => r.rid !== undefined
+export type IssueLabel = ForgeLabel
 export type Issue = {
   id: string
   store: string      // 'local' | a forge host ('github') — the adapter that holds it
@@ -33,6 +34,7 @@ export type Issue = {
   body: string
   replies: Reply[]
   evidence: string[] // content-addressed evidence hashes — the typed cross-node finding reference
+  labels: IssueLabel[] // platform-supplied display metadata; local threads carry none
   url?: string       // a forge permalink; a local issue has none
 }
 
@@ -117,6 +119,7 @@ export function fromForge(slice: ForgeSlice, nodeIds: string[]): Issue[] {
     // downstream renders two kinds of discussion.
     replies: (i.comments ?? []).map((c) => ({ by: c.author, at: c.createdAt, body: c.body })),
     evidence: [],
+    labels: i.labels,
     url: i.url,
   }))
 }

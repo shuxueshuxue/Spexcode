@@ -225,6 +225,7 @@ export default {
     sideFiler: '提交者',
     sideOk: '人工签核',
     sideStore: '存储',
+    sideLabels: '标签',
     sideOriginator: '发起者',
     sideNodes: '规格节点',
     backToEvals: '返回评测列表',

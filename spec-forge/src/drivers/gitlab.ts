@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import type { ForgeComment, ForgeDriver, ForgeIssue, ForgePR } from '../port.js'
+import type { ForgeComment, ForgeDriver, ForgeIssue, ForgeLabel, ForgePR } from '../port.js'
 
 type Ctx = { base: string; host: string; project: string; token: string }
 let ctx: Ctx | null = null
@@ -68,7 +68,7 @@ async function paged<T>(path: string): Promise<T[]> {
 
 type ApiIssue = {
   iid: number; title: string; description: string | null; web_url: string; state: string
-  labels: string[]; author: { username: string } | null; created_at: string; user_notes_count: number
+  labels: ({ name?: string; color?: string; text_color?: string } | string)[]; author: { username: string } | null; created_at: string; user_notes_count: number
 }
 
 async function toIssue(r: ApiIssue): Promise<ForgeIssue> {
@@ -78,11 +78,20 @@ async function toIssue(r: ApiIssue): Promise<ForgeIssue> {
     body: r.description ?? '',
     url: r.web_url,
     state: normalizeState(r.state),
-    labels: r.labels ?? [],
+    labels: forgeLabels(r.labels),
     author: r.author?.username ?? '',
     createdAt: r.created_at ?? '',
     comments: r.user_notes_count > 0 ? await listNotes(r.iid) : [],
   }
+}
+
+function forgeLabels(labels: ApiIssue['labels'] | undefined): ForgeLabel[] {
+  return (labels ?? []).flatMap((label) => {
+    const name = typeof label === 'string' ? label : label.name ?? ''
+    if (!name) return []
+    if (typeof label === 'string') return [{ name }]
+    return [{ name, ...(label.color ? { color: label.color } : {}), ...(label.text_color ? { textColor: label.text_color } : {}) }]
+  })
 }
 
 function normalizeState(state: string): string {
@@ -102,12 +111,12 @@ export const gitlabDriver: ForgeDriver = {
   host: 'gitlab',
 
   async listIssues(): Promise<ForgeIssue[]> {
-    const rows = await paged<ApiIssue>('issues?state=all')
+    const rows = await paged<ApiIssue>('issues?state=all&with_labels_details=true')
     return Promise.all(rows.map(toIssue))
   },
 
   async listIssuesSince(sinceISO: string): Promise<ForgeIssue[]> {
-    const rows = await paged<ApiIssue>(`issues?state=all&updated_after=${encodeURIComponent(sinceISO)}`)
+    const rows = await paged<ApiIssue>(`issues?state=all&with_labels_details=true&updated_after=${encodeURIComponent(sinceISO)}`)
     return Promise.all(rows.map(toIssue))
   },
 

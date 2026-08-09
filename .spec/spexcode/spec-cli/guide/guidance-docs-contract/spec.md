@@ -66,14 +66,15 @@ revision disagrees, an unsafe asset name, and an existing destination asset. Its
 from the exact written catalog buffer. It has no documentation-server client, deploy behavior, or writable
 guidance source.
 
-`.github/workflows/guidance-release.yml` runs only for relevant guidance-source changes pushed to `main`, and its
-single publish job is absent unless repository variable `SPEXCODE_GUIDANCE_RELEASE_PUBLISH` is exactly `true`.
-That off-by-default gate is at job scope, before checkout or credentials. For revision `R`, the producer release
-is tag `guidance-R`; the workflow either creates that non-latest GitHub release with only the two generated assets,
-or, on a rerun, verifies its target revision, complete asset-name set, and downloaded byte equality with the newly
-generated pair. It never uses an overwrite/clobber upload. Publishing a correction therefore means a new committed
-revision and tag, never changing an existing release asset. This workflow publishes source artifacts only: it does
-not deploy documentation or contact a public documentation server.
+`.github/workflows/guidance-release.yml` runs for relevant guidance-source changes pushed to `main` and can be
+manually dispatched to bootstrap the initial catalog release. Its single publish job is absent unless repository
+variable `SPEXCODE_GUIDANCE_RELEASE_PUBLISH` is exactly `true`. That off-by-default gate is at job scope, before
+checkout or credentials. For revision `R`, the producer release is tag `guidance-R`; the workflow either creates
+that non-latest GitHub release with only the two generated assets, or, on a rerun, verifies its target revision,
+complete asset-name set, and downloaded byte equality with the newly generated pair. It never uses an
+overwrite/clobber upload. Publishing a correction therefore means a new committed revision and tag, never changing
+an existing release asset. This workflow publishes source artifacts only: it does not deploy documentation or
+contact a public documentation server.
 
 ### Consumer protocol
 

@@ -17,11 +17,14 @@ scenarios:
     tags: [cli]
     description: >-
       Inspect the guidance release workflow and its focused test, then use the test's workflow fixture checks to
-      exercise the disabled-by-default predicate and the existing-release validation path.
+      exercise the disabled-by-default predicate, the eligible-push filter, the manual bootstrap trigger, and the
+      existing-release validation path.
     expected: >-
-      No release job runs without repository variable `SPEXCODE_GUIDANCE_RELEASE_PUBLISH=true`; a publish is scoped
-      to a `guidance-<revision>` release, creates only the generated pair, and reruns download and compare both
-      assets instead of overwriting them. The workflow contains no documentation deployment or public-docs request.
+      No release job runs without repository variable `SPEXCODE_GUIDANCE_RELEASE_PUBLISH=true`; eligible
+      guidance-source pushes to `main` retain their path filter, and a manual dispatch can bootstrap the first
+      release without a later content change. A publish is scoped to a `guidance-<revision>` release, creates only
+      the generated pair, and reruns download and compare both assets instead of overwriting them. The workflow
+      contains no documentation deployment or public-docs request.
     code: .github/workflows/guidance-release.yml
     test: scripts/guidance-release.test.mjs
 ---

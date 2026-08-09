@@ -15,6 +15,8 @@ import { helpCatalogEntries } from './help.js'
 import { guideCatalogEntries } from './guide.js'
 
 export const GUIDANCE_SCHEMA_VERSION = 1 as const
+export const GUIDANCE_CATALOG_SCHEMA = 'spexcode.guidance-catalog/v1' as const
+export const GUIDANCE_PAYLOAD_NAME = 'guidance-catalog.json' as const
 export type GuidanceKind = 'plugin' | 'help' | 'guide'
 export type GuidanceSurface = 'system' | 'command' | 'hook' | 'skill' | 'agent' | 'review'
 
@@ -30,7 +32,14 @@ export type GuidanceEntry = Readonly<{
   surface?: GuidanceSurface
   title: string
   description: string
+  content: string
   source: GuidanceSource
+}>
+
+export type EffectiveSystemContract = Readonly<{
+  content: string
+  contentHash: string
+  sourceEntryIds: readonly string[]
 }>
 
 export type GuidanceBundle = Readonly<{
@@ -38,6 +47,10 @@ export type GuidanceBundle = Readonly<{
   revision: string
   entries: readonly GuidanceEntry[]
   bundleHash: string
+  catalogSchema: typeof GUIDANCE_CATALOG_SCHEMA
+  payloadName: typeof GUIDANCE_PAYLOAD_NAME
+  sourceRevision: string
+  effectiveSystemContract: EffectiveSystemContract
 }>
 
 type GitReader = (args: string[]) => string
@@ -91,8 +104,8 @@ function entrySource(root: string, path: string, text: string, revision: string,
 }
 
 /**
- * Immutable product-side index over the authoritative plugin/help/guide surfaces.
- * The constructor reads only the existing registries; it never stores their prose in the bundle.
+ * Immutable product-side projection over the authoritative plugin/help/guide surfaces.
+ * The constructor reads existing registries and materializes one export payload at call time.
  */
 export class GuidanceCatalog {
   readonly bundle: GuidanceBundle
@@ -121,6 +134,7 @@ export class GuidanceCatalog {
           surface,
           title: preset.title,
           description: preset.desc,
+          content: preset.body,
           source: entrySource(root, path, preset.body, revision, sourceRevisionFor),
         })
       }
@@ -132,6 +146,7 @@ export class GuidanceCatalog {
         kind: 'help',
         title: entry.title,
         description: 'CLI command usage and safety guidance',
+        content: entry.text,
         source: entrySource(root, path, entry.text, revision, sourceRevisionFor),
       })
     }
@@ -142,14 +157,25 @@ export class GuidanceCatalog {
         kind: 'guide',
         title: entry.title,
         description: 'CLI workflow and format guidance',
+        content: entry.text,
         source: entrySource(root, path, entry.text, revision, sourceRevisionFor),
       })
     }
 
+    const systemEntries = entries.filter((entry) => entry.kind === 'plugin' && entry.surface === 'system')
+    const effectiveSystemContent = systemEntries.map((entry) => entry.content.trim()).filter(Boolean).join('\n\n')
     const payload = {
       schemaVersion: GUIDANCE_SCHEMA_VERSION,
       revision,
       entries: sortEntries(entries),
+      catalogSchema: GUIDANCE_CATALOG_SCHEMA,
+      payloadName: GUIDANCE_PAYLOAD_NAME,
+      sourceRevision: revision,
+      effectiveSystemContract: {
+        content: effectiveSystemContent,
+        contentHash: sha256(effectiveSystemContent),
+        sourceEntryIds: systemEntries.map((entry) => entry.id),
+      },
     }
     const bundleHash = sha256(JSON.stringify(payload))
     this.bundle = freeze({ ...payload, bundleHash })

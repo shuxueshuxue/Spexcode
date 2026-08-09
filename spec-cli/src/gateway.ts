@@ -322,7 +322,7 @@ function webRoute(raw: string): WebRoute | null {
 
 function sessionWebTarget(route: WebRoute, projectRoot?: string): { port: number; host: string; connectHost: string; path: string } {
   const endpoint = postedSessionWeb(route.sessionId, route.key, projectRoot)
-  const base = endpoint.pathname.endsWith('/') ? endpoint.pathname : `${endpoint.pathname}/`
+  const base = new URL('.', endpoint).pathname
   const path = route.tail === '/' ? endpoint.pathname : `${base}${route.tail.slice(1)}`
   return { port: Number(endpoint.port), host: endpoint.host, connectHost: endpoint.hostname.replace(/^\[|\]$/g, ''), path: `${path}${route.query}` }
 }

@@ -10,7 +10,7 @@ scenarios:
       automatically. `watch list` exposes that existing relation/source; the supervisor does NOT issue a
       manual `spex session watch <child>`, and the child transition arrives through the managed send-backed
       delivery without a duplicate message.
-  - name: owned-lifecycle-supervision
+  - name: manual-watch-traffic-boundary
     tags: [cli]
     description: >-
       In a launched supervisor session, deliberately supervise an existing session with `spex session watch

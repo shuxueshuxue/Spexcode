@@ -1056,11 +1056,13 @@ a.scenario-count:hover { background: var(--panel2); }
   border-color: var(--green); color: var(--green);
 }
 .si-session-drag-ghost {
-  position: fixed; z-index: 52; box-sizing: border-box; display: flex; align-items: center;
-  padding: 5px 12px; background: var(--paper); border: 1px solid var(--line);
-  border-left: 3px solid var(--ov, var(--blue)); box-shadow: 0 8px 20px color-mix(in srgb, var(--ink) 22%, transparent);
-  color: var(--ink2); font-family: var(--mono); font-size: var(--type-caption); line-height: var(--line-session-row);
+  position: fixed; z-index: 52; box-sizing: border-box; background: transparent; border: 0;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--ink) 22%, transparent);
   opacity: .96; pointer-events: none; transform: translate(10px, -8px) rotate(-1deg);
+}
+.si-session-drag-ghost > .si-item {
+  height: 100%; box-sizing: border-box; background: var(--panel);
+  border-top: 1px solid var(--line); border-right: 1px solid var(--line);
 }
 body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !important; user-select: none !important; }
 /* A selected headline can grow to three lines; its disclosure stays beside line one rather than centring in

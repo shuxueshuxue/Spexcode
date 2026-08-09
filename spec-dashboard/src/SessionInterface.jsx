@@ -499,11 +499,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       setActionOutcome({ owner: 'panel', phase: 'failed', message: error instanceof Error ? error.message : String(error) })
     }
   }, [allSessions, expandFolds, reload])
-  const startSessionDrag = useCallback((event, session) => {
+  const startSessionDrag = useCallback((event, session, appearance) => {
     if (event.button !== 0 || viewingShelf) return
     const bounds = event.currentTarget.getBoundingClientRect()
     const drag = {
-      id: session.id, session, width: bounds.width, height: bounds.height,
+      id: session.id, session, appearance, width: bounds.width, height: bounds.height,
       offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top,
       startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY,
       parent: session.parent || null, target: undefined, started: false,
@@ -1447,7 +1447,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   className={`si-item${!selecting && active === s.id ? ' on' : ''}${isPicked ? ' picked' : ''}`}
                   style={{ '--ov': labelColor(s.id) }}
                   aria-grabbed={sessionDrag?.id === s.id || undefined}
-                  onMouseDown={(e) => startSessionDrag(e, s)}
+                  onMouseDown={(e) => startSessionDrag(e, s, {
+                    lead, selecting, picked: isPicked, active: !selecting && active === s.id,
+                    fold: it.expandable ? { expanded: it.expanded, rollup: it.rollup, kin: it.kin } : null,
+                    depth: it.depth,
+                  })}
                   onClick={() => {
                     if (suppressSessionClickRef.current === s.id) {
                       suppressSessionClickRef.current = null
@@ -1794,8 +1798,21 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             left: sessionDrag.x - sessionDrag.offsetX,
             top: sessionDrag.y - sessionDrag.offsetY,
             '--ov': labelColor(sessionDrag.id),
+            '--sess-fold-pad-x': '12px',
+            '--sess-fold-indent': `${sessionDrag.appearance.depth * 14}px`,
           }}>
-            <SessionRow s={sessionDrag.session} locked={false} showAvatar={false} />
+            <div className={`si-item${sessionDrag.appearance.active ? ' on' : ''}${sessionDrag.appearance.picked ? ' picked' : ''}`}>
+              {sessionDrag.appearance.selecting && <span className={`si-check${sessionDrag.appearance.picked ? ' on' : ''}`} />}
+              <SessionRow s={sessionDrag.session} locked={false} showAvatar={false} lead={sessionDrag.appearance.lead} />
+            </div>
+            {sessionDrag.appearance.fold && (
+              <span className={`sess-fold pod sess-fold-control${sessionDrag.appearance.fold.expanded ? ' open' : ''}`}
+                style={sessionDrag.appearance.fold.expanded
+                  ? { color: sessionDrag.appearance.fold.rollup, borderColor: sessionDrag.appearance.fold.rollup }
+                  : { background: sessionDrag.appearance.fold.rollup, borderColor: sessionDrag.appearance.fold.rollup }}>
+                {sessionDrag.appearance.fold.kin}
+              </span>
+            )}
           </div>
         )}
       </div>

@@ -34,8 +34,9 @@ scenarios:
       the bulk archive and close confirms; press Enter in each. Verify that no lifecycle request was made
       before either confirm opened, and then count the resulting requests.
     expected: >
-      A short row click still changes only its check; after the movement threshold the source row dims, a
-      full-row ghost floats clear of the highlighted drop target, and the drag sends exactly one
+      A short row click still changes only its check; after the movement threshold the source row dims, its
+      full-row ghost keeps the source title, checkbox, fold pod, and live status, floats clear of the highlighted
+      drop target, and the drag sends exactly one
       POST /api/sessions/reparent with the dragged id in children and the drop target as parent; no local tree
       mutation stands in for that request. In the ordinary menu,
       archive shares the danger section with close and opens an archive confirmation before any archive

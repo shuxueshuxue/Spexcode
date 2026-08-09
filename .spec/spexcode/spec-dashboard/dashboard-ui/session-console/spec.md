@@ -271,12 +271,12 @@ Modified Command/Ctrl/Shift combinations stay with the browser. An **Enter that 
 never sends; plain Enter sends, while Shift+Enter adds a line.
 
 Command Box dispatches by **appending to the target's durable log** ([[dispatch]]), never typed into the pane,
-so one prompt lands atomically even in tmux copy-mode. Its right-pane action-outcome surface shows sending,
-then either delivery or the returned failure. A failed 502 keeps the complete draft and the box open for
-retry, and carries no delivery marker of its own: a send either put the bytes in the log or did not, so a
-retry can only ever repeat something that never landed. On a 2xx it visibly acknowledges
-delivery in that same surface before clearing the draft and closing; disappearing is never the only success
-signal. A `/` line
+so one prompt lands atomically even in tmux copy-mode. Its right-pane action-outcome surface shows only the
+in-flight `sending...` state. A failed 502 keeps the complete draft and the box open for retry, and carries
+no delivery marker of its own: a send either put the bytes in the log or did not, so a retry can only ever
+repeat something that never landed. Once either result settles, it visibly acknowledges through the shared
+[[transient-notices]] stack — a short-lived delivery/failure result outside the Command Box's geometry —
+before a successful send clears the draft and closes the box. A `/` line
 may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every toolbar twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable
@@ -286,14 +286,13 @@ only for the live review proposal declared by `done --propose merge`; `/eval` op
 session-scoped Evals page.
 Lifecycle actions consume both HTTP status and the structured `{ok,error}` body before the board reloads, so
 a refused stop/close/relaunch remains visible instead of reading as a successful background no-op. Command Box
-and lifecycle actions use one selected-session, right-pane action-outcome mechanism: Command Box owns its
-outcome while it is open; an existing-session action owns its selected action/relaunch panel. The left session
-  list is navigation-only and renders no action alert. Bulk archive and close leave select mode immediately but
-  aggregate every returned refusal into that same selected-session outcome, so an HTTP conflict never exists only
-  in browser tooling.
-Every outcome renders once and clears only as its owning
-surface closes, changes session, or completes its success lifecycle; duplicate alerts make one failure look
-like two operations. **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
+and lifecycle actions use one selected-session, right-pane action-outcome mechanism only while they are pending:
+Command Box owns `sending...` while open; an existing-session action owns `working...` in its selected
+action/relaunch panel. Settled delivery and failure publish once through [[transient-notices]], so neither an
+old refusal nor a success permanently spends console geometry. The left session list is navigation-only and
+renders no action alert. Bulk archive and close leave select mode immediately but aggregate every returned
+refusal into that same selected-session result, so an HTTP conflict never exists only in browser tooling.
+**Prompt delivery and a lifecycle transition remain distinct while pending:** the former
 reports `sending...`, while the latter reports the neutral `working...`; reusing delivery copy for relaunch,
 stop, archive, close, or merge would falsely claim the dashboard sent the agent a prompt.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets

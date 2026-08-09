@@ -180,3 +180,8 @@ filter (default off) picking the root.
   scope/scenario/A-B-result change re-sources the workspace and clears that draft before the new result is
   reviewable. Interactive browser and CLI rows always travel through paged or bounded review responses;
   the self-contained scoped HTML export is the only full-model transport exception.
+
+An `@` dispatch echo from a successful remark is a completed acknowledgement, not detail-page content: it
+publishes through [[transient-notices]]' one dashboard notice stack, so navigating or reloading the detail
+never leaves a six-second banner in its document flow. A failed composer action still owns its actionable
+local error state; this page does not turn validation or an editable draft problem into a disappearing toast.

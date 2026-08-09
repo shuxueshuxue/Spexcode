@@ -35,3 +35,7 @@ focus through the existing tab-scoped focus key. Once started in a tab, App stay
 terminal warmth survive a return to Evals, and the lightweight entry is not re-entered until a genuinely new
 cold tab/reload starts at a detail address. This node changes no route shape and weakens no detail
 loading/error/evidence behavior; it only decides which runtime is allowed to exist for that address.
+
+The root still mounts [[transient-notices]] around both runtime choices. That provider is chrome only: a
+lightweight review entry can acknowledge its own completed write without importing the board, while mounting it
+does not fetch graph data, open a transport, or change the cold-route boundary above.

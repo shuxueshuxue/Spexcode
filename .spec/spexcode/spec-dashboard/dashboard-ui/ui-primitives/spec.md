@@ -24,6 +24,8 @@ prose three ways. The pattern is the point: the second copy is where the defect 
 - [[esc-layers]] — the one LIFO Escape stack, so a press peels the layer in front and never the surface
   behind it.
 - [[resizable-panes]] — the one pane-resize mechanism: divider, clamp, persistence, and reset gesture.
+- [[transient-notices]] — the one short-lived result surface: a themed, dismissible stack with one default
+  timeout instead of each page pinning an ad-hoc acknowledgement into its layout.
 
 What keeps this from becoming a junk drawer is a real admission test, applied twice. A node belongs here
 only when it is **owned by no single surface** — a widget only one page will ever mount belongs to that

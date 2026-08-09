@@ -28,6 +28,7 @@ import {
 import { inertChromePress } from './focus.js'
 import { useEscLayer } from './escStack.js'
 import RichText from './RichText.js'
+import { useTransientNotice } from './TransientNotice.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
 
@@ -350,6 +351,7 @@ function LauncherPicker({ launchers, launcher, pickLauncher }) {
 
 export default function SessionInterface({ sessions, specs = [], focusNode, open, searchOpen = false, sel, setSel, seed, onSeedConsumed, onClose, onPickSession, onOpenSearch, reload, boardLive = false }) {
   const t = useT()
+  const { notify } = useTransientNotice()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
   const [ctxMenu, setCtxMenu] = useState(null) // session-row right-click menu { x, y, session } — row-level actions live here
@@ -362,8 +364,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // named launcher profiles ([[launcher-select]]) — a launcher fuses (harness, cmd), so this is the sole
   // launch choice; the fetch + default resolution live in the shared launch path (./launch.js).
   const { launchers, launcher, pickLauncher } = useLaunchers()
-  // One selected-session outcome lives only in the right pane. `owner` decides which product surface clears it:
-  // Command Box keeps delivery progress/failure beside its draft; a lifecycle action stays with its panel.
+  // The right pane owns in-flight state; its settled result moves to the shared notice surface.
   const [actionOutcome, setActionOutcome] = useState(null)
   const [commandOpen, setCommandOpen] = useState(false)
   const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
@@ -392,6 +393,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const attachmentsRef = useRef([])
   const uploadControllersRef = useRef(new Map())
   const uploadQueueBusyRef = useRef(false)
+
+  useEffect(() => {
+    if (!actionOutcome || actionOutcome.phase === 'pending' || actionOutcome.phase === 'sending') return
+    notify(actionOutcome.message, { kind: actionOutcome.phase === 'delivered' ? 'success' : 'error' })
+    setActionOutcome(null)
+  }, [actionOutcome, notify])
 
   const replaceAttachments = (next) => {
     attachmentsRef.current = next

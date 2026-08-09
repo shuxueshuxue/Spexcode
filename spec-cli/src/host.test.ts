@@ -72,7 +72,7 @@ test('publishEndpoint writes atomically; dropOwnEndpoint removes only its own re
   assert.equal(existsSync(endpointRecordPath(root)), false)
 })
 
-test('reconcile validates instance identity and unions with the durable catalog', async () => {
+test('reconcile validates instance identity and keeps the durable catalog explicit', async () => {
   const home = freshHome('reconcile')
   const repos = join(home, 'repos')
   const rootOk = join(repos, 'ok'), rootBad = join(repos, 'bad'), rootDead = join(repos, 'dead')
@@ -111,8 +111,9 @@ test('reconcile validates instance identity and unions with the durable catalog'
     assert.equal(by[rootMissing], undefined, 'a remembered root whose directory is gone is not listed')
     assert.equal(by['/proj/foreign'], undefined, 'a mis-slotted record must yield nothing')
     assert.equal(by['/proj/legacy'], undefined, 'a legacy record must yield nothing')
-    // auto-adoption: the validated live root became durable catalog knowledge
-    assert.ok(readCatalog().some((e) => e.root === rootOk))
+    // A transient served project remains reachable while live, but serving it does not permanently
+    // clutter the offline project menu. Only POST /projects (the explicit add flow) owns the catalog.
+    assert.equal(readCatalog().some((e) => e.root === rootOk), false)
 
     okIdentity.identity = { title: 'Alpha live', icon: 'spark' }
     assert.deepEqual((await reconcileProjects()).find((p) => p.root === rootOk)?.identity,

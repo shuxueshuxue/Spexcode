@@ -28,6 +28,8 @@ jobs:
         run: npm ci
       - name: init-plugin parity + spec-lint (blocks on errors; coverage/drift are advisory warnings)
         run: npm run lint
+      - name: Guidance release producer
+        run: npm run test:guidance-release
       - name: dead-words gate (retired vocabulary must not resurface on command/route/label/file/node surfaces)
         run: node scripts/dead-words.mjs
       - name: typecheck

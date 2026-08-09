@@ -1,0 +1,82 @@
+---
+title: guidance docs contract
+status: active
+hue: 200
+desc: Guidance leaves the product repository only as a sealed, versioned catalog release; an independent documentation repository polls, verifies, reviews, and deploys that release without reading or writing product sources.
+related:
+  - spec-cli/src/guide.ts
+---
+# guidance docs contract
+
+## raw source
+
+The product tree remains the source of truth for SpexCode guidance. An independent documentation repository
+consumes sealed artifacts rather than this checkout, and its own polling, review, and deployment gates remain
+explicit.
+
+## expanded spec
+
+[[guide]] owns the guidance content. The product repository publishes that content for another repository as a
+**release artifact**, never as a source checkout, a branch tip, a shared directory, a submodule, or a file-level
+copy contract. The documentation repository neither reads `guide.ts` nor writes back to it; source changes flow
+one way through the catalog producer. The catalog's internal schema and generation remain its own concern. This
+node owns only the delivery envelope and the consumer protocol around that catalog.
+
+### Sealed source release
+
+Each publishable guidance release has one immutable identity tuple:
+
+- a producer release version and its exact source Git revision;
+- a catalog schema identifier and one named catalog payload asset;
+- the payload byte length and its lowercase SHA-256 digest; and
+- a versioned release manifest whose fields name that tuple and the artifact retrieval location.
+
+The manifest schema is `spexcode.guidance-release/v1`. A manifest is valid only when its schema is supported,
+the source revision and release version are non-empty, the catalog schema and asset name are non-empty, the byte
+length is a non-negative integer, and the digest is exactly 64 lowercase hexadecimal characters. The catalog
+payload declares the same catalog schema and source identity as its manifest. The producer creates both from one
+committed product revision, publishes them together under that version, and never replaces their bytes in place.
+A correction is a new versioned tuple, not a mutable re-upload or a rewrite of a consumer lock.
+
+The digest is over the exact downloaded catalog bytes, before decompression, rendering, or formatting. A source
+release feed may help a consumer discover candidates, but it is not an authority to consume a moving `latest`
+pointer: after choosing a candidate, every read is pinned to the release's immutable asset identity and verified
+against the manifest. The product repository retains the generator input and the release provenance; the
+artifact is a derived, read-only projection and can never become a second editable source of guidance.
+
+### Consumer protocol
+
+The documentation repository configures the producer release feed and the catalog schemas it accepts. Its poller
+does the following as one serialized update attempt:
+
+1. Acquire a consumer-side concurrency lock scoped to that documentation repository and producer. The lock covers
+   discovery, download, verification, rendering, and proposal creation, so two pollers cannot create competing
+   updates for the same source tuple.
+2. Read a candidate release manifest, pin its asset identities, download the manifest and catalog bytes, and refuse
+   the candidate if any schema, source identity, size, payload declaration, or SHA-256 check disagrees. Network,
+   parsing, and verification failures are visible failures; a poller must not reuse an older unverified payload as
+   though it were current.
+3. Compare the verified tuple with the documentation repository's committed consumer lock. An identical tuple is a
+   no-op. A new tuple is rendered only in the documentation repository, and its source version, source revision,
+   catalog schema, payload name, byte length, and SHA-256 are recorded in that lock.
+4. Run the documentation repository's normal validation against that staged render, then open or update a review
+   change that contains the render and the exact consumer lock. The review identifies the producer tuple; it does
+   not claim that polling itself approved the content.
+
+The lock is a provenance record, not a cache hint: review and deployment read it from the proposed or merged
+documentation commit, never from a poller's workspace. A malformed, unsupported, or already-rejected release
+cannot advance it. Rollback selects a previously reviewed, checksum-verified documentation commit or opens a new
+reviewed change that records the selected older tuple; it never mutates a released source artifact.
+
+### Review and deployment separation
+
+Fetching a valid source release does not publish documentation. A human reviews the rendered documentation diff
+and its locked producer tuple through the documentation repository's ordinary review path. Deployment runs only
+from the approved, merged documentation commit after rechecking the lock and the repository's own validation; it
+does not deploy directly from a source release, a polling workspace, or a producer branch.
+
+`PUBLISH-BLOCKED` remains an unconditional consumer-side deploy stop. Polling may discover and prepare a review
+while that marker exists, but no deploy path may remove, bypass, or reinterpret it. The product repository does
+not inspect, delete, or otherwise operate the marker. This preserves a clear ownership boundary: the product
+tree owns guidance intent and sealed releases; the documentation repository owns rendering, approval, its lock,
+and deployment.

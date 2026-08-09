@@ -71,9 +71,9 @@ export function readEndpointRecord(file: string): EndpointRecord | null {
 
 // ── the durable known-project catalog ────────────────────────────────────────────────────────────────
 // ~/.spexcode/projects.json — the host's memory of which projects exist, so /projects can list a project
-// whose backend is OFFLINE (records vanish with their serve; the catalog does not). Populated two ways:
-// explicitly (the add op) and by auto-adoption of any validated live record, so every project ever served
-// under this user shows up without a registration ceremony.
+// whose backend is OFFLINE (records vanish with their serve; the catalog does not). It is populated only
+// by the explicit add operation: a live record may appear in this pass, but an ad-hoc worktree must not
+// turn into a permanent offline menu entry merely because it was served once.
 export type CatalogEntry = { root: string; addedAt: string }
 export const catalogPath = (): string => join(spexcodeHome(), 'projects.json')
 
@@ -212,14 +212,6 @@ export async function reconcileProjects(): Promise<ProjectEntry[]> {
       live.set(rec.root, { rec, identity: inst.identity })
     }
   }))
-
-  // auto-adopt: a VALIDATED live root becomes durable catalog knowledge, so it stays listed after its
-  // serve stops. Unvalidated claims are listed this pass but never written durable — a stale or wrong
-  // record must not pollute the catalog. Best-effort — a refused catalog write (malformed file) must not
-  // hide live backends.
-  for (const root of live.keys()) {
-    try { catalogAdd(root) } catch (e) { if (!catalogWarned) { catalogWarned = true; console.error(`[host] ${(e as Error).message}`) } }
-  }
 
   const byId = new Map<string, ProjectEntry>()
   const push = (root: string) => {

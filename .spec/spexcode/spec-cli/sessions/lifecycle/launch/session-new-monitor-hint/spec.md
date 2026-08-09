@@ -37,8 +37,9 @@ conversation id rather than the SpexCode session id, and is omitted for Claude),
 manual and copied verb manuals. Existing session verbs and spellings keep their behaviour; this is a help
 projection change only. The declaration entries project [[state]]'s current vocabulary rather than inventing
 another lifecycle: `done --propose merge` means review and the sole clickable merge proposal, `nothing` is an
-intended no-write trap that sends the agent to merge, close, ask, or park, `close` means close-pending, while ask/park
-name asking/parked and their distinct wake-up owners.
+intended no-write trap that sends the agent to merge, close, ask, or park, `close` means close-pending only for
+settled work with no outstanding human decision, follow-up, or inspection, while `ask` includes an answered
+exploratory question or handoff awaiting human direction and `park` retains its distinct self-wake owner.
 
 `spex session new --help` lists its optional `--name <name>` alongside the prompt and launcher inputs. The
 name is the new record's initial display override; it does not enter, replace, or alter the launch prompt.

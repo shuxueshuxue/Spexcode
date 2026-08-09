@@ -243,21 +243,25 @@ project's eventual source migration remains an explicit reviewed change rather t
   managed watch delivery or background task will wake you; with neither running to resume you the stop is `asking`, never a false
   `parked` the board misreads as self-resuming while you actually need the human.
   The teaching names the complete declared face: `done --propose merge` is **review** — the sole proposal
-  that offers a human-clickable merge; `done --propose close` is **close-pending**; `ask` is **asking** for a
-  human reply; and `park` is **parked**, waiting only for a managed watch delivery or real background wake-up.
+  that offers a human-clickable merge; `done --propose close` is **close-pending** only after the task is
+  genuinely settled, its worktree is no longer needed, and no human decision, follow-up, or posted-artifact
+  inspection remains. `ask` is **asking** for a human reply or direction — including an answered exploratory
+  question or a handoff awaiting the human's next direction — and `park` is **parked**, waiting only for a
+  managed watch delivery or real background wake-up.
   `done --propose nothing` is instead an intended correction prompt that records no terminal state. Its
   branches name the operative facts: `merge` is committed spec and code not yet landed in `main`; `close` is
   complete work that landed (or had nothing to land), is verified, and leaves neither a needed worktree nor a
-  posted artifact awaiting human inspection; `ask` is human input, direction, or that inspection; `park` is a
-  managed delivery or background job that resumes a named next action — watching terminal children is not a
-  wake-up. The dashboard keeps the merge tool's fixed slot
+  human decision, follow-up, or posted artifact awaiting inspection; `ask` is human input, direction, an
+  answered exploratory answer awaiting follow-up, or that inspection; `park` is a managed delivery or
+  background job that resumes a named next action — watching terminal children is not a wake-up. The dashboard keeps the merge tool's fixed slot
   for every selected session, but enables and paints it green only for the persisted
   `awaiting`/`merge`/`review` proposal while liveness is `online`; every other proposal, lifecycle, or
   liveness reading is muted, disabled, and names its reason. This is an affordance over the existing
   record projection, never a new merge, commit-gate, or lifecycle transition.
-  After verified landing, close-pending is for a finished task whose worktree is no longer needed; otherwise the
-  agent declares the state that is true. The first-stop teaching carries the same boundary, so unfinished work
-  stays review/asking rather than inviting discard.
+  After verified landing, close-pending is for a finished task whose worktree is no longer needed and which has
+  no outstanding human decision or follow-up; otherwise the agent declares the state that is true. The
+  first-stop teaching carries the same boundary, so unfinished work and human-directed handoffs stay
+  review/asking rather than inviting discard.
 - **`StopFailure` → `error`**; **headless turn non-zero exit → `error`**, but only as an `active` compare-and-set
   so a declaration written before child teardown wins; **`Notification(idle_prompt)` → `idle`**. All Stop-gate
   git goes through the shared `git()` helper, so a stray exported git dir can't misdirect repo discovery.

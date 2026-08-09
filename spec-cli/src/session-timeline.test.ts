@@ -269,6 +269,7 @@ test('withNoteReplyHint: makes the note declaration required reply transport eve
   const out = withNoteReplyHint('how is the merge going?')
   assert.ok(out.startsWith('how is the merge going?'), out)
   assert.ok(out.includes('spex session ask --note'), out)
+  assert.ok(out.includes('answered exploratory question'), out)
   assert.ok(out.includes('reply transport'), out)
   assert.ok(out.includes('even when the message says to use no tools'), out)
   assert.ok(out.includes('FINAL action'), out)

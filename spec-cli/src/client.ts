@@ -383,7 +383,7 @@ export async function clientRename(id: string, name: string): Promise<boolean> {
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
-export async function clientReparent(children: string[], parent: string): Promise<import('./sessions.js').SessionReparentResult> {
+export async function clientReparent(children: string[], parent: string | null): Promise<import('./sessions.js').SessionReparentResult> {
   await guarded('session reparent')
   const r = await apiFetch('/api/sessions/reparent', post({ children, parent }))
   if (!r.ok) throw new BackendError(`backend refused to reparent sessions: ${await r.text()}`, r.status)

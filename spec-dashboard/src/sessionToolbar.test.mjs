@@ -39,7 +39,7 @@ test('session toolbar resolves a Terminal or Conversation base before resource t
   const files = source.indexOf('<SessionFiles', actions)
   const surfaceSwitch = source.indexOf('surface-switch', files)
   assert.ok(actions > 0 && actions < files && files < surfaceSwitch, 'commands, Files, and the base-surface switch must share one right-side tool group')
-  assert.match(source, /onClick=\{\(\) => \{[\s\S]{0,100}selectSession\(s\.id\)/)
+  assert.match(source, /onClick=\{\(\) => \{[\s\S]{0,260}selectSession\(s\.id\)/)
   assert.match(source, /activeResource &&[\s\S]{0,240}data-resource-action="refresh"[\s\S]{0,160}refreshResource\(activeResource\)/)
   assert.match(source, /activeResource\?\.kind === 'file'[\s\S]{0,240}data-resource-action="download"[\s\S]{0,220}downloadFile\(activeResource\.sessionId, activeResource\.value\)[\s\S]{0,360}data-resource-action="copy"[\s\S]{0,180}copyFilePath\(activeResource\.value\)/)
   assert.match(source, /icon="x"[\s\S]{0,160}closeResource\(tab\)/)
@@ -113,6 +113,26 @@ test('archive door stays icon-only regardless of archived session count', () => 
 
 test('archive door suppresses the New Session highlight while the shelf is open', () => {
   assert.match(source, /className=\{active === 'new' && !viewingShelf \? 'si-pill new on' : 'si-pill new'\}/)
+})
+
+test('session tree drag moves the whole row and can detach a nested session', () => {
+  assert.match(source, /const \[sessionDrag, setSessionDrag\] = useState\(null\)/)
+  assert.match(source, /apiFetch\('\/api\/sessions\/reparent', \{[\s\S]{0,220}children: \[childId\], parent/)
+  assert.match(source, /data-session-drop-id=\{s\.id\}/)
+  assert.match(source, /data-session-root-drop/)
+  assert.match(source, /sessionAncestorIds\(allSessions, target\)\.includes\(drag\.id\)/)
+  assert.match(source, /className="si-session-drag-ghost"[\s\S]{0,440}<SessionRow s=\{sessionDrag\.session\}/)
+  assert.match(source, /onDetach=\{\(s\) => \{ void changeSessionParent\(s\.id, null\) \}\}/)
+  assert.match(contextMenu, /menu\.session\.parent && <ContextMenuItem icon="corner-up-left" onClick=\{detach\}>/)
+  assert.match(icons, /'corner-up-left':/)
+  assert.match(en, /detach: 'remove from parent'/)
+  assert.match(en, /rootDrop: 'move to top level'/)
+  assert.match(zh, /detach: '解除父级关系'/)
+  assert.match(zh, /rootDrop: '移到顶层'/)
+  assert.match(css, /\.si-tree-row\.dragging > \.si-item \{ opacity: \.28; \}/)
+  assert.match(css, /\.si-tree-row\.drop-target > \.si-item \{/)
+  assert.match(css, /\.si-root-drop\.on \{/)
+  assert.match(css, /\.si-session-drag-ghost \{[\s\S]{0,520}pointer-events: none;/)
 })
 
 test('archive refresh cannot override a human shelf toggle without a selection transition', () => {

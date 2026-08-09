@@ -35,7 +35,8 @@ the accessible name impossible to forget.
   company's logo (the Claude spark, not the Anthropic wordmark; the Codex ring, not the OpenAI flower),
   sourced from AionUi's multi-CLI icon set and monochrome-adapted: hardcoded brand fills stripped so
   the mark inherits `currentColor` (readable in both themes), a two-tone original keeping its second
-  tone as an opacity step.
+  tone as an opacity step. The console's `corner-up-left` mark names the session-tree move back to top
+  level, retaining the same stroke vocabulary rather than a component-local arrow.
 - **Identity marks are a data adapter, not scattered glyphs.** [[project-identity]] renders the named
   [[icon-presets]] registry because the same data must serialize into browser favicons. That one renderer
   is the deliberate sibling to the chrome glyph vocabulary; pages still never hand-write SVG variants.

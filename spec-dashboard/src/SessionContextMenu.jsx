@@ -8,7 +8,7 @@ import { archiveEligible } from './sessionCommands.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
-export default function SessionContextMenu({ menu, onClose, onChanged, onLock, onMultiSelect, onError }) {
+export default function SessionContextMenu({ menu, onClose, onChanged, onLock, onMultiSelect, onDetach, onError }) {
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
   const [closing, setClosing] = useState(null)     // the session whose close-confirm prompt is open | null
@@ -62,6 +62,12 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
   const startSelect = (e) => {
     e.stopPropagation()
     onMultiSelect?.(menu.session)
+    onClose()
+  }
+
+  const detach = (e) => {
+    e.stopPropagation()
+    onDetach?.(menu.session)
     onClose()
   }
 
@@ -176,6 +182,7 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
               <ContextMenuItem icon="terminal" onClick={startAttach}>{t('sessionWindow.attach')}</ContextMenuItem>
             )}
             <ContextMenuItem icon="list-checks" onClick={startSelect}>{t('sessionWindow.select')}</ContextMenuItem>
+            {menu.session.parent && <ContextMenuItem icon="corner-up-left" onClick={detach}>{t('sessionWindow.detach')}</ContextMenuItem>}
             {/* one item, archive or resume ([[archive]]) — the cold row never exposes a record-only unarchive. */}
             {(menu.session.archived || archiveEligible(menu.session.status, false)) && (
               <ContextMenuItem icon={menu.session.archived ? 'star-filled' : 'star'} onClick={toggleArchive}>

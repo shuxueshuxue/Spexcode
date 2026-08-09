@@ -25,6 +25,16 @@ const parent = sessions.find((session) => session.liveness !== 'offline'
 const child = parent && childrenOf.get(parent.id).find((candidate) => candidate.liveness !== 'offline')
 const leaf = sessions.find((session) => session.liveness !== 'offline'
   && ['working', 'parked'].includes(session.status) && !childrenOf.get(session.id)?.length)
+const childSubtree = new Set()
+const pendingDescendants = child ? [child] : []
+while (pendingDescendants.length) {
+  const session = pendingDescendants.pop()
+  if (!session || childSubtree.has(session.id)) continue
+  childSubtree.add(session.id)
+  pendingDescendants.push(...(childrenOf.get(session.id) || []))
+}
+const reparentTarget = sessions.find((session) => session.liveness !== 'offline'
+  && session.id !== parent?.id && !childSubtree.has(session.id))
 const retainedOffline = sessions.filter((session) => session.liveness === 'offline').slice(0, 2)
 const offline = retainedOffline.length ? retainedOffline : sessions.filter((session) =>
   session.id !== parent?.id && session.id !== child?.id && session.id !== leaf?.id
@@ -32,6 +42,7 @@ const offline = retainedOffline.length ? retainedOffline : sessions.filter((sess
 const fixtureNeedsOffline = retainedOffline.length === 0
 assert.ok(parent && child, 'the live board needs one present parent/child session pair')
 assert.ok(leaf, 'the live board needs one live leaf session')
+assert.ok(reparentTarget, 'the live board needs one second live session for a reparent target')
 assert.ok(offline.length, 'the board needs one unrelated session record for the offline fixture')
 
 // Keep the live board's real session records and nesting. Promote retained offline records to roots; when a
@@ -45,6 +56,7 @@ fixture.sessions = fixture.sessions.map((session) => offlineIds.has(session.id)
 
 const transcript = []
 const timeline = []
+const reparentRequests = []
 const record = (surface, fact, value) => transcript.push({ surface, fact, value })
 let videoStartedAt = 0
 const mark = (step) => timeline.push({ at: Date.now() - videoStartedAt, step })
@@ -66,6 +78,14 @@ await page.route('**/api/graph*', (route) => route.fulfill({
   contentType: 'application/json',
   body: JSON.stringify(fixture),
 }))
+await page.route('**/api/sessions/reparent', async (route) => {
+  reparentRequests.push(JSON.parse(route.request().postData() || '{}'))
+  await route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ ok: true }),
+  })
+})
 
 try {
   await page.goto(`${BASE}/#/sessions`, { waitUntil: 'domcontentloaded' })
@@ -153,6 +173,58 @@ try {
   await page.locator(`.si-item[data-sid="${child.id}"]`).waitFor({ state: 'visible' })
   assert.equal(await expanded(interfacePod), 'true', 'a nested deep link must reveal its present ancestors')
   assert.equal(await page.locator('.si-list button button').count(), 0)
+
+  // Reparent uses the actual session row as the drag subject: its fixed ghost carries the row's visible
+  // headline/status, the valid receiver is highlighted, and the request remains an intercepted fixture write.
+  await page.evaluate((id) => { window.location.hash = `#/sessions/${id}` }, reparentTarget.id)
+  const dragChild = page.locator(`.si-item[data-sid="${child.id}"]`)
+  const dragTarget = page.locator(`.si-tree-row:has(> .si-item[data-sid="${reparentTarget.id}"])`)
+  await dragChild.waitFor({ state: 'visible' })
+  await dragTarget.waitFor({ state: 'visible' })
+  const childBox = await dragChild.boundingBox()
+  assert.ok(childBox, 'drag source must have screen bounds')
+  await page.mouse.move(childBox.x + 16, childBox.y + childBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(childBox.x + 28, childBox.y + childBox.height / 2)
+  await page.locator('.si-session-drag-ghost').waitFor({ state: 'visible' })
+  assert.equal(await page.locator(`.si-tree-row:has(> .si-item[data-sid="${child.id}"])`).evaluate((row) => row.classList.contains('dragging')), true)
+  const movedTargetBox = await dragTarget.boundingBox()
+  assert.ok(movedTargetBox, 'target row must keep screen bounds after the root zone opens')
+  await page.mouse.move(movedTargetBox.x + movedTargetBox.width / 2, movedTargetBox.y + movedTargetBox.height / 2)
+  assert.equal(await dragTarget.evaluate((row) => row.classList.contains('drop-target')), true)
+  await page.screenshot({ path: `${OUT}/session-row-drag.png` })
+  const targetDrop = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/sessions/reparent'))
+  await page.mouse.up()
+  await targetDrop
+  assert.deepEqual(reparentRequests.at(-1), { children: [child.id], parent: reparentTarget.id })
+  record('SessionInterface', 'whole-row drag reparent', reparentTarget.id)
+
+  const rootSource = page.locator(`.si-item[data-sid="${child.id}"]`)
+  const rootSourceBox = await rootSource.boundingBox()
+  assert.ok(rootSourceBox, 'nested row must still be draggable to the root zone')
+  await page.mouse.move(rootSourceBox.x + 16, rootSourceBox.y + rootSourceBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(rootSourceBox.x + 28, rootSourceBox.y + rootSourceBox.height / 2)
+  const rootDrop = page.locator('[data-session-root-drop]')
+  await rootDrop.waitFor({ state: 'visible' })
+  const rootBox = await rootDrop.boundingBox()
+  assert.ok(rootBox, 'nested drag must reveal the root drop zone')
+  await page.mouse.move(rootBox.x + rootBox.width / 2, rootBox.y + rootBox.height / 2)
+  assert.equal(await rootDrop.evaluate((zone) => zone.classList.contains('on')), true)
+  const rootRequest = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/sessions/reparent'))
+  await page.mouse.up()
+  await rootRequest
+  assert.deepEqual(reparentRequests.at(-1), { children: [child.id], parent: null })
+  record('SessionInterface', 'root-zone detaches parent', true)
+
+  await rootSource.click({ button: 'right' })
+  const detach = page.locator('.sess-menu-item', { hasText: 'remove from parent' })
+  await detach.waitFor({ state: 'visible' })
+  const menuRequest = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/api/sessions/reparent'))
+  await detach.click()
+  await menuRequest
+  assert.deepEqual(reparentRequests.at(-1), { children: [child.id], parent: null })
+  record('SessionInterface', 'context menu detaches parent', true)
 
   // Compare the two real product surfaces. Fully disclose the dashboard forest, read its DOM order, then
   // open the empty Sessions palette and verify that its session plane inherits that exact order.

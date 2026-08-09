@@ -613,16 +613,16 @@ export function cancelSessionWatch(watcher: string, targets: string[]): number {
   return cancelled
 }
 
-export type SessionReparentResult = { children: string[]; parent: string; notified: string[] }
+export type SessionReparentResult = { children: string[]; parent: string | null; notified: string[] }
 
 async function withRecordLocks<T>(ids: string[], body: () => Promise<T>, index = 0): Promise<T> {
   if (index >= ids.length) return body()
   return withRecordLock(ids[index], () => withRecordLocks(ids, body, index + 1))
 }
 
-function assertReparentable(children: string[], parent: string, records: Map<string, SessRec>): void {
+function assertReparentable(children: string[], parent: string | null, records: Map<string, SessRec>): void {
   if (!children.length) throw new ResourceConflict('reparent needs at least one child session')
-  managedWatchRecord(parent)
+  if (parent) managedWatchRecord(parent)
   for (const id of children) {
     const child = records.get(id)
     if (!child?.governed) throw new ResourceConflict(`session ${id} is not a governed child session`)
@@ -638,9 +638,8 @@ function assertReparentable(children: string[], parent: string, records: Map<str
   }
 }
 
-export async function reparentSessionRecords(rawChildren: string[], parent: string): Promise<SessionReparentResult> {
+export async function reparentSessionRecords(rawChildren: string[], parent: string | null): Promise<SessionReparentResult> {
   const children = [...new Set(rawChildren)].sort()
-  if (!parent) throw new ResourceConflict('reparent needs a destination parent session')
   const notify: SessRec[] = []
   await withRecordLock('session-reparent-transaction', async () => {
     // Read former supervisors only after the transaction fence: a concurrent reparent may change exactly
@@ -655,13 +654,13 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
       try {
         for (const snapshot of snapshots) {
           const { record, watchers } = snapshot
-          const hadNewParent = watchers.some((entry) => entry.watcher === parent)
-          const retainedNewParent = watchers.find((entry) => entry.watcher === parent)
+          const hadNewParent = !!parent && watchers.some((entry) => entry.watcher === parent)
+          const retainedNewParent = parent ? watchers.find((entry) => entry.watcher === parent) : null
           const nextWatchers = watchers.filter((entry) => entry.watcher !== record.parent && entry.watcher !== parent)
-          nextWatchers.push(retainedNewParent ?? { watcher: parent, createdAt: new Date().toISOString() })
+          if (parent) nextWatchers.push(retainedNewParent ?? { watcher: parent, createdAt: new Date().toISOString() })
           writeWatchEntries(snapshot.id, nextWatchers)
           if (record.parent !== parent) writeRecord({ ...record, parent })
-          if (record.parent !== parent || !hadNewParent) notify.push({ ...record, parent })
+          if (parent && (record.parent !== parent || !hadNewParent)) notify.push({ ...record, parent })
         }
         for (const snapshot of snapshots) {
           if (snapshot.record.parent && snapshot.record.parent !== parent)
@@ -682,7 +681,7 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
       }
     }))
   })
-  for (const child of notify) {
+  if (parent) for (const child of notify) {
     const delivered = await sendText(parent, watchMessage(child), child.session)
     if (!delivered.ok) throw new ResourceConflict(`reparent committed but could not queue ${child.session}'s current state for ${parent}: ${delivered.error}`)
   }

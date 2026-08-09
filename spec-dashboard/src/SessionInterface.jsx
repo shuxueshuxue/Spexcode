@@ -18,6 +18,7 @@ import { ComposerSurface, ComposerTextarea, composingKey } from './Composer.jsx'
 import { addressHash, navigateAddress, sessionEvalAddress } from './address.js'
 import { useT } from './i18n/index.jsx'
 import { apiUrl, PROJECT_BASE } from './project.js'
+import { apiFetch } from './data.js'
 import {
   SESSION_SURFACE_CONVERSATION,
   getSessionBaseSurface,
@@ -362,6 +363,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [terminalFocusRequest, setTerminalFocusRequest] = useState(0)
   const [resourceFocusRequest, setResourceFocusRequest] = useState(0)
   const [dragTarget, setDragTarget] = useState(null)
+  const [sessionDrag, setSessionDrag] = useState(null)
   const [attachments, setAttachments] = useState([])
   const [resourceTabs, setResourceTabs] = useState([])
   const [resourceSurface, setResourceSurface] = useState({})
@@ -374,6 +376,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
   const fileTargetRef = useRef('new')  // which surface the pending pick inserts into ('new' | 'command')
   const resourcePickerRef = useRef(null)
+  const sessionDragRef = useRef(null)
+  const suppressSessionClickRef = useRef(null)
   const knownWebsRef = useRef(null)
   useEffect(() => subscribeSessionSurface(() => setSurfaceVersion((version) => version + 1)), [])
   const listRef = useRef(null)
@@ -468,6 +472,76 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [listW, listDrag, resetListW] = useResizable('spex.siListWidth', 204, { min: 180, max: 480 })
   const focusId = focusNode?.id || null
   const selSession = allSessions.find((s) => s.id === active)
+  const changeSessionParent = useCallback(async (childId, parent) => {
+    const child = allSessions.find((session) => session.id === childId)
+    if (!child || (child.parent || null) === parent) return
+    try {
+      const response = await apiFetch('/api/sessions/reparent', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ children: [childId], parent }),
+      })
+      const body = await response.json().catch(() => null)
+      if (!response.ok || body?.ok === false) throw new Error(body?.error || `session parent update refused (HTTP ${response.status})`)
+      if (parent) expandFolds([parent])
+      reload?.()
+    } catch (error) {
+      setActionOutcome({ owner: 'panel', phase: 'failed', message: error instanceof Error ? error.message : String(error) })
+    }
+  }, [allSessions, expandFolds, reload])
+  const startSessionDrag = useCallback((event, session) => {
+    if (event.button !== 0 || selecting || viewingShelf) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const drag = {
+      id: session.id, session, width: bounds.width, height: bounds.height,
+      offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top,
+      startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY,
+      parent: session.parent || null, target: undefined, started: false,
+    }
+    const targetAt = (x, y) => {
+      const element = document.elementFromPoint(x, y)
+      const row = element?.closest?.('[data-session-drop-id]')
+      const root = element?.closest?.('[data-session-root-drop]')
+      let target = row?.dataset.sessionDropId || (root ? null : undefined)
+      if (target === drag.id || (target && sessionAncestorIds(allSessions, target).includes(drag.id))) target = undefined
+      if (target === drag.parent) target = undefined
+      return target
+    }
+    const onMove = (move) => {
+      if (!drag.started && Math.hypot(move.clientX - drag.startX, move.clientY - drag.startY) < 6) return
+      if (!drag.started) {
+        drag.started = true
+        document.body.classList.add('is-session-dragging')
+      }
+      drag.x = move.clientX
+      drag.y = move.clientY
+      drag.target = targetAt(move.clientX, move.clientY)
+      setSessionDrag({ ...drag })
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove, true)
+      window.removeEventListener('mouseup', onUp, true)
+      sessionDragRef.current = null
+      document.body.classList.remove('is-session-dragging')
+      if (!drag.started) return
+      suppressSessionClickRef.current = drag.id
+      // A moved button normally still dispatches its click after mouseup. Clear this guard on the next turn
+      // for browsers that suppress that click, so a later ordinary selection is never swallowed.
+      window.setTimeout(() => {
+        if (suppressSessionClickRef.current === drag.id) suppressSessionClickRef.current = null
+      }, 0)
+      setSessionDrag(null)
+      if (drag.target !== undefined) void changeSessionParent(drag.id, drag.target)
+    }
+    sessionDragRef.current = { onMove, onUp }
+    window.addEventListener('mousemove', onMove, true)
+    window.addEventListener('mouseup', onUp, true)
+  }, [allSessions, changeSessionParent, selecting, viewingShelf])
+  useEffect(() => () => {
+    const drag = sessionDragRef.current
+    if (!drag) return
+    window.removeEventListener('mousemove', drag.onMove, true)
+    window.removeEventListener('mouseup', drag.onUp, true)
+    document.body.classList.remove('is-session-dragging')
+  }, [])
   const terminalFree = isHeadlessSession(selSession)
   const activeBaseSurface = terminalFree ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(active)
   const conversationSurface = activeBaseSurface === SESSION_SURFACE_CONVERSATION
@@ -1325,6 +1399,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             </button>
           </div>
           )}
+          {sessionDrag?.parent && !viewingShelf && (
+            <div className={`si-root-drop${sessionDrag.target === null ? ' on' : ''}`} data-session-root-drop
+              data-tip={t('session.rootDrop')} aria-label={t('session.rootDrop')}>
+              <Icon name="corner-up-left" size={14} />
+            </div>
+          )}
           {viewingShelf && !shelved.length && <div className="si-empty">{t('session.shelfEmpty')}</div>}
           {forest.map((it) => {
             // Working rows group into triage zones and fold nested sessions; the archive branch above is flat and
@@ -1345,13 +1425,21 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             // its pick (never switches the pane), and the row action menu is suppressed.
             const isPicked = selecting && picked.has(s.id)
             return (
-              <div key={s.id} className="sess-tree-row si-tree-row" style={{ '--sess-fold-indent': `${it.depth * 14}px` }}>
+              <div key={s.id} data-session-drop-id={s.id}
+                className={`sess-tree-row si-tree-row${sessionDrag?.id === s.id ? ' dragging' : ''}${sessionDrag?.target === s.id ? ' drop-target' : ''}`}
+                style={{ '--sess-fold-indent': `${it.depth * 14}px` }}>
                 <button
                   type="button"
                   data-sid={s.id}
                   className={`si-item${!selecting && active === s.id ? ' on' : ''}${isPicked ? ' picked' : ''}`}
                   style={{ '--ov': labelColor(s.id) }}
+                  aria-grabbed={sessionDrag?.id === s.id || undefined}
+                  onMouseDown={(e) => startSessionDrag(e, s)}
                   onClick={() => {
+                    if (suppressSessionClickRef.current === s.id) {
+                      suppressSessionClickRef.current = null
+                      return
+                    }
                     if (selecting) return togglePick(s.id)
                     selectSession(s.id)
                   }}
@@ -1686,6 +1774,17 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
           </div>
         </section>
+        {sessionDrag && (
+          <div className="si-session-drag-ghost" aria-hidden="true" style={{
+            width: sessionDrag.width,
+            height: sessionDrag.height,
+            left: sessionDrag.x - sessionDrag.offsetX,
+            top: sessionDrag.y - sessionDrag.offsetY,
+            '--ov': labelColor(sessionDrag.id),
+          }}>
+            <SessionRow s={sessionDrag.session} locked={false} showAvatar={false} />
+          </div>
+        )}
       </div>
     </div>
     <SessionContextMenu
@@ -1703,6 +1802,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       }}
       onLock={(s) => { onPickSession?.(s, false); onClose() }}
       onMultiSelect={enterSelect}
+      onDetach={(s) => { void changeSessionParent(s.id, null) }}
     />
     </>
   )

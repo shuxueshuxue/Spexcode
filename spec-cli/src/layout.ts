@@ -3,7 +3,7 @@ import { join, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { git, repoRoot, gitA, gitAbortError, currentGitBuildAbortSignal, gitInterpretationIdentity, headSha, worktreeSpecSig, worktreeSpecDelta, worktreeSpecDeltas, withGitAbortSignal, type NodeOp } from './git.js'
 import { guardWorktree } from './resilience.js'
-import { HARNESSES, type HarnessId } from './harness.js'
+import { HARNESS_IDENTITIES, type HarnessId } from './harness-identity.js'
 import { encodeProject, projectRuntimeRoot, spexcodeHome } from './project-store.js'
 
 export { encodeProject, spexcodeHome } from './project-store.js'
@@ -347,13 +347,13 @@ export function rawLaunchReadinessOriginal(raw: RawRecord): RawLaunchReadinessOr
 // app-server to contaminate it. No worktree fallback. (sessions.ts's `ownSessionId` delegates here; spec-eval
 // reads it to resolve the current node.)
 export function envSessionId(): string | null {
-  for (const h of HARNESSES) {
+  for (const h of HARNESS_IDENTITIES) {
     const v = process.env[h.sessionEnvVar]
     if (v && v.trim()) { const r = readAliasedRawRecord(v.trim()); if (r) return r.session_id }
   }
   const o = process.env.SPEXCODE_SESSION_ID
   if (o && o.trim()) return o.trim()
-  for (const h of HARNESSES) { const v = process.env[h.sessionEnvVar]; if (v && v.trim()) return v.trim() }
+  for (const h of HARNESS_IDENTITIES) { const v = process.env[h.sessionEnvVar]; if (v && v.trim()) return v.trim() }
   return null
 }
 // @@@ RecordEntry - a record read has THREE outcomes, and collapsing them is what let a live session read as

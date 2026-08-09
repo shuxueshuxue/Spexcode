@@ -6,6 +6,8 @@ desc: One seam between SpexCode and the coding-agent harness (Claude Code, Codex
 code:
   - spec-cli/src/harness.ts
 related:
+  - spec-cli/src/harness-identity.ts
+  - spec-cli/src/harness-identity.test.ts
   - spec-cli/src/headless-controller.ts
   - spec-cli/src/execution-trace.ts
   - spec-cli/src/session-execution.ts
@@ -481,6 +483,12 @@ socket-backed headless delivery uses one `live` / `unproven` / `absent` gate bef
 wake; listener-backed liveness and record-backed liveness are named predicates; and per-session socket cleanup
 uses one unlink helper. Adapter rows retain only the real differences: request payloads, timeout/error labels,
 cold-wake spawners, listener-or-pid fallback, delivery refusal text, and the sockets each runtime owns.
+
+The adapter-neutral identity face is one ordered `HarnessIdentity` registry: each harness id and its
+`sessionEnvVar` appears once there, and every full adapter projects its identity row from that registry.
+`sessionIdentityEnvVars()` and layout's environment lookup consume the same rows. Thus a new adapter cannot
+leave a stale session-id env list behind, and a consumer that only needs identity data never loads launcher,
+transport, or materialization machinery.
 
 Most of this was **consolidation**: the event/snake maps, the Codex trust writer, and the shim writers were
 scattered in [[harness-delivery]]'s materialize; `CLAUDE_CMD` in [[sessions-core]]; the Claude `/` menu in

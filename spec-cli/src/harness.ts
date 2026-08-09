@@ -20,6 +20,7 @@ import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, pr
 import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
 import { writeFileIfChanged } from './file-write.js'
 import { codexRolloutPath, noExecutionTrace, readCodexExecutionTrace, readLocalStoreExecutionTrace, readProjectJsonlExecutionTrace, readSessionJsonlExecutionTrace, type ExecutionTrace, type ExecutionTurn } from './execution-trace.js'
+import { harnessIdentity, HARNESS_IDENTITIES, type HarnessId } from './harness-identity.js'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -33,7 +34,7 @@ import { codexRolloutPath, noExecutionTrace, readCodexExecutionTrace, readLocalS
 // payload shape. On the TS side the harness is derived from the selected launcher or ALL adapters at once
 // (materialize writes every harness's artifacts).
 
-export type HarnessId = 'claude' | 'codex' | 'opencode' | 'pi' | 'zcode' | 'claude-headless' | 'codex-headless' | 'opencode-headless' | 'pi-headless'
+export type { HarnessId } from './harness-identity.js'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null; stopped?: boolean; archived?: boolean }
 export type HarnessLaunchReadyRecord = HarnessLivenessRecord & { governed?: boolean; runtimeDir: string }
 export type HarnessLaunchReadinessFence = {
@@ -782,7 +783,7 @@ export function headlessTurnFailureShell(harness: string, swallow = true): strin
 // per-session process is entitled to carry them; a SHARED, project-scoped daemon must not — see the app-server
 // spawn below.
 export function sessionIdentityEnvVars(): string[] {
-  return [...new Set(['SPEXCODE_SESSION_ID', ...HARNESSES.map((h) => h.sessionEnvVar)])].filter(Boolean)
+  return [...new Set(['SPEXCODE_SESSION_ID', ...HARNESS_IDENTITIES.map((h) => h.sessionEnvVar)])].filter(Boolean)
 }
 export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: string, dir = runtimeRoot(), attachTui = true): string {
   const server = process.env.SPEXCODE_CODEX_SERVER_CMD || serverCmd || codexBinary(codexCmd)
@@ -2377,7 +2378,7 @@ export const claudeHarness: Harness = {
   launchCmd: (_id, _rt, cmd) => claudeBaseCmd(cmd),  // claude's full invocation IS its base command (the tail is appended by the caller)
   baseCmd: claudeBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
-  sessionEnvVar: 'CLAUDE_CODE_SESSION_ID',
+  sessionEnvVar: harnessIdentity('claude').sessionEnvVar,
   launchEnv: rendezvousLaunchEnv,
   shimFile: (proj) => join(proj, '.claude', 'settings.json'),
   shimScope: 'tree',
@@ -2420,6 +2421,7 @@ export const claudeHarness: Harness = {
 export const claudeHeadlessHarness: Harness = {
   ...claudeHarness,
   id: 'claude-headless',
+  sessionEnvVar: harnessIdentity('claude-headless').sessionEnvVar,
   headless: true,
   runtimeOwnership: 'adapter',
   ownsRendezvous: false,
@@ -2478,7 +2480,7 @@ export const codexHarness: Harness = {
   launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
   baseCmd: codexBaseCmd,
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
-  sessionEnvVar: 'CODEX_THREAD_ID',
+  sessionEnvVar: harnessIdentity('codex').sessionEnvVar,
   launchEnv: noLaunchEnv,
   // Codex discovers a LINKED worktree's PROJECT hooks from the ROOT CHECKOUT's `.codex`, NOT the worktree's
   // (codex-rs `root_checkout_hooks_folder_for_dir` rewrites the hooks-config folder to <repo_root>/<rel>/.codex
@@ -2774,6 +2776,7 @@ async function codexHeadlessReadinessProof(current: () => HarnessLaunchReadyReco
 export const codexHeadlessHarness: Harness = {
   ...codexHarness,
   id: 'codex-headless',
+  sessionEnvVar: harnessIdentity('codex-headless').sessionEnvVar,
   headless: true,
   runtimeOwnership: 'adapter',
   launchOneShot: true,
@@ -2823,7 +2826,7 @@ export const piHarness: Harness = {
   launchCmd: (_id, _rt, cmd) => `${piBaseCmd(cmd)} --approve`,   // --approve = one-run project trust (belt to writeTrust's braces)
   baseCmd: piBaseCmd,
   sessionIdArg: (id) => `--session-id ${id}`,        // caller pins the exact session id, claude-style (created if missing)
-  sessionEnvVar: 'PI_SESSION_ID',                    // exported by the generated extension at session_start; tool subprocesses inherit it
+  sessionEnvVar: harnessIdentity('pi').sessionEnvVar, // exported by the generated extension at session_start; tool subprocesses inherit it
   launchEnv: rendezvousLaunchEnv,
   shimFile: (proj) => join(proj, '.pi', 'extensions', 'spexcode.ts'),
   shimScope: 'tree',
@@ -2858,6 +2861,7 @@ export const piHarness: Harness = {
 export const piHeadlessHarness: Harness = {
   ...piHarness,
   id: 'pi-headless',
+  sessionEnvVar: harnessIdentity('pi-headless').sessionEnvVar,
   headless: true,
   // The controller is a per-session process launched in the target tmux pane. Its launch-registered PID
   // and argv session id are exact leaf ownership evidence; record-backed liveness does not make it shared.
@@ -2892,7 +2896,7 @@ export const zcodeHarness: Harness = {
   launchCmd: (_id, _rt, cmd) => `${zcodeBaseCmd(cmd)} --prompt`,
   baseCmd: zcodeBaseCmd,
   sessionIdArg: () => '',
-  sessionEnvVar: 'ZCODE_SESSION_ID',
+  sessionEnvVar: harnessIdentity('zcode').sessionEnvVar,
   launchEnv: noLaunchEnv,
   shimFile: (proj) => join(proj, '.zcode', 'settings.json'),
   shimScope: 'tree',
@@ -2930,7 +2934,7 @@ export const opencodeHarness: Harness = {
   // the launch-injected SPEXCODE_SESSION_ID — honest here because each opencode TUI is a per-session process
   // (no codex-style shared-server contamination). This var is therefore never set; envSessionId's
   // SPEXCODE_SESSION_ID tier resolves the record.
-  sessionEnvVar: 'OPENCODE_SESSION_ID',
+  sessionEnvVar: harnessIdentity('opencode').sessionEnvVar,
   launchEnv: rendezvousLaunchEnv,
   // the "shim" is a generated opencode PLUGIN in the worktree's own tree — opencode auto-loads project plugins
   // by walking the cwd, so like claude it self-anchors and needs no root-checkout rewrite or worktree anchor.
@@ -2967,6 +2971,7 @@ export const opencodeHarness: Harness = {
 export const opencodeHeadlessHarness: Harness = {
   ...opencodeHarness,
   id: 'opencode-headless',
+  sessionEnvVar: harnessIdentity('opencode-headless').sessionEnvVar,
   headless: true,
   runtimeOwnership: 'adapter',
   launchCmd: (_id, _runtimeDir, cmd) => opencodeHeadlessLaunchCommand(opencodeBaseCmd(cmd)),

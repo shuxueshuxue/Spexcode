@@ -12,6 +12,7 @@ code:
   - spec-cli/src/layout.ts#readJsonConfig
   - spec-cli/src/layout.ts#readUploadPolicy
 related:
+  - spec-cli/src/harness-identity.ts
   - spec-cli/src/layout-session-id.test.ts
   - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/src/layout-overlay.api.test.ts
@@ -129,6 +130,9 @@ ENVIRONMENT (`envSessionId()`), with a harness-aware precedence: a harness's per
 the agent's shell under the FIRST session's baked `SPEXCODE_SESSION_ID`, while codex injects the acting
 thread's `CODEX_THREAD_ID` per command, which aliases correctly. Claude is unchanged (its env var already
 equals its record id); a raw, un-aliased harness id is the last resort, below `SPEXCODE_SESSION_ID`.
+The lookup reads the adapter-neutral `HarnessIdentity` registry, the same sole source from which each full
+harness adapter obtains its `sessionEnvVar`; layout never imports the launcher-bearing adapter registry and
+does not carry a copied environment-variable list.
 
 **Alias search answers a question only about ids the store does not already own**, and both layers —
 `readAliasedRecordEntry` and the shell twin `hp_store_dir` — apply that rule identically. Absence splits in

@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
@@ -39,13 +40,30 @@ test('session noun-verb help projects the exact verb from the shared drawer defi
 })
 
 test('done nothing traps before it can write a terminal state', () => {
-  for (const args of [[], ['--propose', 'nothing']]) {
-    const result = spawnSync('tsx', [cli, 'session', 'done', ...args], { cwd: pkgRoot, encoding: 'utf8' })
-    assert.equal(result.status, 2)
-    assert.equal(result.stdout, '')
-    assert.match(result.stderr, /done --propose nothing.*trap: no state was recorded/)
-    assert.match(result.stderr, /merge.*close.*ask.*park/)
-  }
+  const home = mkdtempSync(join(tmpdir(), 'spex-nothing-trap-'))
+  const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const project = dirname(execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: pkgRoot, encoding: 'utf8' }).trim())
+  const record = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions', id, 'session.json')
+  try {
+    mkdirSync(dirname(record), { recursive: true })
+    writeFileSync(record, `${JSON.stringify({
+      session_id: id, governed: true, worktree_path: project, branch: 'node/nothing-trap', node: null,
+      title: 'nothing trap', name: '', parent: null, status: 'active', proposal: null, merges: 0, note: null,
+      sortkey: null, createdAt: Date.now(), harness: 'claude', harness_session_id: '', stopped: false,
+      archived: false, launcher: 'fixture', launch_cmd: 'true',
+    }, null, 2)}\n`)
+    const before = readFileSync(record, 'utf8')
+    for (const args of [[], ['--propose', 'nothing']]) {
+      const result = spawnSync('tsx', [cli, 'session', 'done', ...args], {
+        cwd: pkgRoot, encoding: 'utf8', env: { ...process.env, SPEXCODE_HOME: home, SPEXCODE_SESSION_ID: id },
+      })
+      assert.equal(result.status, 2)
+      assert.equal(result.stdout, '')
+      assert.match(result.stderr, /done --propose nothing.*trap: no state was recorded/)
+      assert.match(result.stderr, /merge.*close.*ask.*park/)
+      assert.equal(readFileSync(record, 'utf8'), before)
+    }
+  } finally { rmSync(home, { recursive: true, force: true }) }
 })
 
 test('bare session keeps the complete compatible drawer', () => {

@@ -162,6 +162,16 @@ scenarios:
       --json` / `spex review`); SUBSEQUENT cut declarations carry no repeat. The dashboard headline remains the
       session title/activity chain for every note shape; it never displays note text. The echo is a nudge riding
       the confirmation — the declaration lands regardless, nothing gates.
+  - name: done-nothing-is-a-no-write-trap
+    tags: [cli]
+    test: spec-cli/src/session-help-cli.test.ts
+    description: >-
+      From the real CLI, invoke both `spex session done` and `spex session done --propose nothing` before
+      any state-writer resolution, then inspect their stdout, stderr, exit code, and the current session record.
+    expected: >-
+      Both invocations exit 2, write no lifecycle/proposal change, and explain that `nothing` is a trap. The
+      prompt names merge, close, ask, and park with their real decision boundary; it never presents a generic
+      done/retention state as a successful default.
   - name: no-record-diagnosis-self-explains
     tags: [backend-api]
     description: >-

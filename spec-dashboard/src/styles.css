@@ -222,13 +222,13 @@ body {
 
 /* ---- left navigation rail ---- */
 .side-rail {
-  flex: 0 0 52px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  flex: 0 0 44px; display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 10px 0; background: var(--panel); border-right: 1px solid var(--line);
 }
 .rail-spacer { flex: 1; }
 /* a rail entry is a real anchor ([[side-nav]]); the chip is a button — one look for both */
 .rail-btn {
-  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
   background: none; border: none; border-radius: 9px; cursor: pointer; color: var(--muted);
   text-decoration: none;
 }

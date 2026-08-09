@@ -112,6 +112,11 @@ test('document pages share one inset page-scroll geometry', () => {
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.page-scroll\s*\{[^}]*margin:\s*10px 0;[^}]*scrollbar-gutter:\s*auto;/s)
 })
 
+test('desktop navigation rail stays compact without changing its icon grammar', () => {
+  assert.match(css, /\.side-rail\s*\{[^}]*flex:\s*0 0 44px;[^}]*align-items:\s*center;/s)
+  assert.match(css, /\.rail-btn\s*\{[^}]*width:\s*32px;[^}]*height:\s*32px;[^}]*justify-content:\s*center;/s)
+})
+
 test('scoped Evals gates are an opaque sticky strip inside that scroll owner', () => {
   assert.match(css, /\.se-gates\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;[^}]*z-index:\s*4;[^}]*flex:\s*0 0 40px;[^}]*height:\s*40px;/s)
   assert.match(css, /\.se-gates\s*\{[^}]*border-bottom:\s*1px solid var\(--line\);[^}]*background:\s*var\(--panel2\);/s)

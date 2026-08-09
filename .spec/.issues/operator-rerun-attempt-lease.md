@@ -48,3 +48,10 @@ Landed zcode-spec cad70220f. Exact rerun and legacy replay now have one live hea
 Measured A/B: clean d0856a15 baseline with two 2.6s fetches -> 5.138s not-queued at locked proof and zero mutation. cad70220 with the same fixture -> 2.737s queued with one proof. A subsequent live !1666 dispatch 4 was accepted and terminally completed at 2026-08-07T21:53:46.524Z as done / ags-unjudgeable, removing its red projection.
 
 Do not close this issue yet: the original socket response-timeout classification path was not remeasured by this fix.
+
+<!-- reply: 9f21aaf5-2745-46f8-bcb9-2f21455b6acb @ 2026-08-09T12:10:48.724Z -->
+Spec: cr-listener-control
+
+Verified against the live zcode-spec source: `node --test --test-name-pattern="response timeout with an unchanged active lease remains unknown" scripts/cr/cr-listener-rerun.process.test.mjs` passed (1/1).
+
+`classifyTimedOutRerun` now returns `unknown` with an explicit safe-retry detail when the control response times out and the active lease is unchanged; no lease or ledger mutation occurs. The repair is present at `6645f0b8a6`.

@@ -1,20 +1,28 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { test } from 'node:test'
-import { buildGuidanceCatalog, GUIDANCE_SCHEMA_VERSION } from './guidance-catalog.js'
+import { buildGuidanceCatalog, GUIDANCE_CATALOG_SCHEMA, GUIDANCE_PAYLOAD_NAME, GUIDANCE_SCHEMA_VERSION } from './guidance-catalog.js'
+import { repoRoot } from './git.js'
 import { guideCatalogEntries } from './guide.js'
 import { helpCatalogEntries } from './help.js'
 import { loadAgentConfig, loadConfig, loadHookConfig, loadReviewConfig, loadSkillConfig, loadSystemConfig } from './specs.js'
 
 const digest = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex')
 
-test('guidance catalog is deterministic, immutable, and index-only', () => {
-  const a = buildGuidanceCatalog().toJSON()
-  const b = buildGuidanceCatalog().toJSON()
+test('guidance catalog is deterministic, immutable, and content-bearing', () => {
+  const first = buildGuidanceCatalog()
+  const second = buildGuidanceCatalog()
+  const a = first.toJSON()
+  const b = second.toJSON()
   assert.deepEqual(a, b)
   assert.equal(a.schemaVersion, GUIDANCE_SCHEMA_VERSION)
+  assert.equal(a.catalogSchema, GUIDANCE_CATALOG_SCHEMA)
+  assert.equal(a.payloadName, GUIDANCE_PAYLOAD_NAME)
   assert.ok(Object.isFrozen(a))
   assert.ok(Object.isFrozen(a.entries))
+  assert.ok(Object.isFrozen(a.effectiveSystemContract))
   assert.ok(a.entries.length > 0)
   assert.equal(a.entries.map((entry) => `${entry.kind}\0${entry.id}\0${entry.surface ?? ''}\0${entry.source.path}`).join('\n'),
     [...a.entries].map((entry) => `${entry.kind}\0${entry.id}\0${entry.surface ?? ''}\0${entry.source.path}`).sort().join('\n'))
@@ -24,11 +32,19 @@ test('guidance catalog is deterministic, immutable, and index-only', () => {
     assert.match(entry.source.contentHash, /^[0-9a-f]{64}$/)
     assert.ok(entry.source.path.length > 0)
     assert.ok(entry.source.revision.length > 0)
-    assert.equal('body' in entry, false)
-    assert.equal('prompt' in entry, false)
+    assert.ok(entry.content.length > 0)
+    assert.equal(entry.source.contentHash, digest(entry.content))
   }
   const { bundleHash, ...payload } = a
   assert.equal(bundleHash, digest(JSON.stringify(payload)))
+  assert.equal(first.exportJson(), second.exportJson())
+  assert.equal(existsSync(join(repoRoot(), GUIDANCE_PAYLOAD_NAME)), false)
+
+  const expectedSystemContent = loadSystemConfig().map((preset) => preset.body.trim()).filter(Boolean).join('\n\n')
+  assert.equal(a.effectiveSystemContract.content, expectedSystemContent)
+  assert.equal(a.effectiveSystemContract.contentHash, digest(expectedSystemContent))
+  assert.deepEqual(a.effectiveSystemContract.sourceEntryIds,
+    loadSystemConfig().map((preset) => `plugin:system:${preset.name}`))
 })
 
 test('catalog covers each active plugin surface and registered help/guide page', () => {
@@ -42,9 +58,23 @@ test('catalog covers each active plugin surface and registered help/guide page',
     const presets = load()
     assert.equal(pluginRows.filter((entry) => entry.surface === surface).length, presets.length)
     for (const preset of presets) {
-      assert.ok(pluginRows.some((entry) => entry.id === `plugin:${surface}:${preset.name}` && entry.source.path === `${preset.dir}/spec.md`))
+      const row = pluginRows.find((entry) => entry.id === `plugin:${surface}:${preset.name}`)
+      assert.ok(row)
+      assert.equal(row.source.path, `${preset.dir}/spec.md`)
+      assert.equal(row.content, preset.body)
+      assert.equal(row.source.contentHash, digest(preset.body))
     }
   }
-  for (const entry of helpCatalogEntries()) assert.ok(bundle.entries.some((row) => row.id === `help:${entry.id}`))
-  for (const entry of guideCatalogEntries()) assert.ok(bundle.entries.some((row) => row.id === `guide:${entry.id}`))
+  for (const entry of helpCatalogEntries()) {
+    const row = bundle.entries.find((candidate) => candidate.id === `help:${entry.id}`)
+    assert.ok(row)
+    assert.equal(row.content, entry.text)
+    assert.equal(row.source.contentHash, digest(entry.text))
+  }
+  for (const entry of guideCatalogEntries()) {
+    const row = bundle.entries.find((candidate) => candidate.id === `guide:${entry.id}`)
+    assert.ok(row)
+    assert.equal(row.content, entry.text)
+    assert.equal(row.source.contentHash, digest(entry.text))
+  }
 })

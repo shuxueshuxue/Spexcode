@@ -221,8 +221,8 @@ app.get('/api/settings', async (c) => c.json({
 // `?surface=review` lists the review-track presets instead ([[review-commands]] — the eval detail's
 // remark-composer `/` dropdown); the exposed surfaces stay this explicit whitelist, never a passthrough.
 app.get('/api/plugins', (c) => c.json(c.req.query('surface') === 'review' ? loadReviewConfig() : loadConfig()))
-// Read-only, deterministic index over the authoritative plugin/help/guide surfaces. The response carries no
-// guidance bodies; clients follow each source path or use the normal help/guide/plugin surfaces to read them.
+// Read-only, deterministic projection over the authoritative plugin/help/guide surfaces. The response carries
+// exact rendered guidance plus provenance so decoupled consumers need no checkout or shared source directory.
 app.get('/api/guidance', (c) => c.json(buildGuidanceCatalog().toJSON()))
 // the ISSUES read surface ([[issues]]) for the dashboard's issues page — the merged list over every store
 // (local threads + the resident forge slice), the SAME mergedIssues() the CLI drain reads, verbatim

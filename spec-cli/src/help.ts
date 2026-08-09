@@ -244,7 +244,8 @@ an admin password exists, and ungated projects serve open.`,
     body: `Usage: spex guidance [--out <path>] [--json]
 
 Prints the deterministic, schema-versioned guidance index. Entries point at the authoritative active plugin,
-help, and guide sources with content hashes and git revision provenance; the export never embeds prompt prose.
+help, and guide sources with exact rendered content, content hashes, and git revision provenance. The derived
+effective system-contract view follows materialization order; no separate authoring source is created.
 --out writes the same bytes to a file instead of stdout.`,
     see: 'spex help · spex guide (the source guidance surfaces)',
   },

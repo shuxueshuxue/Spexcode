@@ -18,6 +18,7 @@ related:
   - spec-dashboard/src/IdentityIcon.jsx
   - spec-dashboard/src/project.test.mjs
   - spec-dashboard/src/projects.test.mjs
+  - spec-dashboard/test/projects-new-project.e2e.mjs
   - spec-dashboard/vite.config.js
 ---
 # projects-hub
@@ -43,7 +44,9 @@ backend so scoped pages are drivable without a hub.
 KNOWN-project view ([[host-gateway]]): a repo enters the fleet by running `spex serve` in it, or through
 the page's dedicated Add Project modal. The modal is a focused host-folder picker, not another inline
 drawer: an editable absolute-path bar and parent/home navigation select one directory while a bounded list
-shows its child folders. The selected folder's actual state drives a compact setup section. An existing Git
+shows its child folders. A typed missing path becomes a clear New project command, which creates that
+directory, initializes Git, and registers it through the host's one add workflow. The selected folder's
+actual state drives a compact setup section. An existing Git
 repo can be added as-is; a plain folder requires an explicit checked Git initialization choice. SpexCode
 initialization is independently optional, recognizes an already-initialized repo, and requires explicit
 harness targets before submit. One submit runs the host's unified add workflow; it stays pending through

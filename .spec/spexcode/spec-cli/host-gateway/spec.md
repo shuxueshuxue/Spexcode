@@ -54,9 +54,11 @@ reachable and diagnosable, but stopping it never turns an experiment into a perm
 The reconciled view includes a remembered or record-claimed root only while that root is still an existing
 directory; a removed checkout/worktree disappears from `GET /projects` without mutating the catalog file.
 Explicit registration is one admin-scoped workflow over
-the real host filesystem: a read-only directory browser selects an existing folder, then `POST /projects`
-normalizes it to the repo's main checkout. An existing Git repo can be cataloged directly; a plain folder
-enters only after the user explicitly chooses the bounded `git init` side effect. Optional SpexCode setup
+the real host filesystem: a read-only directory browser selects an existing folder or reports a typed absent
+path as a candidate, then `POST /projects` normalizes it to the repo's main checkout. An existing Git repo
+can be cataloged directly; a plain folder enters only after the user explicitly chooses the bounded `git init`
+side effect. An absent candidate enters only through the explicit `createDir` + Git-initialization transaction,
+which creates the requested path before that same Git/catalog workflow. Optional SpexCode setup
 still runs the real `spex init` with an explicit harness choice, never a dashboard-owned initializer. A
 failed init returns its exit code and complete transcript and does not claim catalog success; the catalog
 write happens only after every requested setup step succeeds. Its project operations ride the same hub

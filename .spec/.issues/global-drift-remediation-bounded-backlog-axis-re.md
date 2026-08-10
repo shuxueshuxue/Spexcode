@@ -153,3 +153,18 @@ The repair treats a valid unborn branch ref as empty Git history/index input, pr
 Independent consumer YATU confirmed ordinary HTTP only, new services, no SSE/restart: zero-commit warm 200/0 -> first `.spec` 364ms/1 -> deletion 377ms/0; one-commit control remained 200/0 -> 369ms/1 -> 342ms/0. The creation leg is intentional: it would fail under the prohibited “return empty for empty repos” shortcut.
 
 Current whole-repo baseline after landing: spec lint 0 errors / 57 warnings; eval lint 138 nodes flagged, 606 stale, 0 malformed, 0 missing, 0 coverage gaps, 39 over-owned. No freshness, drift threshold, gate, score, or scenario-selection behavior changed.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T12:52:56.121Z -->
+Spec: graph-cache, graph-delta, guidance-catalog, platform-support, session-new-monitor-hint, ls-cjk-width, session-selectors
+
+Narrow spec-warning reconciliation, all on current main and without changing a drift/freshness/gate/score rule:
+
+- graph-cache (`a1ccd60d7`): L0 package extraction only changed the `buildBoard`/`spliceSessions` import path.
+- graph-delta (`c745a752d`): removed an in-code navigation comment duplicated by the current delta spec.
+- guidance-catalog (`38d0a79ae`): L0 moved the same git/config loaders from `@spexcode/l0` to `@spexcode/spec-core`.
+- platform-support (`7f1a1f3e5`): removed a navigation comment duplicated by its current platform boundary.
+- session-new-monitor-hint (`dcbcaa70e`): all five declared function selectors were unchanged; public-graph and internal hook-prompt help entries were outside the node scope.
+- ls-cjk-width (`4e5ec4830`): test fixtures now use existing derived `title`; the new assertion pins the already-written “not selector label” rule.
+- session-selectors (`9537a9693`): its test fixture likewise changed only the retired display field from `label` to `title`; matching grammar is unchanged.
+
+Each is a separately reasoned `Spec-OK` commit, not a bulk ack. Current main baseline: spec lint 0 errors / 49 warnings; full eval lint 137 nodes flagged, 605 stale, 0 malformed, 0 missing, 0 coverage gaps, 39 over-owned. The remaining warnings are still queued for intent/implementation/structure triage rather than automatic acknowledgment.

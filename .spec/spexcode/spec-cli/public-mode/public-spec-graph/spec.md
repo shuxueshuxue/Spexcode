@@ -7,6 +7,7 @@ code:
   - spec-cli/src/public-graph.ts#buildPublicGraph
 related:
   - scripts/public-graph-build.mjs
+  - ops/nginx/spexcode-public-graph.conf
   - spec-dashboard/src/public-mode.js
   - spec-cli/src/cli.ts
   - spec-dashboard/src/App.jsx
@@ -42,8 +43,10 @@ index first and fetches only the selected document, never opens
 `/api/graph`, SSE, session, issue, eval, settings, or terminal transports, and routes all unknown hashes
 back to `#/graph`. The artifact is therefore safe to serve from an ordinary static host. A future
 scheduled GitHub consumer may replace the immutable snapshot/artifact for a repository and map its
-normalized GitHub name to `<project>.spexcode.net`; that transport is outside this product node until
-the DNS and deployment owner are explicitly established.
+normalized GitHub name to `<project>.spexcode.net`; that transport stays outside this product node until
+the generic consumer has an explicit deployment owner. The first approved host is
+`herdr.spexcode.net`; nginx serves it from an isolated release root and never reuses the existing
+`spexcode.net` documentation root.
 
 The build also emits `public-spec-release.json` with schema `spexcode.public-spec-release/v1`: the exact
 revision plus the path, byte count, and SHA-256 of the index and every document. This is the handoff

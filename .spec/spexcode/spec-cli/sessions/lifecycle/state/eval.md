@@ -17,7 +17,7 @@ scenarios:
       and any partial materialized worktree residue is removed before that record is published.
   - name: explicit-stop-is-authoritative-offline
     tags: [backend-api, cli]
-    code: [spec-cli/src/sessions.ts]
+    code: [spec-cli/src/sessions.ts#stopSessionUnlocked]
     description: >-
       On a real headless session that has settled between turns and a real pane-backed control session, call
       the public stop action. Confirm tmux/runtime teardown, sample graph and CLI liveness, then resume each and

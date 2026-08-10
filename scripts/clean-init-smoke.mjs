@@ -120,6 +120,19 @@ function writeOfflineConsumerPlan(consumer, tarball) {
       [`node_modules/${manifest.name}`]: packedEntry,
     },
   }
+
+  // `file:` dependencies in the packed root live inside that tarball, whereas the source
+  // lock's equivalent entries are workspace links. Rewrite that one boundary for the
+  // consumer plan so `npm ci --offline` never asks for a source-checkout sibling.
+  for (const [name, spec] of Object.entries(manifest.dependencies ?? {})) {
+    if (!spec.startsWith('file:')) continue
+    const sourcePath = spec.slice('file:'.length).replace(/\/+$/, '')
+    delete consumerLock.packages[`node_modules/${name}`]
+    delete consumerLock.packages[sourcePath]
+    const packedPath = `node_modules/${manifest.name}/${sourcePath}`
+    consumerLock.packages[`node_modules/${name}`] = { resolved: packedPath, link: true }
+    consumerLock.packages[packedPath] = {}
+  }
   writeFileSync(join(consumer, 'package-lock.json'), `${JSON.stringify(consumerLock, null, 2)}\n`)
 }
 

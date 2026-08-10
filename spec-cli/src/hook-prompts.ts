@@ -60,7 +60,7 @@ const DEFINITIONS: readonly HookPromptDefinition[] = Object.freeze([
     title: 'idle',
     description: 'Lifecycle signal only; no agent-facing text is emitted.',
     role: 'signal',
-    content: NO_PROMPT('idle', 'It records an undeclared idle session on the board.'),
+    content: NO_PROMPT('idle', 'It records an undeclared idle session in the session list.'),
     render: () => '',
   },
   {

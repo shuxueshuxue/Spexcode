@@ -6,7 +6,7 @@ desc: The graph payload is a lean summary — no Issues/Evals row arrays, only e
 code:
   - packages/spec-core/src/graph.ts#buildBoard
 related:
-  - spec-cli/src/board.ts
+  - spec-cli/src/graphSnapshot.ts
   - spec-cli/src/graph.test.ts
   - packages/spec-core/src/reviewSnapshot.ts
   - spec-dashboard/src/NodeView.jsx

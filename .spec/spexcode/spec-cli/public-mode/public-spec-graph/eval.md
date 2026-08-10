@@ -18,6 +18,18 @@ scenarios:
       plane.
     code: [spec-cli/src/public-graph.ts, scripts/public-graph-build.mjs, spec-dashboard/src/App.jsx, spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/SideBar.jsx]
     test: spec-dashboard/test/public-graph-static.e2e.mjs
+  - name: isolated-release-host
+    tags: [frontend-e2e, cli]
+    description: >
+      Publish one verified static release under the approved repository host without changing the existing
+      documentation site. Check the host over HTTPS and fetch the graph manifest and one node document.
+    expected: >
+      `herdr.spexcode.net` serves the graph-only shell from the isolated public-graph release root, its
+      manifest names the deployed source revision, the graph and one node document return successfully, and
+      the existing `spexcode.net` documentation host remains unchanged. The release is activated only by
+      switching the graph site's symlink; the docs site's root and publication marker are untouched.
+    code: [ops/nginx/spexcode-public-graph.conf, scripts/public-graph-build.mjs]
+    test: spec-dashboard/test/public-graph-static.e2e.mjs
 ---
 # public-spec-graph — measurement
 

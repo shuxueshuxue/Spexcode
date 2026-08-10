@@ -33,6 +33,21 @@ scenarios:
       byte-for-byte unchanged. Repair remains on `spex materialize`, `spex init`, and `spex uninstall`,
       never a second write path under doctor.
     code: spec-cli/src/doctor.ts
+  - name: bare-diagnosis-is-read-only
+    tags: [cli]
+    description: >-
+      In an isolated git repository, adopt a project through the real local `spex init --harness codex`
+      with an isolated home, then run bare `spex doctor` through the CLI on PATH. Capture its exit code,
+      complete output, and `git status --porcelain` immediately before and after the diagnosis.
+    expected: >-
+      Bare doctor exits 0, identifies the repository as Spex-adopted, and prints the Spec health diagnosis
+      plus Layers 1 through 5, Coverage verdict, and Footprint. The report includes both altitude and breadth
+      health rows and the single-channel double-delivery result. The before/after git status is identical:
+      diagnosis reads the adopted project without creating, staging, or changing files.
+    code:
+      - spec-cli/src/doctor.ts#doctor
+      - spec-cli/src/doctor.ts#specHealthDiagnosis
+      - spec-cli/src/doctor.ts#doubleDeliveryReport
 ---
 # eval.md — self
 
@@ -42,4 +57,6 @@ and confirms the command catches it by IDENTITY STAMP and exits non-zero, then t
 clears it. The loss being watched is the SILENT double-delivery: a marketplace-installed or leftover
 `spexcode` plugin doubling hooks and shadowing skills while everything still *looks* governed — the
 mirror failure of the under-delivery `doctor` already catches. The read-only-surface scenario proves the
-retired write paths are gone rather than merely hidden from one help page.
+retired write paths are gone rather than merely hidden from one help page. The bare-diagnosis scenario
+uses an isolated adopted repository to prove the full report reaches the user-facing CLI and remains
+read-only.

@@ -64,7 +64,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -461,7 +461,7 @@ if (cmd === 'serve') {
     await flushExit(0)
   }
   if (flag('content-dir') !== undefined) { console.error('spex graph: --content-dir requires --public'); process.exit(2) }
-  const { buildBoard } = await import('./board.js')
+  const { buildBoard } = await import('./graphSnapshot.js')
   const focusRaw = flag('focus')
   const depthRaw = flag('depth')
   const depth = depthRaw === undefined ? undefined : Number(depthRaw)

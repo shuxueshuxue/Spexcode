@@ -5,10 +5,11 @@ import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
+import { tsxBin } from './tsx-bin.js'
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
-const TSX = join(SRC, '..', 'node_modules', '.bin', 'tsx')
+const TSX = tsxBin(join(SRC, '..'))
 
 function fixture(extraCode = '') {
   const root = mkdtempSync(join(tmpdir(), 'spex-lint-json-'))
@@ -25,7 +26,7 @@ function fixture(extraCode = '') {
   writeFileSync(join(root, 'src/a/uncovered.ts'), 'export const uncovered = true\n')
   git('add', '-A')
   git('commit', '-qm', 'seed')
-  const result = spawnSync(TSX, [CLI, 'spec', 'lint', '--json'], { cwd: root, encoding: 'utf8' })
+  const result = spawnSync(process.execPath, [TSX, CLI, 'spec', 'lint', '--json'], { cwd: root, encoding: 'utf8' })
   return { code: result.status ?? -1, stdout: result.stdout, stderr: result.stderr }
 }
 

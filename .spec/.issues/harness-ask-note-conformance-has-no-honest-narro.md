@@ -1,7 +1,7 @@
 ---
 concern: harness ask-note conformance has no honest narrow code anchor for the top-level session ask branch
 by: fbb76f84-7a73-4262-81d6-9028f5eb7c4e
-status: open
+status: landed
 nodes: harness-adapter
 evidence: 4e99be198265, 4e99be198265f49b354ea61e91966ddeb495194d2e42208853309ddb31f270ca, 64bb8c5b5e3eb2f36c27e008e6747c954c1ce1ae8f03e0d4ad2961e1a651157a
 created: 2026-08-10T07:09:17.854Z

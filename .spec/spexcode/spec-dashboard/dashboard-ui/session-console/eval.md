@@ -317,8 +317,11 @@ scenarios:
   - name: lifecycle-confirm-owns-enter
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/session-multi-select.e2e.mjs
-    code: spec-dashboard/src/SessionInterface.jsx#SessionInterface
-    related: [spec-dashboard/src/SessionSelectBar.jsx, spec-dashboard/src/SessionContextMenu.jsx]
+    code:
+      - spec-dashboard/src/SessionInterface.jsx#SessionInterface
+      - spec-dashboard/src/Modal.jsx#Modal
+      - spec-dashboard/src/SessionSelectBar.jsx#SessionSelectBar
+      - spec-dashboard/src/SessionContextMenu.jsx#SessionContextMenu
     description: >-
       Keep the console on its New Session tab, enter multi-select mode, then open the bulk archive and close
       confirms in a real browser. For each dialog, verify its destructive button has focus and press Enter

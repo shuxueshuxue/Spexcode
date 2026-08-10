@@ -524,7 +524,7 @@ if (cmd === 'serve') {
         }
       }
       const tracking = anchored.length
-        ? `Its drift is tracked on the eval axis only: ${anchored.length} scenario${anchored.length === 1 ? '' : 's'} anchor${anchored.length === 1 ? 's' : ''} freshness to it (${anchored.join(', ')}), so changing it makes those readings stale — but no spec body says what it should do`
+        ? `Its drift is tracked on the eval axis only: ${anchored.length} scenario${anchored.length === 1 ? '' : 's'} anchor${anchored.length === 1 ? 's' : ''} freshness to it (${anchored.join(', ')}), so changing it makes those measurements stale — but no spec body says what it should do`
         : 'Nothing tracks its drift'
       console.log(`${rel} — not governed (no code: claim), but referenced by ${names(related)} (related: coverage only). ${tracking}; if your change is substantive, consider giving it a governing home.`)
     } else if (whole.length <= maxOwners) {

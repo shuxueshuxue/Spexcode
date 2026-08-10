@@ -167,14 +167,12 @@ export function readUploadPolicy(root: string): UploadPolicy {
   return resolveUploadPolicy({ ...uploadPolicyDefaults(), ...configured } as Record<keyof UploadPolicy, unknown>)
 }
 
-// the shared git common dir (env-stripped git() so a hook's exported GIT_DIR can't misdirect it). Memoized:
-// it's a process constant, but mainBranch()/mainRoot() resolve it per call (~60 git rev-parse forks per board build without the cache).
-let commonDirCache: string | null = null
+// The shared git common dir (env-stripped git() so a hook's exported GIT_DIR can't misdirect it).
+// Cache by resolved checkout path: callers may deliberately chdir between isolated repositories in one process.
 const commonDirsByPath = new Map<string, string>()
 const topsByPath = new Map<string, string>()
 export function gitCommonDir(): string {
-  if (commonDirCache === null) commonDirCache = git(['rev-parse', '--path-format=absolute', '--git-common-dir']).trim()
-  return commonDirCache
+  return commonDirFor(process.cwd())
 }
 function commonDirFor(proj: string): string {
   const key = resolve(proj)

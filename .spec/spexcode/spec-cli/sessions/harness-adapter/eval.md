@@ -21,6 +21,8 @@ scenarios:
   - name: ask-note
     tags: [backend-api]
     test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "claude+codex / ask-note" }
+    code: spec-cli/src/session-declarations.ts#runSessionDeclaration
+    related: spec-cli/src/session-declarations.cli.test.ts
     description: Run `spex session ask --note` from a real worker with a unique marker in the note.
     expected: The record reads asking and carries the marker verbatim on the public session board.
   - name: deliver-steer

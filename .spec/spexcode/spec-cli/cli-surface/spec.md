@@ -8,8 +8,10 @@ code:
 related:
   - spec-cli/src/guide.ts
   - spec-cli/src/help.ts
+  - spec-cli/src/session-declarations.ts
   - spec-cli/src/session-send-cli.test.ts
   - spec-cli/src/session-create-cli.test.ts
+  - spec-cli/src/session-declarations.cli.test.ts
 ---
 # cli-surface
 
@@ -150,8 +152,9 @@ piped output stays byte-identical.
 The map must stay honest: every porcelain verb `cli.ts` dispatches appears in it (a hidden typeable
 verb is the bug this node exists to prevent), and capabilities that do not exist yet appear nowhere
 — help grows a line only when the verb lands. `cli.ts` remains the thin dispatch hub — verbs' logic
-lives in their own modules; help text lives in `help.ts`; a sibling verb's churn in the hub is that
-feature's, not this node's drift.
+lives in their own modules; `session-declarations.ts` owns the worker-authored `done` / `park` / `ask`
+record declarations; help text lives in `help.ts`; a sibling verb's churn in the hub is that feature's,
+not this node's drift.
 
 The hub rule has a MECHANISM, and stating only the rule leaves the mechanism unprotected. Every dispatch site
 reaches its verb through a lazy `await import(...)` — around eighty of them, one per verb — and the point is

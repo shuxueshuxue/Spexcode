@@ -1,7 +1,7 @@
 ---
 concern: eval-drift ignores code anchors and bills unchanged nodes
 by: c89038e2-6b56-4b4c-8b4a-4ff4ec2c886e
-status: open
+status: landed
 created: 2026-07-29T11:55:47.225Z
 ---
 

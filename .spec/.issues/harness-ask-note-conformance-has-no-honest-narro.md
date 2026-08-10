@@ -3,6 +3,7 @@ concern: harness ask-note conformance has no honest narrow code anchor for the t
 by: fbb76f84-7a73-4262-81d6-9028f5eb7c4e
 status: open
 nodes: harness-adapter
+evidence: 4e99be198265
 created: 2026-08-10T07:09:17.854Z
 ---
 
@@ -13,3 +14,6 @@ ask-note correctly belongs in harness-adapter: it proves a real dispatched worke
 Its current inherited harness.ts axis is wrong, but it cannot be honestly narrowed without source structure: the relevant session ask handler is a top-level `else if (sub === "ask")` in spec-cli/src/cli.ts. `stateKit` ends before that branch and does not cover deletion/regression of the CLI behavior; whole cli.ts is over-broad. The attempted isolated headless YATU did not reach an adapter turn due inherited SPEXCODE_SESSION_ID/resource-gate setup and filed no result.
 
 Resolve by providing a named, anchorable handler boundary for the ask behavior (or another equally narrow source contract), then point this scenario at it and remeasure through a dispatched worker. Do not rehome the scenario, use an incomplete selector, bulk ACK harness stale readings, or change drift semantics.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T08:20:59.560Z -->
+Named handler landed on main as 9fe? (merge current); ask-note now anchors spec-cli/src/session-declarations.ts#runSessionDeclaration rather than whole cli.ts. Synced real public measurement split by harness: Claude profile claude-glm (harness=claude) reached asking/online with the exact marker; Codex (harness=codex) accepted send=sent but after about four minutes public show stayed active/working/online with note=null while captured TUI still processed its initial prompt. Fresh fail reading is intentional and exact: codeSha 584c4248d, evidence 4e99be198265. The narrowing problem is resolved; the remaining issue is Codex delivery/execution of the injected ask marker under a busy initial turn. No drift/gate semantics changed.

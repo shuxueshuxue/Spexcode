@@ -120,8 +120,10 @@ domain-only behavior stays in its page. No empty abstraction or page-local near-
   [[eval-tab]] project the same adapters into one extremely compact embedded control with popup-local
   state. This node owns the presentations and canonical address behavior — never a second parser or a
   second field predicate.
-- **Rows use ONE two-level information grammar.** Rows arrive as data and remain REAL `<a>` anchors, but
-  their content is structured through the shared row primitive: a fixed state-icon box, a wrapping title,
+- **Rows use ONE two-level information grammar.** Every navigable row exposes one full-row REAL `<a>` detail
+  anchor, while the shared structured content is its sibling so a node URL or a filter chip is never nested
+  inside that anchor. Static row text passes through to the detail anchor; a dedicated metadata control keeps
+  its own native href/button behavior. Their content is structured through the shared row primitive: a fixed state-icon box, a wrapping title,
   secondary identity/author/time metadata, then real right-side facts such as comments, store, evidence
   kind, or scope. Desktop rows have GitHub's ~64px rhythm; at 390px the same markup grows vertically, moves
   trailing facts under the title, allows long titles to wrap, and never widens the page. `j`/`k` still move

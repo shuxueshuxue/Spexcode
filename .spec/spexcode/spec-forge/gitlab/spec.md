@@ -18,6 +18,11 @@ adopter-a's `dev.innerdev.cn`) behind the same driver shape, selected by host id
 learns a second vendor. Registration is one registry entry; host *selection* stays out of scope
 (that is forge-host's boundary).
 
+Issue-list reads request GitLab's label-detail form on that same paged endpoint, so the port receives each
+label's name, background color, and text color without a per-issue label lookup. Those values remain optional
+display metadata in the host-agnostic `ForgeIssue`, so a self-hosted GitLab version that omits one is still an
+honest issue read rather than a second request or a failed reconciliation.
+
 **Transport is direct REST over the platform's HTTP client** — no CLI shelled out, because none
 exists to lean on (GitHub's CLI doesn't speak GitLab and no GitLab CLI is installed where this
 matters). That forfeits the github driver's trick of borrowing a CLI's auth and repo-detection, so

@@ -47,7 +47,8 @@ back control, and eval entry). Viewport width changes chrome and layout, never t
 the SAME [[evals-view]]/[[issues-view]] components and their current [[paged-review]] request inside the phone shell, restacked by [[review-chrome]]'s
 one-column reflow (side metadata above the main column — GitHub's own 390px order); the tab bar grows an
 Evals and an Issues entry (tapping navigates the route, the active page lights its tab), and Back is the
-browser's history exactly as on desktop. A direct `#/settings` address mounts the same [[settings]] page
+browser's history exactly as on desktop. Their spec-node facts remain the same real `graphNodeAddress`
+anchors as desktop, not phone-specific focus callbacks. A direct `#/settings` address mounts the same [[settings]] page
 and [[page-scroll]] above that tab bar even though Settings is not a fifth primary tab. Specs/Sessions
 stay the phone-local planes below.
 

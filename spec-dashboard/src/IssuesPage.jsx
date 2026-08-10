@@ -11,8 +11,9 @@ import { reviewActorName } from './reviewFilters.js'
 import { reviewPageNumber, useReviewPage } from './reviewPage.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 import { navigate, routeHash, useRoute } from './route.js'
-import { detailBackHash } from './address.js'
+import { addressHash, detailBackHash, graphNodeAddress } from './address.js'
 import { Icon } from './icons.jsx'
+import IssueLabels from './IssueLabels.jsx'
 
 // The Issues surface ([[issues-view]]): GitHub-style pages over ONE route family, all wearing the shared
 // [[review-chrome]]. `#/issues` is the LIST page — the merged local+forge list (store-tagged, API
@@ -44,7 +45,7 @@ const issueNumber = (id) => {
 
 // the page's recognized qualifier vocabulary — what the highlight overlay colors and the key
 // autocomplete offers; anything else stays plain and matches nothing.
-export const ISSUE_QUERY_KEYS = ['is', 'state', 'store', 'author', 'node', 'session']
+export const ISSUE_QUERY_KEYS = ['is', 'state', 'store', 'author', 'node', 'label', 'session']
 
 // The LIST page (`#/issues[?q=<raw tokens>]`) requests one resident-source page from the server; the WHOLE
 // face is ONE visible token query ([[review-query]]) bridged into the
@@ -80,12 +81,13 @@ export function IssuesListPage({ data, loading, error, query }) {
     const status = th.status || 'open'
     return {
       key: th.id,
+      label: th.concern,
       href: routeHash('issues', th.id),
       content: (
         <>
           <ReviewListRow
             state={<ReviewState kind="issue" state={status} />}
-            title={th.concern}
+            title={<><span className="rl-row-title-text">{th.concern}</span><IssueLabels labels={th.labels} onSelect={(name) => surgery('label', name)} /></>}
             meta={(
               <>
                 <span data-tip={th.id}>{issueNumber(th.id)}</span>
@@ -97,7 +99,7 @@ export function IssuesListPage({ data, loading, error, query }) {
               <>
                 {(th.replies?.length ?? 0) > 0 && <span className="rl-comments" data-tip={t('session.issuesReplies', { n: th.replies.length })}><Icon name="message-square" size={14} />{th.replies.length}</span>}
                 {stores.length > 1 && <span className={`rl-tag fv-store-${th.store === 'local' ? 'local' : 'forge'}`}>{th.store}</span>}
-                {th.nodes?.[0] && <span className="rl-tag node">{th.nodes[0]}</span>}
+                {th.nodes?.[0] && <a className="rl-tag node" href={addressHash(graphNodeAddress(th.nodes[0]))}>{th.nodes[0]}</a>}
               </>
             )}
           />
@@ -134,6 +136,7 @@ export function IssuesListPage({ data, loading, error, query }) {
         suggest: {
           author: facetOptions(data, 'author', t('reviewList.all')).filter((option) => option.value),
           node: facetOptions(data, 'node', t('reviewList.all')).filter((option) => option.value),
+          label: facetOptions(data, 'label', t('reviewList.all')).filter((option) => option.value),
         },
       }}
       sections={[
@@ -167,13 +170,14 @@ export function IssuesListPage({ data, loading, error, query }) {
 // composer docked at its foot, and the store/originator/node/permalink metadata in the SIDE rail (reflowed
 // above the body at phone width). One thread surface for both stores; the only store-specific affordances
 // are metadata. Sign/accept/reject are not product verbs.
-export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpenSession, onWrite }) {
+export function IssueDetailPage({ issue: th, specs, sessions, onOpenSession, onWrite }) {
   const t = useT()
   const local = th.store === 'local'
   const isConcluded = concluded(th)
   const [acting, setActing] = useState('')   // the lifecycle action in flight — one at a time
   const [actErr, setActErr] = useState('')
   const nodes = Array.isArray(th.nodes) ? th.nodes : []
+  const labels = Array.isArray(th.labels) ? th.labels : []
   const replies = Array.isArray(th.replies) ? th.replies : []
   const status = th.status || 'open'
   const run = (name, fn) => async () => {
@@ -213,6 +217,11 @@ export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpe
             <SideValue text={th.store} className={`fv-store fv-store-${local ? 'local' : 'forge'}`} />
             {th.url && <SideValue text={t('session.issuesOpenOnStore', { store: storeDisplayName(th.store) })} href={th.url} external />}
           </SideSection>
+          {labels.length > 0 && (
+            <SideSection label={t('detail.sideLabels')}>
+              <IssueLabels labels={labels} onSelect={(name) => navigate('issues', null, { query: queryParam(setToken(ISSUE_QUERY_DEFAULT, 'label', name), ISSUE_QUERY_DEFAULT) })} />
+            </SideSection>
+          )}
           {/* the originator (who filed) + whether their session is still ALIVE — a local thread's `by` is a
               session id (join it against the board for liveness, click through when live); a forge issue's
               `by` is a github login that resolves to no session, so it stays a plain labeled value. */}
@@ -226,7 +235,7 @@ export function IssueDetailPage({ issue: th, specs, sessions, onFocusNode, onOpe
           {nodes.length > 0 && (
             <SideSection label={t('detail.sideNodes')}>
               {nodes.map((id) => (
-                <SideValue key={id} text={id} mono tip={t('session.issuesFocusNode')} onClick={() => onFocusNode?.(id)} />
+                <SideValue key={id} text={id} mono tip={t('session.issuesFocusNode')} href={addressHash(graphNodeAddress(id))} />
               ))}
             </SideSection>
           )}
@@ -292,7 +301,7 @@ function useIssueDetail(id, freshness) {
   return { issue, error, reload }
 }
 
-export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], sessions = [], issuesStamp = null }) {
+export default function IssuesPage({ onOpenSession, specs = [], sessions = [], issuesStamp = null }) {
   const t = useT()
   const { notify } = useTransientNotice()
   const { param, query } = useRoute()
@@ -329,8 +338,7 @@ export default function IssuesPage({ onFocusNode, onOpenSession, specs = [], ses
       // an address naming no issue renders the honest not-found with the list link ([[review-chrome]]).
       return <DetailShell missing={t('reviewShell.issueNotFound', { id: param })} listHref={routeHash('issues')} listLabel={t('reviewShell.backToIssues')} />
     }
-    return <IssueDetailPage issue={detail.issue} specs={specs} sessions={sessions} onFocusNode={onFocusNode}
-      onOpenSession={onOpenSession} onWrite={onWrite} />
+    return <IssueDetailPage issue={detail.issue} specs={specs} sessions={sessions} onOpenSession={onOpenSession} onWrite={onWrite} />
   }
   return <IssuesListPage data={list.data} loading={list.loading} error={list.error} query={query} />
 }

@@ -4,6 +4,7 @@ import { reviewCommandsFor, fillPreset } from './reviewCommands.js'
 import { evidenceList } from './reviewFilters.js'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
+import { addressHash, graphNodeAddress } from './address.js'
 import { DetailShell, ReviewState, SideSection, SideValue, usePopover } from './ReviewShell.jsx'
 import { readingScore } from './score.jsx'
 import { useT } from './i18n/index.jsx'
@@ -118,7 +119,7 @@ function AbOverflow({ hidden, total, histIdx, onPick }) {
   )
 }
 
-export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, onFocusNode = null, listHref = null, backHref = null, backLabel = null, queue = { prev: [], next: [] } }) {
+export default function EventDetail({ entry, history: providedHistory, sourceKey = 'project', specs = [], sessions = [], onWrite, onOpenSession, listHref = null, backHref = null, backLabel = null, queue = { prev: [], next: [] } }) {
   const t = useT()
   const vid = useRef(null)
   const box = useRef(null)
@@ -529,12 +530,9 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
         {viewing.evaluator && <SideValue text={viewing.evaluator} />}
         <SideValue text={new Date(viewing.ts).toLocaleString()} />
       </SideSection>
-      {/* the reading's spec node as a REAL ref (explicitly labeled — information type is never guessed
-          from a bare token): the shell's graph-focus door when the host wires one, a plain labeled
-          value otherwise. */}
+      {/* the reading's spec node is a real graph address, never a host callback. */}
       <SideSection label={t('detail.sideNode')}>
-        <SideValue text={entry.node} mono tip={onFocusNode ? t('session.issuesFocusNode') : entry.node}
-          onClick={onFocusNode ? () => onFocusNode(entry.node) : null} />
+        <SideValue text={entry.node} mono tip={t('session.issuesFocusNode')} href={addressHash(graphNodeAddress(entry.node))} />
       </SideSection>
       {filer && (
         <SideSection label={t('detail.sideFiler')}>
@@ -596,7 +594,7 @@ export default function EventDetail({ entry, history: providedHistory, sourceKey
   return (
     <DetailShell
       title={entry.scenario}
-      titleMeta={<span className="an-node">{entry.node}</span>}
+      titleMeta={<a className="an-node" href={addressHash(graphNodeAddress(entry.node))}>{entry.node}</a>}
       status={status}
       side={side}
       composer={composer}

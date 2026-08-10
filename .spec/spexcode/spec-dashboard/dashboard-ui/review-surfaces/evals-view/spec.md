@@ -64,6 +64,9 @@ filter (default off) picking the root.
   [[evals-feed]] grammar: a shared structured row for each latest result per scenario, and each row is a
   REAL `<a href>` to its detail address — the
   row's context menu, middle-click, and copy-link all work for free.
+  A displayed spec-node reference is likewise its own `graphNodeAddress` anchor; the list and detail
+  presenters do not depend on a host-injected graph-focus callback, so the cold shell, dashboard shell,
+  and phone shell all mint the same navigation.
 - **Fail / Pass / Unmeasured leads measured loss; review lifecycle does not.** The ListView's top
   quick-filter group renders Fail, Pass, then Unmeasured through the shared ReviewState icon/tone/count and
   toggles `verdict:` by token surgery + PUSH. Unmeasured is the declared-without-reading population, not a

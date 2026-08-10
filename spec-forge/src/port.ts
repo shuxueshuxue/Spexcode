@@ -4,13 +4,19 @@ export type ForgeComment = {
   body: string
 }
 
+export type ForgeLabel = {
+  name: string
+  color?: string
+  textColor?: string
+}
+
 export type ForgeIssue = {
   number: number
   title: string
   body: string
   url: string
   state: string
-  labels: string[]
+  labels: ForgeLabel[]
   author: string
   createdAt: string
   comments: ForgeComment[]

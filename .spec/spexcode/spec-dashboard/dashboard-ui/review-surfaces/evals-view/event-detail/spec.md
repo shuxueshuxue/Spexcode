@@ -34,8 +34,8 @@ scenario (title) with the node as its trailing meta; the **status band** carries
 **A/B strip**; the **MAIN column** is the evidence workspace then the remark thread with its composer
 docked at the foot; the **SIDE rail** is the reading/session metadata, every value through
 [[review-chrome]]'s ONE SideValue primitive (shrink + ellipsis, full text on the tooltip — a filer UUID
-never stretches the rail) — evaluator, filed time, the reading's **spec node as a REAL labeled ref**
-(the shell's graph-focus door; a host wiring none still shows the labeled value), the FILER
+never stretches the rail) — evaluator, filed time, the reading's **spec node as a REAL labeled
+`graphNodeAddress` ref**, the FILER
 chip with its liveness dot (alive = the session is on the board and not offline, painted by the live
 `STATUS_COLOR`, [[state]]; a live chip click-throughs to `#/sessions/<id>`; a legacy reading without `by`
 shows none), the [[human-ok]] settled mark when signed, and the **stale readout** for a non-fresh viewed

@@ -118,7 +118,7 @@ export function issueFilterState(raw = {}, { defaultSection = '' } = {}) {
     : raw.state || defaultSection
   return {
     q: raw.q || '', state, impossible: raw.impossible === true,
-    author: raw.author || '', store: raw.store || '', node: raw.node || '',
+    author: raw.author || '', store: raw.store || '', node: raw.node || '', label: raw.label || '',
     session: raw.session || '',
   }
 }
@@ -138,6 +138,7 @@ const ISSUE_CONFIG = {
     { key: 'author', label: 'reviewList.facetAuthor', values: (issue) => issue.by, labelValue: reviewActorName },
     { key: 'store', label: 'reviewList.facetStore', values: (issue) => issue.store },
     { key: 'node', label: 'reviewList.facetNode', values: (issue) => issue.nodes || [] },
+    { key: 'label', label: 'reviewList.facetLabel', values: (issue) => (issue.labels || []).map((label) => typeof label === 'string' ? label : label?.name), minValues: 1 },
     presenceFacet((issue, { sessions }) => issuePresent(issue, sessions) ? 'present' : 'missing'),
   ],
 }
@@ -293,6 +294,7 @@ const TOKEN_MAPS = {
     store: (v) => ({ store: v }),
     author: (v) => ({ author: v }),
     node: (v) => ({ node: v }),
+    label: (v) => ({ label: v }),
     session: (v) => ({ session: v }),
   },
   eval: {

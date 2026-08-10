@@ -58,6 +58,10 @@ second address. Their compact face is
 one shallow sticky search row plus the shared accessible facet overflow. It uses the same adapter options,
 radio groups, keyboard/Escape behavior, and honest filtered-empty result as the full ListViews.
 
+The Issue adapter exposes forge label names as the exact-match high-cardinality `label:` dimension. It is
+not a second client-only tag filter: token parsing, matching, options, counts, and the bounded server slice
+all travel through this engine. A local issue has no label values and therefore honestly cannot match one.
+
 Surface defaults may differ where the products already differ: canonical Issues opens on outstanding work,
 while canonical Evals opens on its complete bound record with the evidence default `all` (a plain enum
 default, never data-dependent). Evals derives Fail/Pass/Unmeasured as its non-exhaustive verdict section

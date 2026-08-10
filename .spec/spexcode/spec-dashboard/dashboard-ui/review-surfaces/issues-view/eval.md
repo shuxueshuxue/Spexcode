@@ -2,11 +2,12 @@
 scenarios:
   - name: renders-merged-issues
     tags: [frontend-e2e]
-    code: spec-dashboard/src/IssuesPage.jsx
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/IssueCard.jsx, spec-dashboard/src/IssueLabels.jsx, spec-dashboard/src/styles.css]
     description: >-
       Run the dashboard against a backend whose issues span both stores (a local thread with a reply,
-      forge issues). Open #/issues and read the rendered DOM: the list rows (tag + href), then open
-      the local thread's detail page and read it; check for raw markdown syntax in the detail.
+      forge issues, including a forge issue with a named colored platform label). Open #/issues and read
+      the rendered DOM: the list rows (tag + href), then open the local and forge details, inspect the
+      node-info card, and check for raw markdown syntax in the detail.
     expected: >-
       The list renders open rows in the API's order (no re-sort/rank) as REAL <a> anchors to
       #/issues/<id>. Every shared structured row leads with the issue state: open rows use the
@@ -14,7 +15,8 @@ scenarios:
       `issue-opened` Octicon geometry (ring + centre) in the theme's semantic open green, never the old
       8px solid dot; after the Closed section is selected, both local `landed` and forge `closed`
       rows use Primer's matching 16px `issue-closed` geometry (ring + check) in the one semantic closed
-      purple, never compact CSS dots. Then comes the wrapping concern; identity, originator, and opened time
+      purple, never compact CSS dots. Then comes the wrapping concern and the forge's platform-label chips;
+      identity, originator, and opened time
       occupy the secondary line, while real comments/store/node facts sit at the right. At 390px the same
       markup wraps the title and moves trailing facts beneath it without horizontal overflow. The issue
       title face matches the Evals scenario title; NO boxed store chip leads a row. Open/Closed tabs carry
@@ -27,8 +29,10 @@ scenarios:
       the reply thread, its permalink in the side rail labeled with the store's concrete display name
       ("Open on GitHub" for a github issue, "Open on GitLab" for a gitlab issue — derived from the
       issue's `store` identity, never the internal word "forge"), and the SAME composer (no read-only
-      note exists) — store never changes the thread's shape. A local issue shows no permalink. No page
-      errors.
+      note exists) — store never changes the thread's shape. Its platform labels render again in the
+      localized Labels side-rail section and in its node-info card, with the host-provided background/text
+      colors (or a readable derived foreground when the host has none); no second label request occurs.
+      A local issue shows neither permalink nor label chips. No page errors.
   - name: composer-mention-autocomplete
     tags: [frontend-e2e]
     code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/mentions.jsx]

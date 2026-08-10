@@ -153,7 +153,7 @@ export function EvalsListPage({ sessionId, pageData, loading, error, sessions, q
 // The DETAIL page (`#/evals/<node>/<scenario>[?q=scope:<id>]`): the [[event-detail]] workspace for one
 // scenario, standalone — directly openable, browser Back the return path. The session scope hands the
 // WORKTREE-rooted A/B history down; an address naming no real eval renders the honest not-found.
-export function EvalDetailPage({ param, detail, sessionId, loading = false, error, specs, sessions, listHref, backHref, backLabel, onOpenSession, onFocusNode, onWrite }) {
+export function EvalDetailPage({ param, detail, sessionId, loading = false, error, specs, sessions, listHref, backHref, backLabel, onOpenSession, onWrite }) {
   const t = useT()
   const i = param.indexOf('/')
   const node = i > 0 ? param.slice(0, i) : param
@@ -187,13 +187,13 @@ export function EvalDetailPage({ param, detail, sessionId, loading = false, erro
     <div className="page-detail-stack">
       {sourceNotice && <div className="fv-source-notice" role="status">{sourceNotice}</div>}
       <EventDetail entry={entry} history={detail.history} sourceKey={detail.scope || 'project'} specs={specs} sessions={sessions}
-        onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel}
+        onOpenSession={onOpenSession} onWrite={onWrite} listHref={listHref} backHref={backHref} backLabel={backLabel}
         queue={queue} />
     </div>
   )
 }
 
-export default function EvalsPage({ specs = EMPTY_SPECS, sessions = [], issuesStamp = null, reloadBoard, onOpenSession, onFocusNode = null }) {
+export default function EvalsPage({ specs = EMPTY_SPECS, sessions = [], issuesStamp = null, reloadBoard, onOpenSession }) {
   const t = useT()
   const { notify } = useTransientNotice()
   const { param, query } = useRoute()
@@ -234,7 +234,7 @@ export default function EvalsPage({ specs = EMPTY_SPECS, sessions = [], issuesSt
     ? <EvalDetailPage param={param} detail={detail.data && detail.data !== false ? detail.data : null} sessionId={sessionId}
         loading={detail.data === null} error={detail.error} specs={specs}
         sessions={sessions} listHref={listHref} backHref={backHref} backLabel={backLabel}
-        onOpenSession={onOpenSession} onFocusNode={onFocusNode} onWrite={onWrite} />
+        onOpenSession={onOpenSession} onWrite={onWrite} />
     : <EvalsListPage sessionId={sessionId} pageData={list.data} loading={list.loading} error={list.error} sessions={sessions}
         queryText={query.q || ''} onQueryText={onQueryText} hrefFor={hrefFor} hrefForPage={hrefForPage} />
 }

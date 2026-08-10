@@ -36,6 +36,9 @@ page; conflict, lint, ahead, and committed remain together on explicit review/ex
 read, `GET /api/evals/impact?scope=<id>`: it preserves the selector/delta proof for a caller that asks for
 it, while the paged list keeps only each rendered row's own impact reasons.
 
+An Issues `label:` query is ordinary shared filtering: label-chip interaction changes only the committed
+token text, then this same operation derives matching rows, counts, facets, and the next 25-row slice.
+
 A `counts` entry is one number, or the named buckets of a section the adapter SPLIT — Evals' measured
 verdicts arrive as `counts.pass`/`counts.fail` = `{fresh,stale}` while `counts.unmeasured` stays a number.
 The buckets are that verdict's whole population, folded HERE, once, over the complete filtered set before

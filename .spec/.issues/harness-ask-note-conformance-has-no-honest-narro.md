@@ -20,3 +20,6 @@ Named handler landed on main as 9fe? (merge current); ask-note now anchors spec-
 
 <!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T08:21:38.820Z -->
 Correction to the preceding reply: the named-handler branch landed in main at f2a242042 (not the placeholder text shown there). The fresh failure reading is codeSha 584c4248d8d0c4631cb57e24db4b5147eff14d21 with the attached full transcript. The conclusion is unchanged: source ownership is now narrow and honest; Codex injection/execution remains the separate unclosed behavior.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T08:35:11.359Z -->
+Correction after source-path review: the Codex FAIL reading has been retracted on main because the marker was injected before the existing ask-note matrix settled precondition. The CLI receipt means only that delivery debt was accepted; it does not prove the harness executed the marker. A real Codex remeasurement must first record stable public settled state and no native in-progress turn, then send and observe. Only a failure under that gate is a Codex product defect. No source behavior is being changed from this diagnosis.

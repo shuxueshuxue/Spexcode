@@ -13,7 +13,7 @@ scenarios:
       fails loud: non-zero exit, stderr names the local cache path and the backend /api/evidence URL
       it tried.
     tags: [cli]
-    code: spec-eval/src/cli.ts
+    code: spec-eval/src/cli.ts#blobGet
 ---
 
 Measured YATU through the installed `spex` CLI — real `evidence put` / `evidence get` invocations from a

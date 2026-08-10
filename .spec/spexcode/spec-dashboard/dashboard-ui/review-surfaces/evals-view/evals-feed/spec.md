@@ -7,11 +7,11 @@ code:
   - spec-dashboard/src/EvalsFeed.jsx#EvalsGroup
 related:
   - spec-eval/src/evaltab.ts
-  - packages/l0/src/graph.ts
+  - packages/spec-core/src/graph.ts
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/ReviewShell.jsx
-  - packages/l0/src/review/reviewFilters.js
+  - packages/spec-core/src/review/reviewFilters.js
   - spec-dashboard/test/eval-verdict-freshness.e2e.mjs
 ---
 # evals-feed

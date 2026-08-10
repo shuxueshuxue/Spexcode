@@ -3,11 +3,11 @@ import { basename, join, resolve, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { HARNESSES, type HarnessArtifacts } from './harness.js'
-import { runtimeRoot, readConfig, mainCheckout } from '@spexcode/l0'
+import { runtimeRoot, readConfig, mainCheckout } from '@spexcode/spec-core'
 import { resolveHarnessTargets } from './harness-select.js'
-import { loadSkillConfig, loadAgentConfig } from '@spexcode/l0'
+import { loadSkillConfig, loadAgentConfig } from '@spexcode/spec-core'
 import { dematerialize } from './materialize.js'
-import { gitBinary } from '@spexcode/l0'
+import { gitBinary } from '@spexcode/spec-core'
 
 // the standard plugin-host folders a host agent scans (in addition to any named in spexcode.json's `harnesses`).
 const DEFAULT_PLUGIN_HOSTS = ['.claude', '.codex', '.adopter-a'] as const

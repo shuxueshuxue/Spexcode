@@ -1,7 +1,7 @@
 import { createHmac, createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { spexcodeHome } from '@spexcode/l0'
+import { spexcodeHome } from '@spexcode/spec-core'
 
 export type Verifier = { algo: 'scrypt'; N: number; r: number; p: number; salt: string; hash: string; gen: string }
 export type AuthStore = { v: 1; secret: string; admin?: Verifier; projects: Record<string, Verifier> }

@@ -194,7 +194,7 @@ async function followKit(selectors: string[], verb: string): Promise<{
   const { followSessions } = await import('./session-follow.js')
   const { localCachedSessions } = await import('./client.js')
   const { fromRaw, ownSessionId, selectSessions, toSession } = await import('./sessions.js')
-  const { listSessionIds, readPublicRecordEntry } = await import('@spexcode/l0')
+  const { listSessionIds, readPublicRecordEntry } = await import('@spexcode/spec-core')
   const real = selectors.filter((sel) => sel && sel !== '@all')
   let picked: string[] = []
   if (real.length) {
@@ -276,7 +276,7 @@ function nothingProposalTrap(): never {
 
 async function stateKit() {
   const s = await import('./sessions.js')
-  const l = await import('@spexcode/l0')
+  const l = await import('@spexcode/spec-core')
   const { existsSync, writeFileSync } = await import('node:fs')
   // the agent-authored state writers resolve WHICH session by id: a `--session <id>` flag (the lifecycle
   // hooks pass it, parsed from the payload, since they no longer have a cwd `.session`) wins, else the
@@ -496,7 +496,7 @@ if (cmd === 'serve') {
   } else if (sub === 'owner') {
     // BOTH [[governed-related]] relations, distinctly: governors (code: — the verdict) and referencers
     // (related: — pointers; coverage only, never drift, never eval freshness).
-    const { specOwners, specRelated } = await import('@spexcode/l0')
+    const { specOwners, specRelated } = await import('@spexcode/spec-core')
     const { loadConfig } = await import('./lint.js')
     const p0 = positionals(4)[0]
     if (!p0) { console.error('usage: spex spec owner <path> [--actionable]'); process.exit(2) }
@@ -575,7 +575,7 @@ if (cmd === 'serve') {
     // a direct trunk commit. The guard passes the stamp through its tree-unchanged gate instead. `--only`
     // with no paths pins the commit to HEAD's tree even when the index is dirty — an ack must never sweep
     // staged files along. git de-dupes adjacent trailers, so re-acking is harmless.
-    const { git } = await import('@spexcode/l0')
+    const { git } = await import('@spexcode/spec-core')
     const nodes = positionals(4)
     const reason = (flag('reason') ?? '').trim()
     if (!nodes.length || !reason) {
@@ -1098,14 +1098,14 @@ if (cmd === 'serve') {
     // checkout's current branch → 'main'). The pre-commit main-guard captures this so it blocks direct
     // commits on whatever the repo's trunk is actually named, never a hardcoded 'main'. One value, one
     // line; GET /api/settings exposes the same resolution (`.layout`).
-    const { mainBranch } = await import('@spexcode/l0')
+    const { mainBranch } = await import('@spexcode/spec-core')
     console.log(mainBranch())
   } else if (sub === 'spec-governors') {
     // Stable machine projection for spec-aware hooks: one real code: governor per row, with the live spec
     // path the block reason can point at. Empty stdout means ungoverned (including related-only).
     const file = process.argv[4]
     if (!file) { console.error('usage: spex internal spec-governors <path>'); process.exit(2) }
-    const { specOwners, loadSpecsLite } = await import('@spexcode/l0')
+    const { specOwners, loadSpecsLite } = await import('@spexcode/spec-core')
     const paths = new Map(loadSpecsLite().map((node) => [node.id, node.path]))
     for (const owner of specOwners(file)) {
       const path = paths.get(owner.id)

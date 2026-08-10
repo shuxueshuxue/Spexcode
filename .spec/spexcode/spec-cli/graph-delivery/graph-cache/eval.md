@@ -41,7 +41,7 @@ scenarios:
       past 50s as the git-free liveness probe starves behind N concurrent full builds.
   - name: existence-scan-stops-at-first-hit
     tags: [backend-api]
-    code: [packages/l0/src/anchors.ts, spec-eval/src/freshness.ts]
+    code: [packages/spec-core/src/anchors.ts, spec-eval/src/freshness.ts]
     description: >-
       Cost A/B of one COLD full board assembly, measured through the real `/api/graph` HTTP surface, on a
       substrate where the anchored-reading corpus is fixed byte for byte: a fresh clone of the product repo
@@ -68,7 +68,7 @@ scenarios:
       any per-query boolean that flips, or a parse volume that did not actually fall.
   - name: cold-board-does-not-stall-health
     tags: [backend-api]
-    code: [packages/l0/src/graph.ts, packages/l0/src/anchors.ts]
+    code: [packages/spec-core/src/graph.ts, packages/spec-core/src/anchors.ts]
     description: >-
       On an isolated, pinned-port backend serving a corpus with historical anchored readings, first measure
       at least 40 sequential idle `/health` requests. Then start one cold `/api/graph` request and probe
@@ -85,7 +85,7 @@ scenarios:
   - name: non-input-root-churn-starts-no-full-build
     tags: [backend-api]
     code: spec-cli/src/graphCache.ts
-    related: [spec-cli/src/graphStream.ts, packages/l0/src/graph.ts]
+    related: [spec-cli/src/graphStream.ts, packages/spec-core/src/graph.ts]
     description: >-
       A/B the real HTTP and delta-SSE surfaces on two INDEPENDENT copies of one frozen session-bearing
       fixture: a production-shaped corpus (~227 spec nodes) with two linked worktrees, two governed
@@ -229,7 +229,7 @@ scenarios:
     tags: [backend-api]
     test: spec-cli/src/graphStream.api.test.ts
     code: spec-cli/src/graphCache.ts
-    related: [spec-cli/src/graphStream.ts, packages/l0/src/graph.ts]
+    related: [spec-cli/src/graphStream.ts, packages/spec-core/src/graph.ts]
     description: >-
       Warm a real isolated backend and delta subscriber, create a real full-domain change, and hold the
       route-owned or patrol-owned full producer at a controlled git barrier. Persist a real session rename through
@@ -244,8 +244,8 @@ scenarios:
       through the early session frame without amplifying into a patrol successor treadmill.
   - name: cold-board-batches-freshness-per-read
     tags: [backend-api]
-    code: packages/l0/src/graph.ts
-    related: [spec-eval/src/evaltab.ts, spec-eval/src/freshness.ts, packages/l0/src/anchors.ts, packages/l0/src/git.ts]
+    code: packages/spec-core/src/graph.ts
+    related: [spec-eval/src/evaltab.ts, spec-eval/src/freshness.ts, packages/spec-core/src/anchors.ts, packages/spec-core/src/git.ts]
     description: >-
       A/B one cold board assembly over a corpus that actually carries anchored eval readings. Hold the CORPUS
       fixed and vary only the builder binary — run the candidate's `spex` with its working directory set to a

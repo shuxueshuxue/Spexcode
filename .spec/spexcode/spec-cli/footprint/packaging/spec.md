@@ -6,10 +6,10 @@ desc: SpexCode installs as one npm package (`npm i -g spexcode` → `spex`); the
 code:
   - scripts/prepack.mjs
 related:
-  - packages/l0/package.json
-  - packages/l0/src/index.ts
-  - packages/l0/src/review/index.js
-  - packages/l0/src/identity-presets.js
+  - packages/spec-core/package.json
+  - packages/spec-core/src/index.ts
+  - packages/spec-core/src/review/index.js
+  - packages/spec-core/src/identity-presets.js
   - spec-cli/src/cli.ts
   - package.json
   - package-lock.json
@@ -22,11 +22,13 @@ related:
 ---
 # packaging
 
-SpexCode ships as a single installable npm package named `spexcode`. `npm i -g spexcode` puts **one**
-command on PATH — `spex` — and nothing else the user must wire. The package carries everything the tool
-needs on a machine that has never seen the source: the CLI, its `spex init` templates, the git/harness
-hooks, and the **prebuilt** dashboard. There is no build step on the user's machine — the launcher runs
-the TypeScript directly through tsx (a real dependency, not a dev-only tool), the dogfood's no-build stance.
+SpexCode's installation contract is a single installable npm package named `spexcode`: users install only
+that package, and its child packages distribute inside it. `@spexcode/spec-core` is also published separately
+for external projects to depend on directly. `npm i -g spexcode` puts **one** command on PATH — `spex` — and
+nothing else the user must wire. Installing `spexcode` requires Node >= 22. The package carries everything the
+tool needs on a machine that has never seen the source: the CLI, its `spex init` templates, the git/harness
+hooks, and the **prebuilt** dashboard. There is no build step on the user's machine — the launcher runs the
+TypeScript directly through tsx (a real dependency, not a dev-only tool), the dogfood's no-build stance.
 The full TypeScript compiler is deliberately not runtime cargo: it remains a development dependency for
 SpexCode's own typecheck and JS anchors, while an adopter's optional JS-anchor extractor resolves that
 adopter's TypeScript and fails loud when it is absent ([[code-anchor]]).
@@ -42,10 +44,10 @@ that also uses `--ignore-scripts` suppresses esbuild's own platform-binary repai
 installs the matching `@esbuild/<platform>-<arch>` package with `--no-save --no-package-lock`; that is test
 scaffolding only, not an extra normal-adopter step.
 
-The installable unit remains the **monorepo root**, now with one real workspace package: `@spexcode/l0`.
-Its source lives at `packages/l0/src`; the root manifest declares `packages/*`, `spec-cli`, `spec-eval`, and
-`spec-forge` as workspaces, depends on the local L0 package, and ships `packages/l0` in its explicit `files`
-allowlist. `@spexcode/l0` has three deliberately narrow package exports. `.` is the Node-side core entry and
+The installable unit remains the **monorepo root**, now with one real workspace package: `@spexcode/spec-core`.
+Its source lives at `packages/spec-core/src`; the root manifest declares `packages/*`, `spec-cli`, `spec-eval`, and
+`spec-forge` as workspaces, depends on the local L0 package, and ships `packages/spec-core` in its explicit `files`
+allowlist. `@spexcode/spec-core` has three deliberately narrow package exports. `.` is the Node-side core entry and
 owns the root-explicit `readSpecs(root)` reader. `./review` is the browser-safe review domain only: its
 filter, query, and session presentation functions have no Node, React, store, endpoint, or service
 dependency. `./identity` is the same kind of browser-safe identity registry shared by validation and

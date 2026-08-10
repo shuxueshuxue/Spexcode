@@ -5,13 +5,13 @@ import { type SessionEvalOrderRow, buildSessionEvals, type SessionEvals } from '
 import { evalTimeline } from '../../spec-eval/src/evaltab.js'
 import { issuesEnabled as issuesEnabledForReview } from './localIssues.js'
 import { issueStores as issueStoresForReview } from './issues.js'
-import { hasReviewSnapshot, readReviewSnapshot } from '@spexcode/l0'
+import { hasReviewSnapshot, readReviewSnapshot } from '@spexcode/spec-core'
 import { residentForgeRevision, residentForgeState } from '../../spec-forge/src/resident.js'
 // @ts-expect-error The browser-safe domain module is deliberately plain JS so the browser and server execute
 // the exact same tokenizer/matcher through the one public review entry.
-import { EVAL_FILTER_KIND, evalFilterModel, evalReviewState, issueFilterModel, tokenFilterState } from '@spexcode/l0/review'
+import { EVAL_FILTER_KIND, evalFilterModel, evalReviewState, issueFilterModel, tokenFilterState } from '@spexcode/spec-core/review'
 // @ts-expect-error See the shared-domain note above.
-import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, readToken } from '@spexcode/l0/review'
+import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, readToken } from '@spexcode/spec-core/review'
 
 export const REVIEW_PER_PAGE = 25
 

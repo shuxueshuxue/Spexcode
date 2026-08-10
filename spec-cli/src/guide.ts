@@ -692,4 +692,4 @@ export function guideCatalogEntries(): readonly GuideCatalogEntry[] {
   }
   return entries
 }
-import { uploadPolicyDefaults } from '@spexcode/l0'
+import { uploadPolicyDefaults } from '@spexcode/spec-core'

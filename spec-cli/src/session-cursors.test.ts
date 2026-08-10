@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { advanceFollow, followCursor, followedSessions, readCursors, unreadSince } from './session-cursors.js'
-import { sessionStoreDir } from '@spexcode/l0'
+import { sessionStoreDir } from '@spexcode/spec-core'
 import type { TimelineEvent } from './session-timeline.js'
 
 // A cursor is the ONLY durable state supervision has ([[session-cursors]]). These pin the three claims the

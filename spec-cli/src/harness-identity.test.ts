@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { HARNESS_IDENTITIES } from '@spexcode/l0'
+import { HARNESS_IDENTITIES } from '@spexcode/spec-core'
 import { HARNESSES } from './harness.js'
 
 test('full harness adapters project the one identity registry', () => {

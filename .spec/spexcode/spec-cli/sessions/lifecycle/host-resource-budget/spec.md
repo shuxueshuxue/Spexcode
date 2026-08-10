@@ -6,7 +6,7 @@ desc: Attribute resident session and backend cost, enforce budgets, detect leaks
 code:
   - spec-cli/src/host-resources.ts
 related:
-  - packages/l0/src/process-identity.ts
+  - packages/spec-core/src/process-identity.ts
   - spec-cli/src/process-identity.test.ts
   - spec-cli/src/runtime-ownership.ts
   - spec-cli/src/host-resources.test.ts
@@ -16,7 +16,7 @@ related:
   - spec-cli/src/cli.ts
   - spec-cli/src/index.ts
   - spec-cli/src/supervise.ts
-  - packages/l0/src/layout.ts
+  - packages/spec-core/src/layout.ts
   - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/bin/spex.mjs
 ---

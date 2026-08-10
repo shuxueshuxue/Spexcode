@@ -11,8 +11,8 @@ code:
   - spec-eval/src/freshness.ts#currentTreeImage
   - spec-eval/src/freshness.ts#anchorProblems
 related:
-  - packages/l0/src/anchors.ts
-  - packages/l0/src/git.ts
+  - packages/spec-core/src/anchors.ts
+  - packages/spec-core/src/git.ts
   - spec-cli/src/graphCache.ts
   - spec-eval/src/evaltab.ts
   - spec-eval/src/cli.ts

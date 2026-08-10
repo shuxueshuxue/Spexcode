@@ -8,7 +8,7 @@ code:
   - spec-cli/src/worktree-sources.ts#hideSeededFromGit
 related:
   - spec-cli/src/materialize.ts
-  - packages/l0/src/layout.ts
+  - packages/spec-core/src/layout.ts
   - spec-cli/src/materialize.test.ts
 ---
 # residence

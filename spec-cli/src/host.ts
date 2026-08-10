@@ -15,15 +15,15 @@ import { mkdirSync, writeFileSync, readFileSync, renameSync, rmSync, readdirSync
 import { homedir } from 'node:os'
 import { dirname, join, basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { spexcodeHome, encodeProject } from '@spexcode/l0'
-import { git } from '@spexcode/l0'
+import { spexcodeHome, encodeProject } from '@spexcode/spec-core'
+import { git } from '@spexcode/spec-core'
 import { serveStatic, resolveDistDir, ensureDashboardBuilt } from './gateway.js'
 import { startHubGateway, type HubExtensions } from './gateway-hub.js'
 import { tsxBin } from './tsx-bin.js'
-import { DEFAULT_PROJECT_ICON, requireIdentityChoice } from '@spexcode/l0/identity'
+import { DEFAULT_PROJECT_ICON, requireIdentityChoice } from '@spexcode/spec-core/identity'
 import {
   resolveProjectIdentity, writeGatewayIcon, type ResolvedIdentity,
-} from '@spexcode/l0'
+} from '@spexcode/spec-core'
 
 const here = dirname(fileURLToPath(import.meta.url))
 

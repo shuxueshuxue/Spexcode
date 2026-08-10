@@ -9,7 +9,7 @@ code:
 related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
-  - packages/l0/src/layout.ts
+  - packages/spec-core/src/layout.ts
   - spec-cli/src/session-timeline.test.ts
   - spec-cli/src/session-timeline.api.test.ts
   - spec-dashboard/src/TimelineChat.jsx

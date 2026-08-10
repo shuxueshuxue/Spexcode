@@ -5,7 +5,7 @@ hue: 145
 desc: PENDING design — a session's worktree ORIGIN becomes polymorphic (fresh node branch, or seeded from a PR), so an external PR can be pulled in as an ordinary agent-governed session. One seeding primitive; `spex new --from-pr` the only new surface. No code yet.
 related:
   - spec-cli/src/sessions.ts
-  - packages/l0/src/layout.ts
+  - packages/spec-core/src/layout.ts
 ---
 # session-origin
 

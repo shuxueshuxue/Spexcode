@@ -6,13 +6,13 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { platform, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { codexAppServerReceipt, codexAppServerPid, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, type SharedRuntimeProbe } from './harness.js'
-import { repoRoot } from '@spexcode/l0'
-import { runtimeRoot } from '@spexcode/l0'
+import { repoRoot } from '@spexcode/spec-core'
+import { runtimeRoot } from '@spexcode/spec-core'
 import {
   assertSessionStopSafe,
   collectResourceReport,
 } from './host-resources.js'
-import { parseProcStat, processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from '@spexcode/l0'
+import { parseProcStat, processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from '@spexcode/spec-core'
 import { registerBackendInstance, spawnDetachedRuntime, unregisterBackendInstance } from './runtime-ownership.js'
 
 test('parseProcStat keeps PID identity separate from process name punctuation', () => {

@@ -4,16 +4,16 @@ status: active
 hue: 200
 desc: The seam that turns a git invocation into a truthful result — and, when it fails, into a failure that still says WHICH kind it was, so no caller can mistake "git could not run" for "git ran and said no".
 code:
-  - packages/l0/src/git.ts#execGit
-  - packages/l0/src/git.ts#gitBinary
-  - packages/l0/src/git.ts#git
-  - packages/l0/src/git.ts#gitBuffer
-  - packages/l0/src/git.ts#warnIfTimedOut
-  - packages/l0/src/git.ts#gitInterpretationIdentity
-  - packages/l0/src/git.ts#worktreeSpecDeltas
-  - packages/l0/src/git.ts#batchRevisionOids
+  - packages/spec-core/src/git.ts#execGit
+  - packages/spec-core/src/git.ts#gitBinary
+  - packages/spec-core/src/git.ts#git
+  - packages/spec-core/src/git.ts#gitBuffer
+  - packages/spec-core/src/git.ts#warnIfTimedOut
+  - packages/spec-core/src/git.ts#gitInterpretationIdentity
+  - packages/spec-core/src/git.ts#worktreeSpecDeltas
+  - packages/spec-core/src/git.ts#batchRevisionOids
 related:
-  - packages/l0/src/git.ts
+  - packages/spec-core/src/git.ts
   - spec-cli/src/git.test.ts
   - spec-eval/src/freshness.ts
   - spec-cli/src/sessions.ts

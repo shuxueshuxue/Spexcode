@@ -1,6 +1,6 @@
 import { closeSync, lstatSync, openSync, readSync } from 'node:fs'
 import { join } from 'node:path'
-import { git } from '@spexcode/l0'
+import { git } from '@spexcode/spec-core'
 
 export type SourcePolicy = {
   sourceIncludeGlobs: string[] | null

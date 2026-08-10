@@ -4,7 +4,7 @@ import { boundedEvalNeighbors, focusNodes, measuredSequence, paginateReview, pro
 import { orderRowsOf } from '../../spec-eval/src/sessioneval.js'
 // @ts-expect-error The shared browser/server engine is deliberately plain JS — the same module the server
 // folds counts with, so this test measures the real canonical path rather than a re-implementation.
-import { evalFilterModel, tokenFilterState } from '@spexcode/l0/review'
+import { evalFilterModel, tokenFilterState } from '@spexcode/spec-core/review'
 
 const model = {
   sections: { open: 61, closed: 7 },

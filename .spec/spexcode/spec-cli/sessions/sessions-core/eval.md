@@ -52,7 +52,11 @@ scenarios:
     test: spec-cli/src/session-create-transaction.test.ts
   - name: pane-snapshot-survives-the-installed-tmux
     tags: [backend-api]
-    code: spec-cli/src/sessions.ts
+    code:
+      - spec-cli/src/sessions.ts#TMUX_PANE_SEPARATOR
+      - spec-cli/src/sessions.ts#TMUX_PANE_FORMAT
+      - spec-cli/src/sessions.ts#parseLivePanes
+      - spec-cli/src/sessions.ts#liveSnapshot
     description: >
       Start a real tmux server with one session of a known name, ask it for `list-panes -a` using the EXACT
       format the liveness snapshot sends, and feed that raw output to the pane parser. Also read the format

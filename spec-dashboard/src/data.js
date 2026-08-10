@@ -1,5 +1,6 @@
 import { createDeadman } from './heartbeat.js'
 import { apiUrl } from './project.js'
+import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
 
 // drill-down tidy-tree layout ([[node-graph]]); `expanded` is the focused node's ancestor spine.
 export const X_GAP = 280, Y_GAP = 54
@@ -60,6 +61,29 @@ export async function loadGraph() {
   const tag = res.headers.get('etag') || ''
   const board = await res.json()
   return { board, seal: () => { boardTag = tag } }
+}
+
+// The public Spec Graph is a sealed static artifact, not a narrowed live board. Keep it off apiUrl() and
+// avoid every session/review transport: a static host need only serve this one JSON document and Vite assets.
+export async function loadPublicGraph() {
+  const response = await fetch(PUBLIC_GRAPH_SOURCE, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`public graph unavailable: ${response.status}`)
+  const graph = await response.json()
+  if (graph?.schema !== 'spexcode.public-spec-graph/v1' || !Array.isArray(graph?.nodes) || !graph?.identity) {
+    throw new Error('public graph payload is invalid')
+  }
+  return { ...graph, sessions: [], issuesStamp: null }
+}
+
+export async function loadPublicSpecContent(id) {
+  const source = `${PUBLIC_GRAPH_DOCUMENT_SOURCE}/${encodeURIComponent(id)}.json`
+  const response = await fetch(source, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`public spec unavailable: ${response.status}`)
+  const document = await response.json()
+  if (document?.schema !== 'spexcode.public-spec-document/v1' || document.id !== id || typeof document.body !== 'string') {
+    throw new Error('public spec payload is invalid')
+  }
+  return document
 }
 
 // the ONE way to build a `/api/specs/:id/*` URL ([[id-url-safe]]): the node id is the sole variable path

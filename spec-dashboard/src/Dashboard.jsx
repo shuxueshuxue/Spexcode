@@ -67,17 +67,20 @@ function PagePane({ active, warm = false, className, children }) {
   )
 }
 
-function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, boardLive }) {
+function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, boardLive, graphOnly = false }) {
   const project = identity?.title || ''
   // the URL is the page switch ([[side-nav]]): #/graph[/<node>] | #/sessions[/<sel>] | #/issues | #/settings.
   // `page` replaces the old boolean overlay states (sessionUI / settings-modal) — the sidebar, the keyboard,
   // and the address bar all drive the same route.
   const { page, param } = useRoute()
+  useEffect(() => {
+    if (graphOnly && page !== 'graph') navigate('graph', null, { replace: true })
+  }, [graphOnly, page])
   // SessionInterface owns live terminals, so it stays mounted after the first visit. Do not eagerly mount
   // it on graph/evals/issues routes: a cold dashboard should not open every session transport just because
   // the console is available as a sibling route.
-  const [sessionWarm, setSessionWarm] = useState(() => page === 'sessions')
-  useEffect(() => { if (page === 'sessions') setSessionWarm(true) }, [page])
+  const [sessionWarm, setSessionWarm] = useState(() => !graphOnly && page === 'sessions')
+  useEffect(() => { if (!graphOnly && page === 'sessions') setSessionWarm(true) }, [graphOnly, page])
   // focus survives a reload / a mobile↔desktop breakpoint remount within this tab (sessionStorage, so a
   // fresh tab still opens on the root); a stale saved id is fine — focusRaw below falls back to the root.
   const [focusId, setFocusId] = useState(() => {
@@ -365,7 +368,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
   // capture phase so we beat react-flow; while a modal is open it owns the keys (guards below)
   useEffect(() => {
     // the focused node's actual tabs (panesFor), so pane-nav matches what NodeView renders for THIS node
-    const paneKeys = panesFor(focus).map((p) => p.key)
+    const paneKeys = panesFor(focus, graphOnly).map((p) => p.key)
     const cyclePane = (dir) => setPane((p) => { const i = paneKeys.indexOf(p); return paneKeys[((i < 0 ? 0 : i) + dir + paneKeys.length) % paneKeys.length] })
     // nav just moves focus; the follow-focus effect recenters once the tree has re-plotted around the new
     // focus (passing the stale pre-re-plot node straight to centerOn would aim at its OLD coordinates).
@@ -381,9 +384,13 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
       if (e.altKey && !e.metaKey && !e.ctrlKey) {
         const pageOf = { Digit1: 'graph', Digit2: 'sessions', Digit3: 'evals', Digit4: 'issues', Digit5: 'settings' }
         const target = pageOf[e.code]
-        if (target) { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate(target); return }
-        if (e.code === 'KeyN') { e.preventDefault(); e.stopPropagation(); setSearch(null); setSessionSel('new'); navigate('sessions', 'new'); return }
-        if (e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate('evals'); return }
+        if (target) {
+          e.preventDefault(); e.stopPropagation(); setSearch(null)
+          if (!graphOnly || target === 'graph') navigate(target)
+          return
+        }
+        if (!graphOnly && e.code === 'KeyN') { e.preventDefault(); e.stopPropagation(); setSearch(null); setSessionSel('new'); navigate('sessions', 'new'); return }
+        if (!graphOnly && e.code === 'KeyF') { e.preventDefault(); e.stopPropagation(); setSearch(null); navigate('evals'); return }
       }
       // The search palette is a modal: while open it owns its keys over ANY surface — the board OR the session
       // interface (the session interface yields via its searchOpen guard). The SpecSearch input owns ↑/↓/Enter/
@@ -396,7 +403,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
       // ⌥+/ opens the SAME palette with SESSIONS boosted — the session board's search escape-hatch,
       // reachable even while the session interface owns its keys. Match the physical slash key because
       // Option+/ emits a platform-specific glyph on macOS. Plain `/` on the board stays nodes-first (below).
-      if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'Slash') { e.preventDefault(); e.stopPropagation(); setSearch('sessions'); return }
+      if (!graphOnly && e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'Slash') { e.preventDefault(); e.stopPropagation(); setSearch('sessions'); return }
       // Everything below is the plain-key board vocabulary. Browser/system accelerators that happen to use
       // the same base key (`Ctrl/⌘+L`, `Ctrl/⌘+,`, `Alt+←`, …) pass through unless declared above.
       if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -465,10 +472,10 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
       }
       if (firesKey('graph.help', e.key)) { e.preventDefault(); setLegend(true); return }
       if (e.key === 'Escape' && highlightId) { e.preventDefault(); e.stopPropagation(); setHighlightId(null); return }
-      if (firesKey('graph.settings', e.key)) { e.preventDefault(); navigate('settings'); return }
-      if (firesKey('graph.search', e.key)) { e.preventDefault(); e.stopPropagation(); setSearch('nodes'); return }
+      if (!graphOnly && firesKey('graph.settings', e.key)) { e.preventDefault(); navigate('settings'); return }
+      if (!graphOnly && firesKey('graph.search', e.key)) { e.preventDefault(); e.stopPropagation(); setSearch('nodes'); return }
       // chord buffer: a leader (n/d) holds, the next letter fires (CHORDS); a non-match or a 700ms lull clears it and falls through
-      if (!e.metaKey && !e.ctrlKey && !e.altKey && /^[a-zA-Z]$/.test(e.key)) {
+      if (!graphOnly && !e.metaKey && !e.ctrlKey && !e.altKey && /^[a-zA-Z]$/.test(e.key)) {
         const cur = chordRef.current
         if (cur.buf || CHORD_LEADERS.has(e.key)) {
           clearTimeout(cur.timer)
@@ -505,13 +512,13 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
       // crossing into an existing session is the right-click node-menu's job ([[node-menu]]), not a keystroke.
       // [-key (the [[node]] mention opener): jump to a
       // FRESH New Session on the focus ([[<id>]] pre-seeded), unconditional — never enters an existing session
-      else if (firesKey('graph.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
+      else if (!graphOnly && firesKey('graph.fresh', e.key)) { e.preventDefault(); startNew(`[[${focus.id}]] `) }
       // f-key: open the Evals page ([[evals-view]]) — the leading loss surface — from the board; the rail is the other entry
-      else if (firesKey('graph.evals', e.key)) { e.preventDefault(); navigate('evals') }
+      else if (!graphOnly && firesKey('graph.evals', e.key)) { e.preventDefault(); navigate('evals') }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [overlay, page, legend, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openSession, startNew, focusNode, popupScroll, legendScroll])
+  }, [overlay, page, legend, search, highlightId, focus, cycleNodes, upTarget, downTarget, rightTarget, parent, centerOn, getViewport, openSession, startNew, focusNode, popupScroll, legendScroll, graphOnly])
 
   // wake only on a real coordinate change — a pan under a still cursor can emit a synthetic mousemove with unchanged x/y
   useEffect(() => {
@@ -571,9 +578,9 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
   return (
     <div className={kbdMode ? 'app kbd-mode' : 'app'}>
       <TooltipLayer />
-      <SideBar page={page} identity={identity} catalog={catalog} />
+      <SideBar page={page} identity={identity} catalog={catalog} graphOnly={graphOnly} />
       <div className="app-main">
-      <PagePane active={page === 'graph'} warm className="page-graph">
+      <PagePane active={graphOnly || page === 'graph'} warm className="page-graph">
       <div className="graph" ref={graphRef}>
         <ReactFlow
           nodes={nodes}
@@ -581,7 +588,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
           nodeTypes={nodeTypes}
           onNodeClick={onNodeClick}
           onNodeDoubleClick={onNodeDoubleClick}
-          onNodeContextMenu={onNodeContextMenu}
+          onNodeContextMenu={graphOnly ? undefined : onNodeContextMenu}
           nodeOrigin={NODE_ORIGIN}
           zoomOnDoubleClick={false}
           nodesDraggable={false}
@@ -598,11 +605,11 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
           <button className="hud-help" onClick={() => setLegend((v) => !v)} data-tip={t('hud.helpTitle')}>?</button>
         </div>
 
-        <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />
+        {!graphOnly && <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />}
 
         <GraphStats specs={specs} focusId={focusId} onJump={focusNode} />
 
-        <NodeContextMenu
+        {!graphOnly && <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}
           onInfo={() => setOverlay(true)}
           onFresh={(id) => startNew(`[[${id}]] `)}
@@ -610,9 +617,9 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
           onDelete={(id) => startNew(CHORDS.dd(id))}
           sessions={menuSessions}
           onOpenSession={openSession}
-        />
+        />}
 
-        {lockedSession && (
+        {!graphOnly && lockedSession && (
           <div className="lock-hint" style={{ '--ov': labelColor(lockedSession.id) }}>
             <span className="lock-hint-lead"><LockGlyph /> {sessionHeadline(lockedSession)}</span>
             {lockedNodes.length ? (
@@ -641,9 +648,9 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
 
       {/* key on focus.id: remount when the open overlay switches nodes, so the lazily-fetched body ([[graph-lean]])
           never renders one node's prose under another's header while the new fetch is in flight. */}
-      {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} onClose={() => setOverlay(false)} />}
+      {overlay && <NodeView key={focus.id} node={focus} pane={pane} setPane={setPane} sessions={sessions} graphOnly={graphOnly} onClose={() => setOverlay(false)} />}
       {/* The console mounts on first entry, then remains warm while other routes are shown. */}
-      <PagePane active={page === 'sessions'} warm={sessionWarm} className="page-sessions">
+      {!graphOnly && <PagePane active={page === 'sessions'} warm={sessionWarm} className="page-sessions">
         <SessionInterface
           sessions={sessions}
           specs={specs}
@@ -660,23 +667,23 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
           boardLive={boardLive}
           reload={reload}
         />
-      </PagePane>
+      </PagePane>}
       {/* the Evals page ([[evals-view]]) — its own top-level route; the feed rides the app's board poll */}
-      <PagePane active={page === 'evals'} className="page-evals">
+      {!graphOnly && <PagePane active={page === 'evals'} className="page-evals">
         <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reload} onOpenSession={openSession} />
-      </PagePane>
+      </PagePane>}
       {/* the Issues page ([[issues-view]]) — its own route; its paged reads follow the board's issue stamp */}
-      <PagePane active={page === 'issues'} className="page-issues">
+      {!graphOnly && <PagePane active={page === 'issues'} className="page-issues">
         <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />
-      </PagePane>
+      </PagePane>}
       {/* the settings page ([[settings]]) — same sections as ever, now a routed page instead of a popup */}
-      <PagePane active={page === 'settings'} className="page-settings">
+      {!graphOnly && <PagePane active={page === 'settings'} className="page-settings">
         <Settings />
-      </PagePane>
+      </PagePane>}
       {/* the one shared search palette ([[session-search]]) — mounted at APP level, not inside a
           routed page: it must float above whichever page is showing (the graph's `/`, the session board's
           ⌥+/ and Search pill), and a page's display:none must never swallow it. */}
-      {search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(null)} boost={search === 'sessions' ? 'session' : null} />}
+      {!graphOnly && search && <SpecSearch specs={specs} sessions={sessions} onPick={onSearchPick} onClose={() => setSearch(null)} boost={search === 'sessions' ? 'session' : null} />}
       </div>
     </div>
   )

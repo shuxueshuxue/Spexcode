@@ -3,7 +3,7 @@ export {} // make this a module so top-level await is allowed
 // by several verbs (spec owner, graph, issue/eval node args) — a CLI reference arg tolerates an optional @/[[ ]]
 // sigil ([[mentions]]).
 import { stripRefSigil } from './mentions.js'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 const cmd = process.argv[2]
 
@@ -437,6 +437,30 @@ if (cmd === 'serve') {
   console.log(text)
 } else if (cmd === 'graph') {
   if (flag('node') !== undefined) { console.error('spex graph: --node was renamed — use --focus <id>'); process.exit(2) }
+  if (has('public')) {
+    const focusRaw = flag('focus')
+    const depthRaw = flag('depth')
+    const out = flag('out')
+    const contentDir = flag('content-dir')
+    if (focusRaw !== undefined || depthRaw !== undefined) { console.error('spex graph --public: --focus and --depth are not supported'); process.exit(2) }
+    const { buildPublicGraphArtifact, publicGraphJson } = await import('./public-graph.js')
+    const artifact = await buildPublicGraphArtifact()
+    const payload = publicGraphJson(artifact.graph)
+    if (out) {
+      writeFileSync(out, payload)
+      console.log(out)
+    } else {
+      process.stdout.write(payload)
+    }
+    if (contentDir) {
+      mkdirSync(contentDir, { recursive: true })
+      for (const document of artifact.documents) {
+        writeFileSync(`${contentDir}/${encodeURIComponent(document.id)}.json`, `${JSON.stringify(document, null, 2)}\n`)
+      }
+    }
+    await flushExit(0)
+  }
+  if (flag('content-dir') !== undefined) { console.error('spex graph: --content-dir requires --public'); process.exit(2) }
   const { buildBoard } = await import('./board.js')
   const focusRaw = flag('focus')
   const depthRaw = flag('depth')

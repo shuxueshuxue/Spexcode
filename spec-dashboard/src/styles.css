@@ -233,6 +233,8 @@ body {
   text-decoration: none;
 }
 .rail-btn:hover { background: var(--panel2); color: var(--ink2); }
+.rail-btn.disabled { color: var(--line); cursor: not-allowed; }
+.rail-btn.disabled:hover { background: none; color: var(--line); }
 /* the active page: a soft accent wash + accent ink — a state, not a hover effect */
 .rail-btn.on { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
 

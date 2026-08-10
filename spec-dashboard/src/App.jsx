@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
-import { acceptSessionEvalBoard, loadGraph, subscribeBoardLive, projectIdentity } from './data.js'
+import { acceptSessionEvalBoard, loadGraph, loadPublicGraph, subscribeBoardLive, projectIdentity } from './data.js'
 import { PROJECT_ID } from './project.js'
 import { CATALOG_POLL_MS, applyCatalogResult, loadProjects, selectGatewayIdentity, selectProjectIdentity, tabTitle } from './projects.js'
 import CredentialGate from './CredentialGate.jsx'
@@ -8,6 +8,7 @@ import { useT } from './i18n/index.jsx'
 import {
   DEFAULT_GATEWAY_ICON, DEFAULT_PROJECT_ICON, identityFaviconHref,
 } from './IdentityIcon.jsx'
+import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 
 // the two faces are code-split so each downloads only its own world: the desktop tree carries xyflow (and,
 // via its own lazy leaves, xterm + the annotator); the phone face ([[mobile-ui]]) carries none of them.
@@ -52,6 +53,7 @@ export default function App() {
   // so an admin edit in another tab arrives live without an icon-specific cache.
   const [projAccess, setProjAccess] = useState(null)
   useEffect(() => {
+    if (PUBLIC_GRAPH_ONLY) return undefined
     let live = true
     // applyCatalogResult keeps last-good: the catalog is identity-bearing, so one blipped poll (a
     // gateway restart answers 'absent' for a beat) must not regress a resolved identity to the
@@ -69,6 +71,15 @@ export default function App() {
   const reqSeq = useRef(0)
   const reload = useCallback(() => {
     const mine = ++reqSeq.current
+    if (PUBLIC_GRAPH_ONLY) {
+      return loadPublicGraph()
+        .then((graph) => {
+          if (mine !== reqSeq.current) return
+          setLoadFailed(false)
+          applyBoard(graph, true)
+        })
+        .catch(() => { if (mine === reqSeq.current) setLoadFailed(true) })
+    }
     return loadGraph()
       .then((r) => {
         if (mine !== reqSeq.current || !r) return
@@ -90,6 +101,10 @@ export default function App() {
   const hub = !PROJECT_ID && !board && !!projAccess && projAccess.state !== 'absent'
   const facePending = !PROJECT_ID && !board && projAccess === null
   useEffect(() => {
+    if (PUBLIC_GRAPH_ONLY) {
+      reload()
+      return undefined
+    }
     if (hub || facePending) return
     reload()
     const unsub = subscribeBoardLive({
@@ -156,7 +171,9 @@ export default function App() {
   }
   return (
     <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
-      {isMobile
+      {PUBLIC_GRAPH_ONLY
+        ? <Dashboard specs={board.nodes} sessions={[]} issuesStamp={null} reload={reload} identity={identity} catalog={null} boardLive={false} graphOnly />
+        : isMobile
         ? <MobileApp specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reloadBoard={reload} />
         : <Dashboard specs={board.nodes} sessions={board.sessions} issuesStamp={board.issuesStamp} reload={reload} identity={identity} catalog={projAccess} boardLive={boardLive} />}
     </Suspense>

@@ -113,3 +113,10 @@ Three same-surface evidence repairs have landed without changing drift, freshnes
 - harness ask now has a named declaration handler and a valid settled Codex pass. The earlier pre-settlement Codex reading was explicitly retracted because send receipt proves queue acceptance, not completed execution.
 
 The next bounded item is remark-polish/dangling-orphan-visible: its declared CLI plus browser surface was previously backed only by CLI evidence. It will be remeasured on that declared surface, not acknowledged wholesale. Reconnect remains separately queued because its current fake-WebSocket tests are useful auxiliary coverage but cannot close its browser claim.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T11:50:57.173Z -->
+Spec: global-drift-remediation-bounded-backlog-axis-re, graph-stream
+
+Current main remeasure after the served-root graph repair: spec lint is 0 errors / 60 warnings; eval lint is 137 flagged nodes, 603 stale readings, 0 malformed, 0 missing, 0 coverage gaps, and 39 over-owned files.
+
+The graph product gap is resolved and its issue is closed: dd813c9d4 carries cde0fb8ed plus a fresh served-project-first-spec-visibility reading. An initially empty served root now observes first .spec creation and deletion through the ordinary canonical root watcher. Ordinary HTTP converged on the merged code without delta SSE or restart; the existing graph-stream readings that share this changed source correctly became stale and remain queued for remeasurement. No drift threshold, freshness policy, gate, score, or scenario executor changed.

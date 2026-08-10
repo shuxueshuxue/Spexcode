@@ -1,0 +1,27 @@
+{
+  "schema": "spexcode.public-spec-host-registry/v1",
+  "publications": [
+    {
+      "id": "spexcode",
+      "repository": {
+        "slug": "shuxueshuxue/spexcode",
+        "url": "https://github.com/shuxueshuxue/spexcode"
+      },
+      "hostname": "spexcode.spexcode.net",
+      "about": {
+        "title": "About SpexCode",
+        "summary": "A static, read-only view of the SpexCode specification graph. It exposes committed spec intent and relationships only; sessions, issues, evaluations, settings, and write routes are intentionally absent.",
+        "facts": [
+          {
+            "label": "Source",
+            "value": "Committed .spec/spexcode tree"
+          },
+          {
+            "label": "Refresh",
+            "value": "Verified immutable release"
+          }
+        ]
+      }
+    }
+  ]
+}

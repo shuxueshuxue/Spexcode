@@ -46,3 +46,18 @@ Next non-behavioral work, capacity permitting: define/measure the five coverage 
 
 <!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T05:02:30.855Z -->
 Coordination correction: Decision 001 is a preserved, dashboard-posted source-change proposal, NOT a blocker for the remediation campaign. It was raised too early because no current work requires changing eval-owners or any drift/freshness/gate semantic. Continue the non-source work order now: coverage declarations, source/spec ownership triage, and real YATU evidence. Re-open the decision only when a concrete source patch is ready to start; publish a fresh log against that then-current main before editing it.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T05:25:02.565Z -->
+Evidence-axis pilot landed in 17a2ee4ca. `evidence-get/roundtrip` and `evidence-put/put-idempotent` now name `spec-eval/src/cli.ts#blobGet` and `#blobPut`, matching their scoped node contracts. On ce9ba08b4, a real CLI run in an isolated Git repository re-measured binary path/repeat/stdin put idempotence, cache placement, get -o and stdout-pipe byte equality, empty-input refusal, and unknown-hash local+backend loud failure; readings are 7c1c1a11f. Full eval lint no longer lists either scenario stale. Do not generalize from this pilot into a bulk rewrite: zcode-harness inspection found a real spec/eval scope mismatch, not an ACK candidate. New audit rule: evidence must be taken on the same product surface a scenario claims; CLI/store/localhost evidence can diagnose but cannot close a UI/public-path claim. The motivating UI incident is an in-flight projection-layer false green: on one terminal screen failure-worker reports FAILED(false, exit 1) while the Agent swarm tree shows Completed, confirmed at terminal state rather than timing. Spec: eval-core, eval-proactive, spec-lint
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T05:36:28.473Z -->
+Spec: eval-core, eval-proactive, spec-lint
+
+Read-only evidence-surface audit: do not infer a result surface from blobKind alone; a fresh data reading can contain valid Chromium/Playwright evidence (graph-delta is the counterexample). Compare the scenario claim to the measurement method and artifact content instead.
+
+Confirmed fresh false-green candidates for UI remeasurement:
+- session-label/one-name-everywhere declares frontend-e2e and requires session row, @ menu, and Rename dialog, but its fresh transcript records only nine sessionLabel unit tests.
+- remark-polish/dangling-orphan-visible declares frontend-e2e and visible NodeView dangling content, but its fresh pass says scratch-repo CLI with no browser evidence.
+- reconnect/reopen-backoff-reset-and-intentional-close and heartbeat-detects-silent-half-open declare frontend-e2e, while their eval method explicitly runs fake WebSocket/timer logic headlessly without browser/network; current fresh data blobs are absent.
+
+These are evidence-layer-below-claimed-surface drift, not proof that data or transcript readings are invalid. Keep their low-level coverage, lower their UI closure status, and remeasure on a real browser lane. Stale UI scenarios are separately queued; no freshness, gate, or evidence schema behavior changed. Source: read-only audit by @fbb76f84-7a73-4262-81d6-9028f5eb7c4e.

@@ -2,7 +2,7 @@ import { streamSSE } from 'hono/streaming'
 import type { Context } from 'hono'
 import { watch, mkdirSync, readdirSync, readFileSync, type FSWatcher } from 'node:fs'
 import { join, dirname, relative, resolve, basename } from 'node:path'
-import { sessionsRoot, gitCommonDir, sessionBranchIndex, mainBranch } from '@spexcode/spec-core'
+import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch } from '@spexcode/spec-core'
 import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
 import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard } from './graphCache.js'
 import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
@@ -238,7 +238,7 @@ function traceLatency(stage: 'sessions-signal' | 'session-projection-complete' |
 const triggerTags = new Set<string>()
 
 // watchers a test can amputate to prove the patrol still heals the graph ([[graph-stream]]): a CSV of
-// store,refs,worktrees makes the matching ensure* a no-op (with a one-time warning), so a change on that
+// store,refs,worktrees,project-root makes the matching ensure* a no-op (with a one-time warning), so a change on that
 // path reaches subscribers ONLY via the cold-tick patrol — the missing-watcher scenario, on demand.
 const DISABLED = new Set((process.env.SPEXCODE_DISABLE_WATCHERS || '').split(',').map((s) => s.trim()).filter(Boolean))
 const warnedDisabled = new Set<string>()
@@ -613,9 +613,47 @@ type WorktreeWatch = {
 const worktreeWatchers = new Map<string, WorktreeWatch>()
 const worktreeObserver = (name: string): string => `graph:worktree:${name}`
 const worktreeSource = (name: string): string => `worktree:${name}`
+const PROJECT_ROOT_SOURCE = 'project-root'
+let projectRootWatcher: TreeWatcherRegistry | null = null
 
 const ignoredWorktreePath = (file: string): boolean =>
   file.split(/[\\/]/).some((segment) => segment === '.git' || segment === 'node_modules')
+
+// The directory whose tree this backend serves is graph input even before it has a `.spec` tree or any live
+// session worktree. Keeping it in the same root registry as linked worktrees means a first `spex init` or
+// agent-created spec invalidates a warmed empty board instead of leaving a confidently stale cache until a
+// delta patrol happens to repair it. `repoRoot()` matches graph-cache's revision owner: a backend launched
+// from a linked worktree must observe that linked root, not the common-dir checkout.
+function ensureProjectRootWatcher(): void {
+  const root = resolve(repoRoot())
+  const coveredByWorktree = [...worktreeWatchers.values()].some((row) => row.path === root)
+  if (projectRootWatcher?.root === root && !coveredByWorktree) return
+  if (projectRootWatcher) { projectRootWatcher.close(); projectRootWatcher = null }
+  // A malformed registry that resolves a linked worktree onto the served project must not spend a duplicate root
+  // registration. That live worktree watcher already names a full graph change on every root event.
+  if (coveredByWorktree) { noteSourceHealthy(PROJECT_ROOT_SOURCE); return }
+  if (isDisabled(PROJECT_ROOT_SOURCE)) return
+  if (!mayAttach(PROJECT_ROOT_SOURCE)) return
+  let registry: TreeWatcherRegistry
+  registry = new TreeWatcherRegistry({
+    root,
+    source: PROJECT_ROOT_SOURCE,
+    scope: 'full',
+    ignore: ignoredWorktreePath,
+    onInput: () => fireChanged('full', 'all'),
+    onFailure: (error) => {
+      if (projectRootWatcher === registry) projectRootWatcher = null
+      noteSourceFailure(PROJECT_ROOT_SOURCE, error)
+      fireChanged('full', 'all')
+    },
+  })
+  projectRootWatcher = registry
+  if (!registry.refresh()) {
+    if (projectRootWatcher === registry) projectRootWatcher = null
+    return
+  }
+  noteSourceHealthy(PROJECT_ROOT_SOURCE)
+}
 
 export function watchSessionEvalWorktree(
   wtPath: string,
@@ -902,6 +940,7 @@ export async function ensureBoardFileWatchers(forceSessionId?: string): Promise<
   ensureWatcher(storeRoot)
   ensureRefsWatcher(commonRoot)
   await ensureWorktreeRegistry(forceSessionId)
+  ensureProjectRootWatcher()
 }
 
 export function closeBoardFileWatchers(): void {
@@ -922,6 +961,8 @@ export function closeBoardFileWatchers(): void {
   registryWatcher?.close()
   registryWatcher = null
   registryReady = false
+  projectRootWatcher?.close()
+  projectRootWatcher = null
   for (const [name, row] of worktreeWatchers) {
     row.close()
     releaseSessionEvalProjectionObserver(worktreeObserver(name))

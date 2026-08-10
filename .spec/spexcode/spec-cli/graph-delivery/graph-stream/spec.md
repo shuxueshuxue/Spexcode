@@ -50,7 +50,11 @@ TWO subscriber-gated pollers for what never touches a file ([[state]]): a ~100ms
 merged tmux call for window/title state plus the rendezvous tri-state), both → 'sessions'. (4) the
 `.git/worktrees` REGISTRY watcher — git's own birth-ledger for every worktree, hand-made or dispatched —
 which attaches one whole-tree observation of each live worktree's root plus one non-recursive gitdir watch,
-and detaches both on removal. Root events cover dirty governed source, renames, draft scenario declarations and reading
+and detaches both on removal. The served project root is a canonical root too, even before it has a `.spec`
+tree or any live session: its whole-tree observation sees a first `spex init` or agent-created spec subtree
+and invalidates the warmed empty board through this same full-scope funnel. It is the same root the graph
+revision reads, so a backend launched from a linked worktree observes that linked tree rather than the
+common-dir checkout. Root events cover dirty governed source, renames, draft scenario declarations and reading
 sidecars; the gitdir watch covers `index` changes from stage/reset that do not rewrite the working file. Both
 fire 'full'. A root watcher cannot tell a governed byte from a generated one, and is not asked to: what it
 fires is a claim about DOMAIN, and [[graph-cache]]'s verification decides whether any board input actually
@@ -87,8 +91,9 @@ time behind unrelated graph assembly.
 **One registry owns filesystem observation, and its cardinality follows the canonical roots.** Every source
 is one reusable `(root, scope)` registry which is the sole owner of every handle taken for it. What this
 module registers is the set of roots the graph actually has to observe: the session store, the git common
-dir's `refs` and its metadata files, the worktree registry, and — per LIVE worktree — its working tree plus
-git's metadata dir for it. That count grows with roots and worktrees and with nothing else; 444 spec nodes
+dir's `refs` and its metadata files, the worktree registry, the served project's working tree, and — per LIVE
+worktree — its working tree plus git's metadata dir for it. That count grows with canonical roots and worktrees
+and with nothing else; 444 spec nodes
 inside a worktree are the same one registration as an empty one. Registration that instead multiplied per
 spec file is precisely what took an adopter down: 53 live worktrees × 444 node directories asked the
 platform for 23,532 registrations.
@@ -163,7 +168,7 @@ well as its trigger tags, so a product latency reading can allocate route/store,
 transport, and browser time without treating a wall-clock gap as one opaque number. The trigger set is what
 caused ONE refresh, so the refresh consumes it whether or not content moved — a no-op patrol must not leave its
 tag behind to make the next genuine repair read as leaf-signalled, which is the alarm silencing itself on
-exactly the machines that need it. `SPEXCODE_DISABLE_WATCHERS` (csv: store, refs, worktrees) deliberately blinds
+exactly the machines that need it. `SPEXCODE_DISABLE_WATCHERS` (csv: store, refs, worktrees, project-root) deliberately blinds
 a leaf so tests can prove the patrol catches and reports what it misses; `SPEXCODE_BOARD_DEBUG=1` logs every
 broadcast's changed units, trigger tags and refresh cost. No second timer, fingerprint poller, or eval-summary
 generation exists: the one cold tick verifies ordinary board inputs, while session-eval currentness remains

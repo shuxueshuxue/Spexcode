@@ -67,6 +67,7 @@ try {
     const body = document.querySelector('.ov-panel .pane-doc .doc-body')
     return Boolean(body?.textContent?.trim())
   }, undefined, { timeout: 10_000 })
+  assert.equal(requests.filter((url) => new URL(url).pathname === '/public-graph.json').length, 1)
   assert.ok(requests.some((url) => new URL(url).pathname.startsWith('/specs/')))
   assert.equal(requests.some((url) => /(?:SessionInterface|IssuesPage|EvalsPage|Settings|MobileApp|ProjectsPage)-/.test(url)), false)
   assert.equal(requests.some((url) => new URL(url).pathname.startsWith('/api/')), false, requests.join('\n'))

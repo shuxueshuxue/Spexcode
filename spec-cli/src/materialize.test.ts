@@ -4,8 +4,9 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, lstatS
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { seedWorktreeHostState } from './worktree-sources.js'
+import { tsxBin } from './tsx-bin.js'
 
 // [[residence]] / [[content-filter]] / [[commit-surgery]] / [[harness-delivery]] — the vote-less
 // footprint engine: materialized artifacts are NEVER tracked (one residence behavior), a contract file's domain is a LIVE
@@ -18,7 +19,8 @@ import { seedWorktreeHostState } from './worktree-sources.js'
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
-const TSX = join(SRC, '..', 'node_modules', '.bin', 'tsx')
+const PACKAGE = join(SRC, '..')
+const TSX = tsxBin(PACKAGE)
 
 function gitAvailable(): boolean {
   try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true } catch { return false }
@@ -34,9 +36,12 @@ function makeHost() {
   const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (...args: string[]) =>
-    execFileSync(TSX, [CLI, ...args], { cwd: proj, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
-  const spexStderr = (...args: string[]) =>
-    execFileSync('bash', ['-c', `cd '${proj}' && '${TSX}' '${CLI}' ${args.join(' ')} 2>&1 >/dev/null`], { encoding: 'utf8', env })
+    execFileSync(process.execPath, [TSX, CLI, ...args], { cwd: proj, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
+  const spexStderr = (...args: string[]) => {
+    const result = spawnSync(process.execPath, [TSX, CLI, ...args], { cwd: proj, encoding: 'utf8', env })
+    assert.equal(result.status, 0, `${result.stdout}${result.stderr}`)
+    return result.stderr
+  }
   g('init', '-q', '-b', 'main')
   g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
   writeFileSync(join(proj, 'CLAUDE.md'), '# team notes\nkeep me\n')
@@ -211,7 +216,7 @@ test('contract kind transition: user prose entering a wholly-ours CLAUDE.md un-h
   const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (...args: string[]) =>
-    execFileSync(TSX, [CLI, ...args], { cwd: proj, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
+    execFileSync(process.execPath, [TSX, CLI, ...args], { cwd: proj, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
   g('init', '-q', '-b', 'main')
   g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
   writeFileSync(join(proj, 'README.md'), '# app\n')
@@ -284,7 +289,7 @@ test('commit surgery honors GIT_INDEX_FILE: a temporary index (pathspec/-a commi
   const sha = execFileSync('git', ['-C', proj, 'hash-object', '-w', '--stdin'], { input: leak, encoding: 'utf8', env }).trim()
   const tmpEnv = { ...env, GIT_INDEX_FILE: tmpIndex }
   execFileSync('git', ['-C', proj, 'update-index', '--cacheinfo', `100644,${sha},CLAUDE.md`], { env: tmpEnv })
-  execFileSync(TSX, [CLI, 'internal', 'commit-surgery'], { cwd: proj, encoding: 'utf8', env: tmpEnv, stdio: ['ignore', 'pipe', 'pipe'] })
+  execFileSync(process.execPath, [TSX, CLI, 'internal', 'commit-surgery'], { cwd: proj, encoding: 'utf8', env: tmpEnv, stdio: ['ignore', 'pipe', 'pipe'] })
   const tmpStaged = execFileSync('git', ['-C', proj, 'show', ':CLAUDE.md'], { encoding: 'utf8', env: tmpEnv })
   assert.equal(tmpStaged, 'keep me\n', 'the TEMPORARY index was repaired')
   assert.ok(!g('show', ':CLAUDE.md').includes('LEAKED'), 'sanity: the real index never saw the leak')
@@ -301,7 +306,7 @@ test('codex worktree materialize plants the .codex anchor + unconditional projec
   const piAgent = mkdtempSync(join(tmpdir(), 'spex-pi-'))
   const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
-  const spex = (cwd: string, ...args: string[]) => execFileSync(TSX, [CLI, ...args], { cwd, encoding: 'utf8', env })
+  const spex = (cwd: string, ...args: string[]) => execFileSync(process.execPath, [TSX, CLI, ...args], { cwd, encoding: 'utf8', env })
 
   g('init', '-q', '-b', 'main')
   g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
@@ -374,10 +379,10 @@ function makeBareRepo(prefix: string) {
   const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (cwd: string, ...args: string[]) =>
-    execFileSync(TSX, [CLI, ...args], { cwd, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
+    execFileSync(process.execPath, [TSX, CLI, ...args], { cwd, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
   // fire ONE harness lifecycle event through the real dispatcher — must NEVER trigger a materialize now.
   const fireEvent = (cwd: string) =>
-    execFileSync('bash', [DISPATCH, 'codex', 'SessionStart'], { cwd, encoding: 'utf8', env: { ...env, SPEX: `${TSX} ${CLI}` }, input: '{}' })
+    execFileSync('bash', [DISPATCH, 'codex', 'SessionStart'], { cwd, encoding: 'utf8', env: { ...env, SPEX: `${JSON.stringify(process.execPath)} ${JSON.stringify(TSX)} ${JSON.stringify(CLI)}` }, input: '{}' })
   // the content-hash stamp sits in the MATERIALIZED TREE's slot (trees/<enc(tree)>) — here the main checkout's.
   const runtimeHash = () => {
     const projects = join(home, 'projects')

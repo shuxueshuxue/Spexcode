@@ -4,10 +4,10 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { defaultHarness, HARNESSES, harnessById, harnessByIdOrNull, sessionIdentityEnvVars, type HarnessLivenessRecord, type SharedRuntimeDescriptor, type SharedRuntimeProbe } from './harness.js'
-import { listSessionIds, readConfig, readJsonConfig, readPublicRecordEntry, readRawRecord, runtimeRoot, type PublicRecordEntry, type RawRecord } from './layout.js'
-import { repoRoot } from './git.js'
+import { listSessionIds, readConfig, readJsonConfig, readPublicRecordEntry, readRawRecord, runtimeRoot, type PublicRecordEntry, type RawRecord } from '@spexcode/l0'
+import { repoRoot } from '@spexcode/l0'
 import { endpointRecordPath } from './host.js'
-import { detachedRuntimeGenerationToken, parseProcStat, processStartToken, verifyDetachedRuntime, type ProcessIdentity } from './process-identity.js'
+import { detachedRuntimeGenerationToken, parseProcStat, processStartToken, verifyDetachedRuntime, type ProcessIdentity } from '@spexcode/l0'
 import { readBackendInstanceRecords, type BackendInstanceRecord } from './runtime-ownership.js'
 
 type Proc = ProcessIdentity & {

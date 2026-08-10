@@ -19,7 +19,7 @@ scenarios:
       node's parsed selectors rather than flattening them to a path.
   - name: persistent-event-ledger-release
     tags: [cli]
-    code: [spec-cli/src/git.ts, spec-cli/src/anchors.ts, spec-cli/src/lint.ts]
+    code: [packages/l0/src/git.ts, packages/l0/src/anchors.ts, spec-cli/src/lint.ts]
     description: >-
       On the pinned fixed-tree history corpus from the source-of-truth cache audit, run the production
       `spex spec lint` CLI in separate processes and implementation-owned HOME directories for a cold seed,
@@ -45,8 +45,8 @@ scenarios:
       from Git; a failed event walk remains loud and cannot mint a valid tip marker.
   - name: derivation-from-git
     tags: [cli]
-    code: spec-cli/src/specs.ts
-    related: [spec-cli/src/git.ts]
+    code: packages/l0/src/specs.ts
+    related: [packages/l0/src/git.ts]
     description: >-
       In an isolated spex-init repo, take one node through three git moves and read `spex graph --json` after
       each: (1) edit its spec.md body and commit with a `Session: <id>` trailer; (2) commit a pure

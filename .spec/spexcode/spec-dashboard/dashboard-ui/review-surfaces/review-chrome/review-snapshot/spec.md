@@ -4,9 +4,9 @@ status: active
 hue: 205
 desc: The server-only atomic source snapshot shared by graph assembly and paged review, retaining full rows in process while graph JSON exposes only lean summaries.
 code:
-  - spec-cli/src/reviewSnapshot.ts
+  - packages/l0/src/reviewSnapshot.ts
 related:
-  - spec-cli/src/graph.ts
+  - packages/l0/src/graph.ts
   - spec-cli/src/reviews.ts
   - spec-cli/src/graph.test.ts
   - spec-cli/src/reviewSnapshot.test.ts

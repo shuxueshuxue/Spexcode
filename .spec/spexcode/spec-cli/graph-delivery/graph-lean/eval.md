@@ -17,7 +17,7 @@ scenarios:
       with their prose (fetched on open); a search over a body-only token (e.g. `zombie`) returns that node;
       the `/api/specs/lite` and `/api/specs/:id/content` requests return 200; the console is clean. Zero loss =
       the board shrinks with the graph overview, the two-part detail view, and body-ranked search all unchanged.
-    code: [spec-cli/src/graph.ts, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/SpecSearch.jsx]
+    code: [packages/l0/src/graph.ts, spec-dashboard/src/NodeView.jsx, spec-dashboard/src/SpecSearch.jsx]
   - name: detail-shows-spinner-while-body-loads
     tags: [frontend-e2e, desktop]
     description: >
@@ -44,7 +44,7 @@ scenarios:
       node-filtered list. The detail alone may fetch its addressed scenario history; direct/reload keep one
       revision and no full node/session endpoint is requested. Badges/stats remain
       count-only, and a failed page is loud rather than falling back to hidden graph readings.
-    code: [spec-cli/src/graph.ts, spec-dashboard/src/NodeView.jsx]
+    code: [packages/l0/src/graph.ts, spec-dashboard/src/NodeView.jsx]
   - name: scenario-prose-off-the-board
     tags: [frontend-e2e, backend-api]
     description: >
@@ -56,7 +56,7 @@ scenarios:
       Graph and lite corpus carry zero scenario rows. Palette opening issues one bounded request per review
       plane and exposes server-total see-all commands; NodeView's bounded timeline still renders declared
       prose. No frontend reconstructs scenarios from graph/lite data, and the console is clean.
-    code: [spec-cli/src/graph.ts, spec-cli/src/index.ts, spec-dashboard/src/corpus.js, spec-dashboard/src/SpecSearch.jsx, spec-dashboard/src/NodeView.jsx]
+    code: [packages/l0/src/graph.ts, spec-cli/src/index.ts, spec-dashboard/src/corpus.js, spec-dashboard/src/SpecSearch.jsx, spec-dashboard/src/NodeView.jsx]
 ---
 # graph-lean — measurement
 

@@ -1,5 +1,5 @@
 import { navigate, parseRoute, routeHash } from './route.js'
-import { nodeEvalQuery, scopedEvalQuery } from './reviewQuery.js'
+import { nodeEvalQuery, scopedEvalQuery } from '@spexcode/l0/review'
 
 export const graphNodeAddress = (nodeId) => ({ kind: 'graph-node', nodeId })
 export const sessionAddress = (sessionId) => ({ kind: 'session', sessionId })

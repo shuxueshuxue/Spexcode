@@ -8,13 +8,13 @@ import type { Dirent } from 'node:fs'
 import { stat, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { installProcessGuards } from './resilience.js'
+import { installProcessGuards } from '@spexcode/l0'
 import { listenOrExit } from './listen.js'
 import { resolvePublicConfig, startGateway, ensureDashboardBuilt, resolveDistDir } from './gateway.js'
 import { tsxBin } from './tsx-bin.js'
 import { publishEndpoint, dropOwnEndpoint } from './host.js'
-import { repoRoot as servedRepoRoot } from './git.js'
-import { resolveProjectIdentity } from './project-identity.js'
+import { repoRoot as servedRepoRoot } from '@spexcode/l0'
+import { resolveProjectIdentity } from '@spexcode/l0'
 import { startResourceMonitor } from './host-resources.js'
 import { registerBackendInstance, unregisterBackendInstance } from './runtime-ownership.js'
 import { sessionIdentityEnvVars } from './harness.js'
@@ -45,6 +45,7 @@ const watchRoots = [
   here,                                  // spec-cli/src — the backend's own source
   join(repoRoot, 'spec-forge', 'src'),
   join(repoRoot, 'spec-eval', 'src'),
+  join(repoRoot, 'packages', 'l0', 'src'),
 ]
 
 // @@@ instance identity - one id for this serve's whole lifetime, minted at supervisor start and handed to

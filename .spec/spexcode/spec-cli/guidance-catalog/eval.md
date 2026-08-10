@@ -23,7 +23,7 @@ scenarios:
       every help command and guide topic is represented with exact rendered content, and each row points to the
       existing authoritative source path with a matching content hash and revision. Pending plugins are absent.
     code: spec-cli/src/guidance-catalog.ts
-    related: [spec-cli/src/specs.ts, spec-cli/src/help.ts, spec-cli/src/guide.ts]
+    related: [packages/l0/src/specs.ts, spec-cli/src/help.ts, spec-cli/src/guide.ts]
   - name: catalog-does-not-copy-guidance
     tags: [cli]
     description: >-

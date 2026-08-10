@@ -4,7 +4,7 @@ status: active
 hue: 200
 desc: Two relations on a node — GOVERN (the ONE source of truth; drives drift/eval/ack; ≤1 file, >1 errors) and RELATED (everything referenced; carries coverage AND a soft drift warn). Three signal tiers govern > related > uncovered. A file governed by more than maxOwners nodes warns "split it".
 related:
-  - spec-cli/src/specs.ts
+  - packages/l0/src/specs.ts
   - spec-cli/src/lint.ts
   - spec-cli/src/cli.ts
   - spec-eval/src/cli.ts

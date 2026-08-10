@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { gitCommonDir } from '../../spec-cli/src/layout.js'
+import { gitCommonDir } from '@spexcode/l0'
 
 export const MISS_BLOB = 'miss original file'
 

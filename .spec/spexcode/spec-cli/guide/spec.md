@@ -7,7 +7,7 @@ code:
   - spec-cli/src/guide.ts
 related:
   - spec-cli/src/cli.ts
-  - spec-cli/src/layout.ts
+  - packages/l0/src/layout.ts
   - spec-cli/src/docs-quickstart.test.ts
   - README.md
   - docs/README.zh-CN.md

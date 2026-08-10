@@ -1,6 +1,6 @@
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { git } from './git.js'
+import { git } from '@spexcode/l0'
 
 export function seedWorktreeHostState(main: string, wt: string): void {
   const f = 'spexcode.local.json'

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { git, repoRoot } from './git.js'
+import { git, repoRoot } from '@spexcode/l0'
 import {
   loadAgentConfig,
   loadConfig,
@@ -10,7 +10,7 @@ import {
   loadSkillConfig,
   loadSystemConfig,
   type ConfigPreset,
-} from './specs.js'
+} from '@spexcode/l0'
 import { helpCatalogEntries } from './help.js'
 import { guideCatalogEntries } from './guide.js'
 

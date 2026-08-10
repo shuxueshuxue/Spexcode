@@ -4,11 +4,11 @@ status: active
 hue: 200
 desc: The source-session PRESENCE facet in both review ListViews — session:present|missing narrows Issues and Evals by whether the session behind an entry still exists on the board; one membership join, no liveness wording.
 code:
-  - spec-dashboard/src/session.js#sessionPresent
+  - packages/l0/src/review/session.js#sessionPresent
 related:
   - spec-dashboard/src/IssuesPage.jsx
   - spec-dashboard/src/EvalsFeed.jsx
-  - spec-dashboard/src/reviewFilters.js
+  - packages/l0/src/review/reviewFilters.js
   - spec-dashboard/src/Thread.jsx
 ---
 
@@ -33,7 +33,7 @@ question: does the source session still EXIST on the board?
   off-switch, and the visible text remains a second, canonical release.
 - **Present means: the source session still resolves on the current board — any zone.** For an issue,
   the source is its originator (`issue.by`) or any reply author; for a reading, its filer (`by`). The
-  judgment is the ONE membership join this node owns — `session.js`'s `sessionPresent` — so no surface
+  judgment is the ONE membership join this node owns — `@spexcode/l0`'s `sessionPresent` — so no surface
   grows a second one. A non-session author ('human', a github login) is honestly missing. `missing` is
   the complement, so the pair partitions every entry.
 - **Never conflated with scope.** `scope:<id>` picks the worktree DATA SOURCE ([[evals-view]]);

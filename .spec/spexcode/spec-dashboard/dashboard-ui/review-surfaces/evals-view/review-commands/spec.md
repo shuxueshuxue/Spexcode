@@ -11,7 +11,7 @@ related:
   - spec-dashboard/src/mentions.jsx
   - spec-dashboard/src/sessionCommands.js
   - spec-dashboard/src/data.js
-  - spec-cli/src/specs.ts
+  - packages/l0/src/specs.ts
   - spec-cli/src/index.ts
 ---
 # review-commands

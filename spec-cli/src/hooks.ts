@@ -1,4 +1,4 @@
-import { loadHookConfig } from './specs.js'
+import { loadHookConfig } from '@spexcode/l0'
 
 // @@@ hook manifest - the harness-agnostic hook system has THREE parts: (1) the discovered handlers —
 // `surface: hook` nodes under .plugins/core/* (spec-governed content, each shipping one co-located .sh);

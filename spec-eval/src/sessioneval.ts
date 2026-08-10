@@ -18,10 +18,10 @@ import {
   type DriftIndex,
   type DriftPathEvent,
   type ReviewDiffFile,
-} from '../../spec-cli/src/git.js'
-import { touchRoot } from '../../spec-cli/src/root-lru.js'
-import { loadSpecs } from '../../spec-cli/src/specs.js'
-import { mainBranch } from '../../spec-cli/src/layout.js'
+} from '@spexcode/l0'
+import { touchRoot } from '@spexcode/l0'
+import { loadSpecs } from '@spexcode/l0'
+import { mainBranch } from '@spexcode/l0'
 import { reviewIdentity, reviewPayload, type ReviewIdentity } from '../../spec-cli/src/sessions.js'
 import { loadEvalRemarkTracks } from '../../spec-cli/src/issues.js'
 import {
@@ -38,7 +38,7 @@ import {
   type Extractor,
   type RelationEntry,
   type Unit,
-} from '../../spec-cli/src/anchors.js'
+} from '@spexcode/l0'
 import { evalTimelines, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline, type ScenarioInfo } from './evaltab.js'
 import { isUiPath } from './cli.js'
 import { readReadings } from './sidecar.js'

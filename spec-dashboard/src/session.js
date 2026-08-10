@@ -1,3 +1,7 @@
+import { sessionHandle, sessionHeadline, sessionPresent, sessionTitle } from '@spexcode/l0/review'
+
+export { sessionHandle, sessionHeadline, sessionPresent, sessionTitle }
+
 // status→colour values are theme tokens (styles.css :root) so the palette stays single-sourced; var() resolves in inline styles.
 export const STATUS_COLOR = {
   working: 'var(--green)', parked: 'var(--green)',
@@ -55,10 +59,6 @@ export const liveSession = (sessions, id) => {
 // the ONE source-session PRESENCE join ([[live-session-filter]] — the session:present|missing facet):
 // does the id still resolve to a session on the current board at ALL, any zone? Presence, not liveness —
 // the facet asks "is the source still around", never "is it online".
-export const sessionPresent = (sessions, id) => {
-  const s = id ? (sessions || []).find((x) => x.id === id) : null
-  return s || null
-}
 // order the working list by its active lifecycle zones; the archive shelf is a separate flat cold collection.
 // each zone the NEWEST session on top (descending effective time) — the fresh, recently-touched work you
 // actually reach for, not the oldest.
@@ -84,15 +84,6 @@ export const zoneSort = (sessions) => {
 // node-menu overlay list) renders `sessionHeadline`. Naming the stable door `Handle`, not `Name`, is the
 // architectural guard: a dev wanting "the name to show" reaches for the headline by reflex and can no longer
 // grab the handle by mistake — the divergence that kept recurring ([[session-activity]]: one name everywhere).
-export const sessionHandle = (s) =>
-  s?.label || s?.name || s?.node || s?.title || s?.branch || s?.id
-
-export const sessionHeadline = (s) =>
-  s?.title || s?.headline || s?.name || s?.activity || s?.note || s?.promptPreview || s?.node || s?.raw?.title || s?.branch || s?.id
-
-// The visible session name is a single derived `title` on current backends. Keep the old
-// accessor as a compatibility alias while mixed-version clients roll forward.
-export const sessionTitle = sessionHeadline
 
 export function nestSessions(sessions) {
   const present = new Set(sessions.map((s) => s?.id))

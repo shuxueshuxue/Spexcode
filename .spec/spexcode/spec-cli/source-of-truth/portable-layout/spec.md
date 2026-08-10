@@ -5,13 +5,14 @@ session: sess-merge
 hue: 160
 desc: Where things live — main, worktree→node mapping, the spec root node — is detected policy, never a baked-in name.
 code:
-  - spec-cli/src/layout.ts#resolveLayout
-  - spec-cli/src/layout.ts#layoutDeltas
-  - spec-cli/src/layout.ts#mainRoot
-  - spec-cli/src/layout.ts#mainBranch
-  - spec-cli/src/layout.ts#readJsonConfig
-  - spec-cli/src/layout.ts#readUploadPolicy
+  - packages/l0/src/layout.ts#resolveLayout
+  - packages/l0/src/layout.ts#layoutDeltas
+  - packages/l0/src/layout.ts#mainRoot
+  - packages/l0/src/layout.ts#mainBranch
+  - packages/l0/src/layout.ts#readJsonConfig
+  - packages/l0/src/layout.ts#readUploadPolicy
 related:
+  - packages/l0/src/harness-identity.ts
   - spec-cli/src/layout-session-id.test.ts
   - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/src/layout-overlay.api.test.ts
@@ -34,7 +35,7 @@ are tracked, and nothing machine-specific leaks into the tree — so a clean che
 
 ## expanded spec
 
-`spec-cli/src/layout.ts` is the one seam. `resolveLayout()` answers — where is main, **which branch is
+`packages/l0/src/layout.ts` is the one seam. `resolveLayout()` answers — where is main, **which branch is
 its source of truth**, how to enumerate the other checkouts, how each declares its node — and exposes the
 result at `GET /api/settings` (its `layout` half). Everything downstream consumes the resolved layout, never a hardcoded path or
 branch name.
@@ -131,6 +132,9 @@ ENVIRONMENT (`envSessionId()`), with a harness-aware precedence: a harness's per
 the agent's shell under the FIRST session's baked `SPEXCODE_SESSION_ID`, while codex injects the acting
 thread's `CODEX_THREAD_ID` per command, which aliases correctly. Claude is unchanged (its env var already
 equals its record id); a raw, un-aliased harness id is the last resort, below `SPEXCODE_SESSION_ID`.
+The lookup reads the adapter-neutral `HarnessIdentity` registry, the same sole source from which each full
+harness adapter obtains its `sessionEnvVar`; layout never imports the launcher-bearing adapter registry and
+does not carry a copied environment-variable list.
 
 **Alias search answers a question only about ids the store does not already own**, and both layers —
 `readAliasedRecordEntry` and the shell twin `hp_store_dir` — apply that rule identically. Absence splits in

@@ -6,11 +6,11 @@ import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mk
 import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
-import { git, gitA, gitTry, isGitObjectId, repoRoot, mergeBaseDiff, mergeConflicts, withGitAbortSignal, type ReviewDiffFile } from './git.js'
-import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from './specs.js'
+import { git, gitA, gitTry, isGitObjectId, repoRoot, mergeBaseDiff, mergeConflicts, withGitAbortSignal, type ReviewDiffFile } from '@spexcode/l0'
+import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from '@spexcode/l0'
 import { adapterLoadedReferenceState, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
-import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from './layout.js'
+import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/l0'
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { appendSent, recordStatus, lastHumanSendVia, sentDispatchReceipt, settleSentDispatch, type SentDispatchReceipt, type SentDispatchState } from './session-timeline.js'
@@ -18,7 +18,7 @@ import { drain, enqueue, ensurePendingWhileLocked, owesDelivery, pendingSnapshot
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
-import { processStartToken } from './process-identity.js'
+import { processStartToken } from '@spexcode/l0'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationClose, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
 
 const pexec = promisify(execFile)

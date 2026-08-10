@@ -4,10 +4,10 @@ status: active
 hue: 205
 desc: Foreground derived reads share the durable event ledger without queueing behind an unrelated writer's full build.
 code:
-  - spec-cli/src/git.ts#withEventCacheLock
-  - spec-cli/src/git.ts#withEventLedgerBuild
-  - spec-cli/src/git.ts#withEventLedgerDemand
-  - spec-cli/src/git.ts#gitObjectInterpretation
+  - packages/l0/src/git.ts#withEventCacheLock
+  - packages/l0/src/git.ts#withEventLedgerBuild
+  - packages/l0/src/git.ts#withEventLedgerDemand
+  - packages/l0/src/git.ts#gitObjectInterpretation
 related:
   - spec-eval/src/sessioneval.ts
   - spec-eval/src/sessioneval-ledger-demand.api.test.ts

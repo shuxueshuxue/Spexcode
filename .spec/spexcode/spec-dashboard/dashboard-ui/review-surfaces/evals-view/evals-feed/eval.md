@@ -17,7 +17,7 @@ scenarios:
       selected scenario detail alone exposes that scenario's full measurement history.
   - name: unmeasured-filter-and-default-order
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/reviewFilters.js, spec-cli/src/reviews.ts]
+    code: [spec-dashboard/src/EvalsFeed.jsx, packages/l0/src/review/reviewFilters.js, spec-cli/src/reviews.ts]
     related: [spec-dashboard/src/styles.css]
     description: >
       Against the branch-local backend, open #/evals in a real Chromium with measured and blind scenarios.
@@ -33,7 +33,7 @@ scenarios:
   - name: measured-chips-lead-fresh-and-name-stale
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/eval-verdict-freshness.e2e.mjs
-    code: [spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/reviewFilters.js, spec-cli/src/reviews.ts]
+    code: [spec-dashboard/src/EvalsFeed.jsx, packages/l0/src/review/reviewFilters.js, spec-cli/src/reviews.ts]
     related: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
     description: >
       Against a branch-local backend carrying a real remeasurement backlog, open the default #/evals in a

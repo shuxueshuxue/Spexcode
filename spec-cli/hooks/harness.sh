@@ -108,7 +108,7 @@ hp_is_subagent() {
   printf '%s' "${1%%\"tool_input\"*}" | grep -q '"agent_id"[[:space:]]*:' && printf 1
 }
 
-# the per-PROJECT GLOBAL runtime dir (mirrors spec-cli/src/layout.ts `runtimeRoot`): <store>/projects/<enc>,
+# the per-PROJECT GLOBAL runtime dir (mirrors packages/l0/src/layout.ts `runtimeRoot`): <store>/projects/<enc>,
 # keyed by the project (dirname of the ABSOLUTE git-common-dir, so the answer is identical from main or any
 # worktree). The per-session dirs and the per-tree materialize slots (hp_tree_dir) live under it.
 # Echoes the dir; returns non-zero (echoing nothing) when git can't resolve, so a caller can `|| exit 0`.

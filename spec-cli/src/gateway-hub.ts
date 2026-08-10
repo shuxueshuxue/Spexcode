@@ -27,9 +27,9 @@ import {
 import { loginPage } from './login-page.js'
 import { listenOrExit } from './listen.js'
 import { installConnectionReaper } from './reaper.js'
-import { spexcodeHome, encodeProject } from './layout.js'
+import { spexcodeHome, encodeProject } from '@spexcode/l0'
 import { readEndpointRecord } from './host.js'
-import { readGatewayIdentity, type ResolvedIdentity } from './project-identity.js'
+import { readGatewayIdentity, type ResolvedIdentity } from '@spexcode/l0'
 import { proxyHttp, proxySessionWeb, proxySessionWebUpgrade } from './gateway.js'
 
 export type HubProject = { id: string; identity: ResolvedIdentity; url: string; port: number; gated: boolean }

@@ -22,7 +22,7 @@ import { parseEvalConcern, remarkOnHost } from './localIssues.js'
 // else the frontmatter `session:` fallback; specs.ts owns that derivation). The fallback link when a reading's
 // filer is unreachable. null when the node is unknown or has no governing session.
 async function nodeGoverningSession(nodeId: string): Promise<string | null> {
-  const { loadSpecs } = await import('./specs.js')
+  const { loadSpecs } = await import('@spexcode/l0')
   return (await loadSpecs()).find((s) => s.id === nodeId)?.session ?? null
 }
 

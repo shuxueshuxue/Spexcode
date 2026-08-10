@@ -8,7 +8,7 @@ code:
 related:
   - spec-dashboard/src/reviewPage.test.mjs
   - spec-dashboard/src/ReviewShell.jsx
-  - spec-dashboard/src/reviewQuery.js
+  - packages/l0/src/review/reviewQuery.js
   - spec-dashboard/src/route.js
 ---
 

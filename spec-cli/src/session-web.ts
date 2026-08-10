@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { readRecordEntry, sessionArtifactPath, sessionStoreDir } from './layout.js'
-import { projectRuntimeRoot } from './project-store.js'
+import { readRecordEntry, sessionArtifactPath, sessionStoreDir } from '@spexcode/l0'
+import { projectRuntimeRoot } from '@spexcode/l0'
 
 export class SessionWebError extends Error {
   constructor(readonly status: 400 | 403 | 404 | 500, message: string) {

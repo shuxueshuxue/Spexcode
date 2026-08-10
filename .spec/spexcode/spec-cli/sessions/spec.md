@@ -4,7 +4,7 @@ status: active
 hue: 280
 desc: Durable worktree sessions — the subsystem overview; lifecycle/comms/injected-context own the detail.
 code:
-  - spec-cli/src/graph.ts#buildBoard
+  - packages/l0/src/graph.ts#buildBoard
 ---
 
 # sessions
@@ -57,3 +57,7 @@ backend's own project identity (the browser-tab name) — in one module, served 
 features fold their per-node sidecars onto these nodes ([[dashboard-issues]] issues, [[eval-tab]]
 evals) and behind which the live pane is read as text at `…/capture` (which [[remote-client]]'s `spex
 capture` reads) — so such a fold is that feature's stake, not `sessions`' drift.
+
+The CLI/server board adapter enumerates the public session census once and supplies that frozen projection
+to graph assembly and its sessions-only splice. `graph.ts` does not reach back into this subsystem: session
+lifecycle and list ownership remain here, while graph remains the common projection consumer.

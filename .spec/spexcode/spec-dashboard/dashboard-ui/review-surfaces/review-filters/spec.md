@@ -4,8 +4,9 @@ status: active
 hue: 205
 desc: One pure Issues/Evals filter engine with domain data adapters — the single home of field semantics — consumed by the canonical token-query ListViews through a bridge and by the compact Spec Information panes through local state; no second parser, no second predicate.
 code:
-  - spec-dashboard/src/reviewFilters.js
+  - packages/l0/src/review/reviewFilters.js
 related:
+  - packages/l0/src/review/index.js
   - spec-cli/src/reviews.ts
   - spec-dashboard/src/ReviewShell.jsx
   - spec-dashboard/src/IssuesPage.jsx
@@ -15,7 +16,7 @@ related:
   - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/MobileApp.jsx
   - spec-dashboard/src/session.js
-  - spec-dashboard/src/reviewQuery.js
+  - packages/l0/src/review/reviewQuery.js
   - spec-dashboard/src/reviewFilters.test.mjs
   - spec-dashboard/test/review-filters-one-engine.e2e.mjs
   - spec-dashboard/src/icons.jsx
@@ -26,7 +27,9 @@ related:
 
 # review-filters
 
-Issues and Evals travel through **one filtering mechanism** wherever they are listed. A domain adapter is
+Issues and Evals travel through **one filtering mechanism** wherever they are listed. Its pure module lives
+at `@spexcode/l0/review`, the browser-safe package entry shared by the server and dashboard; that entry
+contains no Node, React, store, endpoint, or service dependency. A domain adapter is
 data: it names searchable fields, real facets, section membership (with honest concrete-status spellings),
 absent-field behavior, option labels, and the one source-session PRESENCE join ([[live-session-filter]] —
 `session:present|missing`, never liveness). The engine normalizes state, applies every active dimension

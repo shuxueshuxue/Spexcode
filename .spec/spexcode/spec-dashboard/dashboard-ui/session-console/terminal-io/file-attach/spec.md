@@ -15,7 +15,7 @@ related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/attachment-complete.e2e.mjs
   - spec-cli/src/index.ts
-  - spec-cli/src/layout.ts
+  - packages/l0/src/layout.ts
   - spec-cli/src/guide.ts
   - spec-cli/templates/spexcode.json
 ---

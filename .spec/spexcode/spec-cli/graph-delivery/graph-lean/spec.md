@@ -4,10 +4,11 @@ status: active
 hue: 175
 desc: The graph payload is a lean summary — no Issues/Evals row arrays, only explicit per-node counts and identity needed by first paint; every row list is demand-paged elsewhere.
 code:
-  - spec-cli/src/graph.ts#buildBoard
+  - packages/l0/src/graph.ts#buildBoard
 related:
+  - spec-cli/src/board.ts
   - spec-cli/src/graph.test.ts
-  - spec-cli/src/reviewSnapshot.ts
+  - packages/l0/src/reviewSnapshot.ts
   - spec-dashboard/src/NodeView.jsx
   - spec-dashboard/src/SpecSearch.jsx
   - spec-dashboard/src/corpus.js
@@ -79,3 +80,9 @@ once per change and served from cache, so a poll storm no longer re-walks git pe
 assembly's fs walks yield the event loop instead of starving the liveness probe. The network budget is
 measured as a whole-app ledger: initial graph bytes/forbidden-row counts plus the first opened list response,
 never an isolated endpoint claim.
+
+`buildBoard` is the frozen-input composer: its CLI/server adapter reads the spec snapshot, public session
+census, resolved layout, and one issue/forge snapshot, then passes those values together. The composer does
+not enumerate sessions or read issue stores itself; the full build and the sessions-only splice both consume
+the same explicitly supplied session projection. This keeps runtime-system ownership outside the lean graph
+while preserving the one assembled board result.

@@ -4,7 +4,7 @@ desc: The dashboard keeps headless harness launchers out of its New Session pick
 hue: 280
 related:
   - spec-cli/src/harness.ts
-  - spec-cli/src/layout.ts
+  - packages/l0/src/layout.ts
   - spec-cli/src/index.ts
   - spec-cli/src/guide.ts
   - spec-cli/templates/spexcode.json

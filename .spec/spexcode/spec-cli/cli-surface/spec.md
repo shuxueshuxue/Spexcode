@@ -20,6 +20,10 @@ each thing in it has exactly ONE spelling. Commands read noun-first: `spex <noun
 [flags]`. A verb only programs call lives under `spex internal`, out of sight. No help probe may
 dead-end, and no removed spelling may fail mutely: it names its replacement.
 
+The process-inspection exception is `spex --version` (with `-v` as its compact flag spelling): it prints
+the installed root package version and exits before command routing. It is not a project verb, so it neither
+needs a repository nor enters the noun-first command map.
+
 ## expanded spec
 
 **The grammar.** `spex <noun> <verb> [object] [flags]` — the verb is always the token immediately

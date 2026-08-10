@@ -6,6 +6,10 @@ desc: SpexCode installs as one npm package (`npm i -g spexcode` → `spex`); the
 code:
   - scripts/prepack.mjs
 related:
+  - packages/l0/package.json
+  - packages/l0/src/index.ts
+  - packages/l0/src/review/index.js
+  - packages/l0/src/identity-presets.js
   - spec-cli/src/cli.ts
   - package.json
   - package-lock.json
@@ -38,17 +42,27 @@ that also uses `--ignore-scripts` suppresses esbuild's own platform-binary repai
 installs the matching `@esbuild/<platform>-<arch>` package with `--no-save --no-package-lock`; that is test
 scaffolding only, not an extra normal-adopter step.
 
-The published unit is the **monorepo root**, shipping the runtime subset with the **layout preserved**: an
-explicit `files` allowlist of `spec-cli/{src,bin,templates,hooks}`, the siblings `spec-eval/src` and
-`spec-forge/src`, and `spec-dashboard/dist`. The dist is the one shipped artifact not in git, so it is built
+The installable unit remains the **monorepo root**, now with one real workspace package: `@spexcode/l0`.
+Its source lives at `packages/l0/src`; the root manifest declares `packages/*`, `spec-cli`, `spec-eval`, and
+`spec-forge` as workspaces, depends on the local L0 package, and ships `packages/l0` in its explicit `files`
+allowlist. `@spexcode/l0` has three deliberately narrow package exports. `.` is the Node-side core entry and
+owns the root-explicit `readSpecs(root)` reader. `./review` is the browser-safe review domain only: its
+filter, query, and session presentation functions have no Node, React, store, endpoint, or service
+dependency. `./identity` is the same kind of browser-safe identity registry shared by validation and
+rendering. The dashboard imports only those named pure-domain entries; it never imports `.` and therefore
+cannot pull Node-only graph/store modules into Vite. No source-file subpaths are exported. The package is
+intentionally not `private`, so this workspace has the same npm resolution boundary an adopter receives;
+this refactor does not publish it or prepare any registry action.
+
+The root tarball otherwise preserves the runtime layout: `spec-cli/{src,bin,templates,hooks}`, the siblings
+`spec-eval/src` and `spec-forge/src`, and `spec-dashboard/dist`. The dist is the one shipped artifact not in git, so it is built
 by the **`prepack`** lifecycle hook — the point npm runs *whenever it builds a tarball*, on both `npm pack`
 and `npm publish` (but never on a plain `npm install`). That makes tarball-completeness the contract of
 *producing a tarball at all*, not a publish-only afterthought: pack and publish emit the identical complete
-package, and `npm pack` self-corrects a stale or missing dist instead of silently shipping one. Preserving
-the layout is the whole point: spec-cli, spec-eval, and spec-forge import each
-other by filesystem-relative `../../spec-*` paths (a cycle), so shipping them flat under one package —
-`spexcode/spec-cli/…`, `spexcode/spec-eval/…` — makes every such import resolve **in-package, zero import
-rewriting**. The bin and all entry source stay under `spec-cli/src`, so each module's `pkgRoot` still lands
+package, and `npm pack` self-corrects a stale or missing dist instead of silently shipping one. The remaining
+spec-cli, spec-eval, and spec-forge cross-imports retain their in-package relative layout; L0 is the explicit
+exception and resolves through the root package dependency. The bin and all entry source stay under
+`spec-cli/src`, so each module's `pkgRoot` still lands
 at `spec-cli/` and its asset lookups (templates, hooks, dist) are unchanged. The one thing that moves is
 tsx: spec-cli is now a subdir, and a real npm install may hoist the dependency outside the `spexcode`
 package into the consuming project's `node_modules`. So the launcher and every baked `tsx + cli.ts`
@@ -69,8 +83,8 @@ by that session. Both the installed `spex serve` and the source tree's canonical
 directly. Ordinary session/read/write verbs keep their identity unchanged.
 
 Release identity advances in lockstep across the public root manifest and the private `spec-cli` manifest,
-with each lockfile's root package metadata matching its manifest. Only the root package is publishable; the
-private manifest carries the same version so source-tree and installed CLI diagnostics name one release.
+with each lockfile's root package metadata matching its manifest. The private manifest carries the same
+version so source-tree and installed CLI diagnostics name one release.
 
 The installed terminal follows the same artifact rule. `node-pty` is pinned to an upstream release whose
 Darwin prebuilds publish `spawn-helper` as an executable, and a narrow dependency-artifact test verifies both
@@ -110,6 +124,7 @@ backend and every agent it launches, silently redirecting those agents' own `npm
 repo tree instead of the real global root.
 
 The packaging contract is verified as the user would meet it, not by inspecting files: CI builds the tarball,
-installs that tarball into a clean consumer project, runs `npx spex --help`, then runs `spex init` inside a
-fresh git repo and checks that the seed `.spec` tree and `spexcode.json` landed. A tarball that contains the
-right files but cannot start from an npm install is a packaging failure.
+installs that tarball into a clean consumer project, runs `npx spex --help`, `spex --version`, and
+`spex graph --json`, then runs `spex init` inside a fresh git repo and checks that the seed `.spec` tree and
+`spexcode.json` landed. A tarball that contains the right files but cannot start from an npm install is a
+packaging failure.

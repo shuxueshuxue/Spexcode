@@ -7,7 +7,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { changedSince, codeDrift, contentProbeFor, anchorProbeFor, anchorProblems, anchorVerdictCacheSize, freshnessCacheSize, staleAxes, remarkStale, type ContentProbe, type RemarkSignal } from './freshness.js'
 import { scenarioCodeAxis, scenarioHash } from './scenarios.js'
-import { driftIndex, withGitAbortSignal, type DriftIndex } from '../../spec-cli/src/git.js'
+import { driftIndex, withGitAbortSignal, type DriftIndex } from '@spexcode/l0'
 
 // The teeth ([[remark-teeth]] T1) as a pure state machine — the five transitions the CLI verification walks,
 // proven here without git so the critical edge is pinned regardless of a repo's history.

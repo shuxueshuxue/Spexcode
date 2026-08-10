@@ -40,10 +40,10 @@ scenarios:
   - name: review-gate-costs-the-movement-not-the-corpus
     tags: [backend-api]
     code: [spec-cli/src/sessions.ts]
-    related: [spec-cli/src/anchors.ts, spec-cli/src/lint.ts, spec-eval/src/sessioneval.ts]
+    related: [packages/l0/src/anchors.ts, spec-cli/src/lint.ts, spec-eval/src/sessioneval.ts]
     description: >
       Hold the CORPUS fixed and vary only the binary. In one checkout, A/B the parent and candidate
-      `spec-cli/src/anchors.ts` by launching a branch-local backend on a free port per measurement — its own
+      `packages/l0/src/anchors.ts` by launching a branch-local backend on a free port per measurement — its own
       runtime state, no inherited `SPEXCODE_API_URL`, never a deployed backend — with a PATH `git` shim that
       logs every invocation's argv. Wait for each cold process's startup git work to settle, take an idle
       control window, then drive the real HTTP surface: the session-scoped Evals deep link

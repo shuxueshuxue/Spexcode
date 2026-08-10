@@ -19,7 +19,7 @@ import {
   type CodexGenerationEndpoint,
 } from './codex-runtime-generations.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { processStartToken } from './process-identity.js'
+import { processStartToken } from '@spexcode/l0'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 

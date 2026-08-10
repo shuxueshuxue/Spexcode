@@ -1,4 +1,4 @@
-import { loadSpecs } from '../../spec-cli/src/specs.js'
+import { loadSpecs } from '@spexcode/l0'
 import type { ForgeDriver, ForgeIssue, ForgePR } from './port.js'
 import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from './drivers.js'
 import { resolveLinks, type NodeLinks } from './links.js'

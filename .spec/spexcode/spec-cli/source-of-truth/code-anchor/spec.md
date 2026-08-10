@@ -4,28 +4,28 @@ status: active
 hue: 15
 desc: A code: entry may pin named units (`path#symbol` selectors, any number, one base file, OR'd); drift touching any pinned unit is the BLOCKING tier (one anchor-drift error naming hit selectors), replacing the retired count-based driftErrorThreshold gate. related: selectors warn on hit, stay silent on miss. Anchors are optional — an unanchored node never blocks.
 code:
-  - spec-cli/src/anchors.ts#RANGE_SEMANTICS
-  - spec-cli/src/anchors.ts#ABSENT_IMAGE
-  - spec-cli/src/anchors.ts#runAnchorQueries
-  - spec-cli/src/anchors.ts#anchorHitQueries
-  - spec-cli/src/anchors.ts#anchorHitExists
-  - spec-cli/src/anchors.ts#anchorHitCommits
-  - spec-cli/src/anchors.ts#resolveAnchor
-  - spec-cli/src/anchors.ts#unitsAtFileRevision
-  - spec-cli/src/anchors.ts#fileRevisionMemoKey
-  - spec-cli/src/anchors.ts#hunksAt
-  - spec-cli/src/anchors.ts#hunksAtMany
-  - spec-cli/src/anchors.ts#hunkRecordsInto
-  - spec-cli/src/anchors.ts#hunkMemoKey
-  - spec-cli/src/anchors.ts#rememberHunks
+  - packages/l0/src/anchors.ts#RANGE_SEMANTICS
+  - packages/l0/src/anchors.ts#ABSENT_IMAGE
+  - packages/l0/src/anchors.ts#runAnchorQueries
+  - packages/l0/src/anchors.ts#anchorHitQueries
+  - packages/l0/src/anchors.ts#anchorHitExists
+  - packages/l0/src/anchors.ts#anchorHitCommits
+  - packages/l0/src/anchors.ts#resolveAnchor
+  - packages/l0/src/anchors.ts#unitsAtFileRevision
+  - packages/l0/src/anchors.ts#fileRevisionMemoKey
+  - packages/l0/src/anchors.ts#hunksAt
+  - packages/l0/src/anchors.ts#hunksAtMany
+  - packages/l0/src/anchors.ts#hunkRecordsInto
+  - packages/l0/src/anchors.ts#hunkMemoKey
+  - packages/l0/src/anchors.ts#rememberHunks
 related:
   - scripts/anchor-drift-golden-proof.mjs
   - scripts/anchor-drift-fold-proof.mjs
   - spec-cli/src/anchors.test.ts
   - spec-cli/src/lint.ts
-  - spec-cli/src/git.ts
+  - packages/l0/src/git.ts
   - spec-cli/src/git.test.ts
-  - spec-cli/src/specs.ts
+  - packages/l0/src/specs.ts
   - spec-cli/src/lint-scoped.test.ts
   - spec-cli/src/commit-gate.test.ts
   - spec-cli/src/guide.ts

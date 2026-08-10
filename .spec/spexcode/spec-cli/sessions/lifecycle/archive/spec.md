@@ -5,7 +5,7 @@ hue: 280
 desc: Cold storage — archive proves and stops the exact session-owned runtime, preserves worktree/branch/conversation identity, and exposes only offline history.
 related:
   - spec-cli/src/sessions.ts
-  - spec-cli/src/layout.ts
+  - packages/l0/src/layout.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/client.ts
   - spec-cli/src/index.ts

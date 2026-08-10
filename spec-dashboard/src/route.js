@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryText, sameQuery, scopedEvalQuery } from './reviewQuery.js'
+import { EVAL_QUERY_DEFAULT, ISSUE_QUERY_DEFAULT, hasLegacyParams, legacyQueryText, sameQuery, scopedEvalQuery } from '@spexcode/l0/review'
 
 // The app's URL layer ([[side-nav]]): every top-level page has its own address, so a page can be
 // bookmarked, reloaded, and history-navigated like any modern app. HASH routes (#/graph, #/graph/<node>, #/sessions,

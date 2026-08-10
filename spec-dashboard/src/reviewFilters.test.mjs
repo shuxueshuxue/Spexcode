@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { EVAL_FILTER_KIND, evalFilterModel, filterMenuGroups, issueFilterModel, sectionTotal, tokenFilterState } from './reviewFilters.js'
+import { EVAL_FILTER_KIND, evalFilterModel, filterMenuGroups, issueFilterModel, sectionTotal, tokenFilterState } from '@spexcode/l0/review'
 
 const t = (key) => key
 // presence is board MEMBERSHIP, any zone: an offline-but-listed session is still PRESENT.

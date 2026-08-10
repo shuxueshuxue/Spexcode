@@ -2,9 +2,9 @@ import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync, renameS
 import { join, resolve, relative, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { readConfig, readJsonConfig } from './layout.js'
+import { readConfig, readJsonConfig } from '@spexcode/l0'
 import { resolveHarnessTargets, parseHarnessFlag, NATIVE_HARNESS_IDS } from './harness-select.js'
-import { gitBinary } from './git.js'
+import { gitBinary } from '@spexcode/l0'
 
 // this file lives at <pkgRoot>/src/init.ts, so `..` is the package root — the same derivation the
 // launch paths use, never a hardcoded repo path (so a relocated/installed package still finds its data).

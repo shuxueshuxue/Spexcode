@@ -84,7 +84,7 @@ test('opening a filer or originator session uses no retired eval-view state', ()
 
 test('blind eval rows obey every reading-only token and remain inert', async () => {
   // the FUSED path: token text ([[review-query]]) bridged into the one engine ([[review-filters]])
-  const { EVAL_FILTER_KIND, evalFilterModel, tokenFilterState } = await import('./reviewFilters.js')
+  const { EVAL_FILTER_KIND, evalFilterModel, tokenFilterState } = await import('@spexcode/l0/review')
   const blind = { node: 'alpha', scenario: 'never measured', filterKind: EVAL_FILTER_KIND.BLIND }
   const matches = (text) => evalFilterModel([blind], tokenFilterState(text, 'eval'), { sessions: [], defaultKind: 'all' }).shown.length === 1
 

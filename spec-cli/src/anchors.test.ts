@@ -6,8 +6,11 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
-import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, tsAstExtractor } from './anchors.js'
-import { historyEventCachePathForTests } from './git.js'
+import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, tsAstExtractor } from '@spexcode/l0'
+import { historyEventCachePathForTests } from '@spexcode/l0'
+
+const freshAnchors = (tag: string) =>
+  import(new URL(`anchors.ts?${tag}`, import.meta.resolve('@spexcode/l0')).href) as Promise<typeof import('@spexcode/l0')>
 
 // [[code-anchor]] — the structured relation grammar (ONE parser for code: and related:) and the
 // multi-selector hit engine: selectors on one base file are OR'd, a commit counts ONCE, and each hit
@@ -208,7 +211,7 @@ test('a repeated read costs the MOVEMENT, and a commit git was never asked about
     // A fresh module has no process hunk memo. It must replay the same immutable fact from the existing
     // source-of-truth ledger, not re-run the historical patch query after a backend replacement.
     writeFileSync(argv, '')
-    const fresh = await (await import(`./anchors.js?durable-hunks=${first}`)).anchorHitQueries(
+    const fresh = await (await freshAnchors(`durable-hunks=${first}`)).anchorHitQueries(
       root, [{ win: [event(first)], symbols: ['f', 'g'] }], [x],
     )
     assert.deepEqual(fresh, cold, 'a durable image fact preserves the exact selector result')
@@ -255,17 +258,17 @@ test('an anchor verdict is invariant under a dirty .gitattributes diff-attribute
     writeFileSync(join(root, 'src/x.py'), 'def f():\n    return 11\n\ndef g():\n    return 2\n')
     g('add', '-A'); g('commit', '-qm', 'f moves'); const moved = g('rev-parse', 'HEAD')
     const win = [{ commit: moved, historicalPath: 'src/x.py', parents: [{ commit: g('rev-parse', 'HEAD~1'), historicalPath: 'src/x.py' }] }]
-    const ask = async (mod: typeof import('./anchors.js')) =>
+    const ask = async (mod: typeof import('@spexcode/l0')) =>
       (await mod.anchorHitQueries(root, [{ win, symbols: ['f'] }], mod.extractors(root)))[0].map((row) => row.selectors)
 
     // `-diff` marks the path binary for diff purposes: Git prints "Binary files … differ", no `@@`.
     writeFileSync(join(root, '.gitattributes'), 'src/x.py -diff\n')
-    const suppressed = await ask(await import('./anchors.js'))
+    const suppressed = await ask(await import('@spexcode/l0'))
     // flip the same dirty attribute to its opposite and ask the SAME process again
     writeFileSync(join(root, '.gitattributes'), 'src/x.py diff\n')
-    const flipped = await ask(await import('./anchors.js'))
+    const flipped = await ask(await import('@spexcode/l0'))
     // a module with empty memos is the oracle: whatever it says, the memoized answer must equal it
-    const fresh = await ask(await import(`./anchors.js?attr-oracle=${moved}`))
+    const fresh = await ask(await freshAnchors(`attr-oracle=${moved}`))
 
     assert.deepEqual(flipped, suppressed, 'one commit must have ONE anchor verdict, whatever .gitattributes says')
     assert.deepEqual(flipped, fresh, 'a memoized verdict must equal a fresh module\'s on the same commit and path')
@@ -291,7 +294,7 @@ test('a replaced commit object and a regrafted parent are different hunk facts, 
     g('add', '-A'); g('commit', '-qm', 'f moves'); const movesF = g('rev-parse', 'HEAD')
     writeFileSync(join(root, 'src/i.ts'), unit('f', '11') + unit('g', '22'))
     g('add', '-A'); g('commit', '-qm', 'g moves'); const movesG = g('rev-parse', 'HEAD')
-    const mod = await import('./anchors.js')
+    const mod = await import('@spexcode/l0')
     const x = tsAstExtractor(ROOT)
     const ask = async (event: any) => (await mod.anchorHitQueries(root, [{ win: [event], symbols: ['f'] }], [x]))[0].map((r) => r.selectors)
 
@@ -303,7 +306,7 @@ test('a replaced commit object and a regrafted parent are different hunk facts, 
     const beforeGraft = await askG(movesF)
     g('replace', '--graft', movesG, v1)
     const afterGraft = await askG(v1)
-    const freshGraft = (await (await import(`./anchors.js?graft-oracle=${movesG}`)).anchorHitQueries(
+    const freshGraft = (await (await freshAnchors(`graft-oracle=${movesG}`)).anchorHitQueries(
       root, [{ win: [{ commit: movesG, historicalPath: 'src/i.ts', parents: [{ commit: v1, historicalPath: 'src/i.ts' }] }], symbols: ['f'] }], [x]))[0].map((r: any) => r.selectors)
     assert.deepEqual(beforeGraft, [], 'against its real parent only g moved, so the f anchor is not hit')
     assert.deepEqual(afterGraft, freshGraft, 'after a real graft the memoized answer must equal a fresh module\'s')
@@ -322,7 +325,7 @@ test('a replaced commit object and a regrafted parent are different hunk facts, 
     const before = await askF()
     g('replace', movesF, sibling)
     const after = await askF()
-    const fresh = (await (await import(`./anchors.js?identity-oracle=${movesF}`)).anchorHitQueries(
+    const fresh = (await (await freshAnchors(`identity-oracle=${movesF}`)).anchorHitQueries(
       root, [{ win: [{ commit: movesF, historicalPath: 'src/i.ts', parents: [{ commit: v1, historicalPath: 'src/i.ts' }] }], symbols: ['f'] }], [x]))[0].map((r: any) => r.selectors)
     assert.deepEqual(before, [['f']], 'the original object moved f')
     assert.deepEqual(after, fresh, 'after refs/replace the memoized answer must equal a fresh module\'s')
@@ -363,12 +366,12 @@ async function discriminatingFixture(configure: (g: (...a: string[]) => string) 
 test('a same-process diff.algorithm flip cannot change or freeze an anchor verdict', { skip: !gitAvailable() && 'git not available' }, async () => {
   const { root, g, win, moved } = await discriminatingFixture((git) => git('config', 'diff.algorithm', 'myers'))
   try {
-    const mod = await import('./anchors.js')
+    const mod = await import('@spexcode/l0')
     const ask = async (m: typeof mod) => (await m.anchorHitQueries(root, [{ win, symbols: ['f'] }], [line3Extractor as any]))[0].map((r) => r.selectors)
     const underMyers = await ask(mod)
     g('config', 'diff.algorithm', 'histogram')
     const underHistogram = await ask(mod)
-    const fresh = await ask(await import(`./anchors.js?algo-oracle=${moved}`))
+    const fresh = await ask(await freshAnchors(`algo-oracle=${moved}`))
     assert.deepEqual(underHistogram, underMyers, 'repo diff.algorithm must not move the verdict')
     assert.deepEqual(underHistogram, fresh, 'and the memoized verdict must equal a fresh module\'s after the flip')
     assert.deepEqual(fresh, [['f']], 'the pinned reading attributes the realignment to the anchored line — a myers reading misses it')
@@ -378,12 +381,12 @@ test('a same-process diff.algorithm flip cannot change or freeze an anchor verdi
 test('an ambient color.ui cannot blank the hunk parse into a silent zero-drift verdict', { skip: !gitAvailable() && 'git not available' }, async () => {
   const { root, g, win, moved } = await discriminatingFixture((git) => git('config', 'color.ui', 'always'))
   try {
-    const mod = await import('./anchors.js')
+    const mod = await import('@spexcode/l0')
     const ask = async (m: typeof mod) => (await m.anchorHitQueries(root, [{ win, symbols: ['f'] }], [line3Extractor as any]))[0].map((r) => r.selectors)
     const colored = await ask(mod)
     g('config', '--unset', 'color.ui')
     const plain = await ask(mod)
-    const fresh = await ask(await import(`./anchors.js?color-oracle=${moved}`))
+    const fresh = await ask(await freshAnchors(`color-oracle=${moved}`))
     assert.deepEqual(colored, [['f']], 'an ANSI-coloured patch must still be parsed — zero hunks here would be a silent clean gate')
     assert.deepEqual(plain, colored, 'and color.ui must not move the verdict')
     assert.deepEqual(fresh, colored, 'nor may the memo hold a colour-blanked answer')

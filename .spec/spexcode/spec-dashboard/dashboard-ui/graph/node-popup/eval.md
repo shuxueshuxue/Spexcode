@@ -18,7 +18,8 @@ scenarios:
       without overflowing; digit-key pane switching still works.
     code:
       - spec-dashboard/src/NodeView.jsx
-      - spec-dashboard/src/ReviewShell.jsx
+      - spec-dashboard/src/ReviewShell.jsx#ReviewState
+      - spec-dashboard/src/ReviewShell.jsx#CompactReviewFilter
       - spec-dashboard/src/styles.css
   - name: edit-tab-no-reload-flash
     tags: [frontend-e2e, desktop]

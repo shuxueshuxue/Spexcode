@@ -2,7 +2,7 @@
 scenarios:
   - name: evals-list-page
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/ReviewShell.jsx]
+    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#ReviewListRow, spec-dashboard/src/ReviewShell.jsx#ReviewState, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters]
     description: >
       Open the dashboard in a real browser at a live backend. Click the Evals rail entry (or press ⌥3 / f
       from the graph) and read location.hash + the rendered page. Read the list page's DOM: the row
@@ -135,7 +135,7 @@ scenarios:
   - name: scoped-terminal-door
     tags: [frontend-e2e, desktop, mobile]
     test: spec-dashboard/test/evals-entry.e2e.mjs
-    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/address.js]
+    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/address.js]
     description: >
       Enter a session-scoped Evals LIST through a real console door click, then again by direct URL and
       by reload, at 1440px and 390px, in en and zh: read the list toolbar for the terminal door — tag,
@@ -217,7 +217,7 @@ scenarios:
       review work, while review text cannot leak across or revive after a real evidence identity change.
   - name: session-scope-load-failure
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/ReviewShell.jsx]
+    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#DetailShell]
     description: >
       Open a session-scoped Evals list and detail while forcing its `/api/sessions/:id/evals` request to
       return 503, then repeat with a real 404/missing target. Read the visible controls, alert/not-found
@@ -232,7 +232,7 @@ scenarios:
       failed.
   - name: mobile-evals-pages
     tags: [frontend-e2e, mobile]
-    code: [spec-dashboard/src/MobileApp.jsx, spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
+    code: [spec-dashboard/src/MobileApp.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/styles.css]
     description: >
       In a real browser at a 390px viewport: open #/evals (via the tab bar's Evals entry or directly),
       read query/header/row sizes, visible facets and the opened kebab, body/document scroll width; open a

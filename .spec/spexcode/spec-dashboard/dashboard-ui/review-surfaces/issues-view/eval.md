@@ -136,7 +136,7 @@ scenarios:
   - name: list-page-skeleton
     tags: [frontend-e2e]
     test: "spec-dashboard/test/new-issue-page.e2e.mjs"
-    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#ReviewListRow, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters, spec-dashboard/src/styles.css]
     description: >-
       On the running issues page (#/issues), read the query + bordered ListView skeleton, full-row link/hrefs,
       Open/Closed section tabs, direct menu buttons, and overflow menu. Select Closed and read the hash
@@ -172,7 +172,7 @@ scenarios:
   - name: new-form-node-links
     tags: [frontend-e2e]
     test: "spec-dashboard/test/new-issue-page.e2e.mjs"
-    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/ReviewShell.jsx#SideSection, spec-dashboard/src/ReviewShell.jsx#SideValue]
     description: >-
       On the running issues page, open the New compose page and count its text surfaces, read every store
       picker's option text, and read the side rail while typing; then post an issue whose
@@ -193,7 +193,7 @@ scenarios:
       read-back, the issue appears with that node chip. No page errors.
   - name: new-issue-page
     tags: [frontend-e2e]
-    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/ReviewShell.jsx#SideSection, spec-dashboard/src/ReviewShell.jsx#SideValue]
     description: >-
       On the running dashboard read the Issues list's New action DOM (tag + href), then open the compose
       address COLD (navigate straight to #/issues/new, no list visit): read the page for any
@@ -220,7 +220,7 @@ scenarios:
       form with no horizontal overflow. No page errors.
   - name: shared-listview-facets
     tags: [frontend-e2e]
-    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters]
     description: >-
       With issues spanning stores, originators, nodes, and present/missing source sessions, open #/issues
       at desktop and 390px. Read section/menu/secondary-filter DOM and menu option values; pick Store and Source

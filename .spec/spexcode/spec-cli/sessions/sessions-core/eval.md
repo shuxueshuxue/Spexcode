@@ -70,7 +70,12 @@ scenarios:
     test: spec-cli/src/sessions-hot.test.ts
   - name: a-board-row-carries-only-the-prompt-preview
     tags: [backend-api]
-    code: spec-cli/src/sessions.ts
+    code:
+      - spec-cli/src/sessions.ts#oneLinePreview
+      - spec-cli/src/sessions.ts#toSession
+      - spec-cli/src/sessions.ts#boardRow
+      - spec-cli/src/sessions.ts#listSessions
+      - spec-cli/src/sessions.ts#sessionPrompt
     description: >
       Against a real backend serving a real board whose sessions were launched with long asks, read
       `GET /api/sessions` and weigh its body: total bytes, and the share spent on each row's `prompt` versus

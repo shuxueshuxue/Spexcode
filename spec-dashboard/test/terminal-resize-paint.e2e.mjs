@@ -98,21 +98,34 @@ try {
   const graphResponse = await fetch(`${BASE}/api/graph`)
   assert.equal(graphResponse.status, 200, `dashboard graph returned ${graphResponse.status}`)
   const graph = await graphResponse.json()
-  const seed = graph.sessions.find((session) => session.liveness === 'online') || graph.sessions[0]
-  assert.ok(seed, 'a session-shaped graph row is required for the browser fixture')
   const fixture = structuredClone(graph)
   fixture.sessions = [{
-    ...seed,
     id: scratch,
-    session: scratch,
+    node: null,
+    branch: null,
+    path: scratchDir,
+    label: 'native resize paint proof',
+    title: 'native resize paint proof',
+    raw: { name: 'native resize paint proof', title: null },
+    harness: 'claude',
+    capabilities: { headless: false },
+    launcher: null,
     status: 'working',
     lifecycle: 'active',
+    proposal: null,
+    merges: 0,
     liveness: 'online',
     parent: null,
-    node: null,
-    name: 'native resize paint proof',
-    headline: 'native resize paint proof',
+    note: null,
+    archived: false,
+    archiveHazard: null,
+    prompt: null,
+    promptPreview: null,
     created: Date.now(),
+    activity: null,
+    sortKey: null,
+    files: [],
+    web: [],
   }]
 
   const { chromium } = await import(pathToFileURL(PW).href)

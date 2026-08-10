@@ -523,9 +523,12 @@ export function ListPage({ notice, leading, error, loading = false, title, actio
             aria-labelledby={sectionsAreTabs ? tabId(activeSectionIndex) : undefined}
             aria-label={sectionsAreTabs ? undefined : title}>
             {rows.length === 0 && <div className="lp-empty">{loading ? t('common.loading') : emptyText}</div>}
-            {rows.map((row) => row.href
-              ? <a key={row.key} className={`lp-row ${row.cls || ''} ${cur === row.key ? 'cur' : ''}`} href={row.href}>{row.content}</a>
-              : <div key={row.key} className={`lp-row inert ${row.cls || ''}`}>{row.content}</div>)}
+            {rows.map((row) => (
+              <div key={row.key} className={`lp-row ${row.href ? '' : 'inert'} ${row.cls || ''} ${cur === row.key ? 'cur' : ''}`}>
+                {row.href && <a className="lp-row-link" href={row.href}><span className="sr-only">{row.label || row.key}</span></a>}
+                {row.content}
+              </div>
+            ))}
           </div>
         </section>
         {pagination && <Pagination {...pagination} />}

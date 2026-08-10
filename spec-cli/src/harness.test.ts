@@ -1142,7 +1142,7 @@ test('Codex cold retirement rejects missing or non-detached shared owner identit
     writeFileSync(codexAppServerPid(root), `${process.pid}\n`)
     const missing = await codexHarness.coldRetirementPreflight?.({ session: 'cold-identity-session', harnessSessionId: target })
     assert.equal(missing?.ok, false)
-    if (missing && !missing.ok) assert.match(missing.reason, /generation is unproven/)
+    if (missing && !missing.ok) assert.match(missing.reason, /generation is (?:temporarily )?unproven/)
 
     const start = processStartToken(process.pid)!
     writeFileSync(codexAppServerReceipt(root), `${JSON.stringify({
@@ -1155,7 +1155,7 @@ test('Codex cold retirement rejects missing or non-detached shared owner identit
     })}\n`)
     const nonDetached = await codexHarness.coldRetirementPreflight?.({ session: 'cold-identity-session', harnessSessionId: target })
     assert.equal(nonDetached?.ok, false)
-    if (nonDetached && !nonDetached.ok) assert.match(nonDetached.reason, /detached.*identity|generation is unproven/)
+    if (nonDetached && !nonDetached.ok) assert.match(nonDetached.reason, /detached.*identity|generation is (?:temporarily )?unproven/)
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
@@ -1205,7 +1205,7 @@ test('Codex cold retirement rejects a generation swap after target guard while c
     for (const pending of pendingLists) pending.resolve({ data: pending.archived ? [{ id: target }] : [], nextCursor: null })
     const result = await retirement
     assert.equal(result?.ok, false)
-    if (result && !result.ok) assert.match(result.reason, /generation changed during cold retirement guard/)
+    if (result && !result.ok) assert.match(result.reason, /generation changed during (?:cold retirement guard|subtree census)/)
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await stopCodexOwner(owner)

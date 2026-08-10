@@ -79,9 +79,11 @@ dir, so they answer identically from the main checkout, a linked worktree, or a 
 `mainCheckout()` exposes the root working tree itself
 (`dirname` of the common dir), which a harness keying a per-PROJECT artifact to the root checkout uses — e.g.
 Codex's hook shim + trust materialize at `mainCheckout(proj)`, not the worktree (see [[harness-adapter]]).
-The common-dir and toplevel queries are memoized by their resolved input path for the process lifetime: Git's
-answer for a live checkout is stable while that checkout exists, and one render must not fork the same
-identity probe once per artifact. Different path inputs remain distinct, so a linked worktree still receives
+The common-dir and toplevel queries are memoized by their resolved input path for the process lifetime: the
+no-argument common-dir query keys itself by the current working directory, so one process can deliberately
+move between isolated repositories without inheriting another checkout's identity. Git's answer for a live
+checkout is stable while that checkout exists, and one render must not fork the same identity probe once per
+artifact. Different path inputs remain distinct, so a linked worktree still receives
 its own tree slot while sharing only the common-dir-derived project root.
 `mainRoot(proj?)` is the lighter sibling for consumers that need the configured source-of-truth path rather
 than the physical root checkout: it follows the same common-dir resolution, reads only the root config, and

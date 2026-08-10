@@ -93,7 +93,9 @@ data-level kinds only, never filter options — they surface under `all`.
 
 **Rows use the shared two-level primitive, and each row is a REAL `<a>`** to
 `#/evals/<node>/<scenario>` (the worktree scope's rows carry `?q=scope:<id>` and nothing else) — shared verdict visual +
-wrapping scenario title; node, filer, and filed time below; evidence kind/scope at the right (joining the
+wrapping scenario title; node as a real `graphNodeAddress` anchor, then filer and filed time below; a raw
+session UUID uses the same short `xxxxxxxx…` display as Issues while its full id remains reachable on hover;
+evidence kind/scope at the right (joining the
 secondary line at 390px). No media request of any kind occurs in the list, no per-row write affordance
 (reviewing + signing lives on the detail page). A human-ok'd row adds the one settled certification mark
 (the shared stroke check in a quiet green ring, signer/time as its accessible name). Clicking a row is a

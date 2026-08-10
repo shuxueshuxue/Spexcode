@@ -5,6 +5,8 @@ hue: 30
 desc: One Issue object over every store — a concern bound to nodes, with its own lifecycle. Local-store threads and forge issues are the same type behind a per-issue storage adapter; one merged read port serves the CLI, the API, and the board (eval-remark threads split out — they are the eval scoreboard's, not issues).
 code:
   - spec-cli/src/issues.ts
+related:
+  - spec-cli/src/issues.test.ts
 ---
 # issues
 
@@ -21,7 +23,7 @@ bridge; build the one object and let the stores be adapters.
 ## expanded spec
 
 **The core type.** An `Issue` is `{ id, store, concern, by, status, nodes[], created,
-body, replies[], evidence[], url? }`. `store` names the adapter that holds it (`local`, or a forge host
+body, replies[], evidence[], labels[], url? }`. `store` names the adapter that holds it (`local`, or a forge host
 like `github`) — data, not a mode. There is deliberately **no content-kind taxonomy**: a field that does
 no mechanical work (nothing branches on it) is a label, not structure — what a thread *is* (a change
 suggestion, an annotation, a question) is what its prose says.
@@ -38,10 +40,12 @@ mechanism — venue, file format, lock, trunk commit); a local issue thread *is*
 by where it lives, never written into the file. The **forge** store rides [[spec-forge]]'s tracer read:
 a `ForgeIssue` becomes an Issue at this boundary — id `<host>#<number>`, title → concern, state → status,
 its comments → `replies[]` (the SAME Reply shape a local issue thread carries — both stores' discussions are one
-thread type, so every surface renders one kind of thread), and the host's node-naming conventions (`Spec:`
+thread type, so every surface renders one kind of thread), and its platform labels → `labels[]` (name plus the
+optional display colors the host supplied), and the host's node-naming conventions (`Spec:`
 body marker, transitive PR links — [[links]]) translated into `nodes[]` **here**, so product semantics see
-only `nodes[]` and never know a marker existed. Platform differences live at the adapter boundary; nothing
-downstream branches on store.
+only `nodes[]` and never know a marker existed. A local Issue has `labels: []`; label metadata is display-only,
+never a second lifecycle, concern taxonomy, or SpexCode-owned label scheme. Platform differences live at the
+adapter boundary; nothing downstream branches on store.
 
 **One read, differently freshened — and ONE time line.** `mergedIssues(forgeState, nodeIds)` is a pure
 merge that interleaves every store by creation time, **newest first** — the stores are the same

@@ -12,7 +12,7 @@ import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVa
 import { processStartToken } from '@spexcode/l0'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
-import { gitCommonDir, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/l0'
+import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/l0'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
 
@@ -79,7 +79,7 @@ test('the live rename command resolves to the self-rename prompt through the sha
   assert.equal(await resolveCommandPrompt('/not-a-preset'), '/not-a-preset')
 })
 
-test('Codex registration does not persist an unbound thread when exact generation binding fails', () => {
+test('Codex registration does not persist an unbound thread when exact generation binding fails', serial, () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousGeneration = process.env.SPEXCODE_CODEX_GENERATION
   const home = mkdtempSync(join(tmpdir(), 'spex-codex-registration-'))
@@ -110,7 +110,7 @@ test('Codex registration does not persist an unbound thread when exact generatio
   }
 })
 
-test('session-create API rejects stale fields before entering the transaction', async () => {
+test('session-create API rejects stale fields before entering the transaction', serial, async () => {
   const stale = await sessionCreateRequest({ prompt: 'probe', launcher: 'claude', mode: 'headless' })
   assert.deepEqual(stale, { status: 400, error: 'unknown session-create field: mode' })
 
@@ -736,7 +736,7 @@ test('archive returns the exact adapter receipt when filing fails after cold run
   }
 })
 
-test('a successful archive clears a prior adapter recovery marker so the cold session can close', async () => {
+test('a successful archive clears a prior adapter recovery marker so the cold session can close', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const originalShared = codexHarness.sharedRuntimes
   const originalColdPreflight = codexHarness.coldPreflight
@@ -787,14 +787,20 @@ test('a successful archive clears a prior adapter recovery marker so the cold se
   }
 })
 
-test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', async () => {
+test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
+  const previousCwd = process.cwd()
   const originalShared = codexHarness.sharedRuntimes
   const originalCleanup = codexHarness.cleanupRuntime
   const home = mkdtempSync(join(tmpdir(), 'spex-queued-close-'))
-  const main = dirname(gitCommonDir())
+  const project = join(home, 'project')
   const branches: string[] = []
   const paths: string[] = []
+  mkdirSync(project)
+  execFileSync('git', ['init', '-q', '-b', 'main', project])
+  execFileSync('git', ['-C', project, '-c', 'user.name=Queue Close Fixture', '-c', 'user.email=queue-close@example.test', 'commit', '--allow-empty', '-q', '-m', 'fixture: queue close root'])
+  process.chdir(project)
+  const main = mainRoot()
   process.env.SPEXCODE_HOME = home
 
   const prepare = (suffix: string, thread = '') => {
@@ -802,6 +808,7 @@ test('public close cancels a clean never-launched queue without entering the unr
     const branch = `test/queued-close-${suffix}-${process.pid}-${Date.now()}`
     const path = join(home, `${suffix}-worktree`)
     execFileSync('git', ['-C', main, 'worktree', 'add', '-q', '-b', branch, path, 'main'])
+    assert.notEqual(execFileSync('git', ['-C', main, 'rev-parse', '--verify', `${branch}^{commit}`], { encoding: 'utf8' }).trim(), '')
     branches.push(branch); paths.push(path)
     mkdirSync(sessionStoreDir(id), { recursive: true })
     writeFileSync(sessionRecordPath(id), `${JSON.stringify({
@@ -884,6 +891,7 @@ test('public close cancels a clean never-launched queue without entering the unr
     }
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+    process.chdir(previousCwd)
     rmSync(home, { recursive: true, force: true })
   }
 })

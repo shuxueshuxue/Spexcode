@@ -115,6 +115,7 @@ function parse(id: string, text: string): Issue {
     body: body.join('\n').trim(),
     replies: replies.map((r) => ({ ...r, body: r.body.trim() })),
     evidence: list(fm.evidence),
+    labels: [],
   }
 }
 
@@ -326,6 +327,7 @@ export function openIssue(concern: string, opts: { nodes?: string[]; body?: stri
     body: (opts.body || `(no detail given — ${concern})`).trim(),
     replies: [],
     evidence: opts.evidence || [],
+    labels: [],
   })).issue
 }
 
@@ -415,7 +417,7 @@ function findOrCreateEvalThread(node: string, scenario: string, author: string):
     const p: Issue = {
       id: uniqueId(concern), store: 'local', concern, by: author, status: 'open',
       nodes: [node], created: new Date().toISOString(),
-      body: `Remarks on the \`${scenario}\` eval of [[${node}]].`, replies: [], evidence: [],
+      body: `Remarks on the \`${scenario}\` eval of [[${node}]].`, replies: [], evidence: [], labels: [],
     }
     writeStoreFile(p, `issue: ${concern}`)
     return p

@@ -1,9 +1,10 @@
 import { sessionHeadline } from './session.js'
 import { FacetMenu, ListPage, ReviewListRow, ReviewState, SecondaryFilters } from './ReviewShell.jsx'
 import { EVAL_QUERY_DEFAULT, readToken, setToken } from '@spexcode/l0/review'
-import { EVAL_FILTER_KIND, kindsOf } from '@spexcode/l0/review'
+import { EVAL_FILTER_KIND, kindsOf, reviewActorName } from '@spexcode/l0/review'
 import { useT } from './i18n/index.jsx'
 import { Icon } from './icons.jsx'
+import { addressHash, graphNodeAddress } from './address.js'
 
 // The evals list ([[evals-feed]]): the rows + filters of the Evals LIST page ([[evals-view]]), rendered
 // through the shared [[review-chrome]] ListPage. The unit is the SCENARIO, never the reading — latest
@@ -36,8 +37,8 @@ export function EvalRow({ e }) {
       title={e.scenario}
       meta={(
         <>
-          <span className="ef-node" style={{ color: `hsl(${e.hue ?? 210} 60% 70%)` }}>{e.node}</span>
-          {e.by && <span>{t('evalsFeed.filedBy', { by: e.by })}</span>}
+          <a className="ef-node" href={addressHash(graphNodeAddress(e.node))} style={{ color: `hsl(${e.hue ?? 210} 60% 70%)` }} data-tip={e.node}>{e.node}</a>
+          {e.by && <span data-tip={e.by}>{t('evalsFeed.filedBy', { by: reviewActorName(e.by) })}</span>}
           <span>{t('evalsFeed.filedAt', { at: rel(e.ts) })}</span>
         </>
       )}
@@ -92,11 +93,11 @@ export default function EvalsGroup({ pageData, loading = false, sessions = [], q
       cls: 'se-blind',
       content: (
         <ReviewListRow state={<ReviewState kind="eval" state="missing" />} title={item.scenario}
-          meta={<><span className="ef-node" style={{ color: `hsl(${item.hue ?? 210} 60% 70%)` }}>{item.node}</span><span>{t('sessionEval.unmeasured')}</span></>} />
+          meta={<><a className="ef-node" href={addressHash(graphNodeAddress(item.node))} style={{ color: `hsl(${item.hue ?? 210} 60% 70%)` }} data-tip={item.node}>{item.node}</a><span>{t('sessionEval.unmeasured')}</span></>} />
       ),
     }]
     if (item.filterKind === EVAL_FILTER_KIND.RESULT) {
-      return [{ key: entryKey(item), href: hrefFor(item), content: <EvalRow e={item} /> }]
+      return [{ key: entryKey(item), label: item.scenario, href: hrefFor(item), content: <EvalRow e={item} /> }]
     }
     return []
   })

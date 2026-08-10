@@ -15,7 +15,7 @@
       "body": "The open-issue badge over-counts.\n\nSpec: dashboard-issues",
       "url": "https://github.com/acme/repo/issues/2",
       "state": "open",
-      "labels": ["bug", "needs-eval"]
+      "labels": [{ "name": "bug" }, { "name": "needs-eval" }]
     },
     {
       "number": 3,
@@ -23,7 +23,7 @@
       "body": "branchToNode picks the short id.\n\nSpec: links",
       "url": "https://github.com/acme/repo/issues/3",
       "state": "open",
-      "labels": ["bug"]
+      "labels": [{ "name": "bug" }]
     },
     {
       "number": 4,
@@ -39,7 +39,7 @@
       "body": "This one is flagged but carries no Spec: marker and no closing PR.\n\nneeds-eval\n",
       "url": "https://github.com/acme/repo/issues/5",
       "state": "open",
-      "labels": ["needs-eval"]
+      "labels": [{ "name": "needs-eval" }]
     },
     {
       "number": 6,
@@ -47,7 +47,7 @@
       "body": "A worked bug; the node comes transitively from the closing PR.\n\nneeds-eval: ignore-the-trailing-text",
       "url": "https://github.com/acme/repo/issues/6",
       "state": "open",
-      "labels": ["needs-eval"]
+      "labels": [{ "name": "needs-eval" }]
     }
   ],
   "prs": [

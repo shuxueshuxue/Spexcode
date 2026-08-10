@@ -12,6 +12,7 @@ related:
   - spec-dashboard/src/Composer.jsx
   - spec-dashboard/src/Evidence.jsx
   - spec-dashboard/src/IssueCard.jsx
+  - spec-dashboard/src/IssueLabels.jsx
   - spec-dashboard/src/mentions.jsx
   - packages/l0/src/review/reviewFilters.js
   - spec-dashboard/src/Thread.jsx
@@ -67,7 +68,7 @@ verbs the CLI uses.
   a board value that merely churns per frame: a proxy like that is fresh only by luck, and goes quiet the
   day the churn is optimized away. Rows render **in API
   order** — stores interleaved newest first, no salience ranking. Bare query words search the
-  concern/id/originator/node facts; the metadata header's **Open / Closed sections + counts** are the
+  concern/id/originator/node facts; `label:` matches a forge label name exactly; the metadata header's **Open / Closed sections + counts** are the
   lifecycle switch — token surgery on `state:` only, every other token preserved, counts computed under
   the rest of the query (default Open; every non-open state belongs to Closed, and a concrete concluded
   spelling like `state:landed` matches that status honestly). Matching and options come from the
@@ -79,19 +80,25 @@ verbs the CLI uses.
   + chevron, never a kebab/action affordance. Its stable active-group count reads the presence token.
   At 390px an active Store face condenses visually to the selected store while retaining its fully
   qualified accessible name, so Open/Closed, Store, and Filters never overlap. Originator and spec node are HIGH-cardinality: `author:` /
-  `node:` tokens, hand-typed or completed from the input's bounded inline autocomplete — no enumerating
+  `node:` / `label:` tokens, hand-typed or completed from the input's bounded inline autocomplete — no enumerating
   dropdown; an unknown or historical value still submits and yields the honest filtered zero. An ACTIVE
   menu value whose data option disappeared keeps its cheap All off-switch — and the visible text is
   always the canonical release — so data disappearance cannot trap the list behind an invisible filter.
-  New remains the page-title action. No assignee/labels/project
-  theatre is invented for a model that has none. An actually empty issue store says there are no issues
+  New remains the page-title action. Forge-supplied labels stay platform metadata, but their names are one
+high-cardinality `label:` query dimension: a chip on the Issues list replaces that one token through the
+same URL surgery as every other filter, so the next bounded server page, counts, and Back state all agree.
+Detail chips mint that same list address; node-card chips stay passive because the card is itself the one
+real issue link. Every issue surface uses the one chip primitive to show platform names, background colors,
+and readable foreground color where supplied or derivable; local threads honestly have no chips. No assignee/project
+theatre is invented for a model that has none. An actually empty issue store says there are no issues
   yet; a non-empty store reduced to zero by section/query/facets instead says this view has no matching
   issues, through [[review-chrome]]'s shared empty-state contract.
 - **The row leads with the issue, never its plumbing.** A structured two-level row: the **status mark** (GitHub
   Primer's 16px `issue-opened` octicon in the semantic open green; every concluded state — local
   `landed`, forge `closed` — the `issue-closed` ring+check in the one closed purple; never a CSS dot),
-  then the wrapping concern; under it the real issue identity, originator, and opened time; at the right
-  the comment count and store/node facts that exist. At 390px those facts join the secondary line and the
+  then the wrapping concern and its platform label chips; under it the real issue identity, originator, and opened time; at the right
+  the comment count and store/node facts that exist. A node fact is a real `graphNodeAddress` anchor, never
+  an inert tag; label chips are their own filter controls beside the row-detail anchor. At 390px those facts join the secondary line and the
   title may wrap without horizontal overflow. **The store is metadata, never identity**: it never leads a
   row and never sits on a title.
 - **The detail page is [[review-chrome]]'s GitHub-grammar skeleton.** Header: the concern ALONE as the
@@ -107,8 +114,8 @@ verbs the CLI uses.
   full slug, truncatable — a bare `#slug` reads as a node), the store tag, the ORIGINATOR + liveness (a
   local thread's `by` is a session id — a
   live one is a click-through chip to `#/sessions/<id>`, painted by the board's STATUS_COLOR join; a
-  forge login stays a plain labeled value), the spec-node refs under their localized label (click
-  focuses the graph), and a forge permalink
+  forge login stays a plain labeled value), the platform label chips under their localized label, the spec-node refs under their localized label (real
+  `graphNodeAddress` anchors), and a forge permalink
   labeled with the store's concrete display name ("Open on GitHub"/"Open on GitLab" — canonical
   display-name data, never a URL sniff, never the word "forge"; a local issue renders none). At phone
   width the side metadata reflows ABOVE the body in the one column. A forge issue's comments render as

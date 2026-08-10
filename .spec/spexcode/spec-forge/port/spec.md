@@ -17,7 +17,8 @@ drivers** behind it. The name is the seam, never the vendor.
 Unlike a projection, the port **reads the forge**. Its two verbs fetch a host's work objects —
 `listIssues() → ForgeIssue[]` (issues of **all** states, so closed work stays linkable, not just live
 issues) and `listPRs() → ForgePR[]` (open PRs). `ForgeIssue` is the small stable subset an
-issue collapses to on every host (number, title, body, url, state, labels, author, createdAt — the body is
+issue collapses to on every host (number, title, body, url, state, labels, author, createdAt — each label keeps
+its name plus any host-provided background/text colors; the body is
 where the `Spec: <id>` marker lives; author/createdAt are what lets a forge issue stand beside a local issue
 thread as the same object in the unified Issue port, spec-cli's [[issues]], with a `by` and a `created`).
 It also carries the issue's **comments** (`ForgeComment[]`: author, createdAt, body — exactly what becomes

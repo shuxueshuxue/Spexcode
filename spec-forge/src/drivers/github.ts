@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import type { ForgeComment, ForgeDriver, ForgeIssue, ForgePR } from '../port.js'
+import type { ForgeComment, ForgeDriver, ForgeIssue, ForgeLabel, ForgePR } from '../port.js'
 
 const run = promisify(execFile)
 
@@ -16,7 +16,7 @@ export const githubDriver: ForgeDriver = {
   // fetch open and closed in separate `--limit 200` windows and merge, so a flood of closed issues can't crowd the open set out of one shared `--state all` limit
   async listIssues(): Promise<ForgeIssue[]> {
     const list = (state: string) =>
-      gh<{ number: number; title: string; body: string; url: string; state: string; labels: { name: string }[]; author: { login: string } | null; createdAt: string; comments: { author: { login: string } | null; body: string; createdAt: string }[] }[]>(
+      gh<{ number: number; title: string; body: string; url: string; state: string; labels: { name: string; color?: string }[]; author: { login: string } | null; createdAt: string; comments: { author: { login: string } | null; body: string; createdAt: string }[] }[]>(
         ['issue', 'list', '--state', state, '--limit', '200', '--json', 'number,title,body,url,state,labels,author,createdAt,comments'],
       )
     const [open, closed] = await Promise.all([list('open'), list('closed')])
@@ -26,7 +26,7 @@ export const githubDriver: ForgeDriver = {
       body: r.body ?? '',
       url: r.url,
       state: (r.state || '').toLowerCase(),
-      labels: (r.labels ?? []).map((l) => l.name),
+      labels: forgeLabels(r.labels),
       author: r.author?.login ?? '',
       createdAt: r.createdAt ?? '',
       comments: (r.comments ?? []).map((c) => ({ author: c.author?.login ?? '', createdAt: c.createdAt ?? '', body: c.body ?? '' })),
@@ -36,7 +36,7 @@ export const githubDriver: ForgeDriver = {
   async listIssuesSince(sinceISO: string): Promise<ForgeIssue[]> {
     type ApiRow = {
       number: number; title: string; body: string | null; html_url: string; state: string
-      labels: ({ name?: string } | string)[]; user: { login: string } | null; created_at: string
+      labels: ({ name?: string; color?: string } | string)[]; user: { login: string } | null; created_at: string
       comments: number; pull_request?: unknown
     }
     const out: ApiRow[] = []
@@ -51,7 +51,7 @@ export const githubDriver: ForgeDriver = {
       body: r.body ?? '',
       url: r.html_url,
       state: (r.state || '').toLowerCase(),
-      labels: (r.labels ?? []).map((l) => (typeof l === 'string' ? l : l.name ?? '')).filter(Boolean),
+      labels: forgeLabels(r.labels),
       author: r.user?.login ?? '',
       createdAt: r.created_at ?? '',
       comments: r.comments > 0 ? await listComments(r.number) : [],
@@ -106,6 +106,13 @@ export const githubDriver: ForgeDriver = {
     if (!r.url?.startsWith('http')) throw new Error(`gh issue view returned an unexpected url after close: ${JSON.stringify(r)}`)
     return { url: r.url }
   },
+}
+
+function forgeLabels(labels: ({ name?: string; color?: string } | string)[] | undefined): ForgeLabel[] {
+  return (labels ?? []).flatMap((label) => {
+    const name = typeof label === 'string' ? label : label.name ?? ''
+    return name ? [{ name, ...(typeof label === 'string' || !label.color ? {} : { color: label.color }) }] : []
+  })
 }
 
 async function listComments(number: number): Promise<ForgeComment[]> {

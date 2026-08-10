@@ -286,8 +286,8 @@ export default function MobileApp({ specs, sessions, issuesStamp, reloadBoard })
               {plane === 'settings'
                 ? <Settings />
                 : plane === 'evals'
-                ? <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reloadBoard} onOpenSession={openSession} onFocusNode={(id) => navigate('graph', id)} />
-                : <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} onFocusNode={(id) => navigate('graph', id)} />}
+                ? <EvalsPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} reloadBoard={reloadBoard} onOpenSession={openSession} />
+                : <IssuesPage specs={specs} sessions={sessions} issuesStamp={issuesStamp} onOpenSession={openSession} />}
             </Suspense>
           </div>
         ) : plane === 'specs' ? (

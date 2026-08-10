@@ -9,7 +9,7 @@ const sessions = [{ id: 'on-board', status: 'working', headline: 'worker' }, { i
 test('issue adapter composes query, section, facets, and the one presence join', () => {
   const items = [
     { id: 'local:a', concern: 'alpha concern', status: 'open', store: 'local', by: 'vanished', nodes: ['alpha'], replies: [{ by: 'dormant' }] },
-    { id: 'github#2', concern: 'beta concern', status: 'closed', store: 'github', by: 'human', nodes: ['beta'] },
+    { id: 'github#2', concern: 'beta concern', status: 'closed', store: 'github', by: 'human', nodes: ['beta'], labels: [{ name: 'bug' }, { name: 'triage' }] },
     { id: 'local:c', concern: 'gamma landed', status: 'landed', store: 'local', by: 'on-board', nodes: [] },
   ]
   const base = issueFilterModel(items, { state: 'open' }, { sessions, t })
@@ -27,6 +27,10 @@ test('issue adapter composes query, section, facets, and the one presence join',
   // a concrete concluded spelling matches its status honestly
   assert.deepEqual(issueFilterModel(items, { state: 'landed' }, { sessions, t }).shown.map((item) => item.id), ['local:c'])
   assert.deepEqual(issueFilterModel(items, { author: 'human', node: 'beta' }, { sessions, t }).shown.map((item) => item.id), ['github#2'])
+  // Forge labels are an exact-match query dimension; local issues carry none and cannot match one.
+  assert.deepEqual(issueFilterModel(items, { label: 'bug' }, { sessions, t }).shown.map((item) => item.id), ['github#2'])
+  assert.deepEqual(issueFilterModel(items, { label: 'missing' }, { sessions, t }).shown, [])
+  assert.deepEqual(base.facets.label.options.map((option) => option.value), ['', 'bug', 'triage'])
   // an impossible state (an unknown canonical qualifier) matches NOTHING
   assert.deepEqual(issueFilterModel(items, { impossible: true }, { sessions, t }).shown, [])
 })
@@ -102,6 +106,7 @@ test('compact groups omit fake one-value facets and retain active off-switches',
 test('the canonical bridge maps token text into engine state without a second parser', () => {
   assert.deepEqual(tokenFilterState('is:issue state:closed store:github "long title" gate', 'issue'),
     { q: ['long title', 'gate'], state: 'closed', store: 'github' })
+  assert.deepEqual(tokenFilterState('is:issue label:bug', 'issue'), { q: [], label: 'bug' })
   assert.deepEqual(tokenFilterState('is:eval state:reviewed evidence:video scope:s-1', 'eval'),
     { q: [], review: 'reviewed', kind: 'video' })
   assert.deepEqual(tokenFilterState('state:current session:missing filer:w-1', 'eval'),

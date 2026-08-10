@@ -2,7 +2,7 @@
 scenarios:
   - name: put-idempotent
     tags: [cli]
-    code: spec-eval/src/cli.ts
+    code: spec-eval/src/cli.ts#blobPut
     related: [spec-eval/src/cache.ts]
     description: >
       Through the real CLI: `spex evidence put <file>` a binary file twice and once via stdin

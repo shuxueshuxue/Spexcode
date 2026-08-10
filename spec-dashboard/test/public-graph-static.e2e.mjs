@@ -67,6 +67,7 @@ try {
   assert.equal(requests.some((url) => /(?:SessionInterface|IssuesPage|EvalsPage|Settings|MobileApp|ProjectsPage)-/.test(url)), false)
   assert.equal(requests.some((url) => new URL(url).pathname.startsWith('/api/')), false, requests.join('\n'))
   assert.deepEqual(errors, [])
+  await page.screenshot({ path: process.env.PUBLIC_GRAPH_SCREENSHOT || '/tmp/public-graph-static.png', fullPage: true })
   await context.close()
   console.log('PASS static public graph: rendered one graph page with no API transport and four inert rail entries')
 } finally {

@@ -8,8 +8,8 @@ import { archiveSession, closeSession } from './sessions.js'
 import { codexLoadedReferenceIds, codexStartThread, codexTurn } from './harness.js'
 import { bindCodexGeneration, ensureCodexCurrentGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { processStartToken } from '@spexcode/l0'
-import { runtimeRoot, sessionRecordPath, sessionStoreDir } from '@spexcode/l0'
+import { processStartToken } from '@spexcode/spec-core'
+import { runtimeRoot, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
 const enabled = process.env.SPEXCODE_CODEX_YATU === '1'
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))

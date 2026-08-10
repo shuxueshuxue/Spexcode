@@ -3,8 +3,8 @@ import { resolveLinks } from '../../spec-forge/src/links.js'
 import { FORGE_DRIVERS, forgeDriverFor, forgeIssueStores, resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, issuesEnabled, replyLocalIssue, parseEvalConcern } from './localIssues.js'
 import { parseMentions, type LoopIn } from './mentions.js'
-import { envSessionId } from '@spexcode/l0'
-import { loadSpecsLite } from '@spexcode/l0'
+import { envSessionId } from '@spexcode/spec-core'
+import { loadSpecsLite } from '@spexcode/spec-core'
 
 // A Reply is a plain thread post `{by, at, body}` — OR, when it carries the fields below, a REMARK
 // ([[remark-substrate]]): a reply that pins a RESOLVABLE concern to its host (an issue or a scenario). A

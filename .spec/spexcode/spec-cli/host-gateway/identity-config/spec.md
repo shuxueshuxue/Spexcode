@@ -3,10 +3,10 @@ title: identity config
 hue: 180
 desc: Project identity resolves from the portable dashboard title/icon fields; gateway identity resolves from one host config under SPEXCODE_HOME.
 code:
-  - packages/l0/src/project-identity.ts
+  - packages/spec-core/src/project-identity.ts
 related:
   - spec-cli/src/host.ts
-  - packages/l0/src/graph.ts
+  - packages/spec-core/src/graph.ts
   - spec-cli/src/index.ts
   - spec-cli/src/supervise.ts
 ---

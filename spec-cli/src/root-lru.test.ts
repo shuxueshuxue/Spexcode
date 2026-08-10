@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { rootSlots, touchRoot } from '@spexcode/l0'
+import { rootSlots, touchRoot } from '@spexcode/spec-core'
 
 // [[root-lru]] — the policy that used to be written twice, verbatim in logic and in name, in git.ts and in
 // spec-eval's scenariofresh.ts. These lock the parts that made it worth sharing rather than re-typing.

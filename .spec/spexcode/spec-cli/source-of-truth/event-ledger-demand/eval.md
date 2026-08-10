@@ -4,8 +4,8 @@ scenarios:
     tags: [backend-api]
     test: spec-eval/src/sessioneval-ledger-demand.api.test.ts
     code:
-      - packages/l0/src/git.ts#withEventCacheLock
-      - packages/l0/src/git.ts#withEventLedgerDemand
+      - packages/spec-core/src/git.ts#withEventCacheLock
+      - packages/spec-core/src/git.ts#withEventLedgerDemand
       - spec-eval/src/sessioneval.ts#buildSessionEvals
     description: >-
       Start an isolated real backend over a linked-worktree session, then let an independent live process acquire

@@ -9,7 +9,7 @@ import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { templateConfigPath } from '@spexcode/l0'
+import { templateConfigPath } from '@spexcode/spec-core'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const BYTES_PER_MEBIBYTE = 1024 * 1024

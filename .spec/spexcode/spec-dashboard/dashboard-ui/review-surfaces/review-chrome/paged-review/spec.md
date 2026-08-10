@@ -8,8 +8,8 @@ code:
 related:
   - spec-cli/src/reviews.test.ts
   - spec-cli/src/index.ts
-  - packages/l0/src/review/reviewFilters.js
-  - packages/l0/src/review/reviewQuery.js
+  - packages/spec-core/src/review/reviewFilters.js
+  - packages/spec-core/src/review/reviewQuery.js
   - spec-eval/src/sessioneval.ts
 ---
 

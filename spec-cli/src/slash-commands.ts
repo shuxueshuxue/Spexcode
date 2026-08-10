@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { homedir } from 'node:os'
-import { repoRoot } from '@spexcode/l0'
+import { repoRoot } from '@spexcode/spec-core'
 
 // the data behind the new-session input's `/` dropdown, computed the SAME way the chosen HARNESS computes
 // its own `/` menu so the two stay in lockstep. This module is the slash surface of the [[harness-adapter]]:

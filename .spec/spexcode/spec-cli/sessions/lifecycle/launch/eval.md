@@ -67,7 +67,7 @@ scenarios:
       next drain with no backend restart — raising it drains more `queued` sessions immediately, lowering it
       simply stops further launches (running agents keep their slots). The cap value is never baked into the
       toolchain.
-    code: spec-cli/src/sessions.ts, packages/l0/src/layout.ts
+    code: spec-cli/src/sessions.ts, packages/spec-core/src/layout.ts
   - name: fast-exit-retry-log-is-cause-neutral
     tags: [backend-api]
     description: >

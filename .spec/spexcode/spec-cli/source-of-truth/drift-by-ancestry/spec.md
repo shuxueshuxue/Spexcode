@@ -4,8 +4,8 @@ status: active
 hue: 35
 desc: Drift is judged by true git ancestry — a governed commit counts iff it is NOT reachable from the spec's version — never by a commit-date-ordered linear position, which silently under-reports on branchy history.
 code:
-  - packages/l0/src/git.ts#driftFor
-  - packages/l0/src/git.ts#ackCoverFor
+  - packages/spec-core/src/git.ts#driftFor
+  - packages/spec-core/src/git.ts#ackCoverFor
 related:
   - spec-eval/src/freshness.ts
 ---

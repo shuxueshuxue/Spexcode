@@ -32,7 +32,7 @@ scenarios:
   - name: lifecycle-push-latency
     tags: [backend-api]
     code: spec-cli/src/graphStream.ts
-    related: [spec-cli/src/graphCache.ts, packages/l0/src/graph.ts]
+    related: [spec-cli/src/graphCache.ts, packages/spec-core/src/graph.ts]
     description: >-
       With a delta subscriber attached (`curl -N '/api/board/stream?mode=delta'`), watch the per-user
       session store with fs.watch (the truth clock) and time, for REAL worker lifecycle transitions

@@ -9,7 +9,7 @@ code:
 related:
   - spec-cli/src/gateway-hub.ts
   - spec-cli/src/gateway-auth.test.ts
-  - packages/l0/src/layout.ts
+  - packages/spec-core/src/layout.ts
 ---
 # gateway-auth
 

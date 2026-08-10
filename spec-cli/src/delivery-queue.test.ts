@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { drain, enqueue, owesDelivery, pendingMessages, revokeSenderDelivery, type PendingMessage } from './delivery-queue.js'
-import { sessionArtifactPath, sessionStoreDir } from '@spexcode/l0'
+import { sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 
 // What a session OWES its agent ([[delivery-queue]]). These pin the claims the mesh leans on: an entry leaves
 // only when the adapter TOOK it, order survives a refusal, the resting state is a file that does not exist,

@@ -16,7 +16,7 @@ scenarios:
     related:
       - spec-dashboard/src/App.jsx
       - spec-dashboard/src/IdentityIcon.jsx
-      - packages/l0/src/identity-presets.js
+      - packages/spec-core/src/identity-presets.js
 ---
 # tab-icon loss
 

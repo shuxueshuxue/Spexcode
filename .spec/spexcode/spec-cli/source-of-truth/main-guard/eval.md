@@ -13,7 +13,7 @@ scenarios:
       change the tree is still blocked.
     tags: [cli]
     code: [spec-cli/templates/hooks/pre-commit]
-    related: [spec-cli/src/cli.ts, packages/l0/src/git.ts]
+    related: [spec-cli/src/cli.ts, packages/spec-core/src/git.ts]
 ---
 
 Measured YATU through the real surfaces: the installed pre-commit hook (a real `git commit`, not a

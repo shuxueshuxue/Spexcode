@@ -4,28 +4,28 @@ status: active
 hue: 15
 desc: A code: entry may pin named units (`path#symbol` selectors, any number, one base file, OR'd); drift touching any pinned unit is the BLOCKING tier (one anchor-drift error naming hit selectors), replacing the retired count-based driftErrorThreshold gate. related: selectors warn on hit, stay silent on miss. Anchors are optional — an unanchored node never blocks.
 code:
-  - packages/l0/src/anchors.ts#RANGE_SEMANTICS
-  - packages/l0/src/anchors.ts#ABSENT_IMAGE
-  - packages/l0/src/anchors.ts#runAnchorQueries
-  - packages/l0/src/anchors.ts#anchorHitQueries
-  - packages/l0/src/anchors.ts#anchorHitExists
-  - packages/l0/src/anchors.ts#anchorHitCommits
-  - packages/l0/src/anchors.ts#resolveAnchor
-  - packages/l0/src/anchors.ts#unitsAtFileRevision
-  - packages/l0/src/anchors.ts#fileRevisionMemoKey
-  - packages/l0/src/anchors.ts#hunksAt
-  - packages/l0/src/anchors.ts#hunksAtMany
-  - packages/l0/src/anchors.ts#hunkRecordsInto
-  - packages/l0/src/anchors.ts#hunkMemoKey
-  - packages/l0/src/anchors.ts#rememberHunks
+  - packages/spec-core/src/anchors.ts#RANGE_SEMANTICS
+  - packages/spec-core/src/anchors.ts#ABSENT_IMAGE
+  - packages/spec-core/src/anchors.ts#runAnchorQueries
+  - packages/spec-core/src/anchors.ts#anchorHitQueries
+  - packages/spec-core/src/anchors.ts#anchorHitExists
+  - packages/spec-core/src/anchors.ts#anchorHitCommits
+  - packages/spec-core/src/anchors.ts#resolveAnchor
+  - packages/spec-core/src/anchors.ts#unitsAtFileRevision
+  - packages/spec-core/src/anchors.ts#fileRevisionMemoKey
+  - packages/spec-core/src/anchors.ts#hunksAt
+  - packages/spec-core/src/anchors.ts#hunksAtMany
+  - packages/spec-core/src/anchors.ts#hunkRecordsInto
+  - packages/spec-core/src/anchors.ts#hunkMemoKey
+  - packages/spec-core/src/anchors.ts#rememberHunks
 related:
   - scripts/anchor-drift-golden-proof.mjs
   - scripts/anchor-drift-fold-proof.mjs
   - spec-cli/src/anchors.test.ts
   - spec-cli/src/lint.ts
-  - packages/l0/src/git.ts
+  - packages/spec-core/src/git.ts
   - spec-cli/src/git.test.ts
-  - packages/l0/src/specs.ts
+  - packages/spec-core/src/specs.ts
   - spec-cli/src/lint-scoped.test.ts
   - spec-cli/src/commit-gate.test.ts
   - spec-cli/src/guide.ts

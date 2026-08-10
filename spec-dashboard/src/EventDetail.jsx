@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadReviewPlugins, postEvalOk, postRemark, putFrameBlob } from './data.js'
 import { reviewCommandsFor, fillPreset } from './reviewCommands.js'
-import { evidenceList } from '@spexcode/l0/review'
+import { evidenceList } from '@spexcode/spec-core/review'
 import { EvidenceItem, FullscreenButton } from './Evidence.jsx'
 import { Replies, ReplyComposer, OriginatorLiveness, mmss, anchorLine, parseAnchor, resolveAnchor } from './Thread.jsx'
 import { addressHash, graphNodeAddress } from './address.js'

@@ -120,7 +120,7 @@ scenarios:
       an edit for.
     tags: [cli]
     code: [spec-cli/src/cli.ts]
-    related: [spec-eval/src/scenarios.ts, packages/l0/src/specs.ts]
+    related: [spec-eval/src/scenarios.ts, packages/spec-core/src/specs.ts]
 ---
 
 Measure through the real CLI binary (`node spec-cli/bin/spex.mjs …`), never by reading help.ts: run

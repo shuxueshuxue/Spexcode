@@ -15,9 +15,9 @@ related:
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/attachment-complete.e2e.mjs
   - spec-cli/src/index.ts
-  - packages/l0/src/layout.ts
+  - packages/spec-core/src/layout.ts
   - spec-cli/src/guide.ts
-  - packages/l0/templates/spexcode.json
+  - packages/spec-core/templates/spexcode.json
 ---
 # file-attach
 

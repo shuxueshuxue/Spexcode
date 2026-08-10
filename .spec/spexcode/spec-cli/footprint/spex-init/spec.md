@@ -7,7 +7,7 @@ code:
   - spec-cli/src/init.ts#specInit
 related:
   - spec-cli/src/init.test.ts
-  - packages/l0/templates/spexcode.json
+  - packages/spec-core/templates/spexcode.json
 ---
 # spex-init
 

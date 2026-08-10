@@ -14,7 +14,7 @@
     "spec-forge"
   ],
   "files": [
-    "packages/l0",
+    "packages/spec-core",
     "spec-cli/src",
     "!spec-cli/src/**/*.test.ts",
     "spec-cli/bin",
@@ -41,7 +41,7 @@
     "prepack": "node scripts/sync-init-plugins.mjs --check && node scripts/prepack.mjs"
   },
   "dependencies": {
-    "@spexcode/l0": "file:packages/l0",
+    "@spexcode/spec-core": "file:packages/spec-core",
     "tsx": "^4.19.2"
   },
   "optionalDependencies": {

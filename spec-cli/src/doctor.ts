@@ -3,11 +3,11 @@ import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
-import { loadSystemConfig, loadSkillConfig, loadSpecs } from '@spexcode/l0'
-import { runtimeRoot, treeSlotDir, envSessionId, readAliasedRawRecord, mainCheckout, readJsonConfig } from '@spexcode/l0'
+import { loadSystemConfig, loadSkillConfig, loadSpecs } from '@spexcode/spec-core'
+import { runtimeRoot, treeSlotDir, envSessionId, readAliasedRawRecord, mainCheckout, readJsonConfig } from '@spexcode/spec-core'
 import { loadConfig } from './lint.js'
 import { trackedSourceFiles } from './source-files.js'
-import { gitBinary } from '@spexcode/l0'
+import { gitBinary } from '@spexcode/spec-core'
 
 // this file lives at <pkgRoot>/src/self.ts, so `..` is the package root — the same derivation init.ts/
 // materialize.ts use (never a hardcoded repo path), so the git-hook template lookup survives a relocated install.

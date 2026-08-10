@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { sessionArtifactPath, sessionStoreDir } from '@spexcode/l0'
+import { sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import type { TimelineEvent } from './session-timeline.js'
 
 // @@@ session-cursors - a reader's durable place in a log. One `cursors.json` per session in its global store

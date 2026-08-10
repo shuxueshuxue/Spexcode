@@ -3,7 +3,7 @@ scenarios:
   - name: canonical-and-embedded-filters-are-one
     tags: [frontend-e2e, desktop, mobile]
     test: spec-dashboard/test/review-filters-one-engine.e2e.mjs
-    code: packages/l0/src/review/reviewFilters.js
+    code: packages/spec-core/src/review/reviewFilters.js
     description: >-
       Record a real Chromium run against the live dashboard at desktop and 390px. On #/issues and #/evals,
       combine query, section, direct facet, and overflow choices; capture the visible identities and hash,

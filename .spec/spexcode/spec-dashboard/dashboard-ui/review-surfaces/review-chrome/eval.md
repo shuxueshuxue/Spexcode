@@ -158,7 +158,7 @@ scenarios:
       never the cursor's; only row-context Enter outside a native control opens the cursor row.
   - name: continuable-query
     tags: [frontend-e2e, desktop, mobile]
-    code: [spec-dashboard/src/ReviewShell.jsx, packages/l0/src/review/reviewQuery.js]
+    code: [spec-dashboard/src/ReviewShell.jsx, packages/spec-core/src/review/reviewQuery.js]
     description: >
       In a real browser at a live backend, treat the token query as an editing surface you keep typing
       into: load both list pages at the bare address and at a non-default ?q=, reading the combobox value,
@@ -182,7 +182,7 @@ scenarios:
       and stays aligned with the input at 1440 and 390; the input remains one native AX combobox.
   - name: token-query
     tags: [frontend-e2e, desktop, mobile]
-    code: [spec-dashboard/src/ReviewShell.jsx, packages/l0/src/review/reviewQuery.js]
+    code: [spec-dashboard/src/ReviewShell.jsx, packages/spec-core/src/review/reviewQuery.js]
     description: >
       In a real browser at a live backend, drive both list pages through the visible token query alone:
       read the default face's input text and URL; click section tabs and low-cardinality menus and read

@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hotSignature, parseLivePanes, needsCodexProcScan, TMUX_PANE_FORMAT } from './sessions.js'
-import { sessionStoreDir, sessionArtifactPath } from '@spexcode/l0'
+import { sessionStoreDir, sessionArtifactPath } from '@spexcode/spec-core'
 
 // The 100ms hot tier is a launch-registered-pid death detector with a permanent pid-reuse latch, plus the
 // single-tmux-call warm parser and the legacy ps-scan gate. See [[state]] (liveness) + the birth registration.

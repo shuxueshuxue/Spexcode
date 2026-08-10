@@ -16,7 +16,7 @@ scenarios:
       a run that exits 0 and quietly proceeds (or quietly renders an empty/plugin-less contract) means
       every launched agent runs ungoverned with no signal that the plugins were dropped.
     tags: [cli]
-    code: packages/l0/src/specs.ts
+    code: packages/spec-core/src/specs.ts
   - name: core-flat-topology
     description: >
       Verify `core` sits as a DIRECT `.plugins` child — a peer of the `prompts` shelf, never a resident —
@@ -31,7 +31,7 @@ scenarios:
       single-body system contracts); the materialized contract block is unchanged by the node's position
       (a pure move diffs to nothing). No release-migration table participates in the current gather path.
     tags: [cli]
-    code: packages/l0/src/specs.ts
+    code: packages/spec-core/src/specs.ts
 ---
 # measuring plugin-system
 

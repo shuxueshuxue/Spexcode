@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
+import { HookPromptCatalog } from './hook-prompts.js'
 
 const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
 const dispatch = join(repo, 'spec-cli', 'hooks', 'dispatch.sh')
@@ -28,6 +29,41 @@ test('dispatch exits 2 when a blocking handler emits decision:block JSON', () =>
   })
   assert.equal(r.status, 2)
   assert.match(r.stdout, /"decision":"block"/)
+})
+
+test('stop-gate is silent for self-launched sessions and renders the catalog prompt for governed sessions', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-stop-gate-dispatch-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const sid = 'stop-gate-dispatch'
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
+  const source = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'stop-gate', 'stop-gate.sh')
+  writeFileSync(join(dir, 'hooks', 'stop-gate.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(source)}\n`)
+  const manifest = join(runtime, 'hooks-manifest')
+  writeFileSync(manifest, 'Stop\t10\ttrue\thooks/stop-gate.sh\n')
+  const record = join(runtime, 'sessions', sid, 'session.json')
+  const fire = () => spawnSync('bash', [dispatch, 'claude', 'Stop'], {
+    cwd: dir,
+    env: { ...process.env, SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'), SPEXCODE_HOME: home, SPEX_HOOK_MANIFEST: manifest },
+    input: JSON.stringify({ session_id: sid, hook_event_name: 'Stop', stop_hook_active: false }),
+    encoding: 'utf8',
+  })
+
+  writeFileSync(record, JSON.stringify({ session_id: sid, governed: false, status: 'active' }, null, 2))
+  const selfLaunched = fire()
+  assert.equal(selfLaunched.status, 0, selfLaunched.stderr)
+  assert.equal(selfLaunched.stdout, '')
+
+  writeFileSync(record, JSON.stringify({ session_id: sid, governed: true, status: 'active' }, null, 2))
+  const governed = fire()
+  assert.equal(governed.status, 2, governed.stderr)
+  const expected = new HookPromptCatalog().render('stop-gate', {
+    variant: 'full',
+    cli: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
+  })
+  assert.equal(JSON.parse(governed.stdout).reason, expected)
 })
 
 function legacyMarkActiveRig(source = legacyMarkActive, custom = false) {

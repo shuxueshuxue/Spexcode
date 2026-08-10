@@ -1,7 +1,7 @@
 ---
 concern: lockHint.js has no spec owner: the locked-session banner projects overlay-cycle bindings but keyboard-nav intentionally governs only keymap.js#ACT, and its current YATU scenarios do not cover the banner. Add a dedicated lock-hint leaf with a real UI scenario; do not satisfy this with lockHint.test.mjs alone.
 by: fbb76f84-7a73-4262-81d6-9028f5eb7c4e
-status: open
+status: landed
 nodes: keyboard-nav
 created: 2026-08-10T05:28:05.244Z
 ---

@@ -6,7 +6,7 @@ desc: The graph is BUILT once per change, not once per poll — a single-flight,
 code:
   - spec-cli/src/graphCache.ts
 related:
-  - packages/l0/src/git.ts
+  - packages/spec-core/src/git.ts
   - spec-cli/src/graphScope.test.ts
   - spec-cli/src/graphCache.test.ts
 ---

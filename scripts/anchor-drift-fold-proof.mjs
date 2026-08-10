@@ -11,14 +11,14 @@ import {
   driftIndex,
   historyIndex,
   rowsFor,
-} from '@spexcode/l0'
+} from '@spexcode/spec-core'
 import {
   anchorHitCommits,
   extOf,
   extractorFor,
   extractors,
-} from '@spexcode/l0'
-import { loadSpecs } from '@spexcode/l0'
+} from '@spexcode/spec-core'
+import { loadSpecs } from '@spexcode/spec-core'
 
 const root = process.argv[2] || process.cwd()
 const requestedTip = process.argv[3] || 'HEAD'

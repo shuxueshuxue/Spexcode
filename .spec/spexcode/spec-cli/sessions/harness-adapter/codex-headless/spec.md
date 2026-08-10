@@ -11,7 +11,7 @@ related:
   - spec-cli/src/cli.ts
   - spec-cli/src/codex-headless.test.ts
   - spec-cli/src/sessions-liveness.test.ts
-  - packages/l0/templates/spexcode.json
+  - packages/spec-core/templates/spexcode.json
 
 ---
 

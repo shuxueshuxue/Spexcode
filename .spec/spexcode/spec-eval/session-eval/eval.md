@@ -21,7 +21,7 @@ scenarios:
   - name: session-scope-bounds-impact
     tags: [backend-api, frontend-e2e, desktop]
     test: spec-dashboard/test/session-scope-impact.e2e.mjs
-    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, packages/l0/src/git.ts, spec-cli/src/git.test.ts, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EvalsFeed.jsx]
+    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, packages/spec-core/src/git.ts, spec-cli/src/git.test.ts, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EvalsFeed.jsx]
     description: >
       Run the controlled source fixture over a session model where one source file and one scenario's semantic contract
       changed, another scenario in that same eval.md did not, a third affected scenario has no reading,
@@ -55,15 +55,15 @@ scenarios:
       - spec-eval/src/sessioneval.ts#scopeSessionScenarioRows
       - spec-eval/src/sessioneval.ts#sessionScopeNodes
       - spec-eval/src/sessioneval.ts#buildSessionEvals
-      - packages/l0/src/anchors.ts#parseRelation
-      - packages/l0/src/anchors.ts#resolveAnchor
-      - packages/l0/src/anchors.ts#selectorsHitRanges
-      - packages/l0/src/anchors.ts#diffHunkRanges
-      - packages/l0/src/git.ts#pathRangeEvents
-      - packages/l0/src/git.ts#canonicalPathProjector
-      - packages/l0/src/anchors.ts#anchorHitCommits
-      - packages/l0/src/git.ts#treeTextFiles
-      - packages/l0/src/specs.ts#loadSpecs
+      - packages/spec-core/src/anchors.ts#parseRelation
+      - packages/spec-core/src/anchors.ts#resolveAnchor
+      - packages/spec-core/src/anchors.ts#selectorsHitRanges
+      - packages/spec-core/src/anchors.ts#diffHunkRanges
+      - packages/spec-core/src/git.ts#pathRangeEvents
+      - packages/spec-core/src/git.ts#canonicalPathProjector
+      - packages/spec-core/src/anchors.ts#anchorHitCommits
+      - packages/spec-core/src/git.ts#treeTextFiles
+      - packages/spec-core/src/specs.ts#loadSpecs
       - spec-cli/src/reviews.ts#scopedEvalReviewItems
       - spec-cli/src/reviews.ts#evalsReview
       - spec-cli/src/index.ts
@@ -88,7 +88,7 @@ scenarios:
       the auxiliary symbolic-ref control rejects before publication. Neither becomes zero impact or fake current.
   - name: session-summary-coherence
     tags: [backend-api, frontend-e2e, desktop]
-    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, packages/l0/src/graph.ts, spec-cli/src/graphStream.ts, spec-cli/src/graphStream.test.ts, spec-dashboard/src/data.js, spec-dashboard/src/App.jsx, spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx]
+    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, packages/spec-core/src/graph.ts, spec-cli/src/graphStream.ts, spec-cli/src/graphStream.test.ts, spec-dashboard/src/data.js, spec-dashboard/src/App.jsx, spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx]
     description: >
       Start from a cold graph projection and drive a real Chromium session toolbar through first paint,
       A→B→A session switching, an input-generation change, graph disconnect/reconnect, the scoped Evals
@@ -209,7 +209,7 @@ scenarios:
       re-appears in the address bar.
   - name: branch-new-node-visible
     tags: [backend-api]
-    code: [spec-eval/src/sessioneval.ts, packages/l0/src/specs.ts]
+    code: [spec-eval/src/sessioneval.ts, packages/spec-core/src/specs.ts]
     description: >
       Against a live backend, GET /api/sessions/<id>/evals for a session whose branch ADDS a brand-new
       spec node — spec.md + eval.md + filed readings exist only in the session worktree, not on the

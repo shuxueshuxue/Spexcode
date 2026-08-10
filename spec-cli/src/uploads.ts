@@ -5,8 +5,8 @@ import { basename, join } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
-import { repoRoot } from '@spexcode/l0'
-import { readUploadPolicy, type UploadPolicy } from '@spexcode/l0'
+import { repoRoot } from '@spexcode/spec-core'
+import { readUploadPolicy, type UploadPolicy } from '@spexcode/spec-core'
 
 // The backend's tmpdir is the worker's filesystem. Completed files stay directly under this sink; private
 // metadata and partial bytes live below .staging until an exact-length transfer is promoted atomically.

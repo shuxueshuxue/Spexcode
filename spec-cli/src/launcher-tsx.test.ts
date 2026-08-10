@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { once } from 'node:events'
 import { fileURLToPath } from 'node:url'
-import { processStartToken } from '@spexcode/l0'
+import { processStartToken } from '@spexcode/spec-core'
 
 // @@@ cross-platform tsx resolution ([[platform-support]]) - the launcher must run tsx's JS entry through
 // `node` (process.execPath), NEVER spawn the `.bin/tsx` shim. On Windows that shim is an extensionless sh

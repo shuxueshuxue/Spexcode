@@ -2,7 +2,7 @@
 scenarios:
   - name: fold-project-boundary
     tags: [cli]
-    code: [packages/l0/src/git.ts#canonicalPathProjector]
+    code: [packages/spec-core/src/git.ts#canonicalPathProjector]
     test:
       path: scripts/anchor-drift-fold-proof.mjs
       name: fold/project lower bound and pinned-history equivalence proof
@@ -29,7 +29,7 @@ scenarios:
       reported as zero coverage rather than described as an anchor test.
   - name: anchor-hit-blocks
     tags: [cli]
-    code: [packages/l0/src/git.ts#canonicalPathProjector, packages/l0/src/anchors.ts#anchorHitCommits, packages/l0/src/anchors.ts#anchorHitQueries]
+    code: [packages/spec-core/src/git.ts#canonicalPathProjector, packages/spec-core/src/anchors.ts#anchorHitCommits, packages/spec-core/src/anchors.ts#anchorHitQueries]
     description: >
       In disposable fixture repos, a node's code: entry anchors applyRate. Exercise a direct edit, an edit
       under the file's historical name followed by a rename, a delete followed by a self-acked restore, and
@@ -49,9 +49,9 @@ scenarios:
       path: scripts/anchor-drift-vacated-reuse-proof.mjs
       name: vacated path reuse stays isolated across every consumer and lint ack closes a real hit
     code:
-      - packages/l0/src/git.ts#canonicalPathProjector
-      - packages/l0/src/anchors.ts#anchorHitCommits
-      - packages/l0/src/anchors.ts#anchorHitQueries
+      - packages/spec-core/src/git.ts#canonicalPathProjector
+      - packages/spec-core/src/anchors.ts#anchorHitCommits
+      - packages/spec-core/src/anchors.ts#anchorHitQueries
       - spec-eval/src/freshness.ts#codeDrift
       - spec-eval/src/sessioneval.ts#projectSessionImpact
     description: >
@@ -185,12 +185,12 @@ scenarios:
       In a real Git fixture, create an anchored Python declaration, change that declaration while merging
       a side branch, and call the public projectSessionImpact API across the base and merge commit. Also call
       that same public API on the pinned live-session range 3894f016..5e685131, where a merge touches the
-      anchored packages/l0/src/anchors.ts path.
+      anchored packages/spec-core/src/anchors.ts path.
     expected: >
       Both projections succeed. The fixture reports the merge commit as the selector hit, and every reported
       selector-hit commit is a valid Git object id. Combined-diff patch metadata and content lines are never
       treated as revisions, so the live-session projection is available instead of failing with a bad-revision
-      error for a line such as "diff --cc packages/l0/src/anchors.ts".
+      error for a line such as "diff --cc packages/spec-core/src/anchors.ts".
   - name: candidate-tip-gate
     tags: [cli]
     description: >

@@ -11,7 +11,7 @@ related:
   - spec-cli/src/cli.ts
   - spec-cli/src/help.ts
   - spec-cli/src/index.ts
-  - packages/l0/src/layout.ts
+  - packages/spec-core/src/layout.ts
   - spec-cli/src/host.test.ts
 ---
 # host-gateway

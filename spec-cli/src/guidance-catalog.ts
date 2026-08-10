@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { git, repoRoot } from '@spexcode/l0'
+import { git, repoRoot } from '@spexcode/spec-core'
 import {
   loadAgentConfig,
   loadConfig,
@@ -10,7 +10,7 @@ import {
   loadSkillConfig,
   loadSystemConfig,
   type ConfigPreset,
-} from '@spexcode/l0'
+} from '@spexcode/spec-core'
 import { helpCatalogEntries } from './help.js'
 import { guideCatalogEntries } from './guide.js'
 import { HookPromptCatalog, HOOK_PROMPT_SOURCE, type HookPromptRole } from './hook-prompts.js'

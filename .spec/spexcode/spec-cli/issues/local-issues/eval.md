@@ -43,7 +43,7 @@ scenarios:
   - name: data-not-contract
     tags: [cli]
     code: spec-cli/src/localIssues.ts
-    related: [packages/l0/src/specs.ts, packages/l0/src/git.ts]
+    related: [packages/spec-core/src/specs.ts, packages/spec-core/src/git.ts]
     description: >-
       After threads exist under `.spec/.issues/`, run `spex spec lint` and inspect the board/spec set. The
       store file is a plain `<id>.md`, not `spec.md`.
@@ -118,7 +118,7 @@ scenarios:
   - name: feature-toggle
     tags: [cli]
     code: spec-cli/src/localIssues.ts
-    related: [spec-cli/templates/hooks/post-merge, packages/l0/src/layout.ts, spec-cli/src/doctor.ts]
+    related: [spec-cli/templates/hooks/post-merge, packages/spec-core/src/layout.ts, spec-cli/src/doctor.ts]
     description: >-
       With no config, read the switch through its surfaces (`spex doctor` Repo section; `spex internal
       nudge <node>`). Then set `"issues": { "enabled": false }` in spexcode.json (there is no CLI toggle

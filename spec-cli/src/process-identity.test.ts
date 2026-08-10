@@ -11,7 +11,7 @@ import {
   verifyDetachedRuntime,
   writeDetachedRuntimeReceipt,
   type ProcessAdapter,
-} from '@spexcode/l0'
+} from '@spexcode/spec-core'
 
 type FakeState = { start: string | null; processGroupId: number | null; linuxSessionId: number | null }
 

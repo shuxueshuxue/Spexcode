@@ -6,11 +6,11 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
-import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, tsAstExtractor } from '@spexcode/l0'
-import { historyEventCachePathForTests } from '@spexcode/l0'
+import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, tsAstExtractor } from '@spexcode/spec-core'
+import { historyEventCachePathForTests } from '@spexcode/spec-core'
 
 const freshAnchors = (tag: string) =>
-  import(new URL(`anchors.ts?${tag}`, import.meta.resolve('@spexcode/l0')).href) as Promise<typeof import('@spexcode/l0')>
+  import(new URL(`anchors.ts?${tag}`, import.meta.resolve('@spexcode/spec-core')).href) as Promise<typeof import('@spexcode/spec-core')>
 
 // [[code-anchor]] — the structured relation grammar (ONE parser for code: and related:) and the
 // multi-selector hit engine: selectors on one base file are OR'd, a commit counts ONCE, and each hit
@@ -258,15 +258,15 @@ test('an anchor verdict is invariant under a dirty .gitattributes diff-attribute
     writeFileSync(join(root, 'src/x.py'), 'def f():\n    return 11\n\ndef g():\n    return 2\n')
     g('add', '-A'); g('commit', '-qm', 'f moves'); const moved = g('rev-parse', 'HEAD')
     const win = [{ commit: moved, historicalPath: 'src/x.py', parents: [{ commit: g('rev-parse', 'HEAD~1'), historicalPath: 'src/x.py' }] }]
-    const ask = async (mod: typeof import('@spexcode/l0')) =>
+    const ask = async (mod: typeof import('@spexcode/spec-core')) =>
       (await mod.anchorHitQueries(root, [{ win, symbols: ['f'] }], mod.extractors(root)))[0].map((row) => row.selectors)
 
     // `-diff` marks the path binary for diff purposes: Git prints "Binary files … differ", no `@@`.
     writeFileSync(join(root, '.gitattributes'), 'src/x.py -diff\n')
-    const suppressed = await ask(await import('@spexcode/l0'))
+    const suppressed = await ask(await import('@spexcode/spec-core'))
     // flip the same dirty attribute to its opposite and ask the SAME process again
     writeFileSync(join(root, '.gitattributes'), 'src/x.py diff\n')
-    const flipped = await ask(await import('@spexcode/l0'))
+    const flipped = await ask(await import('@spexcode/spec-core'))
     // a module with empty memos is the oracle: whatever it says, the memoized answer must equal it
     const fresh = await ask(await freshAnchors(`attr-oracle=${moved}`))
 
@@ -294,7 +294,7 @@ test('a replaced commit object and a regrafted parent are different hunk facts, 
     g('add', '-A'); g('commit', '-qm', 'f moves'); const movesF = g('rev-parse', 'HEAD')
     writeFileSync(join(root, 'src/i.ts'), unit('f', '11') + unit('g', '22'))
     g('add', '-A'); g('commit', '-qm', 'g moves'); const movesG = g('rev-parse', 'HEAD')
-    const mod = await import('@spexcode/l0')
+    const mod = await import('@spexcode/spec-core')
     const x = tsAstExtractor(ROOT)
     const ask = async (event: any) => (await mod.anchorHitQueries(root, [{ win: [event], symbols: ['f'] }], [x]))[0].map((r) => r.selectors)
 
@@ -366,7 +366,7 @@ async function discriminatingFixture(configure: (g: (...a: string[]) => string) 
 test('a same-process diff.algorithm flip cannot change or freeze an anchor verdict', { skip: !gitAvailable() && 'git not available' }, async () => {
   const { root, g, win, moved } = await discriminatingFixture((git) => git('config', 'diff.algorithm', 'myers'))
   try {
-    const mod = await import('@spexcode/l0')
+    const mod = await import('@spexcode/spec-core')
     const ask = async (m: typeof mod) => (await m.anchorHitQueries(root, [{ win, symbols: ['f'] }], [line3Extractor as any]))[0].map((r) => r.selectors)
     const underMyers = await ask(mod)
     g('config', 'diff.algorithm', 'histogram')
@@ -381,7 +381,7 @@ test('a same-process diff.algorithm flip cannot change or freeze an anchor verdi
 test('an ambient color.ui cannot blank the hunk parse into a silent zero-drift verdict', { skip: !gitAvailable() && 'git not available' }, async () => {
   const { root, g, win, moved } = await discriminatingFixture((git) => git('config', 'color.ui', 'always'))
   try {
-    const mod = await import('@spexcode/l0')
+    const mod = await import('@spexcode/spec-core')
     const ask = async (m: typeof mod) => (await m.anchorHitQueries(root, [{ win, symbols: ['f'] }], [line3Extractor as any]))[0].map((r) => r.selectors)
     const colored = await ask(mod)
     g('config', '--unset', 'color.ui')

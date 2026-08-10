@@ -1,5 +1,5 @@
 import { relative } from 'node:path'
-import { repoRoot } from '@spexcode/l0'
+import { repoRoot } from '@spexcode/spec-core'
 import { commitTrunkData } from '../../spec-cli/src/localIssues.js'
 import { evalNodes, resolveEvalNode } from './scenarios.js'
 import { readReadings, readSidecar, appendHumanOk, humanOkFor, type HumanOk } from './sidecar.js'

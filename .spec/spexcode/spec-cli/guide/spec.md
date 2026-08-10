@@ -7,7 +7,7 @@ code:
   - spec-cli/src/guide.ts
 related:
   - spec-cli/src/cli.ts
-  - packages/l0/src/layout.ts
+  - packages/spec-core/src/layout.ts
   - spec-cli/src/docs-quickstart.test.ts
   - README.md
   - docs/README.zh-CN.md
@@ -19,6 +19,7 @@ the agent from one verb, picked by an optional topic:
 
 - **no topic → the human SETUP workflow.** The model it teaches is **install once, then let an agent
   drive** — one global install (`npm i -g spexcode`, the [[packaging]] contract) serves *every* project.
+  It requires Node >= 22.
   Each adopted repo runs its own `spex serve` from that repo's cwd and publishes its endpoint into the
   current user's host registry; one host-level `spex dashboard` serves the shared gateway/UI, continuously
   discovers backends that are already running or start later, exposes `/projects` for global switching and

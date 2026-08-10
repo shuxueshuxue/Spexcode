@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync, renameS
 import { join, resolve, relative, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { gitBinary, readConfig, readJsonConfig, templateConfigPath } from '@spexcode/l0'
+import { gitBinary, readConfig, readJsonConfig, templateConfigPath } from '@spexcode/spec-core'
 import { resolveHarnessTargets, parseHarnessFlag, NATIVE_HARNESS_IDS } from './harness-select.js'
 
 // this file lives at <pkgRoot>/src/init.ts, so `..` is the package root — the same derivation the

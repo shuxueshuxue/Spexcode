@@ -50,7 +50,7 @@ scenarios:
       machine.
     tags: [cli]
     code: scripts/test-home.mjs
-    related: [spec-cli/package.json, spec-eval/package.json, packages/l0/src/layout.ts]
+    related: [spec-cli/package.json, spec-eval/package.json, packages/spec-core/src/layout.ts]
 ---
 
 Measure the user-visible test command and the real default store count. The temporary repository is an

@@ -11,7 +11,7 @@ related:
   - spec-cli/src/opencode-headless.test.ts
   - spec-cli/src/sessions-liveness.test.ts
   - spec-cli/src/guide.ts
-  - packages/l0/templates/spexcode.json
+  - packages/spec-core/templates/spexcode.json
 ---
 
 # opencode-headless

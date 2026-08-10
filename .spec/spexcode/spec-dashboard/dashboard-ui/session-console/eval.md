@@ -32,7 +32,7 @@ scenarios:
     tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/session-state-push-latency.e2e.mjs
     code: spec-dashboard/src/SessionContextMenu.jsx
-    related: [spec-dashboard/src/data.js, spec-cli/src/graphStream.ts, spec-cli/src/graphCache.ts, packages/l0/src/graph.ts]
+    related: [spec-dashboard/src/data.js, spec-cli/src/graphStream.ts, spec-cli/src/graphCache.ts, packages/spec-core/src/graph.ts]
     description: >-
       In an isolated real backend and Chromium dashboard, right-click one real persisted session row and rename
       it three times through the modal. Record A (gesture to record persist), B (persist to sessions signal), C

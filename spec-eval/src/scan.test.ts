@@ -104,8 +104,8 @@ test('changed scan scopes node files and scenario drift independently', () => {
     ['detail-side-rail-sticky', ['spec-dashboard/src/ReviewShell.jsx', 'spec-dashboard/src/styles.css']],
     ['detail-metadata-primitive', ['spec-dashboard/src/ReviewShell.jsx', 'spec-dashboard/src/styles.css']],
     ['list-key-routing', ['spec-dashboard/src/ReviewShell.jsx']],
-    ['continuable-query', ['spec-dashboard/src/ReviewShell.jsx', '@spexcode/l0']],
-    ['token-query', ['spec-dashboard/src/ReviewShell.jsx', '@spexcode/l0']],
+    ['continuable-query', ['spec-dashboard/src/ReviewShell.jsx', '@spexcode/spec-core']],
+    ['token-query', ['spec-dashboard/src/ReviewShell.jsx', '@spexcode/spec-core']],
     ['detail-header-alignment', ['spec-dashboard/src/styles.css']],
   ] as const
 

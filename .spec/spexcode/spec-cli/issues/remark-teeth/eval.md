@@ -18,7 +18,7 @@ scenarios:
       remark by re-running, nor clear it by passive receipt.
   - name: board-reflects-remark-axis
     tags: [backend-api]
-    code: packages/l0/src/graph.ts
+    code: packages/spec-core/src/graph.ts
     related: [spec-eval/src/evaltab.ts, spec-cli/src/issues.ts]
     description: >-
       With an unresolved remark on a scenario, read the TWO surfaces one graph build publishes on a

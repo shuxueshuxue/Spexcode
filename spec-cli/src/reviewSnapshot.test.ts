@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { publishReviewSnapshot, readReviewSnapshot, type ReviewSnapshot } from '@spexcode/l0'
+import { publishReviewSnapshot, readReviewSnapshot, type ReviewSnapshot } from '@spexcode/spec-core'
 
 test('review snapshot publication replaces Issues and Evals as one atomic generation', () => {
   const first: ReviewSnapshot = {

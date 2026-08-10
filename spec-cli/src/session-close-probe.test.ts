@@ -5,10 +5,10 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, wr
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { codexHarness } from './harness.js'
-import { processStartToken } from '@spexcode/l0'
+import { processStartToken } from '@spexcode/spec-core'
 import { closeSession, sendText } from './sessions.js'
 import { drain, pendingMessages } from './delivery-queue.js'
-import { runtimeRoot, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/l0'
+import { runtimeRoot, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
 test('close uses a target tmux probe when the global listing is busy', { concurrency: false }, async () => {
   const previousHome = process.env.SPEXCODE_HOME

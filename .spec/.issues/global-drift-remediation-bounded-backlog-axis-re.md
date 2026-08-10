@@ -168,3 +168,10 @@ Narrow spec-warning reconciliation, all on current main and without changing a d
 - session-selectors (`9537a9693`): its test fixture likewise changed only the retired display field from `label` to `title`; matching grammar is unchanged.
 
 Each is a separately reasoned `Spec-OK` commit, not a bulk ack. Current main baseline: spec lint 0 errors / 49 warnings; full eval lint 137 nodes flagged, 605 stale, 0 malformed, 0 missing, 0 coverage gaps, 39 over-owned. The remaining warnings are still queued for intent/implementation/structure triage rather than automatic acknowledgment.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T13:01:55.255Z -->
+Spec: xterm-cell-grid, xterm-sync-resize, live-view
+
+Structural ownership repair landed at `5a46c8154`: the xterm installer’s single array is now three ordered named groups (synchronized resize, cell grid, browser pointer selection), concatenated in the original order. `xterm-cell-grid` directly governs only `cellGridPatches`; the sibling contracts use scoped related anchors for their own groups. This removes the false cell-grid drift caused by the unrelated live-view pointer patch without changing installer behavior or weakening the exact fail-loud source-shape guard.
+
+Main proof: installer idempotence plus Dashboard styles regression 19/19; spec lint 0 errors / 46 warnings. The relevant frontend-e2e scenarios remain stale because static installer evidence is auxiliary, not browser closure. Issue `xterm-cell-grid-source-axis-includes-unrelated-l` is closed with that scope explicitly recorded.

@@ -226,3 +226,13 @@ Closed one bounded spec-only warning. The current Thread delta imports the share
 Spec: global-drift-remediation-bounded-backlog-axis-re, issues-view, reply-thread, mentions
 
 Closed one more bounded issues-view scenario on main: composer-trigger-buttons, commit 0bd67ad99. Fresh isolated Chromium created a real local issue, retained session, and spec node, then measured both symbol buttons on the docked reply composer. They insert at caret or replace the selected span, open the shared menus, preserve the draft through Escape, do not post, and keep the action row inside bounds at desktop and 780px. Video, screenshot, structured result, and timeline are filed. The issues-view lane still has 11 stale scenarios; this does not claim node-wide closure.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T15:04:29.772Z -->
+Spec: global-drift-remediation-bounded-backlog-axis-re
+
+Closed two bounded issues-view scenario drifts on main 202f1e236.
+
+- list-page-skeleton: the product already had a full-row real detail anchor as a child of the structured row. The stale test required the wrapper itself to be an anchor, although that would reintroduce nested-link/control conflicts. The scenario now names the behavioral contract, maps ReviewShell plus styles as real sources, and the browser test proves the child anchor covers each row.
+- new-form-node-links: the product contract requires an internal graph anchor; the stale test incorrectly required a button. The scenario and test now assert #/graph/<id>.
+
+Real isolated backend + Vite + Chromium passed 58/0 on the committed tree. The two fresh readings contain screenshots/transcript, and the list reading includes a real UI journey video. issues-view lane-local eval debt is now 9 stale scenarios; no node-wide closure is claimed.

@@ -125,3 +125,8 @@ The graph product gap is resolved and its issue is closed: dd813c9d4 carries cde
 Spec: graph-stream
 
 Independent integration confirmation from the ZCode consumer line on main descendant 587ad88e2: a new empty Git workspace and a new graph service, ordinary HTTP only and no SSE or restart, warmed at fresh/0 then first .spec appeared in 406ms and deletion returned fresh/0 in 340ms. Three further cycles each created three nodes and removed the entire .spec root; all 12 transitions converged at roughly 326-385ms with no decay. This specifically rules out delta cold patrol and one-shot watcher attachment in the consumer shape that originally exposed the defect.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T12:06:39.850Z -->
+Spec: doctor
+
+Closed the doctor first-commit product failure at e5fa39a5b. The diagnostic now reads only the current spec tree for health rows instead of accidentally requesting history/drift indexing that cannot exist before initial commit. Same disposable real CLI has the recorded fail-to-pass pair, and main post-merge targeted regression passed 14/14 with an unchanged worktree. This lowered the structural spec-warning baseline from 60 to 59; no lint threshold, freshness policy, gate, score, or executor changed.

@@ -7,7 +7,7 @@ scenarios:
       tile carries a magenta ◆N open-issue count badge, distinct from the status dot and the drift
       badge. There is NO issue card popped on the node's hover/focus and NO persistent right sidebar — the
       issue list is read on demand in the node-info Issues tab or routed Issues page. Screenshot the board and file with
-      `spex yatsu eval dashboard-issues --image <png> --pass`.
+      `spex eval add dashboard-issues --scenario open-count-badge-on-tile --image <png> --pass`.
     expected: >-
       A node with open issues shows the ◆N count badge on its tile (and none at zero); no `.issue-popover`
       card is rendered on the node and the graph keeps the full available width. The badge is

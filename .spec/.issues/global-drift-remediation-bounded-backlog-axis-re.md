@@ -120,3 +120,8 @@ Spec: global-drift-remediation-bounded-backlog-axis-re, graph-stream
 Current main remeasure after the served-root graph repair: spec lint is 0 errors / 60 warnings; eval lint is 137 flagged nodes, 603 stale readings, 0 malformed, 0 missing, 0 coverage gaps, and 39 over-owned files.
 
 The graph product gap is resolved and its issue is closed: dd813c9d4 carries cde0fb8ed plus a fresh served-project-first-spec-visibility reading. An initially empty served root now observes first .spec creation and deletion through the ordinary canonical root watcher. Ordinary HTTP converged on the merged code without delta SSE or restart; the existing graph-stream readings that share this changed source correctly became stale and remain queued for remeasurement. No drift threshold, freshness policy, gate, score, or scenario executor changed.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T11:57:32.757Z -->
+Spec: graph-stream
+
+Independent integration confirmation from the ZCode consumer line on main descendant 587ad88e2: a new empty Git workspace and a new graph service, ordinary HTTP only and no SSE or restart, warmed at fresh/0 then first .spec appeared in 406ms and deletion returned fresh/0 in 340ms. Three further cycles each created three nodes and removed the entire .spec root; all 12 transitions converged at roughly 326-385ms with no decay. This specifically rules out delta cold patrol and one-shot watcher attachment in the consumer shape that originally exposed the defect.

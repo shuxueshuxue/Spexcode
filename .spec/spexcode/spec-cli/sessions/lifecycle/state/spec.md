@@ -9,6 +9,7 @@ related:
   - spec-cli/src/commit-gate.test.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/cli.ts
+  - spec-cli/src/hook-prompts.ts
   - spec-cli/src/follow-cli.api.test.ts
 ---
 

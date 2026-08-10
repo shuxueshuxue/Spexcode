@@ -107,9 +107,9 @@ the caller to put a `[[<id>]]` mention in the prompt because the first mention b
 session. This is a removal signpost, not a second node-binding input.
 
 **The internal boundary.** Machine plumbing — `trunk`, `commit-surgery`, `refresh-footprint`,
-`check-staged`, `session-state`/`session-fail`/`session-idle`/`commit-gate`, `nudge`,
+`check-staged`, `session-state`/`session-fail`/`session-idle`/`commit-gate`, `hook-prompt`, `nudge`,
 `session-turn-fail`, `shared-runtime-spawn`, `codex-launch`/`codex-turn`, `claude-headless-run`, and `spec-governors` (the hook-stable `id<TAB>spec-path` projection of a
-file's real `code:` owners) — is namespaced under `spex internal`, absent from the map; its usage
+file's real `code:` owners), and `hook-prompt` (the hook-stable renderer for model-facing hook text) — is namespaced under `spex internal`, absent from the map; its usage
 text tells a stray human which porcelain they probably wanted. The typeable worker declarations
 (`session done|park|ask`) stay porcelain: an agent types them. `session done --propose nothing` is an
 intended correction trap rather than a state write: it exits non-zero after naming merge, close, ask, and

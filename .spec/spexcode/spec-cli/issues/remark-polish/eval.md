@@ -27,14 +27,23 @@ scenarios:
       spawned, and the chain stops at the first online link.
   - name: dangling-orphan-visible
     tags: [cli, frontend-e2e]
-    related: [spec-eval/src/evaltab.ts, spec-eval/src/cli.ts, spec-dashboard/src/NodeView.jsx]
+    test:
+      path: spec-dashboard/test/remark-polish-dangling-orphan-visible.e2e.mjs
+      name: disposable CLI orphan and node-level browser row
+    code:
+      - spec-eval/src/cli.ts#scan
+      - spec-eval/src/evaltab.ts#assembleTimeline
+      - spec-cli/src/reviews.ts#timelineEvalReviewItems
+      - spec-dashboard/src/NodeView.jsx#EvalPane
+      - spec-dashboard/src/NodeView.jsx#DanglingTrack
     description: >-
-      Remark a scenario, then rename/delete it in yatsu.md so its (node, scenario) track joins no reading.
-      Read the node's eval timeline at node level and run `spex yatsu scan`.
+      On a disposable Git project, author a scenario remark with `spex remark add`, then rename/delete that
+      scenario in eval.md so its (node, scenario) track joins no reading. Run `spex eval lint`, then open the
+      node's Eval pane in a real browser.
     expected: >-
       The orphaned track surfaces as a synthetic dangling row at node level — the gone scenario name struck
       through / marked, its remarks listed and still resolvable/retractable via their refs — never vanishing.
-      `spex yatsu scan` prints a `yatsu-dangling` line for the node and counts it in the summary. The dangling
+      `spex eval lint` prints an `eval-dangling` line for the node and counts it in the summary. The dangling
       track ages NOTHING: it stays out of latestPerScenario / the board scoreboard, and no other scenario is
       staled by it. A still-declared-but-unmeasured scenario is NOT flagged dangling (it is a blind spot).
   - name: chain-reaches-inflight-filer
@@ -60,6 +69,6 @@ YATU each strand through the surface a user actually touches. Strand 1 is a **re
 eval detail across two readings with divergent step-timelines — the only honest proof that the anchor
 re-resolves by step-name rather than seeking a frozen m:ss. Strand 2 is measured through the real
 `remark` + loop-in path in `mentions.ts`/`localIssues.ts`, reading who was notified and confirming the remark
-stays unresolved (notification never resolves). Strand 3 is measured both from the CLI (`spex yatsu scan`'s
-`yatsu-dangling` line + the node eval timeline's `dangling` field) and in the browser (the struck-through
-node-level row), on a scratch/disposable yatsu.md so the rename leaves no residue.
+stays unresolved (notification never resolves). Strand 3 is measured both from the CLI (`spex eval lint`'s
+`eval-dangling` line + the node eval timeline's `dangling` field) and in the browser (the struck-through
+node-level row), on a scratch/disposable eval.md so the rename leaves no residue.

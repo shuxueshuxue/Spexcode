@@ -1,9 +1,9 @@
 ---
 concern: harness ask-note conformance has no honest narrow code anchor for the top-level session ask branch
 by: fbb76f84-7a73-4262-81d6-9028f5eb7c4e
-status: open
+status: landed
 nodes: harness-adapter
-evidence: 4e99be198265, 4e99be198265f49b354ea61e91966ddeb495194d2e42208853309ddb31f270ca
+evidence: 4e99be198265, 4e99be198265f49b354ea61e91966ddeb495194d2e42208853309ddb31f270ca, 64bb8c5b5e3eb2f36c27e008e6747c954c1ce1ae8f03e0d4ad2961e1a651157a
 created: 2026-08-10T07:09:17.854Z
 ---
 
@@ -23,3 +23,6 @@ Correction to the preceding reply: the named-handler branch landed in main at f2
 
 <!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T08:35:11.359Z -->
 Correction after source-path review: the Codex FAIL reading has been retracted on main because the marker was injected before the existing ask-note matrix settled precondition. The CLI receipt means only that delivery debt was accepted; it does not prove the harness executed the marker. A real Codex remeasurement must first record stable public settled state and no native in-progress turn, then send and observe. Only a failure under that gate is a Codex product defect. No source behavior is being changed from this diagnosis.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T09:47:22.374Z -->
+Resolution: the named handler is now landed and the original Codex failure was retracted as premature. A valid isolated real Codex run waited for public asking/online and native thread idle before a single send; the exact marker appeared publicly within 25 seconds and both native turns completed. Fresh pass reading codeSha 7c31ec9dd68cbc845c6d503934227f143a3f3550. The scenario now has an honest narrow anchor plus correct product evidence; no adapter behavior change is needed.

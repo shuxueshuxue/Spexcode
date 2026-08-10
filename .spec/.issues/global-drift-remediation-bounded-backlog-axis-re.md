@@ -101,3 +101,15 @@ Honest blockers/issues:
 - harness ask-note remains in harness-adapter but cannot receive an honest narrow anchor until the top-level CLI ask branch has a named handler. Issue harness-ask-note-conformance-has-no-honest-narro records this; no incomplete code axis/readout was filed.
 
 Next work order: repair the live-view evidence oracle, then continue one scenario at a time through the inherited whole-file clusters. Keep state and doctor fail readings visible until their respective runtime fixes are separately decision-gated and product-remeasured.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T09:50:42.856Z -->
+Spec: eval-core, eval-proactive, spec-lint
+
+Checkpoint at main 2b927073d: full spec lint is 0 errors / 64 warnings; full eval lint is 136 flagged: 596 stale, 0 malformed, 0 missing, 0 coverage gaps, 39 over-owned.
+
+Three same-surface evidence repairs have landed without changing drift, freshness, gate, or score semantics:
+- live-view resize now has a durable real Chromium pixel/frame runner with an explicit empty graph fixture and a post-sync fresh frontend-e2e reading;
+- session-label one-name-everywhere now proves the real browser list, @ picker, and Rename prefill rather than only unit tests;
+- harness ask now has a named declaration handler and a valid settled Codex pass. The earlier pre-settlement Codex reading was explicitly retracted because send receipt proves queue acceptance, not completed execution.
+
+The next bounded item is remark-polish/dangling-orphan-visible: its declared CLI plus browser surface was previously backed only by CLI evidence. It will be remeasured on that declared surface, not acknowledged wholesale. Reconnect remains separately queued because its current fake-WebSocket tests are useful auxiliary coverage but cannot close its browser claim.

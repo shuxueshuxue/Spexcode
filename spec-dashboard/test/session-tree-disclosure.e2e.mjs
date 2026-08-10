@@ -197,6 +197,7 @@ try {
   assert.equal(await dragGhost.locator('.sess-id').textContent(), await dragChild.locator('.sess-id').textContent(), 'the ghost retains the source row headline')
   const dragLayout = await dragChild.evaluate((source) => {
     const ghost = document.querySelector('.si-session-drag-ghost .si-item')
+    const transform = new DOMMatrix(getComputedStyle(ghost.parentElement).transform)
     const describe = (row) => {
       const headline = row.querySelector('.sess-id')
       const marker = row.querySelector('.sess-meta')
@@ -213,12 +214,13 @@ try {
         lines,
       }
     }
-    return { source: describe(source), ghost: describe(ghost) }
+    return { source: describe(source), ghost: describe(ghost), visualScale: Math.hypot(transform.a, transform.b) }
   })
   assert.equal(dragLayout.source.tag, dragLayout.ghost.tag, 'the ghost and source retain the same row element')
   assert.equal(dragLayout.source.className, dragLayout.ghost.className, 'the ghost and source retain the same focused row state')
   assert.equal(dragLayout.source.markerFloat, 'right', 'a focused source reserves the status mark on its first line')
   assert.equal(dragLayout.ghost.markerFloat, 'right', 'the ghost keeps the focused source marker rule')
+  assert.ok(Math.abs(dragLayout.visualScale - 0.5) < 0.001, 'the drag ghost is half the source row size')
   assert.equal(dragLayout.source.lines.length, 3, 'the focused source exposes three visible headline lines')
   assert.equal(dragLayout.ghost.lines.length, dragLayout.source.lines.length, 'the ghost exposes the same visible headline line count')
   assert.ok(Math.max(...dragLayout.source.lines.slice(1)) > dragLayout.source.lines[0], 'the source lets later lines grow past the marker-reserved first line')

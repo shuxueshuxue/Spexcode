@@ -77,8 +77,10 @@ The console list is the mutable home of its session forest ([[session-nesting]])
 full-row ghost, dims the original, and highlights a valid receiving parent; a nested row additionally exposes
 a top-level drop zone. The ghost is the same console tree-row presentation as its source, derived again from
 the current forest item rather than from a hand-copied appearance record: selection reveal, headline line boxes,
-right-side status marker, nesting lead, fold pod, and select checkbox therefore retain their exact layout. Only
-the wrapper's semantics differ — the source is an interactive button while the pointer-owned ghost is inert.
+right-side status marker, nesting lead, fold pod, and select checkbox therefore retain their exact internal
+layout. To keep a selected row's expanded headline from covering the receiving object, the pointer-owned ghost
+is rendered at **50% of the source's visual size**, with its pointer anchor adjusted for that scale. Only the
+wrapper's semantics differ — the source is an interactive button while the pointer-owned ghost is inert.
 The gesture is deliberately ordinary pointer drag rather than a tiny dedicated handle: the row itself is what
 will move, so the feedback must visibly be that row. Right-click keeps the complementary
 explicit `remove from parent` action for a nested row. Both paths call the one reparent endpoint and leave

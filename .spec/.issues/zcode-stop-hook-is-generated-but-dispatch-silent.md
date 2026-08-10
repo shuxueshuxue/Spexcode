@@ -1,7 +1,7 @@
 ---
 concern: zcode Stop hook is generated but dispatch silently treats zcode as the event
 by: fbb76f84-7a73-4262-81d6-9028f5eb7c4e
-status: open
+status: landed
 nodes: zcode-harness
 created: 2026-08-10T12:15:51.094Z
 ---

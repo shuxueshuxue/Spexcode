@@ -1530,41 +1530,45 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               <header className="si-tabbar" aria-label={t(conversationSurface ? 'session.conversationToolbarLabel' : 'session.toolbarLabel')}>
                 <div className="si-surface">
                   <div className="si-tabs" role="tablist" aria-label={t('session.surfaceLabel')}>
-                    <button
-                      type="button"
-                      id={surfaceTabId}
-                      role="tab"
-                      aria-selected={!activeResource}
-                      aria-controls={`${surfacePanelId}-${active}`}
-                      className={`si-tab${activeResource ? '' : ' on'}`}
-                      onClick={() => showBaseSurface(active, activeBaseSurface)}
+                    <div className="si-base-tabs">
+                      <button
+                        type="button"
+                        id={surfaceTabId}
+                        role="tab"
+                        aria-selected={!activeResource}
+                        aria-controls={`${surfacePanelId}-${active}`}
+                        className={`si-tab${activeResource ? '' : ' on'}`}
+                        onClick={() => showBaseSurface(active, activeBaseSurface)}
+                      >
+                        <Icon name={conversationSurface ? 'message-square' : 'terminal'} size={13} />
+                        <span className="si-tab-label">{t(conversationSurface ? 'session.tabConversation' : 'session.tabTerminal')}</span>
+                      </button>
+                    </div>
+                    <a
+                      className="si-eval-tab sc-cyan"
+                      href={active !== 'new' ? addressHash(sessionEvalAddress(active)) : null}
+                      data-tip={evalDoorTitle}
+                      aria-label={evalDoorTitle}
                     >
-                      <Icon name={conversationSurface ? 'message-square' : 'terminal'} size={13} />
-                      <span className="si-tab-label">{t(conversationSurface ? 'session.tabConversation' : 'session.tabTerminal')}</span>
-                    </button>
-                    {resourceTabs.filter((tab) => tab.sessionId === active).map((tab) => (
-                      <div key={tab.id} className={`si-resource-tab${activeResource?.id === tab.id ? ' on' : ''}`}>
-                        <button type="button" id={`si-resource-tab-${tab.id}`} role="tab" aria-selected={activeResource?.id === tab.id}
-                          aria-controls={`si-resource-panel-${tab.id}`} className="si-resource-tab-main"
-                          onClick={() => activateResource(tab)}>
-                          <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
-                          <span>{tab.label}</span>
-                        </button>
-                        <IconButton icon="x" size={12} className="si-resource-tab-action" label={t('session.closeResourceTab', { name: tab.label })}
-                          onClick={() => closeResource(tab)} />
-                      </div>
-                    ))}
+                      <Icon name="evals" size={14} />
+                      <span className="si-eval-label">{t('session.tabEval')}</span>
+                      <SessionEvalStats summary={evalSummary} />
+                    </a>
+                    <div className="si-resource-tabs">
+                      {resourceTabs.filter((tab) => tab.sessionId === active).map((tab) => (
+                        <div key={tab.id} className={`si-resource-tab${activeResource?.id === tab.id ? ' on' : ''}`}>
+                          <button type="button" id={`si-resource-tab-${tab.id}`} role="tab" aria-selected={activeResource?.id === tab.id}
+                            aria-controls={`si-resource-panel-${tab.id}`} className="si-resource-tab-main"
+                            onClick={() => activateResource(tab)}>
+                            <Icon name={tab.kind === 'file' ? 'folder-open' : 'globe'} size={13} />
+                            <span>{tab.label}</span>
+                          </button>
+                          <IconButton icon="x" size={12} className="si-resource-tab-action" label={t('session.closeResourceTab', { name: tab.label })}
+                            onClick={() => closeResource(tab)} />
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <a
-                    className="si-eval-tab sc-cyan"
-                    href={active !== 'new' ? addressHash(sessionEvalAddress(active)) : null}
-                    data-tip={evalDoorTitle}
-                    aria-label={evalDoorTitle}
-                  >
-                    <Icon name="evals" size={14} />
-                    <span className="si-eval-label">{t('session.tabEval')}</span>
-                    <SessionEvalStats summary={evalSummary} />
-                  </a>
 
                   <div ref={resourcePickerRef} className="si-resource-picker">
                     <IconButton icon="plus" size={11} className="si-tab-add" label={t('session.addResourceTab')}

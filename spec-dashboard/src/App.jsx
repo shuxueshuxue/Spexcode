@@ -100,11 +100,16 @@ export default function App() {
   // only hammer a surface that answers HTML.
   const hub = !PROJECT_ID && !board && !!projAccess && projAccess.state !== 'absent'
   const facePending = !PROJECT_ID && !board && projAccess === null
+  // Public graph boot is deliberately its own lifecycle. Its board landing flips `facePending` below,
+  // which is meaningful for the live hub but must not cause a second static-index transfer.
   useEffect(() => {
-    if (PUBLIC_GRAPH_ONLY) {
-      reload()
-      return undefined
-    }
+    if (!PUBLIC_GRAPH_ONLY) return undefined
+    reload()
+    return undefined
+  }, [reload])
+
+  useEffect(() => {
+    if (PUBLIC_GRAPH_ONLY) return undefined
     if (hub || facePending) return
     reload()
     const unsub = subscribeBoardLive({

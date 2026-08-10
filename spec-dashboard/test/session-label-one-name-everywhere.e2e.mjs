@@ -120,7 +120,7 @@ try {
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'session.json'), JSON.stringify({
       session_id: session.id, governed: true, worktree_path: project, branch: 'main', node: '', title: rawUrl, name: session.name, parent: '',
-      status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude',
+      status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude-headless',
       harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
       launch_cmd: 'true', launch_owner: 'http://fixture.invalid', create_request_id: '', create_payload_hash: '', launch_readiness_pending: null,
     }, null, 2) + '\n')

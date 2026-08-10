@@ -1,6 +1,6 @@
 import { createDeadman } from './heartbeat.js'
 import { apiUrl } from './project.js'
-import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
+import { PUBLIC_GRAPH_DOCUMENT_SOURCE, PUBLIC_GRAPH_METADATA_SOURCE, PUBLIC_GRAPH_SOURCE } from './public-mode.js'
 
 // drill-down tidy-tree layout ([[node-graph]]); `expanded` is the focused node's ancestor spine.
 export const X_GAP = 280, Y_GAP = 54
@@ -75,6 +75,22 @@ export async function loadPublicGraph() {
     throw new Error('public graph payload is invalid')
   }
   return { ...graph, sessions: [], issuesStamp: null }
+}
+
+export async function loadPublicGraphMetadata() {
+  const response = await fetch(PUBLIC_GRAPH_METADATA_SOURCE, { cache: 'no-cache' })
+  if (!response.ok) throw new Error(`public graph metadata unavailable: ${response.status}`)
+  const metadata = await response.json()
+  const archive = metadata?.release?.archive
+  if (metadata?.schema !== 'spexcode.public-spec-site/v1'
+    || !metadata?.publication?.repository?.url
+    || !Array.isArray(metadata?.about?.facts)
+    || !metadata?.release?.revision
+    || !archive?.path
+    || !archive?.name) {
+    throw new Error('public graph metadata is invalid')
+  }
+  return metadata
 }
 
 export async function loadPublicSpecContent(id) {
@@ -310,8 +326,8 @@ export async function loadIssue(id) {
 }
 
 // human writes — store-routed through the unified issue port ([[issues-view]] / [[issues]]) — local commits
-// to the trunk store, forge choices call the configured driver. @session stays in the authored text as a
-// passive reference. Returns parsed json ({ ok, …, outcomes }); outcomes can only report a courtesy loop-in.
+// to the trunk store, forge choices call the configured driver. @session stays passive; @new creates only
+// after the write commits. Returns parsed json ({ ok, …, outcomes }).
 export async function postIssueReply(id, body, evidence) {
   const res = await apiFetch(`/api/issues/${encodeURIComponent(id)}/reply`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

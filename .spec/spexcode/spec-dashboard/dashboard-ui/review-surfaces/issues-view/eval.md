@@ -39,14 +39,16 @@ scenarios:
     description: >-
       On the running issues page, select a LOCAL issue and type into its reply composer, then open the
       New compose page and type into its description. In each: type `@`, read the dropdown, pick an offline
-      session reference, and read the inserted full id; clear, type `[[` (and a partial id), pick, read the insertion;
+      session reference, and read the inserted full id; clear, choose the synthetic `@new` row and then a
+      launcher, and read the durable token; clear, type `[[` (and a partial id), pick, read the insertion;
       press Esc with a menu open and read the hash; type plain prose and look for any menu. Then visit
       the session console's authored composer and re-check its `@`/`[[` menus still open (the shared-module
       regression).
     expected: >-
       Both composers carry the console's OWN mention dropdowns ([[mentions]] — one shared menu, not a
-      fork): `@` lists retained sessions including offline rows, and a pick inserts `@<id> ` (trailing
-      space). `[[`
+      fork): `@` lists retained sessions including offline rows plus one synthetic `@new` worker door, and a
+      session pick inserts `@<id> ` (trailing space) while `@new` opens the same launcher list as New
+      Session and inserts `@new:<launcher> `. `[[`
       lists the spec nodes (a partial query filters) and a pick inserts `[[<id>]] `. The reply
       composer's menu opens UPWARD (visible above the docked textarea); the compose PAGE's menu opens
       DOWNWARD under the caret line — no pop-out boundary to clear — fully on screen and clipped by nothing.

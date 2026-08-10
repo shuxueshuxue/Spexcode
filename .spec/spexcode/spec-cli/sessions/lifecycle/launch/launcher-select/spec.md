@@ -75,9 +75,12 @@ create-session inputs; callers use `--launcher <name>` / `{ launcher }`. CLI par
 flag with the ordinary usage error, and the create API rejects every unknown body field with the ordinary 400;
 unsupported inputs never disappear into a defaulted launch.
 
-Launcher choice belongs only to an explicit creation request: bare `spex session new` / the New Session
+Launcher choice belongs to every explicit creation request: bare `spex session new` / the New Session
 composer uses `defaultLauncher`, while `--launcher <name>` / the dashboard picker passes the selected profile
-to the same `newSession` call. `@new` is ordinary prose, never an alternate creation API.
+to the same `newSession` call. The `@new` worker action follows that same rule: bare `@new` uses
+`defaultLauncher`, while `@new:<launcher>` passes that explicit profile through the same create owner. Its
+dashboard autocomplete opens the dashboard-visible launcher rows and stores the chosen qualifier in the prose;
+an unknown qualifier is the same loud create failure as an unknown `--launcher` value.
 
 **Persisted and API-exposed, not badged on the board.** A session's chosen launcher NAME is durable data: it
 is stored on the record and rides the session payload (`/api/sessions` + `/api/graph`) alongside its

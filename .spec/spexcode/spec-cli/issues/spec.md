@@ -84,8 +84,9 @@ same routing): a local id goes through the local issue store's committed write, 
 discipline as promotion (the driver stays the only network toucher; the tracer stays read-only; a failed
 forge write fails loud, never queues). A local reply may carry optional `evidence` hashes (an anchored
 annotation's frame blob) that accrue onto the thread's typed `evidence[]`, deduped — a forge reply has no
-  such field, so its frame rides the comment body's image link instead. A reply's `@session` text stays as a
-  passive [[mentions]] reference; assigning or contacting an agent uses explicit session actions. The same
+  such field, so its frame rides the comment body's image link instead. A reply's `@session` text stays a
+  passive [[mentions]] reference, while each `@new`/`@new:<launcher>` token is dispatched only after that
+  reply or issue body has persisted, returning a visible creation outcome without rolling back the write. The same
   reply may loop in the thread's **originator** as a courtesy if their session is online (the implicit loop-in
   — [[mentions]] owns the mechanism, silent when offline, never a spawn); the originator is a local
 thread's author, or an eval-comment thread's reading-filer, and a forge issue's github-login author resolves

@@ -11,6 +11,7 @@ related:
   - spec-dashboard/src/textarea.js
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/command-box.e2e.mjs
+  - spec-dashboard/test/command-box-new.e2e.mjs
 ---
 
 # command-box
@@ -34,19 +35,22 @@ open above the caret/footer inside the available upper space. At phone width the
 replace [[mobile-ui]]'s existing composer.
 
 Sending appends the prompt to the selected session's durable log ([[dispatch]]), so one authored prompt lands
-atomically even while the terminal is in copy mode. `@session` is kept in that prompt as a passive
-[[mentions]] reference; it never sends to the referenced session or creates a worker. The box owns one
-right-pane action-outcome surface: it exposes sending
-while the request is pending, retains the complete draft and returned HTTP/body error for a refused delivery,
-and therefore stays ready for retry. It carries no delivery marker of its own: a send either put the bytes in
-the log or did not, so a retry is only ever a retry of something that never landed. On a 2xx it visibly acknowledges delivery in that same surface before
-clearing the draft and closing; disappearing is never the only success signal. A close, session switch, or the
-next send owns clearing that outcome; the session list never mirrors it. Enter sends only when it is not
+atomically even while the terminal is in copy mode. `@session` remains a passive [[mentions]] reference, while
+`@new` creates a worker whose durable parent is that selected session's exact id and `@new:<launcher>` changes
+only that child's launcher. The appended prompt and any creation receipt are one command submission: a child
+creation failure is visible while the already-appended prompt remains delivered. The box owns the right-pane
+in-flight action state; settled success and failure messages publish through the shared transient-notice
+surface, so a child receipt remains inspectable after the box closes. A refused delivery retains the complete
+draft and returned HTTP/body error, and therefore stays ready for retry. It carries no delivery marker of its
+own: a send either put the bytes in the log or did not, so a retry is only ever a retry of something that never
+landed. A 2xx clears the draft and closes after publishing its success notice; disappearing is never the only
+success signal. A close, session switch, or the next send owns clearing the in-flight state; the session list
+never mirrors it. Enter sends only when it is not
 committing an IME composition; Shift+Enter adds a line. The box uses the one shared [[composer]] shell also used
 by Issues and Evals.
 
 Its grammar is the old control plane, kept in one place: `[[node]]` resolves at send to the node id plus its
-live `spec.md` pointer; `@session` uses [[mentions]] as a passive reference; `/` lists available board commands first,
+live `spec.md` pointer; `@session` and `@new` use [[mentions]]; `/` lists available board commands first,
 then command presets, then harness commands. Board rows execute locally from the same registry as toolbar
 twins; authoring rows insert text. `/stop`, `/close`, `/merge`, and `/eval` retain their existing meaning.
 There is no `/type`: direct TUI input is already the default. File paste, drop, and pick reuse [[file-attach]],

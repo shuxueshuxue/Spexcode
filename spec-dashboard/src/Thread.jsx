@@ -8,6 +8,7 @@ import { STATUS_COLOR, liveSession } from './session.js'
 import { SideValue } from './ReviewShell.jsx'
 import { useT } from './i18n/index.jsx'
 import { Icon, IconButton } from './icons.jsx'
+import { useLaunchers } from './launch.js'
 
 // The ONE thread UI ([[issues-view]]): the reply list + the reply composer, shared by every home an
 // Issue thread renders in — the issue detail (BOTH stores: a forge issue's GitHub comments are the same
@@ -182,8 +183,8 @@ function slashAt(value, caret, commands) {
 // and carries only real acts: the contextual ⏱ anchor stamp (where a clip supplies one), any
 // host-supplied lifecycle action (Close issue / Promote via `actionsEnd`), and the icon-only Send pinned
 // at the right edge; a failed send surfaces its error in the same row, never out of view.
-// Posts through the caller's `onSend(text, evidence)` as 'human'. @session is a passive reference; the
-// textarea carries the SAME `[[node]]`/`@session` autocomplete as the
+// Posts through the caller's `onSend(text, evidence)` as 'human'. @session is a passive reference; @new
+// opens the shared launcher chooser. The textarea carries the SAME `[[node]]`/`@` autocomplete as the
 // console ([[mentions]], one shared menu, never a fork); the composer is docked at the detail's bottom,
 // so its menu opens UPWARD, as an overlay above the container. The thread's own node leads the `[[` list. Over a clip the home passes
 // `anchorNow()` (async → { tMs, step, frame }) → a ⏱ button stamps the current moment's `▶m:ss · step`
@@ -196,7 +197,8 @@ export function ReplyComposer({ onSend, specs = [], sessions = [], focusId = nul
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')       // a failed send (a forge can be unreachable) surfaces, never swallows
   const taRef = useRef(null)
-  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, focusId, up: true })
+  const { launchers } = useLaunchers()
+  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers, focusId, up: true })
   // the review-track `/` menu ([[review-commands]]) — armed only when the home passes `commands` (the eval
   // detail; the issue composers pass none and keep their exact old surface). Two command kinds, one menu:
   // a BUILT-IN verb (`run`) fires its one host-bound runner after the typed token is removed; a PRESET

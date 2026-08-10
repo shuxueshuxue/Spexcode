@@ -7,6 +7,7 @@ code:
   - spec-cli/src/public-graph.ts#buildPublicGraph
 related:
   - scripts/public-graph-build.mjs
+  - public-graphs/registry.json
   - ops/nginx/spexcode-public-graph.conf
   - spec-dashboard/src/public-mode.js
   - spec-cli/src/cli.ts
@@ -15,6 +16,7 @@ related:
   - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/SideBar.jsx
   - spec-dashboard/src/NodeView.jsx
+  - spec-dashboard/src/PublicGraphAbout.jsx
   - spec-dashboard/src/data.js
   - spec-dashboard/vite.config.js
   - spec-cli/src/public-graph.test.ts
@@ -41,20 +43,25 @@ enter either payload. The same command without `--out` writes identical index by
 the per-node documents under `specs/` beside the static assets. The graph-only client reads the small
 index first and fetches only the selected document, never opens
 `/api/graph`, SSE, session, issue, eval, settings, or terminal transports, and routes all unknown hashes
-back to `#/graph`. The artifact is therefore safe to serve from an ordinary static host. A future
-scheduled GitHub consumer may replace the immutable snapshot/artifact for a repository and map its
-normalized GitHub name to `<project>.spexcode.net`; that transport stays outside this product node until
-the generic consumer has an explicit deployment owner. The first approved host is
-`herdr.spexcode.net`; nginx serves it from an isolated release root and never reuses the existing
+back to `#/graph`. The artifact is therefore safe to serve from an ordinary static host and never reuses the
 `spexcode.net` documentation root. Public boot reads the graph index once; static graph and document JSON use
 conditional `no-cache` revalidation, so an unchanged release can answer from the browser's cached body after an
 ETag check. The public mode never polls or opens a long-lived stream.
 
-The build also emits `public-spec-release.json` with schema `spexcode.public-spec-release/v1`: the exact
-revision plus the path, byte count, and SHA-256 of the index and every document. This is the handoff
-contract for that future transport. Its daily job is deliberately boring: allowlist a public
-`owner/repository`, fetch its selected revision into an isolated checkout, build and verify the manifest,
-compare it with the candidate bytes, then atomically switch that repository's already-configured
-`<repository>.spexcode.net` release directory. A fetch/build/verification failure preserves the last
+`public-graphs/registry.json` is the sole repository-to-host mapping. Every publication explicitly names
+its GitHub repository, its `id`, its `<repository>.spexcode.net` hostname, and the About-panel copy; neither
+the build nor the deployment derives a hostname from a checkout name. The current SpexCode row maps
+`shuxueshuxue/spexcode` to `spexcode.spexcode.net`. `herdr.spexcode.net` is a retired trial alias and may only
+redirect to the registered SpexCode host; it must never keep serving SpexCode content as if Herdr owned it.
+
+The build also emits `public-graph-meta.json`, a lazy static source for the floating About panel, and a
+`spexcode.spec.zip` archive rooted at `.spec/` and made from the graph revision's `.spec/spexcode` tree. The panel has a fixed
+repository link and the archive download; its human-readable summary and facts come from the registry. It
+does not load during graph boot and it never reaches a backend. `public-spec-release.json` has schema
+`spexcode.public-spec-release/v1`: the exact revision plus the path, byte count, and SHA-256 of the index,
+metadata, archive, and every document. This is the handoff contract for the generic transport. Its daily job
+is deliberately boring: allowlist a registered public `owner/repository`, fetch its selected revision into an
+isolated checkout, build and verify the manifest, compare it with the candidate bytes, then atomically switch
+that repository's already-configured release directory. A fetch/build/verification failure preserves the last
 known-good release and reports failure; it never publishes a branch tip directly, guesses a hostname, or
 changes DNS/TLS. Repository-name collisions require an explicit registry decision.

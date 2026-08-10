@@ -58,6 +58,14 @@ await page.route('**/api/graph*', async (route) => {
 await page.route(`**/api/sessions/${SESSION}/input`, async (route) => {
   const body = route.request().postDataJSON()
   inputs.push(body)
+  if (body.kind === 'command' && body.text.startsWith('@new:')) {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ok: true,
+      outcomes: [{ token: body.text.split(' ')[0].slice(1), result: 'spawned', detail: 'child-session' }],
+      mentionSummary: '@ new:fixture->child-session',
+    }) })
+    return
+  }
   if (failNext) {
     await new Promise((resolve) => setTimeout(resolve, 120))
     await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'upstream 502: append unavailable' }) })
@@ -197,14 +205,34 @@ await page.keyboard.press('Alt+i')
 await page.waitForFunction(() => document.activeElement?.classList?.contains('si-command-input'))
 step('@session stays passive and offline retained sessions remain discoverable')
 
-if (process.env.COMMAND_BOX_REFERENCE_ONLY === '1') {
+await input.fill('@')
+const newMention = page.locator('.si-command-box .mention-item.new').first()
+await newMention.waitFor({ state: 'visible' })
+await newMention.click()
+await page.waitForFunction(() => document.querySelector('.si-command-input').value === '@new:')
+const launcherMention = page.locator('.si-command-box .mention-item.new').first()
+await launcherMention.waitFor({ state: 'visible' })
+await launcherMention.click()
+const newToken = await input.inputValue()
+assert.match(newToken, /^@new:[\p{L}\p{N}_.-]+ $/u)
+const newSubmission = page.waitForRequest((request) => request.url().endsWith(`/api/sessions/${SESSION}/input`))
+await input.fill(`${newToken}delegate the focused work`)
+await page.locator('.si-command-send').click()
+assert.deepEqual((await newSubmission).postDataJSON(), { kind: 'command', text: `${newToken}delegate the focused work` })
+await page.locator('.tn-notice.success', { hasText: 'child-session' }).waitFor({ state: 'visible' })
+await command.waitFor({ state: 'hidden' })
+await page.keyboard.press('Alt+i')
+await page.waitForFunction(() => document.activeElement?.classList?.contains('si-command-input'))
+step('@new opens the launcher chooser and returns a child receipt')
+
+if (process.env.COMMAND_BOX_NEW_ONLY === '1') {
   const video = page.video()
   await context.close()
-  await video.saveAs(join(OUT, 'command-box-reference.webm'))
+  await video.saveAs(join(OUT, 'command-box-new.webm'))
   await browser.close()
   writeFileSync(join(OUT, 'timeline.json'), JSON.stringify({ v: 2, axis: 'time', events }, null, 2))
   writeFileSync(join(OUT, 'result.json'), JSON.stringify({ session: SESSION, inputs }, null, 2))
-  console.log(JSON.stringify({ ok: true, video: join(OUT, 'command-box-reference.webm'), timeline: join(OUT, 'timeline.json') }))
+  console.log(JSON.stringify({ ok: true, video: join(OUT, 'command-box-new.webm'), timeline: join(OUT, 'timeline.json') }))
   process.exit(0)
 }
 

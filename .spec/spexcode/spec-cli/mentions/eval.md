@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: command-box-new-launcher
+    tags: [backend-api]
+    test: spec-cli/src/mentions-command.api.test.ts
+    code: [spec-cli/src/mentions.ts, spec-cli/src/index.ts]
+    description: >-
+      Start a real backend with the no-model fake harness and one named launcher, create a live source
+      session, and submit both `@new inspect the selected work` and
+      `@new:fake inspect the selected work` through that session's Command Box API.
+    expected: >-
+      The source receives each authored prompt once. Each response names one spawned outcome and child id;
+      the bare token uses the configured default and the qualified token uses `fake`, while both children
+      record the source as parent. A launcher failure is reported as an outcome after the source prompt is
+      already durable, never as a hidden rollback.
   - name: passive-session-reference
     tags: [backend-api]
     code: spec-cli/src/index.ts

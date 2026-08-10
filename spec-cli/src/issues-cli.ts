@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { closeIssue, createIssue, findIssue, isRemark, mergedIssues, promote, type ForgeSlice, type Issue } from './issues.js'
 import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from '../../spec-forge/src/drivers.js'
 import { currentSession, issuesEnabled, reply, resolveRemark, retractRemark } from './localIssues.js'
-import { summarizeLoopIn } from './mentions.js'
+import { summarizeDispatch, summarizeLoopIn } from './mentions.js'
 import { loadSpecsLite } from '@spexcode/spec-core'
 
 // @@@ issues-cli - the `spex issue` / `spex remark` CLI surface: argv parsing, console output, exit codes.
@@ -188,6 +188,8 @@ export async function runIssueWrite(args: string[]): Promise<number> {
       console.log(r.store === 'local'
         ? `replied to '${id}' — ${r.replies?.length} post(s) in thread`
         : `commented on '${id}' — ${r.url}`)
+      const dispatched = summarizeDispatch(r.outcomes)
+      if (dispatched) console.log(`  ${dispatched}`)
       const s = summarizeLoopIn(r.loopIn)
       if (s) console.log(`  ${s}`)
       return 0
@@ -211,6 +213,8 @@ export async function runIssueWrite(args: string[]): Promise<number> {
     console.log(r.store === 'local'
       ? `opened '${r.id}'${re} — committed to the local issue store; read it with \`spex issue ls\``
       : `opened '${r.id}' on ${r.store}${re} — ${r.url}`)
+    const dispatched = summarizeDispatch(r.outcomes)
+    if (dispatched) console.log(`  ${dispatched}`)
     return 0
   } catch (e) {
     console.error(`spex issue: ${e instanceof Error ? e.message : e}`)
@@ -243,6 +247,8 @@ export async function runRemark(args: string[]): Promise<number> {
     const host = scenario ? { node: positional, scenario } : { issue: positional }
     const r = await (await import('./loop-in.js')).remarkWithLoopIn(host, body, { codeSha: fl(args, 'code-sha'), evidence: repeated(args, 'evidence') })
     console.log(`remark ${r.ref}  (against ${r.codeSha.slice(0, 7) || 'HEAD'}) — read it with \`spex issue ls --all\``)
+    const dispatched = summarizeDispatch(r.outcomes)
+    if (dispatched) console.log(`  ${dispatched}`)
     const s = summarizeLoopIn(r.loopIn)
     if (s) console.log(`  ${s}`)
     return 0

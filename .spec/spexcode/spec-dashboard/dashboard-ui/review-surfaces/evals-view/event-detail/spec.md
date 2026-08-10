@@ -116,7 +116,8 @@ server message). The composer is [[issues-view]]'s ONE shared thread composer (q
 two-line floor, auto-grow, persistent action row with the `@`/`[[`/`/` triggers and icon-only Send),
 **docked sticky at the main column's foot** — the thread scrolls behind it, so circle→remark→circle never
 buries the writer. It authors through the CLI-parity `/api/remarks` (find-or-create by (node, scenario),
-author `'human'`, L: no dashboard-only write); an `@session` remains a passive [[mentions]] reference; a leading
+author `'human'`, L: no dashboard-only write); an `@session` remains a passive [[mentions]] reference while
+`@new` dispatches only after the remark write; a leading
 `/` opens the review-track command menu ([[review-commands]] — `/ok` as the ONE dashboard door to the
 [[human-ok]] sign-off, presets as prefills). A fresh scenario shows an empty track with a live composer.
 
@@ -126,8 +127,8 @@ store (the circle burns its rect in), anchor a remark carrying the `▶m:ss · s
 `![frame](/api/evidence/<hash>)` link (the hash becoming the remark's typed `evidence[]`), and — when the
 step's owning node differs — a `[[node]]` routing line. A re-stamp replaces the anchor line AND its riding
 frame together; a failed capture degrades to the text-only anchor, never a blocked mark. A mark is
-thereafter an ordinary reply — replyable and `@`-able: `circle + @session inspect this` is a timestamped,
-framed reference in the stored discussion, never a hidden dispatch.
+thereafter an ordinary reply — replyable and `@`-able: `circle + @new inspect this` is a timestamped,
+framed worker request whose authored anchor remains in the stored discussion.
 
 **READ-side on readings — it files none.** Verdicts render but are never authored here: readings are filed
 by agents through the eval seam WITH evidence; a human pass/fail click would mint a blind `manual@1`

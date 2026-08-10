@@ -14,7 +14,7 @@ import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote 
 import { remarkWithLoopIn, replyIssueWithLoopIn } from './loop-in.js'
 import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
 import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
-import { summarizeLoopIn } from './mentions.js'
+import { dispatchNewMentions, summarizeDispatch, summarizeLoopIn } from './mentions.js'
 import { resolveLayout, mainBranch } from '@spexcode/spec-core'
 import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
@@ -289,7 +289,7 @@ app.post('/api/issues/:id/reply', async (c) => {
     const r = await replyIssueWithLoopIn(id, text, { author: 'human', node, evidence })
     if (r.store !== 'local') await refreshForgeNow()
     notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
-    return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: summarizeLoopIn(r.loopIn) })
+    return c.json({ ok: true, replies: r.replies, url: r.url, outcomes: [summarizeDispatch(r.outcomes), summarizeLoopIn(r.loopIn)].filter(Boolean).join('  |  ') })
   } catch (e) {
     const msg = String((e as Error).message || e)
     return c.json({ error: msg }, id.includes('#') ? 502 : 404)
@@ -324,7 +324,7 @@ app.post('/api/issues', async (c) => {
     const r = await createIssue(concern, { store, nodes, body: postBody, evidence, author: 'human' })
     if (r.store !== 'local') await refreshForgeNow()
     notifyBoardChanged('full')   // atomic with persistence — see the /api/remarks block below
-    return c.json({ ok: true, id: r.id, store: r.store, url: r.url }, 201)
+    return c.json({ ok: true, id: r.id, store: r.store, url: r.url, outcomes: summarizeDispatch(r.outcomes) }, 201)
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, store === 'local' ? 500 : 502)
   }
@@ -379,7 +379,7 @@ app.post('/api/remarks', async (c) => {
   try {
     const r = await remarkWithLoopIn(host, text, { codeSha, author: 'human', evidence })
     notifyBoardChanged('full')
-    return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: summarizeLoopIn(r.loopIn) }, 201)
+    return c.json({ ok: true, ref: r.ref, rid: r.rid, codeSha: r.codeSha, outcomes: [summarizeDispatch(r.outcomes), summarizeLoopIn(r.loopIn)].filter(Boolean).join('  |  ') }, 201)
   } catch (e) {
     return c.json({ error: String((e as Error).message || e) }, 400)
   }
@@ -705,7 +705,7 @@ app.get('/api/sessions/:id/socket', upgradeWebSocket((c) => {
 // loud 400, never a guessed channel.
 app.post('/api/sessions/:id/input', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  if (body?.kind === 'text' || body?.kind === 'command') {
+  if (body?.kind === 'text') {
     // `from` (the sender's session id) rides only an agent-to-agent send → the backend records the comms
     // edge ([[session-timeline]]); a raw human dispatch omits it and is not logged. `replyVia:"note"` marks a
     // terminal-free sender ([[session-timeline]]): the server appends the note-reply insert to the delivery.
@@ -713,6 +713,14 @@ app.post('/api/sessions/:id/input', async (c) => {
       ...(body?.replyVia === 'note' ? { replyVia: 'note' as const } : {}),
     })
     return c.json(r, r.ok ? 200 : 502)
+  }
+  if (body?.kind === 'command') {
+    const id = c.req.param('id')
+    const text = typeof body?.text === 'string' ? body.text : ''
+    const r = await sendText(id, text)
+    if (!r.ok) return c.json(r, 502)
+    const outcomes = await dispatchNewMentions(text, { sessionId: id })
+    return c.json({ ...r, outcomes, mentionSummary: summarizeDispatch(outcomes) })
   }
   if (body?.kind === 'keys') {
     const keys = Array.isArray(body?.keys) ? body.keys.filter((k: unknown) => typeof k === 'string') : []

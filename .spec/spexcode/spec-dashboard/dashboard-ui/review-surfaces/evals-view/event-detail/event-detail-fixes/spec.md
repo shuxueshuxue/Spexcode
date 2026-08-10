@@ -2,7 +2,7 @@
 title: event-detail-fixes
 status: active
 hue: 200
-desc: Event detail regression guardrails: eval remark drafts are scoped to the selected (node, scenario), filer/originator chips route to their live session, and passive references never create a side effect.
+desc: Event detail regression guardrails: eval remark drafts are scoped to the selected (node, scenario), filer/originator chips route to their live session, and @new returns a visible worker receipt after persistence.
 code:
   - spec-dashboard/src/evalsPage.test.mjs
 related:
@@ -24,7 +24,8 @@ scenario, or A/B reading clears ordinary and anchored drafts before another cont
 
 The same surface is also a navigation surface. A live filer/originator chip names the session
 that filed or opened the thread, so activating it must open that session's console, not the generic new
-session route. A human reply's @session reference remains in the stored prose and returns no mention outcome.
+session route. A human reply's @session reference remains in the stored prose and returns no outcome; an exact
+@new keeps that stored prose and returns the spawned-worker receipt.
 
 ## expanded spec
 

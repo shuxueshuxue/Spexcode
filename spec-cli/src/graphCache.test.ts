@@ -50,7 +50,7 @@ delete process.env.SPEXCODE_API_URL
 process.chdir(project)
 
 const cache = await import('./graphCache.js')
-const graph = await import('./board.js')
+const graph = await import('./graphSnapshot.js')
 const git = await import('@spexcode/spec-core')
 
 // Production graph-cache always lives behind a referenced server socket. Keep the fixture at that same

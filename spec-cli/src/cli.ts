@@ -437,7 +437,7 @@ if (cmd === 'serve') {
   console.log(text)
 } else if (cmd === 'graph') {
   if (flag('node') !== undefined) { console.error('spex graph: --node was renamed — use --focus <id>'); process.exit(2) }
-  const { buildBoard } = await import('./board.js')
+  const { buildBoard } = await import('./graphSnapshot.js')
   const focusRaw = flag('focus')
   const depthRaw = flag('depth')
   const depth = depthRaw === undefined ? undefined : Number(depthRaw)

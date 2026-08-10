@@ -175,3 +175,10 @@ Spec: xterm-cell-grid, xterm-sync-resize, live-view
 Structural ownership repair landed at `5a46c8154`: the xterm installer’s single array is now three ordered named groups (synchronized resize, cell grid, browser pointer selection), concatenated in the original order. `xterm-cell-grid` directly governs only `cellGridPatches`; the sibling contracts use scoped related anchors for their own groups. This removes the false cell-grid drift caused by the unrelated live-view pointer patch without changing installer behavior or weakening the exact fail-loud source-shape guard.
 
 Main proof: installer idempotence plus Dashboard styles regression 19/19; spec lint 0 errors / 46 warnings. The relevant frontend-e2e scenarios remain stale because static installer evidence is auxiliary, not browser closure. Issue `xterm-cell-grid-source-axis-includes-unrelated-l` is closed with that scope explicitly recorded.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T13:04:57.983Z -->
+Spec: hook-dispatch, xterm-cell-grid, xterm-sync-resize, live-view
+
+Follow-up checkpoint at main `ef720967c`: `hook-dispatch` received a reasoned L0 import-path acknowledgment only; its manifest/compiler contract did not change. The xterm ownership issue is closed at `5a46c8154`: three ordered named installer groups let cell-grid directly own only its geometry patches, while resize and pointer-selection receive scoped related coverage. Installer idempotence and Dashboard styles regression passed 19/19; no static test was represented as frontend-e2e closure.
+
+Current global truth after a full run: spec lint 0 errors / 45 warnings; eval lint 138 flagged nodes, 607 stale, 0 malformed, 0 missing, 0 coverage gaps, 39 over-owned. The stale count moved because the structural code-axis repair made existing xterm/live-view readings visibly stale; it is not being called either a regression or a green result. Next bounded evidence task is real-browser remeasurement of remark-polish/dangling-orphan-visible, whose prior fresh CLI reading cannot close its frontend-e2e claim.

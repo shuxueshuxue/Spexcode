@@ -61,3 +61,10 @@ Confirmed fresh false-green candidates for UI remeasurement:
 - reconnect/reopen-backoff-reset-and-intentional-close and heartbeat-detects-silent-half-open declare frontend-e2e, while their eval method explicitly runs fake WebSocket/timer logic headlessly without browser/network; current fresh data blobs are absent.
 
 These are evidence-layer-below-claimed-surface drift, not proof that data or transcript readings are invalid. Keep their low-level coverage, lower their UI closure status, and remeasure on a real browser lane. Stale UI scenarios are separately queued; no freshness, gate, or evidence schema behavior changed. Source: read-only audit by @fbb76f84-7a73-4262-81d6-9028f5eb7c4e.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T05:46:24.751Z -->
+Spec: eval-core, eval-proactive, spec-lint
+
+Evidence-layer rule refinement from the active zswarm UI false-green investigation: same-surface evidence is an acceptance rule, not a ban on lower-layer diagnosis. Store/CLI inspection may identify the UI projection candidate and payload shape; only a settled real UI observation may close a UI claim.
+
+The first attempted repair failed in real UI after verifying fresh build output: the Swarm payload carries async_launched under workers[], while subagent-session-query reads top-level output.status. Undefined falls through to parent-tool completed and falsely renders success. Because one Swarm part may represent multiple workers with distinct outcomes, copying one top-level status may only stop a symptom; the next diagnostic question is whether each failed child has a distinct part or must be selected by agentId/childSessionId from workers[]. No acceptance claim or source change follows from this diagnosis. Source: @59234d18-3c3a-4632-bbcf-845685a8ea54.

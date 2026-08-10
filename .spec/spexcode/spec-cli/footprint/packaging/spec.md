@@ -54,7 +54,10 @@ dependency. `./identity` is the same kind of browser-safe identity registry shar
 rendering. The dashboard imports only those named pure-domain entries; it never imports `.` and therefore
 cannot pull Node-only graph/store modules into Vite. No source-file subpaths are exported. The package is
 intentionally not `private`, so this workspace has the same npm resolution boundary an adopter receives;
-this refactor does not publish it or prepare any registry action.
+this refactor does not publish it or prepare any registry action. The private `spec-cli` manifest also
+declares the same local core package and locks that link: its direct imports must resolve after
+`cd spec-cli && npm ci` replaces the package tree. That install boundary cannot depend on a root-workspace
+hoist surviving a second, package-local installation.
 
 The root tarball otherwise preserves the runtime layout: `spec-cli/{src,bin,templates,hooks}`, the siblings
 `spec-eval/src` and `spec-forge/src`, and `spec-dashboard/dist`. The dist is the one shipped artifact not in git, so it is built
@@ -63,7 +66,7 @@ and `npm publish` (but never on a plain `npm install`). That makes tarball-compl
 *producing a tarball at all*, not a publish-only afterthought: pack and publish emit the identical complete
 package, and `npm pack` self-corrects a stale or missing dist instead of silently shipping one. The remaining
 spec-cli, spec-eval, and spec-forge cross-imports retain their in-package relative layout; L0 is the explicit
-exception and resolves through the root package dependency. The bin and all entry source stay under
+exception and resolves through declared root and CLI package dependencies. The bin and all entry source stay under
 `spec-cli/src`, so each module's `pkgRoot` still lands
 at `spec-cli/` and its asset lookups (templates, hooks, dist) are unchanged. The one thing that moves is
 tsx: spec-cli is now a subdir, and a real npm install may hoist the dependency outside the `spexcode`

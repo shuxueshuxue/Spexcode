@@ -1,7 +1,7 @@
 ---
 concern: xterm cell-grid source axis includes unrelated live-view selection patch
 by: fbb76f84-7a73-4262-81d6-9028f5eb7c4e
-status: open
+status: landed
 nodes: xterm-cell-grid, live-view
 created: 2026-08-10T12:55:59.981Z
 ---

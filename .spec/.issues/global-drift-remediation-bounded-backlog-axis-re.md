@@ -216,3 +216,8 @@ Real Chromium closure for issues-view/composer-mention-autocomplete landed at 0f
 The existing batch browser runner did not seed an offline retained session and therefore could not establish that declared leg; this reading supplies the missing input through the production record projection rather than a mocked API. Its batch invocation also emitted three failures belonging to other stale scenarios (two list-page checks and one node-link check). They were not filed as product failures or covered by this pass because they were not independently diagnosed.
 
 Current main post-merge baseline: spec lint 0 errors / 43 warnings; eval lint 138 flagged nodes, 604 stale, 0 malformed, 0 missing, 0 coverage gaps, 39 over-owned. No product source, drift/freshness threshold, gate, score, or scenario executor changed.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T14:28:31.430Z -->
+Spec: global-drift-remediation-bounded-backlog-axis-re, reply-thread, mentions, issues-view
+
+Closed one bounded spec-only warning. The current Thread delta imports the shared launcher registry and passes it to the existing mentions hook; it does not add a composer menu or a Thread-owned dispatch path. Delivery remains caller-owned through onSend(author text, evidence). Fresh Chromium coverage on the shared issue-thread surface exercised the resulting launcher choice, durable reply, node completion, keyboard closure, and an offline retained-session fixture. Main now carries Spec-OK ack 4ded9fbfd; full spec lint is 0 errors and 42 advisory warnings.

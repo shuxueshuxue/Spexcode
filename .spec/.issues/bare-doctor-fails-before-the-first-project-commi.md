@@ -10,3 +10,8 @@ created: 2026-08-10T05:39:34.270Z
 Spec: doctor
 
 In a freshly git-initialized repository, spex init --harness codex succeeds. Before the project has its first commit, bare spex doctor exits 1 instead of printing the read-only diagnosis. The failure is from history indexing: git rev-list --parents HEAD cannot resolve HEAD. The real CLI transcript is attached as evidence. This lane records the failure only; it does not change doctor implementation.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T05:41:08.276Z -->
+Spec: doctor
+
+Confirmed as a supported adoption window, not an eval precondition problem. doctor.ts:374 invokes specHealthDiagnosis for every adopted repository, and doctor.ts:134 calls loadSpecs. specs.ts:253-259 requests sourceIndexes at tip HEAD; git.ts:2020-2023 runs ls-tree and rev-list against that tip, so an unborn HEAD throws from git.ts:1107 before any report is printed. The spex-init contract says the seeded project data is then added and committed; it does not require that commit before doctor. No source patch is included here.

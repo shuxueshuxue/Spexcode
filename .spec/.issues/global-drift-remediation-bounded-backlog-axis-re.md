@@ -142,3 +142,14 @@ Separately, zcode Stop hook delivery is a current implementation bug: generated 
 Spec: zcode-harness, dispatcher-runtime
 
 Closed the concrete ZCode Stop adapter no-op at bd871ed4c. The generated zcode Stop command now uses the existing dispatcher harness-selector path, reaches the selected manifest Stop gate, and has a real generated-command fail-to-pass transcript plus main post-merge 26/26 dispatcher regression. The repair lowered spec warnings from 59 to 57 without touching drift/freshness/gate/score semantics. The larger zcode-runtime-bridge ownership question remains open and explicitly unclaimed; this repair did not add app-server observation or native ID semantics.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T12:45:58.800Z -->
+Spec: graph-stream, drift-by-ancestry
+
+Resolved the zero-commit graph API gap on main `597bfe3ad` (implementation `fa428f979`, then current-state ownership reconciliation `b9c41e74f` and mechanics-only `event-ledger-demand` acknowledgment `d905033f9`). Before the repair, a valid `git init` workspace with unborn `HEAD` returned HTTP 500 because history indexing ran `git ls-tree HEAD`; a one-commit empty workspace returned HTTP 200/nodes=0.
+
+The repair treats a valid unborn branch ref as empty Git history/index input, preserving the unborn sentinel as a cache identity so the first commit takes a new cache path. It does not add an API short-circuit; invalid or malformed Git still fails loudly. Current main regression passed the Git unborn-history case and graph API cases for zero-commit first `.spec` creation plus base-root create/delete.
+
+Independent consumer YATU confirmed ordinary HTTP only, new services, no SSE/restart: zero-commit warm 200/0 -> first `.spec` 364ms/1 -> deletion 377ms/0; one-commit control remained 200/0 -> 369ms/1 -> 342ms/0. The creation leg is intentional: it would fail under the prohibited “return empty for empty repos” shortcut.
+
+Current whole-repo baseline after landing: spec lint 0 errors / 57 warnings; eval lint 138 nodes flagged, 606 stale, 0 malformed, 0 missing, 0 coverage gaps, 39 over-owned. No freshness, drift threshold, gate, score, or scenario-selection behavior changed.

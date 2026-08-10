@@ -1,7 +1,7 @@
 ---
 concern: base checkout .spec created after graph cache warm-up stays fresh-empty without delta patrol
 by: fbb76f84-7a73-4262-81d6-9028f5eb7c4e
-status: open
+status: landed
 nodes: graph-stream
 created: 2026-08-10T11:14:35.553Z
 ---

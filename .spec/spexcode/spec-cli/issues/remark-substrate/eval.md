@@ -22,7 +22,7 @@ scenarios:
   - name: external-write-freshness
     tags: [frontend-e2e]
     code: spec-dashboard/src/IssuesPage.jsx
-    related: [packages/l0/src/graph.ts, spec-cli/src/issues.ts, spec-cli/src/index.ts, spec-dashboard/src/App.jsx]
+    related: [packages/spec-core/src/graph.ts, spec-cli/src/issues.ts, spec-cli/src/index.ts, spec-dashboard/src/App.jsx]
     description: >-
       A real browser sits on the dashboard's Issues page with a local thread's detail open (an on-page
       wall clock burned into the recording). A remark then lands on that thread through POST /api/remarks
@@ -34,7 +34,7 @@ scenarios:
   - name: reading-remark-freshness
     tags: [frontend-e2e]
     code: spec-cli/src/issues.ts
-    related: [packages/l0/src/graph.ts, spec-dashboard/src/EvalsPage.jsx]
+    related: [packages/spec-core/src/graph.ts, spec-dashboard/src/EvalsPage.jsx]
     description: >-
       The SAME external-write window on the substrate's OTHER host. A real browser sits on an open READING
       detail (#/evals/<node>/<scenario>, reached warm through the board — a cold Evals address is the

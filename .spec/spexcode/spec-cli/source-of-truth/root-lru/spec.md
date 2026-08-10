@@ -4,10 +4,10 @@ status: active
 hue: 200
 desc: One reference-counted bounded root→key cache policy, shared by every layer that keeps immutable per-HEAD work warm — so the same eviction rule is never written twice.
 code:
-  - packages/l0/src/root-lru.ts
+  - packages/spec-core/src/root-lru.ts
 related:
   - spec-cli/src/root-lru.test.ts
-  - packages/l0/src/git.ts
+  - packages/spec-core/src/git.ts
   - spec-eval/src/scenariofresh.ts
   - spec-eval/src/freshness.ts
 ---

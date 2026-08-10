@@ -11,8 +11,8 @@ scenarios:
       - spec-eval/src/freshness.ts#runContentBatch
       - spec-eval/src/freshness.ts#startPluralContentBatch
       - spec-eval/src/freshness.ts#contentProbeFor
-      - packages/l0/src/git.ts#batchRevisionOids
-      - packages/l0/src/git.ts#gitObjectInterpretation
+      - packages/spec-core/src/git.ts#batchRevisionOids
+      - packages/spec-core/src/git.ts#gitObjectInterpretation
       - spec-eval/src/evaltab.ts#evalTimelines
     test:
       path: spec-eval/src/freshness-content-batch.api.test.ts
@@ -37,8 +37,8 @@ scenarios:
     code:
       - spec-eval/src/freshness.ts#codeDrift
       - spec-eval/src/freshness.ts#contentProbeFor
-      - packages/l0/src/git.ts#ancestorsOf
-      - packages/l0/src/git.ts#inAncestors
+      - packages/spec-core/src/git.ts#ancestorsOf
+      - packages/spec-core/src/git.ts#inAncestors
     test:
       path: spec-eval/src/freshness.test.ts
       name: 'off-history drift counts: ONE topology walk for the whole read, never one rev-list per (anchor, path)'

@@ -6,7 +6,7 @@ desc: The dashboard eval tab — a node's measurement timeline (verdict + expect
 code:
   - spec-eval/src/evaltab.ts
 related:
-  - packages/l0/src/graph.ts
+  - packages/spec-core/src/graph.ts
   - spec-cli/src/index.ts
   - spec-dashboard/src/NodeView.jsx
   - spec-eval/src/evaltab.test.ts

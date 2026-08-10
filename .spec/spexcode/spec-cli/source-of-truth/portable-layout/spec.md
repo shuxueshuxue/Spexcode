@@ -5,19 +5,19 @@ session: sess-merge
 hue: 160
 desc: Where things live — main, worktree→node mapping, the spec root node — is detected policy, never a baked-in name.
 code:
-  - packages/l0/src/layout.ts#resolveLayout
-  - packages/l0/src/layout.ts#layoutDeltas
-  - packages/l0/src/layout.ts#mainRoot
-  - packages/l0/src/layout.ts#mainBranch
-  - packages/l0/src/layout.ts#readJsonConfig
-  - packages/l0/src/layout.ts#readUploadPolicy
+  - packages/spec-core/src/layout.ts#resolveLayout
+  - packages/spec-core/src/layout.ts#layoutDeltas
+  - packages/spec-core/src/layout.ts#mainRoot
+  - packages/spec-core/src/layout.ts#mainBranch
+  - packages/spec-core/src/layout.ts#readJsonConfig
+  - packages/spec-core/src/layout.ts#readUploadPolicy
 related:
-  - packages/l0/src/harness-identity.ts
+  - packages/spec-core/src/harness-identity.ts
   - spec-cli/src/layout-session-id.test.ts
   - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/src/layout-overlay.api.test.ts
   - spexcode.json
-  - packages/l0/templates/spexcode.json
+  - packages/spec-core/templates/spexcode.json
   - .nvmrc
 ---
 # portable-layout
@@ -35,7 +35,7 @@ are tracked, and nothing machine-specific leaks into the tree — so a clean che
 
 ## expanded spec
 
-`packages/l0/src/layout.ts` is the one seam. `resolveLayout()` answers — where is main, **which branch is
+`packages/spec-core/src/layout.ts` is the one seam. `resolveLayout()` answers — where is main, **which branch is
 its source of truth**, how to enumerate the other checkouts, how each declares its node — and exposes the
 result at `GET /api/settings` (its `layout` half). Everything downstream consumes the resolved layout, never a hardcoded path or
 branch name.
@@ -54,7 +54,7 @@ the same committed-config-with-a-`spexcode.local.json`-overlay seam: persistent,
 The same seam carries [[host-resource-budget]]'s per-session RSS, per-backend RSS, idle-CPU, and sampling
 budgets, and [[file-attach]]'s one `uploads` policy: attachment limit, chunk size, batch concurrency, request
 timeout/retry, stale-transfer lifetime/reaper cadence, backend free-space reserve, and eval-evidence ceiling.
-`packages/l0/templates/spexcode.json` is the one shipped seed and numeric-default source: `readUploadPolicy()`
+`packages/spec-core/templates/spexcode.json` is the one shipped seed and numeric-default source: `readUploadPolicy()`
 and `spex init` both read it, then the former overlays the resolved project/local `uploads` object and validates
 every field loudly. Thus a pre-existing project may
 omit the section and still receive the portable defaults, while one host can override only (for example) its

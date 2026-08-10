@@ -62,8 +62,8 @@ async function vacatedReuse() {
     write(root, '.spec/lineage/c/spec.md', historySpec('rename-c')); write(root, 'src/c.ts', source(11, 'rename-c'))
     const toC = commit(root, 'rename a to c')
 
-    const { historyIndex, rowsFor, driftIndex, pathRangeEvents } = await import('@spexcode/l0')
-    const { anchorHitCommits, extractors } = await import('@spexcode/l0')
+    const { historyIndex, rowsFor, driftIndex, pathRangeEvents } = await import('@spexcode/spec-core')
+    const { anchorHitCommits, extractors } = await import('@spexcode/spec-core')
     const { codeDrift } = await import('../spec-eval/src/freshness.ts')
     const { projectSessionImpact } = await import('../spec-eval/src/sessioneval.ts')
     const hidx = await historyIndex(root), didx = await driftIndex(root)

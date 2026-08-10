@@ -14,7 +14,7 @@ code:
   - spec-eval/src/freshness.ts#startPluralContentBatch
   - spec-eval/src/freshness.ts#primeAnchorTopology
 related:
-  - packages/l0/src/git.ts
+  - packages/spec-core/src/git.ts
   - spec-eval/src/evaltab.ts
   - spec-eval/src/cli.ts
   - spec-eval/src/freshness.test.ts

@@ -4,7 +4,7 @@ status: active
 hue: 205
 desc: The ONE token-query engine behind both review lists — scanner/parser/serializer, token surgery, last-wins matcher, legacy-param replay, and bounded inline autocomplete — pure JS with named exports any consumer can reuse.
 code:
-  - packages/l0/src/review/reviewQuery.js
+  - packages/spec-core/src/review/reviewQuery.js
 related:
   - spec-cli/src/reviews.ts
   - spec-dashboard/src/route.js
@@ -19,7 +19,7 @@ GitHub's issues UI (measured live on github.com/microsoft/vscode in a real Chrom
 truth — the raw query text; tabs, menus, and suggestions only rewrite tokens inside it, and the URL
 carries the text verbatim. SpexCode's two review lists previously split state between a substring input
 and structured hash params — the exact fork GitHub's model eliminates. This engine is that model as a
-standalone pure-JS module in `@spexcode/l0`: no React, no DOM, importable by the pages, the route layer,
+standalone pure-JS module in `@spexcode/spec-core`: no React, no DOM, importable by the pages, the route layer,
 and the server paging surface that needs canonical review addresses.
 
 ## expanded spec

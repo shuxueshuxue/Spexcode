@@ -4,7 +4,7 @@ status: active
 hue: 90
 desc: The spec of SpexCode's plugin SYSTEM — how reflexive, skill-shaped plugin nodes are defined and how they plug in.
 code:
-  - packages/l0/src/specs.ts#configRoots
+  - packages/spec-core/src/specs.ts#configRoots
 ---
 `plugin-system/` holds the **spec of the plugin system** — how SpexCode's reflexive, skill-shaped plugin
 nodes work, *not* the plugins themselves. A plugin node is a folder where the folder *is* the unit (a

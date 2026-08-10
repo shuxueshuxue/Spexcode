@@ -12,8 +12,8 @@ scenarios:
       file fails LOUD naming the file and parse error; it never silently drops the stable branch fact.
     tags: [cli]
     code:
-      - packages/l0/src/layout.ts#mainBranch
-      - packages/l0/src/layout.ts#readConfig
+      - packages/spec-core/src/layout.ts#mainBranch
+      - packages/spec-core/src/layout.ts#readConfig
   - name: cold-overlay-width-does-not-multiply-by-public-surface
     description: >
       In an isolated real repository, create several governed linked worktrees spanning clean edits, a rename,
@@ -26,9 +26,9 @@ scenarios:
       unchanged. A failed flight is not cached and the next request can repair.
     tags: [backend-api]
     code:
-      - packages/l0/src/layout.ts#resolveLayout
-      - packages/l0/src/layout.ts#layoutDeltas
-      - packages/l0/src/git.ts#worktreeSpecDeltas
+      - packages/spec-core/src/layout.ts#resolveLayout
+      - packages/spec-core/src/layout.ts#layoutDeltas
+      - packages/spec-core/src/git.ts#worktreeSpecDeltas
     test: spec-cli/src/layout-overlay.api.test.ts
   - name: record-less-store-dir-never-scans-the-store
     description: >
@@ -43,7 +43,7 @@ scenarios:
       finds the one record that captured it as `harness_session_id`.
     tags: [cli]
     code:
-      - packages/l0/src/layout.ts#readAliasedRecordEntry
+      - packages/spec-core/src/layout.ts#readAliasedRecordEntry
     test: spec-cli/src/layout-session-id.test.ts
 ---
 

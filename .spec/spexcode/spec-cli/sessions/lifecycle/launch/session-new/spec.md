@@ -9,8 +9,8 @@ related:
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
   - spec-cli/src/client.ts
-  - packages/l0/src/git.ts
-  - packages/l0/src/layout.ts
+  - packages/spec-core/src/git.ts
+  - packages/spec-core/src/layout.ts
   - spec-cli/src/session-create-transaction.test.ts
   - spec-cli/src/sessions.test.ts
   - spec-dashboard/src/launch.test.mjs

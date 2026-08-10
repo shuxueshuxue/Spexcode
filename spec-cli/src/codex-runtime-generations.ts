@@ -3,7 +3,7 @@ import { createConnection, type Socket } from 'node:net'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { detachedRuntimeIsGone, processStartToken, verifyDetachedRuntime } from '@spexcode/l0'
+import { detachedRuntimeIsGone, processStartToken, verifyDetachedRuntime } from '@spexcode/spec-core'
 
 export type CodexGenerationEndpoint = Readonly<{
   id: string

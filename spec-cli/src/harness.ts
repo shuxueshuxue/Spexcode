@@ -13,14 +13,14 @@ import { claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadle
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
 import { opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
 import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless, piHeadlessColdRuntime } from './pi-headless.js'
-import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath } from '@spexcode/l0'
-import { git } from '@spexcode/l0'
+import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath } from '@spexcode/spec-core'
+import { git } from '@spexcode/spec-core'
 import { shQuote } from './sh.js'
-import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from '@spexcode/l0'
+import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from '@spexcode/spec-core'
 import { codexGenerationEndpoints, codexGenerationSocketPath, currentCodexGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
 import { writeFileIfChanged } from './file-write.js'
 import { codexRolloutPath, noExecutionTrace, readCodexExecutionTrace, readLocalStoreExecutionTrace, readProjectJsonlExecutionTrace, readSessionJsonlExecutionTrace, type ExecutionTrace, type ExecutionTurn } from './execution-trace.js'
-import { harnessIdentity, HARNESS_IDENTITIES, type HarnessId } from '@spexcode/l0'
+import { harnessIdentity, HARNESS_IDENTITIES, type HarnessId } from '@spexcode/spec-core'
 
 // @@@ harness-adapter - the ONE seam between SpexCode and the coding-agent harness (Claude Code, Codex, …).
 // Every harness-specific fact lives behind THIS interface with one implementation per harness; product code
@@ -34,7 +34,7 @@ import { harnessIdentity, HARNESS_IDENTITIES, type HarnessId } from '@spexcode/l
 // payload shape. On the TS side the harness is derived from the selected launcher or ALL adapters at once
 // (materialize writes every harness's artifacts).
 
-export type { HarnessId } from '@spexcode/l0'
+export type { HarnessId } from '@spexcode/spec-core'
 export type HarnessLivenessRecord = { session: string; harnessSessionId?: string | null; stopped?: boolean; archived?: boolean }
 export type HarnessLaunchReadyRecord = HarnessLivenessRecord & { governed?: boolean; runtimeDir: string }
 export type HarnessLaunchReadinessFence = {

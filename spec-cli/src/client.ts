@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import { platform } from 'node:os'
-import { repoRoot } from '@spexcode/l0'
+import { repoRoot } from '@spexcode/spec-core'
 import { resourceBudgets, type ResourceReport } from './host-resources.js'
-import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/l0'
+import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/spec-core'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
 import { apiBaseInfo, assertProjectMatch, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 

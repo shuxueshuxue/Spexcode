@@ -5,8 +5,8 @@ desc: The browser-tab favicon is the route-selected resolved identity rendered f
 code:
   - spec-dashboard/index.html
 related:
-  - packages/l0/src/graph.ts
-  - packages/l0/src/layout.ts
+  - packages/spec-core/src/graph.ts
+  - packages/spec-core/src/layout.ts
   - spec-dashboard/src/data.js
   - spec-dashboard/src/App.jsx
   - spec-dashboard/src/IdentityIcon.jsx

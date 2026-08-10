@@ -1,4 +1,4 @@
-import { repoRoot, headSha } from '@spexcode/l0'
+import { repoRoot, headSha } from '@spexcode/spec-core'
 import { evalNodes, resolveEvalNode, scenarioHash } from './scenarios.js'
 import { appendReading, readReadings, isJsonBlob, type Reading, type EvidenceKind } from './sidecar.js'
 import { putBlob } from './cache.js'

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { createServer } from 'node:net'
 import { once } from 'node:events'
 import { createHash, randomUUID } from 'node:crypto'
-import { processStartToken } from '@spexcode/l0'
+import { processStartToken } from '@spexcode/spec-core'
 
 const SOURCE = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const SESSION_ID = 'eval-ledger-demand-0001'
@@ -166,7 +166,7 @@ test('public eval surfaces share one ledger truth without inheriting writer lock
 
     const holder = [
       `import { existsSync, writeFileSync } from 'node:fs'`,
-      `import { withEventLedgerBuild } from ${JSON.stringify(join(SOURCE, 'packages/l0/src/git.ts'))}`,
+      `import { withEventLedgerBuild } from ${JSON.stringify(join(SOURCE, 'packages/spec-core/src/git.ts'))}`,
       `await withEventLedgerBuild(process.cwd(), async () => {`,
       `  writeFileSync(${JSON.stringify(writerReady)}, JSON.stringify({ pid: process.pid }))`,
       `  while (!existsSync(${JSON.stringify(writerRelease)})) await new Promise((resolve) => setTimeout(resolve, 10))`,

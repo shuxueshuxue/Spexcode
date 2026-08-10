@@ -1,7 +1,7 @@
 ---
 concern: live-view resize evidence runner treats xterm DOM text as canvas paint and produces a false failure
 by: fbb76f84-7a73-4262-81d6-9028f5eb7c4e
-status: open
+status: landed
 nodes: live-view
 created: 2026-08-10T06:51:47.925Z
 ---

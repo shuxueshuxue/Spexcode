@@ -236,3 +236,10 @@ Closed two bounded issues-view scenario drifts on main 202f1e236.
 - new-form-node-links: the product contract requires an internal graph anchor; the stale test incorrectly required a button. The scenario and test now assert #/graph/<id>.
 
 Real isolated backend + Vite + Chromium passed 58/0 on the committed tree. The two fresh readings contain screenshots/transcript, and the list reading includes a real UI journey video. issues-view lane-local eval debt is now 9 stale scenarios; no node-wide closure is claimed.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T15:21:18.057Z -->
+Spec: review-chrome, eval-core
+
+Structural code-axis repair landed on main at 1d77b2726. Nineteen scenarios had anchored all of ReviewShell.jsx even though their declared user loops pass through distinct components. Each now names its actual measured ReviewShell units: ListPage/query/filter/row/state/pagination for list flows, DetailShell plus side primitives for detail flows, and CompactReviewFilter/ReviewState for the node popup. The two remaining whole-file mentions are related coverage only.
+
+This changes neither product behavior nor drift/freshness/gate/score semantics. It also does not call existing frontend readings green: full eval lint remains 601 stale and the affected scenarios remain explicitly stale where their selected code or scenario changed. The structural owner count drops 39 -> 38; ReviewShell.jsx no longer appears in the over-owned list. Main proof: spec lint 0 errors / 42 advisory warnings; eval lint 0 malformed, 0 missing, 0 coverage gaps.

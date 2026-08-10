@@ -115,3 +115,80 @@ test('a Command Box @session stays in the selected session instead of prompting 
     rmSync(home, { recursive: true, force: true })
   }
 })
+
+test('a Command Box @new creates a child under the selected session, optionally with a named launcher', { timeout: 120_000 }, async () => {
+  const port = await freePort()
+  const home = mkdtempSync(join(tmpdir(), 'spex-new-mention-home-'))
+  const project = mkdtempSync(join(tmpdir(), 'spex-new-mention-project-'))
+  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+    harnesses: ['claude'],
+    sessions: { launchers: { fake: { harness: 'claude', cmd: fakeLauncher } }, defaultLauncher: 'fake' },
+  }, null, 2) + '\n')
+  mkdirSync(join(project, '.spec', 'project'), { recursive: true })
+  writeFileSync(join(project, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\n\n# project\n\nfixture project\n')
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
+  execFileSync('git', ['config', 'user.email', 'fixture@example.test'], { cwd: project })
+  execFileSync('git', ['config', 'user.name', 'fixture'], { cwd: project })
+  execFileSync('git', ['add', '.'], { cwd: project })
+  execFileSync('git', ['commit', '-qm', 'fixture seed'], { cwd: project })
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    SPEXCODE_HOME: home,
+    SPEXCODE_TMUX: `spex-new-mention-${process.pid}-${Date.now()}`,
+    FAKE_HARNESS_INTERVAL_MS: '80',
+  }
+  delete env.SPEXCODE_API_URL
+  delete env.SPEXCODE_SESSION_ID
+  const base = `http://127.0.0.1:${port}`
+  const backend = spawn(process.execPath, [tsxBin(packageRoot), join(packageRoot, 'src', 'cli.ts'), 'serve', '--port', String(port)], {
+    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  const logs = capture(backend)
+  const created: string[] = []
+  try {
+    await waitFor(async () => {
+      try { return (await request(base, '/health')).status } catch { return 0 }
+    }, (status) => status === 200, 'backend health')
+    const sourceResult = await request(base, '/api/sessions', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: 'source session', launcher: 'fake' }),
+    })
+    assert.equal(sourceResult.status, 201, sourceResult.text)
+    const source = (sourceResult.body as { id?: string }).id
+    assert.ok(source, sourceResult.text)
+    created.push(source)
+    await waitFor(async () => (await request(base, `/api/sessions/${source}`)).body as { liveness?: string }, (session) => session.liveness === 'online', `session ${source} online`)
+
+    const dispatch = async (text: string, token: string) => {
+      const result = await request(base, `/api/sessions/${source}/input`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'command', text }),
+      })
+      assert.equal(result.status, 200, result.text)
+      const body = result.body as { outcomes?: Array<{ token?: string; result?: string; detail?: string }>; mentionSummary?: string }
+      assert.equal(body.outcomes?.length, 1, result.text)
+      assert.equal(body.outcomes?.[0]?.token, token, result.text)
+      assert.equal(body.outcomes?.[0]?.result, 'spawned', result.text)
+      const child = body.outcomes?.[0]?.detail
+      assert.ok(child, result.text)
+      created.push(child)
+      assert.match(body.mentionSummary || '', new RegExp(`${token}->`))
+      const childRecord = await waitFor(async () => (await request(base, `/api/sessions/${child}`)).body as { parent?: string; launcher?: string; liveness?: string },
+        (session) => session.parent === source && session.liveness === 'online', `child ${child} under source`)
+      assert.equal(childRecord.parent, source)
+      await waitFor(async () => (await request(base, `/api/sessions/${source}/capture`)).text, (pane) => pane.includes(text), 'source prompt')
+      return childRecord
+    }
+
+    assert.equal((await dispatch('@new inspect the selected work', 'new')).launcher, 'fake')
+    assert.equal((await dispatch('@new:fake inspect the selected work', 'new:fake')).launcher, 'fake')
+  } finally {
+    for (const id of created.reverse()) await request(base, `/api/sessions/${id}/close`, { method: 'POST' }).catch(() => {})
+    if (backend.exitCode === null) {
+      backend.kill('SIGTERM')
+      await new Promise((resolve) => backend.once('close', resolve))
+    }
+    if (backend.exitCode && backend.exitCode !== 0) console.error(logs())
+    rmSync(project, { recursive: true, force: true })
+    rmSync(home, { recursive: true, force: true })
+  }
+})

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { STATUS_COLOR, sessionHeadline } from './session.js'
 import { useT } from './i18n/index.jsx'
 
@@ -6,7 +6,7 @@ import { useT } from './i18n/index.jsx'
 // triggers, their ranking, and the dropdown — shared by every input box that takes the grammar (the session
 // console's New prompt + ❯ inbox in SessionInterface.jsx, the Issues page's reply/new-thread composers in
 // IssuesPage.jsx, the eval remark composer in EventDetail.jsx). One implementation, never a per-surface
-// fork. References only edit the current draft; actions stay with their explicit commands.
+// fork. References only edit the current draft; the exact @new token opens the shared worker launcher door.
 
 // a `[[<id>]]` (Obsidian double-bracket) node-mention token. Optional leading dot so `[[.plugins]]` resolves
 // (a node id is its dir basename — see [[spec-pointer]]). Group 1 = the id. Used for both the New Session
@@ -63,7 +63,24 @@ export function matchSessions(sessions, query) {
     scored.push({ s, score })
   }
   scored.sort((a, b) => a.score - b.score || (b.s.created || 0) - (a.s.created || 0))
-  return scored.slice(0, 8).map((x) => ({ id: x.s.id, label: handle(x.s), sub: x.s.node || x.s.status }))
+  const items = scored.map((x) => ({ id: x.s.id, label: handle(x.s), sub: x.s.node || x.s.status }))
+  const exactCount = scored.filter((x) => x.score === 0).length
+  const beforeNew = items.slice(0, Math.min(exactCount, 7))
+  return [...beforeNew, { id: 'new', label: 'new', sub: 'choose a launcher' }, ...items.slice(beforeNew.length)].slice(0, 8)
+}
+
+export function matchLaunchers(launchers, query) {
+  const q = query.toLowerCase()
+  return (launchers || [])
+    .map((launcher) => {
+      const name = (launcher.name || '').toLowerCase()
+      const score = !q ? 1 : name.startsWith(q) ? 0 : name.includes(q) ? 1 : -1
+      return { launcher, score }
+    })
+    .filter((entry) => entry.score >= 0)
+    .sort((a, b) => a.score - b.score || a.launcher.name.localeCompare(b.launcher.name))
+    .slice(0, 8)
+    .map(({ launcher }) => ({ id: launcher.name, label: launcher.name, sub: launcher.cmd || launcher.harness || '' }))
 }
 
 // bold the first case-insensitive hit of the query inside a label (the part the user has typed so far).
@@ -167,12 +184,17 @@ export function nodeMentionAt(value, caret, specs, focusId) {
 // over handle-chars; if that run is preceded by an `@` at a WORD BOUNDARY (start of line or after
 // whitespace), the caret sits inside an `@query` session token. `[[`=topic, `@`=session — the two triggers never
 // collide (a bare `@` mid-word, e.g. an email, is not a boundary and stays inert).
-export function sessionMentionAt(value, caret, sessions) {
+export function sessionMentionAt(value, caret, sessions, launchers = []) {
   let i = caret - 1
   while (i >= 0 && /[\p{L}\p{N}_.:\-]/u.test(value[i])) i--
     // i now points at the char just left of the handle run — the `@` sigil for a session token.
   if (i >= 0 && value[i] === '@' && (i === 0 || /\s/.test(value[i - 1]))) {
     const query = value.slice(i + 1, caret)
+    if (query.startsWith('new:')) {
+      const items = matchLaunchers(launchers, query.slice('new:'.length))
+      if (!items.length) return null
+      return { kind: 'launcher', items, index: 0, start: i, end: caret, query: query.slice('new:'.length) }
+    }
     const items = matchSessions(sessions, query)
     if (!items.length) return null
     return { kind: 'session', items, index: 0, start: i, end: caret, query }
@@ -185,10 +207,13 @@ export function sessionMentionAt(value, caret, sessions) {
 // and index-follow callbacks. Rows: node = status dot + id + breadcrumb; session = @handle + hint.
 export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
   const t = useT()
-  const session = menu.kind === 'session'
-  const head = menu.query
+  const launcher = menu.kind === 'launcher'
+  const session = menu.kind === 'session' || launcher
+  const head = launcher
+    ? `@new:${menu.query}`
+    : menu.query
       ? (session ? `@${menu.query}` : `[[${menu.query}]]`)
-    : t(session ? 'session.menuSessions' : 'session.menuSpecNodes')
+      : t(session ? 'session.menuSessions' : 'session.menuSpecNodes')
   return (
     <ul className={`${up ? 'mention-menu up' : 'mention-menu'}${fixedStyle ? ' fixed' : ''}`} style={fixedStyle || undefined} role="listbox">
       <li className="mention-head">// {head} — {t('session.menuHint')}</li>
@@ -197,12 +222,12 @@ export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
           key={it.id}
           role="option"
           aria-selected={i === menu.index}
-          className={i === menu.index ? 'mention-item on' : 'mention-item'}
+          className={`${i === menu.index ? 'mention-item on' : 'mention-item'}${launcher || (menu.kind === 'session' && it.id === 'new') ? ' new' : ''}`}
           onMouseDown={(e) => { e.preventDefault(); onPick(it) }}
           onMouseEnter={() => onHover(i)}
         >
           {!session && <span className="mention-dot" style={{ background: STATUS_COLOR[it.status] || STATUS_COLOR.offline }} />}
-          <span className="mention-id">{session ? <>@{highlight(it.label, menu.query)}</> : highlight(it.id, menu.query)}</span>
+          <span className="mention-id">{launcher ? <>@new:{highlight(it.label, menu.query)}</> : session ? <>@{highlight(it.label, menu.query)}</> : highlight(it.id, menu.query)}</span>
           <span className="mention-path">{session ? it.sub : specPath(it.path)}</span>
         </li>
       ))}
@@ -215,7 +240,7 @@ export function MentionMenu({ menu, up, fixedStyle, onPick, onHover }) {
 // and drops the caret after it, and claims ↑/↓/Enter/Tab/Esc WHILE the menu is open (onKeyDown returns true
 // when it consumed the key — Esc closes the menu only, never the page). The console keeps its own window-
 // level state machine (it also multiplexes `/` menus) but builds from the SAME scanners and MentionMenu.
-export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], sessions = [], focusId = null, up = false, fixedAbove = null }) {
+export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], sessions = [], launchers = [], focusId = null, up = false, fixedAbove = null }) {
   const [menu, setMenu] = useState(null)
   const [fixedStyle, setFixedStyle] = useState(null)
   // React synthesizes onSelect after Escape keyup even when the native selection did not move. Without a
@@ -229,7 +254,7 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
     if (dismissed.current === key) { setMenu(null); setFixedStyle(null); return }
     dismissed.current = null
     const caret = el.selectionStart
-    const next = nodeMentionAt(el.value, caret, specs, focusId) || sessionMentionAt(el.value, caret, sessions)
+    const next = nodeMentionAt(el.value, caret, specs, focusId) || sessionMentionAt(el.value, caret, sessions, launchers)
     setMenu(next)
     if (!next || !fixedAbove) { setFixedStyle(null); return }
     const input = el.getBoundingClientRect()
@@ -242,13 +267,27 @@ export function useMentionAutocomplete({ inputRef, value, setValue, specs = [], 
       bottom: `${Math.max(8, window.innerHeight - above + 8)}px`,
     })
   }
+  useEffect(() => {
+    const el = inputRef.current
+    if (launchers.length && el && document.activeElement === el) sync(el)
+  }, [launchers])
   const navBy = (dir) => setMenu((m) => (m ? { ...m, index: (m.index + dir + m.items.length) % m.items.length } : m))
   const accept = (item) => {
     if (!item || !menu) return
     dismissed.current = null
     const before = value.slice(0, menu.start)
+    if (menu.kind === 'session' && item.id === 'new') {
+      const insert = '@new:'
+      const nextValue = before + insert + value.slice(menu.end)
+      const caret = before.length + insert.length
+      setValue(nextValue)
+      setMenu(sessionMentionAt(nextValue, caret, sessions, launchers))
+      requestAnimationFrame(() => { const el = inputRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
+      return
+    }
     const insert = menu.kind === 'session' ? `@${item.id} `
-      : `[[${item.id}]] `
+      : menu.kind === 'launcher' ? `@new:${item.id} `
+        : `[[${item.id}]] `
     setValue(before + insert + value.slice(menu.end))
     setMenu(null)
     setFixedStyle(null)

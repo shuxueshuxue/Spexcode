@@ -106,7 +106,9 @@ scenarios:
       no start identity", since that sentence is the conflation itself.
   - name: prompt-invariant-covers-every-delivery
     tags: [backend-api, cli]
-    code: spec-cli/src/sessions.ts
+    code:
+      - spec-cli/src/sessions.ts#composeSessionPrompt
+      - spec-cli/src/sessions.ts#optionSafe
     description: >
       The option-shaped-prompt guarantee is made at composeSessionPrompt, which serves LAUNCH and every
       SEND — so measure the send half, not only the launch half. In an isolated real project through a real

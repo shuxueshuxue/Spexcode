@@ -2,6 +2,7 @@
 scenarios:
   - name: resize-has-one-compositor
     tags: [frontend-e2e, desktop, backend-api]
+    test: spec-dashboard/test/terminal-resize-paint.e2e.mjs
     description: >-
       Through the running dashboard in a real browser, view a busy scratch tmux session whose program emits
       unrelated synchronized spinner ticks while responding to SIGWINCH later through several paired and

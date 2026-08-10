@@ -296,6 +296,44 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 }
 .hud-help:hover { border-color: var(--blue); color: var(--orange); }
 
+/* Public graph disclosure is a separate static reading surface, placed away from graph stats and the
+   HUD. It is intentionally lazy: opening it is the only action that reads release metadata. */
+.public-about-shell { position: absolute; right: 18px; bottom: 14px; z-index: 8; }
+.public-about-trigger {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 5px 9px;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink2);
+  cursor: pointer; font-family: var(--mono); font-size: var(--type-control); line-height: var(--leading-ui);
+  box-shadow: 0 4px 18px rgba(101,123,131,.12);
+}
+.public-about-trigger:hover, .public-about-trigger[aria-expanded="true"] { border-color: var(--blue); color: var(--blue); }
+.public-about {
+  position: absolute; right: 0; bottom: 38px; width: min(380px, calc(100vw - 84px)); padding: 14px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink);
+  box-shadow: 0 14px 36px rgba(0,0,0,.24); font-size: var(--type-control); line-height: var(--leading-relaxed);
+}
+.public-about-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.public-about-kicker { margin: 0 0 2px; color: var(--blue); font-size: var(--type-caption); text-transform: uppercase; }
+.public-about h2 { margin: 0; color: var(--ink2); font-size: var(--type-title); line-height: var(--leading-tight); }
+.public-about-close {
+  flex: none; width: 24px; height: 24px; padding: 0; border: 1px solid transparent; border-radius: 4px;
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.public-about-close:hover { border-color: var(--line); color: var(--ink2); }
+.public-about-summary, .public-about-status { margin: 12px 0 0; }
+.public-about-error { color: var(--red); }
+.public-about-facts { display: grid; gap: 5px; margin: 12px 0 0; }
+.public-about-facts > div { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; }
+.public-about-facts dt { color: var(--muted); }
+.public-about-facts dd { min-width: 0; margin: 0; color: var(--ink2); overflow-wrap: anywhere; }
+.public-about-facts code { color: var(--cyan); font-family: var(--mono); }
+.public-about-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+.public-about-link {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 4px 8px;
+  border: 1px solid var(--line); border-radius: 4px; color: var(--ink2); text-decoration: none;
+}
+.public-about-link:hover { border-color: var(--blue); color: var(--blue); }
+.public-about-link.primary { border-color: color-mix(in srgb, var(--blue) 55%, var(--line)); color: var(--blue); }
+
 /* lock banner — top-center hint shown while a session owns the graph. Sits between the HUD (top-left)
    and the session window (top-right); carries the locked session's colour on its spine via --ov. */
 .lock-hint {

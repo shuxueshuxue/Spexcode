@@ -221,3 +221,8 @@ Current main post-merge baseline: spec lint 0 errors / 43 warnings; eval lint 13
 Spec: global-drift-remediation-bounded-backlog-axis-re, reply-thread, mentions, issues-view
 
 Closed one bounded spec-only warning. The current Thread delta imports the shared launcher registry and passes it to the existing mentions hook; it does not add a composer menu or a Thread-owned dispatch path. Delivery remains caller-owned through onSend(author text, evidence). Fresh Chromium coverage on the shared issue-thread surface exercised the resulting launcher choice, durable reply, node completion, keyboard closure, and an offline retained-session fixture. Main now carries Spec-OK ack 4ded9fbfd; full spec lint is 0 errors and 42 advisory warnings.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T14:44:27.437Z -->
+Spec: global-drift-remediation-bounded-backlog-axis-re, issues-view, reply-thread, mentions
+
+Closed one more bounded issues-view scenario on main: composer-trigger-buttons, commit 0bd67ad99. Fresh isolated Chromium created a real local issue, retained session, and spec node, then measured both symbol buttons on the docked reply composer. They insert at caret or replace the selected span, open the shared menus, preserve the draft through Escape, do not post, and keep the action row inside bounds at desktop and 780px. Video, screenshot, structured result, and timeline are filed. The issues-view lane still has 11 stale scenarios; this does not claim node-wide closure.

@@ -60,6 +60,7 @@ done <<EOF
 $paths
 EOF
 [ -n "$msg" ] || exit 0
+msg=$($S internal hook-prompt spec-of-file --details "$msg") || exit 1
 esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
 printf '{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"%s"}}\n' "$esc"
 exit 0

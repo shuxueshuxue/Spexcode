@@ -8,6 +8,7 @@ import { repoRoot } from '@spexcode/l0'
 import { guideCatalogEntries } from './guide.js'
 import { helpCatalogEntries } from './help.js'
 import { loadAgentConfig, loadConfig, loadHookConfig, loadReviewConfig, loadSkillConfig, loadSystemConfig } from '@spexcode/l0'
+import { HookPromptCatalog, HOOK_PROMPT_SOURCE } from './hook-prompts.js'
 
 const digest = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex')
 
@@ -34,6 +35,7 @@ test('guidance catalog is deterministic, immutable, and content-bearing', () => 
     assert.ok(entry.source.revision.length > 0)
     assert.ok(entry.content.length > 0)
     assert.equal(entry.source.contentHash, digest(entry.content))
+    assert.ok(['prompt', 'help', 'guide', 'signal'].includes(entry.contentRole))
   }
   const { bundleHash, ...payload } = a
   assert.equal(bundleHash, digest(JSON.stringify(payload)))
@@ -60,9 +62,19 @@ test('catalog covers each active plugin surface and registered help/guide page',
     for (const preset of presets) {
       const row = pluginRows.find((entry) => entry.id === `plugin:${surface}:${preset.name}`)
       assert.ok(row)
-      assert.equal(row.source.path, `${preset.dir}/spec.md`)
-      assert.equal(row.content, preset.body)
-      assert.equal(row.source.contentHash, digest(preset.body))
+      if (surface === 'hook') {
+        const prompt = new HookPromptCatalog().entry(preset.name)
+        assert.equal(row.source.path, HOOK_PROMPT_SOURCE)
+        assert.equal(row.content, prompt.content)
+        assert.equal(row.contentRole, prompt.role)
+        assert.equal(row.runtime?.path, preset.files.find((file) => file.endsWith('.sh')))
+        assert.deepEqual(row.runtime?.events, preset.events)
+      } else {
+        assert.equal(row.source.path, `${preset.dir}/spec.md`)
+        assert.equal(row.content, preset.body)
+        assert.equal(row.contentRole, 'prompt')
+        assert.equal(row.source.contentHash, digest(preset.body))
+      }
     }
   }
   for (const entry of helpCatalogEntries()) {

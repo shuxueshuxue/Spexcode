@@ -218,6 +218,48 @@ for (const harness of ['claude', 'codex'] as const) {
   })
 }
 
+function specOfFileRig(harness: GateHarness) {
+  const dir = mkdtempSync(join(tmpdir(), `spex-spec-of-file-${harness}-`))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const sid = `sid-${harness}-edit`
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, '.spec', 'project'), { recursive: true })
+  mkdirSync(join(dir, 'src'), { recursive: true })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  writeFileSync(join(dir, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\nProject scope.\n')
+  writeFileSync(join(dir, 'src', 'novel.ts'), 'export const novel = true\n')
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'spec-of-file', 'spec-of-file.sh')
+  writeFileSync(join(dir, 'hooks', 'spec-of-file.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
+  const manifest = join(runtime, 'hooks-manifest')
+  mkdirSync(runtime, { recursive: true })
+  writeFileSync(manifest, 'PostToolUse\t10\tfalse\thooks/spec-of-file.sh\n')
+  const payload = harness === 'claude'
+    ? JSON.stringify({ session_id: sid, hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: 'src/novel.ts' } })
+    : JSON.stringify({ session_id: sid, hook_event_name: 'PostToolUse', tool_name: 'apply_patch', tool_input: { command: '*** Update File: src/novel.ts\n@@\n' } })
+  const fire = () => spawnSync('bash', [dispatch, harness, 'PostToolUse'], {
+    cwd: dir,
+    env: { ...process.env, SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'), SPEXCODE_HOME: home, SPEX_HOOK_MANIFEST: manifest },
+    input: payload,
+    encoding: 'utf8',
+  })
+  return { fire }
+}
+
+for (const harness of ['claude', 'codex'] as const) {
+  test(`${harness} spec-of-file: actionable edit emits the registry prompt once`, () => {
+    const t = specOfFileRig(harness)
+    const first = t.fire()
+    assert.equal(first.status, 0, first.stderr)
+    const context = JSON.parse(first.stdout).hookSpecificOutput.additionalContext as string
+    assert.match(context, /^Contract context for this edit:/)
+    assert.match(context, /src\/novel\.ts — no spec claims this yet \(uncovered\)/)
+    const second = t.fire()
+    assert.equal(second.status, 0, second.stderr)
+    assert.equal(second.stdout, '', 'the same file must not inject a second annotation')
+  })
+}
+
 test('codex mark-active resolves by payload thread id despite contaminated SPEXCODE_SESSION_ID', () => {
   const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-codex-'))
   const home = join(dir, 'home')

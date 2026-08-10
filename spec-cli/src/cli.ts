@@ -64,7 +64,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -1286,6 +1286,28 @@ if (cmd === 'serve') {
     if (r.ready) { console.log('ready'); process.exit(0) }
     console.log(r.reason)
     process.exit(1)
+  } else if (sub === 'hook-prompt') {
+    // The internal render seam shared by hook handlers and GuidanceCatalog. The hooks call it only on branches
+    // that already emit model-facing text; their hot no-op paths remain pure shell.
+    const name = positionals(4)[0]
+    if (!name) { console.error('usage: spex internal hook-prompt <name> [--variant <name>] [--path <path>] [--owner <owners>] [--details <text>] [--cli <command>] [--propose <name>] [--reason <text>] [--count <n>] [--ids <ids>]'); process.exit(2) }
+    const { HookPromptCatalog } = await import('./hook-prompts.js')
+    try {
+      console.log(new HookPromptCatalog().render(name, {
+        variant: flag('variant') ?? '',
+        path: flag('path') ?? '',
+        owner: flag('owner') ?? '',
+        details: flag('details') ?? '',
+        cli: flag('cli') ?? '',
+        proposal: flag('propose') ?? '',
+        reason: flag('reason') ?? '',
+        count: flag('count') ?? '',
+        ids: flag('ids') ?? '',
+      }))
+    } catch (error) {
+      console.error(`spex internal hook-prompt: ${error instanceof Error ? error.message : String(error)}`)
+      process.exit(2)
+    }
   } else if (sub === 'nudge') {
     // the post-merge hook prints the (toggle-aware) issue nudge for a merged node — never typed.
     const { nudge } = await import('./localIssues.js')

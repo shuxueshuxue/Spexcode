@@ -7,6 +7,7 @@ code:
   - .spec/spexcode/.plugins/core/spec-of-file/spec-of-file.sh
 related:
   - spec-cli/templates/spec/project/.plugins/core/spec-of-file/spec-of-file.sh
+  - spec-cli/src/hook-prompts.ts
 ---
 
 # inject-spec-of-file
@@ -40,6 +41,10 @@ warning that matters.
 The file→spec resolve is **`spex owner <path> --actionable`** (a thin verb in cli.ts, resolver `specOwners`
 in specs.ts), a light read of frontmatter `code:` only — no git walk. `--actionable` is the discipline: it
 speaks ONLY when there is something to act on, so the annotation stays rare instead of chatty.
+
+The handler passes that actionable result to `HookPromptCatalog` through `spex internal hook-prompt`. The registry
+adds the stable model-facing envelope while the owner resolver remains the one source for event-specific details;
+the exact same template is what the public prompt catalog publishes.
 
 - **over-owned** (> maxOwners governors) → "this file does too much — SPLIT it so each governor owns its own
   module (or merge the nodes, or give it a single foundation owner + relate)." The [[governed-related]]

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createServer } from 'node:net'
+import { templateConfigPath } from '@spexcode/l0'
 
 // [[spex-init]] / [[residence]] — the ADOPTION SURFACE: what `spex init` prints must be TRUE of what it
 // planted (the success message once claimed governedRoots ["src"] while the template seeded ["."] — the
@@ -17,7 +18,7 @@ const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
 const TSX = join(SRC, '..', 'node_modules', '.bin', 'tsx')
 const HOOK_TEMPLATES = join(SRC, '..', 'templates', 'hooks')
-const TEMPLATE_ROOTS = JSON.stringify(JSON.parse(readFileSync(join(SRC, '..', 'templates', 'spexcode.json'), 'utf8')).lint.governedRoots)
+const TEMPLATE_ROOTS = JSON.stringify(JSON.parse(readFileSync(templateConfigPath, 'utf8')).lint.governedRoots)
 const SEEDED_LAUNCHERS = {
   claude: { harness: 'claude', cmd: 'claude' },
   'claude-headless': { harness: 'claude-headless', cmd: 'claude' },

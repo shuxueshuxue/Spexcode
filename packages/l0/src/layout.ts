@@ -121,7 +121,7 @@ export function readConfig(root: string): Config {
 
 export type UploadPolicy = Required<NonNullable<Config['uploads']>>
 
-const TEMPLATE_CONFIG = fileURLToPath(new URL('../templates/spexcode.json', import.meta.url))
+export const templateConfigPath = fileURLToPath(new URL('../templates/spexcode.json', import.meta.url))
 const MIN_POSITIVE_INTEGER = 1
 const MIN_NONNEGATIVE_INTEGER = 0
 
@@ -156,7 +156,7 @@ function resolveUploadPolicy(values: Record<keyof UploadPolicy, unknown>): Uploa
 }
 
 export function uploadPolicyDefaults(): UploadPolicy {
-  return resolveUploadPolicy(readJsonConfig(TEMPLATE_CONFIG).uploads as Record<keyof UploadPolicy, unknown>)
+  return resolveUploadPolicy(readJsonConfig(templateConfigPath).uploads as Record<keyof UploadPolicy, unknown>)
 }
 
 // The seed template is the sole default-value source. Existing projects may omit `uploads`; they receive this

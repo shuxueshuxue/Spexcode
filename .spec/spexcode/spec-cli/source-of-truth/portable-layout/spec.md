@@ -17,7 +17,7 @@ related:
   - spec-cli/src/session-public-projection.api.test.ts
   - spec-cli/src/layout-overlay.api.test.ts
   - spexcode.json
-  - spec-cli/templates/spexcode.json
+  - packages/l0/templates/spexcode.json
   - .nvmrc
 ---
 # portable-layout
@@ -54,8 +54,9 @@ the same committed-config-with-a-`spexcode.local.json`-overlay seam: persistent,
 The same seam carries [[host-resource-budget]]'s per-session RSS, per-backend RSS, idle-CPU, and sampling
 budgets, and [[file-attach]]'s one `uploads` policy: attachment limit, chunk size, batch concurrency, request
 timeout/retry, stale-transfer lifetime/reaper cadence, backend free-space reserve, and eval-evidence ceiling.
-`readUploadPolicy()` takes the numeric defaults only from the shipped `templates/spexcode.json`, then overlays
-the resolved project/local `uploads` object and validates every field loudly. Thus a pre-existing project may
+`packages/l0/templates/spexcode.json` is the one shipped seed and numeric-default source: `readUploadPolicy()`
+and `spex init` both read it, then the former overlays the resolved project/local `uploads` object and validates
+every field loudly. Thus a pre-existing project may
 omit the section and still receive the portable defaults, while one host can override only (for example) its
 chunk size in gitignored `spexcode.local.json`; no upload-only configuration reader or environment-variable
 shadow path exists. Machine-local overrides tune one host without committing its capacity profile, while

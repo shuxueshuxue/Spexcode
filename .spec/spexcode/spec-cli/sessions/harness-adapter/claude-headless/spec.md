@@ -14,7 +14,7 @@ related:
   - spec-cli/src/help.ts
   - spec-cli/src/claude-headless.test.ts
   - spec-cli/src/sessions-liveness.test.ts
-  - spec-cli/templates/spexcode.json
+  - packages/l0/templates/spexcode.json
 ---
 
 # claude-headless

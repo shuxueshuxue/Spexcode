@@ -17,7 +17,7 @@ related:
   - spec-cli/src/index.ts
   - packages/l0/src/layout.ts
   - spec-cli/src/guide.ts
-  - spec-cli/templates/spexcode.json
+  - packages/l0/templates/spexcode.json
 ---
 # file-attach
 

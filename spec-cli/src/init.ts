@@ -2,9 +2,8 @@ import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync, renameS
 import { join, resolve, relative, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { readConfig, readJsonConfig } from '@spexcode/l0'
+import { gitBinary, readConfig, readJsonConfig, templateConfigPath } from '@spexcode/l0'
 import { resolveHarnessTargets, parseHarnessFlag, NATIVE_HARNESS_IDS } from './harness-select.js'
-import { gitBinary } from '@spexcode/l0'
 
 // this file lives at <pkgRoot>/src/init.ts, so `..` is the package root — the same derivation the
 // launch paths use, never a hardcoded repo path (so a relocated/installed package still finds its data).
@@ -172,7 +171,7 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
       console.warn(`• spexcode.json already exists at ${cfgDest} — left untouched (harnesses: ${JSON.stringify(chosenHarnesses)}).`)
     }
   } else {
-    const cfg = (readJsonConfig(join(TEMPLATES, 'spexcode.json')) ?? {}) as Record<string, any>
+    const cfg = (readJsonConfig(templateConfigPath) ?? {}) as Record<string, any>
     cfg.harnesses = chosenHarnesses
     cfg.mainBranch = adoptionMainBranch(targetDir)
     if (nativeChosen.length && cfg.sessions?.launchers) {

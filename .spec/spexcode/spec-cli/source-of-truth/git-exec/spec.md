@@ -10,6 +10,8 @@ code:
   - packages/spec-core/src/git.ts#gitBuffer
   - packages/spec-core/src/git.ts#warnIfTimedOut
   - packages/spec-core/src/git.ts#gitInterpretationIdentity
+  - packages/spec-core/src/git.ts#sourceIndexes
+  - packages/spec-core/src/git.ts#sourceIndexesFull
   - packages/spec-core/src/git.ts#worktreeSpecDeltas
   - packages/spec-core/src/git.ts#batchRevisionOids
 related:
@@ -78,6 +80,13 @@ Git projections. They never inherit Node's smaller default: a valid `ls-tree` or
 default is still Git truth, not a failed command. Crossing SpexCode's explicit budget remains a loud overflow,
 while only the timeout marker may be described as a timeout; the SIGKILL used to enforce either boundary is
 an implementation detail and cannot collapse the two diagnoses.
+
+An unborn `HEAD` is Git's valid empty-history state, not an absent object to query. `headSha()` names it with
+an internal sentinel solely for the root-owned cache identity; the source-index builders interpret that sentinel
+as empty history before any history command is assembled. Both history and drift projections therefore have no
+versions, topology, events, or tip until the first commit exists, while the working-tree graph can still observe
+the first uncommitted `.spec` tree normally. A genuinely unreadable `HEAD`, an explicit invalid revision, or a
+Git child failure remains loud: this is one legal Git state, never a caller-side catch or a broad error fallback.
 
 ## who reads this classification
 

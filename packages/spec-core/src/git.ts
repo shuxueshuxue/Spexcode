@@ -1171,6 +1171,8 @@ export function headSha(root: string): string {
   return `unborn:${name}`
 }
 
+function isUnbornHistoryTip(tip: string): boolean { return tip.startsWith('unborn:') }
+
 // fingerprint of a worktree's `.spec` working tree by path + mtimeMs + size (no git); the overlay-cache
 // key for its working-tree state. '' when `.spec` is absent.
 export function worktreeSpecSig(wtPath: string): string {
@@ -1201,6 +1203,10 @@ export type HistoryIndex = {
   contentVersions: Set<string>              // headPath\0hash rows whose immutable blob changed
   versionPaths: Map<string, string>         // headPath\0hash -> path at that version commit
   mergeVersions?: Set<string>               // path\0hash pairs with an all-parent combined-diff line
+}
+
+function emptyHistoryIndex(): HistoryIndex {
+  return { versions: new Map(), contentVersions: new Set(), versionPaths: new Map(), mergeVersions: new Set() }
 }
 
 type IdentityRawRecord = { h: string; d: string; r: string; s: string | null; a: string; c: [string, string, string, string, string][] }
@@ -1343,7 +1349,7 @@ export function historyIndex(root: string, tip = 'HEAD'): Promise<HistoryIndex> 
   touchRoot(indexRoots, indexCache, root, cacheKey)
   const hit = indexCache.get(cacheKey)
   if (hit) return hit
-  const p = buildIndex(root, head.startsWith('unborn:') ? 'HEAD' : head, false, true)
+  const p = buildIndex(root, head, false, true)
   p.catch(() => { dropFailed(indexCache, cacheKey, p) })   // don't pin a failed build
   indexCache.set(cacheKey, p)
   return p
@@ -1475,6 +1481,7 @@ type TopologyProjection = {
 }
 
 async function buildIndex(root: string, tip: string, transient: boolean, useCache = true, shared?: SharedIndexInputs): Promise<HistoryIndex> {
+  if (isUnbornHistoryTip(tip)) return emptyHistoryIndex()
   const versions = new Map<string, Version[]>()
   const contentVersions = new Set<string>()
   const versionPaths = new Map<string, string>()
@@ -1694,6 +1701,14 @@ export type DriftIndex = {
   specNodes: Map<string, Set<string>> // commit hash -> node ids whose spec.md it touched (its versions)
   anc: Map<string, Uint8Array>        // memoized reachability bitsets, lazily built per queried sha
 }
+
+function emptyDriftIndex(): DriftIndex {
+  return {
+    ord: new Map(), parents: new Map(), fileEvents: new Map(), lineageEvents: new Map(),
+    lineageKeys: (path) => [path], resolutionEvents: new Map(), acks: new Map(), selfAcks: new Map(),
+    specNodes: new Map(), anc: new Map(),
+  }
+}
 export type DriftPathEvent = {
   commit: string
   historicalPath: string
@@ -1849,6 +1864,7 @@ async function mergeHistoryEvents(
 }
 
 async function buildDriftIndex(root: string, tip: string, transient: boolean, useCache = true, shared?: SharedIndexInputs): Promise<DriftIndex> {
+  if (isUnbornHistoryTip(tip)) return emptyDriftIndex()
   const ord = new Map<string, number>(), parents = new Map<string, string[]>()
   const fileEvents = new Map<string, DriftPathEvent[]>()
   const lineageEvents = new Map<string, DriftPathEvent[]>()
@@ -1989,7 +2005,7 @@ export function driftIndex(root: string, tip = 'HEAD'): Promise<DriftIndex> {
   touchRoot(driftRoots, driftIdxCache, root, cacheKey)
   const hit = driftIdxCache.get(cacheKey)
   if (hit) return hit
-  const p = buildDriftIndex(root, head.startsWith('unborn:') ? 'HEAD' : head, false, true)
+  const p = buildDriftIndex(root, head, false, true)
   p.catch(() => { dropFailed(driftIdxCache, cacheKey, p) })
   driftIdxCache.set(cacheKey, p)
   return p
@@ -2017,6 +2033,7 @@ function identityRawStream(value: EventStreamOutput | undefined, kind: EventStre
   return value as IdentityRawRecord[]
 }
 async function buildIndexPair(root: string, tip: string, transient: boolean, useCache = true): Promise<[HistoryIndex, DriftIndex]> {
+  if (isUnbornHistoryTip(tip)) return [emptyHistoryIndex(), emptyDriftIndex()]
   const [allPathsOut, topologyOut] = await Promise.all([
     strictEventGit(['-C', root, '-c', 'core.quotePath=false', 'ls-tree', '-r', '-z', '--name-only', tip]),
     strictEventGit(['-C', root, 'rev-list', '--parents', tip]),
@@ -2044,7 +2061,7 @@ async function buildIndexPair(root: string, tip: string, transient: boolean, use
 export function sourceIndexesFull(root: string, tip = 'HEAD'): Promise<[HistoryIndex, DriftIndex]> {
   const head = tip === 'HEAD' ? headOrEmpty(root) : ''
   const resolved = tip === 'HEAD'
-    ? (!head || head.startsWith('unborn:') ? 'HEAD' : head)
+    ? (head || 'HEAD')
     : git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
   return buildIndexPair(root, resolved, true, false)
 }
@@ -2070,7 +2087,7 @@ export function sourceIndexes(root: string, tip = 'HEAD'): Promise<[HistoryIndex
   const historyHit = indexCache.get(cacheKey), driftHit = driftIdxCache.get(cacheKey)
   if (historyHit && driftHit) return Promise.all([historyHit, driftHit])
 
-  const pair = buildIndexPair(root, head.startsWith('unborn:') ? 'HEAD' : head, false, true)
+  const pair = buildIndexPair(root, head, false, true)
   const historyPromise = pair.then(([history]) => history)
   const driftPromise = pair.then(([, drift]) => drift)
   historyPromise.catch(() => { dropFailed(indexCache, cacheKey, historyPromise) })

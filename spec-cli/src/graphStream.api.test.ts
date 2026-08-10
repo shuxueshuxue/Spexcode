@@ -392,7 +392,7 @@ async function assertServedProjectTreeObservation(project: string, fixture: stri
   }
 }
 
-function prepareEmptyProject(fixture: string, name: string): string {
+function prepareEmptyProject(fixture: string, name: string, commit = true): string {
   const project = join(fixture, name)
   mkdirSync(join(project, 'src'), { recursive: true })
   writeFileSync(join(project, 'src', 'value.ts'), 'export const value = 1\n')
@@ -400,10 +400,28 @@ function prepareEmptyProject(fixture: string, name: string): string {
   git(project, 'init', '-q', '-b', 'main')
   git(project, 'config', 'user.email', 'fixture@example.test')
   git(project, 'config', 'user.name', 'fixture')
-  git(project, 'add', '.')
-  git(project, 'commit', '-qm', 'empty graph seed')
+  if (commit) {
+    git(project, 'add', '.')
+    git(project, 'commit', '-qm', 'empty graph seed')
+  }
   return project
 }
+
+test('a zero-commit served project starts empty and observes its first .spec tree without patrol', { timeout: 30_000 }, async (t) => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-unborn-root-'))
+  try {
+    const project = prepareEmptyProject(fixture, 'project', false)
+    assert.notEqual(spawnSync('git', ['-C', project, 'rev-parse', '--verify', 'HEAD']).status, 0,
+      'the fixture must remain before its first commit')
+    if (!watcherCapacityAvailable([project])) {
+      t.skip('host watcher capacity is unavailable for the served-project observer')
+      return
+    }
+    await assertServedProjectTreeObservation(project, fixture, 'unborn')
+  } finally {
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
 
 test('served base checkout creation and deletion converge from a warmed empty graph without delta patrol', { timeout: 30_000 }, async (t) => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-base-checkout-'))

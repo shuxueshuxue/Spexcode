@@ -65,8 +65,10 @@ export async function loadGraph() {
 
 // The public Spec Graph is a sealed static artifact, not a narrowed live board. Keep it off apiUrl() and
 // avoid every session/review transport: a static host need only serve this one JSON document and Vite assets.
+// `no-cache` asks the browser to revalidate through the host's ETag; it avoids a stale symlink release without
+// paying the full graph/document body again when the revision is unchanged.
 export async function loadPublicGraph() {
-  const response = await fetch(PUBLIC_GRAPH_SOURCE, { cache: 'no-store' })
+  const response = await fetch(PUBLIC_GRAPH_SOURCE, { cache: 'no-cache' })
   if (!response.ok) throw new Error(`public graph unavailable: ${response.status}`)
   const graph = await response.json()
   if (graph?.schema !== 'spexcode.public-spec-graph/v1' || !Array.isArray(graph?.nodes) || !graph?.identity) {
@@ -77,7 +79,7 @@ export async function loadPublicGraph() {
 
 export async function loadPublicSpecContent(id) {
   const source = `${PUBLIC_GRAPH_DOCUMENT_SOURCE}/${encodeURIComponent(id)}.json`
-  const response = await fetch(source, { cache: 'no-store' })
+  const response = await fetch(source, { cache: 'no-cache' })
   if (!response.ok) throw new Error(`public spec unavailable: ${response.status}`)
   const document = await response.json()
   if (document?.schema !== 'spexcode.public-spec-document/v1' || document.id !== id || typeof document.body !== 'string') {

@@ -49,7 +49,7 @@ is what opens its terminal / diff / live-view. Each record carries a **`governed
 Hooks split below. The statuses: `active` (working / undeclared this turn), `awaiting`
 (a proposal — review or close-pending; historical `nothing` records remain readable as done), `parked` (waiting on a managed watch delivery or background task;
 **self-resumes** — nothing for a human to do), `error` (a turn died), `asking` (stopped and **needs the
-human** — a question, or the stop-gate's auto-default for an undeclared/uncommitted stop), `queued` (held
+human** — a question, a reported finding/recommendation awaiting a decision, or the stop-gate's auto-default for an undeclared/uncommitted stop), `queued` (held
 below the cap — [[launch]]), and `idle` (stopped at the prompt without declaring). `merges` is a metadata
 count, not a state.
 
@@ -245,14 +245,14 @@ project's eventual source migration remains an explicit reviewed change rather t
   The teaching names the complete declared face: `done --propose merge` is **review** — the sole proposal
   that offers a human-clickable merge; `done --propose close` is **close-pending** only after the task is
   genuinely settled, its worktree is no longer needed, and no human decision, follow-up, or posted-artifact
-  inspection remains. `ask` is **asking** for a human reply or direction — including an answered exploratory
-  question or a handoff awaiting the human's next direction — and `park` is **parked**, waiting only for a
+  inspection remains. `ask` is **asking** when a human reply, direction, or decision is needed — including a
+  reported finding/recommendation or a handoff awaiting the human's next direction — and `park` is **parked**, waiting only for a
   managed watch delivery or real background wake-up.
   `done --propose nothing` is instead an intended correction prompt that records no terminal state. Its
   branches name the operative facts: `merge` is committed spec and code not yet landed in `main`; `close` is
   complete work that landed (or had nothing to land), is verified, and leaves neither a needed worktree nor a
-  human decision, follow-up, or posted artifact awaiting inspection; `ask` is human input, direction, an
-  answered exploratory answer awaiting follow-up, or that inspection; `park` is a managed delivery or
+  human decision, follow-up, or posted artifact awaiting inspection; `ask` is a needed human reply,
+  direction, or decision on a reported finding/recommendation, handoff, or that inspection; `park` is a managed delivery or
   background job that resumes a named next action — watching terminal children is not a wake-up. The dashboard keeps the merge tool's fixed slot
   for every selected session, but enables and paints it green only for the persisted
   `awaiting`/`merge`/`review` proposal while liveness is `online`; every other proposal, lifecycle, or

@@ -13,7 +13,8 @@ scenarios:
       last-resort raw keys, wait keeps its edge-triggered exit semantics, new explains launch inputs including
       its prompt-independent initial `--name` override, and
       selector/write entries keep the shared SEL grammar/project-bound safety notes; `done --propose nothing`
-      identifies its no-write trap and names its four real destinations. Every entry points back
+      identifies its no-write trap and names its four real destinations; `ask` names the human reply,
+      direction, or decision a reported finding/recommendation may await. Every entry points back
       to the help map/guide without prescribing an orchestration workflow. Bare `spex session` remains the
       complete compatible drawer.
     code: spec-cli/src/help.ts

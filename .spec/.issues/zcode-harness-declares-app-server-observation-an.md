@@ -16,3 +16,12 @@ The scenario can honestly prove the supported one-shot hook-materialization surf
 
 ## Bounded repair decision
 First map each non-materialization claim to its actual implementation and product surface. Then choose one explicit shape: (1) retain this node for adapter-row/materialization-only intent and move implemented observation contracts to their actual owner(s), or (2) extract a zcode runtime/bridge implementation owner with narrow code selectors and real product scenarios. Do not change drift/freshness semantics or auto-ack this node. Any source behavior change remains decision-gated by the campaign ledger.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T12:16:04.316Z -->
+Spec: zcode-harness
+
+Read-only claim map completed. The current adapter owns settings/hook materialization, zcode prompt launch, liveness, and explicit delivery/resume refusal. App-server NDJSON observation, V4 row hydration, child lineage, workspaceId V4 routing, and caller-chosen native session IDs are upstream ZCode capabilities that SpexCode does not bridge or project today. The current materialization scenario cannot prove any of them.
+
+A separate concrete bug was opened as zcode-stop-hook-is-generated-but-dispatch-silent: the emitted dispatch.sh zcode Stop is currently parsed as event zcode and exits 0. It can be repaired against existing intent with a real Stop proof.
+
+Do not silently narrow this spec or implement a bridge in the same change. The remaining ownership decision is explicit: retain zcode-harness as the static adapter and move runtime claims out, or create a decision-gated zcode-runtime-bridge owner for app-server lifecycle, NDJSON transport, replay/projection, reconnect, and native ID persistence. Native child IDs must not be equated with Spex governed nodes without a separate product-contract decision.

@@ -9,10 +9,11 @@ import net from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { templateConfigPath } from '@spexcode/l0'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const BYTES_PER_MEBIBYTE = 1024 * 1024
-const DEFAULT_UPLOADS = JSON.parse(readFileSync(join(here, '../templates/spexcode.json'), 'utf8')).uploads as Record<string, number>
+const DEFAULT_UPLOADS = JSON.parse(readFileSync(templateConfigPath, 'utf8')).uploads as Record<string, number>
 const ONE_BYTE = 1
 const LOCAL_CHUNK_DIVISOR = 2
 const LOCAL_CHUNK_BYTES = DEFAULT_UPLOADS.chunkBytes / LOCAL_CHUNK_DIVISOR

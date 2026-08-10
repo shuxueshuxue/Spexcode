@@ -16,7 +16,7 @@ scenarios:
       same named-launcher mechanism and stores that entry's harness, launcher name, and exact command in its
       record; no environment-specific branch or implicit bypass rewrites it. Any other bypass command works
       only when the user explicitly defines and selects that launcher.
-    code: spec-cli/templates/spexcode.json
+    code: packages/l0/templates/spexcode.json
     related: spec-cli/src/init.ts, spec-cli/src/sessions.ts, spec-cli/src/harness.ts
   - name: launcher-dropdown-replaces-harness-picker
     tags: [frontend-e2e]

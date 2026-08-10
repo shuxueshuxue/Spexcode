@@ -4,7 +4,8 @@
   "type": "module",
   "description": "SpexCode's dependency-minimal spec graph core.",
   "files": [
-    "src"
+    "src",
+    "templates"
   ],
   "exports": {
     ".": "./src/index.ts",

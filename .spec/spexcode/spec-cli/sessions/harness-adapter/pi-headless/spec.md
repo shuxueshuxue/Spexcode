@@ -12,7 +12,7 @@ related:
   - spec-cli/src/help.ts
   - spec-cli/src/pi-harness.ts
   - spec-cli/src/pi-headless.test.ts
-  - spec-cli/templates/spexcode.json
+  - packages/l0/templates/spexcode.json
 ---
 
 # pi-headless

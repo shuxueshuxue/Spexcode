@@ -7,7 +7,7 @@ related:
   - packages/l0/src/layout.ts
   - spec-cli/src/index.ts
   - spec-cli/src/guide.ts
-  - spec-cli/templates/spexcode.json
+  - packages/l0/templates/spexcode.json
   - spec-cli/src/harness.test.ts
   - spec-cli/src/init.test.ts
   - spec-dashboard/src/launch.js

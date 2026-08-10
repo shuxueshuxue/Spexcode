@@ -86,3 +86,18 @@ Spec: eval-core, eval-proactive, spec-lint
 Checkpoint after state axis pilot at main 24a29d18f: full spec lint is 0 errors / 65 warnings; full eval lint is 135 flagged (596 stale, 0 malformed, 0 missing, 0 coverage gaps, 39 over-owned). The count movement since the prior checkpoint comes from concurrent main integration, not a bulk acknowledgement or a standard change.
 
 The pilot narrowed state/explicit-stop-is-authoritative-offline from inherited stop-gate.sh to its actual transition owner spec-cli/src/sessions.ts#stopSessionUnlocked. Same-surface isolated fake-claude + tmux + public spex session CLI reproduced the loss on the synced head: first stop moves online to offline; second stop exits 0 and confirms stopped even though it creates no new transition; resume returns online; close then show is loud. The fail is retained in three readings. This proves the selector repair is honest and the behavior bug remains; no source fix, no precondition rewrite, and no ACK was made.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T07:21:49.618Z -->
+Spec: eval-core, eval-proactive, spec-lint
+
+Current checkpoint at main 3aa446108: full spec lint = 0 errors / 64 warnings. Full eval lint = 136 flagged: 599 stale, 0 malformed, 0 missing, 0 coverage gaps, 39 over-owned. Coverage and missing are genuinely closed; the stale count is not represented as green and moves with concurrent main integration plus more precise scenario axes.
+
+Landed ownership/evidence work:
+- lock-hint is now an independent graph/lock-hint leaf owning only lockHint.js. Real Chromium proof uses a real graph base and one declared controlled session/overlay through the graph seam, then actual row-click lock, visible keycaps, release, and cleared banner. keyboard-nav remains narrowly keymap ownership.
+- session-console/lifecycle-confirm-owns-enter now names the complete top-level UI closure: SessionInterface capture guard, Modal focus-overlay marker, SessionSelectBar bulk confirmation, and SessionContextMenu row confirmation. A synced isolated backend+Vite+Chromium run verified focus/Enter/one-POST cases; polling bypassed host inotify exhaustion only and was documented as environment setup.
+
+Honest blockers/issues:
+- live-view resize compositor is not remeasured yet: real video+WS showed the final grid, while an xterm DOM-text oracle made an observation false-fail. Issue live-view-resize-evidence-runner-treats-xterm-do names the frame/pixel runner repair; no reading was filed.
+- harness ask-note remains in harness-adapter but cannot receive an honest narrow anchor until the top-level CLI ask branch has a named handler. Issue harness-ask-note-conformance-has-no-honest-narro records this; no incomplete code axis/readout was filed.
+
+Next work order: repair the live-view evidence oracle, then continue one scenario at a time through the inherited whole-file clusters. Keep state and doctor fail readings visible until their respective runtime fixes are separately decision-gated and product-remeasured.

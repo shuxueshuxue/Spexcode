@@ -172,9 +172,21 @@ scenarios:
       Both invocations exit 2, write no lifecycle/proposal change, and explain that `nothing` is an intended
       trap. The prompt says merge is committed spec/code not yet landed in `main`; close is work landed (or
       nothing to land), verified, and without a worktree, human decision/follow-up, or posted artifact needing
-      human inspection; ask is human input, direction, an answered exploratory answer awaiting follow-up, or
-      inspection; park is a managed delivery/background job resuming a named action, never a watch on terminal
+      human inspection; ask is a needed human reply, direction, or decision on a reported finding/recommendation,
+      handoff, or inspection; park is a managed delivery/background job resuming a named action, never a watch on terminal
       children. It never presents a generic done/retention state as a successful default.
+  - name: reported-finding-awaits-human-decision
+    tags: [cli]
+    test: spec-cli/src/session-help-cli.test.ts
+    code: .spec/spexcode/.plugins/core/stop-gate/stop-gate.sh
+    related: [spec-cli/src/help.ts, spec-cli/src/cli.ts]
+    description: >-
+      Through the real governed Stop hook, capture its first full declaration prompt and its later compact
+      prompt; also run `spex session ask --help`. Inspect the ask condition on all three projections.
+    expected: >-
+      Each projection says that asking covers a needed human reply, direction, or decision, including a
+      reported finding/recommendation or handoff. Thus an investigation that has reported its conclusion and
+      awaits the user's decision is asking, not close-pending; no example or extra lifecycle is introduced.
   - name: no-record-diagnosis-self-explains
     tags: [backend-api]
     description: >-

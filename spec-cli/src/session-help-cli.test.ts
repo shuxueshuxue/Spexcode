@@ -24,7 +24,7 @@ test('session noun-verb help projects the exact verb from the shared drawer defi
     { verb: 'new', usage: 'Usage: spex session new "<prompt>"', behavior: /--prompt-file[\s\S]*successful receipt/ },
     { verb: 'done', usage: 'Usage: spex session done --propose merge|nothing|close', behavior: /merge.*review[\s\S]*ONLY declaration.*clickable merge[\s\S]*nothing.*trap[\s\S]*close.*close-pending[\s\S]*settled work[\s\S]*no outstanding human decision, follow-up, or inspection/ },
     { verb: 'park', usage: 'Usage: spex session park --note <what-you-await>', behavior: /parked[\s\S]*managed watch delivery[\s\S]*background task[\s\S]*asking/ },
-    { verb: 'ask', usage: 'Usage: spex session ask --note <your-question>', behavior: /asking[\s\S]*human reply or direction[\s\S]*answered exploratory question[\s\S]*handoff awaiting follow-up[\s\S]*parked/ },
+    { verb: 'ask', usage: 'Usage: spex session ask --note <what-you-await>', behavior: /asking[\s\S]*human reply, direction, or decision[\s\S]*reported finding\/recommendation[\s\S]*handoff[\s\S]*parked/ },
     { verb: 'quarantine', usage: 'Usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]', behavior: /--thread is an adapter-native conversation id, never the SpexCode session id; omit it for Claude/ },
   ]
   const outputs = cases.map(({ verb, usage, behavior }) => {
@@ -64,7 +64,7 @@ test('done nothing traps before it can write a terminal state', () => {
       assert.match(result.stderr, /done --propose nothing.*intended trap: no state was recorded/)
       assert.match(result.stderr, /merge.*not landed in `main`/)
       assert.match(result.stderr, /close.*has landed.*verified.*human decision\/follow-up.*posted artifact/)
-      assert.match(result.stderr, /ask.*human input.*direction.*answered exploratory question.*handoff awaiting follow-up.*posted artifact.*inspection/)
+      assert.match(result.stderr, /ask.*human reply.*direction.*decision.*reported finding\/recommendation.*handoff.*posted artifact.*inspection/)
       assert.match(result.stderr, /park.*managed delivery.*background job.*terminal children.*wake-up/)
       assert.equal(readFileSync(record, 'utf8'), before)
     }
@@ -88,15 +88,15 @@ test('Stop teaching names every declaration face without changing the gate', () 
   assert.match(prompt, /done --propose nothing.*TRAP: records no state/)
   assert.match(prompt, /done --propose close.*CLOSE-PENDING.*not merge/)
   assert.match(prompt, /done --propose close.*task genuinely settled, work landed.*worktree no longer needed, and no human decision, follow-up, or posted artifact awaits inspection: propose human close/)
-  assert.match(prompt, /ask --note.*answered exploratory question or handoff awaiting their follow-up.*ASKING/)
+  assert.match(prompt, /ask --note.*human reply, direction, or decision.*reported finding\/recommendation.*handoff.*ASKING/)
   assert.match(prompt, /posted file\/web artifact still needs human inspection.*session ask/)
   assert.match(prompt, /park --note.*real wake-up.*named next action.*terminal children is not a wake-up.*PARKED/)
-  assert.match(prompt, /done --propose merge \(review; ONLY clickable merge\).*close \(close-pending; settled, no human decision\/follow-up or posted artifact waiting\).*park \(parked; real wake-up \+ next action\).*ask \(asking; human reply\/direction, including exploratory answer or handoff\).*nothing.*trap/)
+  assert.match(prompt, /done --propose merge \(review; ONLY clickable merge\).*close \(close-pending; settled, no human decision\/follow-up or posted artifact waiting\).*park \(parked; real wake-up \+ next action\).*ask \(asking; human reply\/direction\/decision, including reported finding\/recommendation or handoff\).*nothing.*trap/)
   assert.match(stopGate, /auto: stopped without declaring — choose merge, close, ask, or park; done --propose nothing records no state/)
   assert.doesNotMatch(stopGate, /Your session state is a CLAIM the graph/)
 })
 
-test('Stop gate teaches exploratory follow-up and handoffs as asking', () => {
+test('Stop gate teaches human decisions and handoffs as asking', () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-stop-gate-guidance-'))
   const store = join(fixture, 'store')
   const lib = join(fixture, 'harness.sh')
@@ -116,13 +116,13 @@ test('Stop gate teaches exploratory follow-up and handoffs as asking', () => {
     assert.equal(full.status, 0, full.stderr)
     const fullReason = JSON.parse(full.stdout).reason as string
     assert.match(fullReason, /task genuinely settled.*no human decision, follow-up, or posted artifact.*CLOSE-PENDING/)
-    assert.match(fullReason, /answered exploratory question or handoff awaiting their follow-up.*ASKING/)
+    assert.match(fullReason, /human reply, direction, or decision.*reported finding\/recommendation.*handoff.*ASKING/)
 
     const terse = invoke()
     assert.equal(terse.status, 0, terse.stderr)
     const terseReason = JSON.parse(terse.stdout).reason as string
     assert.match(terseReason, /close-pending; settled, no human decision\/follow-up or posted artifact waiting/)
-    assert.match(terseReason, /asking; human reply\/direction, including exploratory answer or handoff/)
+    assert.match(terseReason, /asking; human reply\/direction\/decision, including reported finding\/recommendation or handoff/)
     assert.ok(terseReason.length < fullReason.length, 'the compacted-context teaching remains compact')
   } finally { rmSync(fixture, { recursive: true, force: true }) }
 })

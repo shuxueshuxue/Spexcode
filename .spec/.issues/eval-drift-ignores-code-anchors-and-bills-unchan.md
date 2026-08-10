@@ -1,7 +1,7 @@
 ---
 concern: eval-drift ignores code anchors and bills unchanged nodes
 by: c89038e2-6b56-4b4c-8b4a-4ff4ec2c886e
-status: open
+status: landed
 created: 2026-07-29T11:55:47.225Z
 ---
 
@@ -76,3 +76,6 @@ Spec: source-of-truth, eval-core
 
 <!-- reply: 125240d8-ecf4-4039-b783-5dfd81f5e0ad @ 2026-07-29T12:22:37.319Z -->
 Follow-up inventory only; not changed here. spec-eval/src/sessioneval.ts:loadedRelationRows reconstructs path#selector strings from a loaded spec relation split across code + codeScoped or related + relatedScoped fields, then reparses them through scenarioCodeAxis / parseRelation for exact-impact snapshots. This repair instead carries codeEntries from spec-cli/src/specs.ts:loadSpecs into spec-eval/src/evaltab.ts and spec-eval/src/cli.ts, where scenarioCodeAxis consumes entries directly. The future unification candidate is one relation-entry projection usable by both ordinary loader and fixed-revision session-impact snapshots; do not collapse their history/window semantics as part of that refactor.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T05:05:38.968Z -->
+CLOSED AS FIXED. The original whole-file premise was corrected in this thread: anchor-aware freshness already existed. The actual inherited-scenario selector-loss defect was fixed by 3f60f3050, which carries codeEntries through the loader into both evalTimeline and eval lint; current main still resolves inherited axes through codeEntries. The remaining campaign work (broad effective axes, old readings, coverage gaps) is distinct and tracked in global-drift-remediation-bounded-backlog-axis-re. Spec: source-of-truth, eval-core

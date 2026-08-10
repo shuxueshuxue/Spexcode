@@ -3,8 +3,8 @@
 //   GET  /projects                      → { adminGated, gateway, projects: [{ id, identity, root, online, url, gated }] }
 //   PUT|DELETE /projects/admin-password  set/clear the admin password (PUT answers with a fresh session)
 //   PUT|DELETE /projects/:id/password    set/clear one project's password
-//   GET  /projects/browse?path=…          browse host directories + selected Git/SpexCode state
-//   POST /projects {root, initGit?, init?} explicitly initialize as requested, then register
+//   GET  /projects/browse?path=…          browse host directories or read an absent-path candidate
+//   POST /projects {root, createDir?, initGit?, init?} explicitly create/initialize as requested, then register
 //   PUT  /projects/icon                   write the host gateway icon choice
 //   PUT  /projects/:id/icon               write one project's dashboard.icon choice
 //   GET|PUT /projects/:id/config          read/write the raw portable spexcode.json source
@@ -179,6 +179,7 @@ export async function browseProjectDirectories(path = '') {
   return {
     ok: true,
     path: data.path,
+    exists: data.exists !== false,
     parent: typeof data.parent === 'string' ? data.parent : null,
     home: typeof data.home === 'string' ? data.home : data.path,
     gitRoot: typeof data.gitRoot === 'string' ? data.gitRoot : null,
@@ -190,8 +191,8 @@ export async function browseProjectDirectories(path = '') {
   }
 }
 
-// One host add workflow: options describe explicit setup side effects, and the host writes its catalog
-// only after they succeed. A failed real `spex init` carries its exit code + transcript for the modal.
+// One host add workflow: options describe explicit create/setup side effects, and the host writes its
+// catalog only after they succeed. A failed real `spex init` carries its exit code + transcript for the modal.
 export async function addProject(root, setup = {}) {
   let res
   try {

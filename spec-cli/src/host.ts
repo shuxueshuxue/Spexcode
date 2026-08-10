@@ -118,15 +118,23 @@ function gitProjectRoot(dir: string): string | null {
   catch { return null }
 }
 
-// The admin folder picker reads directory NAMES only. Its selected-directory projection lets the UI ask
-// before either side effect instead of discovering the Git precondition after submit.
+// The admin folder picker reads directory NAMES only. An absent typed path is a read-only candidate, so
+// the UI can offer an explicit new-project transaction instead of making a failed browse do that work.
 export type ProjectDirectoryListing = {
-  path: string; parent: string | null; home: string; gitRoot: string | null
+  path: string; exists: boolean; parent: string | null; home: string; gitRoot: string | null
   initialized: boolean; cataloged: boolean
   entries: Array<{ name: string; path: string; git: boolean; initialized: boolean }>
 }
 export function browseProjectDirectories(dir?: string): ProjectDirectoryListing {
-  const path = existingDirectory((dir ?? '').trim() || homedir())
+  const requested = (dir ?? '').trim() || homedir()
+  if (!existsSync(resolve(requested))) {
+    const path = resolve(requested)
+    return {
+      path, exists: false, parent: dirname(path) === path ? null : dirname(path), home: homedir(),
+      gitRoot: null, initialized: false, cataloged: false, entries: [],
+    }
+  }
+  const path = existingDirectory(requested)
   const gitRoot = gitProjectRoot(path)
   const entries = readdirSync(path, { withFileTypes: true })
     .filter((entry) => {
@@ -146,7 +154,7 @@ export function browseProjectDirectories(dir?: string): ProjectDirectoryListing 
     })
     .sort((a, b) => a.name.localeCompare(b.name))
   return {
-    path,
+    path, exists: true,
     parent: dirname(path) === path ? null : dirname(path),
     home: homedir(),
     gitRoot,
@@ -274,18 +282,28 @@ export function runSpex(root: string, args: string[], timeoutMs = 120_000): Prom
 }
 
 export type AddProjectSetup = {
+  createDir?: boolean
   initGit?: boolean
   init?: { harness: string; preset?: string }
 }
 export type AddProjectSetupResult = {
-  ok: boolean; root: string; gitInitialized: boolean
+  ok: boolean; root: string; directoryCreated: boolean; gitInitialized: boolean
   init?: { code: number | null; output: string }
 }
 
-// One ordered add transaction: select an existing directory, explicitly create Git when requested, run
-// the real CLI initializer when requested, and only then claim catalog success.
+// One ordered add transaction: select an existing directory or explicitly create one with Git, run the
+// real CLI initializer when requested, and only then claim catalog success.
 export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSetup = {}): Promise<AddProjectSetupResult> {
-  const path = existingDirectory(dir)
+  if (setup.createDir && !setup.initGit) throw new Error('creating a project directory requires Git initialization')
+  let directoryCreated = false
+  let path: string
+  try { path = existingDirectory(dir) }
+  catch (e) {
+    if (!setup.createDir) throw e
+    mkdirSync(resolve(dir), { recursive: true })
+    directoryCreated = true
+    path = existingDirectory(dir)
+  }
   let root = gitProjectRoot(path)
   let gitInitialized = false
   if (!root) {
@@ -303,11 +321,11 @@ export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSet
     const preset = typeof setup.init.preset === 'string' ? setup.init.preset.trim() : ''
     const result = await runSpex(root, ['init', '--harness', harness, ...(preset ? ['--preset', preset] : [])])
     init = result
-    if (result.code !== 0) return { ok: false, root, gitInitialized, init }
+    if (result.code !== 0) return { ok: false, root, directoryCreated, gitInitialized, init }
   }
 
   catalogAdd(root)
-  return { ok: true, root, gitInitialized, ...(init ? { init } : {}) }
+  return { ok: true, root, directoryCreated, gitInitialized, ...(init ? { init } : {}) }
 }
 
 // The dashboard edits the committed, portable source file verbatim. The host fixes the filename (there
@@ -489,6 +507,7 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
         }
         try {
           const setup = await addKnownProjectWithSetup(root, {
+            createDir: body.createDir === true,
             initGit: body.initGit === true,
             ...(body.init ? { init: { harness: body.init.harness, ...(body.init.preset !== undefined ? { preset: body.init.preset } : {}) } } : {}),
           })

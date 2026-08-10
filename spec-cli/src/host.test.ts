@@ -162,6 +162,20 @@ test('directory browse reports folder state; explicit setup initializes Git then
   assert.deepEqual(JSON.parse(readFileSync(join(plain, 'spexcode.json'), 'utf8')).harnesses, ['codex'])
   assert.deepEqual(readCatalog().map((entry) => entry.root), [plain])
 
+  const unborn = join(parent, 'new-project')
+  const candidate = browseProjectDirectories(unborn)
+  assert.equal(candidate.exists, false)
+  assert.equal(candidate.path, unborn)
+  const created = await addKnownProjectWithSetup(unborn, { createDir: true, initGit: true })
+  assert.equal(created.ok, true)
+  assert.equal(created.directoryCreated, true)
+  assert.equal(existsSync(join(unborn, '.git')), true)
+  assert.equal(readCatalog().some((entry) => entry.root === unborn), true)
+
+  const notCreated = join(parent, 'not-created')
+  await assert.rejects(addKnownProjectWithSetup(notCreated, { createDir: true }), /requires Git initialization/)
+  assert.equal(existsSync(notCreated), false)
+
   const broken = join(parent, 'broken-project')
   mkdirSync(broken)
   const failed = await addKnownProjectWithSetup(broken, { initGit: true, init: { harness: 'not-a-harness' } })
@@ -298,9 +312,22 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     assert.equal(browse.body.path, repo)
     assert.equal(browse.body.gitRoot, repo)
     assert.equal(Array.isArray(browse.body.entries), true)
+    assert.equal(browse.body.exists, true)
     const added = await fetch(`${base}/projects`, { method: 'POST', body: JSON.stringify({ root: repo }) })
     assert.equal(added.status, 200)
     assert.equal((await added.json()).online, false)
+
+    const unborn = join(mkdtempSync(join(tmpdir(), 'spex-host-new-project-parent-')), 'new-project')
+    const unbornBrowse = await getJson(`${base}/projects/browse?path=${encodeURIComponent(unborn)}`)
+    assert.equal(unbornBrowse.status, 200)
+    assert.equal(unbornBrowse.body.exists, false)
+    assert.equal(unbornBrowse.body.path, unborn)
+    const created = await fetch(`${base}/projects`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ root: unborn, createDir: true, initGit: true }),
+    })
+    assert.equal(created.status, 200)
+    assert.equal(existsSync(join(unborn, '.git')), true)
     const repoId = encodeProject(repo)
 
     // Raw portable config rides the same admin surface and works while the repo is offline. Missing is

@@ -41,6 +41,20 @@ scenarios:
       the same URL with NO prompt (the admin scope authorizes every /p/* route). Zero loss = one
       credential experience covers both doors, and a shared direct project link exposes exactly one
       project.
+  - name: new-project-from-missing-folder
+    tags: [frontend-e2e, desktop]
+    test:
+      path: spec-dashboard/test/projects-new-project.e2e.mjs
+      name: Projects creates a cataloged Git project from an absent folder path
+    code: [spec-dashboard/src/ProjectsPage.jsx, spec-dashboard/src/projects.js]
+    description: >
+      Serve the built dashboard from the REAL host gateway, open its Add Project modal in a real browser,
+      enter an absent absolute path, and use the path-bar New project command.
+    expected: >
+      The absent path is reported as a candidate instead of a browse error, its path-bar action reads New
+      project, and clicking it creates the directory and Git repository through the host add transaction.
+      The modal closes only after the new root is registered, and the resulting offline project row is
+      visible in both the rendered catalog and `GET /projects`.
   - name: hub-project-lifecycle
     tags: [frontend-e2e, desktop, mobile]
     code: [spec-dashboard/src/ProjectsPage.jsx, spec-dashboard/src/projects.js]
@@ -49,7 +63,8 @@ scenarios:
       one process) and, in a real browser at the hub face, take a THROWAWAY git repo through the whole
       graphical management workflow: open the Add Project modal, browse into a plain throwaway directory,
       explicitly choose Git initialization and SpexCode initialization with a harness target, and submit;
-      also exercise an invalid/unreadable path and a failed init so their errors remain in the modal. Open
+      also enter a missing path, confirm the path action becomes New project, and create it; exercise an
+      unreadable path and a failed init so their errors remain in the modal. Open
       the added row's settings gear, confirm the raw `spexcode.json` editor contains the initialized
       source, occupies about half the desktop viewport and a large bounded mobile
       height without covering its controls, save a valid project setting, and confirm the file changed on disk;
@@ -60,7 +75,9 @@ scenarios:
       Add Project is a centred, responsive modal rather than an inline page drawer. Its path bar,
       parent/home controls, and bounded child-directory list browse the real host filesystem. The selected
       plain folder is not silently mutated: submit remains unavailable until Git initialization is explicitly
-      checked; SpexCode initialization independently requires at least one harness target. Submitting runs
+      checked; SpexCode initialization independently requires at least one harness target. A missing typed
+      path is a clear New project action that creates a Git-initialized, cataloged project without making the
+      user locate an existing folder. Submitting runs
       the real init chain, keeps a failure and its full transcript in place for retry, and closes only on
       catalog success. The resulting row appears with a calm 'stopped' dot and Start as the primary action,
       never a dead Open. The gear opens a monospace editor containing the project's actual portable

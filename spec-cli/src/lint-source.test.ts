@@ -5,10 +5,11 @@ import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
+import { tsxBin } from './tsx-bin.js'
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
-const TSX = join(SRC, '..', 'node_modules', '.bin', 'tsx')
+const TSX = tsxBin(join(SRC, '..'))
 
 function gitAvailable(): boolean {
   try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true } catch { return false }
@@ -43,7 +44,7 @@ function fixture(
     mkdirSync(dirname(join(root, path)), { recursive: true })
     writeFileSync(join(root, path), content)
   }
-  const result = spawnSync(TSX, [CLI, ...args], { cwd: root, encoding: 'utf8' })
+  const result = spawnSync(process.execPath, [TSX, CLI, ...args], { cwd: root, encoding: 'utf8' })
   return { code: result.status ?? -1, out: `${result.stdout}${result.stderr}` }
 }
 

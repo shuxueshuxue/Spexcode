@@ -11,6 +11,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  watch,
   writeFileSync,
 } from 'node:fs'
 import net from 'node:net'
@@ -115,6 +116,20 @@ async function stopChild(child: ChildProcess): Promise<void> {
   if (timedOut && child.exitCode === null && child.signalCode === null) {
     child.kill('SIGKILL')
     await once(child, 'exit')
+  }
+}
+
+function watcherCapacityAvailable(paths: string[]): boolean {
+  const probes = []
+  try {
+    for (const path of paths) probes.push(watch(path, () => {}))
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'EMFILE' || code === 'ENFILE' || code === 'ENOSPC') return false
+    throw error
+  } finally {
+    for (const probe of probes) probe.close()
   }
 }
 
@@ -261,7 +276,7 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
 // be what retries it. Here one live worktree's tree is gone, so its attach can only fail; the graph is then
 // read repeatedly. A per-read reattach would re-walk every worktree per request — that is how one refused
 // registration became a storm that held gigabytes.
-test('a refused watcher source fails loud once and repairs on a bounded schedule, never per read', { timeout: 40_000 }, async () => {
+test('a refused watcher source fails loud once and repairs on a bounded schedule, never per read', { timeout: 40_000 }, async (t) => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-hold-'))
   const project = join(fixture, 'project')
   const spexHome = join(fixture, 'home')
@@ -341,6 +356,10 @@ test('a refused watcher source fails loud once and repairs on a bounded schedule
     const sourcesHeld = census(serverLog)?.sources ?? 0
     const failuresBeforeRecovery = failures().length
     mkdirSync(gone, { recursive: true })
+    if (!watcherCapacityAvailable([gone, join(project, '.git', 'worktrees', entry)])) {
+      t.skip('host watcher capacity remained unavailable after the intentionally missing tree returned')
+      return
+    }
     await waitFor(() => (census(serverLog)?.sources ?? 0) > sourcesHeld,
       `the held source never reattached after its tree came back:\n${serverLog}`, 30_000)
     assert.equal(failures().length, failuresBeforeRecovery, 'recovery must not add a failure line')

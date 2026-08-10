@@ -25,7 +25,7 @@ export type BoardSnapshot = {
   sessions: any[]
   issues: any[]
   issuesStamp: string
-  forgeRevision: string
+  forgeRevision: number
   evalTimelines: Map<string, any>
   sessionEvalProjections: Map<string, any>
 }

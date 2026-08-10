@@ -8,6 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { extractors } from '@spexcode/spec-core'
 import { specLint } from './lint.js'
 import { eventLedgerDiagnosticsForTests, historyEventCachePathForTests, resetEventLedgerDiagnosticsForTests, resetHistoryCachesForTests } from '@spexcode/spec-core'
+import { tsxBin } from './tsx-bin.js'
 
 // [[code-anchor]] YATU CLI cases — the runtime semantics of measured multi-selectors and scoped
 // related, through the REAL `spex spec lint` in throwaway git repos (real stderr + exit code, never
@@ -17,7 +18,8 @@ import { eventLedgerDiagnosticsForTests, historyEventCachePathForTests, resetEve
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
-const TSX = join(SRC, '..', 'node_modules', '.bin', 'tsx')
+const TSX = tsxBin(join(SRC, '..'))
+const NODE_MODULES = dirname(dirname(dirname(TSX)))
 
 function gitAvailable(): boolean {
   try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true } catch { return false }
@@ -41,7 +43,7 @@ function fixture(hostTypescript = true): Fx {
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8' }).trim()
   g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
   // Most cases exercise host-first resolution; readiness degradation cases deliberately omit it.
-  if (hostTypescript) symlinkSync(join(SRC, '..', 'node_modules'), join(proj, 'node_modules'))
+  if (hostTypescript) symlinkSync(NODE_MODULES, join(proj, 'node_modules'))
   writeFileSync(join(proj, '.gitignore'), 'node_modules\n')
   writeFileSync(join(proj, 'spexcode.json'), JSON.stringify({ lint: { governedRoots: ['src'] } }) + '\n')
   mkdirSync(join(proj, 'src'))
@@ -54,7 +56,7 @@ function fixture(hostTypescript = true): Fx {
   }
   const commit = (msg: string) => { g('add', '-A'); g('commit', '-qm', msg) }
   const lint = () => {
-    const r = spawnSync(TSX, [CLI, 'spec', 'lint'], { cwd: proj, encoding: 'utf8' })
+    const r = spawnSync(process.execPath, [TSX, CLI, 'spec', 'lint'], { cwd: proj, encoding: 'utf8' })
     return { code: r.status ?? -1, out: `${r.stdout}${r.stderr}` }
   }
   return { proj, g, lint, node, commit }

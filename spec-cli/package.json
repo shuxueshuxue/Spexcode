@@ -13,6 +13,7 @@
     "test": "tsx --import ../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {
+    "@spexcode/spec-core": "file:../packages/spec-core",
     "tsx": "^4.19.2"
   },
   "optionalDependencies": {

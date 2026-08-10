@@ -274,8 +274,8 @@ exec "${realGit}" "$@"
 import assert from 'node:assert/strict'
 import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { resolveLayout } from ${JSON.stringify(pathToFileURL(join(here, 'layout.ts')).href)}
-import { withGitAbortSignal } from ${JSON.stringify(pathToFileURL(join(here, 'git.ts')).href)}
+import { resolveLayout } from ${JSON.stringify(pathToFileURL(join(here, '../../packages/spec-core/src/layout.ts')).href)}
+import { withGitAbortSignal } from ${JSON.stringify(pathToFileURL(join(here, '../../packages/spec-core/src/git.ts')).href)}
 const hold = ${JSON.stringify(holdBatch)}, entered = ${JSON.stringify(batchEntered)}
 const waitEntered = async (count) => {
   const deadline = Date.now() + 5000

@@ -174,7 +174,7 @@ function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: strin
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch: 'main',
     node: 'sessions-core', title: '', name: '', parent: '', status: 'active', proposal: '',
-    merges: 0, note: 'preserve-before-readiness', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',
+    merges: 0, review_epoch: 0, note: 'preserve-before-readiness', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',
     harness_session_id: `thread-${id}`, stopped: true, archived: false, cold_proof: '', adapter_recovery: '',
     launcher: 'fixture', launch_cmd: launchCmd, launch_owner: '', create_request_id: '', create_payload_hash: '',
     launch_readiness_pending: '',

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createServer } from 'node:net'
 import { templateConfigPath } from '@spexcode/spec-core'
+import { tsxBin } from './tsx-bin.js'
 
 // [[spex-init]] / [[residence]] — the ADOPTION SURFACE: what `spex init` prints must be TRUE of what it
 // planted (the success message once claimed governedRoots ["src"] while the template seeded ["."] — the
@@ -16,7 +17,8 @@ import { templateConfigPath } from '@spexcode/spec-core'
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
-const TSX = join(SRC, '..', 'node_modules', '.bin', 'tsx')
+const PACKAGE = join(SRC, '..')
+const TSX = tsxBin(PACKAGE)
 const HOOK_TEMPLATES = join(SRC, '..', 'templates', 'hooks')
 const TEMPLATE_ROOTS = JSON.stringify(JSON.parse(readFileSync(templateConfigPath, 'utf8')).lint.governedRoots)
 const SEEDED_LAUNCHERS = {
@@ -51,7 +53,7 @@ function freshRepo(opts: { trackedContract?: boolean } = {}) {
   const env = { ...process.env, SPEXCODE_HOME: home, CODEX_HOME: codex, SPEXCODE_PI_AGENT_DIR: piAgent }
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8', env })
   const spex = (...args: string[]) =>
-    execFileSync(TSX, [CLI, ...args], { cwd: proj, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
+    execFileSync(process.execPath, [TSX, CLI, ...args], { cwd: proj, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
   g('init', '-q', '-b', 'main')
   g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
   writeFileSync(join(proj, 'README.md'), '# app\n')
@@ -80,7 +82,7 @@ test('init adoption data cannot masquerade as a clean untracked project', { skip
   assert.match(out, /project source of truth[\s\S]*\.spec[\s\S]*spexcode\.json/i)
   assert.match(out, /commit them/i)
 
-  const before = spawnSync(TSX, [CLI, 'spec', 'lint'], {
+  const before = spawnSync(process.execPath, [TSX, CLI, 'spec', 'lint'], {
     cwd: proj,
     env,
     encoding: 'utf8',
@@ -93,7 +95,7 @@ test('init adoption data cannot masquerade as a clean untracked project', { skip
   execFileSync('git', ['-C', proj, 'commit', '-qm', 'adopt SpexCode seed'], {
     env: { ...env, SPEXCODE_ALLOW_MAIN: '1' },
   })
-  const after = spawnSync(TSX, [CLI, 'spec', 'lint'], {
+  const after = spawnSync(process.execPath, [TSX, CLI, 'spec', 'lint'], {
     cwd: proj,
     env,
     encoding: 'utf8',
@@ -138,7 +140,8 @@ test('a wholly generated ignore stays self-hidden after repeated materialize', {
 
 test('init without --harness fails loud BEFORE writing anything — the delivery choice is required, never defaulted', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, env } = freshRepo()
-  const all = execFileSync('bash', ['-c', `cd '${proj}' && '${TSX}' '${CLI}' init . 2>&1; echo "exit:$?"`], { encoding: 'utf8', env })
+  const result = spawnSync(process.execPath, [TSX, CLI, 'init', '.'], { cwd: proj, encoding: 'utf8', env })
+  const all = `${result.stdout}${result.stderr}\nexit:${result.status}`
   assert.match(all, /--harness is required/, 'the error names the missing flag')
   assert.match(all, /exit:1/, 'non-zero exit')
   assert.ok(!existsSync(join(proj, '.spec')) && !existsSync(join(proj, 'spexcode.json')), 'nothing was written')
@@ -199,7 +202,7 @@ test('a fresh selected-harness default drives no-choice session creation and pin
     SPEXCODE_API_URL: `http://127.0.0.1:${refusedPort}`,
     SPEXCODE_TMUX: `safe-init-${process.pid}`,
   }
-  const out = execFileSync(TSX, [CLI, 'session', 'new', 'safe default probe'], {
+  const out = execFileSync(process.execPath, [TSX, CLI, 'session', 'new', 'safe default probe'], {
     cwd: proj,
     env: createEnv,
     encoding: 'utf8',
@@ -245,7 +248,9 @@ test('post-checkout defers only the session-owned refresh', { skip: !gitAvailabl
 test('a pre-existing retired render field is ignored with a loud notice — init still succeeds', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, env } = freshRepo()
   writeFileSync(join(proj, 'spexcode.json'), '{"render":"committed","lint":{"governedRoots":["."]}}\n')
-  const all = execFileSync('bash', ['-c', `cd '${proj}' && '${TSX}' '${CLI}' init . --harness claude,codex 2>&1`], { encoding: 'utf8', env })
+  const result = spawnSync(process.execPath, [TSX, CLI, 'init', '.', '--harness', 'claude,codex'], { cwd: proj, encoding: 'utf8', env })
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`)
+  const all = `${result.stdout}${result.stderr}`
   assert.match(all, /retired/i, 'the retired-field notice is loud')
   assert.ok(existsSync(join(proj, '.spec')), 'adoption proceeded — the field is inert, never fatal')
   assert.ok(readFileSync(join(proj, '.git', 'info', 'exclude'), 'utf8').includes('spexcode:start'), 'one residence behavior regardless of the field')
@@ -274,7 +279,7 @@ test('re-init refreshes managed Spex hooks, preserves a custom commit-msg, and n
   const localBin = join(proj, 'node_modules', '.bin')
   mkdirSync(localBin, { recursive: true })
   const localSpex = join(localBin, 'spex')
-  writeFileSync(localSpex, `#!/bin/sh\nexec ${JSON.stringify(TSX)} ${JSON.stringify(CLI)} "$@"\n`)
+  writeFileSync(localSpex, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(TSX)} ${JSON.stringify(CLI)} "$@"\n`)
   chmodSync(localSpex, 0o755)
 
   const cfg = JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8'))

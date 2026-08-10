@@ -5,11 +5,13 @@ import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { tsxBin } from './tsx-bin.js'
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const PACKAGE = join(SRC, '..')
 const HOOK_TEMPLATES = join(PACKAGE, 'templates', 'hooks')
 const CLI = join(SRC, 'cli.ts')
+const TSX = tsxBin(PACKAGE)
 
 const SOURCE = (value: number) => `def apply_rate():\n    return ${value}\n\ndef helper():\n    return 0\n`
 const NODE = `---
@@ -200,7 +202,7 @@ test('a bare receiver reports anchor debt instead of crashing its reference hook
   chmodSync(receiverHook, 0o755)
   const shimDir = mkdtempSync(join(tmpdir(), 'spex-commit-gate-bare-bin-'))
   const shim = join(shimDir, 'spex')
-  writeFileSync(shim, `#!/usr/bin/env bash\nexec ${JSON.stringify(join(PACKAGE, 'node_modules', '.bin', 'tsx'))} ${JSON.stringify(CLI)} "$@"\n`)
+  writeFileSync(shim, `#!/usr/bin/env bash\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(TSX)} ${JSON.stringify(CLI)} "$@"\n`)
   chmodSync(shim, 0o755)
   fx.git('remote', 'add', 'bare-receiver', bare)
   const push = fx.runGit({

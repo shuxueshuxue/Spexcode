@@ -36,6 +36,21 @@ scenarios:
     related:
       - spec-cli/src/init.ts
       - scripts/prepack.mjs
+  - name: cli-package-install-resolves-core
+    tags: [cli]
+    description: >
+      From a clean checkout, run the CI installation order: `npm ci` at the root, then
+      `cd spec-cli && npm ci`, then `npm run -s lint`.
+    expected: >
+      The package-local install preserves a resolvable `@spexcode/spec-core` link for CLI source imports,
+      and `npm run -s lint` completes with zero errors. Replacing the root installation must not make the
+      CLI depend on a workspace-hoisted core package that its own manifest failed to declare.
+    code:
+      - spec-cli/package.json
+      - spec-cli/package-lock.json
+    related:
+      - spec-cli/src/lint.ts
+      - .github/workflows/ci.yml
   - name: omit-optional-l0-adopter
     tags: [cli]
     description: >

@@ -51,16 +51,20 @@ scenarios:
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/session-tree-disclosure.e2e.mjs
     code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/styles.css, spec-dashboard/src/SessionContextMenu.jsx]
-    related: [spec-cli/src/session-reparent.ts]
+    related: [spec-dashboard/src/SessionWindow.jsx, spec-cli/src/session-reparent.ts]
     description: >-
       In the running desktop console, reveal one nested CHILD and an unrelated live TARGET. Pointer-drag the
-      CHILD row onto TARGET, then drag it into the revealed top-level drop zone. Repeat the top-level detach
-      from the CHILD's right-click menu while intercepting the manager write, and record the rendered drag
-      state, target state, and each request body.
+      CHILD row with a title long enough to expose all three selected headline lines onto TARGET, then drag it
+      into the revealed top-level drop zone. While the pointer owns the drag, record the source and ghost row
+      element/state, visible headline line boxes, and right-side status-marker float. Repeat the top-level
+      detach from the CHILD's right-click menu while intercepting the manager write, and record the target
+      state and each request body.
     expected: >-
-      Dragging starts only after motion and the original row dims while a fixed, full session-row ghost — the
-      source headline and live status still visible — follows the pointer. A valid TARGET is visibly highlighted
-      even beneath that ghost and receives exactly
+      Dragging starts only after motion and the original row dims while a fixed, full session-row ghost follows
+      the pointer. A selected long-title source and its ghost have the same row element/state, the same three
+      visible headline lines, and the same right-floated status marker: only the first line gives that marker
+      space while later lines recover full width. A valid TARGET is visibly highlighted even beneath that ghost
+      and receives exactly
       `{children:[CHILD], parent:TARGET}`. A nested child exposes a top-level drop zone that highlights on
       hover and sends exactly `{children:[CHILD], parent:null}`. The context menu offers `remove from parent`
       only for a nested row and sends that same null-parent write. Self, present-parent, and descendant targets

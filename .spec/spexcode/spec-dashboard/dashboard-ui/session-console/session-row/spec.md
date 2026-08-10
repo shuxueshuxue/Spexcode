@@ -33,6 +33,12 @@ activity from `opSummary`, which folds an op list into per-op counts using the s
 Colour is never invented here — it is read from the shared vocabulary so a status means the same
 thing on every surface.
 
+**The console projection.** The desktop console's tree wrapper, item, optional select checkbox, shared row
+face, and fold pod are one presentational tree. Its drag ghost renders that tree again from the same current
+forest item; it does not serialize a second appearance shape. The one permitted difference is semantic: the
+live row is a button with its handlers while the ghost is inert. That keeps selected headline wrapping and its
+right-side marker in the same formatting context as the source row.
+
 **The rails.** `RowLead` draws the tree connectors to the left of a row. A guide array describes the
 ancestry: each entry says whether that column continues below, so the last entry becomes a tee or an
 elbow and the earlier ones become rails or gaps. `RowLead` also reserves the fold control's slot even

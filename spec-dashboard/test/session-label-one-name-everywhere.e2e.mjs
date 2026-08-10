@@ -16,10 +16,15 @@ const workspaceRoots = [root, sharedRoot]
 const tsxRoot = workspaceRoots.find((candidate) => existsSync(join(candidate, 'node_modules', 'tsx', 'dist', 'cli.mjs')))
 if (!tsxRoot) throw new Error('workspace node_modules with tsx is missing')
 const moduleCandidates = [process.env.SPEXCODE_E2E_MODULES, ...workspaceRoots.map((candidate) => join(candidate, 'node_modules'))].filter(Boolean)
+const pluginPath = (candidate) => [
+  join(candidate, '@vitejs', 'plugin-react', 'dist', 'index.mjs'),
+  join(candidate, '@vitejs', 'plugin-react', 'dist', 'index.js'),
+].find(existsSync)
 const modules = moduleCandidates.find((candidate) =>
-  existsSync(join(candidate, 'vite', 'dist', 'node', 'index.js')) && existsSync(join(candidate, '@vitejs', 'plugin-react', 'dist', 'index.js')),
+  existsSync(join(candidate, 'vite', 'dist', 'node', 'index.js')) && pluginPath(candidate),
 )
 if (!modules) throw new Error('dashboard node_modules is missing (set SPEXCODE_E2E_MODULES to a dependency directory)')
+const reactPlugin = pluginPath(modules)
 const tsxCli = join(tsxRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
 const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
@@ -133,7 +138,7 @@ try {
   await waitFor(() => fetch(`http://127.0.0.1:${apiPort}/health`).then((response) => response.ok).catch(() => false), 'isolated backend')
 
   const { createServer } = await import(pathToFileURL(join(modules, 'vite', 'dist', 'node', 'index.js')).href)
-  const react = (await import(pathToFileURL(join(modules, '@vitejs', 'plugin-react', 'dist', 'index.js')).href)).default
+  const react = (await import(pathToFileURL(reactPlugin).href)).default
   const startVite = async (usePolling) => {
     const server = await createServer({
       root: dashboardRoot,

@@ -34,6 +34,10 @@ password. Without `--public` nothing changes: dev stays plain
 loopback, no TLS, no gate — a pure additive switch over [[spec-cli]]'s supervisor; the dashboard needs no
 change (it already calls `/api` same-origin and opens its socket as `wss://` under HTTPS).
 
+This is a trusted collaboration gateway, not the anonymous public artifact. [[public-spec-graph]] builds
+the latter as static files with no gateway, API, terminal, session, issue, eval, or write surface; neither
+mode is a weaker spelling of the other.
+
 **The SPA fallback is for routes, never for files.** Only an extensionless path (`/issues/3`) falls back
 to `index.html`; a missing path *with* an extension is a stale hashed chunk requested by a pre-rebuild
 page still open in some browser, and it answers **404** — serving HTML there would trip the browser's

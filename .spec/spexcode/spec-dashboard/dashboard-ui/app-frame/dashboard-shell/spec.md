@@ -64,6 +64,13 @@ after that reload surfaces as the normal error instead of a reload loop. The boa
 feature (see [[governed-related]]). This is the dashboard twin of [[sessions-core]]: one owner for the
 substrate, references everywhere else.
 
+**Static graph face.** When the build-time `VITE_PUBLIC_GRAPH_ONLY=1` flag is present, this shell has a
+separate, sealed input: `public-graph.json` ([[public-spec-graph]]), not the live board. It fetches that
+one static snapshot once, mounts the desktop graph, and never polls `/api`, opens SSE, reads the project
+catalog, selects a mobile/hub face, or mounts a session/review/settings transport. The ordinary dashboard
+keeps its live-board contract unchanged. The public face can read a node's embedded prose but its sidebar
+is graph-only and its unknown hashes normalize back to `#/graph`.
+
 **One palette, many themes.** The whole app — the spec-node board, the react-flow canvas, AND the
 session console — draws its colours from one set of CSS custom properties (`--paper --panel --panel2
 --line --ink --ink2 --muted`, the accents `--blue/--green/--red/--yellow/--orange/--magenta/--cyan`,

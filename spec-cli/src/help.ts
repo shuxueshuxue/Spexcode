@@ -136,16 +136,19 @@ function sessionVerbHelp(verb: string): string | null {
 const ENTRIES: Record<string, Entry> = {
   // ── project verbs (implicit object = this project) ────────────────────────
   graph: {
-    line: 'graph                 the assembled view: bare = readable tree · --json = the full payload',
-    body: `Usage: spex graph [--focus <id>] [--depth N] [--json]
+    line: 'graph                 the assembled view: bare = readable tree · --json = full payload · --public = static graph snapshot',
+    body: `Usage: spex graph [--focus <id>] [--depth N] [--json] | spex graph --public [--out <path>] [--content-dir <path>]
 
-The ONE assembled view — merged spec tree + worktree overlay + sessions. Bare it renders the
+The normal assembled view is merged spec tree + worktree overlay + sessions. Bare it renders the
 status-coloured tree (coloured when stdout is a tty; NO_COLOR respected), one line per node: id,
 derived status, title, and attention badges (drift:N · stale:N · issues:N · ghost).
   --focus <id>  render just that subtree (unknown id fails loud)
   --depth N     limit levels below the shown root; prunes are counted, never silent
   --json        the full payload (tree · overlay · sessions), identical to GET /api/graph — machine
-                food; with --focus/--depth it is that filtered subtree as nested objects instead`,
+                food; with --focus/--depth it is that filtered subtree as nested objects instead
+  --public      deterministic read-only Spec Graph payload; excludes sessions, issues, evals, and write state
+  --out <path>  write the public graph index to a file instead of stdout (only with --public)
+  --content-dir <path>  write one read-only spec document per node for a static host (only with --public)`,
     see: 'spex spec search (find one node by intent) · spex session ls (just the sessions, as a table)',
   },
   init: {

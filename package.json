@@ -33,6 +33,8 @@
   "scripts": {
     "api": "cd spec-cli && npm run serve",
     "web": "cd spec-dashboard && npm run dev",
+    "build:public": "node scripts/public-graph-build.mjs",
+    "test:public-graph": "npm run build:public && node spec-dashboard/test/public-graph-static.e2e.mjs",
     "lint": "node scripts/sync-init-plugins.mjs --check && cd spec-cli && npm run -s lint",
     "sync:init-plugins": "node scripts/sync-init-plugins.mjs --write",
     "test:init-plugins": "node --test scripts/sync-init-plugins.test.mjs",

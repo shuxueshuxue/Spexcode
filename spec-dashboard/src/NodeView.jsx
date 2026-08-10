@@ -4,7 +4,7 @@ import { EVAL_FILTER_KIND, evidenceList, filterMenuGroups } from '@spexcode/spec
 import { EvidenceItem } from './Evidence.jsx'
 import { Replies } from './Thread.jsx'
 import { useT } from './i18n/index.jsx'
-import { specUrl } from './data.js'
+import { loadPublicSpecContent, specUrl } from './data.js'
 import IssueCard from './IssueCard.jsx'
 import { apiUrl } from './project.js'
 import { addressHash, evalAddress, reviewListAddress } from './address.js'
@@ -20,7 +20,8 @@ export const PANES = [
   { key: 'eval',    label: 'eval' },
 ]
 
-export function panesFor(node) {
+export function panesFor(node, graphOnly = false) {
+  if (graphOnly) return [{ key: 'spec', label: 'spec' }]
   return node?.overlays?.length ? [{ key: 'edit', label: 'edit' }, ...PANES] : PANES
 }
 
@@ -176,25 +177,29 @@ function TwoPart({ parts }) {
 // stale entry and refetches — the detail prose can never lag the version badge above it. A non-OK response is
 // shown but never cached, so a transient 404 during a backend reload can't poison the node until a reload.
 const contentCache = new Map()
-function useSpecContent(id, version) {
-  const key = `${id}@${version ?? ''}`
+function useSpecContent(id, version, { embedded = false, publicGraph = false } = {}) {
+  const key = `${publicGraph ? 'public:' : ''}${id}@${version ?? ''}`
   const [content, setContent] = useState(() => contentCache.get(key) ?? null)
   useEffect(() => {
+    if (embedded) return undefined
     const hit = contentCache.get(key)
     if (hit) { setContent(hit); return }             // cached (re-open) → instant, no spinner
     setContent(null)                                  // drop the previous node/version's prose while the new one loads
     let on = true
-    fetch(specUrl(id, 'content')).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    const request = publicGraph
+      ? loadPublicSpecContent(id)
+      : fetch(specUrl(id, 'content')).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    request
       .then((d) => { contentCache.set(key, d); if (on) setContent(d) })   // land the body the instant it arrives — no artificial delay
       .catch(() => { if (on) setContent({ body: '', parts: null }) })
     return () => { on = false }
-  }, [id, version, key])
+  }, [embedded, id, version, key, publicGraph])
   return content
 }
 
-export function SpecPane({ node }) {
+export function SpecPane({ node, graphOnly = false }) {
   const t = useT()
-  const content = useSpecContent(node.id, node.version)
+  const content = useSpecContent(node.id, node.version, { embedded: node.body != null, publicGraph: graphOnly })
   const driftTitle = (node.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')
   return (
     <div className="pane-doc">
@@ -620,7 +625,7 @@ export function EvalPane({ node, sessions = [], filter = {}, onFilter = () => {}
 // PANES keys map to localized tab labels (the key drives logic; only the label is shown).
 const PANE_LABEL = { spec: 'nodeView.paneSpec', history: 'nodeView.paneHistory', issues: 'nodeView.paneIssues', eval: 'nodeView.paneEval', edit: 'nodeView.paneEdit' }
 
-export default function NodeView({ node, pane, setPane, onClose, sessions = [] }) {
+export default function NodeView({ node, pane, setPane, onClose, sessions = [], graphOnly = false }) {
   const t = useT()
   const [filters, setFilters] = useState({ issues: {}, eval: {} })
   const updateFilter = (kind, patch) => setFilters((current) => ({
@@ -632,7 +637,7 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [] }
   const evalPass = node.reviewSummary?.evals?.pass || 0
   const evalFail = node.reviewSummary?.evals?.fail || 0
   const editCount = (node.overlays || []).length
-  const panes = panesFor(node)
+  const panes = panesFor(node, graphOnly)
   // render the pane the user picked, but fall back to the first available if it isn't valid for THIS node
   // (e.g. 'edit' is selected, then a node with no overlay opens) — so a tab is always shown, never blank.
   const active = panes.some((p) => p.key === pane) ? pane : panes[0].key
@@ -669,7 +674,7 @@ export default function NodeView({ node, pane, setPane, onClose, sessions = [] }
           <span className="ov-hint">{t('nodeView.hint')}</span>
         </div>
         <div className="ov-body">
-          {active === 'spec' && <div className="pane-solo"><SpecPane node={node} /></div>}
+          {active === 'spec' && <div className="pane-solo"><SpecPane node={node} graphOnly={graphOnly} /></div>}
           {active === 'history' && <HistoryPane node={node} rows={rows} />}
           {active === 'issues' && <IssuesPane node={node} sessions={sessions} filter={filters.issues} onFilter={(patch) => updateFilter('issues', patch)} />}
           {active === 'eval' && <EvalPane node={node} sessions={sessions} filter={filters.eval} onFilter={(patch) => updateFilter('eval', patch)} />}

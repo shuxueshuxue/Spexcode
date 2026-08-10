@@ -19,7 +19,12 @@ import { IdentityIcon } from './IdentityIcon.jsx'
 
 const ENTRIES = PAGES.filter((page) => page !== 'settings')
 
-function RailLink({ page, active, label }) {
+function RailLink({ page, active, label, disabled = false }) {
+  if (disabled) return (
+    <span className="rail-btn disabled" data-tip={label} aria-label={label} aria-disabled="true">
+      <Icon name={page} size={18} />
+    </span>
+  )
   return (
     <a
       className={active ? 'rail-btn on' : 'rail-btn'}
@@ -91,7 +96,7 @@ function ProjectChip({ identity, projects, gatewayIdentity, t }) {
   )
 }
 
-export default function SideBar({ page, identity, catalog }) {
+export default function SideBar({ page, identity, catalog, graphOnly = false }) {
   const t = useT()
   const catalogOk = catalog?.state === 'ok'
   return (
@@ -106,10 +111,10 @@ export default function SideBar({ page, identity, catalog }) {
         t={t}
       />}
       {ENTRIES.map((p) => (
-        <RailLink key={p} page={p} active={page === p} label={t(`nav.${p}`)} />
+        <RailLink key={p} page={p} active={page === p} label={t(`nav.${p}`)} disabled={graphOnly && p !== 'graph'} />
       ))}
       <div className="rail-spacer" />
-      <RailLink page="settings" active={page === 'settings'} label={t('nav.settings')} />
+      <RailLink page="settings" active={page === 'settings'} label={t('nav.settings')} disabled={graphOnly} />
     </nav>
   )
 }

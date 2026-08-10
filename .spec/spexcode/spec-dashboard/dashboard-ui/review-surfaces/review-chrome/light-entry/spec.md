@@ -39,3 +39,8 @@ loading/error/evidence behavior; it only decides which runtime is allowed to exi
 The root still mounts [[transient-notices]] around both runtime choices. That provider is chrome only: a
 lightweight review entry can acknowledge its own completed write without importing the board, while mounting it
 does not fetch graph data, open a transport, or change the cold-route boundary above.
+
+The static [[public-spec-graph]] face is a separate compile-time exception: with
+`VITE_PUBLIC_GRAPH_ONLY=1`, the root bypasses this review fast-path even when a copied URL names Evals or
+Issues, delegates to the sealed App graph, and lets that face normalize the hash to `#/graph`. The live
+dashboard keeps the review-first behavior above.

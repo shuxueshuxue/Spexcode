@@ -43,6 +43,10 @@ restores the list.
   every entry, and a Tab-focused control keeps its native Enter/Space activation. Desktop entries use a
   centered **32px** square target: the tight horizontal gutter keeps the rail subordinate to the page while
   retaining an unambiguous pointer and keyboard destination.
+- **Static graph projection preserves the silhouette, not false doors.** [[public-spec-graph]] keeps the
+  familiar rail so visitors can see the product's full shape, but only Spec Node Graph is an anchor. Sessions,
+  Evals, Issues, and Settings render as muted `aria-disabled` icons with no `href`, handler, or keyboard
+  route; they must neither navigate nor wake any live transport. The live dashboard retains five anchors.
 - **The URL is the page state — query string included.** Routes are hash paths — `#/graph` (home; any
   unknown hash lands here) or `#/graph/<node>` (a shareable spec-node focus), `#/sessions` (+
   `#/sessions/<sel>` deep-linking a tab), `#/evals` (+

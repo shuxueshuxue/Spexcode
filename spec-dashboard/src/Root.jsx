@@ -5,6 +5,7 @@ import { TransientNoticeProvider } from './TransientNotice.jsx'
 import { navigate, useRoute } from './route.js'
 import { useT } from './i18n/index.jsx'
 import { useIsMobile } from './useIsMobile.js'
+import { PUBLIC_GRAPH_ONLY } from './public-mode.js'
 
 const App = lazy(() => import('./App.jsx'))
 const EvalsPage = lazy(() => import('./EvalsPage.jsx'))
@@ -53,6 +54,17 @@ export default function Root() {
     if (!coldReviewRoute) setBoardStarted(true)
   }, [coldReviewRoute])
   const lightweight = coldReviewRoute && !boardStarted
+
+  // The public artifact has one face only. It must bypass the live review fast-path as well as the
+  // normal App router, otherwise a direct #/issues or #/evals URL would wake a review transport before
+  // App can normalize it back to the graph.
+  if (PUBLIC_GRAPH_ONLY) {
+    return (
+      <TransientNoticeProvider>
+        <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}><App /></Suspense>
+      </TransientNoticeProvider>
+    )
+  }
 
   return (
     <TransientNoticeProvider>

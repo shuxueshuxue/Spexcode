@@ -16,3 +16,6 @@ The runner declared failure after reading `.xterm-rows.textContent`. That intern
 
 ## Bounded repair
 Execute a revised harness that uses frame/pixel evidence around the resize boundary plus real WebSocket/commit timing; do not use xterm DOM text as the paint oracle. Only then file a fresh frontend-e2e reading. Do not change live-view product code or acknowledge its 16 stale scenarios from the old reading.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T09:49:53.971Z -->
+Resolved on main 8b6af5dbf. The durable terminal-resize runner now uses real Chromium frame/pixel evidence as the paint oracle; WebSocket events only establish resize, commit, final, and tail ordering. It constructs its own empty graph fixture instead of relying on an existing session. A post-sync real run observed the complete resize transaction and visible final/tail frames, then filed a fresh frontend-e2e reading at the merged code SHA. No live-view product behavior or drift/freshness/gate semantics changed.

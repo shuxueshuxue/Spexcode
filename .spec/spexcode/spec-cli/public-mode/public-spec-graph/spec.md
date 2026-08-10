@@ -46,7 +46,9 @@ scheduled GitHub consumer may replace the immutable snapshot/artifact for a repo
 normalized GitHub name to `<project>.spexcode.net`; that transport stays outside this product node until
 the generic consumer has an explicit deployment owner. The first approved host is
 `herdr.spexcode.net`; nginx serves it from an isolated release root and never reuses the existing
-`spexcode.net` documentation root.
+`spexcode.net` documentation root. Public boot reads the graph index once; static graph and document JSON use
+conditional `no-cache` revalidation, so an unchanged release can answer from the browser's cached body after an
+ETag check. The public mode never polls or opens a long-lived stream.
 
 The build also emits `public-spec-release.json` with schema `spexcode.public-spec-release/v1`: the exact
 revision plus the path, byte count, and SHA-256 of the index and every document. This is the handoff

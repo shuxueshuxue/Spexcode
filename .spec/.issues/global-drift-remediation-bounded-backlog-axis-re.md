@@ -130,3 +130,10 @@ Independent integration confirmation from the ZCode consumer line on main descen
 Spec: doctor
 
 Closed the doctor first-commit product failure at e5fa39a5b. The diagnostic now reads only the current spec tree for health rows instead of accidentally requesting history/drift indexing that cannot exist before initial commit. Same disposable real CLI has the recorded fail-to-pass pair, and main post-merge targeted regression passed 14/14 with an unchanged worktree. This lowered the structural spec-warning baseline from 60 to 59; no lint threshold, freshness policy, gate, score, or executor changed.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T12:16:51.620Z -->
+Spec: zcode-harness, hook-dispatch
+
+Read-only zcode-harness mapping separates a concrete adapter bug from a real ownership decision. Current SpexCode ownership is static settings/hook materialization, prompt launch, liveness, and delivery/resume refusal. The spec also claims app-server RPC observation, V4 hydration, child lineage, direct workspace routing, and native ID correspondence that are upstream ZCode capabilities with no Spex bridge or product scenario today. That runtime bridge remains decision-gated rather than being erased or silently implemented.
+
+Separately, zcode Stop hook delivery is a current implementation bug: generated dispatch.sh zcode Stop is parsed as event zcode because dispatch lacks zcode in its harness case, then exits 0 without a manifest match. Issue zcode-stop-hook-is-generated-but-dispatch-silent tracks the narrow implementation/proof repair. The existing artifact-only scenario is not being called a runtime pass.

@@ -154,8 +154,8 @@ pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle witho
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
 genuinely single-line **session toolbar** contains the current surface, its local resource tabs, evaluation, and
 available commands. The current base tab is **Terminal** or **Conversation** for a pane-backed session, and
-Conversation for a headless session. The visual tab sequence is its current surface, resource tabs, the
-**Eval** navigation tab, then the resource picker: this is one compact tab rail, with any remaining toolbar space
+Conversation for a headless session. The visual tab sequence is its current surface, the
+**Eval** navigation tab, resource tabs, then the resource picker: this is one compact tab rail, with any remaining toolbar space
 separating it from command tools. A one-pixel divider and short gutter separate the picker from Eval; there is no
 matching divider after the plus. The picker itself is a compact circular plus control, so it reads as an add/open
 action rather than an extension of Eval. It is deliberately a step smaller and quieter than a command tool — thin
@@ -214,9 +214,10 @@ The toolbar wears the app-chrome background with a bottom separator, so it reads
 **visibly apart from the console** below it in both light and dark themes (the old flat strip blended
 into that dark edge — the complaint this replaces). Its exact height follows the real tab text, icon tools, and
 focus rings rather than clipping them, targeting a compact ~32px instead of the former ~40px identity bar. At a
-narrow pane the same one-line hierarchy progressively drops secondary Eval tallies while keeping the current surface, resource
-tab strip, Eval tab, adjacent plus picker, and every currently available icon tool inside the pane. Resource tab labels clip and their
-strip scrolls horizontally rather than growing a second toolbar line. The bar never grows or
+narrow pane the same one-line hierarchy progressively drops secondary Eval tallies while keeping the current surface, its adjacent
+Eval tab, resource tab strip, picker, and every currently available icon tool inside the pane. The current surface and Eval stay as
+one fixed left anchor while resource tab labels clip and their strip scrolls horizontally rather than growing a second toolbar line.
+The bar never grows or
 overflows for a long prompt/headline because no session headline enters it at all. Geometry stays stable across
 all app themes, English/Chinese, lifecycle and liveness combinations, and Command Box visibility; a persisted wide session list
 yields at the desktop/mobile boundary rather than crushing the terminal lane until toolbar controls clip.

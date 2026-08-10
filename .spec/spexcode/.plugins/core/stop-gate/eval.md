@@ -9,7 +9,7 @@ scenarios:
     expected: >-
       The first block prints the full teaching text — four real states plus the `nothing` trap, each with its
       application condition, including that close-pending is only settled work with no outstanding human
-      decision/follow-up and that an answered exploratory question or handoff awaiting direction is asking,
+      decision/follow-up and that a reported finding/recommendation or handoff awaiting direction is asking,
       plus the declare-LAST ordering discipline (the declaration is the turn's final call; any later tool call
       honestly re-flips the record to active). Every later undeclared stop in the SAME
       session prints a one-line reason instead, and that line is self-explanatory: it still carries the

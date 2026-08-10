@@ -1066,10 +1066,6 @@ a.scenario-count:hover { background: var(--panel2); }
   box-shadow: 0 8px 20px color-mix(in srgb, var(--ink) 22%, transparent);
   opacity: .96; pointer-events: none; transform: translate(10px, -8px) rotate(-1deg);
 }
-.si-session-drag-ghost > .si-item {
-  height: 100%; box-sizing: border-box; background: var(--panel);
-  border-top: 1px solid var(--line); border-right: 1px solid var(--line);
-}
 body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !important; user-select: none !important; }
 /* A selected headline can grow to three lines; its disclosure stays beside line one rather than centring in
    the taller row. Resting rows keep the generic vertical centring above. */

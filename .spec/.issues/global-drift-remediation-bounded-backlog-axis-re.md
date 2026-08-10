@@ -43,3 +43,6 @@ Checkpoint after read-only triage (repo-local CLI; integration code 888eeb565, l
 Decision gate status: Decision 001 is posted on @fbb76f84 as a session file. It asks whether eval-owners may report effective inherited axes diagnostically. No source change, freshness criterion, gate, or `--changed` behavior has been modified.
 
 Next non-behavioral work, capacity permitting: define/measure the five coverage gaps; measure files/html-previews-rendered-in-a-script-free-frame through real CLI + Chromium; triage the 105 semantic scenario stales before code-only backlog. Do not mass-ack or mass-file pass readings.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T05:02:30.855Z -->
+Coordination correction: Decision 001 is a preserved, dashboard-posted source-change proposal, NOT a blocker for the remediation campaign. It was raised too early because no current work requires changing eval-owners or any drift/freshness/gate semantic. Continue the non-source work order now: coverage declarations, source/spec ownership triage, and real YATU evidence. Re-open the decision only when a concrete source patch is ready to start; publish a fresh log against that then-current main before editing it.

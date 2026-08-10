@@ -34,20 +34,46 @@ export function RowLead({ guides = [], expandable, kin = 0 }) {
 
 // The subtree count is the ONLY parent disclosure. It is pointer-only ([[session-nesting]]), carries the
 // expanded state itself, and suppresses mousedown focus without disturbing the current surface sink.
-export function FoldPod({ expanded, rollup, kin, onToggle }) {
+export function FoldPod({ expanded, rollup, kin, onToggle, inert = false }) {
   const label = `${expanded ? 'Hide' : 'Show'} ${kin} nested session${kin === 1 ? '' : 's'}`
+  const style = expanded ? { color: rollup, borderColor: rollup } : { background: rollup, borderColor: rollup }
+  if (inert) return <span aria-hidden="true" className={`sess-fold pod sess-fold-control${expanded ? ' open' : ''}`} style={style}>{kin}</span>
   return (
     <button
       type="button"
       tabIndex={-1}
       className={`sess-fold pod sess-fold-control${expanded ? ' open' : ''}`}
-      style={expanded ? { color: rollup, borderColor: rollup } : { background: rollup, borderColor: rollup }}
+      style={style}
       aria-expanded={expanded}
       aria-label={label}
       data-tip={label}
       onMouseDown={(e) => e.preventDefault()}
       onClick={(e) => { e.stopPropagation(); onToggle() }}
     >{kin}</button>
+  )
+}
+
+// The console's live row and inert drag projection share this complete tree. Only their outer semantics differ.
+export function SessionConsoleTreeRow({ item, activeId, selecting, picked, dragging = false, dropTarget = false, onToggleFold, rowProps = {}, inert = false, style }) {
+  const { s } = item
+  const selected = !selecting && activeId === s.id
+  const isPicked = selecting && picked.has(s.id)
+  const lead = (item.expandable || item.depth)
+    ? <RowLead guides={item.guides} expandable={item.expandable} kin={item.kin} />
+    : null
+  const fold = item.expandable ? { expanded: item.expanded, rollup: item.rollup, kin: item.kin } : null
+  const treeClass = `sess-tree-row si-tree-row${dragging ? ' dragging' : ''}${dropTarget ? ' drop-target' : ''}${inert ? ' si-session-drag-ghost' : ''}`
+  const itemClass = `si-item${selected ? ' on' : ''}${isPicked ? ' picked' : ''}`
+  const face = <>
+    {selecting && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
+    <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
+  </>
+  const treeStyle = { '--ov': labelColor(s.id), '--sess-fold-indent': `${item.depth * 14}px`, ...style }
+  return (
+    <div className={treeClass} style={treeStyle} {...(!inert ? { 'data-session-drop-id': s.id } : { 'aria-hidden': 'true' })}>
+      <button type="button" className={itemClass} tabIndex={inert ? -1 : undefined} {...rowProps}>{face}</button>
+      {fold && <FoldPod {...fold} inert={inert} onToggle={onToggleFold} />}
+    </div>
   )
 }
 

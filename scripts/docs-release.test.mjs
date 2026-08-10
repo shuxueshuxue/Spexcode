@@ -109,6 +109,8 @@ test('workflow allows a gated manual bootstrap and validates immutable docs rele
   assert.match(workflow, /^on:\n  workflow_dispatch:\n  push:\n/m)
   assert.match(workflow, /if: vars\.SPEXCODE_DOCS_RELEASE_PUBLISH == 'true'/)
   assert.match(workflow, /docs-release\.mjs/)
+  assert.match(workflow, /name: Install workspace dependencies\n        run: npm ci/)
+  assert.equal((workflow.match(/\bnpm ci\b/g) ?? []).length, 1, 'a second workspace install removes the root package link')
   assert.match(workflow, /gh release view/)
   assert.match(workflow, /gh release download/)
   assert.match(workflow, /cmp --/)

@@ -65,7 +65,7 @@ eval_advisory() {
   n=$(printf '%s\n' "$out" | grep -cE 'eval-(drift|missing|coverage):')
   [ "${n:-0}" -gt 0 ] || return 0   # no gap in what you changed (or eval lint unavailable) -> nothing to nudge
   ids=$(printf '%s\n' "$out" | sed -n "s/.*eval-[a-z]*: '\([^']*\)'.*/\1/p" | awk '!seen[$0]++' | head -6 | paste -sd' ' -)
-  msg="eval — the loss signal the optimizer reads — flags ${n} gap(s) in nodes you changed: ${ids}. A node whose score went stale/unmeasured: re-measure it — PRODUCE the measurement YOURSELF with a real run of the scenario's actual surface (its tag on the \`spex eval lint --changed\` line tells you WHICH surface to run), compare to expected, and file it with \`spex eval add <node>\`; don't desk-check it, and don't defer to reviewing a recording after the fact. A FRONTEND node with no eval.md: give it one (a scenario — description + expected), since an obvious UI change should carry a loss signal. \`spex eval lint --changed\` lists them. (Advisory — fires once, not a gate.)"
+  msg=$($S internal hook-prompt stop-gate --variant eval --count "$n" --ids "$ids") || return 0
   esc=$(printf '%s' "$msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
   printf '{"hookSpecificOutput":{"hookEventName":"Stop","additionalContext":"%s"}}\n' "$esc"
 }
@@ -94,8 +94,9 @@ if [ "${status:-active}" = awaiting ] && { [ "$proposal" = merge ] || [ "$propos
     $S session ask --session "$sid" --note "stopped with uncommitted work — commit your spec+code on the node branch, then re-declare done" >/dev/null 2>&1 || true
     exit 0
   fi
-  esc=$(printf '%s' "$gatemsg" | sed 's/[\\"]/\\&/g')
-  printf '{"decision":"block","reason":"Not ready to declare done: %s. The dogfood ritual lands every change as a git commit on your node branch BEFORE you propose. Commit your spec.md + code on this node branch (spec: <id> — <reason>, with a Session: trailer), then re-run %s session done --propose %s."}\n' "$esc" "$S" "$proposal"
+  reason=$($S internal hook-prompt stop-gate --variant commit --reason "$gatemsg" --cli "$S" --propose "$proposal") || exit 1
+  esc=$(printf '%s' "$reason" | sed 's/[\\"]/\\&/g')
+  printf '{"decision":"block","reason":"%s"}\n' "$esc"
   exit 0
 fi
 
@@ -120,7 +121,9 @@ fi
 # of the full-to-terse information gap is recoverable from the entry, none of it from memory.
 taught="$sdir/stop-gate-taught"
 if [ -f "$taught" ]; then
-  printf '{"decision":"block","reason":"undeclared stop — declare the ONE true state as your LAST call: `%s session <done --propose merge (review; ONLY clickable merge)|close (close-pending; settled, no human decision/follow-up or posted artifact waiting)|park (parked; real wake-up + next action) / ask (asking; human reply/direction, including exploratory answer or handoff)>`. `done --propose nothing` is a trap: it writes no state and names these choices. Conditions: `%s help session`."}\n' "$S" "$S"
+  reason=$($S internal hook-prompt stop-gate --variant terse --cli "$S") || exit 1
+  esc=$(printf '%s' "$reason" | sed 's/[\\"]/\\&/g')
+  printf '{"decision":"block","reason":"%s"}\n' "$esc"
   exit 0
 fi
 touch "$taught" 2>/dev/null || true
@@ -135,8 +138,12 @@ touch "$taught" 2>/dev/null || true
 # this block text is the one place every undeclared stopper is guaranteed to read, so the teaching that
 # kills the park->block->re-park loop at its source lives here.
 if [ -s "$sdir/files.json" ] && grep -qE '"[^"]+"' "$sdir/files.json"; then
-  printf '{"decision":"block","reason":"a posted file/web artifact still needs human inspection; declare `spex session ask --note ...`, and declare it last."}\n'
+  reason=$($S internal hook-prompt stop-gate --variant artifact) || exit 1
+  esc=$(printf '%s' "$reason" | sed 's/[\\"]/\\&/g')
+  printf '{"decision":"block","reason":"%s"}\n' "$esc"
   exit 0
 fi
-printf '{"decision":"block","reason":"Your session state is a CLAIM the graph, your supervisor, and other agents act on — not a box to tick to end the turn. Stopping undeclared makes your outcome a guess. Pick the ONE that is TRUE right now and run `%s session <choice>`, choosing the <choice> whose condition holds:\\n  • done --propose merge  — spec+code COMMITTED on the branch and genuinely ready for human review. It declares REVIEW and is the ONLY proposal that offers a clickable merge.\\n  • done --propose nothing — TRAP: records no state. Choose merge, close, ask, or park below.\\n  • done --propose close — task genuinely settled, work landed (or none to merge), worktree no longer needed, and no human decision, follow-up, or posted artifact awaits inspection: propose human close. It declares CLOSE-PENDING, not merge. Never run `session close` on your own id.\\n  • ask --note <your-question> — you need the human: a real question or direction, an answered exploratory question or handoff awaiting their follow-up, or posted-artifact inspection. It declares ASKING and resumes only when they reply.\\n  • park --note <what-you-await> — ONLY when a real wake-up will resume a named next action: a managed watch delivery or background task. A watch on terminal children is not a wake-up. It declares PARKED and self-resumes.\\n\\nDECLARE LAST, THEN STOP: finish everything else in the turn first — speak, send your messages, establish managed watches or arm background waits — and make the declaration your FINAL call. Any tool call AFTER it flips your record back to active (mark-active, by design: activity is activity), so the next stop re-blocks and demands a fresh declaration; declaring last kills that loop at its source.\\n\\n(This full explanation shows once per session; later undeclared stops get a one-line reminder. `%s help session` re-explains the choices any time.)"}\n' "$S" "$S"
+reason=$($S internal hook-prompt stop-gate --variant full --cli "$S") || exit 1
+esc=$(printf '%s' "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g' | awk 'BEGIN{ORS=""} NR>1{print "\\n"} {print}')
+printf '{"decision":"block","reason":"%s"}\n' "$esc"
 exit 0

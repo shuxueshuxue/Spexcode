@@ -420,6 +420,7 @@ Machine plumbing — called by generated hooks and launch scripts, never typed b
   session-fail  --session <id>        the StopFailure hook marks the session errored
   session-idle  --session <id>        the idle-prompt hook marks an active session idle
   commit-gate       the Stop gate's deterministic commit check (exit 0 = ready to declare done)
+  hook-prompt <name>                  render canonical model-facing text for a runtime hook
   nudge <node>      the post-merge hook prints the issue nudge for a merged node
   shared-runtime-spawn <cwd> <log> <pid> <scope> <cmd> [args…]  detached adapter control plane (launch script)
   codex-launch <sock> <cwd> [prompt…]   backend-owned codex thread/start + first turn (launch script)

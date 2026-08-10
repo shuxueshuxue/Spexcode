@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
+import { HookPromptCatalog } from './hook-prompts.js'
 
 const repo = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
 const dispatch = join(repo, 'spec-cli', 'hooks', 'dispatch.sh')
@@ -28,6 +29,41 @@ test('dispatch exits 2 when a blocking handler emits decision:block JSON', () =>
   })
   assert.equal(r.status, 2)
   assert.match(r.stdout, /"decision":"block"/)
+})
+
+test('stop-gate is silent for self-launched sessions and renders the catalog prompt for governed sessions', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-stop-gate-dispatch-'))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const sid = 'stop-gate-dispatch'
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  mkdirSync(join(runtime, 'sessions', sid), { recursive: true })
+  const source = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'stop-gate', 'stop-gate.sh')
+  writeFileSync(join(dir, 'hooks', 'stop-gate.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(source)}\n`)
+  const manifest = join(runtime, 'hooks-manifest')
+  writeFileSync(manifest, 'Stop\t10\ttrue\thooks/stop-gate.sh\n')
+  const record = join(runtime, 'sessions', sid, 'session.json')
+  const fire = () => spawnSync('bash', [dispatch, 'claude', 'Stop'], {
+    cwd: dir,
+    env: { ...process.env, SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'), SPEXCODE_HOME: home, SPEX_HOOK_MANIFEST: manifest },
+    input: JSON.stringify({ session_id: sid, hook_event_name: 'Stop', stop_hook_active: false }),
+    encoding: 'utf8',
+  })
+
+  writeFileSync(record, JSON.stringify({ session_id: sid, governed: false, status: 'active' }, null, 2))
+  const selfLaunched = fire()
+  assert.equal(selfLaunched.status, 0, selfLaunched.stderr)
+  assert.equal(selfLaunched.stdout, '')
+
+  writeFileSync(record, JSON.stringify({ session_id: sid, governed: true, status: 'active' }, null, 2))
+  const governed = fire()
+  assert.equal(governed.status, 2, governed.stderr)
+  const expected = new HookPromptCatalog().render('stop-gate', {
+    variant: 'full',
+    cli: join(repo, 'spec-cli', 'bin', 'spex.mjs'),
+  })
+  assert.equal(JSON.parse(governed.stdout).reason, expected)
 })
 
 function legacyMarkActiveRig(source = legacyMarkActive, custom = false) {
@@ -215,6 +251,48 @@ for (const harness of ['claude', 'codex'] as const) {
     assert.equal(t.fire('src/governed.ts', 'mutate').status, 0)
     assert.equal(existsSync(t.sentinel), false, 'a governed mutation is not a governed read')
     assert.equal(t.fire('src/governed.ts').status, 2)
+  })
+}
+
+function specOfFileRig(harness: GateHarness) {
+  const dir = mkdtempSync(join(tmpdir(), `spex-spec-of-file-${harness}-`))
+  const home = join(dir, 'home')
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const sid = `sid-${harness}-edit`
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  mkdirSync(join(dir, '.spec', 'project'), { recursive: true })
+  mkdirSync(join(dir, 'src'), { recursive: true })
+  mkdirSync(join(dir, 'hooks'), { recursive: true })
+  writeFileSync(join(dir, '.spec', 'project', 'spec.md'), '---\ntitle: project\nstatus: active\n---\nProject scope.\n')
+  writeFileSync(join(dir, 'src', 'novel.ts'), 'export const novel = true\n')
+  const hook = join(repo, '.spec', 'spexcode', '.plugins', 'core', 'spec-of-file', 'spec-of-file.sh')
+  writeFileSync(join(dir, 'hooks', 'spec-of-file.sh'), `#!/usr/bin/env bash\nbash ${JSON.stringify(hook)}\n`)
+  const manifest = join(runtime, 'hooks-manifest')
+  mkdirSync(runtime, { recursive: true })
+  writeFileSync(manifest, 'PostToolUse\t10\tfalse\thooks/spec-of-file.sh\n')
+  const payload = harness === 'claude'
+    ? JSON.stringify({ session_id: sid, hook_event_name: 'PostToolUse', tool_name: 'Write', tool_input: { file_path: 'src/novel.ts' } })
+    : JSON.stringify({ session_id: sid, hook_event_name: 'PostToolUse', tool_name: 'apply_patch', tool_input: { command: '*** Update File: src/novel.ts\n@@\n' } })
+  const fire = () => spawnSync('bash', [dispatch, harness, 'PostToolUse'], {
+    cwd: dir,
+    env: { ...process.env, SPEX: join(repo, 'spec-cli', 'bin', 'spex.mjs'), SPEXCODE_HOME: home, SPEX_HOOK_MANIFEST: manifest },
+    input: payload,
+    encoding: 'utf8',
+  })
+  return { fire }
+}
+
+for (const harness of ['claude', 'codex'] as const) {
+  test(`${harness} spec-of-file: actionable edit emits the registry prompt once`, () => {
+    const t = specOfFileRig(harness)
+    const first = t.fire()
+    assert.equal(first.status, 0, first.stderr)
+    const context = JSON.parse(first.stdout).hookSpecificOutput.additionalContext as string
+    assert.match(context, /^Contract context for this edit:/)
+    assert.match(context, /src\/novel\.ts — no spec claims this yet \(uncovered\)/)
+    const second = t.fire()
+    assert.equal(second.status, 0, second.stderr)
+    assert.equal(second.stdout, '', 'the same file must not inject a second annotation')
   })
 }
 

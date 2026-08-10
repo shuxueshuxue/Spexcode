@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { HookPromptCatalog } from './hook-prompts.js'
 
 const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
@@ -82,15 +83,17 @@ test('bare session keeps the complete compatible drawer', () => {
 })
 
 test('Stop teaching names every declaration face without changing the gate', () => {
-  assert.match(stopGate, /done --propose merge.*REVIEW.*ONLY proposal.*clickable merge/)
-  assert.match(stopGate, /done --propose nothing.*TRAP: records no state/)
-  assert.match(stopGate, /done --propose close.*CLOSE-PENDING.*not merge/)
-  assert.match(stopGate, /done --propose close.*task genuinely settled, work landed.*worktree no longer needed, and no human decision, follow-up, or posted artifact awaits inspection: propose human close/)
-  assert.match(stopGate, /ask --note.*human reply, direction, or decision.*reported finding\/recommendation.*handoff.*ASKING/)
-  assert.match(stopGate, /posted file\/web artifact still needs human inspection.*session ask/)
-  assert.match(stopGate, /park --note.*real wake-up.*named next action.*terminal children is not a wake-up.*PARKED/)
-  assert.match(stopGate, /done --propose merge \(review; ONLY clickable merge\).*close \(close-pending; settled, no human decision\/follow-up or posted artifact waiting\).*park \(parked; real wake-up \+ next action\).*ask \(asking; human reply\/direction\/decision, including reported finding\/recommendation or handoff\).*nothing.*trap/)
+  const prompt = new HookPromptCatalog().entry('stop-gate').content
+  assert.match(prompt, /done --propose merge.*REVIEW.*ONLY proposal.*clickable merge/)
+  assert.match(prompt, /done --propose nothing.*TRAP: records no state/)
+  assert.match(prompt, /done --propose close.*CLOSE-PENDING.*not merge/)
+  assert.match(prompt, /done --propose close.*task genuinely settled, work landed.*worktree no longer needed, and no human decision, follow-up, or posted artifact awaits inspection: propose human close/)
+  assert.match(prompt, /ask --note.*human reply, direction, or decision.*reported finding\/recommendation.*handoff.*ASKING/)
+  assert.match(prompt, /posted file\/web artifact still needs human inspection.*session ask/)
+  assert.match(prompt, /park --note.*real wake-up.*named next action.*terminal children is not a wake-up.*PARKED/)
+  assert.match(prompt, /done --propose merge \(review; ONLY clickable merge\).*close \(close-pending; settled, no human decision\/follow-up or posted artifact waiting\).*park \(parked; real wake-up \+ next action\).*ask \(asking; human reply\/direction\/decision, including reported finding\/recommendation or handoff\).*nothing.*trap/)
   assert.match(stopGate, /auto: stopped without declaring — choose merge, close, ask, or park; done --propose nothing records no state/)
+  assert.doesNotMatch(stopGate, /Your session state is a CLAIM the graph/)
 })
 
 test('Stop gate teaches human decisions and handoffs as asking', () => {
@@ -106,7 +109,7 @@ test('Stop gate teaches human decisions and handoffs as asking', () => {
       cwd: fixture,
       input: `{"session_id":"${id}","stop_hook_active":false}`,
       encoding: 'utf8',
-      env: { ...process.env, SPEXCODE_HARNESS_LIB: lib, HOOK_STORE: store },
+      env: { ...process.env, SPEX: `tsx ${cli}`, SPEXCODE_HARNESS_LIB: lib, HOOK_STORE: store },
     })
 
     const full = invoke()

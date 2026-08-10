@@ -135,16 +135,17 @@ scenarios:
       page errors.
   - name: list-page-skeleton
     tags: [frontend-e2e]
-    code: spec-dashboard/src/IssuesPage.jsx
+    test: "spec-dashboard/test/new-issue-page.e2e.mjs"
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
     description: >-
-      On the running issues page (#/issues), read the query + bordered ListView skeleton, row tag/hrefs,
+      On the running issues page (#/issues), read the query + bordered ListView skeleton, full-row link/hrefs,
       Open/Closed section tabs, direct menu buttons, and overflow menu. Select Closed and read the hash
       and the visible query text; reload at that address. Submit a query text, pick a menu value, and
       drive Back through each state. Drive j/k and Enter; then type 'j' inside the query input. Record
       history.length across a row click and drive browser Back.
     expected: >-
       The page is a GitHub-style full-width ListView: 32px query, 48px metadata header, ~64px desktop
-      structured rows, each a REAL <a> anchor to #/issues/<id>; NO master-detail split. Open/Closed + counts
+      structured rows, each exposing a full-row REAL <a> anchor to #/issues/<id>; NO master-detail split. Open/Closed + counts
       sit left; Store is the direct menu and source-session presence uses functional overflow; author and
       spec node are query tokens with no menus; only real values appear. At 390px Store remains direct;
       body/document stay 390px. The list renders instantly from app-resident issues. A query edit, the
@@ -170,7 +171,8 @@ scenarios:
       still available only inside the selected Issues detail meta strip. No page errors.
   - name: new-form-node-links
     tags: [frontend-e2e]
-    code: spec-dashboard/src/IssuesPage.jsx
+    test: "spec-dashboard/test/new-issue-page.e2e.mjs"
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx]
     description: >-
       On the running issues page, open the New compose page and count its text surfaces, read every store
       picker's option text, and read the side rail while typing; then post an issue whose
@@ -185,7 +187,7 @@ scenarios:
       "node ids"). Instead the SIDE rail shows the spec nodes the prose already links, appearing as the
       `[[<id>]]` is typed and gone when it is deleted. Create lands on the created issue's OWN detail address
       (`#/issues/<id>`, a REPLACE — Back returns to the list, never to an emptied form), and that detail
-      shows the linked node as a clickable chip in its side rail — the store inferred
+      shows the linked node as a clickable internal `#/graph/<id>` anchor in its side rail — the store inferred
       `nodes:` from the body's `[[…]]` link ([[local-issues]]), the writer never re-typed an id into a
       separate field. A forge post writes the same node link as a `Spec:` marker and, after the forced forge
       read-back, the issue appears with that node chip. No page errors.

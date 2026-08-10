@@ -11,9 +11,8 @@ import { createServer, type Socket } from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
+import { processStartToken, runtimeRoot } from '@spexcode/spec-core'
 import { codexAppServerPid, codexAppServerSock, rvSock } from '../src/harness.js'
-import { runtimeRoot } from '../src/layout.js'
-import { processStartToken } from '../src/process-identity.js'
 
 const pexec = promisify(execFile)
 const here = dirname(fileURLToPath(import.meta.url))

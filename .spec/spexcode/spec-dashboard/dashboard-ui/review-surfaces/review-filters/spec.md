@@ -7,6 +7,7 @@ code:
   - packages/spec-core/src/review/reviewFilters.js
 related:
   - packages/spec-core/src/review/index.js
+  - packages/spec-core/src/review/reviewFilters.d.ts
   - spec-cli/src/reviews.ts
   - spec-dashboard/src/ReviewShell.jsx
   - spec-dashboard/src/IssuesPage.jsx

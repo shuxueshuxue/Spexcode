@@ -2,6 +2,9 @@
 scenarios:
   - name: one-name-everywhere
     tags: [frontend-e2e, desktop]
+    test:
+      path: spec-dashboard/test/session-label-one-name-everywhere.e2e.mjs
+      name: session list, @ mention dropdown, and Rename prefill
     description: >
       In a real browser on the session board, open a live session's inbox and type `@` to raise the
       mention dropdown. Compare each dropdown row's text against the session LIST rows beside it — the
@@ -14,8 +17,10 @@ scenarios:
       (name > activity > note > promptPreview > …), with zero rows showing a raw URL when prompt prose exists; the rename dialog
       prefills the raw override (the one sanctioned raw consumer). Zero loss = one derivation, every
       surface, and the raw parts reachable only where editing them is the point.
-    code: [spec-cli/src/sessionLabel.test.ts]
-    related: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/SessionContextMenu.jsx, spec-dashboard/src/session.js]
+    code:
+      - spec-dashboard/src/SessionWindow.jsx#SessionRow
+      - spec-dashboard/src/mentions.jsx#matchSessions
+      - spec-dashboard/src/SessionContextMenu.jsx#SessionContextMenu
   - name: note-fills-title-fallback
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/session-note-title.e2e.mjs

@@ -50,9 +50,13 @@ assert.ok(offline.length, 'the board needs one unrelated session record for the 
 // backend and every session.json stay untouched while the real dashboard still renders the full state shape.
 const fixture = structuredClone(graph)
 const offlineIds = new Set(offline.map((session) => session.id))
-fixture.sessions = fixture.sessions.map((session) => offlineIds.has(session.id)
-  ? { ...session, parent: null, ...(fixtureNeedsOffline ? { status: 'offline', liveness: 'offline' } : {}) }
-  : session)
+const longDragHeadline = 'selected drag projection must keep this complete title layout aligned with the live focused session row'
+fixture.sessions = fixture.sessions.map((session) => {
+  const patched = offlineIds.has(session.id)
+    ? { ...session, parent: null, ...(fixtureNeedsOffline ? { status: 'offline', liveness: 'offline' } : {}) }
+    : session
+  return session.id === child.id ? { ...patched, title: longDragHeadline, headline: longDragHeadline } : patched
+})
 
 const transcript = []
 const timeline = []
@@ -176,11 +180,12 @@ try {
 
   // Reparent uses the actual session row as the drag subject: its fixed ghost carries the row's visible
   // headline/status, the valid receiver is highlighted, and the request remains an intercepted fixture write.
-  await page.evaluate((id) => { window.location.hash = `#/sessions/${id}` }, reparentTarget.id)
+  await page.evaluate((id) => { window.location.hash = `#/sessions/${id}` }, child.id)
   const dragChild = page.locator(`.si-item[data-sid="${child.id}"]`)
   const dragTarget = page.locator(`.si-tree-row:has(> .si-item[data-sid="${reparentTarget.id}"])`)
   await dragChild.waitFor({ state: 'visible' })
   await dragTarget.waitFor({ state: 'visible' })
+  await page.waitForFunction((id) => document.querySelector(`.si-item[data-sid="${id}"]`)?.classList.contains('on'), child.id)
   const childBox = await dragChild.boundingBox()
   assert.ok(childBox, 'drag source must have screen bounds')
   await page.mouse.move(childBox.x + 16, childBox.y + childBox.height / 2)
@@ -190,6 +195,35 @@ try {
   await dragGhost.waitFor({ state: 'visible' })
   assert.equal(await page.locator(`.si-tree-row:has(> .si-item[data-sid="${child.id}"])`).evaluate((row) => row.classList.contains('dragging')), true)
   assert.equal(await dragGhost.locator('.sess-id').textContent(), await dragChild.locator('.sess-id').textContent(), 'the ghost retains the source row headline')
+  const dragLayout = await dragChild.evaluate((source) => {
+    const ghost = document.querySelector('.si-session-drag-ghost .si-item')
+    const describe = (row) => {
+      const headline = row.querySelector('.sess-id')
+      const marker = row.querySelector('.sess-meta')
+      const bounds = headline.getBoundingClientRect()
+      const range = document.createRange()
+      range.selectNodeContents(headline)
+      const lines = [...range.getClientRects()]
+        .filter((rect) => rect.top >= bounds.top - 1 && rect.bottom <= bounds.bottom + 1)
+        .map((rect) => Math.round(rect.width))
+      return {
+        tag: row.tagName,
+        className: row.className,
+        markerFloat: getComputedStyle(marker).float,
+        lines,
+      }
+    }
+    return { source: describe(source), ghost: describe(ghost) }
+  })
+  assert.equal(dragLayout.source.tag, dragLayout.ghost.tag, 'the ghost and source retain the same row element')
+  assert.equal(dragLayout.source.className, dragLayout.ghost.className, 'the ghost and source retain the same focused row state')
+  assert.equal(dragLayout.source.markerFloat, 'right', 'a focused source reserves the status mark on its first line')
+  assert.equal(dragLayout.ghost.markerFloat, 'right', 'the ghost keeps the focused source marker rule')
+  assert.equal(dragLayout.source.lines.length, 3, 'the focused source exposes three visible headline lines')
+  assert.equal(dragLayout.ghost.lines.length, dragLayout.source.lines.length, 'the ghost exposes the same visible headline line count')
+  assert.ok(Math.max(...dragLayout.source.lines.slice(1)) > dragLayout.source.lines[0], 'the source lets later lines grow past the marker-reserved first line')
+  assert.ok(Math.max(...dragLayout.ghost.lines.slice(1)) > dragLayout.ghost.lines[0], 'the ghost preserves the source first-line marker reservation')
+  record('SessionInterface', 'focused drag layout matches source', dragLayout)
   const movedTargetBox = await dragTarget.boundingBox()
   assert.ok(movedTargetBox, 'target row must keep screen bounds after the root zone opens')
   await page.mouse.move(movedTargetBox.x + movedTargetBox.width / 2, movedTargetBox.y + movedTargetBox.height / 2)

@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import SessionTerm from './SessionTerm.jsx'
 import TimelineChat from './TimelineChat.jsx'
-import { labelColor } from './color.js'
 import { createSession, useLaunchers, useCommandPresets } from './launch.js'
 import { sessionAncestorIds, sessionForest, splitArchived } from './session.js'
 import { MENTION_RE, nodeMentionAt, sessionMentionAt, slashTokenAt, MentionMenu, matchSlash, SlashMenu } from './mentions.jsx'
-import { SessionRow, SessionZone, RowLead, FoldPod, useFold } from './SessionWindow.jsx'
+import { SessionConsoleTreeRow, SessionZone, useFold } from './SessionWindow.jsx'
 import { HARNESS_BY_ID } from './harness.jsx'
 import { Icon, IconButton } from './icons.jsx'
 import { ReviewState } from './ReviewShell.jsx'
@@ -500,11 +499,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       setActionOutcome({ owner: 'panel', phase: 'failed', message: error instanceof Error ? error.message : String(error) })
     }
   }, [allSessions, expandFolds, reload])
-  const startSessionDrag = useCallback((event, session, appearance) => {
+  const startSessionDrag = useCallback((event, session) => {
     if (event.button !== 0 || viewingShelf) return
     const bounds = event.currentTarget.getBoundingClientRect()
     const drag = {
-      id: session.id, session, appearance, width: bounds.width, height: bounds.height,
+      id: session.id, width: bounds.width,
       offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top,
       startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY,
       parent: session.parent || null, target: undefined, started: false,
@@ -555,6 +554,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     window.removeEventListener('mouseup', drag.onUp, true)
     document.body.classList.remove('is-session-dragging')
   }, [])
+  const draggedItem = sessionDrag ? forest.find((item) => item.type === 'row' && item.s.id === sessionDrag.id) : null
   const terminalFree = isHeadlessSession(selSession)
   const activeBaseSurface = terminalFree ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(active)
   const conversationSurface = activeBaseSurface === SESSION_SURFACE_CONVERSATION
@@ -1428,47 +1428,36 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
               return <SessionZone key={`zone-${it.zone}`} item={it} baseClass="si-zone" onToggle={() => setOfflineOpen((v) => !v)} />
             }
             const s = it.s
-            const lead = (it.expandable || it.depth)
-              ? <RowLead guides={it.guides} expandable={it.expandable} kin={it.kin} />
-              : null
             // A click switches tabs. Locking is an explicit item in the right-click menu below; double-click
             // deliberately has no extra meaning, so it only leaves the clicked tab selected.
-            // The face is the shared SessionRow, avatar-less here.
             // In multi-select mode ([[session-multi-select]]) the row is a checkbox instead: a click toggles
             // its pick (never switches the pane), and the row action menu is suppressed.
-            const isPicked = selecting && picked.has(s.id)
             return (
-              <div key={s.id} data-session-drop-id={s.id}
-                className={`sess-tree-row si-tree-row${sessionDrag?.id === s.id ? ' dragging' : ''}${sessionDrag?.target === s.id ? ' drop-target' : ''}`}
-                style={{ '--sess-fold-indent': `${it.depth * 14}px` }}
-              >
-                <button
-                  type="button"
-                  data-sid={s.id}
-                  className={`si-item${!selecting && active === s.id ? ' on' : ''}${isPicked ? ' picked' : ''}`}
-                  style={{ '--ov': labelColor(s.id) }}
-                  aria-grabbed={sessionDrag?.id === s.id || undefined}
-                  onMouseDown={(e) => startSessionDrag(e, s, {
-                    lead, selecting, picked: isPicked, active: !selecting && active === s.id,
-                    fold: it.expandable ? { expanded: it.expanded, rollup: it.rollup, kin: it.kin } : null,
-                    depth: it.depth,
-                  })}
-                  onClick={() => {
+              <SessionConsoleTreeRow
+                key={s.id}
+                item={it}
+                activeId={active}
+                selecting={selecting}
+                picked={picked}
+                dragging={sessionDrag?.id === s.id}
+                dropTarget={sessionDrag?.target === s.id}
+                onToggleFold={() => toggleFold(s.id)}
+                rowProps={{
+                  'data-sid': s.id,
+                  'aria-grabbed': sessionDrag?.id === s.id || undefined,
+                  onMouseDown: (e) => startSessionDrag(e, s),
+                  onClick: () => {
                     if (suppressSessionClickRef.current === s.id) {
                       suppressSessionClickRef.current = null
                       return
                     }
                     if (selecting) return togglePick(s.id)
                     selectSession(s.id)
-                  }}
-                  onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) }}
-                  data-tip={s.ops?.length ? t('session.opsTitle') : t('session.lockTitle')}
-                >
-                  {selecting && <span className={`si-check${isPicked ? ' on' : ''}`} aria-hidden="true" />}
-                  <SessionRow s={s} locked={false} showAvatar={false} lead={lead} />
-                </button>
-                {it.expandable && <FoldPod expanded={it.expanded} rollup={it.rollup} kin={it.kin} onToggle={() => toggleFold(s.id)} />}
-              </div>
+                  },
+                  onContextMenu: (e) => { e.preventDefault(); e.stopPropagation(); if (!selecting) setCtxMenu({ x: e.clientX, y: e.clientY, session: s }) },
+                  'data-tip': s.ops?.length ? t('session.opsTitle') : t('session.lockTitle'),
+                }}
+              />
             )
           })}
         </aside>
@@ -1792,29 +1781,19 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 </div>
           </div>
         </section>
-        {sessionDrag && (
-          <div className="si-session-drag-ghost" aria-hidden="true" style={{
-            width: sessionDrag.width,
-            height: sessionDrag.height,
-            left: sessionDrag.x - sessionDrag.offsetX,
-            top: sessionDrag.y - sessionDrag.offsetY,
-            '--ov': labelColor(sessionDrag.id),
-            '--sess-fold-pad-x': '12px',
-            '--sess-fold-indent': `${sessionDrag.appearance.depth * 14}px`,
-          }}>
-            <div className={`si-item${sessionDrag.appearance.active ? ' on' : ''}${sessionDrag.appearance.picked ? ' picked' : ''}`}>
-              {sessionDrag.appearance.selecting && <span className={`si-check${sessionDrag.appearance.picked ? ' on' : ''}`} />}
-              <SessionRow s={sessionDrag.session} locked={false} showAvatar={false} lead={sessionDrag.appearance.lead} />
-            </div>
-            {sessionDrag.appearance.fold && (
-              <span className={`sess-fold pod sess-fold-control${sessionDrag.appearance.fold.expanded ? ' open' : ''}`}
-                style={sessionDrag.appearance.fold.expanded
-                  ? { color: sessionDrag.appearance.fold.rollup, borderColor: sessionDrag.appearance.fold.rollup }
-                  : { background: sessionDrag.appearance.fold.rollup, borderColor: sessionDrag.appearance.fold.rollup }}>
-                {sessionDrag.appearance.fold.kin}
-              </span>
-            )}
-          </div>
+        {sessionDrag && draggedItem && (
+          <SessionConsoleTreeRow
+            item={draggedItem}
+            activeId={active}
+            selecting={selecting}
+            picked={picked}
+            inert
+            style={{
+              width: sessionDrag.width,
+              left: sessionDrag.x - sessionDrag.offsetX,
+              top: sessionDrag.y - sessionDrag.offsetY,
+            }}
+          />
         )}
       </div>
     </div>

@@ -13,12 +13,14 @@ import {
 } from '@spexcode/spec-core'
 import { helpCatalogEntries } from './help.js'
 import { guideCatalogEntries } from './guide.js'
+import { HookPromptCatalog, HOOK_PROMPT_SOURCE, type HookPromptRole } from './hook-prompts.js'
 
 export const GUIDANCE_SCHEMA_VERSION = 1 as const
 export const GUIDANCE_CATALOG_SCHEMA = 'spexcode.guidance-catalog/v1' as const
 export const GUIDANCE_PAYLOAD_NAME = 'guidance-catalog.json' as const
 export type GuidanceKind = 'plugin' | 'help' | 'guide'
 export type GuidanceSurface = 'system' | 'command' | 'hook' | 'skill' | 'agent' | 'review'
+export type GuidanceContentRole = 'prompt' | 'help' | 'guide' | 'signal'
 
 export type GuidanceSource = Readonly<{
   path: string
@@ -32,8 +34,16 @@ export type GuidanceEntry = Readonly<{
   surface?: GuidanceSurface
   title: string
   description: string
+  contentRole: GuidanceContentRole
   content: string
   source: GuidanceSource
+  runtime?: Readonly<{
+    path: string
+    revision: string
+    events: readonly string[]
+    order: number
+    block: boolean
+  }>
 }>
 
 export type EffectiveSystemContract = Readonly<{
@@ -124,9 +134,33 @@ export class GuidanceCatalog {
       return value
     }
     const entries: GuidanceEntry[] = []
+    const hookPrompts = new HookPromptCatalog()
 
     for (const [surface, loader] of SURFACES) {
       for (const preset of loader()) {
+        if (surface === 'hook') {
+          const prompt = hookPrompts.entry(preset.name)
+          const handler = preset.files.find((file) => file.endsWith('.sh'))
+          if (!handler) throw new Error(`surface:hook node '${preset.name}' ships no .sh script (one co-located .sh required)`)
+          entries.push({
+            id: `plugin:${surface}:${preset.name}`,
+            kind: 'plugin',
+            surface,
+            title: prompt.title,
+            description: prompt.description,
+            contentRole: prompt.role as HookPromptRole,
+            content: prompt.content,
+            source: entrySource(root, HOOK_PROMPT_SOURCE, prompt.content, revision, sourceRevisionFor),
+            runtime: {
+              path: handler,
+              revision: sourceRevisionFor(handler),
+              events: [...preset.events],
+              order: preset.order,
+              block: preset.block,
+            },
+          })
+          continue
+        }
         const path = sourcePathForPreset(preset)
         entries.push({
           id: `plugin:${surface}:${preset.name}`,
@@ -134,6 +168,7 @@ export class GuidanceCatalog {
           surface,
           title: preset.title,
           description: preset.desc,
+          contentRole: 'prompt',
           content: preset.body,
           source: entrySource(root, path, preset.body, revision, sourceRevisionFor),
         })
@@ -146,6 +181,7 @@ export class GuidanceCatalog {
         kind: 'help',
         title: entry.title,
         description: 'CLI command usage and safety guidance',
+        contentRole: 'help',
         content: entry.text,
         source: entrySource(root, path, entry.text, revision, sourceRevisionFor),
       })
@@ -157,6 +193,7 @@ export class GuidanceCatalog {
         kind: 'guide',
         title: entry.title,
         description: 'CLI workflow and format guidance',
+        contentRole: 'guide',
         content: entry.text,
         source: entrySource(root, path, entry.text, revision, sourceRevisionFor),
       })

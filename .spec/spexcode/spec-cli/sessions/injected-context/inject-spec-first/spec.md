@@ -7,6 +7,7 @@ code:
   - .spec/spexcode/.plugins/core/spec-first/spec-first.sh
 related:
   - spec-cli/hooks/harness.sh
+  - spec-cli/src/hook-prompts.ts
   - spec-cli/templates/spec/project/.plugins/core/spec-first/spec-first.sh
   - spec-cli/src/hook-dispatch.test.ts
 ---
@@ -38,6 +39,11 @@ a sibling of `session.json` under [[runtime]]) therefore has exactly one transit
 - **armed + governed read -> spent, block once**, naming the actual governor and requiring its relevant parent,
   siblings, and children before retrying;
 - **spent + any later event -> spent, allow silently**.
+
+The blocking text is rendered by the shared `HookPromptCatalog` through `spex internal hook-prompt`, with the
+actual path and resolved governor passed as data. The shell owns event detection and sentinel state; the registry
+owns the model-facing words. Thus the public prompt catalog and the live block cannot drift apart, while the common
+silent path stays pure shell.
 
 This file governance is independent of the session record's `governed` bit. Dashboard-launched and
 self-launched agents both get the gate, and a self-launched session's store directory is created only when a

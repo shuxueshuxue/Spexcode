@@ -8,6 +8,7 @@ on:
       - '.spec/**'
       - 'spec-cli/bin/spex.mjs'
       - 'spec-cli/src/guidance-catalog.ts'
+      - 'spec-cli/src/hook-prompts.ts'
       - 'spec-cli/src/git.ts'
       - 'spec-cli/src/guide.ts'
       - 'spec-cli/src/help.ts'

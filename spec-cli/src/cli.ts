@@ -258,75 +258,11 @@ async function evalExport(id: string): Promise<never> {
   process.exit(0)
 }
 
-// appended to a done/ask/block declaration: the note is durable conversation history even though the
-// CURRENT board projection correctly flips back to active on the next tool call.
-const DECLARED = ' — recorded; the human sees it in the dashboard. This declaration remains in the session timeline; your next tool call flips only the current graph state back to active (the mark-active hook, by design).'
-// appended ONLY to a propose-close declaration: a worktree about to be discarded may still own ephemeral things the agent started to test this change; nudge (not gate) it to reclaim them before the worktree goes, keyed on whether the thing should outlive the task — never on who started it (a deliberately long-running service / a production build is started-by-you yet must be left alone). Project-agnostic on purpose.
-// @@@ the sweep never includes THIS session - the nudge names sessions as sweepable, and it is read at the one moment a session is thinking about closing. Said loosely it reads as permission to close yourself, which deletes the worktree the reading agent is running in. So the target is scoped to sessions the agent spawned, and the exclusion is stated rather than implied.
-const CLOSE_CLEANUP = '\n\nBefore this worktree closes, check whether you left anything running that you started to test this change — a background process, a dev or preview server, a bound port, a throwaway session you spawned. If nothing depends on it anymore, shut it down, or it keeps running as an orphan. Leave anything meant to keep running: a service you deliberately stood up, a production build, anything other work relies on. What matters is whether it still needs to exist after this task, not whether you started it. If unsure, leave it. This sweep never includes THIS session: you have PROPOSED that the human close it, and closing your own session would delete the worktree you are running in. This is a reminder to check, not a required step.'
-function nothingProposalTrap(): never {
-  console.error('`spex session done --propose nothing` is an intended trap: no state was recorded.')
-  console.error('Choose the true destination:')
-  console.error('  `merge` - committed spec and code have not landed in `main`.')
-  console.error('  `close` - work is complete: it has landed (or had nothing to land), is verified, and no worktree, human decision/follow-up, or posted artifact needs human inspection.')
-  console.error('  `ask` - a human reply, direction, or decision is needed, including a reported finding/recommendation, handoff, or posted artifact inspection.')
-  console.error('  `park` - a managed delivery or background job will resume a named next action; watching terminal children is not a wake-up.')
-  process.exit(2)
-}
-
+// Internal lifecycle writers use the same local record-resolution rules as worker declarations, but the
+// porcelain done/park/ask dispatch below goes straight to its named handler.
 async function stateKit() {
-  const s = await import('./sessions.js')
-  const l = await import('@spexcode/spec-core')
-  const { existsSync, writeFileSync } = await import('node:fs')
-  // the agent-authored state writers resolve WHICH session by id: a `--session <id>` flag (the lifecycle
-  // hooks pass it, parsed from the payload, since they no longer have a cwd `.session`) wins, else the
-  // harness env var (ownSessionId — the agent's own `spex session …` carries the harness session id).
-  const sess = flag('session')
-  // @@@ no-record diagnosis ([[state]]) - the session store resolves from the CURRENT directory (runtimeRoot
-  // ← the cwd's git common dir), so the classic declaration failure is a cd OUTSIDE the session's project —
-  // and a bare "no session record" told the author none of that (field-reported). Name the actual cause and
-  // route the fix; each branch is a distinct situation, distinguished by probing the same store the writer used.
-  const noRecord = (): string => {
-    // cwd probe FIRST: outside a git repo nothing below can resolve — not the store, and not even the env
-    // id (ownSessionId's alias walk reads the store too) — so diagnose the cwd before touching either.
-    let ids: string[] | null
-    try { ids = l.listSessionIds() } catch { ids = null }
-    if (ids === null) return `no session record — declarations resolve the session store from the CURRENT directory, and ${process.cwd()} is not inside a git repository. cd back into the session's worktree and re-declare.`
-    const wid = sess || s.ownSessionId()   // safe now: the store just resolved, so the alias walk cannot throw
-    if (!wid) return 'no session record — no session id to write: this shell carries no harness session env (SPEXCODE_SESSION_ID / CLAUDE_CODE_SESSION_ID) and no --session was given. Pass --session <id> (spex session ls lists ids).'
-    if (ids.length === 0) return `no session record for ${wid.slice(0, 8)} — declarations resolve the session store from the CURRENT directory, and the project at ${process.cwd()} has no sessions at all: you are in a different project's checkout. cd back into the session's worktree and re-declare.`
-    return `no session record for ${wid.slice(0, 8)} — this project's store (resolved from ${process.cwd()}) holds ${ids.length} session(s) but not this one: a wrong --session id, or you are declaring from a different project's checkout. cd back into the session's worktree and re-declare, or pass a valid --session <id> (spex session ls).`
-  }
-  // a state writer from a non-repo cwd throws git's not-a-repo before it can return false — map exactly
-  // that throw to the no-record path (noRecord re-probes and names the cwd); anything else stays loud.
-  // A record that exists but CANNOT carry state (unreadable bytes, or a worktree that is gone) is its own
-  // answer: the writer refused on purpose and already knows why, so that reason is what the caller prints —
-  // never the no-record diagnosis, which would send the author chasing a wrong cwd ([[sessions-core]]).
-  const mark = (fn: () => boolean): { ok: boolean; reason?: string } => {
-    try { return { ok: fn() } }
-    catch (e) {
-      if (e instanceof s.SessionRecordUnusable) return { ok: false, reason: e.message }
-      if (/not a git repository/i.test(String((e as any)?.stderr ?? e))) return { ok: false }
-      throw e
-    }
-  }
-  // Taught once per record: the CLI's explicit NOTE column is the only note display that cuts prose.
-  const noteEcho = (note?: string): string => {
-    if (!note) return ''
-    const tableCut = s.displayWidth(note) > s.NOTE_BOARD_LIMIT
-    if (!tableCut) return ''
-    const wid = sess || s.ownSessionId()
-    const rid = wid ? (l.readAliasedRawRecord(wid)?.session_id ?? wid) : null   // sentinel lives in the RECORD's dir, so an aliased codex id lands on the same file
-    if (rid) {
-      const sentinel = l.sessionArtifactPath(rid, 'note-echo-taught')
-      try {
-        if (existsSync(sentinel)) return ''
-        writeFileSync(sentinel, `${new Date().toISOString()}\n`)   // only reached on a successful declaration (the echo rides the success branch)
-      } catch { /* unreadable/unwritable store dir → fall through and teach again; never block the echo */ }
-    }
-    return `\nyour note is ${note.length} chars — the session table's NOTE column shows only the first ${s.NOTE_BOARD_LIMIT} display columns. the full text IS recorded, and readable via spex session review ${(wid || '<your-session>').slice(0, 8)} / spex session ls --json. (said once — later cut notes won't repeat this.)`
-  }
-  return { s, l, sess, noRecord, mark, noteEcho }
+  const { sessionStateKit } = await import('./session-declarations.js')
+  return sessionStateKit(flag('session'))
 }
 
 // a trailing --help/-h prints help and exits BEFORE any verb runs, so a help probe never fires a
@@ -936,10 +872,11 @@ if (cmd === 'serve') {
     if (r.dispatched) console.log(`merge dispatched to ${id} — its agent is landing the merge`)
     else console.error(`merge dispatch failed: ${r.reason}`)
     process.exit(r.dispatched ? 0 : 1)
+  } else if (sub === 'done' || sub === 'park' || sub === 'ask') {
+    const { runSessionDeclaration } = await import('./session-declarations.js')
+    await runSessionDeclaration(sub, process.argv)
   } else {
-    // `s` (sessions.ts) backs the state PRODUCERS that stay local (done/park/ask write the global record by
-    // session_id) and the stateKit shared with `spex internal session-*`. `c` (client.ts) backs the
-    // read/control subs that route through the backend. Lazily imported.
+    // `c` (client.ts) backs the read/control subs that route through the backend. Lazily imported.
     const sendArgs = sub === 'send' ? parseSessionSendArgs(process.argv.slice(4)) : null
     const c = await import('./client.js')
     const id = sendArgs?.selector ?? process.argv[4]
@@ -952,33 +889,6 @@ if (cmd === 'serve') {
       const r = await c.clientResume(full, process.argv.includes('--force'))
       if (r.ok) console.log(r.info ? `${full} -> ${r.info}` : `${full} -> resumed`)
       else { console.error(`spex session resume: ${r.error || `no such session ${full}`}`); process.exit(2) }
-    } else if (sub === 'done') {
-      // `merge`/`close` are awaiting declarations; `nothing` is an intentional no-write correction trap.
-      const p = (flag('propose') as any) || 'nothing'
-      if (p === 'nothing') nothingProposalTrap()
-      const { s, sess, mark, noRecord, noteEcho } = await stateKit()
-      let closeNote = p === 'close' ? CLOSE_CLEANUP : ''
-      if (p === 'close') {
-        // the DATA half of the close nudge ([[local-issues]] closeoutNudge): the still-open local issues this
-        // session touched, listed by id — empty/OFF/no-identity prints nothing. Loud on failure but never
-        // gating: the declaration must land whatever the issue store is doing.
-        try { closeNote += (await import('./localIssues.js')).closeoutNudge(sess ?? s.ownSessionId()) }
-        catch (e) { console.error(`issue closeout check failed (declaration unaffected): ${e instanceof Error ? e.message : e}`) }
-      }
-      const done = mark(() => s.markDone(p, sess, flag('note')))
-      console.log(done.ok ? `done (${p})${DECLARED}${noteEcho(flag('note'))}${closeNote}` : done.reason ?? noRecord())
-    } else if (sub === 'park') {
-      // sugar: the agent is waiting on a background task; it will self-resume (NOT idle/awaiting)
-      const { s, sess, mark, noRecord, noteEcho } = await stateKit()
-      const parked = mark(() => s.markState('parked', { note: flag('note'), sessionId: sess }))
-      console.log(parked.ok ? `parked${DECLARED}${noteEcho(flag('note'))}` : parked.reason ?? noRecord())
-    } else if (sub === 'ask') {
-      // the agent DELIBERATELY declares it is pausing to ask the human a question (like `done`/`park`, an
-      // authored state — NOT guarded active-only). The --note carries the question. Distinct from `park`
-      // (waiting on a background task, self-resumes): an asking agent resumes only when the human replies.
-      const { s, sess, mark, noRecord, noteEcho } = await stateKit()
-      const asked = mark(() => s.markState('asking', { note: flag('note'), sessionId: sess }))
-      console.log(asked.ok ? `asking${DECLARED}${noteEcho(flag('note'))}` : asked.reason ?? noRecord())
     } else if (sub === 'stop') {
       // the SOFT stop: kill the agent's tmux + socket but KEEP the worktree, so the session goes offline and
       // can be resumed (`session resume`). Distinct from `close`, which removes the worktree.

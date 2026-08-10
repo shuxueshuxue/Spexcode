@@ -15,6 +15,7 @@ related:
   - spec-cli/src/slash-commands.ts
   - spec-cli/src/materialize.ts
   - spec-cli/src/sessions.ts
+  - spec-cli/src/session-declarations.ts
   - spec-cli/src/harness.test.ts
   - spec-cli/hooks/harness.sh
   - spec-cli/templates/hooks/prepare-commit-msg
@@ -42,7 +43,9 @@ resident or controller-backed runtime merges only with per-behavior eval reading
 REAL dispatched session of that harness, covering eight lifecycle behaviors: (1) **undeclared stop** — the gate's rejection reaches the
 session and the record flows out of `active`; (2) **PreToolUse block** — a blocking hook genuinely stops
 the tool and the handler's own reason reaches the agent; (3) **ask** — `spex session ask --note` flips the
-record to `asking` with the note on the board; (4) **deliver + steer** — an idle send lands exactly once
+record to `asking` with the note on the board. Its worker-facing declaration handler is
+`session-declarations.ts#runSessionDeclaration`, while the shared record writer remains lower-level state
+mechanics; (4) **deliver + steer** — an idle send lands exactly once
 (exit 0) and a mid-turn send reaches the live turn; (5) **resume** — stop → resume continues the SAME
 conversation; (6) **liveness** — a killed agent reads `offline` within seconds (even with a stale socket
 file on disk) and a relaunch reads `online`; (7) **commit gate** — a dirty-tree merge proposal is rejected

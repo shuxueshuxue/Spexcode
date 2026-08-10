@@ -1,7 +1,7 @@
 ---
 concern: remark-polish 与 dashboard-issues 的 eval.md 仍含 v0.2 拼写（spex resolve / yatsu scan / yatsu eval / yatsu.md）
 by: 14f79c23-b5ae-490e-a9d8-c9c6983f336f
-status: open
+status: landed
 nodes: remark-polish, dashboard-issues
 created: 2026-07-12T00:27:02.159Z
 ---

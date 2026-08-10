@@ -46,6 +46,8 @@ const toolbarProbe = (page) => page.evaluate(() => {
   const evalTab = document.querySelector('.si-eval-tab')
   const picker = document.querySelector('.si-resource-picker')
   const tabs = document.querySelector('.si-tabs')
+  const baseTabs = document.querySelector('.si-base-tabs')
+  const resourceTabs = document.querySelector('.si-resource-tabs')
   const term = document.querySelector('.si-term-body')
   const files = document.querySelector('.si-files')
   const surfaceSwitch = document.querySelector('[data-surface-switch]')
@@ -62,6 +64,8 @@ const toolbarProbe = (page) => page.evaluate(() => {
     sidebarHeadline: document.querySelector('.si-item.on .sess-id')?.textContent || null,
     evalTab: { tag: evalTab.tagName, href: evalTab.getAttribute('href'), label: evalTab.getAttribute('aria-label'), iconColor: getComputedStyle(evalTab.querySelector(':scope > svg')).color, box: rect(evalTab) },
     tabs: rect(tabs),
+    baseTabs: rect(baseTabs),
+    resourceTabs: rect(resourceTabs),
     picker: { ...rect(picker), borderLeft: getComputedStyle(picker).borderLeftWidth, borderRight: getComputedStyle(picker).borderRightWidth },
     add: { ...rect(document.querySelector('.si-tab-add')), borderRadius: getComputedStyle(document.querySelector('.si-tab-add')).borderRadius },
     files: { ...rect(files), borderLeft: getComputedStyle(files).borderLeftWidth, gapFromLastCommand: lastCommandTool ? files.getBoundingClientRect().left - lastCommandTool.getBoundingClientRect().right : null },
@@ -180,8 +184,9 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   check('one selected Terminal tab', result.wide.roles.tablists === 1 && result.wide.roles.tabs === 1 && result.wide.roles.selected === 'true', result.wide.roles)
   check('toolbar omits duplicate identity and headline payload', result.wide.identityCount === 0 && !result.wide.text.includes(result.wide.sidebarHeadline) && !result.wide.html.includes(result.wide.sidebarHeadline), { identityCount: result.wide.identityCount, toolbar: result.wide.text, sidebar: result.wide.sidebarHeadline })
   check('Eval is a canonical real navigation tab', result.wide.evalTab.tag === 'A' && decodeURIComponent(result.wide.evalTab.href).includes(`scope:${SESSION}`), result.wide.evalTab)
-  check('Eval directly follows the current resource-tab strip', Math.abs(result.wide.tabs.right - result.wide.evalTab.box.x) <= 1, { tabs: result.wide.tabs, evalTab: result.wide.evalTab.box })
-  check('resource picker is divided from Eval and its plus is a circle quieter than a command tool', Math.abs(result.wide.evalTab.box.right - result.wide.picker.x) <= 1
+  check('Eval directly follows the current base surface', Math.abs(result.wide.baseTabs.right - result.wide.evalTab.box.x) <= 1, { baseTabs: result.wide.baseTabs, evalTab: result.wide.evalTab.box })
+  check('resource strip follows Eval', Math.abs(result.wide.evalTab.box.right - result.wide.resourceTabs.x) <= 1, { evalTab: result.wide.evalTab.box, resourceTabs: result.wide.resourceTabs })
+  check('resource picker is divided from the resource strip and its plus is a circle quieter than a command tool', Math.abs(result.wide.resourceTabs.right - result.wide.picker.x) <= 1
     && result.wide.picker.borderLeft === '1px' && result.wide.picker.borderRight === '0px' && result.wide.add.x > result.wide.picker.x
     && result.wide.add.width === 20 && result.wide.add.height === 20 && result.wide.add.borderRadius === '50%'
     && result.wide.add.width < (result.wide.actionDetails[0]?.box?.width ?? 0),
@@ -550,6 +555,22 @@ for (const evalMode of ['zero', 'error']) {
   await fileRow.locator('.si-files-name').click()
   const resourceTab = page.locator('.si-resource-tab').filter({ hasText: 'surface-proof.md' })
   await resourceTab.waitFor({ state: 'visible' })
+  const resourceDocking = await page.evaluate(() => {
+    const box = (selector) => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect()
+      return rect && { left: rect.left, right: rect.right }
+    }
+    return {
+      base: box('.si-base-tabs [role="tab"]'),
+      eval: box('.si-eval-tab'),
+      resource: box('.si-resource-tab'),
+    }
+  })
+  check('opening a resource keeps Eval docked to the current base surface',
+    Math.abs(resourceDocking.base.right - resourceDocking.eval.left) <= 1
+      && Math.abs(resourceDocking.eval.right - resourceDocking.resource.left) <= 1,
+  resourceDocking)
+  await page.screenshot({ path: join(OUT, 'B-eval-resource-docking.png'), fullPage: true })
   await resourceTab.locator('.si-resource-tab-action').click()
   await page.locator('.si-term-body.is-conversation .tl-chat:visible').waitFor({ state: 'visible', timeout: 20_000 })
   const afterClose = await page.evaluate(() => ({

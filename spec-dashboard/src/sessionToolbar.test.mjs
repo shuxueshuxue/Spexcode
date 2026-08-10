@@ -18,7 +18,7 @@ const icons = readFileSync(new URL('./icons.jsx', import.meta.url), 'utf8')
 const en = readFileSync(new URL('./i18n/en.js', import.meta.url), 'utf8')
 const zh = readFileSync(new URL('./i18n/zh.js', import.meta.url), 'utf8')
 
-test('session toolbar resolves a Terminal or Conversation base before resource tabs, Eval, and its adjacent picker', () => {
+test('session toolbar keeps Eval docked to the Terminal or Conversation base before resource tabs and the picker', () => {
   assert.match(source, /className="si-tabs" role="tablist"/)
   assert.match(source, /role="tab"[\s\S]{0,180}aria-selected=\{!activeResource\}/)
   assert.match(source, /resourceTabs\.filter\(\(tab\) => tab\.sessionId === active\)/)
@@ -50,12 +50,16 @@ test('session toolbar resolves a Terminal or Conversation base before resource t
   assert.match(source, /href=\{active !== 'new' \? addressHash\(sessionEvalAddress\(active\)\) : null\}/)
   assert.doesNotMatch(source, /<EvalScopeDoor/)
 
-  const tabs = source.indexOf('className="si-tabs" role="tablist"')
+  const baseTabs = source.indexOf('className="si-base-tabs"')
   const evalTab = source.indexOf('className="si-eval-tab')
+  const resourceTabs = source.indexOf('className="si-resource-tabs"')
   const picker = source.indexOf('className="si-resource-picker"')
-  assert.ok(tabs > 0 && tabs < evalTab && evalTab < picker && picker < actions, 'Eval and the picker must stay adjacent after the resource tab strip')
+  assert.ok(baseTabs > 0 && baseTabs < evalTab && evalTab < resourceTabs && resourceTabs < picker && picker < actions,
+    'Eval must stay directly after the base surface while resource tabs occupy the following scrollable segment')
   assert.match(css, /\.si-tabbar\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*stretch;/s)
   assert.match(css, /\.si-surface\s*\{[^}]*flex:\s*0 1 auto;/s)
+  assert.match(css, /\.si-base-tabs\s*\{[^}]*flex:\s*none;/s)
+  assert.match(css, /\.si-resource-tabs\s*\{[^}]*overflow-x:\s*auto;/s)
   assert.match(css, /\.si-actions\s*\{[^}]*margin-left:\s*auto;/s)
   assert.doesNotMatch(source, /si-surface-tools/)
   assert.doesNotMatch(css, /\.si-surface-tools\s*\{/)
@@ -303,7 +307,7 @@ test('Command Box orders board, preset, then harness commands and deduplicates b
 test('toolbar is a fixed compact row with no identity track and stable tool geometry', () => {
   assert.match(css, /\.si-session-wrap\s*\{\s*container-type:\s*inline-size;/)
   assert.match(css, /\.si-tabbar\s*\{[^}]*height:\s*32px;[^}]*display:\s*flex;[^}]*align-items:\s*stretch;/s)
-  assert.match(css, /\.si-tabs\s*\{[^}]*overflow-x:\s*auto;/s)
+  assert.match(css, /\.si-resource-tabs\s*\{[^}]*overflow-x:\s*auto;/s)
   assert.match(css, /\.si-resource-tab-main\s*\{[^}]*max-width:\s*180px;/s)
   assert.doesNotMatch(css, /\.si-identity|\.si-th-name|\.si-session-status|\.si-session-live/)
   assert.match(css, /\.si-tool\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;[^}]*flex:\s*0 0 24px;/s)

@@ -176,7 +176,8 @@ scenarios:
     expected: >-
       The pane-backed session keeps its warm Terminal pane. The headless session has no terminal or tmux socket:
       its main console is the shared TimelineChat (timeline + declaration notes + fixed `replyVia:"note"`
-      composer). Eval is a real canonical navigation tab, followed immediately by the resource picker, and no inline eval pane mounts. The compact
+      composer). Eval is a real canonical navigation tab, fixed immediately after the current base surface before the resource
+      tab strip, and no inline eval pane mounts. The compact
       toolbar stays one line, visually separate from either console, with honest eval summary states and all
       available icon tools visible. Its fixed merge slot turns green only for the live `done --propose merge`
       review proposal; all other proposal/lifecycle/liveness cases stay muted and disabled without shifting the
@@ -188,13 +189,14 @@ scenarios:
       Open a real session console in Chromium and measure the session toolbar while its current surface is visible.
       Follow keyboard focus from the current surface through the right edge of the tab rail.
     expected: >-
-      The visual and keyboard sequence is current surface/resource tabs, the real Eval navigation tab, its
-      following resource-picker plus button, then one contiguous group of right-edge tools. This tab sequence is compact: a one-pixel
+      The visual and keyboard sequence is current surface, the real Eval navigation tab, resource tabs, the
+      resource-picker plus button, then one contiguous group of right-edge tools. Opening a resource leaves Eval
+      immediately after the current surface rather than moving it. This tab sequence is compact: a one-pixel
       divider and short gutter distinguish Eval from a compact circular plus control; its right side has no
       matching divider. That plus stays visibly subordinate to the command tools — a smaller box than a tool's,
       a thin neutral ring at rest, accent only under hover or keyboard focus. Files and the
       Terminal/Conversation switch use the same icon gap as the command tools, with no wrapper-created group
-      gutter. There is no flexible spacer or separate Eval control between the resource tabs, Eval, and picker.
+      gutter. There is no flexible spacer or separate Eval control between the current surface, Eval, resource tabs, and picker.
   - name: posted-resources-are-singleton-tabs
     tags: [frontend-e2e, desktop, cli, backend-api]
     test: spec-dashboard/test/session-web.e2e.mjs

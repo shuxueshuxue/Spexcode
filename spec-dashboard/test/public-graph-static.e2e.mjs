@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { extname, join, normalize, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -9,12 +10,26 @@ const root = resolve(new URL('../dist-public/', import.meta.url).pathname)
 const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.SPEXCODE_CHROMIUM_PATH || process.env.CHROMIUM || '/snap/bin/chromium'
 const { chromium } = await import(pathToFileURL(playwrightPath).href)
-const mime = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf' }
+const mime = { '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript', '.json': 'application/json', '.zip': 'application/zip', '.svg': 'image/svg+xml', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf' }
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex')
 const manifest = JSON.parse(readFileSync(join(root, 'public-spec-release.json'), 'utf8'))
 assert.equal(manifest.schema, 'spexcode.public-spec-release/v1')
 assert.equal(manifest.graph.path, 'public-graph.json')
 assert.equal(manifest.graph.sha256, sha256(readFileSync(join(root, manifest.graph.path))))
+assert.equal(manifest.publication.hostname, 'spexcode.spexcode.net')
+assert.equal(manifest.metadata.path, 'public-graph-meta.json')
+assert.equal(manifest.metadata.sha256, sha256(readFileSync(join(root, manifest.metadata.path))))
+assert.equal(manifest.archive.path, 'spexcode.spec.zip')
+assert.equal(manifest.archive.sha256, sha256(readFileSync(join(root, manifest.archive.path))))
+const metadata = JSON.parse(readFileSync(join(root, manifest.metadata.path), 'utf8'))
+assert.equal(metadata.schema, 'spexcode.public-spec-site/v1')
+assert.equal(metadata.publication.hostname, manifest.publication.hostname)
+assert.equal(metadata.release.archive.sha256, manifest.archive.sha256)
+assert.equal(metadata.release.revision, manifest.revision)
+const zipContents = spawnSync('unzip', ['-Z1', join(root, manifest.archive.path)], { encoding: 'utf8' })
+assert.equal(zipContents.status, 0, zipContents.stderr)
+assert.ok(zipContents.stdout.includes('.spec/spec-cli/public-mode/public-spec-graph/spec.md'))
+assert.equal(zipContents.stdout.includes('.spec/.issues/'), false)
 assert.equal(manifest.documents.length, JSON.parse(readFileSync(join(root, manifest.graph.path), 'utf8')).nodes.length)
 for (const asset of manifest.documents) {
   const bytes = readFileSync(join(root, asset.path))
@@ -67,7 +82,16 @@ try {
     const body = document.querySelector('.ov-panel .pane-doc .doc-body')
     return Boolean(body?.textContent?.trim())
   }, undefined, { timeout: 10_000 })
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('.ov-backdrop', { state: 'hidden', timeout: 10_000 })
+  await page.getByRole('button', { name: 'About this public graph' }).click()
+  await page.waitForSelector('.public-about', { state: 'visible', timeout: 10_000 })
+  await page.waitForFunction(() => Boolean(document.querySelector('.public-about-actions')))
+  assert.equal(await page.locator('.public-about-link').first().getAttribute('href'), 'https://github.com/shuxueshuxue/spexcode')
+  assert.equal(await page.locator('.public-about-link.primary').getAttribute('href'), '/spexcode.spec.zip')
+  assert.equal(await page.locator('.public-about-link.primary').getAttribute('download'), 'spexcode.spec.zip')
   assert.equal(requests.filter((url) => new URL(url).pathname === '/public-graph.json').length, 1)
+  assert.equal(requests.filter((url) => new URL(url).pathname === '/public-graph-meta.json').length, 1)
   assert.ok(requests.some((url) => new URL(url).pathname.startsWith('/specs/')))
   assert.equal(requests.some((url) => /(?:SessionInterface|IssuesPage|EvalsPage|Settings|MobileApp|ProjectsPage)-/.test(url)), false)
   assert.equal(requests.some((url) => new URL(url).pathname.startsWith('/api/')), false, requests.join('\n'))

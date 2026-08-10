@@ -47,7 +47,7 @@ the trunk and reviewing in-flight work is exactly when the loop-in matters most 
 awaiting review) — then the **node's governing session**, then **nobody** (the remark still surfaces on the
 board through the teeth). Delivery walks the chain and stops at the first ONLINE link; an offline/absent
 link — a broken worktree sidecar included — falls through to the next, never failing the remark write. This is **notification only** — it
-**resolves nothing** (R3: resolve is a deliberate second-party call — `spex resolve`, or the dashboard's resolve — never from
+**resolves nothing** (R3: resolve is a deliberate second-party call — `spex remark resolve`, or the dashboard's resolve — never from
 dispatch/delivery), never spawns a worker, and stays silent when the chain runs dry. It is one
 small extension of the existing loop-in seam (`notifyOriginator` takes the chain; `mentions.ts` owns it), not
 a new subsystem — a plain issue thread's chain is still just its author, so nothing else changes.
@@ -58,7 +58,7 @@ A remark whose scenario was **renamed or deleted** keys a `(node, scenario)` tha
 loads ([[remark-teeth]]'s dangling clause) but, until now, appeared *nowhere*. M4 surfaces it: the node's
 eval timeline (`evaltab.ts`) emits a synthetic **dangling** row per orphaned track — the scenario name struck
 through / marked gone, its remarks listed and **resolvable/retractable via their normal refs**
-(`spex resolve` / `spex retract`). A track is dangling only when its scenario is BOTH gone from `eval.md`
+(`spex remark resolve` / `spex remark retract`). A track is dangling only when its scenario is BOTH gone from `eval.md`
 AND has no reading; a still-declared-but-unmeasured scenario is a blind spot, not an orphan. The dangling row
 is kept **separate** from `readings` so it never flows into `latestPerScenario` / the board scoreboard: it
 **ages nothing** (there is no reading for the teeth to stale), it is only made *visible*. `spex eval lint`

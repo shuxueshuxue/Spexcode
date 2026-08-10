@@ -94,6 +94,26 @@ scenarios:
       exactly one `stale, refreshing` -> `fresh` cycle and one non-overlapping build. Registration/runtime
       failures are visible with their source path and errno and never leave a half-attached or silently-deaf
       registry.
+  - name: served-project-first-spec-visibility
+    tags: [backend-api]
+    code: spec-cli/src/graphStream.ts
+    related: [spec-cli/src/graphStream.api.test.ts]
+    description: >-
+      In isolated served Git projects whose roots start with no `.spec` directory — including a zero-commit
+      `git init` repository and an unrecorded linked worktree — start the real backend and warm `/api/graph`
+      to a fresh zero-node response. Without a delta subscriber or restart, create a valid served-project
+      `.spec` node and poll the real graph API. Then attach plain
+      `/api/graph/stream`, delete that node, create and delete another, and observe each plain signal plus
+      the following fresh HTTP graph. Count the actual backend generation's Linux inotify entries (where
+      available) and the backend census before creation and after final deletion.
+    expected: >-
+      The served project root is registered as a canonical graph root even when `.spec` did not exist at
+      server startup, and an unborn `HEAD` supplies an empty historical projection rather than a 500: every
+      creation/deletion promptly converges through ordinary root events, never the
+      delta-only cold patrol, and `/api/graph` never calls an absent subtree `fresh`. A linked-worktree backend
+      observes its own root, not the common-dir checkout. The plain stream reports the same
+      changes, and the observer set returns to its warmed plateau after the subtree is removed — no duplicate
+      root registrations or leaked handles remain.
   - name: failed-refresh-keeps-trigger-attribution
     tags: [backend-api]
     code: spec-cli/src/graphStream.ts

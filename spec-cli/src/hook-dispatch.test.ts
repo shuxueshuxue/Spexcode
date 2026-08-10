@@ -66,6 +66,42 @@ test('stop-gate is silent for self-launched sessions and renders the catalog pro
   assert.equal(JSON.parse(governed.stdout).reason, expected)
 })
 
+test('the generated zcode Stop command reaches its manifest stop gate', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-zcode-stop-dispatch-'))
+  const home = join(dir, 'home')
+  const sid = 'zcode-generated-stop'
+  execFileSync('git', ['init', '-q'], { cwd: dir })
+  const initialized = spawnSync(process.execPath, [join(repo, 'spec-cli', 'bin', 'spex.mjs'), 'init', '.', '--harness', 'zcode'], {
+    cwd: dir,
+    env: { ...process.env, SPEXCODE_HOME: home },
+    encoding: 'utf8',
+  })
+  assert.equal(initialized.status, 0, initialized.stderr)
+
+  const settings = JSON.parse(readFileSync(join(dir, '.zcode', 'settings.json'), 'utf8'))
+  const command = settings.hooks.Stop[0].hooks[0].command as string
+  assert.match(command, /dispatch\.sh zcode Stop$/, 'the materialized zcode shim must bake its adapter id')
+
+  const runtime = join(home, 'projects', dir.replace(/[/.]/g, '-'))
+  const slot = join(runtime, 'trees', dir.replace(/[/.]/g, '-'))
+  assert.match(readFileSync(join(slot, 'hooks-manifest'), 'utf8'), /^Stop\t10\ttrue\t\.spec\/project\/\.plugins\/core\/stop-gate\/stop-gate\.sh$/m)
+  assert.match(readFileSync(join(slot, 'harnesses'), 'utf8'), /^zcode$/m)
+  const recordDir = join(runtime, 'sessions', sid)
+  mkdirSync(recordDir, { recursive: true })
+  writeFileSync(join(recordDir, 'session.json'), JSON.stringify({
+    session_id: sid, governed: true, status: 'active', proposal: '', note: '',
+  }, null, 2) + '\n')
+
+  const result = spawnSync('bash', ['-c', command], {
+    cwd: dir,
+    env: { ...process.env, SPEXCODE_HOME: home },
+    input: JSON.stringify({ session_id: sid, hook_event_name: 'Stop', stop_hook_active: false }),
+    encoding: 'utf8',
+  })
+  assert.equal(result.status, 2, result.stderr)
+  assert.match(JSON.parse(result.stdout).reason, /Your session state is a CLAIM/)
+})
+
 function legacyMarkActiveRig(source = legacyMarkActive, custom = false) {
   const dir = mkdtempSync(join(tmpdir(), 'spex-dispatch-legacy-mark-active-'))
   const home = join(dir, 'home')

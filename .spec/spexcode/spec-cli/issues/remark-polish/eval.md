@@ -23,7 +23,7 @@ scenarios:
     expected: >-
       (a) the filer is notified; (b) delivery falls through to the node's governing session; (c) nobody is
       notified and it stays silent (the teeth still surface the remark). In every case the notification
-      RESOLVES nothing — the remark stays unresolved (resolve is a deliberate `spex resolve`), no worker is
+      RESOLVES nothing — the remark stays unresolved (resolve is a deliberate `spex remark resolve`), no worker is
       spawned, and the chain stops at the first online link.
   - name: dangling-orphan-visible
     tags: [cli, frontend-e2e]

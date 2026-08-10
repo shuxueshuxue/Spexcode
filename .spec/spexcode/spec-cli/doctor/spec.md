@@ -19,6 +19,9 @@ related:
 health without putting judgment in the deterministic commit gate, and it proves that a self-launched agent
 actually receives the SpexCode workflow rather than running silently free.
 
+The diagnosis works immediately after `spex init`, before the project has its first commit: it reads the
+adopted worktree it is reporting on and does not require a Git history merely to give advisory health rows.
+
 When a user launches their OWN claude/codex — no SpexCode process in the launch — the whole workflow has
 to reach that agent through files the harness auto-discovers: the artifacts [[harness-delivery]] writes. So
 the question "is this agent actually governed, or silently running free?" has a concrete answer, and

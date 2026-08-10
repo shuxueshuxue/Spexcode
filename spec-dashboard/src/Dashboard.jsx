@@ -9,6 +9,7 @@ import Legend from './Legend.jsx'
 import SpecSearch from './SpecSearch.jsx'
 import GraphStats from './GraphStats.jsx'
 import SideBar from './SideBar.jsx'
+import PublicGraphAbout from './PublicGraphAbout.jsx'
 import TooltipLayer from './Tooltip.jsx'
 import { useRoute, navigate } from './route.js'
 import { navigateAddress } from './address.js'
@@ -608,6 +609,8 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
         {!graphOnly && <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />}
 
         <GraphStats specs={specs} focusId={focusId} onJump={focusNode} />
+
+        {graphOnly && <PublicGraphAbout />}
 
         {!graphOnly && <NodeContextMenu
           menu={nodeMenu} onClose={() => setNodeMenu(null)}

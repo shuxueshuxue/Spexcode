@@ -1,5 +1,16 @@
 ---
 scenarios:
+  - name: unborn-head-is-empty-history
+    tags: [cli]
+    code: packages/spec-core/src/git.ts#sourceIndexes
+    related: [spec-cli/src/git.test.ts]
+    description: >-
+      Create a real Git repository with no commits and ask both the cached and full source-index entrances for
+      its history and drift projections, then make its first ordinary commit and read again.
+    expected: >-
+      The unborn repository yields empty history and drift projections without invoking `HEAD` as a Git object;
+      its cache identity is replaced by the first real commit, whose normal indexed projection remains intact.
+    test: spec-cli/src/git.test.ts
   - name: git-children-use-one-resolved-executable-per-path
     tags: [cli]
     description: >-

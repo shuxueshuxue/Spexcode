@@ -833,6 +833,42 @@ test('an explicit pending tip never occupies or evicts the root-owned HEAD index
   assert.equal(await driftIndex(root), headDrift, 'pending drift evicted the warm HEAD object')
 })
 
+test('an unborn HEAD is an empty history, not a Git ref to query', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-unborn-history-'))
+  const run = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+  try {
+    run('init', '-q', '-b', 'main')
+    run('config', 'user.email', 'unborn@example.test')
+    run('config', 'user.name', 'unborn')
+    resetHistoryCachesForTests()
+
+    const [history, drift] = await sourceIndexes(root)
+    const [fullHistory, fullDrift] = await sourceIndexesFull(root)
+    for (const candidate of [history, fullHistory]) {
+      assert.equal(candidate.versions.size, 0)
+      assert.equal(candidate.contentVersions.size, 0)
+      assert.equal(candidate.versionPaths.size, 0)
+    }
+    for (const candidate of [drift, fullDrift]) {
+      assert.equal(candidate.tip, undefined)
+      assert.equal(candidate.ord.size, 0)
+      assert.equal(candidate.fileEvents.size, 0)
+    }
+    assert.equal(await historyIndex(root), history, 'the unborn history stays in the normal HEAD cache')
+    assert.equal(await driftIndex(root), drift, 'the unborn drift stays in the normal HEAD cache')
+
+    writeFileSync(join(root, 'README.md'), 'first commit\n')
+    run('add', 'README.md')
+    run('commit', '-qm', 'first commit')
+    const [, afterDrift] = await sourceIndexes(root)
+    assert.notEqual(afterDrift, drift, 'the first real commit replaces the unborn cache identity')
+    assert.equal(afterDrift.tip, run('rev-parse', 'HEAD'))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+    resetHistoryCachesForTests()
+  }
+})
+
 test('independent same-HEAD clones never share a source index across repository stores', async () => {
   const { root, run } = specRepo()
   const parent = mkdtempSync(join(tmpdir(), 'spex-index-clones-'))

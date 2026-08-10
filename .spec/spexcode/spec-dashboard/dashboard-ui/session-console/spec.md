@@ -304,9 +304,9 @@ reports `sending...`, while the latter reports the neutral `working...`; reusing
 stop, archive, close, or merge would falsely claim the dashboard sent the agent a prompt.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
 tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
-that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` is a
-passive [[mentions]] reference retained in the selected session's prompt. File paste, drop, and pick reuse
-[[file-attach]].
+that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` stays
+a passive [[mentions]] reference, while `@new` uses the selected session as the spawned worker's durable
+parent and therefore folds that child below it. File paste, drop, and pick reuse [[file-attach]].
 
 A **right-click on a session row** opens its context menu — **lock on graph**, rename, archive or close
 ([[session-rename]] / [[archive]]), select for bulk archive/close and drag-to-reparent

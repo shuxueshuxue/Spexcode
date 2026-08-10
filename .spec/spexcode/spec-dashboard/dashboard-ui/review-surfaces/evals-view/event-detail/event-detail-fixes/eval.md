@@ -27,7 +27,7 @@ scenarios:
       It never opens `#/sessions/new`; offline or missing filers remain non-clickable labels.
   - name: eval-comment-outcome-flash
     tags: [frontend-e2e]
-    code: [spec-dashboard/src/EvalsPage.jsx]
+    code: [spec-dashboard/src/EvalsPage.jsx#EvalsPage]
     description: >
       In a real browser on #/evals, send an eval remark whose body contains `@session`, wait for the write
       response, then read the persisted reply and the referenced session's unchanged timeline.

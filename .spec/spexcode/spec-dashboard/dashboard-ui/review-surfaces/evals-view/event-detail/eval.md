@@ -276,7 +276,7 @@ scenarios:
       surfaces its server message on the row, never swallowed. No page errors.
   - name: session-home-history-rooted
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/EvalsPage.jsx]
+    code: [spec-dashboard/src/EventDetail.jsx, spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#useEvalDetail, spec-dashboard/src/EvalsPage.jsx#EvalDetailPage]
     description: >-
       In a real browser open the SESSION-scoped detail page (#/evals/<node>/<scenario>?session=<id>) for
       a session whose worktree has

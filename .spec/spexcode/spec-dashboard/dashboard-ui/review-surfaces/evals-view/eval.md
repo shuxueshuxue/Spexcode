@@ -2,7 +2,7 @@
 scenarios:
   - name: evals-list-page
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#ReviewListRow, spec-dashboard/src/ReviewShell.jsx#ReviewState, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters]
+    code: [spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#EvalsListPage, spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#ReviewListRow, spec-dashboard/src/ReviewShell.jsx#ReviewState, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters]
     description: >
       Open the dashboard in a real browser at a live backend. Click the Evals rail entry (or press ⌥3 / f
       from the graph) and read location.hash + the rendered page. Read the list page's DOM: the row
@@ -24,7 +24,7 @@ scenarios:
       page whose whole state lives in its URL and whose rows are links.
   - name: list-detail-push-back
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/EventDetail.jsx]
+    code: [spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#EvalDetailPage, spec-dashboard/src/route.js, spec-dashboard/src/EventDetail.jsx]
     description: >
       In a real browser on #/evals with a non-default filter applied (e.g. ?q=is:eval
       verdict:fail): record
@@ -47,7 +47,7 @@ scenarios:
       openable.
   - name: detail-source-resolution-and-unmeasured-state
     tags: [frontend-e2e, backend-api]
-    code: [spec-cli/src/index.ts, spec-cli/src/reviews.ts, spec-dashboard/src/EvalsPage.jsx]
+    code: [spec-cli/src/index.ts, spec-cli/src/reviews.ts, spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#useEvalDetail, spec-dashboard/src/EvalsPage.jsx#EvalDetailPage]
     description: >
       Through a live backend and a real browser, open an Eval detail whose trunk history exists while its
       `scope:` id names a removed session worktree, then inspect the bounded detail response and rendered
@@ -135,7 +135,7 @@ scenarios:
   - name: scoped-terminal-door
     tags: [frontend-e2e, desktop, mobile]
     test: spec-dashboard/test/evals-entry.e2e.mjs
-    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/address.js]
+    code: [spec-dashboard/src/EvalsPage.jsx#EvalsListPage, spec-dashboard/src/EvalsPage.jsx#EvalScopeDoor, spec-dashboard/src/EvalsPage.jsx#EvalDetailPage, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/address.js]
     description: >
       Enter a session-scoped Evals LIST through a real console door click, then again by direct URL and
       by reload, at 1440px and 390px, in en and zh: read the list toolbar for the terminal door — tag,
@@ -176,7 +176,7 @@ scenarios:
       a time.
   - name: session-scope-and-legacy-redirect
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/route.js, spec-dashboard/src/SessionInterface.jsx]
+    code: [spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#EvalsListPage, spec-dashboard/src/EvalsPage.jsx#EvalScopeDoor, spec-dashboard/src/route.js, spec-dashboard/src/SessionInterface.jsx]
     description: >
       With a live session that has worktree-rooted readings: on #/evals scope to that session through the
       query — type scope: and pick it from the bounded suggestions (board sessions only) — and read the
@@ -198,7 +198,7 @@ scenarios:
       worktree evals live in the ONE #/evals route family behind the scope: token.
   - name: session-detail-refresh-stability
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EventDetail.jsx]
+    code: [spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#detailMatchesProjection, spec-dashboard/src/EvalsPage.jsx#useEvalDetail, spec-dashboard/src/EvalsPage.jsx#EvalDetailPage, spec-dashboard/src/EventDetail.jsx]
     description: >
       Open a session-scoped detail whose scenario has at least two readings and a timeline sidecar. Walk
       from the latest B pole to the older A pole, wait for the timeline events to render, type unsent prose,
@@ -217,7 +217,7 @@ scenarios:
       review work, while review text cannot leak across or revive after a real evidence identity change.
   - name: session-scope-load-failure
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#DetailShell]
+    code: [spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#useEvalDetail, spec-dashboard/src/EvalsPage.jsx#EvalsListPage, spec-dashboard/src/EvalsPage.jsx#EvalDetailPage, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#DetailShell]
     description: >
       Open a session-scoped Evals list and detail while forcing its `/api/sessions/:id/evals` request to
       return 503, then repeat with a real 404/missing target. Read the visible controls, alert/not-found

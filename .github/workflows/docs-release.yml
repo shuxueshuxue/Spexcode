@@ -32,10 +32,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - name: Install packed root
-        run: npm ci
-      - name: Install spec-cli
-        working-directory: spec-cli
+      - name: Install workspace dependencies
         run: npm ci
       - name: Emit sealed docs assets
         env:

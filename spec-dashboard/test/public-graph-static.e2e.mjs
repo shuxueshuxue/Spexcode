@@ -63,6 +63,10 @@ try {
   assert.equal(await page.locator('.side-rail .rail-btn.disabled[aria-disabled="true"]').count(), 4)
   await page.locator('.react-flow__node').first().dblclick()
   await page.waitForSelector('.ov-panel .pane-doc', { state: 'visible', timeout: 10_000 })
+  await page.waitForFunction(() => {
+    const body = document.querySelector('.ov-panel .pane-doc .doc-body')
+    return Boolean(body?.textContent?.trim())
+  }, undefined, { timeout: 10_000 })
   assert.ok(requests.some((url) => new URL(url).pathname.startsWith('/specs/')))
   assert.equal(requests.some((url) => /(?:SessionInterface|IssuesPage|EvalsPage|Settings|MobileApp|ProjectsPage)-/.test(url)), false)
   assert.equal(requests.some((url) => new URL(url).pathname.startsWith('/api/')), false, requests.join('\n'))

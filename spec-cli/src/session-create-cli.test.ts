@@ -435,7 +435,7 @@ dns.lookup = function (hostname, options, callback) {
     const recorded = createServer((req, res) => {
       if (req.method === 'GET' && req.url === '/health') {
         healthRequests++
-        setTimeout(() => { res.writeHead(200); res.end('ok') }, 550)
+        setTimeout(() => { res.writeHead(200); res.end('ok') }, 350)
         return
       }
       if (req.method === 'GET' && req.url === '/api/instance') {
@@ -460,7 +460,7 @@ dns.lookup = function (hostname, options, callback) {
     assert.equal(timedInstances, 1, 'the instance probe receives its own full wall after health')
     assert.equal(timedSettings, 0, 'record discovery never layers settings onto authority')
     assert.equal(timedCreates, 1)
-    assert.ok(Date.now() - recordedStarted >= 1_600, '550ms health plus 1200ms instance use independent walls')
+    assert.ok(Date.now() - recordedStarted >= 1_400, '350ms health plus 1200ms instance use independent walls')
     noArtifacts()
 
     const largeHome = join(root, 'large-home')

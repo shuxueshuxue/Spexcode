@@ -189,7 +189,7 @@ test('browseProjectDirectories normalizes the host folder listing and encodes a 
   const impl = async (url) => {
     calls.push(url)
     return jsonRes(200, {
-      path: '/home/me/a b', parent: '/home/me', home: '/home/me', gitRoot: '/home/me/a b',
+      path: '/home/me/a b', exists: true, parent: '/home/me', home: '/home/me', gitRoot: '/home/me/a b',
       initialized: true, cataloged: false,
       entries: [{ name: 'child', path: '/home/me/a b/child', git: true, initialized: false }, { nope: true }],
     })
@@ -197,9 +197,20 @@ test('browseProjectDirectories normalizes the host folder listing and encodes a 
   const r = await withFetch(impl, () => browseProjectDirectories('/home/me/a b'))
   assert.equal(calls[0], '/projects/browse?path=%2Fhome%2Fme%2Fa%20b')
   assert.deepEqual(r, {
-    ok: true, path: '/home/me/a b', parent: '/home/me', home: '/home/me', gitRoot: '/home/me/a b',
+    ok: true, path: '/home/me/a b', exists: true, parent: '/home/me', home: '/home/me', gitRoot: '/home/me/a b',
     initialized: true, cataloged: false,
     entries: [{ name: 'child', path: '/home/me/a b/child', git: true, initialized: false }],
+  })
+})
+
+test('browseProjectDirectories preserves an absent-path candidate for the New project command', async () => {
+  const r = await withFetch(async () => jsonRes(200, {
+    path: '/home/me/new-project', exists: false, parent: '/home/me', home: '/home/me',
+    gitRoot: null, initialized: false, cataloged: false, entries: [],
+  }), () => browseProjectDirectories('/home/me/new-project'))
+  assert.deepEqual(r, {
+    ok: true, path: '/home/me/new-project', exists: false, parent: '/home/me', home: '/home/me',
+    gitRoot: null, initialized: false, cataloged: false, entries: [],
   })
 })
 
@@ -219,6 +230,14 @@ test('addProject posts explicit initialization choices and normalizes the return
   assert.equal(r.project.id, 'r')
   assert.equal(r.project.online, false)
   assert.equal(r.setup.gitInitialized, true)
+})
+
+test('addProject carries the explicit new-directory transaction', async () => {
+  const calls = []
+  const impl = async (url, init) => { calls.push({ url, method: init?.method, body: init?.body }); return jsonRes(200, { id: 'r', root: '/home/me/r', online: false, url: null }) }
+  const r = await withFetch(impl, () => addProject('/home/me/r', { createDir: true, initGit: true }))
+  assert.deepEqual(calls[0], { url: '/projects', method: 'POST', body: '{"root":"/home/me/r","createDir":true,"initGit":true}' })
+  assert.equal(r.ok, true)
 })
 
 test('addProject surfaces the host refusal verbatim (400 not-a-repo), tolerates non-JSON and death', async () => {

@@ -59,8 +59,8 @@ function PasswordForm({ onSet, onClear, placeholder, busy, t }) {
   )
 }
 
-// One modal over the host add transaction: browse a real directory, explicitly choose its setup side
-// effects, then let the host run Git → real spex init → catalog in that order.
+// One modal over the host add transaction: browse a real directory, or make an absent typed path an
+// explicit new Git project, then let the host run real spex init → catalog in that order.
 function AddProjectModal({ onAdded, onClose, t }) {
   const [path, setPath] = useState('')
   const [listing, setListing] = useState(null)
@@ -89,7 +89,8 @@ function AddProjectModal({ onAdded, onClose, t }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [busy, onClose])
 
-  const selected = !!listing && path === listing.path
+  const selected = !!listing?.exists && path === listing.path
+  const newProject = !!listing && !listing.exists && path === listing.path
   const needsGit = selected && !listing.gitRoot
   const needsSpex = selected && !listing.initialized
   const canSubmit = selected && !loading && !busy && !listing.cataloged &&
@@ -104,6 +105,16 @@ function AddProjectModal({ onAdded, onClose, t }) {
       ...(needsGit ? { initGit } : {}),
       ...(needsSpex && initSpex ? { init: { harness: harnesses.join(',') } } : {}),
     })
+    setBusy(false)
+    if (r.ok) { onAdded(r.project); return }
+    setError(r.error === 'network' ? t('projects.actionFailed') : r.error)
+    setOutput(r.output || '')
+  }
+
+  const createProject = async () => {
+    if (!newProject || busy) return
+    setBusy(true); setError(null); setOutput('')
+    const r = await addProject(listing.path, { createDir: true, initGit: true })
     setBusy(false)
     if (r.ok) { onAdded(r.project); return }
     setError(r.error === 'network' ? t('projects.actionFailed') : r.error)
@@ -127,12 +138,21 @@ function AddProjectModal({ onAdded, onClose, t }) {
           <input
             className="proj-add-path" value={path} autoFocus spellCheck={false}
             onChange={(e) => { setPath(e.target.value); setError(null) }}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (path.trim()) browse(path.trim()) } }}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' || !path.trim()) return
+              e.preventDefault()
+              if (newProject) createProject()
+              else browse(path.trim())
+            }}
             placeholder={t('projects.addPlaceholder')} aria-label={t('projects.addPlaceholder')}
             disabled={busy}
           />
-          <button className="proj-act" type="button" disabled={!path.trim() || loading || busy} onClick={() => browse(path.trim())}>
-            {loading ? t('projects.browseLoading') : t('projects.browseGo')}
+          <button
+            className={newProject ? 'proj-act primary' : 'proj-act'} type="button"
+            disabled={!path.trim() || loading || busy}
+            onClick={() => { if (newProject) createProject(); else browse(path.trim()) }}
+          >
+            {loading ? t('projects.browseLoading') : busy && newProject ? t('projects.browseCreating') : newProject ? t('projects.browseNew') : t('projects.browseGo')}
           </button>
         </div>
 
@@ -145,7 +165,8 @@ function AddProjectModal({ onAdded, onClose, t }) {
               {entry.initialized && <span className="proj-folder-tag spex">SpexCode</span>}
             </button>
           ))}
-          {!loading && listing && !listing.entries.length && <div className="proj-folder-empty">{t('projects.folderEmpty')}</div>}
+          {!loading && listing && !listing.exists && <div className="proj-folder-empty">{t('projects.folderMissing')}</div>}
+          {!loading && listing?.exists && !listing.entries.length && <div className="proj-folder-empty">{t('projects.folderEmpty')}</div>}
           {loading && <div className="proj-folder-empty">{t('projects.browseLoading')}</div>}
         </div>
 

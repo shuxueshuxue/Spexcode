@@ -90,9 +90,9 @@ mkdirSync(out, { recursive: true })
 const fixture = mkdtempSync(join(tmpdir(), 'spex-session-label-'))
 const project = join(fixture, 'project')
 const home = join(fixture, 'home')
-const timelineStart = Date.now()
 const timeline = []
-const step = (name) => timeline.push({ at: Date.now() - timelineStart, step: name })
+let videoStartedAt = 0
+const step = (name) => timeline.push({ at: Date.now() - videoStartedAt, step: name })
 let backend
 let vite
 let browser
@@ -171,8 +171,6 @@ try {
     await vite?.close().catch(() => {})
     vite = await startVite(true)
   }
-  step('isolated backend and dashboard ready')
-
   const graph = await waitFor(async () => {
     const response = await fetch(`http://127.0.0.1:${apiPort}/api/graph`)
     if (!response.ok) return null
@@ -189,6 +187,7 @@ try {
   browser = await chromium.launch({ executablePath: chromiumPath, headless: true })
   context = await browser.newContext({ viewport: { width: 1280, height: 800 }, recordVideo: { dir: out, size: { width: 1280, height: 800 } } })
   const page = await context.newPage()
+  videoStartedAt = Date.now()
   await page.goto(`${base}/#/sessions/${renamed.id}`, { waitUntil: 'domcontentloaded' })
   await page.locator(`.si-item[data-sid="${renamed.id}"]`).waitFor({ state: 'visible', timeout: 15_000 })
 
@@ -215,6 +214,8 @@ try {
   assert.deepEqual(new Set(mentionTitles), new Set(titles.values()), 'each dropdown label is one visible list title')
   assert.ok(mentionTitles.every((title) => !title.includes(rawUrl)), 'no dropdown label renders the raw URL')
   step('@ mention dropdown matches list titles')
+  await page.screenshot({ path: join(out, 'session-label-mention-dropdown.png'), fullPage: true })
+  await page.waitForTimeout(500)
 
   await page.locator(`.si-item[data-sid="${renamed.id}"]`).click({ button: 'right' })
   const renameItem = page.getByText('rename', { exact: true })
@@ -225,6 +226,7 @@ try {
   assert.equal(await renameInput.inputValue(), renamed.name, 'Rename alone reads the raw override prefill')
   assert.equal(rowTitles.get(renamed.id), titles.get(renamed.id), 'the visible row retains the derived name')
   step('Rename prefill reads raw override')
+  await page.waitForTimeout(500)
 
   await page.screenshot({ path: join(out, 'session-label-one-name-everywhere.png'), fullPage: true })
   const video = page.video()

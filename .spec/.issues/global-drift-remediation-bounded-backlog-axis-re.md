@@ -30,3 +30,16 @@ Before any source change that could alter a drift/freshness criterion, scenario 
 
 ## Done condition
 A reviewable dashboard-visible ledger names every remaining debt class, its owner/campaign, and whether it is blocked on a human decision. No historical `--changed` green result is represented as global freshness.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-10T04:38:33.943Z -->
+Checkpoint after read-only triage (repo-local CLI; integration code 888eeb565, ledger commit 0896fe7e8):
+
+- Current spec lint: 0 errors; 67 governed-code drift warnings, 1 uncovered file (spec-dashboard/src/lockHint.js), and 1 soft related-drift aggregate (388 related files across 119 nodes). The old 74 warning count was from the pre-L0-move snapshot and is not the current baseline.
+- Current eval lint: 143 nodes flagged; 602 stale, 1 unmeasured, 5 eval coverage gaps, 38 explicit over-owned files, 0 malformed.
+- Axis audit: 786 scenarios = 370 inherited node axes, 573 effective whole-file axes, 173 selector-only, 40 empty. 407 stale readings are code-only with a whole-file effective axis. This is a precision worklist, not evidence that the stale rule is wrong.
+- First mapping hotspots: harness-adapter (38 stale / 22 inherited), session-console (25 / 21), state (19 / 17), live-view (16 / 16).
+- Spec triage: launch-hero and evidence-get/evidence-put are scoped-unit ACK candidates after their owners verify the named units; zcode-harness and lockHint.js are ownership repairs, not ACKs.
+
+Decision gate status: Decision 001 is posted on @fbb76f84 as a session file. It asks whether eval-owners may report effective inherited axes diagnostically. No source change, freshness criterion, gate, or `--changed` behavior has been modified.
+
+Next non-behavioral work, capacity permitting: define/measure the five coverage gaps; measure files/html-previews-rendered-in-a-script-free-frame through real CLI + Chromium; triage the 105 semantic scenario stales before code-only backlog. Do not mass-ack or mass-file pass readings.

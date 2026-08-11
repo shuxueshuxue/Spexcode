@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: shipped-tarball-carries-what-the-verbs-need
+    tags: [cli]
+    description: >
+      Build the real tarball with `npm pack`, install it into a scratch prefix with `npm install <tgz>`, and
+      from that prefix alone drive a verb whose work depends on a build artifact not in git — `spex flat site`,
+      which copies the graph-only dashboard shell beside a flat's payload. Nothing in the run may read the
+      source checkout. Compare the shell the command emitted against the one inside the installed package.
+    expected: >
+      The verb exits 0 and the artifact it copied is byte-identical to the copy inside the installed package —
+      proving it came from the tarball, not from a checkout that happened to be nearby. A verb that works only
+      where the repository is present is broken for every user, and it fails in the one direction a source
+      checkout can never reveal.
+    related: [scripts/prepack.mjs, package.json, spec-cli/src/flat.ts]
   - name: dashboard-serves-bundled
     tags: [cli]
     description: >

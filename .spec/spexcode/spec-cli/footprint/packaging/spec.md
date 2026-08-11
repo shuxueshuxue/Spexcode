@@ -61,7 +61,11 @@ declares the same local core package and locks that link: its direct imports mus
 hoist surviving a second, package-local installation.
 
 The root tarball otherwise preserves the runtime layout: `spec-cli/{src,bin,templates,hooks}`, the siblings
-`spec-eval/src` and `spec-forge/src`, and `spec-dashboard/dist`. The dist is the one shipped artifact not in git, so it is built
+`spec-eval/src` and `spec-forge/src`, and the dashboard builds `spec-dashboard/dist` and
+`spec-dashboard/dist-public`. There are **two** dashboard builds because graph-only mode is baked in at build
+time, so the full dashboard cannot double as the read-only shell [[flat]] copies beside a flat's payload —
+ship only `dist` and `spex flat site` works in a source checkout and nowhere else, telling an installed user
+to run a build script they do not have. The dists are the shipped artifacts not in git, so they are built
 by the **`prepack`** lifecycle hook — the point npm runs *whenever it builds a tarball*, on both `npm pack`
 and `npm publish` (but never on a plain `npm install`). That makes tarball-completeness the contract of
 *producing a tarball at all*, not a publish-only afterthought: pack and publish emit the identical complete

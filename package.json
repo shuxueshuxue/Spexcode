@@ -25,6 +25,7 @@
     "spec-forge/src",
     "!spec-forge/src/**/*.test.ts",
     "spec-dashboard/dist",
+    "spec-dashboard/dist-public",
     "README.md"
   ],
   "engines": {

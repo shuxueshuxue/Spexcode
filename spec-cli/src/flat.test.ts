@@ -158,8 +158,8 @@ test('the gallery index escapes what it prints and links relatively', () => {
   // card prints the slug and the language names; the full source URL is deliberately NOT on this page (the
   // flat's own About panel carries provenance), and this asserts that staying true rather than assuming it.
   const html = galleryIndexHtml([
-    { slug: 'psf/requests', source: 'https://evil.test/"><script>alert(1)</script>', revision: 'abcdef0123456789', coverage: 100, governed: 21, nodes: 46, passed: true, languages: ['Python'] },
-    { slug: 'x/y', source: 'https://github.com/x/y', revision: 'deadbeefcafe', coverage: 62, governed: 80, nodes: 9, passed: false, languages: ['<img src=x onerror=1>'] },
+    { slug: 'psf/requests', source: 'https://evil.test/"><script>alert(1)</script>', revision: 'abcdef0123456789', coverage: 100, governed: 21, nodes: 46, passed: true, languages: ['Python'], lang: 'zh' },
+    { slug: 'x/y', source: 'https://github.com/x/y', revision: 'deadbeefcafe', coverage: 62, governed: 80, nodes: 9, passed: false, languages: ['<img src=x onerror=1>'], lang: 'en' },
   ])
   assert.ok(html.includes('href="./psf/requests/"'), 'entry link must be relative — the gallery itself may sit under a prefix')
   assert.ok(!html.includes('<script>alert(1)</script>') && !html.includes('evil.test'), 'the source string reached the page')

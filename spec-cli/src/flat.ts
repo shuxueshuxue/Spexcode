@@ -14,6 +14,17 @@ export const FLAT_BRANCH = 'flatcode'
 const DEFAULT_ROUNDS = 6
 const DEFAULT_COVERAGE = 90
 
+// @@@ prose language - a spec is written FOR the people who maintain the repository, and for most of the
+// world that is not English. The language governs the prose only: node ids are directory names, which
+// [[id-url-safe]] holds to a URL-safe ASCII form, so a tree written in Chinese still has ascii-kebab ids.
+// Unlisted codes pass through verbatim, so `--lang "Brazilian Portuguese"` works without a table entry.
+const LANGUAGE_NAMES: Readonly<Record<string, string>> = {
+  zh: '简体中文 (Simplified Chinese)', 'zh-cn': '简体中文 (Simplified Chinese)',
+  'zh-tw': '繁體中文 (Traditional Chinese)', en: 'English', ja: '日本語 (Japanese)',
+  ko: '한국어 (Korean)', fr: 'French', de: 'German', es: 'Spanish', pt: 'Portuguese', ru: 'Russian',
+}
+export const languageName = (code: string) => LANGUAGE_NAMES[code.toLowerCase()] ?? code
+
 // @@@ source extensions are an allowlist, never a guess - an unknown extension is ignored rather than
 // governed. Governing a file nobody can spec (a lockfile, a minified vendor bundle, a fixture) manufactures
 // permanent coverage debt that no round can ever pay off, so the gate would never close. Under-claiming costs
@@ -182,7 +193,17 @@ export function confirmProfile(proposed: FlatProfile, sourceFiles: readonly stri
   return { ...proposed, governedRoots, fileCount: sourceFiles.length }
 }
 
-function surveyPrompt(profile: FlatProfile, coverageFloor: number): string {
+// The prose language is stated as its own paragraph rather than folded into the task, because it applies to
+// every node and the one thing it must NOT touch is the ids.
+const languageClause = (lang: string | undefined): string[] => lang && lang.toLowerCase() !== 'en' ? [
+  ``,
+  `WRITE THE SPEC PROSE IN ${languageName(lang)}. That means every node's \`title\`, \`desc\` and body — the`,
+  `whole tree reads in that language, not a translation layer over English.`,
+  `Node IDS STAY lowercase ascii-kebab (they are directory names and part of URLs), and so do the file paths`,
+  `in \`code:\`/\`related:\` and the \`[[id]]\` mentions that point at them.`,
+] : []
+
+function surveyPrompt(profile: FlatProfile, coverageFloor: number, lang?: string): string {
   return [
     `You are flattening this repository into a SpexCode .spec tree. This is the whole task; there is no other work.`,
     ``,
@@ -198,6 +219,7 @@ function surveyPrompt(profile: FlatProfile, coverageFloor: number): string {
     `A node body states INTENT, INVARIANTS, and CONTRACTS: what this part guarantees, what it refuses, what`,
     `would be a bug. It is not a paraphrase of the code — a reader who has the source already gets nothing`,
     `from prose that restates it. Write what the source CANNOT tell them: why this shape, what it must never do.`,
+    ...languageClause(lang),
     ``,
     `You will be measured, and you will be told what failed:`,
     `  - \`spex spec lint\` must report ZERO errors.`,
@@ -208,9 +230,10 @@ function surveyPrompt(profile: FlatProfile, coverageFloor: number): string {
   ].join('\n')
 }
 
-function repairPrompt(gate: FlatGate, doctor: string, coverageFloor: number): string {
+function repairPrompt(gate: FlatGate, doctor: string, coverageFloor: number, lang?: string): string {
   const lines = [
     `Continue flattening this repository. The gate was measured and it did NOT pass. Fix exactly what follows.`,
+    ...languageClause(lang),
     ``,
     `Coverage: ${gate.coverage}% of ${gate.governed} governed files (floor ${coverageFloor}%). Lint errors: ${gate.errors}.`,
   ]
@@ -277,6 +300,7 @@ export type FlatOptions = {
   launcher?: string
   rounds?: number
   coverage?: number
+  lang?: string
 }
 
 export type FlatResult = {
@@ -383,7 +407,7 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
   while (round < rounds && !gatePassed(gate, coverageFloor)) {
     round += 1
     const doctor = round === 1 ? '' : (await spex(['doctor'], repo)).stdout
-    const prompt = round === 1 ? surveyPrompt(profile, coverageFloor) : repairPrompt(gate, doctor, coverageFloor)
+    const prompt = round === 1 ? surveyPrompt(profile, coverageFloor, options.lang) : repairPrompt(gate, doctor, coverageFloor, options.lang)
     log(`round ${round}/${rounds} — coverage ${gate.coverage}% · ${gate.errors} lint error(s)`)
     const code = await runTurn(harness.oneShotTurn!(prompt, cmd), repo)
     if (code !== 0) log(`round ${round}: the agent turn exited ${code}; measuring anyway`)
@@ -396,7 +420,7 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
   writeFileSync(join(out, 'flat.json'), `${JSON.stringify({
     schema: 'spexcode.flat/v1',
     source, revision, branch: FLAT_BRANCH, launcher: launcherName, harness: harness.id,
-    rounds: round, roundBudget: rounds, coverageFloor, passed,
+    rounds: round, roundBudget: rounds, coverageFloor, passed, lang: options.lang ?? 'en',
     gate: { errors: gate.errors, governed: gate.governed, uncovered: gate.uncovered, coverage: gate.coverage },
     profile,
   }, null, 2)}\n`)
@@ -553,6 +577,7 @@ export type GalleryEntry = {
   nodes: number
   passed: boolean
   languages: readonly string[]
+  lang: string
 }
 
 const escapeHtml = (text: string) =>
@@ -582,21 +607,21 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
         </div>
         <div class="langs">${langs}</div>
         <div class="stats">
-          <span><b>${entry.nodes}</b> specs</span>
-          <span><b>${entry.governed}</b> files</span>
-          <span class="${entry.passed ? 'ok' : 'partial'}">${entry.coverage}%${entry.passed ? ' covered' : ' partial'}</span>
+          <span><b>${entry.nodes}</b> 个节点</span>
+          <span><b>${entry.governed}</b> 个文件</span>
+          <span class="${entry.passed ? 'ok' : 'partial'}">${entry.coverage}% 覆盖${entry.passed ? '' : '（部分）'}</span>
         </div>
         <div class="rev"><code>${escapeHtml(entry.revision.slice(0, 12))}</code></div>
       </a>`
   }).join('\n')
 
   return `<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flatcode — understand any codebase</title>
-<meta name="description" content="Flatcode reads a repository and writes down what each part is for, then checks that writing against the code.">
+<title>Flatcode 软件二向箔 — 读懂任意代码库</title>
+<meta name="description" content="Flatcode 通读一个仓库，把每一部分是干什么的写下来，再拿这些文字去对照代码检查。">
 <!-- Inlined, because a static host with no favicon answers a 404 on every single visit. The mark is the
      name: a solid body above, flattened to a line below. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2310b981'/%3E%3Crect x='8' y='7' width='16' height='9' rx='2' fill='%23041b12' opacity='.75'/%3E%3Crect x='6' y='21' width='20' height='3.5' rx='1.75' fill='%23041b12'/%3E%3C/svg%3E">
@@ -631,10 +656,13 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
   nav { display: flex; align-items: center; justify-content: space-between; padding: 1.5rem 0; }
   .brand { display: flex; align-items: center; gap: .6rem; font-weight: 600; letter-spacing: -.01em; }
   .brand svg { display: block; }
+  .nav-links { display: flex; align-items: center; gap: .5rem; }
   nav a.ghost {
+    display: inline-flex; align-items: center; gap: .4rem;
     color: var(--muted); text-decoration: none; font-size: .875rem; padding: .45rem .85rem;
     border: 1px solid var(--line); border-radius: 8px; transition: border-color .15s, color .15s;
   }
+  nav a.ghost.icon { padding: .45rem .6rem; }
   nav a.ghost:hover { color: var(--fg); border-color: var(--line-hi); }
 
   header.hero { padding: 6rem 0 4.5rem; max-width: 46rem; margin: 0 auto; text-align: center; }
@@ -716,16 +744,20 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
       <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#10b981"/><rect x="8" y="7" width="16" height="9" rx="2" fill="#041b12" opacity=".75"/><rect x="6" y="21" width="20" height="3.5" rx="1.75" fill="#041b12"/></svg>
       Flatcode
     </div>
-    <a class="ghost" href="https://github.com/shuxueshuxue/spexcode" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <div class="nav-links">
+      <a class="ghost" href="https://spexcode.net/zh/flatcode/">文档</a>
+      <a class="ghost icon" href="https://github.com/shuxueshuxue/spexcode" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      </a>
+    </div>
   </nav>
 
   <header class="hero">
-    <div class="eyebrow">软件二向箔 · powered by SpexCode</div>
-    <h1>Understand <em>any</em> codebase.</h1>
+    <div class="eyebrow">软件二向箔 · 由 SpexCode 驱动</div>
+    <h1>读懂<em>任意</em>代码库。</h1>
     <p class="lede">
-      Flatcode reads a repository and writes down what each part is for — the intent, the invariants, the
-      things the source itself can't tell you. Then it checks that writing against the code, and refuses to
-      publish until it holds.
+      Flatcode 通读一个仓库，把每一部分「是干什么的」写下来——意图、不变量、源码本身说不出口的东西。
+      然后它拿这些文字去对照代码检查，过不了就不发布。
     </p>
     <div class="cmd">
       <span class="prompt">$</span>
@@ -735,15 +767,15 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
   </header>
 
   <div class="how">
-    <div><div class="step">01</div><h4>It reads the whole repository</h4><p>An agent works through the source and writes a tree of specs — one node per real responsibility, not one per file.</p></div>
-    <div><div class="step">02</div><h4>It is graded, not trusted</h4><p>Every round is measured: zero lint errors, and a coverage floor over the repository's source. The agent saying it finished is not part of the gate.</p></div>
-    <div><div class="step">03</div><h4>You read it like a map</h4><p>The result is a navigable graph. Open any node for the prose behind that piece of the system.</p></div>
+    <div><div class="step">01</div><h4>它通读整个仓库</h4><p>一个 agent 走完源码，写出一棵 spec 树——一个节点对应一份真实职责，而不是一个文件配一个节点。</p></div>
+    <div><div class="step">02</div><h4>它被打分，而不是被信任</h4><p>每一轮都要测量：lint 零错误，覆盖率达到下限。agent 说自己写完了，不算数。</p></div>
+    <div><div class="step">03</div><h4>你像看地图一样读它</h4><p>结果是一张可导航的图谱。点开任意节点，读这块系统背后的那段文字。</p></div>
   </div>
 
   <section class="gallery">
     <div class="sec-head">
-      <h2>Flattened so far</h2>
-      <span>${entries.length} ${entries.length === 1 ? 'repository' : 'repositories'}</span>
+      <h2>已经压平的仓库</h2>
+      <span>${entries.length} 个</span>
     </div>
     <div class="grid">
 ${cards}
@@ -751,8 +783,9 @@ ${cards}
   </section>
 
   <footer>
-    Built with <a href="https://github.com/shuxueshuxue/spexcode" target="_blank" rel="noopener noreferrer">SpexCode</a>.
-    Every graph here is a read-only projection of committed specs — no sessions, no write routes, no backend.
+    由 <a href="https://github.com/shuxueshuxue/spexcode" target="_blank" rel="noopener noreferrer">SpexCode</a> 构建 ·
+    <a href="https://spexcode.net/zh/flatcode/">文档</a>。
+    这里每一张图谱都是已提交 spec 的只读投影——没有会话，没有写入路径，没有后端。
   </footer>
 </div>
 <script>
@@ -781,6 +814,7 @@ export async function flatGallery(out: string, flatDirs: readonly string[], log:
     if (!existsSync(recordPath)) throw new Error(`spex flat gallery: ${flat} is not a flat — no flat.json`)
     const record = JSON.parse(readFileSync(recordPath, 'utf8')) as {
       source: string; revision: string; passed?: boolean
+      lang?: string
       gate?: { coverage?: number; governed?: number }
       profile?: { languages?: string[] }
     }
@@ -802,12 +836,17 @@ export async function flatGallery(out: string, flatDirs: readonly string[], log:
       nodes: graph.nodes.length,
       passed: record.passed === true,
       languages: record.profile?.languages ?? [],
+      lang: record.lang ?? 'en',
     })
     const release = join(dest, 'public-spec-release.json')
     receipts.push({ slug, release: `${slug}/public-spec-release.json`, sha256: sha256(readFileSync(release)) })
     log(`  ${slug} — ${graph.nodes.length} nodes, ${record.gate?.coverage ?? 0}% of ${record.gate?.governed ?? 0} governed`)
   }
-  entries.sort((a, b) => a.slug.localeCompare(b.slug))
+  // @@@ order - a tree written in the reader's own language goes first. The site defaults to Chinese, so a
+  // Chinese-prose flat is the one that demonstrates the product to the visitor it is aimed at; an English tree
+  // shown first makes the whole page look like a translation of somebody else's thing.
+  const rank = (entry: GalleryEntry) => (entry.lang.toLowerCase().startsWith('zh') ? 0 : entry.lang.toLowerCase() === 'en' ? 2 : 1)
+  entries.sort((a, b) => rank(a) - rank(b) || a.slug.localeCompare(b.slug))
   receipts.sort((a, b) => a.slug.localeCompare(b.slug))
   writeFileSync(join(target, 'index.html'), galleryIndexHtml(entries))
   // The manifest is what makes a publish auditable: it names every entry and hashes each flat's own release
@@ -848,7 +887,7 @@ export async function runFlat(argv: readonly string[]): Promise<number> {
     console.error(`spex flat: unknown subcommand "${sub}". Run \`spex flat\` for the command map.`)
     return 2
   }
-  const known = new Set(['out', 'launcher', 'rounds', 'coverage'])
+  const known = new Set(['out', 'launcher', 'rounds', 'coverage', 'lang'])
   const flags = new Map<string, string>()
   const positional: string[] = []
   const rest = argv.slice(1)
@@ -880,6 +919,7 @@ export async function runFlat(argv: readonly string[]): Promise<number> {
       launcher: flags.get('launcher'),
       rounds: number('rounds'),
       coverage: number('coverage'),
+      lang: flags.get('lang'),
     })
     const { gate } = result
     console.log('')

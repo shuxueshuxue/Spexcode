@@ -7,8 +7,7 @@ code:
   - spec-cli/src/public-graph.ts#buildPublicGraph
 related:
   - scripts/public-graph-build.mjs
-  - public-graphs/registry.json
-  - ops/nginx/spexcode-public-graph.conf
+  - scripts/public-graph-registry.json
   - spec-dashboard/src/public-mode.js
   - spec-cli/src/cli.ts
   - spec-dashboard/src/App.jsx
@@ -48,9 +47,14 @@ back to `#/graph`. The artifact is therefore safe to serve from an ordinary stat
 conditional `no-cache` revalidation, so an unchanged release can answer from the browser's cached body after an
 ETag check. The public mode never polls or opens a long-lived stream.
 
-`public-graphs/registry.json` is the sole repository-to-host mapping. Every publication explicitly names
-its GitHub repository, its `id`, its `<repository>.spexcode.net` hostname, and the About-panel copy; neither
-the build nor the deployment derives a hostname from a checkout name. The current SpexCode row maps
+A registry is the sole repository-to-host mapping. Every publication explicitly names its repository, its
+`id`, its hostname, and the About-panel copy; neither the build nor the deployment derives a hostname from a
+checkout name. That REFUSAL is the product — the build rejects an unregistered id — while WHICH publications
+exist is one deployment's fact, so `--registry <path>` lets a deployment supply its own list instead of
+editing this repository to publish a second repository. `scripts/public-graph-registry.json` is the default
+and holds SpexCode's own publication; it sits beside the only thing that reads it rather than in a top-level
+directory of its own. The serving vhost is not here at all: an nginx server block naming one host's paths is
+deployment configuration and lives with the deployment. The current SpexCode row maps
 `shuxueshuxue/spexcode` to `spexcode.spexcode.net`. `herdr.spexcode.net` is a retired trial alias and may only
 redirect to the registered SpexCode host; it must never keep serving SpexCode content as if Herdr owned it.
 

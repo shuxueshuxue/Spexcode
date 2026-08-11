@@ -30,7 +30,8 @@ scenarios:
       document return successfully. `herdr.spexcode.net` redirects to that registered host; the existing
       `spexcode.net` documentation host remains unchanged. The release is activated only by switching the
       graph site's symlink; the docs site's root and publication marker are untouched.
-    code: [ops/nginx/spexcode-public-graph.conf, scripts/public-graph-build.mjs]
+    code: [scripts/public-graph-build.mjs]
+    related: [scripts/public-graph-registry.json]
     test: spec-dashboard/test/public-graph-static.e2e.mjs
 ---
 # public-spec-graph — measurement

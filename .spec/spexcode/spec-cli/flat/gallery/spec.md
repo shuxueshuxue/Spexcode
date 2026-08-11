@@ -4,7 +4,6 @@ status: active
 hue: 165
 desc: Many flats on one static host at flatcode.spexcode.net/<owner>/<repo> — assembled by a command, published with a receipt, and serving nothing a static file server cannot.
 related:
-  - ops/nginx/spexcode-flatcode.conf
   - spec-cli/src/flat.ts
   - spec-cli/src/flat.test.ts
 ---
@@ -34,7 +33,9 @@ that looks right and is not — it rewrites the dots in `../../etc/passwd` and l
 The host is an ordinary static file server: no application, no database, no write route, nothing that can be
 asked to do anything but return a file. Each flat carries its own hashed bundle under its own directory, so
 the immutable-cache rule matches `/<owner>/<repo>/assets/`, not `/assets/` — a single-publication host's
-pattern silently caches nothing here.
+pattern silently caches nothing here. The vhost that encodes those rules is **not in this repository**: a
+server block naming one host's paths is deployment configuration, and it lives with the deployment scripts
+that install it, not beside the code that produced the files.
 
 A directory URL must redirect to its slashed form before anything renders. The published artifact resolves
 its payload relative to its own URL ([[flat]]), so at `/psf/requests` the browser would ask for

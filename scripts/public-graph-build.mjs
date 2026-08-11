@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dashboard = join(root, 'spec-dashboard')
 const output = join(dashboard, 'dist-public')
-const registryPath = join(root, 'public-graphs', 'registry.json')
+// @@@ the registry is DATA, the refusal is the product - this script enforces the invariant that a hostname
+// is never derived from a checkout or branch name, which needs a registry to refuse against. WHICH
+// publications exist is one deployment's fact, so --registry lets a deployment supply its own list instead
+// of editing this repository to publish a second repository. The default names SpexCode's own publication.
+const DEFAULT_REGISTRY = join(root, 'scripts', 'public-graph-registry.json')
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex')
 const run = (command, args, options = {}) => {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', ...options })
@@ -19,12 +23,18 @@ const string = (value, label) => {
   if (typeof value !== 'string' || !value.trim()) fail(`${label} must be a non-empty string`)
   return value
 }
-const publicationId = (() => {
+const { publicationId, registryPath } = (() => {
   const args = process.argv.slice(2)
-  if (!args.length) return 'spexcode'
-  if (args.length === 2 && args[0] === '--publication') return string(args[1], 'publication id')
-  fail('usage: node scripts/public-graph-build.mjs [--publication <id>]')
+  let id = 'spexcode'
+  let registry = DEFAULT_REGISTRY
+  for (let at = 0; at < args.length; at += 1) {
+    if (args[at] === '--publication') { id = string(args[at + 1], 'publication id'); at += 1; continue }
+    if (args[at] === '--registry') { registry = resolve(string(args[at + 1], 'registry path')); at += 1; continue }
+    fail('usage: node scripts/public-graph-build.mjs [--publication <id>] [--registry <path>]')
+  }
+  return { publicationId: id, registryPath: registry }
 })()
+if (!existsSync(registryPath)) fail(`registry ${registryPath} does not exist`)
 const registry = JSON.parse(readFileSync(registryPath, 'utf8'))
 if (registry?.schema !== 'spexcode.public-spec-host-registry/v1' || !Array.isArray(registry.publications)) {
   fail('registry schema is invalid')

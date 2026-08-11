@@ -552,78 +552,217 @@ export type GalleryEntry = {
   governed: number
   nodes: number
   passed: boolean
+  languages: readonly string[]
 }
 
 const escapeHtml = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
+// The colours developers already read a language by. Anything unlisted gets the neutral dot rather than a
+// guessed hue — a wrong-but-confident colour is worse than none.
+const LANGUAGE_DOT: Readonly<Record<string, string>> = {
+  TypeScript: '#3178c6', JavaScript: '#f1e05a', Python: '#3572a5', Go: '#00add8', Rust: '#dea584',
+  Ruby: '#701516', Java: '#b07219', Kotlin: '#a97bff', Swift: '#f05138', C: '#555555', 'C++': '#f34b7d',
+  'C#': '#178600', PHP: '#4f5d95', Scala: '#c22d40', Elixir: '#6e4a7e', Erlang: '#b83998',
+  Haskell: '#5e5086', OCaml: '#ef7a08', Clojure: '#db5855', Lua: '#000080', Dart: '#00b4ab',
+  Vue: '#41b883', Svelte: '#ff3e00', Shell: '#89e051', Zig: '#ec915c',
+}
+
 // The index is hand-written rather than another dashboard build: it is a LIST, not a graph, and giving it the
 // graph bundle would ship a megabyte of react-flow to render eight links. Self-contained and theme-aware for
 // the same reason every published artifact here is — it must survive on a static host with no build step.
 export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
-  const cards = entries.map((entry) => `      <a class="card" href="./${escapeHtml(entry.slug)}/">
-        <h2>${escapeHtml(entry.slug)}</h2>
-        <p class="src">${escapeHtml(entry.source)}</p>
-        <dl>
-          <div><dt>coverage</dt><dd>${entry.coverage}%${entry.passed ? '' : ' <span class="partial">partial</span>'}</dd></div>
-          <div><dt>governed</dt><dd>${entry.governed} files</dd></div>
-          <div><dt>nodes</dt><dd>${entry.nodes}</dd></div>
-          <div><dt>revision</dt><dd><code>${escapeHtml(entry.revision.slice(0, 12))}</code></dd></div>
-        </dl>
-      </a>`).join('\n')
+  const cards = entries.map((entry) => {
+    const [owner, name] = entry.slug.includes('/') ? [entry.slug.split('/')[0], entry.slug.split('/').slice(1).join('/')] : ['', entry.slug]
+    const langs = entry.languages.map((language) => `<span class="lang"><i style="background:${LANGUAGE_DOT[language] ?? '#6b7280'}"></i>${escapeHtml(language)}</span>`).join('')
+    return `      <a class="card" href="./${escapeHtml(entry.slug)}/">
+        <div class="card-top">
+          <h3>${owner ? `<span class="owner">${escapeHtml(owner)}/</span>` : ''}${escapeHtml(name)}</h3>
+          <svg class="go" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="langs">${langs}</div>
+        <div class="stats">
+          <span><b>${entry.nodes}</b> specs</span>
+          <span><b>${entry.governed}</b> files</span>
+          <span class="${entry.passed ? 'ok' : 'partial'}">${entry.coverage}%${entry.passed ? ' covered' : ' partial'}</span>
+        </div>
+        <div class="rev"><code>${escapeHtml(entry.revision.slice(0, 12))}</code></div>
+      </a>`
+  }).join('\n')
+
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flatcode — software flattened into specs</title>
+<title>Flatcode — understand any codebase</title>
+<meta name="description" content="Flatcode reads a repository and writes down what each part is for, then checks that writing against the code.">
 <!-- Inlined, because a static host with no favicon answers a 404 on every single visit. The mark is the
      name: a solid body above, flattened to a line below. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232f6f4f'/%3E%3Crect x='8' y='7' width='16' height='9' rx='1.5' fill='%23fff' opacity='.9'/%3E%3Crect x='6' y='21' width='20' height='3' rx='1.5' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2310b981'/%3E%3Crect x='8' y='7' width='16' height='9' rx='2' fill='%23041b12' opacity='.75'/%3E%3Crect x='6' y='21' width='20' height='3.5' rx='1.75' fill='%23041b12'/%3E%3C/svg%3E">
 <style>
+  /* Committed to dark on purpose: the graph pages a visitor clicks into are dark, and a light shell handing
+     off to a dark app is the seam that makes a site feel assembled rather than made. Every colour is painted
+     explicitly so nothing inherits the host's theme. */
   :root {
-    --bg: #f7f7f5; --fg: #1a1a19; --muted: #6b6b66; --line: #dedcd6; --card: #fff; --accent: #2f6f4f;
-  }
-  :root:not([data-theme="light"]) { }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-    --bg: #17181a; --fg: #e6e6e3; --muted: #9a9a94; --line: #2c2e31; --card: #1e1f22; --accent: #7fbf9a;
-  } }
-  :root[data-theme="dark"] {
-    --bg: #17181a; --fg: #e6e6e3; --muted: #9a9a94; --line: #2c2e31; --card: #1e1f22; --accent: #7fbf9a;
+    --bg: #08090b; --panel: #0e1013; --line: #1c1f24; --line-hi: #2b3038;
+    --fg: #f2f3f5; --muted: #9096a1; --dim: #6b7280;
+    --accent: #10b981; --accent-soft: #34d399;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue",
+            "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  main { max-width: 60rem; margin: 0 auto; padding: 3rem 1.25rem 5rem; }
-  header h1 { font-size: 1.5rem; margin: 0 0 .35rem; letter-spacing: -.01em; }
-  header p { color: var(--muted); margin: 0 0 2.5rem; max-width: 42rem; }
-  .grid { display: grid; gap: .875rem; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
-  .card { display: block; padding: 1rem 1.1rem; background: var(--card); border: 1px solid var(--line);
-          border-radius: .5rem; color: inherit; text-decoration: none; }
-  .card:hover { border-color: var(--accent); }
-  .card h2 { font-size: .95rem; margin: 0 0 .2rem; color: var(--accent); }
-  .src { color: var(--muted); font-size: .78rem; margin: 0 0 .8rem; overflow-wrap: anywhere; }
-  dl { margin: 0; display: grid; gap: .15rem; }
-  dl div { display: flex; justify-content: space-between; gap: 1rem; font-size: .78rem; }
-  dt { color: var(--muted); }
-  dd { margin: 0; }
-  .partial { color: #b3762f; }
-  footer { margin-top: 3rem; color: var(--muted); font-size: .78rem; }
-  footer a { color: var(--accent); }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans);
+    font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  /* One soft light source behind the hero. Cheap, and it stops the page reading as a flat black rectangle. */
+  .glow {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(52rem 30rem at 50% -8rem, rgba(16,185,129,.22), transparent 68%),
+      radial-gradient(34rem 22rem at 18% 4rem, rgba(56,189,248,.09), transparent 72%),
+      radial-gradient(34rem 22rem at 84% 10rem, rgba(139,92,246,.07), transparent 72%);
+  }
+  .wrap { position: relative; z-index: 1; max-width: 68rem; margin: 0 auto; padding: 0 1.5rem; }
+
+  nav { display: flex; align-items: center; justify-content: space-between; padding: 1.5rem 0; }
+  .brand { display: flex; align-items: center; gap: .6rem; font-weight: 600; letter-spacing: -.01em; }
+  .brand svg { display: block; }
+  nav a.ghost {
+    color: var(--muted); text-decoration: none; font-size: .875rem; padding: .45rem .85rem;
+    border: 1px solid var(--line); border-radius: 8px; transition: border-color .15s, color .15s;
+  }
+  nav a.ghost:hover { color: var(--fg); border-color: var(--line-hi); }
+
+  header.hero { padding: 6rem 0 4.5rem; max-width: 46rem; margin: 0 auto; text-align: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: .5rem; font-size: .8125rem; color: var(--accent-soft);
+    background: rgba(16,185,129,.08); border: 1px solid rgba(16,185,129,.2);
+    padding: .3rem .7rem; border-radius: 999px; margin-bottom: 1.5rem;
+  }
+  h1 {
+    font-size: clamp(2.6rem, 6.5vw, 4.25rem); line-height: 1.02; letter-spacing: -.035em;
+    font-weight: 620; margin: 0 0 1.25rem;
+  }
+  h1 em { font-style: normal; color: var(--accent-soft); }
+  .lede { font-size: clamp(1.05rem, 2.2vw, 1.2rem); color: var(--muted); margin: 0 auto 2.5rem; max-width: 36rem; }
+
+  .cmd {
+    display: flex; align-items: center; gap: .75rem; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: .85rem 1rem; font-family: var(--mono); font-size: .875rem;
+    width: fit-content; max-width: 100%; margin: 0 auto; text-align: left;
+  }
+  .cmd .prompt { color: var(--accent); user-select: none; }
+  .cmd code { color: var(--fg); white-space: nowrap; overflow-x: auto; flex: 1; }
+  .cmd button {
+    flex: none; background: transparent; border: 1px solid var(--line); color: var(--muted);
+    border-radius: 7px; padding: .3rem .6rem; font: inherit; font-size: .75rem; cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .cmd button:hover { color: var(--fg); border-color: var(--line-hi); }
+
+  .how { display: grid; gap: 1.75rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+         padding: 1rem 0 4.5rem; border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 3rem; }
+  .how h4 { margin: 0 0 .4rem; font-size: .9375rem; font-weight: 600; }
+  .how p { margin: 0; color: var(--muted); font-size: .9375rem; }
+  .how .step { color: var(--dim); font-family: var(--mono); font-size: .75rem; margin-bottom: .6rem; }
+
+  section.gallery { padding-bottom: 6rem; }
+  .sec-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1.5rem; }
+  .sec-head h2 { font-size: 1.0625rem; font-weight: 600; margin: 0; letter-spacing: -.01em; }
+  .sec-head span { color: var(--dim); font-size: .875rem; }
+
+  .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); }
+  .card {
+    display: block; padding: 1.25rem; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; color: inherit; text-decoration: none;
+    transition: border-color .18s, transform .18s, background .18s;
+  }
+  .card:hover { border-color: var(--line-hi); background: #12151a; transform: translateY(-2px); }
+  .card:hover .go { color: var(--accent-soft); transform: translateX(2px); }
+  .card-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .card h3 { margin: 0; font-size: 1rem; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .card .owner { color: var(--dim); font-weight: 400; }
+  .go { color: var(--dim); flex: none; transition: color .18s, transform .18s; }
+  .langs { display: flex; flex-wrap: wrap; gap: .5rem; margin: .85rem 0 1rem; }
+  .lang { display: inline-flex; align-items: center; gap: .35rem; font-size: .75rem; color: var(--muted); }
+  .lang i { width: .5rem; height: .5rem; border-radius: 50%; display: inline-block; }
+  .stats { display: flex; flex-wrap: wrap; gap: .9rem; font-size: .8125rem; color: var(--muted); }
+  .stats b { color: var(--fg); font-weight: 600; }
+  .stats .ok { color: var(--accent-soft); }
+  .stats .partial { color: #fbbf24; }
+  .rev { margin-top: .8rem; font-family: var(--mono); font-size: .6875rem; color: #4b5563; }
+
+  footer { border-top: 1px solid var(--line); padding: 2rem 0 3.5rem; color: var(--dim); font-size: .875rem; }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--fg); }
+  @media (max-width: 640px) {
+    header.hero { padding: 3.5rem 0 2.5rem; }
+    /* The command still scrolls inside its own chip; a smaller face just means less of it is hidden. */
+    .cmd { font-size: .78rem; padding: .75rem .85rem; gap: .5rem; }
+    .how { padding-top: 2.25rem; gap: 1.5rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
-  <main>
-    <header>
-      <h1>Flatcode</h1>
-      <p>Software flattened into specifications. Each entry is a read-only projection of one repository's
-         <code>.spec</code> tree, produced by an agent and held to a measured gate: zero lint errors and a
-         coverage floor over the repository's governed source.</p>
-    </header>
+<div class="glow"></div>
+<div class="wrap">
+  <nav>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#10b981"/><rect x="8" y="7" width="16" height="9" rx="2" fill="#041b12" opacity=".75"/><rect x="6" y="21" width="20" height="3.5" rx="1.75" fill="#041b12"/></svg>
+      Flatcode
+    </div>
+    <a class="ghost" href="https://github.com/shuxueshuxue/spexcode" target="_blank" rel="noopener noreferrer">GitHub</a>
+  </nav>
+
+  <header class="hero">
+    <div class="eyebrow">软件二向箔 · powered by SpexCode</div>
+    <h1>Understand <em>any</em> codebase.</h1>
+    <p class="lede">
+      Flatcode reads a repository and writes down what each part is for — the intent, the invariants, the
+      things the source itself can't tell you. Then it checks that writing against the code, and refuses to
+      publish until it holds.
+    </p>
+    <div class="cmd">
+      <span class="prompt">$</span>
+      <code id="cmd">spex flat new https://github.com/owner/repo</code>
+      <button type="button" id="copy" aria-label="Copy command">copy</button>
+    </div>
+  </header>
+
+  <div class="how">
+    <div><div class="step">01</div><h4>It reads the whole repository</h4><p>An agent works through the source and writes a tree of specs — one node per real responsibility, not one per file.</p></div>
+    <div><div class="step">02</div><h4>It is graded, not trusted</h4><p>Every round is measured: zero lint errors, and a coverage floor over the repository's source. The agent saying it finished is not part of the gate.</p></div>
+    <div><div class="step">03</div><h4>You read it like a map</h4><p>The result is a navigable graph. Open any node for the prose behind that piece of the system.</p></div>
+  </div>
+
+  <section class="gallery">
+    <div class="sec-head">
+      <h2>Flattened so far</h2>
+      <span>${entries.length} ${entries.length === 1 ? 'repository' : 'repositories'}</span>
+    </div>
     <div class="grid">
 ${cards}
     </div>
-    <footer>Built with <a href="https://github.com/shuxueshuxue/spexcode">SpexCode</a> — <code>spex flat new &lt;repo&gt;</code>.</footer>
-  </main>
+  </section>
+
+  <footer>
+    Built with <a href="https://github.com/shuxueshuxue/spexcode" target="_blank" rel="noopener noreferrer">SpexCode</a>.
+    Every graph here is a read-only projection of committed specs — no sessions, no write routes, no backend.
+  </footer>
+</div>
+<script>
+  // Progressive: the command is readable and selectable without this; the button just saves a drag.
+  document.getElementById('copy').addEventListener('click', function () {
+    var text = document.getElementById('cmd').textContent
+    var done = function () { var b = this; b.textContent = 'copied'; setTimeout(function () { b.textContent = 'copy' }, 1400) }.bind(this)
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () {})
+  })
+</script>
 </body>
 </html>
 `
@@ -641,7 +780,9 @@ export async function flatGallery(out: string, flatDirs: readonly string[], log:
     const recordPath = join(flat, 'flat.json')
     if (!existsSync(recordPath)) throw new Error(`spex flat gallery: ${flat} is not a flat — no flat.json`)
     const record = JSON.parse(readFileSync(recordPath, 'utf8')) as {
-      source: string; revision: string; passed?: boolean; gate?: { coverage?: number; governed?: number }
+      source: string; revision: string; passed?: boolean
+      gate?: { coverage?: number; governed?: number }
+      profile?: { languages?: string[] }
     }
     const site = join(flat, 'site')
     if (!existsSync(join(site, 'index.html'))) {
@@ -660,6 +801,7 @@ export async function flatGallery(out: string, flatDirs: readonly string[], log:
       governed: record.gate?.governed ?? 0,
       nodes: graph.nodes.length,
       passed: record.passed === true,
+      languages: record.profile?.languages ?? [],
     })
     const release = join(dest, 'public-spec-release.json')
     receipts.push({ slug, release: `${slug}/public-spec-release.json`, sha256: sha256(readFileSync(release)) })

@@ -154,16 +154,23 @@ test('a slug can never escape the gallery root', () => {
 })
 
 test('the gallery index escapes what it prints and links relatively', () => {
+  // Every string a flat contributes comes from the repository it read, so all of it is hostile input. The
+  // card prints the slug and the language names; the full source URL is deliberately NOT on this page (the
+  // flat's own About panel carries provenance), and this asserts that staying true rather than assuming it.
   const html = galleryIndexHtml([
-    { slug: 'psf/requests', source: 'https://github.com/psf/requests', revision: 'abcdef0123456789', coverage: 100, governed: 21, nodes: 46, passed: true },
-    { slug: 'x/y', source: '<script>alert(1)</script>', revision: 'deadbeefcafe', coverage: 62, governed: 80, nodes: 9, passed: false },
+    { slug: 'psf/requests', source: 'https://evil.test/"><script>alert(1)</script>', revision: 'abcdef0123456789', coverage: 100, governed: 21, nodes: 46, passed: true, languages: ['Python'] },
+    { slug: 'x/y', source: 'https://github.com/x/y', revision: 'deadbeefcafe', coverage: 62, governed: 80, nodes: 9, passed: false, languages: ['<img src=x onerror=1>'] },
   ])
   assert.ok(html.includes('href="./psf/requests/"'), 'entry link must be relative — the gallery itself may sit under a prefix')
-  assert.ok(!html.includes('<script>alert(1)</script>'), 'a source string reached the page unescaped')
-  assert.ok(html.includes('&lt;script&gt;'))
+  assert.ok(!html.includes('<script>alert(1)</script>') && !html.includes('evil.test'), 'the source string reached the page')
+  assert.ok(!html.includes('<img src=x onerror=1>'), 'a language name reached the page unescaped')
+  assert.ok(html.includes('&lt;img'), 'the language name is present but escaped')
   // A flat that did not converge must say so where someone choosing what to read can see it.
   assert.ok(html.includes('partial'))
   assert.ok(html.includes('abcdef012345') && !html.includes('abcdef0123456789'), 'revision is shown short')
+  // An unknown language gets the neutral dot rather than an invented colour.
+  assert.ok(html.includes('#3178c6') === false && html.includes('#3572a5'), 'known languages carry their own colour')
+  assert.ok(html.includes('#6b7280'), 'an unlisted language falls back to neutral')
 })
 
 test('every harness declaring a one-shot turn carries the prompt exactly one way', () => {

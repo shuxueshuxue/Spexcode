@@ -29,6 +29,17 @@ scenarios:
       listing the harnesses that can run a round. Cloning first and failing afterwards is a failure, and so is
       silently substituting a different harness.
     tags: [cli]
+  - name: site-renders-under-a-subpath
+    description: >
+      Serve a flat's site under a path prefix the way a gallery host would — `/<owner>/<repo>/` — with every
+      request outside that prefix answered 404, and drive a real browser at it. The 404 is the point: a host
+      carrying many flats has no reason to serve one flat's assets from the domain root, so a run that allows
+      root fallbacks cannot tell a relocatable site from one that only ever worked at `/`.
+    expected: >
+      The graph renders and a node's document loads with no request escaping the prefix. A flat is a directory
+      whose contents are self-referential; a site that resolves its own assets from the domain root is not a
+      directory anyone can move, and the same defect silently rules out every path-routed host.
+    tags: [frontend-e2e, cli]
   - name: flat-site-renders-with-no-backend
     description: >
       Emit a flat's site with `spex flat site`, serve the directory over plain static HTTP, and drive a real

@@ -370,6 +370,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
   font-family: var(--mono); font-size: var(--type-control); color: var(--ink2);
 }
 .bstat-total { font-weight: var(--weight-bold); color: var(--ink); padding-right: 1px; }
+.bstat-project { color: var(--blue); }
+.bstat-governance { color: var(--muted); }
 .bstat {
   display: inline-flex; align-items: center; gap: 3px;
   padding: 1px 4px; border: 0; border-radius: 4px; background: none;
@@ -408,6 +410,8 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .spec-node.focused { border-color: var(--blue); outline: 2px solid var(--blue); outline-offset: -1px; }
 .spec-node.active.focused { border-color: var(--orange); outline-color: var(--orange); }
 .spec-node.drift.focused { border-color: var(--yellow); outline-color: var(--yellow); }
+.spec-node.governance-group { background: var(--panel2); border-style: dashed; }
+.spec-node.governance-group .node-title { color: var(--muted); }
 
 .node-row1 { display: flex; align-items: center; gap: 7px; }
 .node-row2 { display: flex; align-items: center; gap: 7px; min-height: 18px; }
@@ -418,6 +422,7 @@ body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-selec
 .node-title { font-size: var(--type-control); font-weight: var(--weight-semibold); color: var(--ink2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node-ago { font-size: var(--type-caption); color: var(--muted); flex: none; white-space: nowrap; }
 .node-ver { font-size: var(--type-caption); color: var(--muted); flex: none; }
+.node-governance-count { font-size: var(--type-caption); color: var(--muted); flex: none; }
 
 /* expandable hint: a small ▸N tab riding the node's RIGHT edge (the direction children open), shown only
    on a collapsed node so a leaf and a closed branch are never confused. Muted by default; on the focused

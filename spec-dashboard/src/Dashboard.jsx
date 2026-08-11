@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlow, ReactFlowProvider, MarkerType, Position, useReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import SpecNode from './SpecNode.jsx'
+import SpecNode, { governanceSummary } from './SpecNode.jsx'
 import NodeContextMenu from './NodeContextMenu.jsx'
 import NodeView, { panesFor } from './NodeView.jsx'
 import SessionWindow, { LockGlyph } from './SessionWindow.jsx'
@@ -142,6 +142,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
     specs.forEach((s) => { if (s.parent) m[s.parent] = (m[s.parent] || 0) + 1 })
     return m
   }, [specs])
+  const governance = useMemo(() => governanceSummary(specs), [specs])
   // changed nodes from the RAW tree (so the o-cycle reaches collapsed subtrees), kept in backend order for a stable cycle
   const overlayNodes = useMemo(() => specs.filter((s) => s.overlays?.length), [specs])
 
@@ -260,7 +261,12 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
     const editorData = editors.map((e) => ({ id: e.id, status: e.status, node: e.node }))
     // collapsed = has children but its subtree is hidden (not on the expanded spine) -> show the ▸N hint.
     const kids = childCount[s.id] || 0
-    const extra = { editors: editorData, collapsed: kids > 0 && !expanded.has(s.id), childCount: kids }
+    const extra = {
+      editors: editorData,
+      collapsed: kids > 0 && !expanded.has(s.id),
+      childCount: kids,
+      governanceCount: s.id === governance.rootId ? governance.count : 0,
+    }
     return {
       id: s.id, type: 'spec', position: { x: s.x, y: s.y },
       data: { ...s, ...extra },
@@ -269,7 +275,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
       draggable: false, selected: s.id === focusId, className,
     }
     })
-  }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded])
+  }, [focusId, focus.parent, highlightId, lockedNodes, specs2, liveEditorsOf, childCount, expanded, governance])
 
   const edges = useMemo(() => {
     const tree = specs2.filter((s) => s.parent).map((s) => {
@@ -608,7 +614,7 @@ function Dashboard({ specs, sessions, issuesStamp, reload, identity, catalog, bo
 
         {!graphOnly && <SessionWindow sessions={sessions} activeId={highlightId} onPick={onPickSession} onOpenSession={openSession} />}
 
-        <GraphStats specs={specs} focusId={focusId} onJump={focusNode} />
+        <GraphStats specs={specs} governance={governance} focusId={focusId} onJump={focusNode} />
 
         {graphOnly && <PublicGraphAbout />}
 

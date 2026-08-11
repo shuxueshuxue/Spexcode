@@ -30,6 +30,7 @@ import RichText from './RichText.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
+const SESSION_DRAG_GHOST_SCALE = 0.5
 
 // the attach affordance — the shared `paperclip` glyph ([[icon-system]], currentColor stroke, so it
 // inherits the .si-attach muted→blue hover), NOT a color emoji. BusyGlyph is the in-flight (uploading)
@@ -807,7 +808,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const buildMenu = (value, caret) => {
     const mm = nodeMentionAt(value, caret, specs, focusId)
     if (mm) return mm
-    const am = sessionMentionAt(value, caret, allSessions)
+    const am = sessionMentionAt(value, caret, allSessions, launchers)
     if (am) return am
     if (active === 'new') {
       const cm = slashTokenAt(value, caret, commandPresets)
@@ -844,9 +845,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       requestAnimationFrame(() => { const el = msgRef.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
       return
     }
-    // command preset → the New prompt (composed at launch); a `[[`-mention/`@`-session reference → whichever box is
-    // active: the New prompt (resolved at launch) or a running session's Command Box (resolved at send). An
-    // A session reference inserts `@<id> ` (the id, so the server/CLI resolver matches) — text expansion only, no dispatch.
+    // command preset → the New prompt (composed at launch); a `[[`/`@` reference → whichever box is active.
     if (menu.kind === 'config') {
       // A preset governs the whole launch, so a token picked anywhere in an existing draft becomes its
       // leading command. This is still an authoring edit only: Enter sends the normalized raw grammar through
@@ -858,13 +857,22 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(next.length, next.length) } })
       return
     }
-    const insert = menu.kind === 'session' ? `@${item.id} `
-      : `[[${item.id}]] `
-    const onMsg = (menu.kind === 'mention' || menu.kind === 'session') && active !== 'new'
+    const onMsg = (menu.kind === 'mention' || menu.kind === 'session' || menu.kind === 'launcher') && active !== 'new'
     const ref = onMsg ? msgRef : taRef
     const cur = onMsg ? msg : prompt
     const setCur = onMsg ? setMsg : setPrompt
     const before = cur.slice(0, menu.start)
+    if (menu.kind === 'session' && item.id === 'new') {
+      const next = before + '@new:' + cur.slice(menu.end)
+      const caret = before.length + '@new:'.length
+      setCur(next)
+      setMenu(sessionMentionAt(next, caret, allSessions, launchers))
+      requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(caret, caret) } })
+      return
+    }
+    const insert = menu.kind === 'session' ? `@${item.id} `
+      : menu.kind === 'launcher' ? `@new:${item.id} `
+        : `[[${item.id}]] `
     setCur(before + insert + cur.slice(menu.end))
     setMenu(null)
     const caret = before.length + insert.length
@@ -930,7 +938,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
         return
       }
       setMsg((current) => current === raw ? '' : current)
-      setActionOutcome({ owner: 'command', phase: 'delivered', message: t('session.outcomeDelivered') })
+      setActionOutcome({ owner: 'command', phase: 'delivered', message: outcome?.mentionSummary || t('session.outcomeDelivered') })
       outcomeTimerRef.current = window.setTimeout(() => closeCommandBox(), 650)
     } catch (error) {
       setActionOutcome({
@@ -1499,7 +1507,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   onClick={() => pickFiles('new')}
                   disabled={uploadingAt('new')}
                 >{uploadingAt('new') ? <BusyGlyph /> : <AttachGlyph />}</button>
-                {menu && (menu.kind === 'mention' || menu.kind === 'session') && mentionMenuEl(false)}
+                {menu && (menu.kind === 'mention' || menu.kind === 'session' || menu.kind === 'launcher') && mentionMenuEl(false)}
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
@@ -1753,7 +1761,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                             }}
                             placeholder={t('session.commandPlaceholder')} spellCheck={false} />
                           {menu && menu.kind === 'slash' && slashMenu(true, menu.query ? `/${menu.query}` : t('session.menuCommands'))}
-                          {menu && (menu.kind === 'mention' || menu.kind === 'session') && mentionMenuEl(true)}
+                          {menu && (menu.kind === 'mention' || menu.kind === 'session' || menu.kind === 'launcher') && mentionMenuEl(true)}
                         </div>
                         {attachmentQueue('command')}
                         </>
@@ -1794,8 +1802,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             inert
             style={{
               width: sessionDrag.width,
-              left: sessionDrag.x - sessionDrag.offsetX,
-              top: sessionDrag.y - sessionDrag.offsetY,
+              left: sessionDrag.x - sessionDrag.offsetX * SESSION_DRAG_GHOST_SCALE,
+              top: sessionDrag.y - sessionDrag.offsetY * SESSION_DRAG_GHOST_SCALE,
             }}
           />
         )}

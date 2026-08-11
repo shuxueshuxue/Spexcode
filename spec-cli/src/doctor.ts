@@ -131,7 +131,8 @@ export async function specHealthDiagnosis(root: string): Promise<HealthFinding[]
   const breadth = loadBreadthConfig(root)
   const governed = trackedSourceFiles(root, lint.governedRoots, lint)
   const ident = identRe(identifierFilenameCandidates(governed, altitude.identifierExtensions))
-  const specs = await loadSpecs(root)
+  // Health reads the current spec tree only; a newly adopted repository has no HEAD history yet.
+  const specs = await loadSpecs(root, { history: null, drift: null })
   const childCount = new Map<string, number>()
   for (const spec of specs) if (spec.parent) childCount.set(spec.parent, (childCount.get(spec.parent) ?? 0) + 1)
   const findings: HealthFinding[] = []

@@ -3,7 +3,7 @@ scenarios:
   - name: paged-review-desktop-yatu
     test: spec-dashboard/test/review-pagination.e2e.mjs
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/reviewPage.js]
+    code: [spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#Pagination, spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/reviewPage.js]
     description: >
       Against a real backend in Chromium, start the byte/item ledger at first app entry, then open Issues,
       trunk Evals, and scoped Evals. Measure the graph bootstrap and every paged response; compare response
@@ -34,7 +34,7 @@ scenarios:
   - name: paged-review-mobile-yatu
     test: spec-dashboard/test/review-pagination.e2e.mjs
     tags: [frontend-e2e, mobile]
-    code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/reviewPage.js]
+    code: [spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#Pagination, spec-dashboard/src/reviewPage.js]
     description: >
       Open Evals page 2 in real Chromium at 390x844 after the desktop request contract has passed. Measure
       pagination wrapping, target geometry, scroll ownership, horizontal overflow, and the accessibility
@@ -46,7 +46,7 @@ scenarios:
       exposes real Previous Page, numbered Page N, and Next Page links; Enter on focused Next PUSHes page 3.
   - name: one-chrome-two-pages
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
+    code: [spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#ReviewListRow, spec-dashboard/src/ReviewShell.jsx#ReviewState, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters, spec-dashboard/src/styles.css]
     description: >
       In a real browser at a live backend, open #/evals and #/issues and compare the two list pages'
       DOM and paged response: the 32px query, ListView container, section/facet/secondary-filter metadata bar, structured row elements
@@ -96,7 +96,7 @@ scenarios:
   - name: detail-side-rail-sticky
     test: spec-dashboard/test/detail-rail.e2e.mjs
     tags: [frontend-e2e, desktop, mobile]
-    code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
+    code: [spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/ReviewShell.jsx#SideSection, spec-dashboard/src/styles.css]
     description: >
       Open a long eval detail (main column taller than the viewport) and an issue detail at 1440px;
       scroll each detail page through its full height and read the side rail's computed position and
@@ -117,7 +117,7 @@ scenarios:
   - name: detail-metadata-primitive
     test: spec-dashboard/test/detail-rail.e2e.mjs
     tags: [frontend-e2e, desktop, mobile]
-    code: [spec-dashboard/src/ReviewShell.jsx, spec-dashboard/src/styles.css]
+    code: [spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/ReviewShell.jsx#SideSection, spec-dashboard/src/ReviewShell.jsx#SideValue, spec-dashboard/src/styles.css]
     description: >
       At 1440 and 390, in en and zh, open an eval detail whose filer is a full session UUID, a local
       issue detail with a long slug id, and a forge issue detail. Read every side-rail metadata row's
@@ -143,7 +143,7 @@ scenarios:
       compact meta grammar — two densities, each a single implementation.
   - name: list-key-routing
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/ReviewShell.jsx]
+    code: [spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#listOwnsKey]
     description: >
       In a real browser on #/issues, press j to establish a row cursor. With that cursor still present,
       focus and press Enter on a section tab, a facet button, the secondary Filters trigger, and the New action; close
@@ -158,7 +158,7 @@ scenarios:
       never the cursor's; only row-context Enter outside a native control opens the cursor row.
   - name: continuable-query
     tags: [frontend-e2e, desktop, mobile]
-    code: [spec-dashboard/src/ReviewShell.jsx, packages/spec-core/src/review/reviewQuery.js]
+    code: [spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#continuableText, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters, packages/spec-core/src/review/reviewQuery.js]
     description: >
       In a real browser at a live backend, treat the token query as an editing surface you keep typing
       into: load both list pages at the bare address and at a non-default ?q=, reading the combobox value,
@@ -182,7 +182,7 @@ scenarios:
       and stays aligned with the input at 1440 and 390; the input remains one native AX combobox.
   - name: token-query
     tags: [frontend-e2e, desktop, mobile]
-    code: [spec-dashboard/src/ReviewShell.jsx, packages/spec-core/src/review/reviewQuery.js]
+    code: [spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters, packages/spec-core/src/review/reviewQuery.js]
     description: >
       In a real browser at a live backend, drive both list pages through the visible token query alone:
       read the default face's input text and URL; click section tabs and low-cardinality menus and read

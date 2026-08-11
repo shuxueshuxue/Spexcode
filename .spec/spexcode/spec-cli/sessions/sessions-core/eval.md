@@ -52,7 +52,11 @@ scenarios:
     test: spec-cli/src/session-create-transaction.test.ts
   - name: pane-snapshot-survives-the-installed-tmux
     tags: [backend-api]
-    code: spec-cli/src/sessions.ts
+    code:
+      - spec-cli/src/sessions.ts#TMUX_PANE_SEPARATOR
+      - spec-cli/src/sessions.ts#TMUX_PANE_FORMAT
+      - spec-cli/src/sessions.ts#parseLivePanes
+      - spec-cli/src/sessions.ts#liveSnapshot
     description: >
       Start a real tmux server with one session of a known name, ask it for `list-panes -a` using the EXACT
       format the liveness snapshot sends, and feed that raw output to the pane parser. Also read the format
@@ -66,7 +70,12 @@ scenarios:
     test: spec-cli/src/sessions-hot.test.ts
   - name: a-board-row-carries-only-the-prompt-preview
     tags: [backend-api]
-    code: spec-cli/src/sessions.ts
+    code:
+      - spec-cli/src/sessions.ts#oneLinePreview
+      - spec-cli/src/sessions.ts#toSession
+      - spec-cli/src/sessions.ts#boardRow
+      - spec-cli/src/sessions.ts#listSessions
+      - spec-cli/src/sessions.ts#sessionPrompt
     description: >
       Against a real backend serving a real board whose sessions were launched with long asks, read
       `GET /api/sessions` and weigh its body: total bytes, and the share spent on each row's `prompt` versus
@@ -97,7 +106,9 @@ scenarios:
       no start identity", since that sentence is the conflation itself.
   - name: prompt-invariant-covers-every-delivery
     tags: [backend-api, cli]
-    code: spec-cli/src/sessions.ts
+    code:
+      - spec-cli/src/sessions.ts#composeSessionPrompt
+      - spec-cli/src/sessions.ts#optionSafe
     description: >
       The option-shaped-prompt guarantee is made at composeSessionPrompt, which serves LAUNCH and every
       SEND — so measure the send half, not only the launch half. In an isolated real project through a real

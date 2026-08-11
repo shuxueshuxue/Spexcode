@@ -2,7 +2,7 @@
 scenarios:
   - name: node-preview-current-rows-and-list-door
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/NodeView.jsx, spec-dashboard/src/ReviewShell.jsx, spec-cli/src/reviews.ts]
+    code: [spec-dashboard/src/NodeView.jsx, spec-dashboard/src/ReviewShell.jsx#CompactReviewFilter, spec-cli/src/reviews.ts]
     related: [spec-dashboard/src/styles.css]
     description: >
       Against a branch-local backend with one node holding more than 25 declared scenarios and multiple
@@ -53,7 +53,7 @@ scenarios:
   - name: stale-debt-survives-the-phone-header
     tags: [frontend-e2e, mobile]
     test: spec-dashboard/test/eval-verdict-freshness.e2e.mjs
-    code: [spec-dashboard/src/ReviewShell.jsx]
+    code: [spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#ReviewState]
     related: [spec-dashboard/src/EvalsFeed.jsx, spec-dashboard/src/styles.css]
     description: >
       Open the default #/evals at a 390px viewport in a real Chromium served from the PREBUILT dashboard

@@ -39,14 +39,16 @@ scenarios:
     description: >-
       On the running issues page, select a LOCAL issue and type into its reply composer, then open the
       New compose page and type into its description. In each: type `@`, read the dropdown, pick an offline
-      session reference, and read the inserted full id; clear, type `[[` (and a partial id), pick, read the insertion;
+      session reference, and read the inserted full id; clear, choose the synthetic `@new` row and then a
+      launcher, and read the durable token; clear, type `[[` (and a partial id), pick, read the insertion;
       press Esc with a menu open and read the hash; type plain prose and look for any menu. Then visit
       the session console's authored composer and re-check its `@`/`[[` menus still open (the shared-module
       regression).
     expected: >-
       Both composers carry the console's OWN mention dropdowns ([[mentions]] — one shared menu, not a
-      fork): `@` lists retained sessions including offline rows, and a pick inserts `@<id> ` (trailing
-      space). `[[`
+      fork): `@` lists retained sessions including offline rows plus one synthetic `@new` worker door, and a
+      session pick inserts `@<id> ` (trailing space) while `@new` opens the same launcher list as New
+      Session and inserts `@new:<launcher> `. `[[`
       lists the spec nodes (a partial query filters) and a pick inserts `[[<id>]] `. The reply
       composer's menu opens UPWARD (visible above the docked textarea); the compose PAGE's menu opens
       DOWNWARD under the caret line — no pop-out boundary to clear — fully on screen and clipped by nothing.
@@ -133,16 +135,17 @@ scenarios:
       page errors.
   - name: list-page-skeleton
     tags: [frontend-e2e]
-    code: spec-dashboard/src/IssuesPage.jsx
+    test: "spec-dashboard/test/new-issue-page.e2e.mjs"
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#ReviewListRow, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters, spec-dashboard/src/styles.css]
     description: >-
-      On the running issues page (#/issues), read the query + bordered ListView skeleton, row tag/hrefs,
+      On the running issues page (#/issues), read the query + bordered ListView skeleton, full-row link/hrefs,
       Open/Closed section tabs, direct menu buttons, and overflow menu. Select Closed and read the hash
       and the visible query text; reload at that address. Submit a query text, pick a menu value, and
       drive Back through each state. Drive j/k and Enter; then type 'j' inside the query input. Record
       history.length across a row click and drive browser Back.
     expected: >-
       The page is a GitHub-style full-width ListView: 32px query, 48px metadata header, ~64px desktop
-      structured rows, each a REAL <a> anchor to #/issues/<id>; NO master-detail split. Open/Closed + counts
+      structured rows, each exposing a full-row REAL <a> anchor to #/issues/<id>; NO master-detail split. Open/Closed + counts
       sit left; Store is the direct menu and source-session presence uses functional overflow; author and
       spec node are query tokens with no menus; only real values appear. At 390px Store remains direct;
       body/document stay 390px. The list renders instantly from app-resident issues. A query edit, the
@@ -168,7 +171,8 @@ scenarios:
       still available only inside the selected Issues detail meta strip. No page errors.
   - name: new-form-node-links
     tags: [frontend-e2e]
-    code: spec-dashboard/src/IssuesPage.jsx
+    test: "spec-dashboard/test/new-issue-page.e2e.mjs"
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/ReviewShell.jsx#SideSection, spec-dashboard/src/ReviewShell.jsx#SideValue]
     description: >-
       On the running issues page, open the New compose page and count its text surfaces, read every store
       picker's option text, and read the side rail while typing; then post an issue whose
@@ -183,13 +187,13 @@ scenarios:
       "node ids"). Instead the SIDE rail shows the spec nodes the prose already links, appearing as the
       `[[<id>]]` is typed and gone when it is deleted. Create lands on the created issue's OWN detail address
       (`#/issues/<id>`, a REPLACE — Back returns to the list, never to an emptied form), and that detail
-      shows the linked node as a clickable chip in its side rail — the store inferred
+      shows the linked node as a clickable internal `#/graph/<id>` anchor in its side rail — the store inferred
       `nodes:` from the body's `[[…]]` link ([[local-issues]]), the writer never re-typed an id into a
       separate field. A forge post writes the same node link as a `Spec:` marker and, after the forced forge
       read-back, the issue appears with that node chip. No page errors.
   - name: new-issue-page
     tags: [frontend-e2e]
-    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx#DetailShell, spec-dashboard/src/ReviewShell.jsx#SideSection, spec-dashboard/src/ReviewShell.jsx#SideValue]
     description: >-
       On the running dashboard read the Issues list's New action DOM (tag + href), then open the compose
       address COLD (navigate straight to #/issues/new, no list visit): read the page for any
@@ -216,7 +220,7 @@ scenarios:
       form with no horizontal overflow. No page errors.
   - name: shared-listview-facets
     tags: [frontend-e2e]
-    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx]
+    code: [spec-dashboard/src/IssuesPage.jsx, spec-dashboard/src/ReviewShell.jsx#ListPage, spec-dashboard/src/ReviewShell.jsx#TokenQueryInput, spec-dashboard/src/ReviewShell.jsx#FacetMenu, spec-dashboard/src/ReviewShell.jsx#SecondaryFilters]
     description: >-
       With issues spanning stores, originators, nodes, and present/missing source sessions, open #/issues
       at desktop and 390px. Read section/menu/secondary-filter DOM and menu option values; pick Store and Source

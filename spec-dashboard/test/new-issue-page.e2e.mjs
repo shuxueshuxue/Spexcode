@@ -57,9 +57,21 @@ await settle(p)
 const listShape = await p.evaluate(() => {
   const nw = document.querySelector('.rl-new')
   const rows = [...document.querySelectorAll('.lp-row')]
+  const rowLinks = rows.map((row) => {
+    const link = row.querySelector(':scope > .lp-row-link')
+    const box = row.getBoundingClientRect()
+    const linkBox = link?.getBoundingClientRect()
+    return {
+      tag: link?.tagName,
+      href: link?.getAttribute('href'),
+      covers: !!linkBox && Math.abs(linkBox.left - box.left) <= 1 && Math.abs(linkBox.top - box.top) <= 1
+        && Math.abs(linkBox.right - box.right) <= 1 && Math.abs(linkBox.bottom - box.bottom) <= 1,
+    }
+  })
   return {
     newTag: nw?.tagName, newHref: nw?.getAttribute('href'), newHasOnclick: !!nw?.onclick,
-    rowsAreAnchors: rows.length > 0 && rows.every((r) => r.tagName === 'A' && /^#\/issues\//.test(r.getAttribute('href'))),
+    rowLinks,
+    rowsHaveFullRowAnchors: rowLinks.length > 0 && rowLinks.every((link) => link.tag === 'A' && /^#\/issues\//.test(link.href) && link.covers),
     query: document.querySelector('.rl-query input')?.value,
     tabs: [...document.querySelectorAll('.rl-section')].map((b) => b.textContent),
     queryH: Math.round(document.querySelector('.rl-query').getBoundingClientRect().height),
@@ -67,7 +79,7 @@ const listShape = await p.evaluate(() => {
   }
 })
 check('list New is a REAL anchor to the compose address', listShape.newTag === 'A' && listShape.newHref === '#/issues/new', `${listShape.newTag} href=${listShape.newHref}`)
-check('list rows stay real anchors to their detail address', listShape.rowsAreAnchors)
+check('list rows expose full-row real anchors to their detail address', listShape.rowsHaveFullRowAnchors, JSON.stringify(listShape.rowLinks))
 check('list chrome: 32px query with the default token text, 48px section header', listShape.queryH === 32 && listShape.headH === 48 && listShape.query.trim() === 'is:issue state:open', `query ${listShape.queryH}px "${listShape.query}" head ${listShape.headH}px`)
 check('Open/Closed sections carry counts', listShape.tabs.length === 2 && /open/i.test(listShape.tabs[0]), listShape.tabs.join(' | '))
 
@@ -75,10 +87,10 @@ check('Open/Closed sections carry counts', listShape.tabs.length === 2 && /open/
 await p.click('.lp-head')
 await p.keyboard.press('j')
 await settle(p, 200)
-const cur1 = await p.evaluate(() => document.querySelector('.lp-row.cur')?.getAttribute('href'))
+const cur1 = await p.evaluate(() => document.querySelector('.lp-row.cur .lp-row-link')?.getAttribute('href'))
 await p.keyboard.press('j')
 await settle(p, 200)
-const cur2 = await p.evaluate(() => document.querySelector('.lp-row.cur')?.getAttribute('href'))
+const cur2 = await p.evaluate(() => document.querySelector('.lp-row.cur .lp-row-link')?.getAttribute('href'))
 check('j moves a visible row cursor', !!cur1 && !!cur2 && cur1 !== cur2, `${cur1} → ${cur2}`)
 // a key typed INSIDE the query input reaches the input and moves no cursor
 await p.click('.rl-query input')
@@ -86,7 +98,7 @@ await p.keyboard.type('j')
 await settle(p, 200)
 const typed = await p.evaluate(() => ({
   value: document.querySelector('.rl-query input').value,
-  cur: document.querySelector('.lp-row.cur')?.getAttribute('href'),
+  cur: document.querySelector('.lp-row.cur .lp-row-link')?.getAttribute('href'),
 }))
 check("'j' typed in the query input lands in the input and moves no cursor", typed.value.endsWith('j') && typed.cur === cur2, `value="${typed.value}"`)
 await p.keyboard.press('Backspace')
@@ -224,11 +236,11 @@ await cold.waitForSelector('.ds-side')
 await settle(cold, 600)
 const landed = await cold.evaluate(() => ({
   hash: location.hash, hist: history.length, title: document.querySelector('.ds-title')?.textContent,
-  railNodes: [...document.querySelectorAll('.ds-side .ds-val')].map((el) => ({ tag: el.tagName, text: el.textContent })),
+  railNodes: [...document.querySelectorAll('.ds-side .ds-val')].map((el) => ({ tag: el.tagName, text: el.textContent, href: el.getAttribute('href') })),
 }))
 check('Create lands on the created issue\'s OWN detail address, as a REPLACE', landed.hash.startsWith('#/issues/') && landed.hist === histAtCompose, `${landed.hash} history ${histAtCompose}→${landed.hist}`)
 check('the detail shows the concern as its title', landed.title === concern, landed.title)
-check('the linked node arrives as a clickable rail chip — inferred from the prose', landed.railNodes.some((v) => v.text === 'issues-view' && v.tag === 'BUTTON'), JSON.stringify(landed.railNodes))
+check('the linked node arrives as an internal graph anchor — inferred from the prose', landed.railNodes.some((v) => v.text === 'issues-view' && v.tag === 'A' && v.href === '#/graph/issues-view'), JSON.stringify(landed.railNodes))
 await cold.screenshot({ path: join(OUT, 'new-form-node-links.png') })
 await cold.goBack()
 await cold.waitForSelector('.lp-row')
@@ -339,11 +351,24 @@ const upward = await v.evaluate(() => {
   return { above: menu.bottom <= ta.top + 2, rows }
 })
 check('the DOCKED reply composer opens its menu UPWARD', upward.above, upward.rows.slice(0, 3).join(' | '))
-check('the session menu contains only retained session references', !upward.rows.some((r) => /@new/.test(r)), upward.rows.join(' | '))
+check('the shared @ menu offers @new beside retained session references', upward.rows.some((r) => /@new/.test(r)), upward.rows.join(' | '))
+const newRowIndex = await v.evaluate(() => [...document.querySelectorAll('.fv-compose .mention-item')].findIndex((el) => el.classList.contains('new')))
+const cursorIndex = await v.evaluate(() => [...document.querySelectorAll('.fv-compose .mention-item')].findIndex((el) => el.classList.contains('on')))
+for (let step = 0; step < (newRowIndex - cursorIndex + 100) % 100; step++) await v.keyboard.press('ArrowDown')
+const onNew = await v.evaluate(() => document.querySelector('.fv-compose .mention-item.on')?.classList.contains('new'))
+check('↓ roves onto the @new row', onNew === true, `cursor ${cursorIndex} → new row ${newRowIndex}`)
 await v.keyboard.press('Enter')
 await settle(v, 500)
+await v.waitForSelector('.fv-compose .mention-menu')
+const launchers = await v.evaluate(() => ({
+  value: document.querySelector('.fv-compose .fv-textarea').value,
+  rows: [...document.querySelectorAll('.fv-compose .mention-item')].map((el) => el.textContent),
+}))
+check('accepting @new opens one row per configured launcher', launchers.value.includes('@new:') && launchers.rows.length >= 1, `"${launchers.value}" ${launchers.rows.length} rows`)
+await v.keyboard.press('Enter')
+await settle(v, 400)
 const picked = await v.inputValue('.fv-compose .fv-textarea')
-check('picking a session writes its passive @<id> reference into the prose', /^@[a-f0-9-]+ $/.test(picked), `"${picked}"`)
+check('picking a launcher writes @new:<launcher> into the prose', /@new:[\p{L}\p{N}_.-]+ $/u.test(picked), `"${picked}"`)
 await v.fill('.fv-compose .fv-textarea', '')
 await v.click('.fv-compose .fv-textarea')
 await v.keyboard.type('[[issues-vi')

@@ -1,7 +1,6 @@
-// @@@ mentions - the two passive in-text references: `[[node]]` names a topic and
-// `@session` names a retained session. The grammar is shared by every composer; neither
-// reference is control. Sending to a session, launching one, and inheriting one remain
-// explicit `spex session send`, `spex session new`, and `/distill <id>` actions.
+// @@@ mentions - the shared in-text grammar: `[[node]]` and `@session` are references;
+// the exact @new token is the durable worker-creation action. Its dispatcher stays here
+// so every composer reaches the same creation owner after its own write has committed.
 const SESSION_RE = /(?:^|\s)@([\p{L}\p{N}_-]+(?::[\p{L}\p{N}_.-]+)?)/gu
 const NODE_RE = /\[\[([^\]\s]+)\]\]/g
 
@@ -22,6 +21,68 @@ export function parseMentions(text: string): { sessions: string[]; nodes: string
   for (const m of text.matchAll(NODE_RE)) nodes.push(m[1])
   return { sessions: uniq(sessions), nodes: uniq(nodes) }
 }
+
+export type DispatchOutcome = { token: string; result: 'spawned' | 'failed'; detail?: string; note?: string }
+export type NewDispatchContext =
+  | { threadId: string; node: string | null; author: string; status?: string | null }
+  | { sessionId: string }
+
+export function spawnParent(author: string, sessions: { id: string }[]): string | null {
+  return sessions.some((session) => session.id === author) ? author : null
+}
+
+export function newWorkerPrompt(threadId: string, node: string | null, author: string, text: string, status?: string | null): string {
+  const scope = node ? ` on node [[${node}]]` : ''
+  const settled = status && status !== 'open'
+    ? `NOTE: this thread is already resolved (status: ${status}). Verify main first; if it already satisfies the thread, report that finding instead of re-implementing.\n\n`
+    : ''
+  return `Issue thread "${threadId}"${scope} @-mentioned @new (by ${author}) for a fresh look:\n\n  ${text.trim()}\n\n` +
+    settled +
+    `Read the thread (\`spex issue ls --all\`, find ${threadId}) and act on it${node ? `; the relevant node is ${node}` : ''}.`
+}
+
+export function commandWorkerPrompt(sessionId: string, text: string): string {
+  return `Session "${sessionId}" opened a child worker from its Command Box:\n\n${text.trim()}`
+}
+
+// Writes call this only after their durable append/commit succeeds. @session deliberately remains absent:
+// sending to an existing session is still the explicit `spex session send` operation.
+export async function dispatchNewMentions(text: string, ctx: NewDispatchContext): Promise<DispatchOutcome[]> {
+  const tokens = parseMentions(text).sessions
+  const requested = tokens.flatMap((token) => {
+    const match = /^new(?::([\p{L}\p{N}_.-]+))?$/u.exec(token)
+    return match ? [{ token, launcher: match[1] }] : []
+  })
+  if (!requested.length) return []
+
+  const { listSessions, sessionCreateRequest } = await import('./sessions.js')
+  const sessions = await listSessions()
+  const command = 'sessionId' in ctx
+  const author = command ? ctx.sessionId : ctx.author
+  const outcomes: DispatchOutcome[] = []
+  for (const request of requested) {
+    const settled = !command && ctx.status && ctx.status !== 'open' ? ctx.status : undefined
+    try {
+      const created = await sessionCreateRequest({
+        prompt: command
+          ? commandWorkerPrompt(ctx.sessionId, text)
+          : newWorkerPrompt(ctx.threadId, ctx.node, ctx.author, text, ctx.status),
+        parent: spawnParent(author, sessions),
+        launcher: request.launcher,
+      })
+      if (created.status !== 201) throw new Error(`${created.code || 'session_create_failed'}: ${created.error}`)
+      outcomes.push({ token: request.token, result: 'spawned', detail: created.session.id, ...(settled ? { note: `thread ${settled}` } : {}) })
+    } catch (error) {
+      outcomes.push({ token: request.token, result: 'failed', detail: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  return outcomes
+}
+
+export const summarizeDispatch = (outcomes: DispatchOutcome[]): string =>
+  outcomes.length ? '@ ' + outcomes.map((outcome) => outcome.result === 'spawned'
+    ? `${outcome.token}->${outcome.detail}${outcome.note ? ` (${outcome.note})` : ''}`
+    : `${outcome.token}->failed (${outcome.detail})`).join('  |  ') : ''
 
 // The originator courtesy is the only automatic notification left in this module. It
 // resolves explicit stored session ids against online rows; prose @ references never call it.

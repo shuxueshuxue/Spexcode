@@ -15,7 +15,9 @@ scenarios:
       stays 0-error throughout.
   - name: reserved-address-ids
     tags: [cli]
-    code: spec-cli/src/localIssues.ts
+    code:
+      - spec-cli/src/localIssues.ts#uniqueId
+      - spec-cli/src/localIssues.ts#openIssue
     description: >-
       Against a disposable local store, open an issue whose concern slugifies to exactly a RESERVED address
       word (`New`), then open a second one with the same concern, and read the ids the store minted plus the

@@ -21,7 +21,7 @@ scenarios:
   - name: session-scope-bounds-impact
     tags: [backend-api, frontend-e2e, desktop]
     test: spec-dashboard/test/session-scope-impact.e2e.mjs
-    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, packages/spec-core/src/git.ts, spec-cli/src/git.test.ts, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx, spec-dashboard/src/EvalsFeed.jsx]
+    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, packages/spec-core/src/git.ts, spec-cli/src/git.test.ts, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#EvalsListPage, spec-dashboard/src/EvalsPage.jsx#EvalDetailPage, spec-dashboard/src/EvalsFeed.jsx]
     description: >
       Run the controlled source fixture over a session model where one source file and one scenario's semantic contract
       changed, another scenario in that same eval.md did not, a third affected scenario has no reading,
@@ -88,7 +88,7 @@ scenarios:
       the auxiliary symbolic-ref control rejects before publication. Neither becomes zero impact or fake current.
   - name: session-summary-coherence
     tags: [backend-api, frontend-e2e, desktop]
-    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, packages/spec-core/src/graph.ts, spec-cli/src/graphStream.ts, spec-cli/src/graphStream.test.ts, spec-dashboard/src/data.js, spec-dashboard/src/App.jsx, spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx]
+    code: [spec-eval/src/sessioneval.ts, spec-eval/src/sessioneval.test.ts, packages/spec-core/src/graph.ts, spec-cli/src/graphStream.ts, spec-cli/src/graphStream.test.ts, spec-dashboard/src/data.js, spec-dashboard/src/App.jsx, spec-dashboard/src/Dashboard.jsx, spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx#EvalsPage]
     description: >
       Start from a cold graph projection and drive a real Chromium session toolbar through first paint,
       A→B→A session switching, an input-generation change, graph disconnect/reconnect, the scoped Evals
@@ -125,7 +125,7 @@ scenarios:
       whole, not garbled.
   - name: session-attribution-legible
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/EvalsPage.jsx, spec-eval/src/sessioneval.ts]
+    code: [spec-dashboard/src/EvalsPage.jsx#EvalsListPage, spec-eval/src/sessioneval.ts]
     description: >
       Open the scoped list (`#/evals?q=is:eval scope:<id>`) for a session that filed a reading WITHOUT committing code (its codeSha
       is the merge-base) over a node carrying older readings by other sessions plus a retired scenario's
@@ -162,7 +162,7 @@ scenarios:
   - name: eval-door-one-chrome
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/evals-entry.e2e.mjs
-    code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx]
+    code: [spec-dashboard/src/SessionInterface.jsx, spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#EvalsListPage, spec-dashboard/src/EvalsPage.jsx#EvalScopeDoor]
     description: >
       Open a session's console in a real browser and read the tab bar: what ELEMENT the Eval entry is
       (tag, href attribute) and what clicking it does (read location.hash + history.length before/after
@@ -187,7 +187,7 @@ scenarios:
       = one canonical home for a session's evaluation, reached through real-anchor doors.
   - name: session-eval-deep-link
     tags: [frontend-e2e, desktop]
-    code: [spec-dashboard/src/route.js, spec-dashboard/src/EvalsPage.jsx]
+    code: [spec-dashboard/src/route.js, spec-dashboard/src/EvalsPage.jsx#EvalsPage, spec-dashboard/src/EvalsPage.jsx#EvalDetailPage]
     related:
       - spec-dashboard/src/Dashboard.jsx
       - spec-dashboard/src/address.js

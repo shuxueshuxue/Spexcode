@@ -21,6 +21,11 @@ governs the acknowledgement floor: a `Spec-OK` ack quiets exactly the commits re
 commit, never a sibling branch's changes. This holds the promise [[spec-node-states]] makes when it
 says drift is measured "by git ancestry".
 
+A valid unborn branch from a fresh `git init` has no commit topology to inspect, so its history and
+drift folds are empty rather than Git failures. Its `unborn:<ref>` identity may key an in-process
+cache but must never be passed to Git as a revision; the first real commit supplies a new ordinary
+tip and cache identity. This does not soften failures for an unreadable or malformed checkout.
+
 ## expanded spec
 No linear order can keep that promise — date or topological, a total order cannot express "these two commits sit
 on parallel branches", so any position compare silently under-reports whenever history is not chronological:

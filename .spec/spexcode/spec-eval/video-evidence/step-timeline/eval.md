@@ -2,7 +2,12 @@
 scenarios:
   - name: time-axis-step-rail-unchanged
     tags: [frontend-e2e]
-    code: [spec-dashboard/src/EventDetail.jsx, spec-eval/src/timeline.ts]
+    code:
+      - spec-dashboard/src/EventDetail.jsx#normalizeTimeline
+      - spec-dashboard/src/EventDetail.jsx#axisLabel
+      - spec-dashboard/src/EventDetail.jsx#StepRail
+      - spec-dashboard/src/EventDetail.jsx#EventDetail
+      - spec-eval/src/timeline.ts
     description: >
       File a VIDEO reading carrying a LEGACY v1 step-timeline (`{ "v": 1, "events": [{ "tMs", "step" }] }`)
       on a node, open that node's Eval tab in the dashboard, select the reading, and read the custom
@@ -16,7 +21,12 @@ scenarios:
       case of the axis-keyed formatter. The clip still plays, markers still seek.
   - name: line-axis-step-rail
     tags: [frontend-e2e]
-    code: [spec-dashboard/src/EventDetail.jsx, spec-eval/src/cli.ts]
+    code:
+      - spec-dashboard/src/EventDetail.jsx#normalizeTimeline
+      - spec-dashboard/src/EventDetail.jsx#axisLabel
+      - spec-dashboard/src/EventDetail.jsx#StepRail
+      - spec-dashboard/src/EventDetail.jsx#EventDetail
+      - spec-eval/src/cli.ts
     description: >
       File a NON-video reading whose evidence is a `--result` transcript plus a v2 `axis:'line'` step-map
       (`{ "v": 2, "axis": "line", "events": [{ "at": <line-no>, "step" }] }`) — no `--video`. Open that

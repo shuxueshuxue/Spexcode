@@ -47,6 +47,20 @@ scenarios:
       positions before settling with focus centred, preserving the move's direction; node containers may
       transition opacity but never transform. The filed reading carries video because a settled still cannot
       distinguish a connected camera move from detached structural animation.
+  - name: governance-group-keeps-plugin-tree-reachable
+    tags: [frontend-e2e, desktop]
+    description: >-
+      Open a newly adopted project's graph whose `.plugins` branch contains SpexCode's generated governance
+      specs. On the initial frame, count the ordinary project nodes and the collapsed governance entry, then
+      read the group label and its whole-subtree count. Focus the governance entry and drill through every
+      nested branch, recording which `.plugins` node ids become real rendered tiles along the way.
+    expected: >-
+      The initial graph makes the user's project visually primary: ordinary project tiles occupy the first
+      structure while one explicitly-labelled SpexCode governance group states the complete number of
+      governance specs. The group is a compact entry, not a filter: after ordinary focus/drill navigation,
+      every governance node is rendered and reachable, with no missing descendants or replacement data
+      source. The filed evidence includes the initial and expanded browser screenshots plus the two exact
+      node counts.
 ---
 # eval.md — node-graph
 

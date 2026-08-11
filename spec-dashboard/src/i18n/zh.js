@@ -476,8 +476,14 @@ export default {
 
   // 左下角的看板统计条 —— 把节点徽章在整棵树上「计数」（去重的不同对象，而非徽章求和），唯独覆盖度按「场景」计数（评测损失的真实单位）。每个小块的悬停说明标明它统计什么；点击会沿其背后的节点逐个走查（每点一次走到下一个）。
   stats: {
-    aria: '看板统计',
+    aria: ({ project, governance, total }) => governance
+      ? `${project} 个项目规格，${governance} 个 SpexCode 治理规格，共 ${total} 个规格`
+      : `${project} 个项目规格`,
     totalTitle: ({ n }) => `树中共有 ${n} 个规格节点`,
+    projectCount: ({ n }) => `${n} 项目`,
+    projectTitle: ({ n }) => `${n} 个项目规格`,
+    governanceCount: ({ n }) => `${n} SpexCode`,
+    governanceTitle: ({ n }) => `${n} 个 SpexCode 治理规格`,
     statusTitle: ({ n, status }) => `${n} 个${status} —— 点击逐个走查`,
     driftTitle: ({ n }) => `${n} 个节点的代码领先于其规格 —— 点击逐个走查`,
     issueTitle: ({ n }) => `链接到树上的不同未关闭议题共 ${n} 个 —— 点击逐个走查承载它们的节点`,
@@ -511,6 +517,10 @@ export default {
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? '（未提交）' : ''}`,
     openIssues: ({ n }) => `${n} 个待办 issue——打开节点信息查看`,
     expandable: ({ n }) => `${n} 个子节点——聚焦展开`,
+    governanceTitle: 'SpexCode 治理规格',
+    governanceCount: ({ n }) => `${n} 个规格`,
+    governanceCountTitle: ({ n }) => `该分组含 ${n} 个 SpexCode 治理规格`,
+    governanceExpandable: ({ n }) => `${n} 个 SpexCode 治理规格——聚焦展开`,
   },
 
   // 节点右键菜单（[[node-menu]]）——板上节点动词的鼠标侧标签。

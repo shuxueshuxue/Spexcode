@@ -15,7 +15,7 @@ related:
   - spec-dashboard/src/styles.test.mjs
   - spec-dashboard/test/terminal-multi-viewer.e2e.mjs
   - spec-dashboard/test/terminal-resize-paint.e2e.mjs
-  - spec-dashboard/scripts/patch-xterm-sync-resize.mjs
+  - spec-dashboard/scripts/patch-xterm-sync-resize.mjs#pointerSelectionPatches
   - spec-cli/src/index.ts
   - spec-cli/test/pty-bridge.attach-repaint.ts
   - spec-cli/test/pty-bridge.cold-incremental.ts

@@ -1,5 +1,18 @@
 ---
 scenarios:
+  - name: command-box-new-worker
+    tags: [frontend-e2e, backend-api]
+    test: spec-dashboard/test/command-box-new.e2e.mjs
+    related: [spec-cli/src/mentions-command.api.test.ts]
+    description: >-
+      Start the dashboard and backend over a fresh temporary project with one live fake-harness session and
+      one named `fake` launcher. Open that session's Command Box, type `@`, choose `@new`, choose the
+      launcher, append work text, and submit through the browser.
+    expected: >-
+      The first pick changes the draft to `@new:` and the launcher pick to `@new:fake `; the submitted
+      prompt remains in the selected session. The dashboard shows the backend's spawned-worker receipt in
+      its shared success notice, and exactly one created session records that selected session as `parent`
+      and `fake` as its launcher. An ordinary `@session` token remains a passive reference.
   - name: command-box-control-surface
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/command-box.e2e.mjs

@@ -8,7 +8,7 @@ if (pkg.version !== '6.0.0') {
   throw new Error(`xterm synchronized-resize patch requires 6.0.0, found ${pkg.version}`)
 }
 
-const patches = [
+const synchronizedResizePatches = [
   {
     file: 'src/browser/services/RenderService.ts',
     from: `    if (this._coreService.decPrivateModes.synchronizedOutput) {
@@ -52,6 +52,9 @@ const patches = [
     from: 'this._isPaused?this._pausedResizeTask.set((()=>this._renderer.value?.handleResize(e,t))):this._renderer.value.handleResize(e,t)',
     to: '(this._isPaused||this._coreService.decPrivateModes.synchronizedOutput)?this._pausedResizeTask.set((()=>this._renderer.value?.handleResize(e,t))):this._renderer.value.handleResize(e,t)',
   },
+]
+
+const cellGridPatches = [
   {
     file: 'src/browser/renderer/dom/DomRendererRowFactory.ts',
     from: `          cellAmount++;
@@ -97,6 +100,9 @@ const patches = [
     from: 'M!==this.defaultSpacing&&(b.style.letterSpacing=`${M}px`),m.push(b)',
     to: 'M!==this.defaultSpacing&&(b.style.letterSpacing=`${M}px`),b.style.display="inline-block",b.style.width=`${C*c}px`,b.style.overflow="hidden",b.style.verticalAlign="top",m.push(b)',
   },
+]
+
+const pointerSelectionPatches = [
   // Pointer belongs to the browser, wheel belongs to tmux. Plain drag always makes a LOCAL selection
   // even while the pane application owns mouse-report mode: button events never become reports (the
   // dashboard's copy gesture stays modifier-free), while wheel reports still flow to tmux, whose
@@ -126,6 +132,8 @@ const patches = [
     to: 'shouldForceSelection(e){return!0}',
   },
 ]
+
+const patches = [...synchronizedResizePatches, ...cellGridPatches, ...pointerSelectionPatches]
 
 const changed = new Set()
 for (const patch of patches) {

@@ -272,6 +272,187 @@ test('backend watcher plateaus and delivers three consecutive ref changes exactl
   }
 })
 
+// A backend may start before its served project has a `.spec` tree — that is the normal first-use shape.
+// Keep this through HTTP/SSE rather than reaching into graph-stream: the false `fresh` header was the
+// user-visible loss. Both the base checkout and a linked-worktree server use this same YATU loop.
+async function assertServedProjectTreeObservation(project: string, fixture: string, label: string): Promise<void> {
+  const spexHome = join(fixture, 'home')
+  const port = await freePort()
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(port),
+    SPEXCODE_HOME: spexHome,
+    SPEXCODE_BOARD_DEBUG: '1',
+    SPEXCODE_TMUX: `spex-graph-stream-project-root-${label}-${port}`,
+    PATH: `${fakeTmuxDir(fixture)}:${process.env.PATH}`,
+  }
+  delete env.SPEXCODE_API_URL
+  delete env.SPEXCODE_DISABLE_WATCHERS
+  // This direct child is the generation serving the fixture port; do not count a supervisor or its parent.
+  const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
+    cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let serverLog = ''
+  child.stdout?.on('data', (chunk) => { serverLog += String(chunk) })
+  child.stderr?.on('data', (chunk) => { serverLog += String(chunk) })
+  const base = `http://127.0.0.1:${port}`
+  const abort = new AbortController()
+  const events: string[] = []
+  let streamRead: Promise<void> | null = null
+  const graphHas = async (id: string): Promise<boolean> => {
+    const response = await fetch(`${base}/api/graph`)
+    const graph = await response.json() as { nodes?: Array<{ id?: string }> }
+    return response.headers.get('x-spexcode-graph') === 'fresh' && graph.nodes?.some((node) => node.id === id) === true
+  }
+  const graphLacks = async (id: string): Promise<boolean> => {
+    const response = await fetch(`${base}/api/graph`)
+    const graph = await response.json() as { nodes?: Array<{ id?: string }> }
+    return response.headers.get('x-spexcode-graph') === 'fresh' && !graph.nodes?.some((node) => node.id === id)
+  }
+  const writeNode = (id: string): void => {
+    const spec = join(project, '.spec', id, 'spec.md')
+    mkdirSync(dirname(spec), { recursive: true })
+    writeFileSync(spec, [
+      '---', `title: ${id}`, 'status: active', 'hue: 190', 'desc: served project fixture', '---',
+      `# ${id}`, '', '## raw source', '', 'Fixture.', '', '## expanded spec', '', 'Fixture graph.', '',
+    ].join('\n'))
+  }
+  const waitPromptly = async (predicate: () => boolean | Promise<boolean>, message: string): Promise<void> => {
+    const started = Date.now()
+    await waitFor(predicate, message, 3_000)
+    assert.ok(Date.now() - started < 3_000, `${message}: convergence reached the patrol-scale boundary`)
+  }
+
+  try {
+    await waitFor(async () => fetch(`${base}/health`).then((response) => response.ok).catch(() => false),
+      `backend did not become healthy:\n${serverLog}`)
+    const warm = await fetch(`${base}/api/graph`)
+    assert.equal(warm.status, 200)
+    assert.equal(warm.headers.get('x-spexcode-graph'), 'fresh')
+    assert.deepEqual((await warm.json() as { nodes?: unknown[] }).nodes, [], 'the fixture must warm an empty graph')
+    const baselineWatches = inotifyCount(child.pid!)
+    const baselineCensus = census(serverLog)
+    assert.ok(baselineCensus, `the backend never reported its watcher census:\n${serverLog}`)
+
+    // No SSE exists here. This must be a leaf-driven invalidation, not the delta-only cold patrol.
+    const noSseNode = 'created-without-sse'
+    writeNode(noSseNode)
+    await waitPromptly(() => graphHas(noSseNode), `a served-project .spec created after the warm read stayed fresh-empty:\n${serverLog}`)
+    assert.doesNotMatch(serverLog, /PATROL-REPAIR/, `no-SSE creation must not need a patrol repair:\n${serverLog}`)
+
+    const response = await fetch(`${base}/api/graph/stream`, { signal: abort.signal })
+    assert.equal(response.status, 200)
+    streamRead = (async () => {
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffered = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) return
+        buffered += decoder.decode(value, { stream: true })
+        let boundary: number
+        while ((boundary = buffered.indexOf('\n\n')) >= 0) {
+          const block = buffered.slice(0, boundary)
+          buffered = buffered.slice(boundary + 2)
+          const event = block.split('\n').find((line) => line.startsWith('event: '))?.slice(7)
+          if (event) events.push(event)
+        }
+      }
+    })().catch((error) => { if (!abort.signal.aborted) throw error })
+    await waitFor(() => events.includes('ready'), `plain graph stream did not become ready:\n${serverLog}`)
+    await waitForQuiet(events, 250)
+
+    const deleteNoSseBefore = events.filter((event) => event === 'graph-changed').length
+    rmSync(join(project, '.spec'), { recursive: true, force: true })
+    await waitFor(() => events.filter((event) => event === 'graph-changed').length > deleteNoSseBefore,
+      `plain graph stream did not signal the served-project .spec deletion:\n${serverLog}`, 3_000)
+    await waitPromptly(() => graphLacks(noSseNode), `served-project .spec deletion did not converge through the plain stream:\n${serverLog}`)
+
+    const plainNode = 'created-with-plain-sse'
+    const plainBefore = events.filter((event) => event === 'graph-changed').length
+    writeNode(plainNode)
+    await waitFor(() => events.filter((event) => event === 'graph-changed').length > plainBefore,
+      `plain graph stream did not signal the served-project .spec creation:\n${serverLog}`, 3_000)
+    await waitPromptly(() => graphHas(plainNode), `served-project .spec creation did not converge through the plain stream:\n${serverLog}`)
+
+    const finalDeleteBefore = events.filter((event) => event === 'graph-changed').length
+    rmSync(join(project, '.spec'), { recursive: true, force: true })
+    await waitFor(() => events.filter((event) => event === 'graph-changed').length > finalDeleteBefore,
+      `plain graph stream did not signal the final served-project .spec deletion:\n${serverLog}`, 3_000)
+    await waitPromptly(() => graphLacks(plainNode), `final served-project .spec deletion did not converge:\n${serverLog}`)
+    await waitFor(() => inotifyCount(child.pid!) === baselineWatches && JSON.stringify(census(serverLog)) === JSON.stringify(baselineCensus),
+      `served-project watcher did not return to its warm plateau:\n${serverLog}`, 3_000)
+    assert.doesNotMatch(serverLog, /PATROL-REPAIR/, `plain graph stream must not rely on the delta-only patrol:\n${serverLog}`)
+  } catch (error) {
+    assert.fail(`${error instanceof Error ? error.stack : String(error)}\nevents=${events.join(',')}\nserver log:\n${serverLog}`)
+  } finally {
+    abort.abort()
+    await streamRead?.catch(() => {})
+    await stopChild(child)
+  }
+}
+
+function prepareEmptyProject(fixture: string, name: string, commit = true): string {
+  const project = join(fixture, name)
+  mkdirSync(join(project, 'src'), { recursive: true })
+  writeFileSync(join(project, 'src', 'value.ts'), 'export const value = 1\n')
+  writeFileSync(join(project, 'spexcode.json'), '{}\n')
+  git(project, 'init', '-q', '-b', 'main')
+  git(project, 'config', 'user.email', 'fixture@example.test')
+  git(project, 'config', 'user.name', 'fixture')
+  if (commit) {
+    git(project, 'add', '.')
+    git(project, 'commit', '-qm', 'empty graph seed')
+  }
+  return project
+}
+
+test('a zero-commit served project starts empty and observes its first .spec tree without patrol', { timeout: 30_000 }, async (t) => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-unborn-root-'))
+  try {
+    const project = prepareEmptyProject(fixture, 'project', false)
+    assert.notEqual(spawnSync('git', ['-C', project, 'rev-parse', '--verify', 'HEAD']).status, 0,
+      'the fixture must remain before its first commit')
+    if (!watcherCapacityAvailable([project])) {
+      t.skip('host watcher capacity is unavailable for the served-project observer')
+      return
+    }
+    await assertServedProjectTreeObservation(project, fixture, 'unborn')
+  } finally {
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
+test('served base checkout creation and deletion converge from a warmed empty graph without delta patrol', { timeout: 30_000 }, async (t) => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-base-checkout-'))
+  try {
+    const project = prepareEmptyProject(fixture, 'project')
+    if (!watcherCapacityAvailable([project])) {
+      t.skip('host watcher capacity is unavailable for the served-project observer')
+      return
+    }
+    await assertServedProjectTreeObservation(project, fixture, 'base')
+  } finally {
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
+test('a backend launched from an unrecorded linked worktree watches that served root', { timeout: 30_000 }, async (t) => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-graph-stream-linked-root-'))
+  try {
+    const main = prepareEmptyProject(fixture, 'main')
+    const linked = join(fixture, 'linked')
+    git(main, 'worktree', 'add', '--detach', '-q', linked, 'HEAD')
+    if (!watcherCapacityAvailable([linked])) {
+      t.skip('host watcher capacity is unavailable for the linked served-project observer')
+      return
+    }
+    await assertServedProjectTreeObservation(linked, fixture, 'linked')
+  } finally {
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
 // The second half of the adopter incident: once a source is refused, whatever NOTICES the failure must not
 // be what retries it. Here one live worktree's tree is gone, so its attach can only fail; the graph is then
 // read repeatedly. A per-read reattach would re-walk every worktree per request — that is how one refused
@@ -429,7 +610,7 @@ exec "${realGit}" "$@"
     // This test intentionally holds one real producer through a second 15s cold tick. Keep the fixture
     // watchdog outside that causal window; it is not a product budget change.
     SPEXCODE_BOARD_BUILD_TIMEOUT_MS: '30000',
-    SPEXCODE_DISABLE_WATCHERS: 'refs',
+    SPEXCODE_DISABLE_WATCHERS: 'refs,project-root',
     PATH: `${bin}:${process.env.PATH || ''}`,
   }
   delete env.SPEXCODE_API_URL
@@ -495,7 +676,7 @@ exec "${realGit}" "$@"
       `an unchanged patrol ran a board producer:\n${serverLog}`)
     assert.doesNotMatch(serverLog, /PATROL-REPAIR/, 'an unchanged patrol cannot report a repair')
 
-    // a real commit: with refs blinded no leaf watcher can see it (the main checkout is not a linked worktree)
+    // A real commit: refs and the served-project root are blinded, so no leaf watcher can see it.
     const logBeforePatrol = serverLog.length
     const framesBefore = frames.length
     writeFileSync(hold, 'hold\n')

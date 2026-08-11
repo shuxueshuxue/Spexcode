@@ -17,7 +17,7 @@ import { readdirSync, existsSync, mkdirSync, writeFileSync, readFileSync, rmdirS
 import { join, dirname, resolve as resolvePath } from 'node:path'
 import { git, headSha, repoRoot } from '@spexcode/spec-core'
 import { mainCheckout, envSessionId, readConfig } from '@spexcode/spec-core'
-import { parseMentions } from './mentions.js'
+import { dispatchNewMentions, parseMentions, type DispatchOutcome } from './mentions.js'
 import type { Issue, Reply } from './issues.js'
 
 const LOCAL_STORE_REL = '.spec/.issues'
@@ -358,11 +358,14 @@ export function reply(id: string, body: string, author?: string, evidence?: stri
 
 // @@@ the PROGRAMMATIC store write surface — the dashboard's human write path calls these (author `'human'`).
 // The store is git-native data, so a human's write goes through the SAME open/reply the CLI uses (committed
-// straight to the trunk). @session remains text in that committed discussion; it never summons an agent.
+// straight to the trunk). @session remains text in that committed discussion; only @new dispatches after it.
 // Originator courtesy is composed above this store because it needs eval-aware candidate resolution.
-export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue }> {
+export async function replyLocalIssue(id: string, body: string, author: string, evidence?: string[], remark?: { targetCodeSha: string }): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
   const thread = reply(id, body, author, evidence, remark)
-  return { thread }
+  return {
+    thread,
+    outcomes: await dispatchNewMentions(body, { threadId: id, node: thread.nodes[0] || null, author, status: thread.status }),
+  }
 }
 
 
@@ -370,9 +373,17 @@ export async function replyLocalIssue(id: string, body: string, author: string, 
 export async function postLocalIssue(
   concern: string,
   opts: { nodes?: string[]; body?: string; evidence?: string[]; author: string },
-): Promise<{ thread: Issue }> {
+): Promise<{ thread: Issue; outcomes: DispatchOutcome[] }> {
   const thread = openIssue(concern, { nodes: opts.nodes, body: opts.body, evidence: opts.evidence, author: opts.author })
-  return { thread }
+  return {
+    thread,
+    outcomes: await dispatchNewMentions(opts.body || concern, {
+      threadId: thread.id,
+      node: thread.nodes[0] || null,
+      author: opts.author,
+      status: thread.status,
+    }),
+  }
 }
 
 export function closeLocalIssue(id: string): { status: 'landed'; already: boolean } {
@@ -440,13 +451,13 @@ export async function remarkOnHost(
   host: { issue?: string; node?: string; scenario?: string },
   body: string,
   opts: { codeSha?: string; author?: string; evidence?: string[] } = {},
-): Promise<{ ref: string; rid: string; codeSha: string; thread: Issue; author: string }> {
+): Promise<{ ref: string; rid: string; codeSha: string; thread: Issue; author: string; outcomes: DispatchOutcome[] }> {
   const author = opts.author || currentSession()
   const codeSha = opts.codeSha || headSha(repoRoot())
   const id = resolveRemarkHost(host, author)
-  const { thread } = await replyLocalIssue(id, body, author, opts.evidence, { targetCodeSha: codeSha })
+  const { thread, outcomes } = await replyLocalIssue(id, body, author, opts.evidence, { targetCodeSha: codeSha })
   const rid = thread.replies[thread.replies.length - 1].rid!
-  return { ref: `${id}#${rid}`, rid, codeSha, thread, author }
+  return { ref: `${id}#${rid}`, rid, codeSha, thread, author, outcomes }
 }
 
 // a remark ref is `<thread-id>#<rid>`; the thread id (a store slug) never contains '#', so split on the last.

@@ -482,8 +482,14 @@ export default {
   // never a sum of badges), except coverage which counts SCENARIOS (the unit of eval loss). Each chip's
   // title says what it counts; clicking WALKS focus through the nodes behind it, one per click.
   stats: {
-    aria: 'graph statistics',
+    aria: ({ project, governance, total }) => governance
+      ? `${project} project specs and ${governance} SpexCode governance specs, ${total} specs total`
+      : `${project} project specs`,
     totalTitle: ({ n }) => `${n} spec node${n === 1 ? '' : 's'} in the tree`,
+    projectCount: ({ n }) => `${n} project`,
+    projectTitle: ({ n }) => `${n} project spec${n === 1 ? '' : 's'}`,
+    governanceCount: ({ n }) => `${n} SpexCode`,
+    governanceTitle: ({ n }) => `${n} SpexCode governance spec${n === 1 ? '' : 's'}`,
     statusTitle: ({ n, status }) => `${n} ${status} — click to walk them`,
     driftTitle: ({ n }) => `${n} node${n === 1 ? '' : 's'} whose code is ahead of its spec — click to walk them`,
     issueTitle: ({ n }) => `${n} distinct open issue${n === 1 ? '' : 's'} linked to the tree — click to walk the nodes carrying them`,
@@ -517,6 +523,10 @@ export default {
     opTitle: ({ op, label, uncommitted }) => `${op} · ${label}${uncommitted ? ' (uncommitted)' : ''}`,
     openIssues: ({ n }) => `${n} open issue${n === 1 ? '' : 's'} — open node info to read them`,
     expandable: ({ n }) => `${n} child${n === 1 ? '' : 'ren'} — focus to drill in`,
+    governanceTitle: 'SpexCode governance',
+    governanceCount: ({ n }) => `${n} specs`,
+    governanceCountTitle: ({ n }) => `${n} SpexCode governance specs in this group`,
+    governanceExpandable: ({ n }) => `${n} SpexCode governance specs — focus to drill in`,
   },
 
   // the node right-click menu ([[node-menu]]) — labels for the board's node verbs, mouse-side.

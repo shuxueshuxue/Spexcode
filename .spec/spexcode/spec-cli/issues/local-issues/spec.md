@@ -150,9 +150,10 @@ it to `.spec/.issues` on its first store touch after a toolchain update — the 
 - **A human writes too — the local issue store is the programmatic surface.** The same write verbs carry an optional
   `author` (default the effective session id, else a caller-passed `'human'`), so a person can post from
   outside the CLI. `replyLocalIssue(id, body, author)` and `postLocalIssue(concern, {nodes, body, author})` are
-  the programmatic entrypoints and commit their text verbatim: an `@session` remains a passive reference
-  ([[mentions]]). `replyLocalIssue` is composed above this module with the thread originator's online courtesy
-  loop-in; `postLocalIssue` opens a new thread whose originator is the poster, so it loops in no one. The
+  the programmatic entrypoints and commit their text verbatim: an `@session` remains a passive reference, while
+  an exact `@new` token dispatches only after the committed write and returns its outcome ([[mentions]]).
+  `replyLocalIssue` is composed above this module with the thread originator's online courtesy loop-in;
+  `postLocalIssue` opens a new thread whose originator is the poster, so it loops in no one. The
   dashboard's write path ([[issues-view]]) is a thin caller: `POST /api/issues/:id/reply` and `POST /api/issues`
   (author `'human'`), plus `POST /api/issues/:id/promote` for the local-to-forge move. All are gated by the
   same on/off switch (403 when OFF).

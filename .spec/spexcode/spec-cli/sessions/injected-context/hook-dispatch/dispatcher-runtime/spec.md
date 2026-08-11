@@ -22,6 +22,13 @@ node governs the exact shell entry every harness invokes, including its scratch-
 event input once before invoking any matching handler. A trap cleans up its per-dispatch scratch state on normal
 completion, handler failure, signal, or shell exit.
 
+The materialized shim passes its adapter id before the event. The dispatcher consumes each native id — `claude`,
+`codex`, `opencode`, `pi`, and `zcode` — plus the plugin form, exports it as `SPEXCODE_HARNESS`, then dispatches
+the following event. An old one-argument shim remains the explicit compatibility shape: an unrecognized first
+argument is the event and defaults to Claude. `zcode` shares the Claude-family payload parser in `harness.sh`; it
+is still an explicit dispatcher id, so its generated `dispatch.sh zcode Stop` command cannot silently turn
+`zcode` into an event name.
+
 The same tree slot carries the dispatch-id allowlist from its last successful materialize. A project transport
 may remain installed after a selection changes, but an event whose baked harness id is absent from THIS tree's
 allowlist exits before any input handling. Before the project migration marker, an absent allowlist is

@@ -53,15 +53,23 @@ Pointing `--api` (or `SPEXCODE_API_URL`) at another machine's backend still moni
 machine's sessions with no code change — the dashboard's viewer-points-anywhere model, extended to the CLI.
 A local fallback never silently impersonates it: the source is stated on every read that took one.
 
-`session show --ssh <address> <full-session-id>`, `session send --ssh <address> <full-session-id> <text>`, and
-`session close --ssh <address> <full-session-id>` are peer-backed spellings of that same **Remote transport**
-role. `<address>` is an opaque SSH address/alias, not a URL the product parses. It selects an
+`session show --ssh <address> <full-session-id>`, `session send --ssh <address> <full-session-id> <text>`,
+`session close --ssh <address> <full-session-id>`, `session ls --ssh <address> <full-session-id>`, and
+`session new --ssh <address> <full-session-id> <text>` are peer-backed spellings of that same **Remote
+transport** role. `<address>` is an opaque SSH address/alias, not a URL the product parses. It selects an
 already-established [[machine-peer]] and thereby its private loopback forward; that forward becomes the
 explicit API route and follows the same intentional-remote, fail-loud rules as `--api`. A missing peer is a
 named `no communication tunnel` failure, never a local fallback or an automatic SSH attempt: an agent decides
 whether to establish a peer and retry. The peer endpoint derives the target's project from the full session id;
-these cross-machine operations deliberately do not broaden local selector grammar or fetch a remote board.
-`show --capture` and `send --keys` remain local-only because the peer endpoint has no terminal-control route.
+with `ls` and `new` the id is an anchor for that derivation, not a selector, project parameter, or parent.
+Remote `ls` therefore receives the selected project's default board and applies only local presentation
+(`--status` / `--json`); it does not fetch an all-project board, resolve a remote selector, or expose archived
+rows through a query escape hatch. Remote `new` sends the existing create fields plus an idempotency key through
+the peer's closed envelope, remains parentless, never creates a managed cross-machine watch, and fails when the
+remote backend is offline instead of using `createSession`'s local in-process fallback. Its prompt carries the
+existing peer reply hint when the initiator is a governed session, so the newly created agent can answer over the
+same tunnel. `show --capture` and `send --keys` remain local-only because the peer endpoint has no
+terminal-control route.
 
 **A password-gated gateway is still an API endpoint.** With an explicit `--api`, `--password <password>`
 (or `SPEXCODE_PASSWORD`) means the CLI performs the gateway's existing designed login at that endpoint,

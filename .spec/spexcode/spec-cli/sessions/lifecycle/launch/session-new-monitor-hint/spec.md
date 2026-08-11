@@ -64,9 +64,11 @@ entry through `session close --help` never sees them — a help projection that 
 inference is what lets an agent read the destructive verb as its own ending.
 
 The same shared map projects [[machine-peer]]'s remote spellings for `session show`, text `session send`,
-and `session close`: each takes `--ssh <address> <full-session-id>` (send also takes its text payload), while
-live-pane capture and raw-key control remain absent from that peer surface. Help records that bounded transport
-choice without discovering machines, opening SSH, or prescribing a cross-machine workflow.
+`session close`, `session ls`, and `session new`: each takes `--ssh <address> <full-session-id>` (send and new
+also take their text payload). With `ls` and `new`, the id anchors project derivation and does not select or
+parent the newly created row. Live-pane capture and raw-key control remain absent from that peer surface. Help
+records that bounded transport choice without discovering machines, opening SSH, or prescribing a
+cross-machine workflow.
 
 **The successful-create receipt.** After [[launch]] returns the new session record, `spex session new`
 prints the bare, parseable session **JSON to STDOUT** exactly as before, then prints a concise receipt to
@@ -92,3 +94,8 @@ The managed-watch outcome is resolved before that receipt is printed. A child th
 parent subscription could not be installed remains a real child session; the command says that failure loudly
 and prints the unmanaged background-`wait` receipt rather than falsely claiming terminal delivery. Retrying
 the ordinary `spex session watch <id>` is the explicit repair, not a second create path.
+
+A peer-created session is not that local child case. Its JSON still reaches stdout, but its stderr receipt names
+the peer spelling for a later snapshot and explicitly says that no managed watch exists across the machine
+boundary. The remote prompt's reply hint is the return path; a local `session wait` or `session watch` is not
+misrepresented as a monitor for the remote row.

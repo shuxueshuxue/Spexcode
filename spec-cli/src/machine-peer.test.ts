@@ -175,6 +175,62 @@ test('a peer ingress derives one local project then uses its ordinary session in
   }
 })
 
+test('a peer anchor lists and creates through one derived project without opening a query or parent escape hatch', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-machine-peer-project-'))
+  const previous = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const received: unknown[] = []
+  const backend = createServer(async (req, res) => {
+    const parts: Buffer[] = []
+    for await (const chunk of req) parts.push(Buffer.from(chunk))
+    const raw = Buffer.concat(parts).toString('utf8')
+    received.push({ method: req.method, path: req.url, key: req.headers['idempotency-key'] ?? null, body: raw ? JSON.parse(raw) : null })
+    res.setHeader('content-type', 'application/json')
+    if (req.method === 'GET') { res.end(JSON.stringify([{ id: SESSION, title: 'remote board' }])); return }
+    res.end(JSON.stringify({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', parent: null, title: 'remote new' }))
+  })
+  const gateway = new MachinePeerGateway()
+  try {
+    const backendPort = await listen(backend)
+    endpoint(project(home, 'one'), `http://127.0.0.1:${backendPort}`)
+    gateway.start()
+    const accepted = await control({ op: 'accept', sourceMachineId: SOURCE, sshAddress: 'peer-fixture', remoteInboundPort: 31021, remoteOutboundPort: 31022 })
+    assert.ok(accepted.ok && accepted.peer)
+    const peer = accepted.peer
+
+    const listed = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}/project/sessions`)
+    assert.equal(listed.status, 200)
+    assert.deepEqual(await listed.json(), [{ id: SESSION, title: 'remote board' }])
+
+    const created = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}/project/sessions`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: 'create there', launcher: 'fixture', requestKey: 'peer-create-1' }),
+    })
+    assert.equal(created.status, 200)
+    assert.deepEqual(await created.json(), { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', parent: null, title: 'remote new' })
+    assert.deepEqual(received, [
+      { method: 'GET', path: '/api/sessions', key: null, body: null },
+      { method: 'POST', path: '/api/sessions', key: 'peer-create-1', body: { prompt: 'create there', launcher: 'fixture' } },
+    ])
+
+    const parent = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}/project/sessions`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: 'wrong parent', parent: SOURCE, requestKey: 'peer-create-2' }),
+    })
+    assert.equal(parent.status, 400)
+    assert.match((await parent.json() as { error: string }).error, /parent/)
+    const archived = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}/project/sessions?all=1`)
+    assert.equal(archived.status, 404)
+    assert.equal(received.length, 2, 'rejected peer paths never reach the backend')
+  } finally {
+    await gateway.close()
+    await close(backend)
+    if (previous === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previous
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('a known peer makes client send use its forward and missing peers fail before local fallback', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-machine-peer-send-'))
   const previous = process.env.SPEXCODE_HOME
@@ -233,8 +289,16 @@ test('the peer and session CLI surfaces use the gateway-owned peer forward', asy
       const chunks: Buffer[] = []
       for await (const chunk of req) chunks.push(Buffer.from(chunk))
       const raw = Buffer.concat(chunks).toString('utf8')
-      received.push({ method: req.method, path: req.url, body: raw ? JSON.parse(raw) : null })
+      received.push({ method: req.method, path: req.url, key: req.headers['idempotency-key'] ?? null, body: raw ? JSON.parse(raw) : null })
       res.setHeader('content-type', 'application/json')
+      if (req.url === `/api/sessions/${SESSION}/project/sessions` && req.method === 'GET') {
+        res.end(JSON.stringify([{ id: SESSION, title: 'remote board', status: 'working' }]))
+        return
+      }
+      if (req.url === `/api/sessions/${SESSION}/project/sessions` && req.method === 'POST') {
+        res.end(JSON.stringify({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', parent: null, title: 'peer launched' }))
+        return
+      }
       if (req.method === 'GET') { res.end(JSON.stringify({ id: SESSION, title: 'remote detail' })); return }
       res.end(JSON.stringify({ ok: true }))
     })
@@ -250,20 +314,42 @@ test('the peer and session CLI surfaces use the gateway-owned peer forward', asy
     const shown = await runCli(['session', 'show', '--ssh', 'peer-fixture', SESSION, '--json'], env)
     assert.equal(shown.code, 0, shown.stderr)
     assert.deepEqual(JSON.parse(shown.stdout), { id: SESSION, title: 'remote detail' })
+    const remoteList = await runCli(['session', 'ls', '--ssh', 'peer-fixture', SESSION, '--json'], env)
+    assert.equal(remoteList.code, 0, remoteList.stderr)
+    assert.deepEqual(JSON.parse(remoteList.stdout), [{ id: SESSION, title: 'remote board', status: 'working' }])
+    const remoteNew = await runCli(['session', 'new', '--ssh', 'peer-fixture', SESSION, 'peer task'], { ...env, SPEXCODE_SESSION_ID: SOURCE })
+    assert.equal(remoteNew.code, 0, remoteNew.stderr)
+    assert.deepEqual(JSON.parse(remoteNew.stdout), { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', parent: null, title: 'peer launched' })
+    assert.match(remoteNew.stderr, /launched remote session/)
+    assert.match(remoteNew.stderr, /no managed watch crosses this machine peer/)
     const closed = await runCli(['session', 'close', '--ssh', 'peer-fixture', SESSION], env)
     assert.equal(closed.code, 0, closed.stderr)
     assert.equal(closed.stdout, `closed ${SESSION}\n`)
-    assert.deepEqual(received, [
-      { method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'from cli' } },
-      { method: 'GET', path: `/api/sessions/${SESSION}`, body: null },
-      { method: 'POST', path: `/api/sessions/${SESSION}/close`, body: { source: { kind: 'user' } } },
+    assert.deepEqual(received.slice(0, 3), [
+      { method: 'POST', path: `/api/sessions/${SESSION}/input`, key: null, body: { kind: 'text', text: 'from cli' } },
+      { method: 'GET', path: `/api/sessions/${SESSION}`, key: null, body: null },
+      { method: 'GET', path: `/api/sessions/${SESSION}/project/sessions`, key: null, body: null },
     ])
+    const create = received[3] as { method: string; path: string; key: string | null; body: { prompt: string; requestKey: string } }
+    assert.equal(create.method, 'POST')
+    assert.equal(create.path, `/api/sessions/${SESSION}/project/sessions`)
+    assert.equal(create.key, null)
+    assert.match(create.body.prompt, /^peer task\n\n— from session bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb on machine [0-9a-f-]{36}\. To reply: spex session send --ssh peer-fixture bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb "<your reply>"$/)
+    assert.match(create.body.requestKey, /^[0-9a-f-]{36}$/)
+    assert.deepEqual(received[4], { method: 'POST', path: `/api/sessions/${SESSION}/close`, key: null, body: { source: { kind: 'user' } } })
     const short = await runCli(['session', 'show', '--ssh', 'peer-fixture', SESSION.slice(0, 8)], env)
     assert.equal(short.code, 2)
     assert.match(short.stderr, /--ssh requires a full session id/)
     const capture = await runCli(['session', 'show', '--ssh', 'peer-fixture', SESSION, '--capture'], env)
     assert.equal(capture.code, 2)
     assert.match(capture.stderr, /--capture cannot cross a machine peer/)
+    const archive = await runCli(['session', 'ls', '--ssh', 'peer-fixture', SESSION, '--all'], env)
+    assert.equal(archive.code, 2)
+    assert.match(archive.stderr, /--all is unavailable through a machine peer/)
+    const missingTunnel = await runCli(['session', 'new', '--ssh', 'absent-peer', SESSION, 'never local'], env)
+    assert.equal(missingTunnel.code, 1)
+    assert.match(missingTunnel.stderr, /no communication tunnel/)
+    assert.equal(received.length, 5, 'a missing peer cannot fall back to a local session create')
     const absent = await runCli(['peer', 'disconnect', 'absent-peer'], env)
     assert.equal(absent.code, 1)
     assert.match(absent.stderr, /no communication tunnel/)

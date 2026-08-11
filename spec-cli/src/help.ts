@@ -37,16 +37,19 @@ type SessionVerbHelp = readonly [usage: string | readonly string[], detail: stri
 // Keeping the behavioral prose here prevents a compact probe from becoming a second, drifting manual.
 function sessionHelpDefinitions(): Record<string, SessionVerbHelp> {
   return {
-    new: ['spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>] [--name <name>] [--base <commit-ish>]',
+    new: [['spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>] [--name <name>] [--base <commit-ish>]',
+      'spex session new --ssh <address> <FULL-SESSION-ID> "<prompt>" [--prompt-file <path>|-] [--launcher <name>] [--name <name>] [--base <commit-ish>]'],
       `Launch a worker in its own node worktree. The materialized system contract reaches it
 automatically; the prompt supplies the task context. Its first [[id]] mention binds the
 session to that node. --prompt-file <path>|- carries a long prompt without shell quoting
 (exclusive with the inline prompt). --name sets the session's initial display name without changing the prompt.
 --base <commit-ish> pins the fork point instead of the source-of-truth branch's current head, so a run can be
 reproduced against a frozen commit; a base that names no commit is refused before anything is created.
-The successful receipt names what to read, monitor, and reply on.`],
-    ls: ['spex session ls [SEL…] [--status a,b] [--all] [--json]',
-      'One-shot table of living sessions. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it.', ['selector']],
+The successful receipt names what to read, monitor, and reply on. --ssh uses an existing gateway-to-gateway
+communication tunnel: its full id anchors the remote project, creation stays parentless and remote, and its
+prompt carries a runnable reply path over that same tunnel.`],
+    ls: [['spex session ls [SEL…] [--status a,b] [--all] [--json]', 'spex session ls --ssh <address> <FULL-SESSION-ID> [--status a,b] [--json]'],
+      'One-shot table of living sessions. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it. --ssh uses an existing gateway-to-gateway communication tunnel; its full id anchors one remote project rather than filtering the table, and archive projection stays unavailable on that peer route.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
     files: [['spex session files add <path>', 'spex session files ls', 'spex session files retract <path>'],
       'Publish, list, or withdraw YOUR session’s live file paths. Posting stores an absolute path beside the session record without copying bytes; the dashboard downloads it only when the human clicks.'],
@@ -496,6 +499,13 @@ export function sessionLaunchReceipt(id: string, managedWatch = false): string {
     ? `managed watch registered (parent source) — this parent receives ${id}'s state changes through its normal send queue; \`spex session reparent ${id} --to <parent>\` moves it, while \`watch cancel\` affects only manual watches`
     : `background \`spex session wait ${id}\` (edge-triggered; exits on the next non-actionable→actionable transition); \`spex session watch ${id}\` registers send-backed delivery when the caller is governed`}; \`spex session watch stream ${id}\` NEVER EXITS
   response channel: \`spex session send ${id} "<msg>"\`; \`send --keys\` is an UNSTABLE LAST RESORT after a plain send cannot land`
+}
+
+export function peerSessionLaunchReceipt(id: string, sshAddress: string): string {
+  return `spex: launched remote session ${id}
+  current result: the session JSON is on stdout now; \`spex session ls --ssh ${sshAddress} ${id}\` is the later one-shot snapshot
+  next lifecycle change: no managed watch crosses this machine peer; query the remote snapshot when needed
+  response channel: the launched prompt carries its runnable peer reply path; \`spex session send --ssh ${sshAddress} ${id} "<msg>"\` reaches this remote session`
 }
 
 export function overviewHelp(): string {

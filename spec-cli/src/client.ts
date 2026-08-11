@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { platform } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { repoRoot } from '@spexcode/spec-core'
 import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/spec-core'
@@ -264,6 +265,33 @@ export async function clientSendThroughPeer(sshAddress: string, id: string, text
     return { ok: false, error: typeof peerBody.error === 'string' ? peerBody.error : `peer request failed (${response.status})` }
   }
   return body as DispatchResult
+}
+
+// The full id is the peer gateway's project anchor. Peer lists deliberately use the default board projection:
+// archives would need a new allowlisted operation, not an unreviewed query-string tunnel.
+export async function clientListSessionsThroughPeer(sshAddress: string, projectAnchor: string): Promise<Session[]> {
+  const response = await peerFetch(sshAddress, `/api/sessions/${seg(projectAnchor)}/project/sessions`)
+  if (!response.ok) throw new BackendError(`remote backend refused to list sessions for ${projectAnchor}: ${await response.text()}`, response.status)
+  return await response.json() as Session[]
+}
+
+export type PeerSessionCreateInput = { prompt: string; launcher?: string; name?: string; base?: string }
+
+// Peer creation is deliberately separate from sessions.ts createSession: that function's proven-local-refusal
+// fallback would launch on THIS machine. The closed body lets the peer gateway recreate the normal backend
+// idempotency header without becoming a general header proxy.
+export async function clientCreateThroughPeer(sshAddress: string, projectAnchor: string, input: PeerSessionCreateInput): Promise<Session> {
+  const response = await peerFetch(sshAddress, `/api/sessions/${seg(projectAnchor)}/project/sessions`, post({
+    ...input,
+    requestKey: randomUUID(),
+  }))
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    let message = text
+    try { message = JSON.parse(text).error || text } catch {}
+    throw new BackendError(`remote backend rejected session (${response.status}): ${message}`, response.status)
+  }
+  return await response.json() as Session
 }
 
 // GET /api/sessions/:id/review — the manager cockpit review bundle (null on 404).

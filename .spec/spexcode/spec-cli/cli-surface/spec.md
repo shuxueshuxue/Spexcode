@@ -94,6 +94,13 @@ SpexCode session id; callers omit it when the named adapter has no native thread
 Both it and `--restore` require the original exact id rather than a
 selector, because corrupt rows never belong to selector enumeration.
 
+`--ssh <address>` is a transport selection, not a competing command grammar. On every peer-enabled session
+verb, its first positional is the complete remote session UUID: show/send/close address that row, while ls/new
+use it only as the remote project's derivation anchor. The latter accepts no second selector and introduces no
+`--project`, `--root`, or URL-shaped target flag. This preserves one reusable peer locator and makes the only
+otherwise-unavailable piece of routing information explicit without teaching the CLI dashboard URLs or remote
+filesystem paths.
+
 **One verb, one spelling.** The old verb mirror (promoted session verbs + bare session subs) is
 gone, as is every deprecated alias: there are no two spellings that reach one handler, and nothing
 that "still runs but warns". The raw-key escape hatch is not a verb but the last-resort face of one:

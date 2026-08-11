@@ -39,18 +39,26 @@ mutable reachability hint. A hostname, gateway URL, and backend `instanceId` are
 authorization proof.
 
 **The gateway is the transport endpoint; the backend remains ordinary.** A dedicated loopback listener accepts
-only three full-id peer requests: `GET /api/sessions/:id` (show), `POST /api/sessions/:id/input` (text send),
-and `POST /api/sessions/:id/close` (close). It is a short allowlist, never a generic proxy. Its reachability is
-authorized by the authenticated SSH connection which created the listener; it does not add a third
+five full-id peer requests: `GET /api/sessions/:id` (show), `POST /api/sessions/:id/input` (text send),
+`POST /api/sessions/:id/close` (close), `GET /api/sessions/:id/project/sessions` (the selected project's
+default session projection), and `POST /api/sessions/:id/project/sessions` (create in that selected project).
+The full UUID is the project anchor for the last two routes, not a list selector or a parent. The listener is a
+short allowlist, never a generic proxy: query strings remain rejected, so a peer list has only the ordinary
+default projection rather than a hidden route to archives. Its reachability is authorized by the authenticated
+SSH connection which created the listener; it does not add a third
 [[gateway-auth]] scope or expose a public route. The receiver derives the target project by scanning its own
 per-project session stores for the full UUID: no match is a named not-found failure and more than one match is a
 loud ambiguity. Session records are grouped by Git common directory, while backend endpoint records are keyed
 by the worktree they serve, so after finding one session record the gateway selects the endpoint whose published
 root equals that record's `worktree_path`. A direct endpoint in the session slot remains valid; a unique endpoint
 sharing the same common-dir store is the retired-session fallback, while several candidates are a loud ambiguity.
-It invokes that project's normal local detail, text-input, or close path; input rewrites an untrusted sender claim
-to the authenticated peer identity and close is an ordinary user close. The backend never parses SSH addresses,
-holds peer state, or gains a cross-machine code path.
+It invokes that project's normal local detail, text-input, close, list, or create path; input rewrites an
+untrusted sender claim to the authenticated peer identity and close is an ordinary user close. Peer create takes
+only `{prompt, launcher?, name?, base?, requestKey}`: the gateway turns `requestKey` into the normal internal
+`Idempotency-Key`, rejects `parent` and every project/filesystem field, and forwards no caller headers. A remote
+new is therefore parentless, admission-controlled by the remote backend, and idempotent across the tunnel; it
+never falls back to launching on the initiating machine. The backend never parses SSH addresses, holds peer
+state, or gains a cross-machine code path.
 
 **Acceptance preserves the existing definition.** A cross-machine send reports `sent` only when the remote
 backend accepted the normal timeline append. Establishing SSH, reaching a peer port, or obtaining an HTTP
@@ -62,8 +70,12 @@ agent decides to run `spex peer connect <address>` and reissue its original send
 may use its own information to find an SSH address and full session UUID. SpexCode does not parse, store, or
 route that URL. Its machine-facing surface is `spex peer connect|ls|disconnect` and
 `spex session show --ssh <address> <full-session-id>`, `spex session send --ssh <address>
-<full-session-id> <text>`, and `spex session close --ssh <address> <full-session-id>`. Incoming text envelopes
-carry the sender's stable machine id, full session id, display label, and the opaque peer address needed for a
-runnable reply insert.
+<full-session-id> <text>`, `spex session close --ssh <address> <full-session-id>`,
+`spex session ls --ssh <address> <full-session-id>`, and `spex session new --ssh <address>
+<full-session-id> <prompt>`. With `--ssh`, the first positional is always a full id; for `ls` and `new` it is
+the project anchor, so remote `ls` accepts exactly that one positional and never pretends it filters the result.
+Remote creation appends the ordinary peer reply hint to its prompt, but installs neither a cross-machine parent
+nor a watch. Incoming text envelopes carry the sender's stable machine id, full session id, display label, and
+the opaque peer address needed for a runnable reply insert.
 Those values make a reply semantically addressable and unique, but only the SSH-created loopback listener
 authorizes delivery.

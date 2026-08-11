@@ -142,6 +142,31 @@ function parseSessionSendArgs(args: string[]): SessionSendArgs {
 type SessionTargetArgs = { selector: string; sshAddress?: string }
 const FULL_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+type SessionPeerAnchor = { sshAddress: string; sessionId: string }
+
+function sessionPeerAnchorUsage(verb: 'ls' | 'new', detail: string): never {
+  console.error(`spex session ${verb}: ${detail}`)
+  console.error(verb === 'ls'
+    ? 'usage: spex session ls [SEL...] [--status a,b] [--all] [--json]\n       spex session ls --ssh <address> <FULL-SESSION-ID> [--status a,b] [--json]'
+    : 'usage: spex session new "<prompt>" [--prompt-file <path>|-] [--launcher <name>] [--name <name>] [--base <commit-ish>]\n       spex session new --ssh <address> <FULL-SESSION-ID> "<prompt>" [--prompt-file <path>|-] [--launcher <name>] [--name <name>] [--base <commit-ish>]')
+  process.exit(2)
+}
+
+// With SSH, every session verb starts with the same full-id anchor. Target operations address that record;
+// ls/new derive its project at the remote gateway. This keeps project identity out of a second flag grammar.
+function parseSessionPeerAnchor(verb: 'ls' | 'new', args: string[]): SessionPeerAnchor | null {
+  const sshCount = process.argv.filter((token) => token === '--ssh').length
+  if (!sshCount) return null
+  if (sshCount !== 1) sessionPeerAnchorUsage(verb, '--ssh may appear only once')
+  const sshAddress = flag('ssh')
+  if (!sshAddress || sshAddress.startsWith('--')) sessionPeerAnchorUsage(verb, '--ssh expects one non-empty address')
+  if (has('api') || has('port')) sessionPeerAnchorUsage(verb, '--ssh, --api, and --port are alternate routes; choose one')
+  if (has('password') || has('insecure')) sessionPeerAnchorUsage(verb, '--password and --insecure apply only to an explicit --api route, not --ssh')
+  const sessionId = args[0]
+  if (!FULL_SESSION_ID.test(sessionId ?? '')) sessionPeerAnchorUsage(verb, '--ssh requires a full session id as its first positional')
+  return { sshAddress, sessionId }
+}
+
 function sessionTargetUsage(verb: 'show' | 'close', detail: string): never {
   console.error(`spex session ${verb}: ${detail}`)
   console.error(verb === 'show'
@@ -738,10 +763,15 @@ if (cmd === 'serve') {
       console.error('spex session new: --node was removed — put a [[<id>]] mention in the prompt — the first mention binds')
       process.exit(2)
     }
-    rejectUnknownFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'name', 'base', 'api', 'port'])
-    const { createSession } = await import('./sessions.js')
+    const newPositionals = positionals(4)
+    const peerAnchor = parseSessionPeerAnchor('new', newPositionals)
+    rejectUnknownFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'name', 'base', 'api', 'port', 'ssh'])
+    if (peerAnchor && newPositionals.length > 2) sessionPeerAnchorUsage('new', '--ssh accepts one full-id anchor and one inline prompt at most')
+    const { createSession, ownSessionId, withPeerSenderHint } = await import('./sessions.js')
     const promptFile = flag('prompt-file')
-    const inline = flag('prompt') ?? positionals(4)[0]
+    const explicitPrompt = flag('prompt')
+    if (peerAnchor && explicitPrompt !== undefined && newPositionals.length !== 1) sessionPeerAnchorUsage('new', 'give the prompt either after the full-id anchor or via --prompt, not both')
+    const inline = explicitPrompt ?? newPositionals[peerAnchor ? 1 : 0]
     let prompt = inline ?? ''
     if (promptFile !== undefined) {
       // fail-loud exclusive: never silently pick one of two prompt sources.
@@ -751,11 +781,23 @@ if (cmd === 'serve') {
       catch (e) { console.error(`spex session new: --prompt-file ${promptFile}: ${e instanceof Error ? e.message : e}`); process.exit(2) }
       if (!prompt.trim()) { console.error(`spex session new: --prompt-file ${promptFile === '-' ? 'stdin' : promptFile} is empty — refusing a promptless launch`); process.exit(2) }
     }
-    const created = await createSession(prompt, flag('launcher') ?? undefined, flag('name') ?? undefined, flag('base') ?? undefined)
-    const { ownSessionId, subscribeSessionWatch } = await import('./sessions.js')
+    let peerPrompt = prompt
+    if (peerAnchor) {
+      const senderId = ownSessionId()
+      if (senderId) {
+        const { readPeerMachineId } = await import('./machine-peer.js')
+        peerPrompt = withPeerSenderHint(prompt, { id: senderId, label: null }, peerAnchor.sshAddress, readPeerMachineId())
+      }
+    }
+    const created = peerAnchor
+      ? await (await import('./client.js')).clientCreateThroughPeer(peerAnchor.sshAddress, peerAnchor.sessionId, {
+        prompt: peerPrompt, launcher: flag('launcher') ?? undefined, name: flag('name') ?? undefined, base: flag('base') ?? undefined,
+      })
+      : await createSession(prompt, flag('launcher') ?? undefined, flag('name') ?? undefined, flag('base') ?? undefined)
     let watchEstablished = false
-    if (created.parent && created.parent === ownSessionId()) {
+    if (!peerAnchor && created.parent && created.parent === ownSessionId()) {
       try {
+        const { subscribeSessionWatch } = await import('./sessions.js')
         await subscribeSessionWatch(created.parent, [created.id], 'parent')
         watchEstablished = true
       } catch (error) {
@@ -763,19 +805,26 @@ if (cmd === 'serve') {
       }
     }
     console.log(JSON.stringify(created, null, 2))
-    console.error((await import('./help.js')).sessionLaunchReceipt(created.id, watchEstablished))
+    const help = await import('./help.js')
+    console.error(peerAnchor
+      ? help.peerSessionLaunchReceipt(created.id, peerAnchor.sshAddress)
+      : help.sessionLaunchReceipt(created.id, watchEstablished))
   } else if (sub === 'ls') {
     // pretty list of living sessions + states. `spex session ls [SEL...] [--status a,b] [--json]`
     // the board comes from the backend (so it shows the sessions of whatever SPEXCODE_API_URL points at,
     // incl. a remote machine); selectSessions/formatTable are pure presentation, applied client-side.
     const { selectSessions, formatTable } = await import('./sessions.js')
-    const { clientListSessions } = await import('./client.js')
+    const { clientListSessions, clientListSessionsThroughPeer } = await import('./client.js')
     // The backend's default projection excludes cold archives. --all and an explicit selector request the
     // history projection so an operator can still inspect or unarchive one deliberately.
     const selectors = positionals(4)
-    const all = await clientListSessions(has('all') || selectors.length > 0)
-    const visible = all
-    const picked = selectSessions(visible, selectors, flag('status')?.split(','))
+    const peerAnchor = parseSessionPeerAnchor('ls', selectors)
+    if (peerAnchor && selectors.length !== 1) sessionPeerAnchorUsage('ls', '--ssh accepts exactly one full-id project anchor, not session selectors')
+    if (peerAnchor && has('all')) sessionPeerAnchorUsage('ls', '--all is unavailable through a machine peer')
+    const visible = peerAnchor
+      ? await clientListSessionsThroughPeer(peerAnchor.sshAddress, peerAnchor.sessionId)
+      : await clientListSessions(has('all') || selectors.length > 0)
+    const picked = selectSessions(visible, peerAnchor ? [] : selectors, flag('status')?.split(','))
     console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked))
   } else if (sub === 'resources') {
     rejectUnknownFlags('spex session resources', 4, ['json', 'api', 'port'])

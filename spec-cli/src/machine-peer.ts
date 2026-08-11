@@ -161,6 +161,13 @@ type PeerSessionRequest =
   | { kind: 'show'; sessionId: string }
   | { kind: 'input'; sessionId: string }
   | { kind: 'close'; sessionId: string }
+  | { kind: 'list'; sessionId: string }
+  | { kind: 'create'; sessionId: string }
+
+type PeerCreate = {
+  requestKey: string
+  body: { prompt: string; launcher?: string; name?: string; base?: string }
+}
 
 // Session records live under the shared Git common-dir store, whereas a running backend publishes under
 // the worktree root it serves. A direct endpoint beside the session remains the simple case; linked
@@ -210,13 +217,42 @@ function peerSessionRequest(req: IncomingMessage): PeerSessionRequest | null {
   if (req.method === 'POST' && input) return { kind: 'input', sessionId: input[1] }
   const close = url.pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})\/close$/i)
   if (req.method === 'POST' && close) return { kind: 'close', sessionId: close[1] }
+  const projectSessions = url.pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})\/project\/sessions$/i)
+  if (req.method === 'GET' && projectSessions) return { kind: 'list', sessionId: projectSessions[1] }
+  if (req.method === 'POST' && projectSessions) return { kind: 'create', sessionId: projectSessions[1] }
   return null
+}
+
+async function peerCreateRequest(req: IncomingMessage): Promise<PeerCreate> {
+  const raw = await readRequest(req)
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch { throw new Error('session create body must be JSON') }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('session create body must be a JSON object')
+  const input = parsed as Record<string, unknown>
+  const unknown = Object.keys(input).filter((key) => !['prompt', 'launcher', 'name', 'base', 'requestKey'].includes(key)).sort()
+  if (unknown.length) throw new Error(`unknown peer session-create field${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}`)
+  if (typeof input.prompt !== 'string') throw new Error('session-create prompt must be a string')
+  if (input.launcher !== undefined && typeof input.launcher !== 'string') throw new Error('session-create launcher must be a string')
+  if (input.name !== undefined && typeof input.name !== 'string') throw new Error('session-create name must be a string')
+  if (input.base !== undefined && typeof input.base !== 'string') throw new Error('session-create base must be a string')
+  if (typeof input.requestKey !== 'string' || !/^[\x21-\x7e]{1,128}$/.test(input.requestKey)) {
+    throw new Error('session-create requestKey must be 1-128 visible ASCII characters')
+  }
+  return {
+    requestKey: input.requestKey,
+    body: {
+      prompt: input.prompt,
+      ...(input.launcher !== undefined ? { launcher: input.launcher } : {}),
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.base !== undefined ? { base: input.base } : {}),
+    },
+  }
 }
 
 async function forwardToProject(peer: MachinePeer, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const request = peerSessionRequest(req)
   if (!request) {
-    json(res, 404, { error: 'peer accepts GET /api/sessions/<full-id>, POST /api/sessions/<full-id>/input, or POST /api/sessions/<full-id>/close only' })
+    json(res, 404, { error: 'peer accepts GET /api/sessions/<full-id>, POST /api/sessions/<full-id>/input, POST /api/sessions/<full-id>/close, GET /api/sessions/<full-id>/project/sessions, or POST /api/sessions/<full-id>/project/sessions only' })
     return
   }
   const { sessionId } = request
@@ -225,7 +261,9 @@ async function forwardToProject(peer: MachinePeer, req: IncomingMessage, res: Se
   if (projects.length > 1) { json(res, 409, { error: `session ${sessionId} is ambiguous across ${projects.length} local projects` }); return }
   if (projects[0].endpointConflict) { json(res, 409, { error: projects[0].endpointConflict }); return }
   if (!projects[0].url) { json(res, 502, { error: `target backend for session ${sessionId} is offline` }); return }
-  let path = `/api/sessions/${encodeURIComponent(sessionId)}`
+  let path = request.kind === 'list' || request.kind === 'create'
+    ? '/api/sessions'
+    : `/api/sessions/${encodeURIComponent(sessionId)}`
   let init: RequestInit = { method: 'GET' }
   if (request.kind === 'input') {
     let body: Record<string, unknown>
@@ -245,6 +283,15 @@ async function forwardToProject(peer: MachinePeer, req: IncomingMessage, res: Se
     // external-user operation, authorized here solely by the SSH-created loopback listener.
     path += '/close'
     init = { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: { kind: 'user' } }) }
+  } else if (request.kind === 'create') {
+    let create: PeerCreate
+    try { create = await peerCreateRequest(req) }
+    catch (error) { json(res, 400, { error: (error as Error).message }); return }
+    init = {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'Idempotency-Key': create.requestKey },
+      body: JSON.stringify(create.body),
+    }
   }
   let upstream: Response
   try {

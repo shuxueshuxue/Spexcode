@@ -76,6 +76,9 @@ text is served by the id-addressed record detail, which reads the stored prompt 
 a receipt for one ask and keeps it whole. So the list body stays proportional to the NUMBER of sessions
 rather than to the total length of what was asked — otherwise one long ask outweighs the entire rest of the
 board, on every poll and in the last-known-row cache, to serve a field no list reader consults.
+Terminal close removes that record by design, so its append-only audit ledger is not folded into the board or
+revived as a second session type. It may answer one id-addressed post-close diagnostic with the durable target
+id and close time; a malformed or ambiguous ledger is unknown, never a plausible absence.
 Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature
 node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[session-follow]],

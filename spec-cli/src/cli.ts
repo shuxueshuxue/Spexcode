@@ -75,11 +75,12 @@ function positionals(from: number): string[] {
   return out
 }
 
-function rejectUnknownFlags(command: string, from: number, allowed: readonly string[]): void {
+function rejectUnknownFlags(command: string, from: number, allowed: readonly string[], attached: readonly string[] = []): void {
   const known = new Set(allowed.map((name) => `--${name}`))
   for (let i = from; i < process.argv.length; i++) {
     const token = process.argv[i]
     if (!token.startsWith('--')) continue
+    if (attached.some((name) => token.startsWith(`--${name}=`))) continue
     if (!known.has(token)) {
       console.error(`${command}: unknown flag ${token}`)
       process.exit(2)
@@ -87,6 +88,26 @@ function rejectUnknownFlags(command: string, from: number, allowed: readonly str
     if (VALUE_FLAGS.has(token)) i++
   }
 }
+
+// `--children` deliberately has an optional value only in its attached form. A separated following token
+// remains a normal ls selector, so the long-standing `ls --children <child-SEL>` grammar keeps its meaning.
+function childrenScopeOption(): string | null | undefined {
+  const forms = process.argv.slice(4).filter((token) => token === '--children' || token.startsWith('--children='))
+  if (!forms.length) return undefined
+  if (forms.length > 1) {
+    console.error('spex session ls: --children may appear only once')
+    process.exit(2)
+  }
+  if (forms[0] === '--children') return null
+  const selector = forms[0].slice('--children='.length)
+  if (!selector) {
+    console.error('spex session ls: --children=<PARENT-SEL> requires a non-empty parent selector')
+    process.exit(2)
+  }
+  return selector
+}
+
+const idLikeSelector = (selector: string): boolean => /^[0-9a-f-]{8,}$/i.test(stripRefSigil(selector))
 
 type SessionSendArgs =
   | { selector: string; kind: 'text'; text: string; sshAddress?: string }
@@ -810,22 +831,68 @@ if (cmd === 'serve') {
       ? help.peerSessionLaunchReceipt(created.id, peerAnchor.sshAddress)
       : help.sessionLaunchReceipt(created.id, watchEstablished))
   } else if (sub === 'ls') {
-    // pretty list of living sessions + states. `spex session ls [SEL...] [--status a,b] [--json]`
+    // pretty list of living sessions + states. `spex session ls [SEL...] [--children[=PARENT-SEL]] [--status a,b] [--json]`
     // the board comes from the backend (so it shows the sessions of whatever SPEXCODE_API_URL points at,
     // incl. a remote machine); selectSessions/formatTable are pure presentation, applied client-side.
-    const { selectSessions, formatTable } = await import('./sessions.js')
-    const { clientListSessions, clientListSessionsThroughPeer } = await import('./client.js')
+    const { ownSessionId, resolveSession, selectChildren, selectSessions, formatTable } = await import('./sessions.js')
+    const { clientListSessions, clientListSessionsThroughPeer, clientSessionClosure } = await import('./client.js')
     // The backend's default projection excludes cold archives. --all and an explicit selector request the
     // history projection so an operator can still inspect or unarchive one deliberately.
     const selectors = positionals(4)
+    rejectUnknownFlags('spex session ls', 4, ['status', 'all', 'json', 'api', 'port', 'ssh', 'children'], ['children'])
     const peerAnchor = parseSessionPeerAnchor('ls', selectors)
+    const children = childrenScopeOption()
     if (peerAnchor && selectors.length !== 1) sessionPeerAnchorUsage('ls', '--ssh accepts exactly one full-id project anchor, not session selectors')
     if (peerAnchor && has('all')) sessionPeerAnchorUsage('ls', '--all is unavailable through a machine peer')
+    if (peerAnchor && children === null) sessionPeerAnchorUsage('ls', '--children over a machine peer requires --children=<remote-parent-SEL>')
     const visible = peerAnchor
       ? await clientListSessionsThroughPeer(peerAnchor.sshAddress, peerAnchor.sessionId)
       : await clientListSessions(has('all') || selectors.length > 0)
-    const picked = selectSessions(visible, peerAnchor ? [] : selectors, flag('status')?.split(','))
-    console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked))
+    let scoped = visible
+    let scope: import('./sessions.js').SessionTableScope = { kind: 'sessions' }
+    if (children !== undefined) {
+      let parent: string
+      if (children === null) {
+        parent = ownSessionId() || ''
+        if (!parent) {
+          console.error('spex session ls: --children needs a governed caller session; use --children=<PARENT-SEL> from a human shell')
+          process.exit(2)
+        }
+      } else {
+        const resolved = resolveSession(children, visible)
+        if ('ok' in resolved) parent = resolved.ok.id
+        else if ('ambiguous' in resolved) {
+          console.error(`spex session ls: parent selector ${children} is ambiguous: ${resolved.ambiguous.map((session) => session.id.slice(0, 8)).join(', ')}`)
+          process.exit(2)
+        } else {
+          const pointed = [...new Set(visible.flatMap((session) => session.parent && (session.parent === children || session.parent.startsWith(children)) ? [session.parent] : []))]
+          if (pointed.length === 1) parent = pointed[0]
+          else if (pointed.length > 1) {
+            console.error(`spex session ls: parent selector ${children} is ambiguous: ${pointed.map((id) => id.slice(0, 8)).join(', ')}`)
+            process.exit(2)
+          } else {
+            console.error(`spex session ls: no session or child-parent pointer matches ${children}`)
+            process.exit(2)
+          }
+        }
+      }
+      scoped = selectChildren(visible, parent)
+      scope = { kind: 'children', parent }
+    }
+    const selected = selectSessions(scoped, peerAnchor ? [] : selectors)
+    const picked = flag('status') ? selected.filter((session) => flag('status')!.split(',').includes(session.status)) : selected
+    if (!peerAnchor && children === undefined && selectors.length === 1 && !selected.length && idLikeSelector(selectors[0])) {
+      const closure = await clientSessionClosure(selectors[0])
+      if (closure) {
+        const result = { id: closure.id, status: 'closed', closedAt: closure.closedAt }
+        console.log(has('json') ? JSON.stringify([result], null, 2) : `${closure.id.slice(0, 8)}: closed at ${closure.closedAt}`)
+      } else {
+        console.error(`spex session ls: ${selectors[0]} was not found in this project's live, archive, or terminal-close history`)
+        process.exit(2)
+      }
+    } else {
+      console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked, true, scope))
+    }
   } else if (sub === 'resources') {
     rejectUnknownFlags('spex session resources', 4, ['json', 'api', 'port'])
     const { clientResources } = await import('./client.js')

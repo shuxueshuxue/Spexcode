@@ -5,7 +5,7 @@ import { repoRoot } from '@spexcode/spec-core'
 import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/spec-core'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
-import { apiBaseInfo, assertProjectMatch, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { apiBaseInfo, assertProjectMatch, findSessionClosure, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type SessionClosure, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 import { resolveMachinePeer } from './machine-peer.js'
 
 export class BackendError extends Error {
@@ -212,6 +212,19 @@ export async function clientListSessions(includeArchived = false): Promise<Sessi
     if (!r.ok) throw new BackendError(`backend error ${r.status} listing sessions`, r.status)
     return await r.json() as Session[]
   }, () => localCachedSessions(includeArchived))
+}
+
+// A terminal close removes the record from the board. The audit lookup is deliberately id-addressed and is
+// consulted only after an explicit selector missed that board, so ordinary lists stay a current-state read.
+export async function clientSessionClosure(selector: string): Promise<SessionClosure | null> {
+  return cachedRead(async () => {
+    const r = await apiFetch(`/api/sessions/${seg(selector)}/closure`)
+    if (r.headers.get('x-spexcode-close-history') !== 'v1')
+      throw new BackendError(`backend does not support terminal close history; refusing to label ${selector} as never existed (update the backend)`, 501)
+    if (r.status === 404) return null
+    if (!r.ok) throw new BackendError(`backend error ${r.status} reading close history for ${selector}`, r.status)
+    return await r.json() as SessionClosure
+  }, () => findSessionClosure(selector))
 }
 
 export async function clientResources(): Promise<import('./host-resources.js').ResourceReport> {

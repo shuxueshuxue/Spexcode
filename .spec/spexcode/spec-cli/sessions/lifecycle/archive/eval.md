@@ -157,6 +157,21 @@ scenarios:
       selected, and renders one separate archive card with one resume action. A real selected-id or selected-row
       archived-state transition still automatically chooses the side that owns that selection.
     tags: [frontend-e2e]
+  - name: explicit-ls-distinguishes-terminal-close-from-never-existed
+    description: >
+      Through the real `spex session ls --all <id> --api <backend>` CLI path, use an empty board with one
+      id-addressed terminal-close history hit and a second id with neither record nor history. Then use a
+      backend which returns a generic, unmarked 404 for the closure route and prove it names the incompatible
+      backend rather than claiming the target never existed.
+    expected: >
+      The closed id exits zero and prints its close time; the never-existed id exits nonzero and names that it
+      missed live, archive, and terminal-close history. The normal board does not acquire a closed row, and an
+      ambiguous or unreadable ledger refuses rather than claiming absence.
+    tags: [cli, backend-api]
+    test:
+      path: spec-cli/src/session-ls-cli.test.ts
+      name: session ls names terminal close history instead of collapsing it into a never-existed miss
+    code: [spec-cli/src/sessions.ts, spec-cli/src/client.ts, spec-cli/src/index.ts, spec-cli/src/session-ls-cli.test.ts]
 ---
 
 # eval — archive

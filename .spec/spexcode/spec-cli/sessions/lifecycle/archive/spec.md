@@ -122,6 +122,15 @@ inspectable after a successful terminal close but never grants deletion authorit
 entry and never changes a Codex generation binding into its record-removing phase. Archive remains reversible
 only through `resume`, which unarchives before recreating the runtime. Close is not reversible.
 
+The ledger is also the one read-only answer after terminal record removal: an id-addressed close-history lookup
+may report `{id, closedAt}` to a caller whose explicit list selector missed both live and archived projection.
+It neither restores a row nor turns the ledger into an alternate board; ordinary list reads do not scan it. A
+closed answer is successful, while an id absent from the live, archive, and close-history facts is a loud miss.
+Unreadable or ambiguous history is likewise loud rather than being relabelled "never existed". The HTTP
+closure route marks every one of its responses, including its no-history 404, as a close-history-capable
+response. An unmarked 404 is an incompatible backend, not evidence of absence, and fails loudly with its
+upgrade repair rather than silently producing the never-existed answer.
+
 Close has three ownership-proof entries into that one terminal result. A live row first uses the ordinary exact
 stop proof, then removes its record, worktree, and branch. A proven-cold archived row must not pretend to be
 live again just to retire: it verifies that the record's cold proof still binds the target adapter/thread and

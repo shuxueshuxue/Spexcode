@@ -149,7 +149,10 @@ prose.
 
 Write/runtime routes are thin callers of the [[sessions]] state machine — no session logic lives here:
 `/api/sessions` list + spawn; per-session `resume`/`interrupt`/`review`/`close`/`quarantine`, plus reads `review` (the merge
-bundle), `capture` (the live pane as text), and `prompt`. `merge` is a **dispatch to the session's own
+bundle), `capture` (the live pane as text), `prompt`, and id-addressed `closure` (the durable terminal-close
+audit answer after record removal). `closure` returns only its target id and close time or 404; it is not a
+second historical session collection. Every closure response carries its capability marker, including a 404,
+so a client can distinguish no close fact from a backend that lacks the route. `merge` is a **dispatch to the session's own
 agent**, not a server merge — it returns `{dispatched}` and never touches main's tree. Text input appends a
 whole prompt to the target timeline, then best-effort pokes its adapter; only a refused append is 502.
 `rawkey` keeps tmux send-keys for nav; `socket` streams pane bytes. Session

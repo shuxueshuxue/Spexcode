@@ -122,6 +122,37 @@ function appendCloseLedger(id: string, rec: SessRec, source: CloseSource): void 
   appendFileSync(path, `${JSON.stringify(event)}\n`)
 }
 
+// Close deliberately removes the record, but not this narrow audit fact. A list can therefore distinguish a
+// terminal answer from a misspelled id without reviving a second, mutable "closed session" store.
+export type SessionClosure = { id: string; closedAt: string }
+export function findSessionClosure(selector: string): SessionClosure | null {
+  const query = stripRefSigil(selector).trim()
+  if (!query) return null
+  const path = join(runtimeRoot(), 'session-close-ledger.ndjson')
+  let text: string
+  try { text = readFileSync(path, 'utf8') }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+  const matches = new Map<string, SessionClosure>()
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue
+    let event: unknown
+    try { event = JSON.parse(line) } catch { throw new ResourceConflict('session close history is unreadable') }
+    if (!event || typeof event !== 'object' || (event as { action?: unknown }).action !== 'close-authorized') continue
+    const target = (event as { target?: unknown }).target
+    const id = target && typeof target === 'object' ? (target as { id?: unknown }).id : undefined
+    const closedAt = (event as { at?: unknown }).at
+    if (typeof id !== 'string' || !id || typeof closedAt !== 'string' || !closedAt)
+      throw new ResourceConflict('session close history is malformed')
+    if (id === query || id.startsWith(query)) matches.set(id, { id, closedAt })
+  }
+  if (!matches.size) return null
+  if (matches.size > 1) throw new ResourceConflict(`close history for ${query} is ambiguous: ${[...matches.keys()].map((id) => id.slice(0, 8)).join(', ')}`)
+  return [...matches.values()][0]
+}
+
 function storeDir(id: string): string { const d = sessionStoreDir(id); mkdirSync(d, { recursive: true }); return d }
 
 function writePromptFile(id: string, prompt: string): void {
@@ -3678,6 +3709,12 @@ export function selectSessions(all: Session[], selectors: string[], statuses?: s
   return out
 }
 
+// Parentage is a durable direct pointer, even when that parent was terminally closed and no longer has a row.
+// The CLI's child scope must keep that fact visible rather than requiring callers to reverse-engineer prompts.
+export function selectChildren(all: Session[], parent: string): Session[] {
+  return all.filter((session) => session.parent === parent)
+}
+
 // @@@ resolveSession - resolve ONE selector to ONE session against a board: the single-target counterpart of
 // selectSessions, for the control verbs (review/send/merge/close/resume/show). The backend matches
 // ids EXACTLY, so a verb resolves the selector here first and then calls with the FULL id — a node/branch/
@@ -3745,23 +3782,38 @@ export function statusLegend(color = true): string {
   return c('90', '  key: ') + parts.join('  ')
 }
 
-// human-friendly aligned table: header + (glyph + colour + status + title + id + merges + note) rows +
+// human-friendly aligned table: header + (glyph + colour + status + title + id + parent + merges + note) rows +
 // a status legend, so the table tells the whole story (incl. each agent's note) at a glance.
-export function formatTable(sessions: Session[], color = true): string {
+export type SessionTableScope = { kind: 'sessions' } | { kind: 'children'; parent: string }
+function statusSummary(sessions: Session[]): string {
+  const counts = new Map<DisplayStatus, number>()
+  for (const session of sessions) counts.set(session.status, (counts.get(session.status) || 0) + 1)
+  return (Object.keys(STATUS_GLYPH) as DisplayStatus[])
+    .flatMap((status) => {
+      const count = counts.get(status)
+      return count ? [`${count} ${SHORT[status] || status}`] : []
+    })
+    .join(' · ')
+}
+
+export function formatTable(sessions: Session[], color = true, scope: SessionTableScope = { kind: 'sessions' }): string {
   const c = (code: string, t: string) => (color ? `\x1b[${code}m${t}\x1b[0m` : t)
-  if (!sessions.length) return c('90', '  no living sessions')
-  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'TITLE'.padEnd(22)} ${'ID'.padEnd(8)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
+  const label = scope.kind === 'children' ? `children of ${scope.parent.slice(0, 8)}` : 'sessions'
+  const heading = c('1', `SpexCode ${label} (${sessions.length}${sessions.length ? `; ${statusSummary(sessions)}` : ''})`)
+  if (!sessions.length) return [heading, c('90', `  no ${scope.kind === 'children' ? 'children' : 'living sessions'}`)].join('\n')
+  const header = c('90', `    ${'STATUS'.padEnd(13)} ${'TITLE'.padEnd(22)} ${'ID'.padEnd(8)} ${'PARENT'.padEnd(8)} ${'\u00d7'.padEnd(4)}${'PROMPT'.padEnd(42)}NOTE`)
   const rows = sessions.map((s) => {
     const g = STATUS_GLYPH[s.status] ?? '\u00b7'
     const code = ANSI[s.status] ?? '0'
     const title = padWidth(truncWidth(sessionTitle(s), 22), 22)
     const st = s.status.padEnd(13)
+    const parent = c('90', (s.parent || '-').slice(0, 8).padEnd(8))
     const merges = (s.merges ? `\u00d7${s.merges}` : '').padEnd(4)
     const prompt = c('90', padWidth(s.promptPreview ? trunc(s.promptPreview, 40) : '', 42))   // what it was asked to do
     const note = s.note ? c('90', trunc(s.note, NOTE_BOARD_LIMIT)) : ''
-    return `  ${c(code, g)} ${c(code, st)} ${title} ${c('90', s.id.slice(0, 8))} ${merges}${prompt}${note}`
+    return `  ${c(code, g)} ${c(code, st)} ${title} ${c('90', s.id.slice(0, 8))} ${parent} ${merges}${prompt}${note}`
   })
-  return [c('1', `SpexCode sessions (${sessions.length})`), header, ...rows, statusLegend(color)].join('\n')
+  return [heading, header, ...rows, statusLegend(color)].join('\n')
 }
 
 // @@@ sendText - THE APPEND ACCEPTS, THE QUEUE OWES ([[dispatch]]). One hold of the record lock records the

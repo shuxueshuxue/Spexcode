@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, findSessionClosure, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -45,6 +45,31 @@ function assertIsolatedResumeStore(home: string, id: string): void {
   assert.ok(sessionStoreDir(id).startsWith(`${home}/`), `resume fixture ${id} store escaped isolated SPEXCODE_HOME`)
   assert.ok(runtimeRoot().startsWith(`${home}/`), `resume fixture ${id} runtime root escaped isolated SPEXCODE_HOME`)
 }
+
+test('terminal close history distinguishes one closed id from absence and refuses ambiguous facts', serial, () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-close-history-'))
+  process.env.SPEXCODE_HOME = home
+  try {
+    const root = runtimeRoot()
+    mkdirSync(root, { recursive: true })
+    const first = 'deadbeef-dead-4bee-8bee-deadbeefdead'
+    writeFileSync(join(root, 'session-close-ledger.ndjson'), [
+      JSON.stringify({ action: 'close-authorized', at: '2026-08-11T04:00:00.000Z', target: { id: first } }),
+      JSON.stringify({ action: 'other', at: '2026-08-11T04:01:00.000Z', target: { id: 'ignored' } }),
+    ].join('\n') + '\n')
+    assert.deepEqual(findSessionClosure('deadbeef'), { id: first, closedAt: '2026-08-11T04:00:00.000Z' })
+    assert.equal(findSessionClosure('ffffffff'), null)
+
+    const second = 'deadbeef-cafe-4bee-8bee-deadbeefcafe'
+    writeFileSync(join(root, 'session-close-ledger.ndjson'), `${readFileSync(join(root, 'session-close-ledger.ndjson'), 'utf8')}${JSON.stringify({ action: 'close-authorized', at: '2026-08-11T04:02:00.000Z', target: { id: second } })}\n`)
+    assert.throws(() => findSessionClosure('deadbeef'), /close history for deadbeef is ambiguous/)
+  } finally {
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+  }
+})
 
 test('command presets compose once at the backend prompt boundary while unknown slash text passes through', serial, () => {
   const presets = [

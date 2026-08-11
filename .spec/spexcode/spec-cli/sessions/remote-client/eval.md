@@ -87,6 +87,19 @@ scenarios:
       name: the peer and session CLI surfaces use the gateway-owned peer forward
     code: spec-cli/src/client.ts
     related: [spec-cli/src/machine-peer.ts, spec-cli/src/cli.ts]
+  - name: explicit-close-history-read-stays-on-its-named-backend
+    description: >
+      Point `spex session ls --all <id> --api <url>` at a controlled backend with an empty board and a terminal
+      close-history answer, then repeat for a capability-marked 404 history miss and an unmarked legacy-route
+      404. The latter must fail as incompatible rather than use local history or say never existed.
+    expected: >
+      Both board and close-history requests stay on the explicit backend; a close hit is success, while a 404
+      history miss becomes the named nonzero never-existed answer. No local ledger fallback occurs.
+    tags: [cli, backend-api]
+    test:
+      path: spec-cli/src/session-ls-cli.test.ts
+      name: session ls names terminal close history instead of collapsing it into a never-existed miss
+    code: [spec-cli/src/client.ts, spec-cli/src/session-ls-cli.test.ts]
 ---
 
 # measuring remote-client backend routing

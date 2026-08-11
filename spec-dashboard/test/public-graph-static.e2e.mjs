@@ -4,9 +4,11 @@ import { createServer } from 'node:http'
 import { readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { extname, join, normalize, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
-const root = resolve(new URL('../dist-public/', import.meta.url).pathname)
+// fileURLToPath, not `.pathname` — the latter leaves percent-encoding in place, so any checkout path with a
+// space or a non-ASCII character resolves to a directory that does not exist.
+const root = resolve(fileURLToPath(new URL('../dist-public/', import.meta.url)))
 const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.SPEXCODE_CHROMIUM_PATH || process.env.CHROMIUM || '/snap/bin/chromium'
 const { chromium } = await import(pathToFileURL(playwrightPath).href)

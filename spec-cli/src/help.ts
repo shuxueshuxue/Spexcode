@@ -196,8 +196,9 @@ consume the same visible diagnosis.`,
     see: 'spex spec lint (deterministic graph/contract gate) · spex materialize (repair delivery artifacts)',
   },
   flat: {
-    line: 'flat new <repo>       Flatcode — flatten any repository into a converged .spec tree  [--out|--rounds|--coverage]',
+    line: 'flat new|site         Flatcode — flatten any repository into a converged .spec tree, then preview it',
     body: `Usage: spex flat new <repo-url|path> [--out <dir>] [--launcher <name>] [--rounds <n>] [--coverage <pct>]
+       spex flat site <flat-dir>
 
 Clones the target, works out what counts as its source, seeds .spec, then runs an agent round after round
 until the spec tree passes a gate: zero \`spex spec lint\` errors, coverage at or above --coverage (default
@@ -212,7 +213,12 @@ branch, <out>/flat.json holds the reading. Nothing is pushed, nothing is served,
 registered — the target repository never lands on anyone's board.
 
 --launcher picks the agent exactly like a session does, and must name a harness with a non-interactive
-turn; a launcher whose harness has none is refused by name rather than quietly swapped.`,
+turn; a launcher whose harness has none is refused by name rather than quietly swapped.
+
+\`spex flat site <flat-dir>\` writes <flat-dir>/site — the graph-only dashboard over that flat's spec tree,
+plus the node documents, the .spec archive, and a release manifest with a SHA-256 per file. It is plain
+static files with no backend, so any static host serves it and a partial flat still previews (its About
+panel carries the coverage, so a partial tree never reads as a finished one).`,
     see: 'spex guide spec (the authoring format the rounds follow) · spex spec lint · spex doctor',
   },
   uninstall: {

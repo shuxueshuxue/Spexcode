@@ -26,9 +26,23 @@ test('a repository with no recognised source profiles to nothing rather than to 
   assert.deepEqual(profile.sourceExtensions, [])
 })
 
-test('a top-level source file makes the repository root the governed root', () => {
+test('a repository whose source really is at the top level governs the root', () => {
   const profile = profileFiles(['main.go', 'helper.go', 'go.mod'])
   assert.deepEqual(profile.governedRoots, ['.'])
+})
+
+test('one top-level packaging script does not drag the whole repository into the governed set', () => {
+  // Measured on psf/requests: src=19, tests=15, docs=2, and a lone setup.py at the root. A root that
+  // qualifies subsumes every sibling, so letting setup.py qualify it would silently govern all 37 files.
+  const profile = profileFiles([
+    ...Array.from({ length: 19 }, (_, n) => `src/requests/m${n}.py`),
+    ...Array.from({ length: 15 }, (_, n) => `tests/test_${n}.py`),
+    'docs/conf.py', 'docs/build.py',
+    'setup.py',
+    'README.md', 'pyproject.toml',
+  ])
+  assert.ok(!profile.governedRoots.includes('.'), 'setup.py qualified the repository root')
+  assert.deepEqual(profile.governedRoots, ['docs', 'src', 'tests'])
 })
 
 test('the gate reads coverage and errors out of the real lint report shape', () => {

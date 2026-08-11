@@ -56,9 +56,11 @@ export default function PublicGraphAbout() {
                 <div><dt>Revision</dt><dd><code>{shortRevision(metadata.release.revision)}</code></dd></div>
               </dl>
               <div className="public-about-actions">
-                <a className="public-about-link" href={publication.repository.url} target="_blank" rel="noopener noreferrer">
-                  <Icon name="globe" size={14} /> GitHub repository
-                </a>
+                {publication.repository?.url && (
+                  <a className="public-about-link" href={publication.repository.url} target="_blank" rel="noopener noreferrer">
+                    <Icon name="globe" size={14} /> Repository
+                  </a>
+                )}
                 <a className="public-about-link primary" href={`/${archive.path}`} download={archive.name}>
                   <Icon name="download" size={14} /> Download .spec
                 </a>

@@ -55,8 +55,11 @@ the build nor the deployment derives a hostname from a checkout name. The curren
 redirect to the registered SpexCode host; it must never keep serving SpexCode content as if Herdr owned it.
 
 The build also emits `public-graph-meta.json`, a lazy static source for the floating About panel, and a
-`spexcode.spec.zip` archive rooted at `.spec/` and made from the graph revision's `.spec/spexcode` tree. The panel has a fixed
-repository link and the archive download; its human-readable summary and facts come from the registry. It
+`spexcode.spec.zip` archive rooted at `.spec/` and made from the graph revision's `.spec/spexcode` tree. The panel offers the
+archive download always and a repository link only when the publication names one — the shell also renders
+[[flat]]'s locally produced sites, whose source may be a path with no forge behind it, and a link labelled
+for a forge the source does not live on would be a claim rather than a fact. Its human-readable summary and
+facts come from the metadata beside the graph. It
 does not load during graph boot and it never reaches a backend. `public-spec-release.json` has schema
 `spexcode.public-spec-release/v1`: the exact revision plus the path, byte count, and SHA-256 of the index,
 metadata, archive, and every document. This is the handoff contract for the generic transport. Its daily job

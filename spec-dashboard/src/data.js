@@ -82,8 +82,10 @@ export async function loadPublicGraphMetadata() {
   if (!response.ok) throw new Error(`public graph metadata unavailable: ${response.status}`)
   const metadata = await response.json()
   const archive = metadata?.release?.archive
+  // A repository url is OPTIONAL: a Flatcode flat's source may be a local path with no forge behind it, and
+  // rejecting the whole release for a missing link would blank the panel over an absent nicety while the
+  // graph, facts, and archive it exists to present are all there. The renderer omits the link instead.
   if (metadata?.schema !== 'spexcode.public-spec-site/v1'
-    || !metadata?.publication?.repository?.url
     || !Array.isArray(metadata?.about?.facts)
     || !metadata?.release?.revision
     || !archive?.path

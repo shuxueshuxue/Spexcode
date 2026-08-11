@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { HARNESSES, defaultLauncher, harnessById, resolveLauncher, type Harness } from './harness.js'
@@ -60,6 +61,7 @@ function run(command: string, args: readonly string[], cwd: string, stdin = ''):
     child.stderr.on('data', (chunk) => { stderr += chunk })
     child.on('error', (error) => done({ code: 127, stdout, stderr: `${stderr}${(error as Error).message}` }))
     child.on('close', (code) => done({ code: code ?? 1, stdout, stderr }))
+    child.stdin.on('error', () => { /* see runTurn: the exit code is the verdict, not the stdin pipe */ })
     child.stdin.end(stdin)
   })
 }
@@ -71,6 +73,12 @@ function runTurn(turn: { command: string; stdin: string }, cwd: string): Promise
     const child = spawn('sh', ['-c', turn.command], { cwd, stdio: ['pipe', 'inherit', 'inherit'] })
     child.on('error', () => done(127))
     child.on('close', (code) => done(code ?? 1))
+    // @@@ the exit code is the verdict, not the pipe - a harness that takes the prompt and closes stdin, or
+    // that exits before reading it at all (a rejected credential, a bad flag), makes this write EPIPE. That is
+    // information about the pipe, not about the round: an unhandled EPIPE here would abort the whole flat and
+    // throw away every converged round before it, where the exit code turns the same event into one reported
+    // failed round the loop can measure and continue past.
+    child.stdin.on('error', () => { /* handled by the close code above */ })
     child.stdin.end(turn.stdin)
   })
 }
@@ -111,14 +119,21 @@ export function profileFiles(files: readonly string[]): FlatProfile {
   }
   const sourceExtensions = [...byExtension.keys()].sort()
   const languages = [...new Set(sourceExtensions.map((extension) => SOURCE_EXTENSIONS[extension]))].sort()
-  // A root earns governance by holding a real share of the source. The threshold keeps one stray script in
-  // `scripts/` from widening the governed set to the whole repository.
-  const floor = Math.max(1, Math.floor(fileCount * 0.02))
-  const governedRoots = [...byRoot.entries()]
-    .filter(([, count]) => count >= floor)
-    .map(([root]) => root)
-    .sort()
-  return { sourceExtensions, governedRoots: governedRoots.includes('.') ? ['.'] : governedRoots, languages, fileCount }
+  // A root earns governance by holding a real SHARE of the source, and the repository root earns it the same
+  // way as any other. Without that, one top-level packaging script (`setup.py`) qualifies the root, the root
+  // subsumes every sibling, and a library flat silently takes on its whole test and docs tree. The share is
+  // deliberately coarse — the emitted config is the user's to correct, and under-claiming costs one edit
+  // while over-claiming costs rounds spent specifying files nobody wanted specified.
+  const floor = Math.max(2, Math.ceil(fileCount * 0.05))
+  const qualified = [...byRoot.entries()].filter(([, count]) => count >= floor).map(([root]) => root).sort()
+  const governedRoots = qualified.includes('.') ? ['.'] : qualified
+  // Report the count of what will actually BE governed, not of everything recognised: a file under a root that
+  // did not qualify is never gated, and counting it here would put the report permanently at odds with the
+  // gate's own denominator.
+  const governedCount = governedRoots.includes('.')
+    ? fileCount
+    : governedRoots.reduce((total, root) => total + (byRoot.get(root) ?? 0), 0)
+  return { sourceExtensions, governedRoots, languages, fileCount: governedCount }
 }
 
 // The gate reading. `spex spec lint --json` exits non-zero when it found errors — that IS the reading, not a
@@ -187,7 +202,19 @@ function repairPrompt(gate: FlatGate, doctor: string, coverageFloor: number): st
     if (gate.uncoveredFiles.length > 60) lines.push(`  … and ${gate.uncoveredFiles.length - 60} more; run \`spex spec lint\` for the rest.`)
   }
   if (doctor.trim()) {
-    lines.push(``, `SPEC HEALTH — nodes reading as mechanics dumps rather than intent, and parents fanned too wide:`, ``, doctor.trim())
+    lines.push(
+      ``,
+      `SPEC HEALTH — nodes reading as mechanics dumps rather than intent, and parents fanned too wide:`,
+      ``,
+      doctor.trim(),
+      ``,
+      // `spex init` seeds .plugins with SpexCode's own workflow nodes, whose bodies ARE the prompt text that
+      // gets materialized for the agent. Doctor measures them like any other node, so its findings name them —
+      // and a round spent "fixing" them would trim live product behaviour and specify nothing about this
+      // repository. The boundary belongs in the instruction, not in a fragile filter over doctor's prose.
+      `IGNORE any finding under \`.spec/*/.plugins/\`. Those are SpexCode's own seeded workflow nodes, not`,
+      `your work, and their bodies are prompt text that must not be trimmed. Fix only nodes you wrote.`,
+    )
   }
   lines.push(``, `Commit nothing; the driver commits.`)
   return lines.join('\n')
@@ -247,6 +274,10 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
   if (!Number.isInteger(rounds) || rounds < 1) throw new Error('spex flat: --rounds must be a positive integer')
   if (!Number.isFinite(coverageFloor) || coverageFloor < 0 || coverageFloor > 100) throw new Error('spex flat: --coverage must be between 0 and 100')
 
+  // Resolve the agent BEFORE touching the network or the disk: a typo'd launcher name is knowable up front,
+  // and discovering it after cloning would charge a fetch for a mistake that cost nothing to catch.
+  const { harness, cmd, name: launcherName } = resolveTurnHarness(options.launcher, process.cwd())
+
   const name = basename(options.target.replace(/\.git$/, '').replace(/\/+$/, '')) || 'flat'
   const out = resolve(options.out ?? `${name}.flat`)
   const repo = join(out, 'repo')
@@ -286,11 +317,13 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
   const existing = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {}
   writeFileSync(configPath, `${JSON.stringify({
     ...existing,
+    // Name the graph after the repository it reads, not after Flatcode's checkout directory — otherwise every
+    // flat in the world renders under the title "repo".
+    dashboard: { title: name, ...(existing.dashboard ?? {}) },
     lint: { ...(existing.lint ?? {}), governedRoots: profile.governedRoots, sourceExtensions: profile.sourceExtensions },
   }, null, 2)}\n`)
 
   // --- seed ----------------------------------------------------------------------------------------------
-  const { harness, cmd, name: launcherName } = resolveTurnHarness(options.launcher, process.cwd())
   const init = await spex(['init', '--harness', harness.dispatchId], repo)
   if (init.code !== 0) throw new Error(`spex flat: seeding .spec failed — ${init.stderr.trim() || init.stdout.trim()}`)
   await commit(repo, 'flatcode: profile and seed .spec')
@@ -322,10 +355,108 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
   return result
 }
 
+// @@@ publicShellDir - the graph-only dashboard build, bundled-or-monorepo, mirroring gateway.ts's
+// resolveDistDir. The shell is a build artifact of SpexCode and identical for every flat; only the payload
+// beside it is per-repository. That split is why a flat renders with no backend and no build step of its own.
+export function publicShellDir(): string {
+  const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
+  const bundled = join(pkgRoot, 'dashboard-public-dist')
+  if (existsSync(join(bundled, 'index.html'))) return bundled
+  return join(pkgRoot, '..', 'spec-dashboard', 'dist-public')
+}
+
+// The one spec-root directory under .spec. `spex init` names it for the project, so it is `project` in a
+// fresh flat and `spexcode` in this repository — deriving it beats hardcoding either.
+function specRoot(repo: string): string {
+  const entries = readdirSync(join(repo, '.spec'), { withFileTypes: true }).filter((entry) => entry.isDirectory())
+  if (entries.length !== 1) throw new Error(`spex flat site: expected exactly one spec root under .spec, found ${entries.length}`)
+  return entries[0].name
+}
+
+export async function flatSite(flatDir: string, log: (line: string) => void = console.log): Promise<{ site: string; nodes: number }> {
+  const out = resolve(flatDir)
+  const recordPath = join(out, 'flat.json')
+  if (!existsSync(recordPath)) throw new Error(`spex flat site: ${out} is not a flat — no flat.json. Run \`spex flat new\` first.`)
+  const record = JSON.parse(readFileSync(recordPath, 'utf8')) as { source: string; revision: string; gate?: { coverage?: number; governed?: number } }
+  const repo = join(out, 'repo')
+  const site = join(out, 'site')
+
+  const shell = publicShellDir()
+  if (!existsSync(join(shell, 'index.html'))) {
+    throw new Error(
+      `spex flat site: no graph-only dashboard build at ${shell}. In a source checkout, build it once with ` +
+      `\`npm run build:public\`; an installed spexcode ships it.`,
+    )
+  }
+  mkdirSync(site, { recursive: true })
+  cpSync(join(shell, 'index.html'), join(site, 'index.html'))
+  cpSync(join(shell, 'assets'), join(site, 'assets'), { recursive: true })
+
+  const graphPath = join(site, 'public-graph.json')
+  const graph = await spex(['graph', '--public', '--out', graphPath, '--content-dir', join(site, 'specs')], repo)
+  if (graph.code !== 0) throw new Error(`spex flat site: building the public graph failed — ${graph.stderr.trim() || graph.stdout.trim()}`)
+  const payload = JSON.parse(readFileSync(graphPath, 'utf8')) as { revision: string; nodes: unknown[] }
+
+  const root = specRoot(repo)
+  const archiveName = `${root}.spec.zip`
+  const archive = await run('git', ['archive', '--format=zip', '--prefix=.spec/', `--output=${join(site, archiveName)}`, `${payload.revision}:.spec/${root}`], repo)
+  if (archive.code !== 0) throw new Error(`spex flat site: archiving the spec tree failed — ${archive.stderr.trim()}`)
+
+  const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
+  const asset = (path: string) => { const bytes = readFileSync(join(site, path)); return { path, bytes: bytes.byteLength, sha256: sha256(bytes) } }
+  const graphAsset = asset('public-graph.json')
+  const archiveAsset = { ...asset(archiveName), name: archiveName }
+  const documents = readdirSync(join(site, 'specs')).filter((name) => name.endsWith('.json')).sort()
+
+  // The About panel's facts are the flat's own reading. A visitor should be able to see, without leaving the
+  // page, that this tree was produced by a measured conversion and how complete that conversion actually was —
+  // publishing the graph while hiding its coverage would present a partial flat as a finished one.
+  const metadata = {
+    schema: 'spexcode.public-spec-site/v1',
+    // A repository link is offered only when the source is one a browser can follow. A local path rendered as
+    // a link would promise a destination that does not exist for anyone but the person who ran the flat.
+    publication: { id: root, ...(isUrl(record.source) ? { repository: { url: record.source } } : {}) },
+    about: {
+      title: `About this flat`,
+      summary: 'A static, read-only view of a specification graph produced by Flatcode from the repository named below. It exposes committed spec intent and relationships only; sessions, issues, evaluations, settings, and write routes are absent.',
+      facts: [
+        { label: 'Source', value: record.source },
+        // The panel renders the release revision itself; a second one here would read as two different commits.
+        { label: 'Source revision', value: record.revision.slice(0, 12) },
+        { label: 'Coverage', value: `${record.gate?.coverage ?? 0}% of ${record.gate?.governed ?? 0} governed source files` },
+      ],
+    },
+    release: { revision: payload.revision, graph: graphAsset, archive: archiveAsset },
+  }
+  const metadataBytes = Buffer.from(`${JSON.stringify(metadata, null, 2)}\n`)
+  writeFileSync(join(site, 'public-graph-meta.json'), metadataBytes)
+
+  writeFileSync(join(site, 'public-spec-release.json'), `${JSON.stringify({
+    schema: 'spexcode.public-spec-release/v1',
+    revision: payload.revision,
+    publication: metadata.publication,
+    graph: graphAsset,
+    metadata: { path: 'public-graph-meta.json', bytes: metadataBytes.byteLength, sha256: sha256(metadataBytes) },
+    archive: archiveAsset,
+    documents: documents.map((name) => asset(`specs/${name}`)),
+  }, null, 2)}\n`)
+
+  log(`site: ${payload.nodes.length} nodes at ${payload.revision.slice(0, 12)} → ${site}`)
+  return { site, nodes: payload.nodes.length }
+}
+
 export async function runFlat(argv: readonly string[]): Promise<number> {
   const sub = argv[0]
   const { commandHelp } = await import('./help.js')
   if (sub === undefined || sub === '--help' || sub === '-h') { console.log(commandHelp('flat')); return sub === undefined ? 0 : 0 }
+  if (sub === 'site') {
+    const dir = argv[1]
+    if (!dir || argv.length !== 2) { console.error('usage: spex flat site <flat-dir>'); return 2 }
+    try {
+      await flatSite(dir)
+      return 0
+    } catch (error) { console.error((error as Error).message); return 1 }
+  }
   if (sub !== 'new') {
     console.error(`spex flat: unknown subcommand "${sub}". Run \`spex flat\` for the command map.`)
     return 2

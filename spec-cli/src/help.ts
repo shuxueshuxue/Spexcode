@@ -196,9 +196,10 @@ consume the same visible diagnosis.`,
     see: 'spex spec lint (deterministic graph/contract gate) · spex materialize (repair delivery artifacts)',
   },
   flat: {
-    line: 'flat new|site         Flatcode — flatten any repository into a converged .spec tree, then preview it',
+    line: 'flat new|site|gallery Flatcode — flatten any repository into a converged .spec tree, then preview it',
     body: `Usage: spex flat new <repo-url|path> [--out <dir>] [--launcher <name>] [--rounds <n>] [--coverage <pct>]
        spex flat site <flat-dir>
+       spex flat gallery --out <dir> <flat-dir>…
 
 Clones the target, works out what counts as its source, seeds .spec, then runs an agent round after round
 until the spec tree passes a gate: zero \`spex spec lint\` errors, coverage at or above --coverage (default
@@ -218,7 +219,13 @@ turn; a launcher whose harness has none is refused by name rather than quietly s
 \`spex flat site <flat-dir>\` writes <flat-dir>/site — the graph-only dashboard over that flat's spec tree,
 plus the node documents, the .spec archive, and a release manifest with a SHA-256 per file. It is plain
 static files with no backend, so any static host serves it and a partial flat still previews (its About
-panel carries the coverage, so a partial tree never reads as a finished one).`,
+panel carries the coverage, so a partial tree never reads as a finished one). The directory is relocatable:
+it names everything relative to itself, so the same bytes serve from a domain root or any path prefix.
+
+\`spex flat gallery --out <dir> <flat-dir>…\` assembles many flats into one static tree — each flat's site at
+<out>/<owner>/<repo>/ (the slug comes from the source it read, not from your --out name), a self-contained
+index page listing them, and gallery.json naming every entry with a SHA-256 of its release manifest, so what
+landed on a host can be checked against what was built.`,
     see: 'spex guide spec (the authoring format the rounds follow) · spex spec lint · spex doctor',
   },
   uninstall: {

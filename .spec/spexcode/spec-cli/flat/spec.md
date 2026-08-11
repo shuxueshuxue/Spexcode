@@ -95,7 +95,8 @@ more than one flat.
 Emitting that exact shape is deliberate: the hosted gallery and self-serve conversion that would follow have
 a transport specified already, and this command must not force it to be redesigned around a private format.
 
-Flatcode is **not** the hosting. It does not deploy, does not own a subdomain, does not authenticate anyone,
-and does not run anything on a server. Those are separate surfaces with their own trust boundaries, and
-folding them in here would put an account system inside a command that today only needs a directory to write
-into.
+This command is **not** the hosting. It does not deploy, does not own a subdomain, and does not authenticate
+anyone. Carrying many flats on one host is [[gallery]]'s concern, and it stays a separate surface for a
+reason: it has a trust boundary this command does not — a public path derived from an attacker-controllable
+source string — and folding it in would put that boundary inside a command whose only side effect today is
+a directory it was told to write.

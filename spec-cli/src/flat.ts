@@ -493,6 +493,158 @@ export async function flatSite(flatDir: string, log: (line: string) => void = co
   return { site, nodes: payload.nodes.length }
 }
 
+// @@@ gallerySlug - the path a flat is served at. Derived from the SOURCE the flat read, never from the
+// directory Flatcode happened to write into: two people flattening the same repository must land on the same
+// slug, and a local `--out` name is an accident of one machine.
+export function gallerySlug(source: string): string {
+  const url = source.replace(/\.git$/, '').replace(/\/+$/, '')
+  const forge = /^(?:https?:\/\/|git@|ssh:\/\/|git:\/\/)[^/:]+[:/](.+)$/.exec(url)
+  const raw = forge ? forge[1] : basename(url)
+  // Sanitize per SEGMENT, not over the whole string. The slug becomes a directory under the gallery root and
+  // a path on a public host, and the source it comes from is attacker-controllable; treating it as one string
+  // turns `../../etc/passwd` into `/-/etc/passwd`, which is absolute. Splitting first means a traversal
+  // segment cannot survive as one: `..` sanitizes to empty and is dropped, as is any empty or dot segment.
+  const segments = raw.split('/')
+    .map((segment) => segment.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, ''))
+    .filter((segment) => segment && segment !== '.' && segment !== '..')
+  return segments.join('/') || 'flat'
+}
+
+export type GalleryEntry = {
+  slug: string
+  source: string
+  revision: string
+  coverage: number
+  governed: number
+  nodes: number
+  passed: boolean
+}
+
+const escapeHtml = (text: string) =>
+  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+// The index is hand-written rather than another dashboard build: it is a LIST, not a graph, and giving it the
+// graph bundle would ship a megabyte of react-flow to render eight links. Self-contained and theme-aware for
+// the same reason every published artifact here is — it must survive on a static host with no build step.
+export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
+  const cards = entries.map((entry) => `      <a class="card" href="./${escapeHtml(entry.slug)}/">
+        <h2>${escapeHtml(entry.slug)}</h2>
+        <p class="src">${escapeHtml(entry.source)}</p>
+        <dl>
+          <div><dt>coverage</dt><dd>${entry.coverage}%${entry.passed ? '' : ' <span class="partial">partial</span>'}</dd></div>
+          <div><dt>governed</dt><dd>${entry.governed} files</dd></div>
+          <div><dt>nodes</dt><dd>${entry.nodes}</dd></div>
+          <div><dt>revision</dt><dd><code>${escapeHtml(entry.revision.slice(0, 12))}</code></dd></div>
+        </dl>
+      </a>`).join('\n')
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flatcode — software flattened into specs</title>
+<!-- Inlined, because a static host with no favicon answers a 404 on every single visit. The mark is the
+     name: a solid body above, flattened to a line below. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232f6f4f'/%3E%3Crect x='8' y='7' width='16' height='9' rx='1.5' fill='%23fff' opacity='.9'/%3E%3Crect x='6' y='21' width='20' height='3' rx='1.5' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f7f7f5; --fg: #1a1a19; --muted: #6b6b66; --line: #dedcd6; --card: #fff; --accent: #2f6f4f;
+  }
+  :root:not([data-theme="light"]) { }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #17181a; --fg: #e6e6e3; --muted: #9a9a94; --line: #2c2e31; --card: #1e1f22; --accent: #7fbf9a;
+  } }
+  :root[data-theme="dark"] {
+    --bg: #17181a; --fg: #e6e6e3; --muted: #9a9a94; --line: #2c2e31; --card: #1e1f22; --accent: #7fbf9a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  main { max-width: 60rem; margin: 0 auto; padding: 3rem 1.25rem 5rem; }
+  header h1 { font-size: 1.5rem; margin: 0 0 .35rem; letter-spacing: -.01em; }
+  header p { color: var(--muted); margin: 0 0 2.5rem; max-width: 42rem; }
+  .grid { display: grid; gap: .875rem; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
+  .card { display: block; padding: 1rem 1.1rem; background: var(--card); border: 1px solid var(--line);
+          border-radius: .5rem; color: inherit; text-decoration: none; }
+  .card:hover { border-color: var(--accent); }
+  .card h2 { font-size: .95rem; margin: 0 0 .2rem; color: var(--accent); }
+  .src { color: var(--muted); font-size: .78rem; margin: 0 0 .8rem; overflow-wrap: anywhere; }
+  dl { margin: 0; display: grid; gap: .15rem; }
+  dl div { display: flex; justify-content: space-between; gap: 1rem; font-size: .78rem; }
+  dt { color: var(--muted); }
+  dd { margin: 0; }
+  .partial { color: #b3762f; }
+  footer { margin-top: 3rem; color: var(--muted); font-size: .78rem; }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Flatcode</h1>
+      <p>Software flattened into specifications. Each entry is a read-only projection of one repository's
+         <code>.spec</code> tree, produced by an agent and held to a measured gate: zero lint errors and a
+         coverage floor over the repository's governed source.</p>
+    </header>
+    <div class="grid">
+${cards}
+    </div>
+    <footer>Built with <a href="https://github.com/shuxueshuxue/spexcode">SpexCode</a> — <code>spex flat new &lt;repo&gt;</code>.</footer>
+  </main>
+</body>
+</html>
+`
+}
+
+export async function flatGallery(out: string, flatDirs: readonly string[], log: (line: string) => void = console.log): Promise<GalleryEntry[]> {
+  if (!flatDirs.length) throw new Error('spex flat gallery: name at least one flat directory')
+  const target = resolve(out)
+  mkdirSync(target, { recursive: true })
+  const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
+  const entries: GalleryEntry[] = []
+  const receipts: { slug: string; release: string; sha256: string }[] = []
+  for (const dir of flatDirs) {
+    const flat = resolve(dir)
+    const recordPath = join(flat, 'flat.json')
+    if (!existsSync(recordPath)) throw new Error(`spex flat gallery: ${flat} is not a flat — no flat.json`)
+    const record = JSON.parse(readFileSync(recordPath, 'utf8')) as {
+      source: string; revision: string; passed?: boolean; gate?: { coverage?: number; governed?: number }
+    }
+    const site = join(flat, 'site')
+    if (!existsSync(join(site, 'index.html'))) {
+      throw new Error(`spex flat gallery: ${flat} has no site — run \`spex flat site ${dir}\` first`)
+    }
+    const slug = gallerySlug(record.source)
+    const dest = join(target, slug)
+    mkdirSync(dest, { recursive: true })
+    cpSync(site, dest, { recursive: true })
+    const graph = JSON.parse(readFileSync(join(dest, 'public-graph.json'), 'utf8')) as { nodes: unknown[] }
+    entries.push({
+      slug,
+      source: record.source,
+      revision: record.revision,
+      coverage: record.gate?.coverage ?? 0,
+      governed: record.gate?.governed ?? 0,
+      nodes: graph.nodes.length,
+      passed: record.passed === true,
+    })
+    const release = join(dest, 'public-spec-release.json')
+    receipts.push({ slug, release: `${slug}/public-spec-release.json`, sha256: sha256(readFileSync(release)) })
+    log(`  ${slug} — ${graph.nodes.length} nodes, ${record.gate?.coverage ?? 0}% of ${record.gate?.governed ?? 0} governed`)
+  }
+  entries.sort((a, b) => a.slug.localeCompare(b.slug))
+  receipts.sort((a, b) => a.slug.localeCompare(b.slug))
+  writeFileSync(join(target, 'index.html'), galleryIndexHtml(entries))
+  // The manifest is what makes a publish auditable: it names every entry and hashes each flat's own release
+  // manifest, so what landed on a host can be compared with what was built without trusting the transport.
+  writeFileSync(join(target, 'gallery.json'), `${JSON.stringify({
+    schema: 'spexcode.flat-gallery/v1',
+    entries: entries.map((entry) => ({ ...entry })),
+    releases: receipts,
+  }, null, 2)}\n`)
+  log(`gallery: ${entries.length} flat(s) → ${target}`)
+  return entries
+}
+
 export async function runFlat(argv: readonly string[]): Promise<number> {
   const sub = argv[0]
   const { commandHelp } = await import('./help.js')
@@ -502,6 +654,17 @@ export async function runFlat(argv: readonly string[]): Promise<number> {
     if (!dir || argv.length !== 2) { console.error('usage: spex flat site <flat-dir>'); return 2 }
     try {
       await flatSite(dir)
+      return 0
+    } catch (error) { console.error((error as Error).message); return 1 }
+  }
+  if (sub === 'gallery') {
+    const rest = argv.slice(1)
+    const at = rest.indexOf('--out')
+    const out = at >= 0 ? rest[at + 1] : undefined
+    const dirs = rest.filter((token, index) => token !== '--out' && !(at >= 0 && index === at + 1))
+    if (!out || !dirs.length) { console.error('usage: spex flat gallery --out <dir> <flat-dir>…'); return 2 }
+    try {
+      await flatGallery(out, dirs)
       return 0
     } catch (error) { console.error((error as Error).message); return 1 }
   }

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { confirmProfile, gatePassed, profileFiles, readGate, type FlatGate } from './flat.js'
+import { confirmProfile, galleryIndexHtml, gallerySlug, gatePassed, profileFiles, readGate, type FlatGate } from './flat.js'
 import { HARNESSES, harnessById } from './harness.js'
 
 test('profiling governs tracked source and ignores what no spec could claim', () => {
@@ -122,6 +122,48 @@ test('convergence needs both halves — a clean tree that is thin does not pass'
 
 test('an unparseable lint report is a failure, never a silent zero', () => {
   assert.throws(() => readGate('this is not json'))
+})
+
+test('a gallery slug comes from the source, so the same repository always lands in the same place', () => {
+  assert.equal(gallerySlug('https://github.com/psf/requests'), 'psf/requests')
+  assert.equal(gallerySlug('https://github.com/psf/requests.git'), 'psf/requests')
+  assert.equal(gallerySlug('git@github.com:charmbracelet/lipgloss.git'), 'charmbracelet/lipgloss')
+  assert.equal(gallerySlug('https://dev.aminer.cn/codegeex/z-code.git'), 'codegeex/z-code')
+  // A local path has no owner, so it slugs to its own name — the --out directory never decides.
+  assert.equal(gallerySlug('/home/someone/My Project/'), 'my-project')
+})
+
+test('a slug can never escape the gallery root', () => {
+  // The slug becomes a path on a public host. A source that walks upward, hides a segment, or names an
+  // absolute location must not be able to write outside <out>/ or serve from somewhere it was not given.
+  for (const hostile of [
+    'https://evil.test/../../etc/passwd',
+    'https://evil.test/a/../../b',
+    '/../../../etc/shadow',
+    'https://evil.test/%2e%2e/x',
+    'https://evil.test/.ssh/authorized_keys',
+  ]) {
+    const slug = gallerySlug(hostile)
+    assert.ok(!slug.split('/').includes('..'), `${hostile} produced a traversing slug: ${slug}`)
+    assert.ok(!slug.startsWith('/'), `${hostile} produced an absolute slug: ${slug}`)
+    assert.match(slug, /^[a-z0-9][a-z0-9/_-]*$/, `${hostile} produced an unsafe slug: ${slug}`)
+    assert.ok(!slug.includes('//'), `${hostile} produced an empty segment: ${slug}`)
+  }
+  // The traversal segments are dropped, not merely rewritten into something that still looks like a path.
+  assert.equal(gallerySlug('https://evil.test/../../etc/passwd'), 'etc/passwd')
+})
+
+test('the gallery index escapes what it prints and links relatively', () => {
+  const html = galleryIndexHtml([
+    { slug: 'psf/requests', source: 'https://github.com/psf/requests', revision: 'abcdef0123456789', coverage: 100, governed: 21, nodes: 46, passed: true },
+    { slug: 'x/y', source: '<script>alert(1)</script>', revision: 'deadbeefcafe', coverage: 62, governed: 80, nodes: 9, passed: false },
+  ])
+  assert.ok(html.includes('href="./psf/requests/"'), 'entry link must be relative — the gallery itself may sit under a prefix')
+  assert.ok(!html.includes('<script>alert(1)</script>'), 'a source string reached the page unescaped')
+  assert.ok(html.includes('&lt;script&gt;'))
+  // A flat that did not converge must say so where someone choosing what to read can see it.
+  assert.ok(html.includes('partial'))
+  assert.ok(html.includes('abcdef012345') && !html.includes('abcdef0123456789'), 'revision is shown short')
 })
 
 test('every harness declaring a one-shot turn carries the prompt exactly one way', () => {

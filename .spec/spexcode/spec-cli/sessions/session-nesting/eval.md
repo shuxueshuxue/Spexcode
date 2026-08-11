@@ -60,8 +60,8 @@ scenarios:
       detach from the CHILD's right-click menu while intercepting the manager write, and record the target
       state and each request body.
     expected: >-
-      Dragging starts only after motion and the original row dims while a fixed, full session-row ghost follows
-      the pointer. A selected long-title source and its ghost have the same row element/state, the same three
+      Dragging starts only after motion and the original row dims while a fixed, 75%-scale full session-row ghost
+      follows the pointer with a matching scaled pointer anchor. A selected long-title source and its ghost have the same row element/state, the same three
       visible headline lines, and the same right-floated status marker: only the first line gives that marker
       space while later lines recover full width. A valid TARGET is visibly highlighted even beneath that ghost
       and receives exactly

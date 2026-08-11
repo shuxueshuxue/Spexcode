@@ -30,7 +30,7 @@ import RichText from './RichText.js'
 import { useTransientNotice } from './TransientNotice.jsx'
 
 const isHeadlessSession = (session) => session?.capabilities?.headless === true
-const SESSION_DRAG_GHOST_SCALE = 0.5
+const SESSION_DRAG_GHOST_SCALE = 0.75
 
 // the attach affordance — the shared `paperclip` glyph ([[icon-system]], currentColor stroke, so it
 // inherits the .si-attach muted→blue hover), NOT a color emoji. BusyGlyph is the in-flight (uploading)
@@ -1780,6 +1780,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
             inert
             style={{
               width: sessionDrag.width,
+              '--si-session-drag-ghost-scale': SESSION_DRAG_GHOST_SCALE,
               left: sessionDrag.x - sessionDrag.offsetX * SESSION_DRAG_GHOST_SCALE,
               top: sessionDrag.y - sessionDrag.offsetY * SESSION_DRAG_GHOST_SCALE,
             }}

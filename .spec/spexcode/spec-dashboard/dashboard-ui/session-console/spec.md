@@ -78,8 +78,8 @@ full-row ghost, dims the original, and highlights a valid receiving parent; a ne
 a top-level drop zone. The ghost is the same console tree-row presentation as its source, derived again from
 the current forest item rather than from a hand-copied appearance record: selection reveal, headline line boxes,
 right-side status marker, nesting lead, fold pod, and select checkbox therefore retain their exact internal
-layout. To keep a selected row's expanded headline from covering the receiving object, the pointer-owned ghost
-is rendered at **50% of the source's visual size**, with its pointer anchor adjusted for that scale. Only the
+layout. To keep a selected row's expanded headline readable without covering the receiving object, the pointer-owned ghost
+is rendered at **75% of the source's visual size**, with its pointer anchor adjusted for that scale. Only the
 wrapper's semantics differ — the source is an interactive button while the pointer-owned ghost is inert.
 The gesture is deliberately ordinary pointer drag rather than a tiny dedicated handle: the row itself is what
 will move, so the feedback must visibly be that row. Right-click keeps the complementary

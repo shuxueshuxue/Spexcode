@@ -220,7 +220,7 @@ try {
   assert.equal(dragLayout.source.className, dragLayout.ghost.className, 'the ghost and source retain the same focused row state')
   assert.equal(dragLayout.source.markerFloat, 'right', 'a focused source reserves the status mark on its first line')
   assert.equal(dragLayout.ghost.markerFloat, 'right', 'the ghost keeps the focused source marker rule')
-  assert.ok(Math.abs(dragLayout.visualScale - 0.5) < 0.001, 'the drag ghost is half the source row size')
+  assert.ok(Math.abs(dragLayout.visualScale - 0.75) < 0.001, 'the drag ghost is 75% of the source row size')
   assert.equal(dragLayout.source.lines.length, 3, 'the focused source exposes three visible headline lines')
   assert.equal(dragLayout.ghost.lines.length, dragLayout.source.lines.length, 'the ghost exposes the same visible headline line count')
   assert.ok(Math.max(...dragLayout.source.lines.slice(1)) > dragLayout.source.lines[0], 'the source lets later lines grow past the marker-reserved first line')

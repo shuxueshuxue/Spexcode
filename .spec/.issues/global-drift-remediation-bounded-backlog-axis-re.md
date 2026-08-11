@@ -328,3 +328,8 @@ SpexCode dashboard governance grouping is landed on main at bd0f57c4b after sync
 ZCode delivery remains deliberately local, not landed remotely. codex/swarm-mr-staging at 74790db1c is a clean fast-forward candidate over local gitlab/staging d7c613590 (19 ahead, 0 behind). Verification on that exact local branch passed lint with 0 errors, typecheck, watcher lifecycle tests 2/2, and SpecMap tests 11/11. The standing instruction is no push, MR, or remote-ref mutation; therefore these verified commits remain a draft awaiting explicit human landing authorization. Treat fast-forward feasibility and landing authority as separate facts.
 
 The Decision 152 .plugins cross-repository graph-contract log remains awaiting a human choice; no source or drift-standard change has been made for it.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-11T01:59:15.947Z -->
+Correction to the ZCode landing checkpoint. The reported 19-ahead / 0-behind relation is only against the local cached ref refs/remotes/gitlab/staging at d7c613590, whose remote configuration no longer exists. It is not evidence about live GitLab staging. The only configured remote is origin; the attempted gitlab dry-run contacted nothing and made no remote change. Because fetch is prohibited, current live staging ancestry is unknown.
+
+Retained state: codex/swarm-mr-staging at 74790db1c is a clean, locally verified draft. It awaits explicit human authorization before any push, MR, fetch, or remote-ref mutation. Do not read local fast-forward feasibility as landing approval or as proof of current remote ancestry.

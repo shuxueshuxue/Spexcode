@@ -14,6 +14,7 @@ import { navigate, routeHash, useRoute } from './route.js'
 import { addressHash, detailBackHash, graphNodeAddress } from './address.js'
 import { Icon } from './icons.jsx'
 import IssueLabels from './IssueLabels.jsx'
+import { useLaunchers } from './launch.js'
 
 // The Issues surface ([[issues-view]]): GitHub-style pages over ONE route family, all wearing the shared
 // [[review-chrome]]. `#/issues` is the LIST page — the merged local+forge list (store-tagged, API
@@ -369,9 +370,10 @@ function NewIssuePage({ specs, sessions, stores, onCreated }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const taRef = useRef(null)
+  const { launchers } = useLaunchers()
   // on a PAGE the menu opens downward under the caret line — no pop-out boundary to clear, so no `up`/
   // `fixedAbove` overlay geometry ([[mentions]]).
-  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions })
+  const ac = useMentionAutocomplete({ inputRef: taRef, value: body, setValue: setBody, specs, sessions, launchers })
   useEffect(() => {
     if (!stores.some((s) => s.id === store)) setStore(stores[0]?.id || 'local')
   }, [stores, store])

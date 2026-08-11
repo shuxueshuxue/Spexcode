@@ -403,6 +403,23 @@ check('the compose PAGE opens its menu DOWNWARD, fully on screen', down.below &&
 await v.keyboard.press('Escape')
 await v.fill('.fv-new-compose .fv-textarea', '')
 await v.click('.fv-new-compose .fv-textarea')
+await v.keyboard.type('@')
+await v.waitForSelector('.fv-new-compose .mention-menu')
+const pageNewRow = await v.locator('.fv-new-compose .mention-item.new', { hasText: '@new' }).first()
+await pageNewRow.click()
+await v.waitForSelector('.fv-new-compose .mention-menu')
+const pageLaunchers = await v.evaluate(() => ({
+  value: document.querySelector('.fv-new-compose .fv-textarea').value,
+  rows: [...document.querySelectorAll('.fv-new-compose .mention-item')].map((el) => el.textContent),
+}))
+check('the compose page opens the launcher menu after accepting @new', pageLaunchers.value.includes('@new:') && pageLaunchers.rows.length >= 1, JSON.stringify(pageLaunchers))
+await v.keyboard.press('Enter')
+await settle(v, 400)
+const pageLauncherPick = await v.inputValue('.fv-new-compose .fv-textarea')
+check('the compose page writes the selected @new:<launcher> token', /@new:[\p{L}\p{N}_.-]+ $/u.test(pageLauncherPick), `"${pageLauncherPick}"`)
+await v.keyboard.press('Escape')
+await v.fill('.fv-new-compose .fv-textarea', '')
+await v.click('.fv-new-compose .fv-textarea')
 await v.keyboard.type('[[issues-vi')
 await v.waitForSelector('.fv-new-compose .mention-menu')
 await v.keyboard.press('Enter')

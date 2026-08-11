@@ -298,12 +298,10 @@ const browser = await chromium.launch({ executablePath: CHROMIUM, headless: true
   await video.saveAs(join(OUT, 'B-toolbar.webm'))
 }
 
-async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme = 'minimal', status = 'working', liveness = 'online', proposal, lifecycle, archived = false, evalMode = 'mixed', surfaceFile = false, reviewEpochs = [1] } = {}) {
+async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme = 'minimal', status = 'working', liveness = 'online', proposal, lifecycle, archived = false, evalMode = 'mixed', surfaceFile = false } = {}) {
   let evalReads = 0
   let mergeDispatches = 0
-  const mergeKeys = []
-  const mergeBodies = []
-  let reviewReads = 0
+  const mergeRequests = []
   const context = await browser.newContext({ viewport: { width, height: 760 } })
   await context.addInitScript(({ listWidth, lang, theme }) => {
     localStorage.setItem('spex.siListWidth', String(listWidth))
@@ -344,20 +342,13 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
     session.evalSummary = evalProjection(evalMode)
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(graph) })
   })
-  const branchHead = '1'.repeat(40), baseHead = '2'.repeat(40)
-  await page.route('**/api/sessions/*/review', async (route) => {
-    const reviewEpoch = reviewEpochs[Math.min(reviewReads++, reviewEpochs.length - 1)]
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ branchHead, baseHead, reviewEpoch }) })
-  })
   await page.route('**/api/sessions/*/merge', async (route) => {
-    const body = route.request().postDataJSON()
-    const key = route.request().headers()['idempotency-key']
-    if (!key || body?.expectedBranchHead !== branchHead || body?.expectedBaseHead !== baseHead || !Number.isSafeInteger(body?.expectedReviewEpoch)) {
-      await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ dispatched: false, error: 'missing reviewed authority' }) })
+    const request = { body: route.request().postData(), idempotencyKey: route.request().headers()['idempotency-key'] }
+    mergeRequests.push(request)
+    if (request.body || request.idempotencyKey) {
+      await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ dispatched: false, error: 'merge must be a plain intent' }) })
       return
     }
-    mergeKeys.push(key)
-    mergeBodies.push(body)
     mergeDispatches++
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ dispatched: true }) })
   })
@@ -373,7 +364,7 @@ async function fixturePage({ width = 1440, listWidth = 240, lang = 'en', theme =
   await page.goto(`${BASE}/#/sessions/${SESSION}`, { waitUntil: 'domcontentloaded' })
   await waitToolbar(page)
   await page.waitForTimeout(100)
-  return { context, page, evalReads: () => evalReads, mergeDispatches: () => mergeDispatches, mergeKeys: () => [...mergeKeys], mergeBodies: () => [...mergeBodies] }
+  return { context, page, evalReads: () => evalReads, mergeDispatches: () => mergeDispatches, mergeRequests: () => [...mergeRequests] }
 }
 
 // Exact 390px terminal pane: 922 viewport - 52 rail - 480 persisted list.
@@ -417,7 +408,7 @@ for (const lang of ['en', 'zh']) {
 }
 
 {
-  const { context, page, mergeDispatches, mergeKeys } = await fixturePage({ status: 'review', liveness: 'online', proposal: 'merge' })
+  const { context, page, mergeDispatches, mergeRequests } = await fixturePage({ status: 'review', liveness: 'online', proposal: 'merge' })
   const mergeButton = page.locator('.si-tool.merge')
   const dispatch = async () => {
     await Promise.all([
@@ -428,26 +419,8 @@ for (const lang of ['en', 'zh']) {
   }
   await dispatch()
   await dispatch()
-  const keys = mergeKeys()
-  check('merge retries reuse the reviewed declaration authority', mergeDispatches() === 2 && keys.length === 2 && keys[0] === keys[1], { dispatches: mergeDispatches(), keys })
-  await context.close()
-}
-
-{
-  const { context, page, mergeDispatches, mergeKeys, mergeBodies } = await fixturePage({ status: 'review', liveness: 'online', proposal: 'merge', reviewEpochs: [1, 2] })
-  const mergeButton = page.locator('.si-tool.merge')
-  const dispatch = async () => {
-    await Promise.all([
-      page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/merge') && response.status() === 200),
-      mergeButton.click(),
-    ])
-    await page.waitForFunction(() => !document.querySelector('.si-tool.merge')?.disabled)
-  }
-  await dispatch()
-  await dispatch()
-  const keys = mergeKeys(), bodies = mergeBodies()
-  check('merge refresh derives fresh reviewed authority', mergeDispatches() === 2 && keys.length === 2 && keys[0] !== keys[1]
-    && JSON.stringify(bodies.map((body) => body.expectedReviewEpoch)) === JSON.stringify([1, 2]), { dispatches: mergeDispatches(), keys, bodies })
+  const requests = mergeRequests()
+  check('merge dispatch stays a plain intent', mergeDispatches() === 2 && requests.length === 2 && requests.every((request) => !request.body && !request.idempotencyKey), { dispatches: mergeDispatches(), requests })
   await context.close()
 }
 

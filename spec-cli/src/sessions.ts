@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mk
 import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
-import { git, gitA, gitTry, isGitObjectId, repoRoot, mergeBaseDiff, mergeConflicts, withGitAbortSignal, type ReviewDiffFile } from '@spexcode/spec-core'
+import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, withGitAbortSignal, isGitObjectId, type ReviewDiffFile } from '@spexcode/spec-core'
 import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from '@spexcode/spec-core'
 import { adapterLoadedReferenceState, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
@@ -233,7 +233,7 @@ export type SessRec = {
   session: string; governed: boolean; worktreePath: string; branch: string | null
   node: string | null; title: string | null; name: string | null
   parent: string | null   // the spawning session's id ([[session-nesting]]); null for a top-level launch
-  status: Lifecycle; proposal: Proposal | null; merges: number; reviewEpoch: number; note: string | null
+  status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
   sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
   stopped: boolean       // explicit human stop; liveness metadata, never an agent-authored lifecycle value
   archived: boolean      // shelved by the human ([[archive]]) — only clean after coldProof is written
@@ -435,7 +435,6 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     session: raw.session_id, governed: !!raw.governed, worktreePath: raw.worktree_path || '', branch: raw.branch || null,
     node: raw.node || null, title: raw.title || null, name: raw.name || null, parent: raw.parent || null,
     status, proposal, merges: Number(raw.merges) || 0,
-    reviewEpoch: Number.isSafeInteger(raw.review_epoch) && raw.review_epoch! >= 0 ? raw.review_epoch! : 0,
     note: raw.note || null, sortKey, createdAt: Number(raw.createdAt) || 0,
     harness: raw.harness || 'claude',   // records written before the harness field default to claude
     harnessSessionId: raw.harness_session_id || null,
@@ -503,7 +502,6 @@ function writeRecord(rec: SessRec): void {
     status: rawLifecycleStatus(rec),
     proposal: rec.proposal ?? '',
     merges: rec.merges,
-    review_epoch: rec.reviewEpoch,
     note: rec.note ?? '',
     sortkey: rec.sortKey ?? '',
     createdAt: rec.createdAt,
@@ -2351,7 +2349,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           let rec: SessRec = {
             session: id, governed: true, worktreePath: path, branch,
             node: ref || null, title, name, parent: parent && parent !== id ? parent : null,
-            status: 'queued', proposal: null, merges: 0, reviewEpoch: 0, note: null, sortKey: null, createdAt: Date.now(),
+            status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
             harness: h.id, harnessSessionId: null, stopped: false, archived: false, coldProof: null, adapterRecovery: null, launcher: chosen.name,
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
             ...(base ? { base } : {}),
@@ -2593,14 +2591,9 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
     const rec = readLiveRecord(id)
     if (!rec) return false
     const proposal = status === 'awaiting' ? (opts.proposal ?? 'nothing') : null
-    // @@@ reviewEpoch - an explicit renewed merge declaration is new human-review authority even when its
-    // visible state and Git heads are unchanged. Its durable generation keeps a fresh request distinct from
-    // retrying the already accepted request for the prior declaration.
-    const reviewEpoch = status === 'awaiting' && proposal === 'merge' ? rec.reviewEpoch + 1 : rec.reviewEpoch
     writeRecord({
       ...rec, status,
       proposal,
-      reviewEpoch,
       note: opts.note ?? null,
     })
     return true
@@ -2710,9 +2703,6 @@ export type ReviewGates = {
 }
 export type ReviewPayload = {
   id: string; node: string | null; branch: string | null
-  branchHead: string         // immutable session-branch object whose committed review facts describe
-  baseHead: string           // immutable canonical-base object from the same ref snapshot
-  reviewEpoch: number        // durable awaiting+merge declaration generation that authorizes this review
   label: string              // the session's identity, derived ONCE via deriveLabel — the review surface renders THIS, never its own node||branch||id chain
   ahead: number              // commits the node branch is ahead of main
   dirtyNonRuntime: number    // uncommitted files excluding SpexCode's own runtime files
@@ -2805,7 +2795,7 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   // path is genuine work — this is just the total uncommitted count.
   const dirtyNonRuntime = statusOut.split('\n').filter(Boolean).map(porcelainPath).length
   return {
-    id, node: wt.rec.node, branch: wt.branch, branchHead, baseHead, reviewEpoch: wt.rec.reviewEpoch,
+    id, node: wt.rec.node, branch: wt.branch,
     label: deriveLabel({ id, name: wt.rec.name, node: wt.rec.node, title: wt.rec.title, branch: wt.branch }),
     ahead: Number(aheadOut.trim()) || 0,
     dirtyNonRuntime, diff,
@@ -2814,210 +2804,35 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
   }
 }
 
-// @@@ shAscii - a 7-bit ASCII shell word yielding EXACTLY these bytes. A dispatched prompt crosses a control
-// channel, the agent's own tool call, and a terminal before a shell parses it, and a byte above 0x7F can be
-// dropped, replaced by U+FFFD, or truncate the line at any of those hops — the measured field failure. Bytes
-// that are already safe ASCII stay literal (an ASCII repo's prompt is byte-identical to before); anything
-// else is rebuilt from POSIX `printf %b` octal escapes, taken from the RAW bytes with no normalization.
-function shAscii(value: string | Buffer): string {
-  const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value, 'utf8')
-  const safe = (b: number) => b >= 0x20 && b <= 0x7e
-  if (bytes.every(safe)) return shQuote(bytes.toString('latin1'))
-  let escaped = ''
-  for (const b of bytes) escaped += safe(b) && b !== 0x27 && b !== 0x5c ? String.fromCharCode(b) : `\\0${b.toString(8).padStart(3, '0')}`
-  return `"$(printf '%b' '${escaped}')"`
-}
-const hexBytes = (value: string | Buffer): string => (Buffer.isBuffer(value) ? value : Buffer.from(value, 'utf8')).toString('hex')
+const MERGE_PROMPT = `Merge your branch into main, then settle the session honestly.
 
-// @@@ mergePrompt - every gate states its own verdict, in ASCII. Two things were wrong with a bare `&&` chain
-// of `test`s. It is silent on BOTH outcomes, so an agent shown "no output" cannot tell a held gate from a
-// broken one and conservatively refuses to land forever; and it compared unicode ref/path bytes as shell
-// strings, which only works if every hop to the executor carried them intact. So each item now reports its
-// own actual-vs-expected value, only the whole conjunction emits the success token, and every value that can
-// carry a byte above 0x7F travels as hex (compared straight off the pipe, before any shell string layer) or
-// as a printf-escaped literal. The conjunction itself is unchanged: all five, resp. three, checks together.
-function mergePrompt(mainPath: string, worktreePath: string, worktreeTop: Buffer, branch: string, base: string, expectedBranchHead: string, expectedBaseHead: string, reason: string): string {
-  const mainQ = shQuote(mainPath)
-  const mainA = shAscii(mainPath), worktreeA = shAscii(worktreePath)
-  const refA = shAscii(`refs/heads/${branch}`), baseRefA = shAscii(`refs/heads/${base}`), baseA = shAscii(base)
-  const topHexQ = shQuote(hexBytes(worktreeTop)), refHexQ = shQuote(hexBytes(`refs/heads/${branch}`))
-  const reviewedQ = shQuote(expectedBranchHead), baseHeadQ = shQuote(expectedBaseHead)
-  const messageA = shAscii(`merge ${branch}: ${reason}`)
-  const hexPipe = `| tr -d '\\n' | od -An -tx1 | tr -d ' \\n'`
-  return `Merge your branch \`${branch}\` into \`${base}\`, then settle the session honestly. You know this work, so resolve any conflicts yourself — in YOUR OWN worktree, never in the shared ${base} checkout.\n\n` +
-    `0. Re-verify the REVIEWED generation BEFORE changing anything. All five checks must hold together, and the block SAYS SO: seeing \`REVIEWED_GENERATION_OK\` is the ONLY pass. A \`REVIEWED_GENERATION_FAIL <n>/<item>\` line — or no output at all — is a FAIL: STOP, report the stale review naming that item, and do not sync or land. (Detached HEAD, another checked-out branch, a moved/missing branch/base ref, or any OID outside the reviewed pair each surface as one of the five items.) Run the block AS WRITTEN — it is pure ASCII on purpose, and items 1 and 2 compare hex so a retyped or re-encoded copy cannot change what they mean:\n` +
-    `   wt=${worktreeA}; main_ck=${mainA}; ref=${refA}; base_ref=${baseRefA}\n` +
-    `   want_top=${topHexQ}; want_ref=${refHexQ}; want_reviewed=${reviewedQ}; want_base=${baseHeadQ}\n` +
-    `   g1=$(git -C "$wt" rev-parse --show-toplevel ${hexPipe}); test "$g1" = "$want_top" || echo "REVIEWED_GENERATION_FAIL 1/toplevel: hex [$g1] != [$want_top]"\n` +
-    `   g2=$(git -C "$wt" symbolic-ref --quiet HEAD ${hexPipe}); test "$g2" = "$want_ref" || echo "REVIEWED_GENERATION_FAIL 2/symbolic: hex [$g2] != [$want_ref]"\n` +
-    `   g3=$(git -C "$wt" rev-parse HEAD); test "$g3" = "$want_reviewed" || echo "REVIEWED_GENERATION_FAIL 3/wtHEAD: [$g3] != [$want_reviewed]"\n` +
-    `   g4=$(git -C "$main_ck" show-ref --verify --hash "$ref"); test "$g4" = "$want_reviewed" || echo "REVIEWED_GENERATION_FAIL 4/mainref: [$g4] != [$want_reviewed]"\n` +
-    `   g5=$(git -C "$main_ck" show-ref --verify --hash "$base_ref"); test "$g5" = "$want_base" || echo "REVIEWED_GENERATION_FAIL 5/baseref: [$g5] != [$want_base]"\n` +
-    `   test "$g1" = "$want_top" && test "$g2" = "$want_ref" && test "$g3" = "$want_reviewed" && test "$g4" = "$want_reviewed" && test "$g5" = "$want_base" && echo REVIEWED_GENERATION_OK\n` +
-    `1. Sync first, where you work: \`git merge ${base}\` INTO your branch, resolve every conflict here, and re-run what proves your work. The ${base} checkout is the fleet's ONE landing door — a merge that stops to ask about conflicts holds it for everyone.\n` +
-    `2. Freeze the TESTED result immediately before landing and merge that exact object, never a moving branch name. Same rules as step 0 — run it as written, and \`LANDING_MERGED <oid>\` is the ONLY evidence it landed; it prints only after all three guards held AND the merge itself succeeded:\n` +
-    `   wt=${worktreeA}; main_ck=${mainA}; ref=${refA}; base_br=${baseA}; msg=${messageA}; want_ref=${refHexQ}\n` +
-    `   candidate=$(git -C "$wt" rev-parse HEAD)\n` +
-    `   c1=$(git -C "$wt" symbolic-ref --quiet HEAD ${hexPipe}); test "$c1" = "$want_ref" || echo "LANDING_FAIL 1/symbolic: hex [$c1] != [$want_ref]"\n` +
-    `   c2=$(git -C "$main_ck" show-ref --verify --hash "$ref"); test "$c2" = "$candidate" || echo "LANDING_FAIL 2/mainref: [$c2] != [$candidate]"\n` +
-    `   c3=0; git -C "$main_ck" merge-base --is-ancestor "$base_br" "$candidate" || { c3=1; echo "LANDING_FAIL 3/ancestor: [$candidate] does not contain the base branch; go back to step 1"; }\n` +
-    `   test "$c1" = "$want_ref" && test "$c2" = "$candidate" && test "$c3" = 0 && git -C "$main_ck" merge --no-ff -m "$msg" "$candidate" && echo "LANDING_MERGED $candidate"\n` +
-    `   No \`LANDING_MERGED\` line means nothing landed: a \`LANDING_FAIL\` names which guard, and its absence after the guards held means the merge itself failed. Either way ${base} or the branch moved while you tested — go back to step 0/review instead of landing.\n` +
-    `3. A busy door is a wait, not a race: if the ${base} checkout is already mid-merge (an unresolved index), retry with a bounded wait — never abort or resolve someone else's in-progress merge. ` +
-    `4. Verify it landed: \`${base}\`'s HEAD must now be the new merge commit and no merge may be left in progress — if YOUR merge went half-merged, run \`git -C ${mainQ} merge --abort\` and report it rather than leaving \`${base}\` mid-state. ` +
-    `5. Once you've verified \`${base}\` advanced cleanly, and this task is settled with no need to retain its worktree or await a human decision/follow-up, run \`spex session done --propose close\` as your FINAL action. This declares CLOSE-PENDING for the human; do NOT run \`spex session close\`. Otherwise declare the state that is true.`
-}
+1. In your own worktree, merge the latest main into your branch. Resolve any conflicts there and re-run the proof.
+2. Atomic landing: main only receives the completed branch as one no-ff merge. Never resolve conflicts in the shared main checkout.
+3. Verify main advanced cleanly with no merge left in progress. If this task is settled, run \`spex session done --propose close\` as your FINAL action; otherwise declare the state that is true.`
 
 export type MergeSessionResult =
-  | { dispatched: true; replayed?: boolean; expectedBranchHead: string; expectedBaseHead: string; reviewEpoch: number }
-  | { dispatched: false; reason: string; code?: 'session_merge_invalid_request' | 'session_merge_key_reused' | 'session_merge_head_changed' | 'session_merge_branch_unproven' | 'session_merge_not_proposed' | 'session_merge_review_changed'; status?: 400 | 409 }
-export type MergeSessionOptions = { requestKey?: string; expectedBranchHead?: string; expectedBaseHead?: string; expectedReviewEpoch?: number }
+  | { dispatched: true }
+  | { dispatched: false; reason: string; code?: 'session_merge_not_proposed'; status?: 409 }
 
-function normalizeMergeKey(raw: string | undefined): string | null {
-  if (raw === undefined) return null
-  const key = raw.trim()
-  if (!key || key.length > 128 || !/^[\x21-\x7e]+$/.test(key)) return null
-  return key
-}
-
-async function proveMergeBranchIdentity(worktreePath: string, branch: string, base: string): Promise<{ ok: true; branchHead: string; baseHead: string; top: string } | { ok: false; reason: string }> {
-  const [top, symbolic, head, pair] = await Promise.all([
-    gitTry(['-C', worktreePath, 'rev-parse', '--show-toplevel']),
-    gitTry(['-C', worktreePath, 'symbolic-ref', '--quiet', '--short', 'HEAD']),
-    gitTry(['-C', worktreePath, 'rev-parse', 'HEAD']),
-    reviewHeadPair(worktreePath, branch, base).then((value) => ({ ok: true as const, value }), (error) => ({ ok: false as const, error })),
-  ])
-  if (!top.ok || !symbolic.ok || !head.ok || !pair.ok) {
-    return { ok: false, reason: `branch identity is unreadable${!symbolic.ok ? ' (worktree HEAD is detached or not symbolic)' : ''}` }
-  }
-  let actualTop = top.stdout.trim(), expectedTop = worktreePath
-  try { actualTop = realpathSync(actualTop) } catch { /* comparison reports the missing/moved root */ }
-  try { expectedTop = realpathSync(expectedTop) } catch { /* comparison reports the missing/moved root */ }
-  if (actualTop !== expectedTop) return { ok: false, reason: `worktree top-level is ${actualTop}, expected ${expectedTop}` }
-  if (symbolic.stdout.trim() !== branch) return { ok: false, reason: `worktree checked out ${symbolic.stdout.trim() || '(detached)'}, expected ${branch}` }
-  const worktreeHead = head.stdout.trim()
-  if (worktreeHead !== pair.value.branchHead) return { ok: false, reason: `worktree HEAD ${worktreeHead} does not match stored branch ${branch} at ${pair.value.branchHead}` }
-  return { ok: true, ...pair.value, top: actualTop }
-}
-
-type DispatchDelivery = NonNullable<SentDispatchReceipt['delivery']>
-function keyedPendingMessage(receipt: SentDispatchReceipt, mid: string, delivery: DispatchDelivery): PendingMessage {
-  return {
-    mid,
-    text: delivery.text,
-    from: delivery.from,
-    dispatch: { operation: receipt.operation, requestDigest: receipt.requestDigest },
-  }
-}
-
-async function acceptedMergeDispatch(id: string, idempotency: SentDispatchReceipt): Promise<SentDispatchState | null> {
-  return withRecordLock(id, async () => withDeliveryLocks([id], async () => {
-    const prior = sentDispatchReceipt(id, idempotency.operation, idempotency.requestDigest)
-    if (prior?.payloadHash === idempotency.payloadHash && prior.delivery && !prior.delivered) {
-      ensurePendingWhileLocked(id, keyedPendingMessage(idempotency, prior.mid, prior.delivery))
-    }
-    return prior
-  }))
-}
-
-async function replayAcceptedMerge(id: string, idempotency: SentDispatchReceipt, prior: SentDispatchState): Promise<void> {
-  // Old receipts predate recoverable delivery bytes and are already accepted history. Settled receipts are
-  // likewise response-only: replay must not reopen or otherwise mutate a session after its later lifecycle.
-  if (!prior.delivery || prior.delivered) return
-  await drainSession(id)
-  const current = sentDispatchReceipt(id, idempotency.operation, idempotency.requestDigest)
-  if (current?.delivered) return
-  await resumeSession(id, { guard: false })
-  await drainSession(id)
-}
-
-async function mergeSessionUnlocked(id: string, options: MergeSessionOptions = {}): Promise<MergeSessionResult> {
-  const requestKey = normalizeMergeKey(options.requestKey)
-  if (!requestKey) {
-    return { dispatched: false, reason: 'Idempotency-Key must be 1-128 visible ASCII characters', code: 'session_merge_invalid_request', status: 400 }
-  }
-  const expectedBranchHead = options.expectedBranchHead, expectedBaseHead = options.expectedBaseHead, expectedReviewEpoch = options.expectedReviewEpoch
-  if (expectedBranchHead === undefined || expectedBaseHead === undefined || expectedReviewEpoch === undefined) {
-    return { dispatched: false, reason: 'expectedBranchHead, expectedBaseHead, and expectedReviewEpoch are required with Idempotency-Key', code: 'session_merge_invalid_request', status: 400 }
-  }
-  const main = mainRoot()
-  if (!isGitObjectId(main, expectedBranchHead) || !isGitObjectId(main, expectedBaseHead)) {
-    return { dispatched: false, reason: 'expectedBranchHead and expectedBaseHead must be full lowercase native Git object ids', code: 'session_merge_invalid_request', status: 400 }
-  }
-  if (!Number.isSafeInteger(expectedReviewEpoch) || expectedReviewEpoch < 0) {
-    return { dispatched: false, reason: 'expectedReviewEpoch must be a non-negative safe integer', code: 'session_merge_invalid_request', status: 400 }
-  }
-  const idempotency = {
-    operation: 'merge' as const,
-    requestDigest: digest(`spexcode-session-merge\0${requestKey}`),
-    payloadHash: digest(JSON.stringify({ expectedBranchHead, expectedBaseHead, expectedReviewEpoch })),
-  }
-  const prior = await acceptedMergeDispatch(id, idempotency)
-  if (prior) {
-    if (prior.payloadHash !== idempotency.payloadHash) {
-      return { dispatched: false, reason: 'Idempotency-Key is already bound to another session-merge payload', code: 'session_merge_key_reused', status: 409 }
-    }
-    await replayAcceptedMerge(id, idempotency, prior)
-    return { dispatched: true, replayed: true, expectedBranchHead, expectedBaseHead, reviewEpoch: expectedReviewEpoch }
-  }
-  const [branchObject, baseObject] = await Promise.all([
-    gitTry(['-C', main, 'cat-file', '-e', `${expectedBranchHead}^{commit}`]),
-    gitTry(['-C', main, 'cat-file', '-e', `${expectedBaseHead}^{commit}`]),
-  ])
-  if (!branchObject.ok || !baseObject.ok) {
-    return {
-      dispatched: false,
-      reason: `reviewed heads are missing or are not commits: branch ${expectedBranchHead} / base ${expectedBaseHead}`,
-      code: 'session_merge_head_changed',
-      status: 409,
-    }
-  }
+export async function mergeSession(id: string): Promise<MergeSessionResult> {
   const wt = await findWorktree(id)
-  if (!wt || !wt.branch) return { dispatched: false, reason: 'no such session' }
-  const branch = wt.branch, base = mainBranch()
-  // Raw bytes, not a decoded-then-re-encoded string: the gate's expected hex must be what the filesystem
-  // holds, so no normalization can slip between what we promise and what git will print.
-  let worktreeTop = Buffer.from(wt.path, 'utf8')
-  try { worktreeTop = realpathSync(wt.path, { encoding: 'buffer' }) } catch { /* the locked proof reports the vanished worktree */ }
-  const subject = (await gitA(['-C', main, 'log', '-1', '--format=%s', expectedBranchHead])).trim()
-  const reason = subject.replace(/^spec:\s+/, '') || branch
-  const r = await sendText(id, mergePrompt(main, wt.path, worktreeTop, branch, base, expectedBranchHead, expectedBaseHead, reason), undefined, {
-    idempotency,
+  if (!wt?.branch) return { dispatched: false, reason: 'no such mergeable session' }
+  const r = await sendText(id, MERGE_PROMPT, undefined, {
     deferDrain: true,
     acceptGuard: async (rec) => {
-      const conflict = (message: string, code: NonNullable<Extract<MergeSessionResult, { dispatched: false }>['code']>) =>
-        Object.assign(new ResourceConflict(message), { code })
       if (!rec.governed || rec.status !== 'awaiting' || rec.proposal !== 'merge') {
-        throw conflict(`session ${id} is not a governed awaiting merge proposal`, 'session_merge_not_proposed')
-      }
-      if (rec.reviewEpoch !== expectedReviewEpoch) {
-        throw conflict(`review declaration changed: expected epoch ${expectedReviewEpoch}, found ${rec.reviewEpoch}`, 'session_merge_review_changed')
-      }
-      if (rec.worktreePath !== wt.path || rec.branch !== branch) {
-        throw conflict(`session branch identity changed before merge acceptance`, 'session_merge_branch_unproven')
-      }
-      const proof = await proveMergeBranchIdentity(rec.worktreePath, branch, base)
-      if (!proof.ok) throw conflict(`session branch identity is unproven: ${proof.reason}`, 'session_merge_branch_unproven')
-      if (proof.branchHead !== expectedBranchHead || proof.baseHead !== expectedBaseHead) {
-        throw conflict(`reviewed heads changed: expected branch ${expectedBranchHead} / base ${expectedBaseHead}, found branch ${proof.branchHead} / base ${proof.baseHead}`, 'session_merge_head_changed')
+        const error = new ResourceConflict(`session ${id} is not a governed awaiting merge proposal`)
+        Object.assign(error, { code: 'session_merge_not_proposed' })
+        throw error
       }
     },
   })
-  if (r.code === 'dispatch_key_reused') {
-    return { dispatched: false, reason: 'Idempotency-Key is already bound to another session-merge payload', code: 'session_merge_key_reused', status: 409 }
-  }
-  if (r.code === 'session_merge_not_proposed' || r.code === 'session_merge_branch_unproven' || r.code === 'session_merge_head_changed' || r.code === 'session_merge_review_changed') {
-    return { dispatched: false, reason: r.error || 'merge authority refused', code: r.code, status: 409 }
-  }
+  if (r.code === 'session_merge_not_proposed') return { dispatched: false, reason: r.error || 'merge dispatch refused', code: r.code, status: 409 }
   if (!r.ok) return { dispatched: false, reason: r.error || 'could not dispatch merge prompt' }
-  // Acceptance is already durable. Ensure-live follows it so no relaunch/state mutation can happen before the
-  // reviewed CAS; a failed relaunch leaves the one queued debt for the ordinary delivery supervisor.
   await resumeSession(id, { guard: false })
   await drainSession(id)
-  return { dispatched: true, replayed: r.replayed === true, expectedBranchHead, expectedBaseHead, reviewEpoch: expectedReviewEpoch }
+  return { dispatched: true }
 }
-export const mergeSession = (id: string, options: MergeSessionOptions = {}): Promise<MergeSessionResult> =>
-  mergeSessionUnlocked(id, options)
 
 // @@@ killAgentProcess - the pane is the agent's HOME, not its LEASH. `kill-session` SIGHUPs the pane's
 // process group, and an idle agent goes with it (measured: ~0.8s) — but one mid-turn can outlive the whole
@@ -3861,8 +3676,17 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
 // that cannot reach an agent must at least leave a trace ([[session-timeline]]).
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
 type DispatchIdempotency = SentDispatchReceipt
-type DispatchAcceptCode = 'dispatch_key_reused' | 'session_merge_not_proposed' | 'session_merge_branch_unproven' | 'session_merge_head_changed'
+type DispatchAcceptCode = 'dispatch_key_reused' | 'session_merge_not_proposed'
 type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: DispatchAcceptCode }
+type DispatchDelivery = NonNullable<SentDispatchReceipt['delivery']>
+function keyedPendingMessage(receipt: SentDispatchReceipt, mid: string, delivery: DispatchDelivery): PendingMessage {
+  return {
+    mid,
+    text: delivery.text,
+    from: delivery.from,
+    dispatch: { operation: receipt.operation, requestDigest: receipt.requestDigest },
+  }
+}
 type SendTextOptions = {
   replyVia?: 'note'
   idempotency?: DispatchIdempotency

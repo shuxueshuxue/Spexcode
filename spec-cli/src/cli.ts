@@ -1043,18 +1043,11 @@ if (cmd === 'serve') {
       for (const f of r.diff) console.log(`    ${f.status.padEnd(12)} +${f.additions} -${f.deletions}  ${f.path}`)
     }
   } else if (sub === 'merge') {
-    const [{ clientMerge, clientReview }, { createHash }] = await Promise.all([import('./client.js'), import('node:crypto')])
+    const { clientMerge } = await import('./client.js')
     const sel = positionals(4)[0]
     if (!sel) { console.error('usage: spex session merge <SEL>  (id | id-prefix | node | branch)'); process.exit(2) }
     const id = await resolveSelectorOrExit(sel)
-    const review = await clientReview(id)
-    if (!review) { console.error(`merge dispatch failed: no such session ${id}`); process.exit(1) }
-    const r = await clientMerge(id, {
-      expectedBranchHead: review.branchHead,
-      expectedBaseHead: review.baseHead,
-      expectedReviewEpoch: review.reviewEpoch,
-      requestKey: createHash('sha256').update(`spexcode-cli-session-merge\0${id}\0${review.branchHead}\0${review.baseHead}\0${review.reviewEpoch}`).digest('hex'),
-    })
+    const r = await clientMerge(id)
     if (r.dispatched) console.log(`merge dispatched to ${id} — its agent is landing the merge`)
     else console.error(`merge dispatch failed: ${r.reason}`)
     process.exit(r.dispatched ? 0 : 1)

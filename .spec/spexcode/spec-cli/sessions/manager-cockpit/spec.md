@@ -32,16 +32,10 @@ same surface.
 → `null` → HTTP 404 / a non-zero CLI exit. The reads run in parallel, all against the source-of-truth base
 branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload carries:
 
-- **branchHead / baseHead** — the exact immutable Git object ids whose branch/base generation every committed
-  review fact below describes. Review resolves both branch refs in one Git ref snapshot, then uses ONLY those
-  two object ids for ahead, merge-base diff, and conflict projection; a moving branch name, `HEAD`, or canonical
-  base name never rides a later review command. After assembling those facts it re-reads the pair and refuses the
-  review if either ref moved, so no response combines facts from one pair with a later visible generation. A caller
-  can therefore bind a decision to the pair and reject
-  either work authored after review or canonical movement after review. Both ids ride the merge authority and
-  prompt: the session agent re-proves its symbolic branch, worktree HEAD, stored branch ref, and canonical base
-  ref before syncing, then freezes and merges the tested post-sync object. There is no second provenance model:
-  the pair is exactly Git's own object identity at the review boundary.
+- **review snapshot** — review resolves branch and base refs together, uses that snapshot internally for ahead,
+  merge-base diff, and conflict projection, then refuses a read if either ref moved while the facts were assembled.
+  This prevents a mixed-generation review response; object ids are implementation detail, are not returned, and do
+  not authorize merge.
 - **ahead** — commits the node branch is ahead of the base.
 - **dirtyNonRuntime** — uncommitted files; SpexCode writes no runtime files into the worktree
   ([[runtime]]), so every dirty path is genuine spec/code work — the basis [[state]]'s commit gate uses.
@@ -100,32 +94,13 @@ branch (`mainBranch()`, auto-detected — never a hardcoded `main`). The payload
   session gates strip.
 - **proposal** — the session's standing proposal kind + note, read from its global record.
 
-`mergeSession(id)` is the ACT verb, served at `POST /api/sessions/:id/merge` and run by `spex session merge <id>` —
-but it is a DISPATCH, not a server merge: the SESSION'S OWN agent lands the work, the server NEVER touches
-main's tree (it carries no `git merge` logic). It reopens the session (`--resume`s via [[state]]'s reopen
-when tmux died, which waits for the rendezvous socket so the dispatch hits a live agent), then sends
-`mergePrompt` through the socket. That prompt is the human's merge INTENT and the one place the merge STYLE
-lives: a `--no-ff` commit `merge <branch>: <reason>` from the main checkout (`reason` = the branch's latest
-commit subject minus a leading `spec: `), with the agent told to resolve conflicts, VERIFY the base's HEAD
-advanced with no half-merge, then propose CLOSE (not merge — the commit gate exempts propose-close) for the
-human. Async + fail-loud: `{dispatched:true}` once the prompt is appended, else `{dispatched:false, reason}`
-(HTTP 409 / non-zero) only when the record rejects it. Landing is thus the
-agent's verified act, never a server merge. The dispatch boundary nevertheless admits only a governed session
-currently declaring `awaiting` + `proposal=merge`, with an `Idempotency-Key`, the exact `branchHead` /
-`baseHead` pair, and the durable `reviewEpoch` returned by review. Every explicit renewed merge declaration
-advances that epoch even if the pair did not move. It validates the record declaration epoch and both Git refs before reopening or appending
-anything. Acceptance is one existing durable timeline receipt carrying the exact owed transport form, reconciled
-with the existing delivery queue under its lock; only after that recoverable receipt exists does
-the server ensure the original agent is live and drain the debt. Native CLI and dashboard clients derive their
-retry key from the exact session route, reviewed head pair, and review epoch instead of volatile client state, so the
-same decision replays the same acceptance even after either client restarts. A renewed declaration therefore creates
-a fresh authorized request even when its heads match a settled earlier merge dispatch. Key ownership is deliberately
-route-local: the same raw key may authorize an independent decision on another session, while the same route/key
-with another pair or epoch is a loud 409. Before handover, same-route/same-key/same-pair-and-epoch retries reconstruct any queue debt lost after the receipt
-write and resume delivery; after the adapter accepts it, a private settlement in that same timeline makes every later
-replay response-only, with no resume, unarchive, lifecycle, or queue mutation. The raw key is never persisted. Thus
-review SHOWS a stable declaration generation and Git decision, merge binds exactly that decision, and the agent still ENFORCES the tested landing
-itself.
+`mergeSession(id)` is the ACT verb, served at `POST /api/sessions/:id/merge` and run by `spex session merge <id>`.
+It is a plain dispatch, never a server merge: only a governed `awaiting` session with `proposal=merge` can receive
+it; any other state fails loudly with HTTP 409. The request has no body or special header. Once its one ordinary
+prompt is durably appended, normal session resume and delivery apply. The prompt tells the session's own agent to
+sync and resolve conflicts in its own worktree, re-run proof, atomically land the completed branch with one
+`--no-ff` merge into `main`, and verify the landing before proposing close. The server never touches `main` and
+the shared main checkout never resolves a conflict.
 
 Two read verbs round out the manager surface, both backend-computed so a client (incl. a REMOTE one over
 `SPEXCODE_API_URL`) can monitor an agent without the binary terminal socket: **capture**

@@ -199,7 +199,7 @@ function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: strin
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
     session_id: id, governed: true, worktree_path: worktree, branch: 'main',
     node: 'sessions-core', title: '', name: '', parent: '', status: 'active', proposal: '',
-    merges: 0, review_epoch: 0, note: 'preserve-before-readiness', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',
+    merges: 0, note: 'preserve-before-readiness', sortkey: '', createdAt: Date.now(), harness: 'codex-headless',
     harness_session_id: `thread-${id}`, stopped: true, archived: false, cold_proof: '', adapter_recovery: '',
     launcher: 'fixture', launch_cmd: launchCmd, launch_owner: '', create_request_id: '', create_payload_hash: '',
     launch_readiness_pending: '',
@@ -1027,7 +1027,7 @@ test('launchPreflight refuses a launch that cannot succeed, naming which fact se
   const home = mkdtempSync(join(tmpdir(), 'spex-preflight-'))
   const base: SessRec = {
     session: 'preflight-test', governed: true, worktreePath: join(home, 'gone'), branch: null, node: null,
-    title: null, name: null, parent: null, status: 'idle', proposal: null, merges: 0, reviewEpoch: 0, note: null,
+    title: null, name: null, parent: null, status: 'idle', proposal: null, merges: 0, note: null,
     sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, stopped: false, archived: false,
     launcher: null, launchCmd: '/bin/true', launchOwner: null,
   }
@@ -1077,7 +1077,7 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
     const rec: SessRec = {
       session: 'mat-fail-test', governed: true, worktreePath: '/tmp/spex-mat-fail-worktree', branch: 'node/mat-fail',
       node: null, title: 'mat fail', name: null, parent: null,
-      status: 'queued', proposal: null, merges: 0, reviewEpoch: 0, note: null, sortKey: null, createdAt: 1,
+      status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
       harness: 'claude', harnessSessionId: null, stopped: false, archived: false,
       launcher: 'reclaude', launchCmd: 'claude', launchOwner: null,
     }
@@ -1175,7 +1175,7 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
 
   const base: SessRec = {
     session: 'owned-q', governed: true, worktreePath: '/wt/q', branch: 'node/q', node: null, title: null,
-    name: null, parent: null, status: 'queued', proposal: null, merges: 0, reviewEpoch: 0, note: null, sortKey: null,
+    name: null, parent: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null,
     createdAt: 1, harness: 'codex', harnessSessionId: null, stopped: false, archived: false, launcher: 'codex', launchCmd: 'codex',
     launchOwner: publicAuthority,
   }

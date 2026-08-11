@@ -15,6 +15,18 @@ scenarios:
       path: spec-cli/src/machine-peer.test.ts
       name: the peer and session CLI surfaces use the gateway-owned peer forward
     code: spec-cli/src/machine-peer.ts
+  - name: linked-worktree-peer-return
+    description: >
+      Address a session stored under a Git common-dir runtime from a peer, where its active backend
+      was published by the linked worktree that owns the session record's worktree_path.
+    expected: >
+      The peer gateway routes the normal input to that worktree's published backend, and a reply
+      returns through the existing bidirectional tunnel without a second peer connection.
+    tags: [cli, backend-api]
+    test:
+      path: spec-cli/src/machine-peer.test.ts
+      name: a common-dir session routes to the endpoint published for its linked worktree
+    code: spec-cli/src/machine-peer.ts
 ---
 
 The local regression uses a disposable SPEXCODE_HOME and a pair-shaped loopback forward so it can prove the

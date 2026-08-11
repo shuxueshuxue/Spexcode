@@ -61,3 +61,19 @@ capture` reads) — so such a fold is that feature's stake, not `sessions`' drif
 The CLI/server board adapter enumerates the public session census once and supplies that frozen projection
 to graph assembly and its sessions-only splice. `graph.ts` does not reach back into this subsystem: session
 lifecycle and list ownership remain here, while graph remains the common projection consumer.
+
+### Cross-product worker identity
+
+ZCode owns native swarm child ids; SpexCode owns the session record and its [[session-eval]] projection. When a
+ZCode tool or hook needs to show a child-specific SpexCode eval glance, it must declare the exact pair with
+`POST /api/sessions/:spexSessionId/zcode-child-sessions` and body `{ "childSessionId": "<opaque-zcode-id>" }`.
+The target must be a current governed SpexCode session. The declaration stores the opaque id in that session's
+global record, is idempotent for the same pair, and rejects a child already owned by another current record;
+there is no title/path/branch/timestamp fallback. The route explicitly publishes a sessions graph refresh before
+success, so a reader that fetched the graph before declaration sees the new projection without a server restart.
+
+The graph exposes a non-empty `zcodeChildSessionIds` only on the owning session row. Absence means no established
+relation and consumers leave a child eval cell absent, rather than presenting an aggregate or zero. Because the
+association has exactly the same lifetime as its target record, close removes it and a newly created record may
+later bind the same ZCode id. This is a relation only: it neither creates a SpexCode session for a ZCode worker nor
+changes [[session-eval]]'s worktree-rooted evaluation semantics.

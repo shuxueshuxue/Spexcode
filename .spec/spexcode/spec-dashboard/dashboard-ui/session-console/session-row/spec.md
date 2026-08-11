@@ -35,7 +35,7 @@ thing on every surface.
 
 **The console projection.** The desktop console's tree wrapper, item, optional select checkbox, shared row
 face, and fold pod are one presentational tree. Its drag ghost renders that tree again from the same current
-forest item; it does not serialize a second appearance shape. The one permitted visual difference is a 50% scale
+forest item; it does not serialize a second appearance shape. The one permitted visual difference is a 75% scale
 of the ghost, so a selected row's expanded headline does not cover the receiving object; the pointer anchor is
 adjusted to that scale. The other difference is semantic: the live row is a button with its handlers while the
 ghost is inert. The ghost therefore keeps selected headline wrapping and its right-side marker in the same

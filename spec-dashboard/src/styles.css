@@ -1109,7 +1109,7 @@ a.scenario-count:hover { background: var(--panel2); }
 .si-session-drag-ghost {
   position: fixed; z-index: 52; box-sizing: border-box; background: transparent; border: 0;
   box-shadow: 0 8px 20px color-mix(in srgb, var(--ink) 22%, transparent);
-  opacity: .96; pointer-events: none; transform: translate(10px, -8px) rotate(-1deg) scale(.5); transform-origin: top left;
+  opacity: .96; pointer-events: none; transform: translate(10px, -8px) rotate(-1deg) scale(var(--si-session-drag-ghost-scale)); transform-origin: top left;
 }
 body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !important; user-select: none !important; }
 /* A selected headline can grow to three lines; its disclosure stays beside line one rather than centring in

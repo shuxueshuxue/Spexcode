@@ -42,7 +42,11 @@ authorization proof.
 only a peer envelope. Its reachability is authorized by the authenticated SSH connection which created the
 listener; it does not add a third [[gateway-auth]] scope or expose a public route. The receiver derives the
 target project by scanning its own per-project session stores for the full UUID: no match is a named not-found
-failure and more than one match is a loud ambiguity. It then invokes that project's normal local
+failure and more than one match is a loud ambiguity. Session records are grouped by Git common directory,
+while backend endpoint records are keyed by the worktree they serve, so after finding one session record the
+gateway selects the endpoint whose published root equals that record's `worktree_path`. A direct endpoint in
+the session slot remains valid; a unique endpoint sharing the same common-dir store is the retired-session
+fallback, while several candidates are a loud ambiguity. It then invokes that project's normal local
 `POST /api/sessions/:id/input` text path. The backend never parses SSH addresses, holds peer state, or gains a
 cross-machine code path.
 

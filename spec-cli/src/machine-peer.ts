@@ -3,9 +3,9 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from 'node:http'
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { createConnection, createServer as createNetServer, type Server as NetServer } from 'node:net'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
-import { spexcodeHome } from '@spexcode/spec-core'
+import { runtimeRoot, spexcodeHome } from '@spexcode/spec-core'
 import { readEndpointRecord } from './host.js'
 
 const execFileAsync = promisify(execFile)
@@ -156,16 +156,43 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body))
 }
 
-function peerProjectsForSession(sessionId: string): Array<{ id: string; url: string | null }> {
+type PeerProject = { id: string; url: string | null; endpointConflict?: string }
+
+// Session records live under the shared Git common-dir store, whereas a running backend publishes under
+// the worktree root it serves. A direct endpoint beside the session remains the simple case; linked
+// worktrees use the record's worktree_path to find their own published endpoint.
+function peerProjectsForSession(sessionId: string): PeerProject[] {
   const projects = join(spexcodeHome(), 'projects')
   let ids: string[] = []
   try { ids = readdirSync(projects) } catch { return [] }
-  const hits: Array<{ id: string; url: string | null }> = []
+  const endpointRecords = ids.flatMap((id) => {
+    const endpoint = readEndpointRecord(join(projects, id, 'backend.json'))
+    return endpoint ? [{ id, endpoint }] : []
+  })
+  const hits: PeerProject[] = []
   for (const id of ids) {
     const root = join(projects, id)
-    if (!existsSync(join(root, 'sessions', sessionId, 'session.json'))) continue
-    const endpoint = readEndpointRecord(join(root, 'backend.json'))
-    hits.push({ id, url: endpoint?.url ?? null })
+    const record = join(root, 'sessions', sessionId, 'session.json')
+    if (!existsSync(record)) continue
+    const direct = readEndpointRecord(join(root, 'backend.json'))
+    if (direct) { hits.push({ id, url: direct.url }); continue }
+    let worktree = ''
+    try {
+      const parsed = JSON.parse(readFileSync(record, 'utf8'))
+      if (typeof parsed?.worktree_path === 'string' && parsed.worktree_path) worktree = resolve(parsed.worktree_path)
+    } catch { /* the backend gives the record's named error after routing reaches it */ }
+    const exact = worktree ? endpointRecords.filter(({ endpoint }) => resolve(endpoint.root) === worktree) : []
+    if (exact.length === 1) { hits.push({ id, url: exact[0].endpoint.url }); continue }
+    if (exact.length > 1) {
+      hits.push({ id, url: null, endpointConflict: `session ${sessionId} has ${exact.length} live backends for worktree ${worktree}` })
+      continue
+    }
+    const common = endpointRecords.filter(({ endpoint }) => {
+      try { return runtimeRoot(endpoint.root) === root } catch { return false }
+    })
+    if (common.length === 1) hits.push({ id, url: common[0].endpoint.url })
+    else if (common.length > 1) hits.push({ id, url: null, endpointConflict: `session ${sessionId} has ${common.length} live backends in its Git project` })
+    else hits.push({ id, url: null })
   }
   return hits
 }
@@ -177,6 +204,7 @@ async function forwardToProject(peer: MachinePeer, req: IncomingMessage, res: Se
   const projects = peerProjectsForSession(sessionId)
   if (!projects.length) { json(res, 404, { error: `no local project owns session ${sessionId}` }); return }
   if (projects.length > 1) { json(res, 409, { error: `session ${sessionId} is ambiguous across ${projects.length} local projects` }); return }
+  if (projects[0].endpointConflict) { json(res, 409, { error: projects[0].endpointConflict }); return }
   if (!projects[0].url) { json(res, 502, { error: `target backend for session ${sessionId} is offline` }); return }
   let body: Record<string, unknown>
   try {

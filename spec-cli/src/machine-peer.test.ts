@@ -5,9 +5,10 @@ import { createServer } from 'node:http'
 import { once } from 'node:events'
 import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
+import { encodeProject, runtimeRoot } from '@spexcode/spec-core'
 import { clientSendThroughPeer } from './client.js'
 import { MachinePeerGateway, listMachinePeers, peerRpc, peerStorePath, readPeerMachineId } from './machine-peer.js'
 
@@ -45,19 +46,54 @@ async function control(request: Parameters<typeof peerRpc>[0]) {
   return await peerRpc(request)
 }
 
-function project(home: string, id: string, session = SESSION): string {
+function project(home: string, id: string, session = SESSION, worktreePath = ''): string {
   const root = join(home, 'projects', id)
   mkdirSync(join(root, 'sessions', session), { recursive: true })
-  writeFileSync(join(root, 'sessions', session, 'session.json'), '{}\n')
+  writeFileSync(join(root, 'sessions', session, 'session.json'), `${JSON.stringify(worktreePath ? { worktree_path: worktreePath } : {})}\n`)
   return root
 }
 
-function endpoint(root: string, url: string): void {
+function endpoint(root: string, url: string, projectRoot = '/fixture/project'): void {
   writeFileSync(join(root, 'backend.json'), `${JSON.stringify({
-    version: 2, url, pid: process.pid, instanceId: 'fixture-instance', root: '/fixture/project',
+    version: 2, url, pid: process.pid, instanceId: 'fixture-instance', root: projectRoot,
     identity: { title: 'fixture', icon: 'spexcode' }, startedAt: new Date().toISOString(),
   })}\n`)
 }
+
+test('a common-dir session routes to the endpoint published for its linked worktree', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-machine-peer-worktree-'))
+  const previous = process.env.SPEXCODE_HOME
+  process.env.SPEXCODE_HOME = home
+  const received: string[] = []
+  const backend = createServer((req, res) => {
+    received.push(req.url ?? '')
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify({ ok: true }))
+  })
+  const gateway = new MachinePeerGateway()
+  try {
+    const backendPort = await listen(backend)
+    const sessionProject = basename(runtimeRoot(pkgRoot))
+    project(home, sessionProject, SESSION, pkgRoot)
+    const endpointProject = join(home, 'projects', encodeProject(pkgRoot))
+    mkdirSync(endpointProject, { recursive: true })
+    endpoint(endpointProject, `http://127.0.0.1:${backendPort}`, pkgRoot)
+    gateway.start()
+    const accepted = await control({ op: 'accept', sourceMachineId: SOURCE, sshAddress: 'peer-fixture', remoteInboundPort: 31011, remoteOutboundPort: 31012 })
+    assert.ok(accepted.ok && accepted.peer)
+    const response = await fetch(`http://127.0.0.1:${accepted.peer.inboundPort}/api/sessions/${SESSION}/input`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'text', text: 'linked worktree' }),
+    })
+    assert.equal(response.status, 200)
+    assert.deepEqual(received, [`/api/sessions/${SESSION}/input`])
+  } finally {
+    await gateway.close()
+    await close(backend)
+    if (previous === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previous
+    rmSync(home, { recursive: true, force: true })
+  }
+})
 
 test('a peer ingress derives one local project then uses its ordinary session input endpoint', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-machine-peer-'))

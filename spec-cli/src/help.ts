@@ -195,6 +195,26 @@ putting them in the lint gate, then audits workflow delivery. Run it directly or
 consume the same visible diagnosis.`,
     see: 'spex spec lint (deterministic graph/contract gate) · spex materialize (repair delivery artifacts)',
   },
+  flat: {
+    line: 'flat new <repo>       Flatcode — flatten any repository into a converged .spec tree  [--out|--rounds|--coverage]',
+    body: `Usage: spex flat new <repo-url|path> [--out <dir>] [--launcher <name>] [--rounds <n>] [--coverage <pct>]
+
+Clones the target, works out what counts as its source, seeds .spec, then runs an agent round after round
+until the spec tree passes a gate: zero \`spex spec lint\` errors, coverage at or above --coverage (default
+90%), with \`spex doctor\`'s altitude findings fed back as the next round's instructions. The agent saying it
+finished is not the signal — the measurement is.
+
+Rounds are bounded (--rounds, default 6). Exhausting the budget reports a PARTIAL flat naming what still
+fails and exits non-zero; it never reports a pass it did not measure.
+
+The product is a directory: <out>/repo holds the clone with the spec tree committed on the \`flatcode\`
+branch, <out>/flat.json holds the reading. Nothing is pushed, nothing is served, no session or project is
+registered — the target repository never lands on anyone's board.
+
+--launcher picks the agent exactly like a session does, and must name a harness with a non-interactive
+turn; a launcher whose harness has none is refused by name rather than quietly swapped.`,
+    see: 'spex guide spec (the authoring format the rounds follow) · spex spec lint · spex doctor',
+  },
   uninstall: {
     line: 'uninstall [dir]       remove all derived artifacts + local state; preserve tracked intent  [--hooks]',
     body: `Usage: spex uninstall [dir=cwd] [--hooks]
@@ -534,6 +554,7 @@ Noun drawers
   ${ENTRIES.issue.line}
   ${ENTRIES.remark.line}
   ${ENTRIES.evidence.line}
+  ${ENTRIES.flat.line}
 
 Manuals
   ${ENTRIES.guide.line}

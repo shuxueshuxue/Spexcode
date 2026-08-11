@@ -203,6 +203,16 @@ export interface Harness {
   // against a since-changed default, which would point `--resume` at the wrong config dir and lose the
   // transcript ([[launcher-select]], the resume-launcher-pin). launchCmd builds its invocation ON TOP of this.
   baseCmd(cmd?: string): string
+  // @@@ oneShotTurn - ONE non-interactive turn: the harness reads a single prompt, works, and exits. This is
+  // the seam [[flat]] converges on, and it is deliberately NOT launchCmd — that builds a RESIDENT invocation
+  // (a TUI in a tmux pane, or a controller owning a socket) whose prompt tail the launch script appends, and
+  // which nothing waits on. Flatcode needs the opposite: a process whose exit means the turn is over.
+  // Adapters carry the prompt whichever way their own CLI accepts it — on stdin where the harness reads it
+  // (so a multi-KB prompt is never shell-quoted), as an argument where it does not — and product code just
+  // writes `stdin` and runs `command` without learning which harness answered. An adapter with no
+  // non-interactive mode declares none, and the caller refuses that launcher BY NAME rather than substituting
+  // a spelling that would quietly behave differently.
+  oneShotTurn?(prompt: string, cmd?: string): { command: string; stdin: string }
   // the flag that pins the session id at launch. Claude lets the caller choose (`--session-id <id>`); Codex
   // assigns its own, so there is nothing to pass (the id is captured/resumed afterwards).
   sessionIdArg(id: string): string
@@ -2441,6 +2451,7 @@ export const claudeHarness: Harness = {
   executionTrace: readProjectJsonlExecutionTrace,
   launchCmd: (_id, _rt, cmd) => claudeBaseCmd(cmd),  // claude's full invocation IS its base command (the tail is appended by the caller)
   baseCmd: claudeBaseCmd,
+  oneShotTurn: (prompt, cmd) => ({ command: `${claudeBaseCmd(cmd)} -p`, stdin: prompt }),   // --print reads the prompt from stdin
   sessionIdArg: (id) => `--session-id ${id}`,        // the caller chooses the id
   sessionEnvVar: harnessIdentity('claude').sessionEnvVar,
   launchEnv: rendezvousLaunchEnv,
@@ -2543,6 +2554,8 @@ export const codexHarness: Harness = {
   executionTrace: readCodexExecutionTrace,
   launchCmd: (id, runtimeDir, cmd) => codexLaunchCommand(id, codexBaseCmd(cmd), undefined, runtimeDir ?? runtimeRoot()),   // the full app-server+TUI script BUILT AROUND the resolved base command; ONE app-server per PROJECT
   baseCmd: codexBaseCmd,
+  oneShotTurn: (prompt, cmd) => ({ command: `${codexBaseCmd(cmd)} exec -`, stdin: prompt }),   // `exec -` reads the prompt from stdin
+
   sessionIdArg: () => '',                            // codex assigns its own id (the backend owns it via thread/start)
   sessionEnvVar: harnessIdentity('codex').sessionEnvVar,
   launchEnv: noLaunchEnv,
@@ -2966,6 +2979,9 @@ export const zcodeHarness: Harness = {
   executionTrace: noExecutionTrace,
   launchCmd: (_id, _rt, cmd) => `${zcodeBaseCmd(cmd)} --prompt`,
   baseCmd: zcodeBaseCmd,
+  // z-code's one-turn launcher already IS the non-interactive shape; it takes the prompt as an argument.
+  oneShotTurn: (prompt, cmd) => ({ command: `${zcodeBaseCmd(cmd)} --prompt ${shQuote(prompt)}`, stdin: '' }),
+
   sessionIdArg: () => '',
   sessionEnvVar: harnessIdentity('zcode').sessionEnvVar,
   launchEnv: noLaunchEnv,
@@ -3000,6 +3016,9 @@ export const opencodeHarness: Harness = {
   executionTrace: readLocalStoreExecutionTrace,
   launchCmd: (_id, _rt, cmd) => opencodeLaunchCommand(opencodeBaseCmd(cmd)),   // the tail-branching script (prompt vs --resume/--continue marker)
   baseCmd: opencodeBaseCmd,
+  // `opencode run` takes the message positionally; it documents no stdin form, so the prompt is an argument.
+  oneShotTurn: (prompt, cmd) => ({ command: `${opencodeBaseCmd(cmd)} run ${shQuote(prompt)}`, stdin: '' }),
+
   sessionIdArg: () => '',                            // opencode mints its own session id; the plugin's first event reports it back (opencode-capture)
   // opencode exports NO per-session env var to its tool subprocesses (probed, 1.18.3). Identity flows through
   // the launch-injected SPEXCODE_SESSION_ID — honest here because each opencode TUI is a per-session process

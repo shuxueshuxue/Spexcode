@@ -743,6 +743,9 @@ if (cmd === 'serve') {
 } else if (cmd === 'doctor') {
   const { runDoctor } = await import('./doctor.js')
   await flushExit(await runDoctor(process.argv.slice(3)))
+} else if (cmd === 'flat') {
+  const { runFlat } = await import('./flat.js')
+  await flushExit(await runFlat(process.argv.slice(3)))
 } else if (cmd === 'peer') {
   const sub = process.argv[3]
   if (sub === undefined) {

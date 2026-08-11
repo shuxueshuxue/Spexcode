@@ -34,6 +34,17 @@ is in play.** So there is ONE `Harness` interface, ONE implementation per harnes
 `if (claude)` branch ANYWHERE in product code (materialize, dispatch, sessions, board, slash) is forbidden —
 that branching belongs to the harness detector and the adapter only.
 
+A harness can be asked for two different shapes of run, and the adapter owns both spellings. `launchCmd` is
+the **resident** one — a TUI in a pane or a controller holding a socket, whose prompt tail the launch script
+appends and whose exit means something went wrong. `oneShotTurn` is the **bounded** one: a command that reads
+a single prompt, works, and exits, where the exit is the turn finishing normally. [[flat]]'s conversion rounds
+are the caller that needs the second shape, and they wait on it. Adapters carry the prompt whichever way their
+own CLI takes it — on stdin where the harness reads stdin, so a multi-KB prompt is never shell-quoted, as an
+argument where it does not — and the caller writes the returned stdin and runs the returned command without
+learning which harness answered. A harness with no non-interactive mode declares none, and callers refuse that
+launcher by name; substituting a different harness would run the work under credentials and a model the user
+did not choose.
+
 ## acceptance — the live-behavior matrix
 
 An adapter is accepted by LIVE BEHAVIOR, never by artifact inspection: pi's stop-gate bridge shipped with

@@ -319,3 +319,12 @@ Spec: global-drift-remediation-bounded-backlog-axis-re
 Live-state correction: read the ZCode project session store directly after the report. Session 6083c2cb is asking with no proposal; its note names z-code commit 618fcb443 and the outstanding human landing. Session b7ff743a is asking with no proposal; its note names z-code branch codex/swarm-mr-staging, commits 9b44fb148 and 74790db1c, and the same outstanding human landing. Both SpexCode node branches correctly remain main..HEAD equals zero.
 
 Track both as unresolved but truthfully labelled, not as awaiting a status correction. General evidence rule: lifecycle is live state. A handoff summary is only a lead; before recording its current state, query the owning project's session store and retain only the necessary fields. This supersedes the preceding post's future-tense wording about owners correcting the records. No source behavior changes here.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-11T01:58:25.514Z -->
+Landing checkpoint.
+
+SpexCode dashboard governance grouping is landed on main at bd0f57c4b after sync: the governance browser E2E reports 4 project nodes, one collapsed governance tile, and 22 reachable governance nodes; production build passes; spec lint remains 0 errors. The dashboard full unit suite still has the same two pre-existing static source-path failures on main and the landing branch (165 pass / 2 fail), so it is not attributed to this change.
+
+ZCode delivery remains deliberately local, not landed remotely. codex/swarm-mr-staging at 74790db1c is a clean fast-forward candidate over local gitlab/staging d7c613590 (19 ahead, 0 behind). Verification on that exact local branch passed lint with 0 errors, typecheck, watcher lifecycle tests 2/2, and SpecMap tests 11/11. The standing instruction is no push, MR, or remote-ref mutation; therefore these verified commits remain a draft awaiting explicit human landing authorization. Treat fast-forward feasibility and landing authority as separate facts.
+
+The Decision 152 .plugins cross-repository graph-contract log remains awaiting a human choice; no source or drift-standard change has been made for it.

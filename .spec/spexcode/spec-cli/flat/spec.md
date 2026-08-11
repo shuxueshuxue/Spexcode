@@ -45,14 +45,27 @@ A round that fails the gate does not retry the same prompt: the findings ARE the
 bounded, and exhausting the budget reports a **partial** flat naming what still fails — never a pass. A
 flat that stops early is a legible outcome; a flat that claims success it did not measure is not.
 
-## Profiling is load-bearing, not convenience
+## Profiling is load-bearing, and it is proposed, not asserted
 
 A foreign repository has no `spexcode.json`, and lint with no `governedRoots`/`sourceExtensions` finds zero
 source files. Zero governed files makes coverage vacuously complete and every drift and coverage rule
 silent — the gate would pass an empty `.spec` on any repository in the world. So Flatcode derives the
 governed roots and source extensions from what the repository actually contains and writes them down before
-the first round, and it refuses to run a gate over an empty governed set. The inferred profile is committed
-into the clone so the reading is reproducible and so the user can correct it and re-run.
+the first round.
+
+But reading the file tree only PROPOSES a governed set; [[spec-lint]] applies the product's own source policy
+on top and is the one that decides. Its test globs drop `tests/`, `test_*` and `*.test.*` wholesale, so a root
+can be proposed, written into the config, and then govern nothing — leaving a config that lists a root the
+gate ignores and a report whose file count the gate's own denominator contradicts. So the proposal is
+**confirmed against lint's accounting** before anything is measured against it: roots it kept nothing from are
+dropped, the config is rewritten, the reading is taken again under the config actually in effect, and the
+count that gets reported is lint's, never the file walk's. An empty confirmed set is refused rather than
+gated. This file does not get to assert what is governed, for the same reason it does not get to assert
+convergence — and reimplementing the exclusion policy here to predict the answer would put a second copy of
+it in the tree for the copies to drift apart.
+
+The confirmed profile is committed into the clone so the reading is reproducible and so the user can correct
+it and re-run.
 
 ## The agent seam is one-shot turns
 

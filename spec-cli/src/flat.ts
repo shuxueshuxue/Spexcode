@@ -30,6 +30,10 @@ const SOURCE_EXTENSIONS: Readonly<Record<string, string>> = {
 const NON_SOURCE_DIRS = new Set([
   'node_modules', 'vendor', 'third_party', 'thirdparty', 'dist', 'build', 'out', 'target',
   'generated', 'gen', '.venv', 'venv', 'site-packages', 'testdata', 'fixtures', '__pycache__',
+  // SpexCode's own tree is never the subject of a flat. It is absent on the first pass (profiling runs before
+  // the seed) but present on any re-profile, where counting it would shift the share threshold under roots
+  // that qualified the first time.
+  '.spec',
 ])
 
 export type FlatGate = {
@@ -39,6 +43,7 @@ export type FlatGate = {
   coverage: number
   errorFindings: readonly string[]
   uncoveredFiles: readonly string[]
+  sourceFiles: readonly string[]
 }
 
 export type FlatProfile = {
@@ -144,7 +149,8 @@ export function readGate(payload: string): FlatGate {
     findings?: { level: string; rule: string; spec?: string; file?: string; msg: string }[]
   }
   const findings = report.findings ?? []
-  const governed = (report.sourceFiles ?? []).length
+  const sourceFiles = report.sourceFiles ?? []
+  const governed = sourceFiles.length
   const uncoveredFiles = findings.filter((f) => f.rule === 'coverage').map((f) => f.file ?? f.msg)
   const errorFindings = findings.filter((f) => f.level === 'error').map((f) => `${f.rule}: ${f.msg}`)
   return {
@@ -154,11 +160,27 @@ export function readGate(payload: string): FlatGate {
     coverage: governed ? Math.round(((governed - uncoveredFiles.length) / governed) * 100) : 0,
     errorFindings,
     uncoveredFiles,
+    sourceFiles,
   }
 }
 
 export const gatePassed = (gate: FlatGate, coverageFloor: number) =>
   gate.errors === 0 && gate.governed > 0 && gate.coverage >= coverageFloor
+
+// @@@ confirmProfile - narrow the PROPOSED governed set to the one lint actually keeps. The proposal is read
+// off the file tree, but lint applies the product's own source policy on top (its testGlobs drop `tests/`,
+// `test_*`, `*.test.*` wholesale), so a root can be proposed, written into the config, and then contribute
+// nothing. Left uncorrected that root is a lie in two places at once: the emitted config lists a root the gate
+// ignores, and the report prints a file count the gate's own denominator contradicts — measured on psf/requests
+// as "37 source files across docs, src, tests" beside a gate reading of 21. The profile must be CONFIRMED
+// against lint's accounting for the same reason convergence is: this file does not get to assert what is
+// governed. Reimplementing the exclusion policy here instead would put a second copy of it in the tree, and the
+// copies would drift.
+export function confirmProfile(proposed: FlatProfile, sourceFiles: readonly string[]): FlatProfile {
+  const kept = new Set(sourceFiles.map((file) => (file.includes('/') ? file.split('/')[0] : '.')))
+  const governedRoots = proposed.governedRoots.filter((root) => root === '.' || kept.has(root))
+  return { ...proposed, governedRoots, fileCount: sourceFiles.length }
+}
 
 function surveyPrompt(profile: FlatProfile, coverageFloor: number): string {
   return [
@@ -305,32 +327,53 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
 
   // --- profile -------------------------------------------------------------------------------------------
   const tracked = (await gitOrThrow(['ls-files'], repo, 'listing tracked files')).split('\n').filter(Boolean)
-  const profile = profileFiles(tracked)
-  if (!profile.fileCount) {
+  const proposed = profileFiles(tracked)
+  if (!proposed.fileCount) {
     throw new Error(
       `spex flat: no recognised source files in ${source}. Flatcode governs a fixed allowlist of source ` +
       `extensions; a repository outside it would gate on an empty governed set, which passes vacuously.`,
     )
   }
-  log(`profiled ${profile.fileCount} source files · ${profile.languages.join(', ')} · roots ${profile.governedRoots.join(', ')}`)
   const configPath = join(repo, 'spexcode.json')
   const existing = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {}
-  writeFileSync(configPath, `${JSON.stringify({
+  const writeConfig = (chosen: FlatProfile) => writeFileSync(configPath, `${JSON.stringify({
     ...existing,
     // Name the graph after the repository it reads, not after Flatcode's checkout directory — otherwise every
     // flat in the world renders under the title "repo".
     dashboard: { title: name, ...(existing.dashboard ?? {}) },
-    lint: { ...(existing.lint ?? {}), governedRoots: profile.governedRoots, sourceExtensions: profile.sourceExtensions },
+    lint: { ...(existing.lint ?? {}), governedRoots: chosen.governedRoots, sourceExtensions: chosen.sourceExtensions },
   }, null, 2)}\n`)
+  writeConfig(proposed)
 
   // --- seed ----------------------------------------------------------------------------------------------
   const init = await spex(['init', '--harness', harness.dispatchId], repo)
   if (init.code !== 0) throw new Error(`spex flat: seeding .spec failed — ${init.stderr.trim() || init.stdout.trim()}`)
-  await commit(repo, 'flatcode: profile and seed .spec')
   log(`seeded .spec · launcher ${launcherName} (${harness.id})`)
 
-  // --- converge ------------------------------------------------------------------------------------------
+  // --- confirm the governed set BEFORE anything is measured against it ------------------------------------
   let gate = await gateOf(repo)
+  const profile = confirmProfile(proposed, gate.sourceFiles)
+  const dropped = proposed.governedRoots.filter((root) => !profile.governedRoots.includes(root))
+  if (dropped.length) {
+    // Re-read rather than argue that the numbers cannot have moved. The first draft of this reasoned that
+    // narrowing only removes roots contributing zero files, so the reading above must still stand — and that
+    // reasoning is exactly the kind this command exists to refuse. The config that produced a reading is part
+    // of the reading; change the config, measure again. One subprocess is cheaper than a report that is right
+    // only as long as an assumption holds.
+    writeConfig(profile)
+    gate = await gateOf(repo)
+    log(`dropped ${dropped.join(', ')} — lint's source policy governs nothing there`)
+  }
+  if (!gate.governed) {
+    throw new Error(
+      `spex flat: lint governs no source file in ${source}, so the gate would pass vacuously. The proposed ` +
+      `roots were ${proposed.governedRoots.join(', ')}; the product's source policy kept none of them.`,
+    )
+  }
+  await commit(repo, 'flatcode: profile and seed .spec')
+  log(`governing ${profile.fileCount} source files · ${profile.languages.join(', ')} · roots ${profile.governedRoots.join(', ')}`)
+
+  // --- converge ------------------------------------------------------------------------------------------
   let round = 0
   while (round < rounds && !gatePassed(gate, coverageFloor)) {
     round += 1

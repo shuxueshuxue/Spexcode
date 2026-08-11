@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { gatePassed, profileFiles, readGate, type FlatGate } from './flat.js'
+import { confirmProfile, gatePassed, profileFiles, readGate, type FlatGate } from './flat.js'
 import { HARNESSES, harnessById } from './harness.js'
 
 test('profiling governs tracked source and ignores what no spec could claim', () => {
@@ -45,6 +45,31 @@ test('one top-level packaging script does not drag the whole repository into the
   assert.deepEqual(profile.governedRoots, ['docs', 'src', 'tests'])
 })
 
+test('the proposed governed set is narrowed to what lint actually keeps', () => {
+  // Measured on psf/requests: the file tree proposes docs, src and tests, but the product's source policy
+  // drops `tests/**` wholesale, so lint governs 21 files, not 36. Leaving the proposal uncorrected wrote a
+  // root into the config that the gate ignores and printed a count the gate's own denominator contradicted.
+  const proposed = profileFiles([
+    ...Array.from({ length: 19 }, (_, n) => `src/requests/m${n}.py`),
+    ...Array.from({ length: 15 }, (_, n) => `tests/test_${n}.py`),
+    'docs/conf.py', 'docs/build.py',
+  ])
+  assert.deepEqual(proposed.governedRoots, ['docs', 'src', 'tests'])
+  const lintKeeps = [
+    ...Array.from({ length: 19 }, (_, n) => `src/requests/m${n}.py`),
+    'docs/conf.py', 'docs/build.py',
+  ]
+  const confirmed = confirmProfile(proposed, lintKeeps)
+  assert.deepEqual(confirmed.governedRoots, ['docs', 'src'])
+  assert.equal(confirmed.fileCount, 21)
+  assert.deepEqual(confirmed.sourceExtensions, proposed.sourceExtensions)
+})
+
+test('confirming keeps a repository-root governed set whole', () => {
+  const proposed = profileFiles(['main.go', 'helper.go'])
+  assert.deepEqual(confirmProfile(proposed, ['main.go', 'helper.go']).governedRoots, ['.'])
+})
+
 test('the gate reads coverage and errors out of the real lint report shape', () => {
   const gate = readGate(JSON.stringify({
     projection: 'spex.spec-lint.report',
@@ -86,9 +111,9 @@ test('an empty governed set never passes, however clean the report looks', () =>
 })
 
 test('convergence needs both halves — a clean tree that is thin does not pass', () => {
-  const thin: FlatGate = { errors: 0, governed: 100, uncovered: 40, coverage: 60, errorFindings: [], uncoveredFiles: [] }
-  const broken: FlatGate = { errors: 3, governed: 100, uncovered: 0, coverage: 100, errorFindings: ['x'], uncoveredFiles: [] }
-  const done: FlatGate = { errors: 0, governed: 100, uncovered: 5, coverage: 95, errorFindings: [], uncoveredFiles: [] }
+  const thin: FlatGate = { errors: 0, governed: 100, uncovered: 40, coverage: 60, errorFindings: [], uncoveredFiles: [], sourceFiles: [] }
+  const broken: FlatGate = { errors: 3, governed: 100, uncovered: 0, coverage: 100, errorFindings: ['x'], uncoveredFiles: [], sourceFiles: [] }
+  const done: FlatGate = { errors: 0, governed: 100, uncovered: 5, coverage: 95, errorFindings: [], uncoveredFiles: [], sourceFiles: [] }
   assert.equal(gatePassed(thin, 90), false)
   assert.equal(gatePassed(broken, 90), false)
   assert.equal(gatePassed(done, 90), true)

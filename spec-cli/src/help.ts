@@ -197,7 +197,7 @@ consume the same visible diagnosis.`,
   },
   flat: {
     line: 'flat new|site|gallery Flatcode — flatten any repository into a converged .spec tree, then preview it',
-    body: `Usage: spex flat new <repo-url|path> [--out <dir>] [--launcher <name>] [--rounds <n>] [--coverage <pct>]
+    body: `Usage: spex flat new <repo-url|path> [--out <dir>] [--launcher <name>] [--rounds <n>] [--coverage <pct>] [--lang <code>]
        spex flat site <flat-dir>
        spex flat gallery --out <dir> <flat-dir>…
 
@@ -215,6 +215,10 @@ registered — the target repository never lands on anyone's board.
 
 --launcher picks the agent exactly like a session does, and must name a harness with a non-interactive
 turn; a launcher whose harness has none is refused by name rather than quietly swapped.
+
+--lang <code> writes the spec PROSE in that language (\`--lang zh\`, \`--lang ja\`, or a spelled-out name):
+every node's title, desc and body, since a spec is written for whoever maintains that repository. Node ids
+stay lowercase ascii-kebab — they are directory names and part of URLs — and so do code paths and mentions.
 
 \`spex flat site <flat-dir>\` writes <flat-dir>/site — the graph-only dashboard over that flat's spec tree,
 plus the node documents, the .spec archive, and a release manifest with a SHA-256 per file. It is plain

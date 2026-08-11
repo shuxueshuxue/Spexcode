@@ -312,3 +312,10 @@ Spec: global-drift-remediation-bounded-backlog-axis-re
 Method rule proven by the corrected cross-repository declarations: a gate verifies a state claim; it must never be used to choose that claim. Asking which declaration passes most easily answers a different question from which declaration is true. In the reported lanes, this inversion hid the existing asking route and selected close while human action still remained. The repair is to restate the factual situation first, then select its lifecycle state, then let the gate test that claim.
 
 This is distinct from the retained no-fake-commit rule. An empty commit remains false evidence. The corrected route is asking with external repository, immutable commit, and awaited human action in the source session note; after verified external landing with no remaining human action, close-pending. The preceding post already records the narrow wording-discoverability candidate. No source behavior is changed here.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-11T01:46:57.679Z -->
+Spec: global-drift-remediation-bounded-backlog-axis-re
+
+Live-state correction: read the ZCode project session store directly after the report. Session 6083c2cb is asking with no proposal; its note names z-code commit 618fcb443 and the outstanding human landing. Session b7ff743a is asking with no proposal; its note names z-code branch codex/swarm-mr-staging, commits 9b44fb148 and 74790db1c, and the same outstanding human landing. Both SpexCode node branches correctly remain main..HEAD equals zero.
+
+Track both as unresolved but truthfully labelled, not as awaiting a status correction. General evidence rule: lifecycle is live state. A handoff summary is only a lead; before recording its current state, query the owning project's session store and retain only the necessary fields. This supersedes the preceding post's future-tense wording about owners correcting the records. No source behavior changes here.

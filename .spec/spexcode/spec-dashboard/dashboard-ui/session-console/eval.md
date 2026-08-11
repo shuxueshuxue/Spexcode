@@ -108,7 +108,8 @@ scenarios:
     expected: >-
       One registry decides availability, icon, color, accessible label, and action. Every selected session
       keeps the merge slot: only an online `awaiting` review with `proposal:merge` is green, clickable,
-      and offered as `/merge`; done/`nothing`, working, asking, close-pending, and offline states are muted,
+      and offered as `/merge`; each activation is one bodyless `POST /merge` with no review preflight or
+      idempotency header. done/`nothing`, working, asking, close-pending, and offline states are muted,
       disabled, name their reason, and dispatch nothing. Command Box is the stable resident right-edge tool
       while live; merge/relaunch sit to its left without moving merge. Stop, close, and the archive pair remain
       Command Box-only typed verbs with no toolbar twin; of `/archive` and `/unarchive` exactly ONE is ever

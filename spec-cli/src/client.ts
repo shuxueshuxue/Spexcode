@@ -361,14 +361,10 @@ export async function clientEvals(id: string): Promise<EvalsResult> {
   throw new BackendError(`session eval pages changed while fetching ${id}; retry the command`)
 }
 
-// POST /api/sessions/:id/merge — the cockpit's merge DISPATCH. The caller returns the exact pair it just
-// reviewed and one durable request key; the backend accepts that declaration generation once before ensuring the agent live.
-export async function clientMerge(id: string, options: { expectedBranchHead: string; expectedBaseHead: string; expectedReviewEpoch: number; requestKey: string }): Promise<{ dispatched: boolean; replayed?: boolean; expectedBranchHead?: string; expectedBaseHead?: string; reviewEpoch?: number; reason?: string; code?: string }> {
+// POST /api/sessions/:id/merge — a human merge intent dispatched to the session's own agent.
+export async function clientMerge(id: string): Promise<{ dispatched: boolean; reason?: string; code?: string }> {
   await guarded('merge')
-  const headers: Record<string, string> = { 'content-type': 'application/json', 'Idempotency-Key': options.requestKey }
-  const r = await apiFetch(`/api/sessions/${seg(id)}/merge`, {
-    method: 'POST', headers, body: JSON.stringify({ expectedBranchHead: options.expectedBranchHead, expectedBaseHead: options.expectedBaseHead, expectedReviewEpoch: options.expectedReviewEpoch }),
-  })
+  const r = await apiFetch(`/api/sessions/${seg(id)}/merge`, { method: 'POST' })
   return await r.json().catch(() => ({ dispatched: false, reason: `bad backend response (${r.status})` }))
 }
 

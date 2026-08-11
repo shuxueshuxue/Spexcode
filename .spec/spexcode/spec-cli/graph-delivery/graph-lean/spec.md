@@ -65,6 +65,14 @@ failed. It is already batch-produced and content-addressed before graph assembly
 splice only attach the cached projection. No graph request, subscriber, or session row calls the full
 `buildSessionEvals`, and scenarios/readings/evidence remain behind their demand routes.
 
+**A ZCode child may point at that glance only through an explicit identity assertion.** A session row may carry
+`zcodeChildSessionIds`, the exact opaque ZCode child ids durably asserted for that SpexCode session. The array is
+absent when no assertion exists; it is never a zero-valued eval result. A consumer matches a current
+`childSessionId` only by exact membership, then reads that *same row's* `evalSummary`; it does not join on title,
+branch, worktree, parent task, or timing. One child id has one live SpexCode owner: repeating the same pair is
+idempotent, while an attempted second owner is a loud conflict. The assertion lives only with its session record,
+so closing that record removes both the graph row and its pointer; a later session may then assert the id anew.
+
 **Demand routes own rows all the way down.** `/api/specs/lite` remains the node prose corpus but carries no
 scenario declarations; the search palette requests its bounded Issue/Eval planes through [[paged-review]].
 The node popup requests `node:`-filtered Issue rows and a paged Eval timeline through the same protocol.

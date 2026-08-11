@@ -88,6 +88,7 @@ export type Session = {
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
   files?: string[]         // live posted paths ([[files]]), read from the session store with the rest of the projection
   web?: SessionWeb[]       // live posted loopback services ([[web]]), read from the session store with the rest of the projection
+  zcodeChildSessionIds?: string[] // explicit ZCode worker identities; absent means this SpexCode session has no asserted worker association
 }
 
 // HTTP carries no authenticated session identity. A CLI may report its environment id, but that remains
@@ -243,6 +244,7 @@ export type SessRec = {
   launchOwner: string | null // stable public-backend authority while queued; null for active/legacy records
   createRequestId?: string | null // digest of the public Idempotency-Key; binds retry without storing the bearer
   createPayloadHash?: string | null // exact normalized create payload bound to createRequestId
+  zcodeChildSessionIds?: string[] // persistent exact ZCode child ids; never inferred from title, path, branch, or timing
   base?: string | null   // explicit fork point the creator pinned; absent/null = the auto-detected source-of-truth branch
   launchReadinessPending?: LaunchReadinessPending | null // internal resume candidate; every public reader projects `original` until one final publish
 }
@@ -424,6 +426,11 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
   if (pendingRaw && !pendingStatus) throw new Error(`session '${raw.session_id}' launch readiness original has invalid lifecycle '${pendingRaw.status}'`)
   const pendingProposal = pendingRaw && isSessionProposal(pendingRaw.proposal) ? pendingRaw.proposal : null
   if (pendingRaw?.proposal && !pendingProposal) throw new Error(`session '${raw.session_id}' launch readiness original has invalid proposal '${pendingRaw.proposal}'`)
+  const zcodeChildSessionIds = raw.zcode_child_session_ids ?? []
+  if (!Array.isArray(zcodeChildSessionIds)
+    || zcodeChildSessionIds.some((id) => typeof id !== 'string' || !id || id.trim() !== id)
+    || new Set(zcodeChildSessionIds).size !== zcodeChildSessionIds.length)
+    throw new Error(`session '${raw.session_id}' has invalid zcode_child_session_ids`)
   return {
     session: raw.session_id, governed: !!raw.governed, worktreePath: raw.worktree_path || '', branch: raw.branch || null,
     node: raw.node || null, title: raw.title || null, name: raw.name || null, parent: raw.parent || null,
@@ -441,6 +448,7 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     launchOwner: launchOwner || null,
     createRequestId: raw.create_request_id || null,
     createPayloadHash: raw.create_payload_hash || null,
+    zcodeChildSessionIds: [...zcodeChildSessionIds],
     base: raw.base || null,             // records written before pinned bases → null → the source-of-truth branch
     launchReadinessPending: pendingRaw ? {
       version: 1,
@@ -510,6 +518,7 @@ function writeRecord(rec: SessRec): void {
     launch_owner: rec.status === 'queued' ? rec.launchOwner ?? '' : '',
     create_request_id: rec.createRequestId ?? '',
     create_payload_hash: rec.createPayloadHash ?? '',
+    ...(rec.zcodeChildSessionIds?.length ? { zcode_child_session_ids: rec.zcodeChildSessionIds } : {}),
     // Written only when the creator pinned one: an unpinned record keeps its exact legacy bytes, so a
     // restore-the-frozen-record path stays byte-identical instead of silently gaining a key.
     ...(rec.base ? { base: rec.base } : {}),
@@ -1033,7 +1042,34 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const pp = prompt ? oneLinePreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session) }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
+}
+
+export type ZCodeChildSessionLink = { sessionId: string; childSessionId: string; alreadyLinked: boolean }
+
+// @@@zcode child identity - ZCode owns the child id and SpexCode owns the session record. The writer accepts
+// only their exact declared pair; names, worktrees, branches, and timestamps are deliberately not candidates.
+// One hash-derived lock serializes every claim for one opaque child id across all records, while the target's
+// ordinary record lock preserves its lifecycle write discipline. Closing the target removes this field with
+// its record, so the association lasts exactly as long as the SpexCode session/eval projection it names.
+export async function linkZCodeChildSession(sessionId: string, childSessionId: unknown): Promise<ZCodeChildSessionLink | null> {
+  if (typeof childSessionId !== 'string' || !childSessionId || childSessionId.trim() !== childSessionId)
+    throw new ResourceConflict('z-code child session link needs a non-empty, whitespace-free childSessionId')
+  const child = childSessionId
+  const childLock = `zcode-child-link-${createHash('sha256').update(child).digest('hex')}`
+  return withRecordLock(childLock, () => withRecordLock(sessionId, async () => {
+    const target = readRecord(sessionId)
+    if (!target || !target.governed) return null
+    for (const id of listSessionIds()) {
+      const candidate = readRecord(id)
+      if (!candidate?.zcodeChildSessionIds?.includes(child)) continue
+      if (candidate.session !== target.session)
+        throw new ResourceConflict(`z-code child session ${child} is already linked to SpexCode session ${candidate.session}`)
+      return { sessionId: target.session, childSessionId: child, alreadyLinked: true }
+    }
+    writeRecord({ ...target, zcodeChildSessionIds: [...(target.zcodeChildSessionIds ?? []), child] })
+    return { sessionId: target.session, childSessionId: child, alreadyLinked: false }
+  }))
 }
 
 export async function renameSession(id: string, name: string): Promise<boolean> {

@@ -34,4 +34,12 @@ So there are two tiers, and the degradation between them must be loud rather tha
 
 Worktree isolation transfers cleanly, with no registration step to install. A V4 `createSession` may carry a **local directory path directly as `workspaceId`**; the bridge treats it as the `workspacePath` and opens the session with that directory as its working directory, so one node per worktree needs no prior app-side enrolment — the failure-prone install-time dependency that would otherwise be disqualifying here does not exist. Two limits bound that: an input-less `createSession` yields only a deferred draft and persists nothing until a first input promotes it, and a remote directory requires a well-formed `remote:ssh|wsl|docker|server:…` identity. This adapter does not use that route today; it launches `zcode --prompt`.
 
-Because both systems name sessions, the correspondence between them is declared rather than inferred: z-code's `sessionId` and `childSessionId` map to SpexCode's session id and governed node id explicitly. `session/create` accepts a caller-supplied id, so the mapping can be asserted at creation instead of reconstructed later by matching timestamps or paths. SpexCode keeps node claim, worktree, atomic landing, and the spec-before-code gate — z-code has no concept of landing, and overlays derive from git, which z-code never produces. z-code keeps delegation lineage and in-session children. The outer layer holds one worktree and one top-level worker per node; z-code's native children serve sub-tasks inside that worker, and never nest.
+Because both systems name sessions, correspondence is declared rather than inferred. The top-level z-code launch
+inherits its SpexCode `SPEXCODE_SESSION_ID`; a configured tool/hook executing for a native child additionally has
+that child's `ZCODE_SESSION_ID`. When that child needs a SpexCode eval glance, it posts the explicit
+`{ childSessionId }` pair to the owning SpexCode session's `zcode-child-sessions` route. The persistent relation
+is exact, unique per live child id, and omitted if the tool cannot establish it; neither timestamps nor paths
+reconstruct it later. SpexCode keeps node claim, worktree, atomic landing, and the spec-before-code gate — z-code
+has no concept of landing, and overlays derive from git, which z-code never produces. z-code keeps delegation
+lineage and in-session children. The outer layer holds one worktree and one top-level worker per node; z-code's
+native children serve sub-tasks inside that worker, and never nest.

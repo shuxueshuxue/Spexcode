@@ -383,6 +383,9 @@ export async function specDiffAt(id: string, hash: string) {
 // harness lifecycle events the node binds, its deterministic intra-event order, and whether it intends to
 // block (honored only on block-capable events). See loadHookConfig + the hook compiler/dispatcher.
 export type ConfigPreset = { name: string; title: string; desc: string; kind: string; dir: string; files: string[]; body: string; events: string[]; order: number; block: boolean; tools: string[] }
+// @@@ public instance root - cross-repository consumers import this identity instead of matching a folder
+// literal. `plugin-system` remains the separate root for this project's system spec.
+export const PLUGIN_INSTANCE_ROOT = '.plugins'
 // field-driven surface - a plugin is a spec node at ANY depth under a plugin root that carries a
 // `surface: system|command|hook|skill|agent|review` frontmatter field naming where it plugs in. There are no
 // `command/`/`system/`/`hook/`/`skill/`/`agent/` bucket dirs (those were graph-invisible grouping dirs with no spec.md, so
@@ -413,13 +416,13 @@ function rootNode(): string | null {
 function configRoots(): string[] {
   const root = rootNode()
   if (!root) return []
-  if (existsSync(join(SPEC_DIR, root, '.config')) && !existsSync(join(SPEC_DIR, root, '.plugins'))) {
+  if (existsSync(join(SPEC_DIR, root, '.config')) && !existsSync(join(SPEC_DIR, root, PLUGIN_INSTANCE_ROOT))) {
     throw new Error(
-      `.spec/${root}/.config exists but .spec/${root}/.plugins does not — this spec tree predates the v0.3.0 ` +
-      `plugin rename (.config → .plugins). Refusing to load an empty plugin surface (agents would launch ` +
+      `.spec/${root}/.config exists but .spec/${root}/${PLUGIN_INSTANCE_ROOT} does not — this spec tree predates the v0.3.0 ` +
+      `plugin rename (.config → ${PLUGIN_INSTANCE_ROOT}). Refusing to load an empty plugin surface (agents would launch ` +
       `ungoverned). Run \`spex doctor --migrate\` to migrate the tree.`)
   }
-  return ['.plugins', 'plugin-system'].map((r) => join(SPEC_DIR, root, r))
+  return [PLUGIN_INSTANCE_ROOT, 'plugin-system'].map((r) => join(SPEC_DIR, root, r))
 }
 // co-located bundle files = everything under the node folder except its spec.md, repo-relative, recursive.
 function bundleFiles(dir: string): string[] {

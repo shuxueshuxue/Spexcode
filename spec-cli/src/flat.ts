@@ -351,6 +351,11 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
   log(`seeded .spec · launcher ${launcherName} (${harness.id})`)
 
   // --- confirm the governed set BEFORE anything is measured against it ------------------------------------
+  // Commit the seed FIRST. Lint refuses to enumerate source while the spec tree it is asked about is
+  // untracked, and it reports that refusal as an empty governed set — indistinguishable, to a caller reading
+  // only the numbers, from a repository whose every root the source policy rejected. Reading before the commit
+  // made a healthy two-file repository look vacuous.
+  await commit(repo, 'flatcode: profile and seed .spec')
   let gate = await gateOf(repo)
   const profile = confirmProfile(proposed, gate.sourceFiles)
   const dropped = proposed.governedRoots.filter((root) => !profile.governedRoots.includes(root))
@@ -361,6 +366,7 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
     // of the reading; change the config, measure again. One subprocess is cheaper than a report that is right
     // only as long as an assumption holds.
     writeConfig(profile)
+    await commit(repo, `flatcode: narrow governed roots to ${profile.governedRoots.join(', ')}`)
     gate = await gateOf(repo)
     log(`dropped ${dropped.join(', ')} — lint's source policy governs nothing there`)
   }
@@ -370,7 +376,6 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
       `roots were ${proposed.governedRoots.join(', ')}; the product's source policy kept none of them.`,
     )
   }
-  await commit(repo, 'flatcode: profile and seed .spec')
   log(`governing ${profile.fileCount} source files · ${profile.languages.join(', ')} · roots ${profile.governedRoots.join(', ')}`)
 
   // --- converge ------------------------------------------------------------------------------------------

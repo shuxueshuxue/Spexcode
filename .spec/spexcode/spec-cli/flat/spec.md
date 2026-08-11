@@ -65,7 +65,10 @@ convergence — and reimplementing the exclusion policy here to predict the answ
 it in the tree for the copies to drift apart.
 
 The confirmed profile is committed into the clone so the reading is reproducible and so the user can correct
-it and re-run.
+it and re-run. The seed is committed **before** the confirming reading, because lint declines to enumerate
+source while the spec tree it is asked about is untracked, and it reports that refusal the same way it
+reports a repository whose every root the policy rejected: an empty governed set. Reading first therefore
+makes a healthy repository look vacuous, and the refusal is indistinguishable from the real one.
 
 ## The agent seam is one-shot turns
 

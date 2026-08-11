@@ -75,15 +75,17 @@ is UNSTABLE and can confirm dangerous dialogs — try a plain send first; use ke
 provably cannot land.`, ['selector', 'project-bound']],
     interrupt: ['spex session interrupt <SEL>', 'Hard-interrupt the current turn through native harness control.', ['selector', 'project-bound']],
     rename: ['spex session rename <SEL> "<name>"', 'Set the display name; an empty name clears it.', ['selector', 'project-bound']],
-    show: ['spex session show <SEL> [--capture] [--json]', `The session record: status · node · branch · launcher · the full originating prompt.
---capture prints the LIVE PANE as text instead (empty pane = exit 0; unknown session = exit 2).`, ['selector']],
+    show: [['spex session show <SEL> [--capture] [--json]', 'spex session show --ssh <address> <FULL-SESSION-ID> [--json]'], `The session record: status · node · branch · launcher · the full originating prompt.
+--capture prints the LIVE PANE as text instead (empty pane = exit 0; unknown session = exit 2). --ssh uses an
+existing gateway-to-gateway communication tunnel and requires a full session id; live-pane capture stays local.`, ['selector']],
     resume: ['spex session resume <SEL> [--force]', 'Relaunch ONLY if confirmed offline; --force is for a wedged session.', ['selector', 'project-bound']],
     stop: ['spex session stop <SEL>', 'Soft stop: kill the exact agent and KEEP the worktree resumable.', ['selector', 'project-bound']],
     archive: ['spex session archive <SEL>', 'Cold-archive it: exact leaf/runtime stopped, worktree and conversation kept.', ['selector']],
     unarchive: ['spex session unarchive <SEL>', 'Deprecated compatibility spelling: same behavior as resume, relaunching the same conversation.', ['selector']],
-    close: ['spex session close <SEL>', `Retire ANOTHER session — one you dispatched — deleting its worktree, branch and record.
+    close: [['spex session close <SEL>', 'spex session close --ssh <address> <FULL-SESSION-ID>'], `Retire ANOTHER session — one you dispatched — deleting its worktree, branch and record.
 <SEL> names that session; it is never \`.\` and never your own id. Closing yourself deletes the worktree
-you are running in, mid-turn. Your own ending is a declaration: \`done --propose close\`.`, ['selector', 'project-bound']],
+you are running in, mid-turn. Your own ending is a declaration: \`done --propose close\`. --ssh uses an existing
+gateway-to-gateway communication tunnel and requires a full session id.`, ['selector', 'project-bound']],
     quarantine: ['spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <id> --worktree <absent-path> --branch <absent-branch> [--restore]',
       'Move only an unreadable record after the backend proves every named residue absent. --thread is an adapter-native conversation id, never the SpexCode session id; omit it for Claude. Quarantine and --restore both require the original exact id because corrupt rows are outside selectors.', ['project-bound']],
     done: ['spex session done --propose merge|nothing|close [--note T]',

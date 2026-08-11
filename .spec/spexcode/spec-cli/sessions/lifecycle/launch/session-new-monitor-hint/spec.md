@@ -63,6 +63,11 @@ PROPOSES, the human performing the close. The drawer's headings are a layout, an
 entry through `session close --help` never sees them — a help projection that leaves the distinction to
 inference is what lets an agent read the destructive verb as its own ending.
 
+The same shared map projects [[machine-peer]]'s remote spellings for `session show`, text `session send`,
+and `session close`: each takes `--ssh <address> <full-session-id>` (send also takes its text payload), while
+live-pane capture and raw-key control remain absent from that peer surface. Help records that bounded transport
+choice without discovering machines, opening SSH, or prescribing a cross-machine workflow.
+
 **The successful-create receipt.** After [[launch]] returns the new session record, `spex session new`
 prints the bare, parseable session **JSON to STDOUT** exactly as before, then prints a concise receipt to
 **STDERR**. The receipt carries the real session id and one line for each dependency:

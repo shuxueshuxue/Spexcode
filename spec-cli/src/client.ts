@@ -246,15 +246,18 @@ export async function clientSend(id: string, text: string, from?: string): Promi
 }
 
 // A machine peer's outbound loopback port is an SSH forward into the remote gateway's dedicated ingress.
-// It accepts the same input route as a backend, so the remote gateway can preserve normal sendText acceptance.
-export async function clientSendThroughPeer(sshAddress: string, id: string, text: string, from?: string): Promise<DispatchResult> {
+// It exposes only the small session-id allowlist the gateway can safely route to a derived local project.
+async function peerFetch(sshAddress: string, path: string, init?: RequestInit): Promise<Response> {
   const peer = resolveMachinePeer(sshAddress)
-  let response: Response
   try {
-    response = await fetch(`http://127.0.0.1:${peer.outboundPort}/api/sessions/${seg(id)}/input`, post({ kind: 'text', text, ...(from ? { from } : {}) }))
+    return await fetch(`http://127.0.0.1:${peer.outboundPort}${path}`, init)
   } catch (error) {
     throw new BackendError(`communication tunnel for SSH address ${JSON.stringify(sshAddress)} is unreachable — run \`spex peer connect ${sshAddress}\` to repair it (${(error as Error).message})`, undefined, error)
   }
+}
+
+export async function clientSendThroughPeer(sshAddress: string, id: string, text: string, from?: string): Promise<DispatchResult> {
+  const response = await peerFetch(sshAddress, `/api/sessions/${seg(id)}/input`, post({ kind: 'text', text, ...(from ? { from } : {}) }))
   const body = await response.json().catch(() => ({ ok: false, error: `bad peer response (${response.status})` })) as DispatchResult | { error?: unknown }
   const peerBody = body as { ok?: unknown; error?: unknown }
   if (!response.ok && peerBody.ok !== false) {
@@ -364,6 +367,14 @@ export async function clientClose(id: string): Promise<boolean> {
   return !!(await r.json().catch(() => ({ ok: false })))?.ok
 }
 
+// POST /api/sessions/:id/close through a known peer. The local project guard is inapplicable: the peer is
+// already the caller's explicit remote transport, and the remote gateway derives the owning project by id.
+export async function clientCloseThroughPeer(sshAddress: string, id: string): Promise<boolean> {
+  const r = await peerFetch(sshAddress, `/api/sessions/${seg(id)}/close`, post({ source: { kind: 'user' } }))
+  if (!r.ok) throw new BackendError(`remote backend refused to close ${id}: ${await r.text()}`, r.status)
+  return !!(await r.json().catch(() => ({ ok: false })))?.ok
+}
+
 export async function clientQuarantine(
   id: string,
   witness: { adapter: string; thread: string | null; tmux: string; worktree: string; branch: string },
@@ -430,4 +441,11 @@ export async function clientShow(id: string): Promise<ShowResult> {
     const session = localCachedSessions(true).find((item) => item.id === id)
     return session ? { ok: true, session } : { ok: false, status: 404 }
   })
+}
+
+export async function clientShowThroughPeer(sshAddress: string, id: string): Promise<ShowResult> {
+  const r = await peerFetch(sshAddress, `/api/sessions/${seg(id)}`)
+  if (r.ok) return { ok: true, session: await r.json() as Session & { prompt: string | null } }
+  if (r.status === 404) return { ok: false, status: 404 }
+  throw new BackendError(`remote backend refused to show ${id}: ${await r.text()}`, r.status)
 }

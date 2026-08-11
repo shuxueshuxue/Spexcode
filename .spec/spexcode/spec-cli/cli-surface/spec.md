@@ -45,10 +45,13 @@ its own finding classes) and `serve ui` (a different process) are verbs.
 
 `peer` is the host-level machine-link drawer: `spex peer connect <SSH-ADDRESS>` establishes a durable
 [[machine-peer]], `spex peer ls` reports the known links, and `spex peer disconnect <SSH-ADDRESS>` explicitly
-retires one. `spex session send --ssh <SSH-ADDRESS> <FULL-SESSION-ID> "<msg>"` is the corresponding remote
-send face. The address stays opaque to SpexCode — `user@host`, a `Host` alias, and any SSH-config spelling are
-passed to SSH without product parsing. `--ssh` is a parameter of `send`, not a rival routing grammar: once a
-known peer resolves it, the send uses the ordinary explicit remote transport path.
+retires one. `spex session show --ssh <SSH-ADDRESS> <FULL-SESSION-ID>`, `spex session send --ssh <SSH-ADDRESS>
+<FULL-SESSION-ID> <text>`, and `spex session close --ssh <SSH-ADDRESS> <FULL-SESSION-ID>` are the first
+corresponding remote session faces. The address stays opaque to SpexCode — `user@host`, a `Host` alias, and any
+SSH-config spelling are passed to SSH without product parsing. `--ssh` is a transport parameter for these
+id-addressed verbs, not a rival routing grammar: once a known peer resolves it, the verb uses the ordinary
+explicit remote transport path. Operations which need a remote project context, such as `ls` and `new`, do not
+borrow the caller's local cwd and therefore stay outside this first group.
 
 `spex spec lint --json` is the machine representation of the same blocking report, not another lint
 verb: it emits the [[spec-lint]] versioned report on stdout while retaining lint's error-derived exit code.

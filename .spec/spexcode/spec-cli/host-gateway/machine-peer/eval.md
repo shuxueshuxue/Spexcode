@@ -3,13 +3,14 @@ scenarios:
   - name: peer-send-reaches-normal-input-and-preserves-return-identity
     description: >
       Start the host peer service with an established loopback peer forward, then use the real CLI
-      `peer ls` and `session send --ssh` faces. Also exercise the remote peer ingress against one,
+      `peer ls` and `session show|send|close --ssh` faces. Also exercise the remote peer ingress against one,
       zero, and multiple local project ownership matches.
     expected: >
       The CLI sends through the peer forward only when that named tunnel exists; the remote gateway
-      derives exactly one project and forwards a normal text input with the stable peer machine/session
-      identity. Missing or ambiguous session ownership fails loudly, and removing session state never
-      tears down the machine peer.
+      derives exactly one project and forwards only normal session detail, text-input, and close requests.
+      Text input has the stable peer machine/session identity; close is normalized to an ordinary user close;
+      any unlisted backend operation is rejected. Missing or ambiguous session ownership fails loudly, and
+      removing session state never tears down the machine peer.
     tags: [cli, backend-api]
     test:
       path: spec-cli/src/machine-peer.test.ts

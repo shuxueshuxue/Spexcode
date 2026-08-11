@@ -100,7 +100,7 @@ export function findMachinePeer(sshAddress: string): MachinePeer | null {
 export function resolveMachinePeer(sshAddress: string): MachinePeer {
   const peer = findMachinePeer(sshAddress)
   if (!peer || peer.state !== 'connected') {
-    const error = new Error(`no communication tunnel for SSH address ${JSON.stringify(sshAddress)} — run \`spex peer connect ${sshAddress}\`, then retry the unchanged send`)
+    const error = new Error(`no communication tunnel for SSH address ${JSON.stringify(sshAddress)} — run \`spex peer connect ${sshAddress}\`, then retry the unchanged command`)
     error.name = 'BackendError'
     throw error
   }
@@ -157,6 +157,10 @@ function json(res: ServerResponse, status: number, body: unknown): void {
 }
 
 type PeerProject = { id: string; url: string | null; endpointConflict?: string }
+type PeerSessionRequest =
+  | { kind: 'show'; sessionId: string }
+  | { kind: 'input'; sessionId: string }
+  | { kind: 'close'; sessionId: string }
 
 // Session records live under the shared Git common-dir store, whereas a running backend publishes under
 // the worktree root it serves. A direct endpoint beside the session remains the simple case; linked
@@ -197,29 +201,54 @@ function peerProjectsForSession(sessionId: string): PeerProject[] {
   return hits
 }
 
+function peerSessionRequest(req: IncomingMessage): PeerSessionRequest | null {
+  const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+  if (url.search) return null
+  const base = url.pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})$/i)
+  if (req.method === 'GET' && base) return { kind: 'show', sessionId: base[1] }
+  const input = url.pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})\/input$/i)
+  if (req.method === 'POST' && input) return { kind: 'input', sessionId: input[1] }
+  const close = url.pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})\/close$/i)
+  if (req.method === 'POST' && close) return { kind: 'close', sessionId: close[1] }
+  return null
+}
+
 async function forwardToProject(peer: MachinePeer, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const match = new URL(req.url ?? '/', 'http://127.0.0.1').pathname.match(/^\/api\/sessions\/([0-9a-f-]{36})\/input$/i)
-  if (!match || req.method !== 'POST') { json(res, 404, { error: 'peer accepts POST /api/sessions/<full-id>/input only' }); return }
-  const sessionId = match[1]
+  const request = peerSessionRequest(req)
+  if (!request) {
+    json(res, 404, { error: 'peer accepts GET /api/sessions/<full-id>, POST /api/sessions/<full-id>/input, or POST /api/sessions/<full-id>/close only' })
+    return
+  }
+  const { sessionId } = request
   const projects = peerProjectsForSession(sessionId)
   if (!projects.length) { json(res, 404, { error: `no local project owns session ${sessionId}` }); return }
   if (projects.length > 1) { json(res, 409, { error: `session ${sessionId} is ambiguous across ${projects.length} local projects` }); return }
   if (projects[0].endpointConflict) { json(res, 409, { error: projects[0].endpointConflict }); return }
   if (!projects[0].url) { json(res, 502, { error: `target backend for session ${sessionId} is offline` }); return }
-  let body: Record<string, unknown>
-  try {
-    const parsed = JSON.parse(await readRequest(req))
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || parsed.kind !== 'text' || typeof parsed.text !== 'string') throw new Error('input must be {kind:"text",text:"..."}')
-    body = {
-      kind: 'text', text: parsed.text,
-      from: validPeerSender(parsed.from, peer.machineId) ? parsed.from : peerSenderRef(peer.machineId),
-    }
-  } catch (error) { json(res, 400, { error: (error as Error).message }); return }
+  let path = `/api/sessions/${encodeURIComponent(sessionId)}`
+  let init: RequestInit = { method: 'GET' }
+  if (request.kind === 'input') {
+    let body: Record<string, unknown>
+    try {
+      const parsed = JSON.parse(await readRequest(req))
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || parsed.kind !== 'text' || typeof parsed.text !== 'string') throw new Error('input must be {kind:"text",text:"..."}')
+      body = {
+        kind: 'text', text: parsed.text,
+        from: validPeerSender(parsed.from, peer.machineId) ? parsed.from : peerSenderRef(peer.machineId),
+      }
+    } catch (error) { json(res, 400, { error: (error as Error).message }); return }
+    path += '/input'
+    init = { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+  } else if (request.kind === 'close') {
+    try { await readRequest(req) } catch (error) { json(res, 400, { error: (error as Error).message }); return }
+    // A peer cannot claim to be a local session on the receiving machine. Close is the backend's ordinary
+    // external-user operation, authorized here solely by the SSH-created loopback listener.
+    path += '/close'
+    init = { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: { kind: 'user' } }) }
+  }
   let upstream: Response
   try {
-    upstream = await fetch(`${projects[0].url}/api/sessions/${encodeURIComponent(sessionId)}/input`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-    })
+    upstream = await fetch(`${projects[0].url}${path}`, init)
   } catch (error) { json(res, 502, { error: `target backend is unreachable: ${(error as Error).message}` }); return }
   const text = await upstream.text()
   res.writeHead(upstream.status, { 'content-type': upstream.headers.get('content-type') ?? 'application/json' })

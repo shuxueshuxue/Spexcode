@@ -124,6 +124,9 @@ function parseSessionSendArgs(args: string[]): SessionSendArgs {
   if ((values.has('--api') && values.has('--port')) || (values.has('--ssh') && (values.has('--api') || values.has('--port')))) {
     sessionSendUsage('--ssh, --api, and --port are alternate routes; choose one')
   }
+  if (values.has('--ssh') && (values.has('--password') || values.has('--insecure'))) {
+    sessionSendUsage('--password and --insecure apply only to an explicit --api route, not --ssh')
+  }
   const rawKeys = values.get('--keys')
   if (rawKeys !== undefined) {
     if (values.has('--ssh')) sessionSendUsage('--keys cannot cross a machine peer', true)
@@ -134,6 +137,44 @@ function parseSessionSendArgs(args: string[]): SessionSendArgs {
   }
   if (positionals.length !== 2) sessionSendUsage('plain send requires exactly one selector and one message')
   return { selector: positionals[0], kind: 'text', text: positionals[1], ...(values.has('--ssh') ? { sshAddress: values.get('--ssh')! } : {}) }
+}
+
+type SessionTargetArgs = { selector: string; sshAddress?: string }
+const FULL_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function sessionTargetUsage(verb: 'show' | 'close', detail: string): never {
+  console.error(`spex session ${verb}: ${detail}`)
+  console.error(verb === 'show'
+    ? 'usage: spex session show <SEL> [--capture] [--json] [--api <url> | --port <n>]\n       spex session show --ssh <address> <FULL-SESSION-ID> [--json]'
+    : 'usage: spex session close <SEL> [--api <url> | --port <n>]\n       spex session close --ssh <address> <FULL-SESSION-ID>')
+  process.exit(2)
+}
+
+function parseSessionTargetArgs(verb: 'show' | 'close', args: string[]): SessionTargetArgs {
+  const values = new Map<string, string>()
+  const valueFlags = new Set(['--api', '--port', '--password', '--ssh'])
+  const bareFlags = new Set(verb === 'show' ? ['--capture', '--json', '--insecure'] : ['--insecure'])
+  const positionals: string[] = []
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i]
+    if (!token.startsWith('--')) { positionals.push(token); continue }
+    if (!valueFlags.has(token) && !bareFlags.has(token)) sessionTargetUsage(verb, `unknown flag ${token}`)
+    if (values.has(token)) sessionTargetUsage(verb, `${token} may appear only once`)
+    values.set(token, '')
+    if (bareFlags.has(token)) continue
+    const value = args[++i]
+    if (value === undefined || value === '' || value.startsWith('--')) sessionTargetUsage(verb, `${token} expects one non-empty value`)
+    values.set(token, value)
+  }
+  if ((values.has('--api') && values.has('--port')) || (values.has('--ssh') && (values.has('--api') || values.has('--port')))) {
+    sessionTargetUsage(verb, '--ssh, --api, and --port are alternate routes; choose one')
+  }
+  if (values.has('--ssh') && (values.has('--password') || values.has('--insecure'))) {
+    sessionTargetUsage(verb, '--password and --insecure apply only to an explicit --api route, not --ssh')
+  }
+  if (values.has('--ssh') && verb === 'show' && values.has('--capture')) sessionTargetUsage(verb, '--capture cannot cross a machine peer')
+  if (positionals.length !== 1) sessionTargetUsage(verb, 'requires exactly one session selector')
+  return { selector: positionals[0], ...(values.has('--ssh') ? { sshAddress: values.get('--ssh')! } : {}) }
 }
 
 const SIGNPOSTS: Record<string, string> = {
@@ -907,8 +948,9 @@ if (cmd === 'serve') {
   } else {
     // `c` (client.ts) backs the read/control subs that route through the backend. Lazily imported.
     const sendArgs = sub === 'send' ? parseSessionSendArgs(process.argv.slice(4)) : null
+    const targetArgs = sub === 'show' || sub === 'close' ? parseSessionTargetArgs(sub, process.argv.slice(4)) : null
     const c = await import('./client.js')
-    const id = sendArgs?.selector ?? process.argv[4]
+    const id = sendArgs?.selector ?? targetArgs?.selector ?? process.argv[4]
     if (sub === 'resume') {
       // bring the agent back up (relaunch ONLY if confirmed offline, the backend owns it); demotes a working
       // `active` to idle but leaves a standing declaration/proposal untouched (see sessions.ts resumeSession()).
@@ -938,8 +980,12 @@ if (cmd === 'serve') {
       const ok = await c.clientArchive(full, on)
       console.log(!ok ? `no such session ${full}` : `${on ? 'archived' : 'resumed'} ${full}`)
     } else if (sub === 'close') {
-      const full = await resolveSelectorOrExit(id)
-      const closed = await c.clientClose(full)
+      const full = targetArgs?.sshAddress
+        ? (FULL_SESSION_ID.test(id ?? '') ? id! : sessionTargetUsage('close', '--ssh requires a full session id, not a selector'))
+        : await resolveSelectorOrExit(id)
+      const closed = targetArgs?.sshAddress
+        ? await c.clientCloseThroughPeer(targetArgs.sshAddress, full)
+        : await c.clientClose(full)
       if (!closed) { console.error(`spex session close: no such session ${full} (record remains; no close was committed)`); process.exit(1) }
       console.log(`closed ${full}`)
     } else if (sub === 'quarantine') {
@@ -975,7 +1021,7 @@ if (cmd === 'serve') {
     } else if (sub === 'send') {
       if (!sendArgs) sessionSendUsage('arguments were not parsed')
       const full = sendArgs.sshAddress
-        ? (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id ?? '')
+        ? (FULL_SESSION_ID.test(id ?? '')
             ? id!
             : sessionSendUsage('--ssh requires a full session id, not a selector'))
         : await resolveSelectorOrExit(id)
@@ -1026,13 +1072,17 @@ if (cmd === 'serve') {
       // prompt); --capture swaps in the LIVE PANE face of the same read. The pane contract is unchanged from
       // the verb it absorbed — fail and empty stay DISTINCT: a real empty pane prints nothing and exits 0;
       // unknown id exits 2, offline / capture-error exit 1, each with a named reason.
-      const full = await resolveSelectorOrExit(id)
+      const full = targetArgs?.sshAddress
+        ? (FULL_SESSION_ID.test(id ?? '') ? id! : sessionTargetUsage('show', '--ssh requires a full session id, not a selector'))
+        : await resolveSelectorOrExit(id)
       if (has('capture')) {
         const r = await c.clientCapture(full)
         if (r.ok) { process.stdout.write(r.pane) }
         else { console.error(`spex session show --capture: ${r.reason}`); process.exit(r.status === 404 ? 2 : 1) }
       } else {
-        const r = await c.clientShow(full)
+        const r = targetArgs?.sshAddress
+          ? await c.clientShowThroughPeer(targetArgs.sshAddress, full)
+          : await c.clientShow(full)
         if (!r.ok) { console.error(`spex session show: no such session ${full}`); process.exit(2) }
         if (has('json')) { console.log(JSON.stringify(r.session, null, 2)) }
         else {

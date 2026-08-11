@@ -103,9 +103,10 @@ test('a peer ingress derives one local project then uses its ordinary session in
   const backend = createServer(async (req, res) => {
     const parts: Buffer[] = []
     for await (const chunk of req) parts.push(Buffer.from(chunk))
-    received.push({ path: req.url, body: JSON.parse(Buffer.concat(parts).toString('utf8')) })
+    const raw = Buffer.concat(parts).toString('utf8')
+    received.push({ method: req.method, path: req.url, body: raw ? JSON.parse(raw) : null })
     res.setHeader('content-type', 'application/json')
-    res.end(JSON.stringify({ ok: true }))
+    res.end(JSON.stringify(req.method === 'GET' ? { id: SESSION, title: 'remote detail' } : { ok: true }))
   })
   const gateway = new MachinePeerGateway()
   try {
@@ -121,7 +122,7 @@ test('a peer ingress derives one local project then uses its ordinary session in
     })
     assert.equal(response.status, 200)
     assert.deepEqual(received, [{
-      path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'hello', from: `peer:${SOURCE}:${SOURCE}` },
+      method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'hello', from: `peer:${SOURCE}:${SOURCE}` },
     }])
 
     const claimed = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}/input`, {
@@ -129,8 +130,24 @@ test('a peer ingress derives one local project then uses its ordinary session in
     })
     assert.equal(claimed.status, 200)
     assert.deepEqual(received[1], {
-      path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'claim', from: `peer:${SOURCE}` },
+      method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'claim', from: `peer:${SOURCE}` },
     })
+
+    const shown = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}`)
+    assert.equal(shown.status, 200)
+    assert.deepEqual(await shown.json(), { id: SESSION, title: 'remote detail' })
+    const closed = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}/close`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source: { kind: 'unverified-session-claim', id: SOURCE } }),
+    })
+    assert.equal(closed.status, 200)
+    assert.deepEqual(received.slice(2), [
+      { method: 'GET', path: `/api/sessions/${SESSION}`, body: null },
+      { method: 'POST', path: `/api/sessions/${SESSION}/close`, body: { source: { kind: 'user' } } },
+    ])
+
+    const rejected = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/${SESSION}/stop`, { method: 'POST' })
+    assert.equal(rejected.status, 404, 'the peer ingress is an allowlist, never a generic backend proxy')
+    assert.equal(received.length, 4)
 
     const missing = await fetch(`http://127.0.0.1:${peer.inboundPort}/api/sessions/cccccccc-cccc-4ccc-8ccc-cccccccccccc/input`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'text', text: 'missing' }),
@@ -215,8 +232,10 @@ test('the peer and session CLI surfaces use the gateway-owned peer forward', asy
     forward = createServer(async (req, res) => {
       const chunks: Buffer[] = []
       for await (const chunk of req) chunks.push(Buffer.from(chunk))
-      received.push({ path: req.url, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) })
+      const raw = Buffer.concat(chunks).toString('utf8')
+      received.push({ method: req.method, path: req.url, body: raw ? JSON.parse(raw) : null })
       res.setHeader('content-type', 'application/json')
+      if (req.method === 'GET') { res.end(JSON.stringify({ id: SESSION, title: 'remote detail' })); return }
       res.end(JSON.stringify({ ok: true }))
     })
     await listen(forward, peer.outboundPort)
@@ -228,9 +247,23 @@ test('the peer and session CLI surfaces use the gateway-owned peer forward', asy
     const sent = await runCli(['session', 'send', '--ssh', 'peer-fixture', SESSION, 'from cli'], env)
     assert.equal(sent.code, 0, sent.stderr)
     assert.equal(sent.stdout, 'sent\n')
-    assert.deepEqual(received, [{
-      path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'from cli' },
-    }])
+    const shown = await runCli(['session', 'show', '--ssh', 'peer-fixture', SESSION, '--json'], env)
+    assert.equal(shown.code, 0, shown.stderr)
+    assert.deepEqual(JSON.parse(shown.stdout), { id: SESSION, title: 'remote detail' })
+    const closed = await runCli(['session', 'close', '--ssh', 'peer-fixture', SESSION], env)
+    assert.equal(closed.code, 0, closed.stderr)
+    assert.equal(closed.stdout, `closed ${SESSION}\n`)
+    assert.deepEqual(received, [
+      { method: 'POST', path: `/api/sessions/${SESSION}/input`, body: { kind: 'text', text: 'from cli' } },
+      { method: 'GET', path: `/api/sessions/${SESSION}`, body: null },
+      { method: 'POST', path: `/api/sessions/${SESSION}/close`, body: { source: { kind: 'user' } } },
+    ])
+    const short = await runCli(['session', 'show', '--ssh', 'peer-fixture', SESSION.slice(0, 8)], env)
+    assert.equal(short.code, 2)
+    assert.match(short.stderr, /--ssh requires a full session id/)
+    const capture = await runCli(['session', 'show', '--ssh', 'peer-fixture', SESSION, '--capture'], env)
+    assert.equal(capture.code, 2)
+    assert.match(capture.stderr, /--capture cannot cross a machine peer/)
     const absent = await runCli(['peer', 'disconnect', 'absent-peer'], env)
     assert.equal(absent.code, 1)
     assert.match(absent.stderr, /no communication tunnel/)

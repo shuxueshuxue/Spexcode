@@ -4,6 +4,7 @@ status: active
 hue: 90
 desc: The spec of SpexCode's plugin SYSTEM — how reflexive, skill-shaped plugin nodes are defined and how they plug in.
 code:
+  - packages/spec-core/src/specs.ts#PLUGIN_INSTANCE_ROOT
   - packages/spec-core/src/specs.ts#configRoots
 ---
 `plugin-system/` holds the **spec of the plugin system** — how SpexCode's reflexive, skill-shaped plugin
@@ -27,6 +28,13 @@ reports on it — which the new-session `/` palette tags it by.
 The instance root is `.plugins`. A pre-0.3.0 `.config`-only tree is refused loudly rather than gathered as
 an empty surface that launches ungoverned agents. Its repair points to `spex doctor --migrate`; in the current
 release that spelling is only a non-mutating tombstone directing the user through a 0.3.x bridge release.
+
+`@spexcode/spec-core` exports that instance identity as `PLUGIN_INSTANCE_ROOT`. This is the stable
+cross-repository contract for a consumer that needs to recognize the instance tree: it imports the symbol rather
+than matching a folder literal. Discovery and the legacy `.config` refusal derive from the same source. This names
+only the DIY dev-flow instance root; `plugin-system` remains a distinct root for the SpexCode system spec. Renaming
+the exported identity is therefore an intentional cross-repository contract and migration change, not a local UI
+or loader edit.
 
 **The init preset.** *Which* [[.plugins]] plugins `spex init` seeds into a new project — the shipped dev-flow
 set vs. the spexcode-only holdbacks, and how the materialized template tree carries it — is its own scoped

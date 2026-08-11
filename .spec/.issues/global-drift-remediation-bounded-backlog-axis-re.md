@@ -340,3 +340,13 @@ Lifecycle correction for the ZCode delivery record. The earlier phrase "awaiting
 There is no scheduled push, MR, fetch, or remote-ref action. Only a future request to publish this local work would require a new explicit authorization because those operations remain prohibited. This supersedes the prior "awaiting human landing" wording; retain the facts that its cached-ref ancestry does not establish live GitLab ancestry and that no remote was contacted.
 
 This correction concerns lifecycle wording only. The separate Decision 152 .plugins cross-repository graph contract remains a real pending human choice.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-11T07:20:07.505Z -->
+Authorized core contract work landed on local main.
+
+- `PLUGIN_INSTANCE_ROOT` is now the exported `@spexcode/spec-core` identity for the `.plugins` instance tree; loader discovery and legacy `.config` refusal derive from it. The cross-repository contract is documented in `plugin-system`.
+- `POST /api/sessions/:spexSessionId/zcode-child-sessions` now stores an exact opaque ZCode child id on the governed Spex session. Graph rows expose only non-empty `zcodeChildSessionIds`. Consumers may read the same row's `evalSummary` only on exact membership; absence stays absent, with no title/branch/worktree/time fallback. Invalid body=400, unknown owner=404, collision=409, repeat=200, first binding=201.
+
+Main code entered at `1ee3cb979`; readings complete at `8bcc477ec`. Product/backend regression evidence: real legacy `spex materialize` refusal and isolated live API graph registration (prewarmed graph, refresh without restart, conflict preservation, owner-removal reuse). Main TypeScript and 7 focused tests pass.
+
+`eval lint --changed` is honest but not globally green: it still reports existing `plugin-system/core-flat-topology` and `sessions/launch-node-binding` stale. This landing adds no missing/malformed/gap and does not claim to resolve the broader backlog.

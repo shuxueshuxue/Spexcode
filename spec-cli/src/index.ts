@@ -20,7 +20,7 @@ import { getBoardJson } from './graphCache.js'
 import { boardStream, closeBoardFileWatchers, ensureBoardFileWatchers, notifyBoardChanged, flushDeferredWorktreeRegistryChange } from './graphStream.js'
 import { gitA, gitTry, repoRoot } from '@spexcode/spec-core'
 import { cockpitReview } from './cockpit.js'
-import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, findSessionClosure, renameSession, setSessionSort, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
+import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSession, quarantineCorruptRecord, restoreQuarantinedRecord, archiveSession, resumeSession, mergeSession, captureSessionResult, sessionPrompt, findSessionClosure, renameSession, setSessionSort, linkZCodeChildSession, sessionCreateRequest, superviseQueue, superviseTurnFailures, superviseDelivery, SessionRecordUnusable, TMUX_SOCK } from './sessions.js'
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
@@ -756,6 +756,18 @@ app.post('/api/sessions/:id/rename', async (c) => {
   const ok = await renameSession(c.req.param('id'), typeof body?.name === 'string' ? body.name : '')
   if (ok) notifyBoardChanged('sessions')
   return c.json({ ok }, ok ? 200 : 404)
+})
+// Cross-product identity is opt-in and exact: a ZCode tool/hook reports its own opaque child id against the
+// SpexCode session it belongs to. No route derives an association from labels, timing, worktrees, or branches.
+app.post('/api/sessions/:id/zcode-child-sessions', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  if (!body || typeof body.childSessionId !== 'string' || !body.childSessionId || body.childSessionId.trim() !== body.childSessionId)
+    return c.json({ error: 'body needs a non-empty, whitespace-free childSessionId' }, 400)
+  const link = await linkZCodeChildSession(c.req.param('id'), body?.childSessionId)
+  if (!link) return c.json({ error: 'no such governed session' }, 404)
+  // The store watch is best effort. The confirming reader must see its asserted identity immediately.
+  notifyBoardChanged('sessions')
+  return c.json(link, link.alreadyLinked ? 200 : 201)
 })
 
 // set/clear a session's sort-key ([[session-reorder]]): a finite number pins the row's slot, null (or

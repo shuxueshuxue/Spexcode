@@ -160,7 +160,9 @@ scenarios:
   - name: explicit-ls-distinguishes-terminal-close-from-never-existed
     description: >
       Through the real `spex session ls --all <id> --api <backend>` CLI path, use an empty board with one
-      id-addressed terminal-close history hit and a second id with neither record nor history.
+      id-addressed terminal-close history hit and a second id with neither record nor history. Then use a
+      backend which returns a generic, unmarked 404 for the closure route and prove it names the incompatible
+      backend rather than claiming the target never existed.
     expected: >
       The closed id exits zero and prints its close time; the never-existed id exits nonzero and names that it
       missed live, archive, and terminal-close history. The normal board does not acquire a closed row, and an

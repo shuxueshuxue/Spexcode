@@ -219,6 +219,8 @@ export async function clientListSessions(includeArchived = false): Promise<Sessi
 export async function clientSessionClosure(selector: string): Promise<SessionClosure | null> {
   return cachedRead(async () => {
     const r = await apiFetch(`/api/sessions/${seg(selector)}/closure`)
+    if (r.headers.get('x-spexcode-close-history') !== 'v1')
+      throw new BackendError(`backend does not support terminal close history; refusing to label ${selector} as never existed (update the backend)`, 501)
     if (r.status === 404) return null
     if (!r.ok) throw new BackendError(`backend error ${r.status} reading close history for ${selector}`, r.status)
     return await r.json() as SessionClosure

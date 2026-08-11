@@ -535,6 +535,9 @@ app.get('/api/sessions/:id/timeline', (c) => {
 // plus the full originating prompt (the row itself carries only the preview). One id-addressed read backs
 // the CLI's show; 404 for an unknown id.
 app.get('/api/sessions/:id/closure', (c) => {
+  // A missing close fact and a backend that predates this route are different answers. The client requires
+  // this capability marker even on 404, so an old backend can never turn a closed id into "never existed".
+  c.header('x-spexcode-close-history', 'v1')
   const closure = findSessionClosure(c.req.param('id'))
   return closure ? c.json(closure) : c.json({ error: 'no terminal close history for this session' }, 404)
 })

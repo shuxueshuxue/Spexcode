@@ -90,7 +90,8 @@ scenarios:
   - name: explicit-close-history-read-stays-on-its-named-backend
     description: >
       Point `spex session ls --all <id> --api <url>` at a controlled backend with an empty board and a terminal
-      close-history answer, then repeat for a 404 history miss.
+      close-history answer, then repeat for a capability-marked 404 history miss and an unmarked legacy-route
+      404. The latter must fail as incompatible rather than use local history or say never existed.
     expected: >
       Both board and close-history requests stay on the explicit backend; a close hit is success, while a 404
       history miss becomes the named nonzero never-existed answer. No local ledger fallback occurs.

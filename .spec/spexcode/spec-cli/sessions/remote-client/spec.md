@@ -52,7 +52,10 @@ it stays local and guards that premise loudly against the resolved backend; see 
 An explicit `ls` id miss has one bounded cache companion: the id-addressed terminal-close ledger read. It uses
 the same backend-or-local cache role as the board, returns only `{id, closedAt}`, and is consulted only after
 the live/archive board miss. It never turns ordinary list reads into historical enumeration, and an explicit
-remote endpoint never falls back to a local ledger.
+remote endpoint never falls back to a local ledger. A closure route's no-history 404 carries its explicit
+close-history capability marker; an unmarked 404 means the named backend predates or does not implement that
+route and is a loud incompatibility with an upgrade repair, never a local fallback and never a false
+never-existed result.
 
 Pointing `--api` (or `SPEXCODE_API_URL`) at another machine's backend still monitors and drives THAT
 machine's sessions with no code change — the dashboard's viewer-points-anywhere model, extended to the CLI.

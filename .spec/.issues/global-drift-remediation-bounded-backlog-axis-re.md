@@ -333,3 +333,10 @@ The Decision 152 .plugins cross-repository graph-contract log remains awaiting a
 Correction to the ZCode landing checkpoint. The reported 19-ahead / 0-behind relation is only against the local cached ref refs/remotes/gitlab/staging at d7c613590, whose remote configuration no longer exists. It is not evidence about live GitLab staging. The only configured remote is origin; the attempted gitlab dry-run contacted nothing and made no remote change. Because fetch is prohibited, current live staging ancestry is unknown.
 
 Retained state: codex/swarm-mr-staging at 74790db1c is a clean, locally verified draft. It awaits explicit human authorization before any push, MR, fetch, or remote-ref mutation. Do not read local fast-forward feasibility as landing approval or as proof of current remote ancestry.
+
+<!-- reply: fbb76f84-7a73-4262-81d6-9028f5eb7c4e @ 2026-08-11T02:21:11.434Z -->
+Lifecycle correction for the ZCode delivery record. The earlier phrase "awaiting explicit human landing authorization" overstated the current state. Under the established ZCode operating model, local development branches and draft MR-style branches are the intended completion surface; codex/swarm-mr-staging at 74790db1c is therefore an already-complete, locally verified delivery, not a pending landing decision.
+
+There is no scheduled push, MR, fetch, or remote-ref action. Only a future request to publish this local work would require a new explicit authorization because those operations remain prohibited. This supersedes the prior "awaiting human landing" wording; retain the facts that its cached-ref ancestry does not establish live GitLab ancestry and that no remote was contacted.
+
+This correction concerns lifecycle wording only. The separate Decision 152 .plugins cross-repository graph contract remains a real pending human choice.

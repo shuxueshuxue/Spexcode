@@ -71,6 +71,22 @@ scenarios:
       in the same setup stay unguarded (viewer-points-anywhere).
     tags: [cli, backend-api]
     code: spec-cli/src/client.ts
+  - name: peer-project-operations-stay-remote
+    description: >
+      With an established loopback peer forward, use `spex session ls --ssh <address> <full-id>` and
+      `spex session new --ssh <address> <full-id> <prompt>` through the real CLI. Record the forwarded
+      requests, then repeat creation against an absent peer.
+    expected: >
+      Both operations use the peer forward and the full id only as the remote gateway's project anchor.
+      Listing returns the normal default board. Creation carries a closed requestKey envelope, has no parent,
+      emits a runnable peer reply hint for a governed caller, and fails loud on an absent peer without a
+      local in-process create fallback.
+    tags: [cli, backend-api]
+    test:
+      path: spec-cli/src/machine-peer.test.ts
+      name: the peer and session CLI surfaces use the gateway-owned peer forward
+    code: spec-cli/src/client.ts
+    related: [spec-cli/src/machine-peer.ts, spec-cli/src/cli.ts]
 ---
 
 # measuring remote-client backend routing

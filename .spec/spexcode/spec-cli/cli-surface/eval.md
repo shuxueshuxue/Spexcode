@@ -121,6 +121,21 @@ scenarios:
     tags: [cli]
     code: [spec-cli/src/cli.ts]
     related: [spec-eval/src/scenarios.ts, packages/spec-core/src/specs.ts]
+  - name: peer-session-operations-share-the-full-id-anchor
+    description: >
+      Through the real CLI and an established loopback peer forward, invoke peer session show, send, close,
+      ls, and new. Use a full id in every invocation and try `ls --all` through the same transport.
+    expected: >
+      `--ssh` remains one transport option grammar: every peer operation begins with the opaque address and
+      a full session UUID. Show/send/close address that row; ls/new use it solely as the remote project anchor.
+      No project, root, URL, or remote selector parameter appears, and peer ls rejects archive projection
+      rather than quietly broadening the tunnel.
+    tags: [cli, backend-api]
+    test:
+      path: spec-cli/src/machine-peer.test.ts
+      name: the peer and session CLI surfaces use the gateway-owned peer forward
+    code: spec-cli/src/cli.ts
+    related: [spec-cli/src/machine-peer.ts, spec-cli/src/client.ts]
 ---
 
 Measure through the real CLI binary (`node spec-cli/bin/spex.mjs …`), never by reading help.ts: run

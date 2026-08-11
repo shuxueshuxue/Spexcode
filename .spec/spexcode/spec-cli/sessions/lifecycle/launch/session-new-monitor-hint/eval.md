@@ -40,6 +40,20 @@ scenarios:
       no receipt text mixed in.
     code: spec-cli/src/help.ts
     related: spec-cli/src/cli.ts
+  - name: peer-create-receipt-names-the-return-boundary
+    tags: [cli]
+    test:
+      path: spec-cli/src/machine-peer.test.ts
+      name: the peer and session CLI surfaces use the gateway-owned peer forward
+    description: >
+      Create a session through `session new --ssh <address> <full-id>` from a governed caller, capturing
+      its stdout, stderr, and the prompt delivered through the peer forward.
+    expected: >
+      Stdout remains the bare remote session JSON. Stderr names the remote snapshot spelling and explicitly
+      says no managed watch crosses the peer. The delivered prompt carries the peer reply command with the
+      opaque address and full initiating session id, rather than claiming a cross-machine parent or watch.
+    code: spec-cli/src/help.ts
+    related: [spec-cli/src/cli.ts, spec-cli/src/machine-peer.ts]
 ---
 
 # session-new-monitor-hint — yatsu

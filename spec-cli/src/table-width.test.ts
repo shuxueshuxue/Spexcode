@@ -80,3 +80,15 @@ test('formatTable: the TITLE column renders the derived title, never the selecto
   assert.ok(table.includes('current live summary'))
   assert.ok(!table.includes('legacy-node-handle'))
 })
+
+test('formatTable: parent and scope summary describe the rows being shown', () => {
+  const parent = 'parent-1234'
+  const table = formatTable([
+    sess({ id: 'child-a1', parent, status: 'working' }),
+    sess({ id: 'child-b2', parent, status: 'asking' }),
+  ], false, { kind: 'children', parent })
+  assert.match(table, /SpexCode children of parent-1 \(2; 1 working · 1 asking\)/)
+  assert.match(table, /\bPARENT\b/)
+  assert.match(table, /child-a1 parent-1/)
+  assert.match(table, /child-b2 parent-1/)
+})

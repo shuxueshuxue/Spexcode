@@ -84,6 +84,19 @@ scenarios:
       Crucially the pod colour does NOT move PARENT between zones or change PARENT's own glyph or sort slot:
       a yellow pod over a parked PARENT still leaves PARENT in the self-running zone with its parked glyph —
       the downward rollup is a passive hint, never an escalation. Each child keeps its own true status glyph.
+  - name: cli-child-scope-reads-the-durable-direct-parent
+    description: >
+      Drive `spex session ls --children` from a governed parent over a board containing direct children and an
+      unrelated row, then repeat with `--children=<parent-id>` and a positional child filter.
+    expected: >
+      The CLI reads the stored direct parent field, not prompt prose: only direct children appear, each row
+      exposes that parent, and the scope summary counts only displayed child states. The attached parent value
+      does not consume the following positional selector.
+    tags: [cli, backend-api]
+    test:
+      path: spec-cli/src/session-ls-cli.test.ts
+      name: session ls projects parentage, a child scope, and status summary without stealing positional selectors
+    code: [spec-cli/src/cli.ts, spec-cli/src/sessions.ts]
 ---
 
 # session-nesting — yatsu

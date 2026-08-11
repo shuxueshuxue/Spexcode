@@ -136,6 +136,20 @@ scenarios:
       name: the peer and session CLI surfaces use the gateway-owned peer forward
     code: spec-cli/src/cli.ts
     related: [spec-cli/src/machine-peer.ts, spec-cli/src/client.ts]
+  - name: session-ls-child-scope-keeps-selector-grammar
+    description: >
+      Through the real session ls CLI against a controlled project board with one parent, two direct children,
+      and an unrelated row, run `ls --children`, `ls --children <child-SEL>`, and
+      `ls --children=<parent-SEL>`. Also run the help probe.
+    expected: >
+      Bare `--children` selects the governed caller's direct children; its following positional still filters
+      those rows, while only the attached value names another parent. The output has a direct PARENT column and
+      a status summary of the displayed scope, and help teaches both forms without a second parent flag.
+    tags: [cli, backend-api]
+    test:
+      path: spec-cli/src/session-ls-cli.test.ts
+      name: session ls projects parentage, a child scope, and status summary without stealing positional selectors
+    code: [spec-cli/src/cli.ts, spec-cli/src/help.ts, spec-cli/src/session-ls-cli.test.ts]
 ---
 
 Measure through the real CLI binary (`node spec-cli/bin/spex.mjs …`), never by reading help.ts: run

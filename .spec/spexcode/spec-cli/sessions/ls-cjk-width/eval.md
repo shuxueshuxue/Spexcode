@@ -28,6 +28,19 @@ scenarios:
       session's current title.
     test: spec-cli/src/table-width.test.ts
     code: [spec-cli/src/sessions.ts, spec-cli/src/table-width.test.ts]
+  - name: parent-column-and-scope-summary-follow-the-displayed-rows
+    tags: [cli]
+    description: >
+      Render the real table for two direct children with different statuses and a shared parent id, using the
+      children scope. Inspect the title, header, rows, and status counts.
+    expected: >
+      The heading names the parent-scoped collection and derives exactly one count per displayed nonzero status;
+      PARENT is a stable eight-character column beside each id. The structural column does not disturb the
+      existing CJK-safe TITLE/PROMPT alignment.
+    test:
+      path: spec-cli/src/table-width.test.ts
+      name: formatTable: parent and scope summary describe the rows being shown
+    code: [spec-cli/src/sessions.ts, spec-cli/src/table-width.test.ts]
 ---
 
 # ls-cjk-width — measurement

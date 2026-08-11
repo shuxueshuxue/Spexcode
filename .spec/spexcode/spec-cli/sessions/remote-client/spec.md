@@ -49,6 +49,11 @@ backend is therefore the convenient owner of launch and the shared cache — nev
 invariant. (`session attach` remains its own case: a foreground terminal cannot be brokered over HTTP, so
 it stays local and guards that premise loudly against the resolved backend; see [[session-attach]].)
 
+An explicit `ls` id miss has one bounded cache companion: the id-addressed terminal-close ledger read. It uses
+the same backend-or-local cache role as the board, returns only `{id, closedAt}`, and is consulted only after
+the live/archive board miss. It never turns ordinary list reads into historical enumeration, and an explicit
+remote endpoint never falls back to a local ledger.
+
 Pointing `--api` (or `SPEXCODE_API_URL`) at another machine's backend still monitors and drives THAT
 machine's sessions with no code change — the dashboard's viewer-points-anywhere model, extended to the CLI.
 A local fallback never silently impersonates it: the source is stated on every read that took one.

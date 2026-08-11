@@ -11,6 +11,7 @@ related:
   - spec-cli/src/session-declarations.ts
   - spec-cli/src/session-send-cli.test.ts
   - spec-cli/src/session-create-cli.test.ts
+  - spec-cli/src/session-ls-cli.test.ts
   - spec-cli/src/session-declarations.cli.test.ts
 ---
 # cli-surface
@@ -100,6 +101,14 @@ use it only as the remote project's derivation anchor. The latter accepts no sec
 `--project`, `--root`, or URL-shaped target flag. This preserves one reusable peer locator and makes the only
 otherwise-unavailable piece of routing information explicit without teaching the CLI dashboard URLs or remote
 filesystem paths.
+
+`session ls` names a collection, not an implied supervisor tree: bare `ls` remains the project-wide board for
+scripts and human operators. `--children` changes only that read scope to the governed caller's direct children;
+`--children=<PARENT-SEL>` names another direct-parent scope in an attached value, deliberately leaving a
+following positional as the ordinary result selector (`ls --children <SEL>`). Scope precedes the existing
+selector and status filters, so a caller can ask for one child without changing the meaning of `SEL`. The table
+must expose every row's direct parent and summarize the displayed scope by status. A peer list has no remote
+caller identity, so its child scope requires the explicit attached parent selector.
 
 **One verb, one spelling.** The old verb mirror (promoted session verbs + bare session subs) is
 gone, as is every deprecated alias: there are no two spellings that reach one handler, and nothing

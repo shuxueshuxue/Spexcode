@@ -87,7 +87,11 @@ committing work it did not write.
 
 A converged flat emits the same static artifact [[public-spec-graph]] already defines — the versioned index,
 one document per node, the About metadata, the `.spec` archive, and the release manifest with per-file
-SHA-256. It renders from a plain directory with no backend, so a flat is previewable the moment it exists.
+SHA-256. It renders from a plain directory with no backend, so a flat is previewable the moment it exists,
+and that directory is **relocatable**: every asset, payload and download it names is relative to itself, so
+the same bytes serve from a domain root or from any path prefix. A flat that resolved its own assets from
+the domain root would be a directory nobody could move, and would silently rule out every host that carries
+more than one flat.
 Emitting that exact shape is deliberate: the hosted gallery and self-serve conversion that would follow have
 a transport specified already, and this command must not force it to be redesigned around a private format.
 

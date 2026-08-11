@@ -31,7 +31,9 @@ if (r.status !== 0 || !existsSync(join(dashPkg, 'dist', 'index.html'))) {
 console.log(`[prepack] dashboard built → ${join(dashPkg, 'dist')}`)
 
 console.log('[prepack] building the graph-only shell (vite build, VITE_PUBLIC_GRAPH_ONLY=1)…')
-const p = spawnSync('npm', ['run', 'build', '--', '--outDir', 'dist-public'], {
+// --base ./ so the emitted shell references its own assets relatively: a flat is a directory, and a gallery
+// serves many of them under path prefixes. Root-served hosts are unaffected — at `/` the two forms coincide.
+const p = spawnSync('npm', ['run', 'build', '--', '--outDir', 'dist-public', '--base', './'], {
   cwd: dashPkg,
   stdio: 'inherit',
   env: { ...process.env, VITE_PUBLIC_GRAPH_ONLY: '1' },

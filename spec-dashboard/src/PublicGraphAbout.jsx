@@ -61,7 +61,7 @@ export default function PublicGraphAbout() {
                     <Icon name="globe" size={14} /> Repository
                   </a>
                 )}
-                <a className="public-about-link primary" href={`/${archive.path}`} download={archive.name}>
+                <a className="public-about-link primary" href={`./${archive.path}`} download={archive.name}>
                   <Icon name="download" size={14} /> Download .spec
                 </a>
               </div>

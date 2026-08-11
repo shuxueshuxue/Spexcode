@@ -43,14 +43,11 @@ for (const fact of publication.about.facts) {
 }
 
 mkdirSync(output, { recursive: true })
-run('npm', ['run', 'build', '--', '--outDir', 'dist-public'], {
+// The payload sources are left to public-mode.js's relative defaults — one place decides, and relative is
+// what lets the same artifact be served from a domain root or from a path prefix.
+run('npm', ['run', 'build', '--', '--outDir', 'dist-public', '--base', './'], {
   cwd: dashboard,
-  env: {
-    ...process.env,
-    VITE_PUBLIC_GRAPH_ONLY: '1',
-    VITE_PUBLIC_GRAPH_SOURCE: '/public-graph.json',
-    VITE_PUBLIC_GRAPH_DOCUMENT_SOURCE: '/specs',
-  },
+  env: { ...process.env, VITE_PUBLIC_GRAPH_ONLY: '1' },
 })
 run(process.execPath, ['spec-cli/bin/spex.mjs', 'graph', '--public', '--out', join(output, 'public-graph.json'), '--content-dir', join(output, 'specs')])
 const payload = JSON.parse(readFileSync(join(output, 'public-graph.json'), 'utf8'))

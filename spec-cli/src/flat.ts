@@ -328,24 +328,24 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
   const out = resolve(options.out ?? `${name}.flat`)
   const repo = join(out, 'repo')
   if (existsSync(repo)) throw new Error(`spex flat: ${repo} already exists — name a different --out or remove it`)
-  mkdirSync(out, { recursive: true })
 
   // --- acquire -------------------------------------------------------------------------------------------
+  // Everything knowable about the target is checked BEFORE anything is created. Creating the output
+  // directory first left an empty `<name>.flat` behind every time a target was rejected — litter in the
+  // caller's cwd from a run that did nothing, and the caller has to clean up after a command that failed.
   let source = options.target
-  if (isUrl(options.target)) {
-    log(`cloning ${options.target}`)
-    const clone = await run('git', ['clone', '--quiet', options.target, repo], out)
-    if (clone.code !== 0) throw new Error(`spex flat: clone failed — ${clone.stderr.trim()}`)
-  } else {
-    const local = resolve(options.target)
+  let local: string | null = null
+  if (!isUrl(options.target)) {
+    local = resolve(options.target)
     if (!existsSync(join(local, '.git'))) throw new Error(`spex flat: ${local} is not a git repository`)
     const dirty = await gitOrThrow(['status', '--porcelain'], local, 'reading the working tree')
     if (dirty) throw new Error(`spex flat: ${local} has uncommitted changes — Flatcode commits a spec tree and will not mix it with work it did not write`)
-    log(`cloning local ${local}`)
-    const clone = await run('git', ['clone', '--quiet', local, repo], out)
-    if (clone.code !== 0) throw new Error(`spex flat: local clone failed — ${clone.stderr.trim()}`)
     source = local
   }
+  mkdirSync(out, { recursive: true })
+  log(local ? `cloning local ${local}` : `cloning ${options.target}`)
+  const clone = await run('git', ['clone', '--quiet', local ?? options.target, repo], out)
+  if (clone.code !== 0) throw new Error(`spex flat: clone failed — ${clone.stderr.trim()}`)
   const revision = await gitOrThrow(['rev-parse', 'HEAD'], repo, 'reading the cloned revision')
   await gitOrThrow(['checkout', '--quiet', '-b', FLAT_BRANCH], repo, `creating the ${FLAT_BRANCH} branch`)
 

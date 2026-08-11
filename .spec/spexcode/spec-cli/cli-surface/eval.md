@@ -35,7 +35,8 @@ scenarios:
   - name: help-journey
     description: >
       Walk the three help layers as a fresh agent would, through the real CLI: (1) `spex help` — the
-      map must open with the noun-first grammar, list the six noun drawers and the project verbs, and
+      map must open with the noun-first grammar, list every noun drawer (spec · session · peer · eval ·
+      issue · remark · evidence · flat) and the project verbs, and
       state the shared conventions (SEL · `.` · --json · --api routing · mentions) once; (2)
       `spex help session` plus `spex session send --help`, `spex session wait --help`, and
       `spex session new --help` — the first is the complete drawer while each noun-verb probe is only

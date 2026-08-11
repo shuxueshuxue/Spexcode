@@ -111,3 +111,52 @@ backend（累计 2234 s）和一个 `/tmp` fixture backend（1100 s）。
 
 因此建议：在归属可证明正确之前，`idle-cpu-over-budget` 与 `orphan` 一样，不得进入任何回收路径，
 且报告文本宜显式标注其依赖归属正确性。
+
+<!-- reply: 455707e5-dc60-4535-9138-5155be816b07 @ 2026-08-11T14:50:44.712Z -->
+Spec: host-resource-budget
+
+## 补充证据：一个健康在服的 backend 在进程零变化的情况下自行变成 orphan
+
+观测到 `backend <id>` 这个 owner 在相邻两次采样之间被重新分类为
+`orphan:owner-record-absent`，而它描述的进程集合完全没有变化。
+
+| 时刻 | 分类 | 进程 |
+|---|---|---|
+| T | `backend`，rss 2242 MiB | supervisor + child，pid 未变 |
+| T+30min | `orphan:owner-record-absent`，rss 2230 MiB | **同样的 pid，同样的 age** |
+
+该 backend 在整个窗口内持续正常服务：它派生自部署网关，网关的对外 HTTPS 端口在翻转前后
+均返回稳定的 302。supervisor 与 child 的存活时长与它们各自的启动时刻一致，期间没有任何重启、
+重载或信号。
+
+同时观测到：该 project 在全局运行时里的 `backend.json` 端点登记文件**已不存在**，
+而同一天早些时候它是存在的（当时全机共 9 个 project 有该文件，包含这一个）。
+
+该 owner 给出的 reclaim 理由是
+`superseded backend generation remains owned by backend supervisor teardown, never session stop`，
+即它被判定为"被取代的旧世代"。但事实上它是当前唯一在服的那一代。
+
+## 为什么这条比首帖的证据更强
+
+首帖的两个例子（一个 owner 吞掉 90 个 PID、同一 PID 被两个 owner 认领）可以被解读为
+"归属算法在复杂拓扑下的边界情况"。这一条不能：
+
+**被观测对象在两次采样之间没有发生任何变化，唯一变化的是描述它的记录。**
+分类结果因此不是对世界的观察，而是对一份可能消失的记录的观察。当记录消失时，
+被它描述的实体不会消失——它只会变成"无主"。
+
+这同时解释了 orphan 分类为何会系统性地捞到重要进程：**越是长期存活、被反复引用的基础设施，
+越有机会在某一次记录写入/过期中失去它的登记。**短命的进程反而不会。
+
+## 对判据的直接影响
+
+`orphan:owner-record-absent` 这个 finding 的字面含义是"找不到 owner 记录"，这是准确的；
+但它被消费的方式是"这是一个无主的、可回收的东西"，这一步推断不成立。
+记录缺失与实体无主是两件事，当前实现把前者当作后者的证据。
+
+在归属可证明正确之前，建议：
+
+1. 该 finding 的文本改为陈述记录状态（"owner record not found"），而不是暗示实体属性（"orphan"）；
+2. 报告中显式区分"记录缺失"与"已验证无主"，后者需要额外证据（如端口无监听、无活跃连接、
+   父项目已不存在）；
+3. 任何回收路径都不得以记录缺失为唯一依据。

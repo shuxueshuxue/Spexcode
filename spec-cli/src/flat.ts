@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { HARNESSES, defaultLauncher, harnessById, resolveLauncher, type Harness } from './harness.js'
@@ -443,11 +443,45 @@ export async function flatSite(flatDir: string, log: (line: string) => void = co
   const graphPath = join(site, 'public-graph.json')
   const graph = await spex(['graph', '--public', '--out', graphPath, '--content-dir', join(site, 'specs')], repo)
   if (graph.code !== 0) throw new Error(`spex flat site: building the public graph failed — ${graph.stderr.trim() || graph.stdout.trim()}`)
-  const payload = JSON.parse(readFileSync(graphPath, 'utf8')) as { revision: string; nodes: unknown[] }
-
   const root = specRoot(repo)
+
+  // @@@ the publication is the repository's spec, not SpexCode's - `spex init` seeds .plugins with SpexCode's
+  // own workflow nodes so the converting agent receives its contract. They are machinery, not a reading of the
+  // target: measured on the first three published flats they were 38-48% of every graph, and their bodies ARE
+  // the command prompt texts, so a visitor who came to read `requests` met SpexCode's `extract` prompt
+  // presented as that repository's specification. The conversion needs them; the publication must not carry
+  // them. Filtering here rather than at seed time keeps the agent's contract intact.
+  const payload = JSON.parse(readFileSync(graphPath, 'utf8')) as {
+    revision: string
+    nodes: { id: string; path: string }[]
+  }
+  // The graph's `path` is repo-relative and includes `.spec/`, so the prefix has to as well.
+  const seeded = `.spec/${root}/.plugins/`
+  const published = payload.nodes.filter((node) => !node.path.startsWith(seeded))
+  if (published.length === payload.nodes.length) {
+    throw new Error(`spex flat site: nothing matched the seeded prefix ${seeded} — the publication would carry SpexCode's own workflow nodes as if they were this repository's spec`)
+  }
+  const dropped = payload.nodes.length - published.length
+  if (dropped) {
+    for (const node of payload.nodes) {
+      if (published.includes(node)) continue
+      rmSync(join(site, 'specs', `${node.id}.json`), { force: true })
+    }
+    writeFileSync(graphPath, `${JSON.stringify({ ...payload, nodes: published }, null, 2)}\n`)
+    log(`  dropped ${dropped} seeded SpexCode workflow node(s) from the publication`)
+  }
+
   const archiveName = `${root}.spec.zip`
-  const archive = await run('git', ['archive', '--format=zip', '--prefix=.spec/', `--output=${join(site, archiveName)}`, `${payload.revision}:.spec/${root}`], repo)
+  // The archive is the same publication, so it excludes the same subtree — a downloader who unzips it must
+  // get what the graph showed, not the machinery the graph deliberately left out.
+  const topLevel = readdirSync(join(repo, '.spec', root), { withFileTypes: true })
+    .map((entry) => entry.name)
+    .filter((name) => name !== '.plugins')
+    .sort()
+  const archive = await run('git', [
+    'archive', '--format=zip', '--prefix=.spec/', `--output=${join(site, archiveName)}`,
+    `${payload.revision}:.spec/${root}`, ...topLevel,
+  ], repo)
   if (archive.code !== 0) throw new Error(`spex flat site: archiving the spec tree failed — ${archive.stderr.trim()}`)
 
   const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex')
@@ -489,8 +523,8 @@ export async function flatSite(flatDir: string, log: (line: string) => void = co
     documents: documents.map((name) => asset(`specs/${name}`)),
   }, null, 2)}\n`)
 
-  log(`site: ${payload.nodes.length} nodes at ${payload.revision.slice(0, 12)} → ${site}`)
-  return { site, nodes: payload.nodes.length }
+  log(`site: ${published.length} nodes at ${payload.revision.slice(0, 12)} → ${site}`)
+  return { site, nodes: published.length }
 }
 
 // @@@ gallerySlug - the path a flat is served at. Derived from the SOURCE the flat read, never from the

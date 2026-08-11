@@ -8,6 +8,7 @@ related:
   - spec-cli/src/supervise.ts
   - spec-cli/src/gateway-hub.ts
   - spec-cli/src/gateway.ts
+  - spec-cli/src/machine-peer.ts
   - spec-cli/src/cli.ts
   - spec-cli/src/help.ts
   - spec-cli/src/index.ts
@@ -85,3 +86,10 @@ HTTPS — every surface (admin list, /p proxying, the shell) on that one TLS por
 and a plaintext client on the TLS port is refused, never silently downgraded. Absent `tls`, `spex
 dashboard` stays plain loopback HTTP; `--host` widens the bind, behind whatever gates the operator
 configured.
+
+[[machine-peer]] is a second, private lifetime owned by this same host process. The gateway owns each
+machine-peer SSH process and the pair of loopback-only peer ports it forwards; the dashboard shell is not a
+participant in an individual message. A local CLI may dial the outgoing peer port directly, while the remote
+gateway owns the incoming peer port and forwards the accepted envelope into its ordinary local project
+backend. This keeps the public `/p/:projectId/*` proxy and backend contract unchanged, while making the
+gateway — not a session, project, or one-shot CLI child — the owner of a durable machine link.

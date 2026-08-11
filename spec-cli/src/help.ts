@@ -68,8 +68,8 @@ session's store is gone.`, ['selector']],
     merge: ['spex session merge <SEL>', 'Dispatches a gated merge to the session\'s own agent; it does not close the session.', ['selector', 'project-bound']],
     reparent: ['spex session reparent <child-SEL...> --to <parent-SEL>',
       'Move one or more governed children to a replacement parent, replacing only the former parent\'s managed watch relation. It never restarts a child and works when the former parent is offline.', ['selector', 'project-bound']],
-    send: [['spex session send <SEL> "<msg>"', 'spex session send <SEL> [--api <url> | --port <n>] -- <option-shaped-msg>', 'spex session send <SEL> --keys "<keys>"'],
-      `Plain send delivers a message once its timeline append succeeds; a dead adapter only delays its context. Routing flags may precede or follow ordinary text; use -- before a message that begins with --. --keys is the LAST RESORT:
+    send: [['spex session send <SEL> "<msg>"', 'spex session send <SEL> [--api <url> | --port <n>] -- <option-shaped-msg>', 'spex session send --ssh <address> <FULL-SESSION-ID> "<msg>"', 'spex session send <SEL> --keys "<keys>"'],
+      `Plain send delivers a message once its timeline append succeeds; a dead adapter only delays its context. Routing flags may precede or follow ordinary text; use -- before a message that begins with --. --ssh uses an existing gateway-to-gateway communication tunnel and requires a full session id; no tunnel fails loud so an agent may run \`spex peer connect <address>\` then retry. --keys is the LAST RESORT:
 raw nav-mode keystrokes to a TUI dialog ("Up Up Enter", C-/M-/S- combos). The raw key surface
 is UNSTABLE and can confirm dangerous dialogs — try a plain send first; use keys only when text
 provably cannot land.`, ['selector', 'project-bound']],
@@ -254,6 +254,18 @@ effective system-contract view follows materialization order; no separate author
   },
 
   // ── the noun drawers ──────────────────────────────────────────────────────
+  peer: {
+    line: 'peer <verb>           gateway-owned SSH communication tunnels between machines',
+    body: `Usage: spex peer connect <SSH-ADDRESS>
+       spex peer ls [--json]
+       spex peer disconnect <SSH-ADDRESS>
+
+connect asks the local host gateway to own one bidirectional SSH tunnel to the opaque address. The
+same tunnel survives session closure and is reused by later sessions. The gateway must already be
+running (\`spex dashboard\`); no command leaves an SSH child owned by the CLI. ls reports known peers;
+disconnect retires the local peer and asks its remote counterpart to do the same.`,
+    see: 'spex session send --ssh <address> <full-session-id> "<msg>" · spex dashboard (the host gateway)',
+  },
   spec: {
     line: 'spec <verb>           the governance graph: search · owner · lint · ack',
     body: `Usage: spex spec search <query…> [--limit N=10] [--json]
@@ -505,6 +517,7 @@ Project verbs (implicit object = this project)
 Noun drawers
   ${ENTRIES.spec.line}
   ${ENTRIES.session.line}
+  ${ENTRIES.peer.line}
   ${ENTRIES.eval.line}
   ${ENTRIES.issue.line}
   ${ENTRIES.remark.line}

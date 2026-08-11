@@ -19,6 +19,7 @@ import { spexcodeHome, encodeProject } from '@spexcode/spec-core'
 import { git } from '@spexcode/spec-core'
 import { serveStatic, resolveDistDir, ensureDashboardBuilt } from './gateway.js'
 import { startHubGateway, type HubExtensions } from './gateway-hub.js'
+import { MachinePeerGateway } from './machine-peer.js'
 import { tsxBin } from './tsx-bin.js'
 import { DEFAULT_PROJECT_ICON, requireIdentityChoice } from '@spexcode/spec-core/identity'
 import {
@@ -466,6 +467,9 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
   const distDir = opts.distDir ?? resolveDistDir()
   if (!opts.distDir) ensureDashboardBuilt(join(here, '..', '..'), distDir)
 
+  const peers = new MachinePeerGateway()
+  peers.start()
+
   const sseClients = new Set<http.ServerResponse>()
   let lastBroadcast = ''
   // reconcile → push the fresh list to every /projects/stream subscriber when it changed.
@@ -611,12 +615,13 @@ export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
 
   return {
     server,
-    close: () => new Promise<void>((resolve) => {
+    close: async () => {
       clearInterval(loop); clearInterval(ping)
       for (const c of sseClients) c.destroy()
       sseClients.clear()
-      server.close(() => resolve())
+      await peers.close()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
       server.closeAllConnections?.()
-    }),
+    },
   }
 }

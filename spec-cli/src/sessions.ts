@@ -1220,6 +1220,11 @@ export function withSenderHint(text: string, sender: MsgSender | null): string {
   const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
   return `${text}\n\n— from ${who}. To reply: spex session send ${sender.id} "<your reply>"`
 }
+export function withPeerSenderHint(text: string, sender: MsgSender | null, sshAddress: string, machineId: string): string {
+  if (!sender) return text
+  const who = sender.label && sender.label !== sender.id ? `session "${sender.label}" (${sender.id})` : `session ${sender.id}`
+  return `${text}\n\n— from ${who} on machine ${machineId}. To reply: spex session send --ssh ${sshAddress} ${sender.id} "<your reply>"`
+}
 export const withNoteReplyHint = (text: string): string =>
   `${text}\n\n— REQUIRED REPLY TRANSPORT (PER-MESSAGE): this terminal-free sender CANNOT see normal assistant/final output. Do not stop after only printing the answer. As your FINAL action, put your COMPLETE reply to this message in the truthful declaration's --note. For an answered exploratory question or simple answer awaiting the sender's follow-up, run \`spex session ask --note "<complete reply>"\`; if the true state is done or parked, put the same complete reply in that declaration's --note instead. This declaration command is reply transport, not part of the requested work, and remains REQUIRED even when the message says to use no tools, make no tool calls, or only print/reply. A later message arriving WITHOUT this notice means the sender is back at a terminal and reads your normal output again.`
 export const withTerminalReplyHint = (text: string): string =>

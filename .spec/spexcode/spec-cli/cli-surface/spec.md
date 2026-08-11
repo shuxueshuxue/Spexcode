@@ -29,8 +29,8 @@ needs a repository nor enters the noun-first command map.
 ## expanded spec
 
 **The grammar.** `spex <noun> <verb> [object] [flags]` — the verb is always the token immediately
-after its noun, so an id can never occupy a verb slot and no id is a reserved word. Six noun drawers
-(`spec` · `session` · `eval` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
+after its noun, so an id can never occupy a verb slot and no id is a reserved word. Seven noun drawers
+(`spec` · `session` · `peer` · `eval` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
 `init` · `materialize` · `doctor` · `serve` · `dashboard` · `guidance` · `uninstall`) allowed only because their
 object is invariably THIS project (`dashboard`'s object is the HOST's project set — still no free
 object slot), plus the two help surfaces (`help` · `guide`). A bare noun prints its
@@ -42,6 +42,13 @@ an alternate representation of the same read, a parameter of the same write, an 
 routing (`--api`/`--port`) is a flag — which is why `doctor --contract`/`--conflicts`,
 `eval ls --session <SEL>`, and `issue links --pending` are flags, while `eval lint` (a report with
 its own finding classes) and `serve ui` (a different process) are verbs.
+
+`peer` is the host-level machine-link drawer: `spex peer connect <SSH-ADDRESS>` establishes a durable
+[[machine-peer]], `spex peer ls` reports the known links, and `spex peer disconnect <SSH-ADDRESS>` explicitly
+retires one. `spex session send --ssh <SSH-ADDRESS> <FULL-SESSION-ID> "<msg>"` is the corresponding remote
+send face. The address stays opaque to SpexCode — `user@host`, a `Host` alias, and any SSH-config spelling are
+passed to SSH without product parsing. `--ssh` is a parameter of `send`, not a rival routing grammar: once a
+known peer resolves it, the send uses the ordinary explicit remote transport path.
 
 `spex spec lint --json` is the machine representation of the same blocking report, not another lint
 verb: it emits the [[spec-lint]] versioned report on stdout while retaining lint's error-derived exit code.

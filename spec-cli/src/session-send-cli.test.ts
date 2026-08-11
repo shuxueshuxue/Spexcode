@@ -93,6 +93,8 @@ test('session send rejects malformed valued flags and positional arity before ba
       ['session', 'send', TARGET, 'message', '--api', ''],
       ['session', 'send', TARGET, 'message', '--api', api, '--port', ''],
       ['session', 'send', TARGET, '--api', api, '--keys', ''],
+      ['session', 'send', TARGET, 'message', '--ssh', 'peer', '--api', api],
+      ['session', 'send', TARGET, '--keys', 'Up', '--ssh', 'peer'],
     ]) {
       const result = await runCli(args, env)
       assert.equal(result.code, 2)

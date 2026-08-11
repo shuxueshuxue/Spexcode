@@ -31,6 +31,12 @@ text and a sender `{ id, label }`, it appends one line:
 **runnable** `spex session send` at the sender's **FULL id** — the recipient pastes intent into it and the
 reply travels the identical path back.
 
+A [[machine-peer]] message carries the peer's opaque SSH address with the same sender identity. Its insert is
+the runnable `spex session send --ssh <peer-address> <full-session-id> "<your reply>"`; the recipient's
+gateway maps that already-known peer address onto the reverse half of the same SSH connection. The insert is
+still only guidance, not an acknowledgement protocol or a second transport. A backend instance id and a
+hostname are diagnostics/claims, not a sender identity or return route.
+
 **The sender label is the board HEADLINE, not the bare prompt title.** The name comes from `sessionHeadline`
 (the unified cross-surface title — the SAME chain the board card shows: a chosen name ▸ the live Claude-Code
 self-summary `activity` ▸ a fuller prompt preview ▸ node/title/branch/id), NOT the stable `sessionLabel`

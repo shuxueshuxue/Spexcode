@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { withSenderHint, deriveHeadline } from './sessions.js'
+import { withPeerSenderHint, withSenderHint, deriveHeadline } from './sessions.js'
 
 // withSenderHint is the WHOLE feature: `spex session send` wraps the delivered message with a sender stamp +
 // a runnable reply command. These pin the cases the send command produces — agent→agent (headline + id,
@@ -43,6 +43,13 @@ test('withSenderHint: a multi-line message is preserved; the hint is appended be
   const out = withSenderHint(msg, { id: FULL, label: 'graph' })
   assert.ok(out.startsWith(msg), out)
   assert.ok(out.indexOf('— from session "graph"') > out.indexOf('line two'), out)
+})
+
+test('withPeerSenderHint: the reply keeps the opaque peer address and the sender full id', () => {
+  const out = withPeerSenderHint('cross machine', { id: FULL, label: 'tunnel work' }, 'ssh-prod-alias', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+  assert.ok(out.startsWith('cross machine'), out)
+  assert.match(out, /machine bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/, out)
+  assert.ok(out.includes(`spex session send --ssh ssh-prod-alias ${FULL} "<your reply>"`), out)
 })
 
 // deriveHeadline is the unified cross-surface title the footer (and watch greeting) use — the SAME chain

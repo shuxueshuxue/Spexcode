@@ -5,6 +5,7 @@ import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/spec-core'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
 import { apiBaseInfo, assertProjectMatch, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
+import { resolveMachinePeer } from './machine-peer.js'
 
 export class BackendError extends Error {
   constructor(message: string, readonly status?: number, readonly transport?: unknown) {
@@ -242,6 +243,24 @@ export async function clientSend(id: string, text: string, from?: string): Promi
   // it's present (an agent send), so a human-shell send stays unrecorded.
   const r = await apiFetch(`/api/sessions/${seg(id)}/input`, post({ kind: 'text', text, ...(from ? { from } : {}) }))
   return await r.json().catch(() => ({ ok: false, error: `bad backend response (${r.status})` })) as DispatchResult
+}
+
+// A machine peer's outbound loopback port is an SSH forward into the remote gateway's dedicated ingress.
+// It accepts the same input route as a backend, so the remote gateway can preserve normal sendText acceptance.
+export async function clientSendThroughPeer(sshAddress: string, id: string, text: string, from?: string): Promise<DispatchResult> {
+  const peer = resolveMachinePeer(sshAddress)
+  let response: Response
+  try {
+    response = await fetch(`http://127.0.0.1:${peer.outboundPort}/api/sessions/${seg(id)}/input`, post({ kind: 'text', text, ...(from ? { from } : {}) }))
+  } catch (error) {
+    throw new BackendError(`communication tunnel for SSH address ${JSON.stringify(sshAddress)} is unreachable — run \`spex peer connect ${sshAddress}\` to repair it (${(error as Error).message})`, undefined, error)
+  }
+  const body = await response.json().catch(() => ({ ok: false, error: `bad peer response (${response.status})` })) as DispatchResult | { error?: unknown }
+  const peerBody = body as { ok?: unknown; error?: unknown }
+  if (!response.ok && peerBody.ok !== false) {
+    return { ok: false, error: typeof peerBody.error === 'string' ? peerBody.error : `peer request failed (${response.status})` }
+  }
+  return body as DispatchResult
 }
 
 // GET /api/sessions/:id/review — the manager cockpit review bundle (null on 404).

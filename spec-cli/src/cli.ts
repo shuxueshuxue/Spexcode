@@ -64,7 +64,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--ssh', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -89,19 +89,19 @@ function rejectUnknownFlags(command: string, from: number, allowed: readonly str
 }
 
 type SessionSendArgs =
-  | { selector: string; kind: 'text'; text: string }
-  | { selector: string; kind: 'keys'; keys: string[] }
+  | { selector: string; kind: 'text'; text: string; sshAddress?: string }
+  | { selector: string; kind: 'keys'; keys: string[]; sshAddress?: undefined }
 
 function sessionSendUsage(detail: string, keys = false): never {
   console.error(`spex session send: ${detail}`)
   console.error(keys
     ? 'usage: spex session send <SEL> --keys "<keys>"   (e.g. "Up Up Enter", "C-r", single chars — last resort; try a plain send first)'
-    : 'usage: spex session send <SEL> "<msg>" [--api <url> | --port <n>]\n       spex session send <SEL> [--api <url> | --port <n>] -- <option-shaped-msg>')
+    : 'usage: spex session send <SEL> "<msg>" [--api <url> | --port <n>]\n       spex session send --ssh <address> <FULL-SESSION-ID> "<msg>"\n       spex session send <SEL> [--api <url> | --port <n>] -- <option-shaped-msg>')
   process.exit(2)
 }
 
 function parseSessionSendArgs(args: string[]): SessionSendArgs {
-  const valueFlags = new Set(['--api', '--port', '--keys', '--password'])
+  const valueFlags = new Set(['--api', '--port', '--keys', '--password', '--ssh'])
   const bareFlags = new Set(['--insecure'])
   const values = new Map<string, string>()
   const positionals: string[] = []
@@ -121,16 +121,19 @@ function parseSessionSendArgs(args: string[]): SessionSendArgs {
     }
     positionals.push(token)
   }
-  if (values.has('--api') && values.has('--port')) sessionSendUsage('--api and --port are alternate routes; choose one')
+  if ((values.has('--api') && values.has('--port')) || (values.has('--ssh') && (values.has('--api') || values.has('--port')))) {
+    sessionSendUsage('--ssh, --api, and --port are alternate routes; choose one')
+  }
   const rawKeys = values.get('--keys')
   if (rawKeys !== undefined) {
+    if (values.has('--ssh')) sessionSendUsage('--keys cannot cross a machine peer', true)
     if (positionals.length !== 1) sessionSendUsage('raw keys take one selector and no text message', true)
     const keys = rawKeys.split(/\s+/).filter(Boolean)
     if (!keys.length) sessionSendUsage('--keys expects one non-empty value', true)
     return { selector: positionals[0], kind: 'keys', keys }
   }
   if (positionals.length !== 2) sessionSendUsage('plain send requires exactly one selector and one message')
-  return { selector: positionals[0], kind: 'text', text: positionals[1] }
+  return { selector: positionals[0], kind: 'text', text: positionals[1], ...(values.has('--ssh') ? { sshAddress: values.get('--ssh')! } : {}) }
 }
 
 const SIGNPOSTS: Record<string, string> = {
@@ -653,6 +656,32 @@ if (cmd === 'serve') {
 } else if (cmd === 'doctor') {
   const { runDoctor } = await import('./doctor.js')
   await flushExit(await runDoctor(process.argv.slice(3)))
+} else if (cmd === 'peer') {
+  const sub = process.argv[3]
+  if (sub === undefined) {
+    console.log((await import('./help.js')).commandHelp('peer'))
+  } else if (sub === 'connect' || sub === 'disconnect') {
+    rejectUnknownFlags(`spex peer ${sub}`, 4, [])
+    const address = positionals(4)
+    if (address.length !== 1) { console.error(`usage: spex peer ${sub} <SSH-ADDRESS>`); process.exit(2) }
+    const { peerControlOrThrow } = await import('./machine-peer.js')
+    try {
+      const peer = await peerControlOrThrow({ op: sub, sshAddress: address[0] })
+      if (!Array.isArray(peer)) console.log(`${sub === 'connect' ? 'connected' : 'disconnected'} ${peer.sshAddress} (${peer.machineId})`)
+    } catch (error) { console.error(`spex peer ${sub}: ${(error as Error).message}`); process.exit(1) }
+  } else if (sub === 'ls') {
+    rejectUnknownFlags('spex peer ls', 4, ['json'])
+    const { peerControlOrThrow } = await import('./machine-peer.js')
+    try {
+      const peers = await peerControlOrThrow({ op: 'list' })
+      if (!Array.isArray(peers)) throw new Error('peer service returned an invalid list')
+      if (has('json')) console.log(JSON.stringify(peers, null, 2))
+      else for (const peer of peers) console.log(`${peer.state.padEnd(10)} ${peer.sshAddress}  ${peer.machineId}  ${peer.owner ? 'owner' : 'reverse'}`)
+    } catch (error) { console.error(`spex peer ls: ${(error as Error).message}`); process.exit(1) }
+  } else {
+    console.error(`spex peer: unknown verb '${sub}' — connect | ls | disconnect  (spex help peer)`)
+    process.exit(2)
+  }
 } else if (cmd === 'session') {
   const sub = process.argv[3]
   if (sub === undefined) {
@@ -945,7 +974,11 @@ if (cmd === 'serve') {
       console.log(`reparented ${result.children.join(', ')} -> ${result.parent}`)
     } else if (sub === 'send') {
       if (!sendArgs) sessionSendUsage('arguments were not parsed')
-      const full = await resolveSelectorOrExit(id)
+      const full = sendArgs.sshAddress
+        ? (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id ?? '')
+            ? id!
+            : sessionSendUsage('--ssh requires a full session id, not a selector'))
+        : await resolveSelectorOrExit(id)
       if (sendArgs.kind === 'keys') {
         // the LAST-RESORT face of send: forward raw nav-mode keystrokes (tmux send-keys, NEVER the prompt
         // socket) — how a manager drives a worker wedged in an interactive TUI dialog the prompt channel
@@ -973,7 +1006,19 @@ if (cmd === 'serve') {
         // the board), NOT the stable sessionLabel that stops at the bare prompt-truncation title.
         sender = 'ok' in sr ? { id: sr.ok.id, label: s.sessionHeadline(sr.ok) } : { id: senderId, label: null }
       }
-      const r = await c.clientSend(full, s.withSenderHint(sendArgs.text, sender), senderId ?? undefined)
+      let text = sendArgs.text
+      let from = senderId ?? undefined
+      if (sendArgs.sshAddress && sender) {
+        const { peerSenderRef, readPeerMachineId } = await import('./machine-peer.js')
+        const machineId = readPeerMachineId()
+        text = s.withPeerSenderHint(text, sender, sendArgs.sshAddress, machineId)
+        from = peerSenderRef(machineId, sender.id)
+      } else if (!sendArgs.sshAddress) {
+        text = s.withSenderHint(text, sender)
+      }
+      const r = sendArgs.sshAddress
+        ? await c.clientSendThroughPeer(sendArgs.sshAddress, full, text, from)
+        : await c.clientSend(full, text, from)
       console.log(r.ok ? 'sent' : `dispatch failed: ${r.error}`)
       process.exit(r.ok ? 0 : 1)
     } else if (sub === 'show') {
@@ -1027,7 +1072,20 @@ if (cmd === 'serve') {
   }
 } else if (cmd === 'internal') {
   const sub = process.argv[3]
-  if (sub === 'trunk') {
+  if (sub === 'peer-accept' || sub === 'peer-drop') {
+    const encoded = process.argv[4]
+    if (!encoded) { console.error(`usage: spex internal ${sub} <base64url-json>`); process.exit(2) }
+    let body: Record<string, unknown>
+    try {
+      const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'))
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('not an object')
+      body = parsed as Record<string, unknown>
+    } catch { console.error(`spex internal ${sub}: invalid base64url JSON`); process.exit(2) }
+    const { peerRpc } = await import('./machine-peer.js')
+    const request = sub === 'peer-accept' ? { ...body, op: 'accept' as const } : { ...body, op: 'drop' as const }
+    try { console.log(JSON.stringify(await peerRpc(request as import('./machine-peer.js').PeerRpcRequest))) }
+    catch (error) { console.error(`spex internal ${sub}: ${(error as Error).message}`); process.exit(1) }
+  } else if (sub === 'trunk') {
     // print the resolved source-of-truth branch (layout.ts mainBranch(): config override → the main
     // checkout's current branch → 'main'). The pre-commit main-guard captures this so it blocks direct
     // commits on whatever the repo's trunk is actually named, never a hardcoded 'main'. One value, one

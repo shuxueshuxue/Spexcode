@@ -69,10 +69,14 @@ and then repeat the complete cold proof
 before deleting anything. An unsupported, rejected, generation-swapped, unknown, or still-active interrupt is a
 loud close refusal; it never substitutes a PID signal, changes a sibling, or skips the ordinary cold proof.
 An adapter may have a registered native thread that has not yet received its first user message. When its protocol
-explicitly reports that `thread/turns/list` is unavailable because that thread is not materialized yet, the report is
-positive evidence that there is no turn to interrupt, so close proceeds to the ordinary cold proof. This exception is
-exact and protocol-scoped; a timeout, transport failure, ownership ambiguity, or any other unknown turn state still
-refuses loudly.
+explicitly reports that `thread/turns/list` is unavailable because that thread is not materialized yet, or reports the
+exact target as `thread not loaded`, the report is positive evidence that there is no turn to interrupt, so close proceeds
+to the ordinary cold proof. If that proof also
+finds the exact target absent from both native collections and descendant-free, the same explicit refusal proves the
+startup-only shape: a loaded reference is removed through the exact native delete mutation, while a target with no
+loaded reference produces an already-cold receipt and skips native mutation. An ordinary absent, unowned, or
+reassigned target still refuses. This exception is exact and protocol-scoped; a timeout, transport failure, ownership
+ambiguity, or any other unknown turn state still refuses loudly.
 
 For a shared resident adapter, lifecycle mutation uses a target-scoped proof rather than the resource report's
 full projection. It first proves the shared PID/start/detached-receipt/socket generation, obtains the paginated loaded-ID

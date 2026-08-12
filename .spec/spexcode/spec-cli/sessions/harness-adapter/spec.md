@@ -381,9 +381,12 @@ surface:
   root checkout per the events/shim point above) and stores the returned `thread.id` on the governed record as `harness_session_id` — no capture hook,
   no rollout-file scan, no cwd guess. The server may register that thread before the first user message materializes
   it. In that window `thread/turns/list` returns the exact protocol refusal `is not materialized yet;
-  thread/turns/list is unavailable before first user message`; the lifecycle adapter treats only that response as a
-  proven no-turn interrupt result. Timeouts and all other transport, ownership, or turn-state errors remain refusal
-  paths. The
+  thread/turns/list is unavailable before first user message` (or, after native cleanup, `thread not loaded: <id>`);
+  the lifecycle adapter treats only those exact responses as a
+  proven no-turn interrupt result. During cold proof, the same response can prove an otherwise absent,
+  descendant-free target is in the startup-only shape: an existing loaded reference is removed by the exact native
+  delete request, while an already-unloaded target needs no mutation. Ordinary absent/unowned targets, timeouts,
+  and all other transport, ownership, or turn-state errors remain refusal paths. The
   app-server `--listen unix://<sock>` endpoint is a WebSocket at path `/rpc` (the same upgrade the `--remote`
   TUI performs); delivery speaks WebSocket JSON-RPC over that Unix socket directly — NOT `codex app-server
   proxy` (a dumb byte relay that performs no HTTP upgrade, which the server rejects).

@@ -248,3 +248,15 @@ certifies them current again. An old backend without this route,
 a proxy that strips SSE, or a server that ignores `?mode=delta` still degrade to the plain protocol or the
 poll — never to a frozen view. The full snapshot itself (first paint, resync) stays [[graph-lean]]'s cut
 (issue #26), composing with — not replaced by — the delta path.
+
+The project-root sweep observes the served tree only. A linked worktree under `.worktrees/` holds a
+different branch's checkout, and every status on this board derives from the served checkout's own
+HEAD — so nothing under there can move a status here until it lands and this HEAD advances. Watching
+it buys no update and costs one inotify watch per directory wherever the platform has no recursive
+observer: measured on this repository, 20,124 of 20,473 watched directories were linked worktrees
+against 843 in the served tree.
+
+The exclusion is scoped to that sweep alone. A live session worktree keeps its own registry rooted
+at its own path, because there the tree IS the input. And the cut has to be checked from both sides:
+"fewer watches" reads identically whether the useless directories went or the useful ones did, so a
+spec edit inside the served tree must still be observed to fire.

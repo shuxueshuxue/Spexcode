@@ -66,15 +66,3 @@ An unrecognised key is reported as unknown, never thrown. Producer and consumer 
 once this package is published, so a kind added later must degrade to "ignored, and visibly so" in a
 consumer that predates it. Tolerating an unknown key is not the same as letting a fallback branch
 stand in for handling a known one; only the latter hides a path that is never taken.
-
-The project-root sweep observes the served tree only. A linked worktree under `.worktrees/` holds a
-different branch's checkout, and every status on this board derives from the served checkout's own
-HEAD — so nothing under there can move a status here until it lands and this HEAD advances. Watching
-it buys no update and costs one inotify watch per directory wherever the platform has no recursive
-observer: measured on this repository, 20,124 of 20,473 watched directories were linked worktrees
-against 843 in the served tree.
-
-The exclusion is scoped to that sweep alone. A live session worktree keeps its own registry rooted
-at its own path, because there the tree IS the input. And the cut has to be checked from both sides:
-"fewer watches" reads identically whether the useless directories went or the useful ones did, so a
-spec edit inside the served tree must still be observed to fire.

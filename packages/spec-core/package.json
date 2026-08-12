@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/spec-core",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "type": "module",
   "description": "SpexCode's dependency-minimal spec graph core.",
   "files": [
@@ -14,5 +14,9 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "pack:publishable": "node scripts/pack-publishable.mjs"
   }
 }

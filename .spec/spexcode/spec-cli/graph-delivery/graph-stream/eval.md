@@ -136,6 +136,11 @@ scenarios:
     tags: [backend-api]
     code: spec-cli/src/graphStream.ts
     description: >-
+      PLATFORM PREMISE — these counts belong to the consolidated-recursive transport, not to the product
+      everywhere: a host with no subtree observer (Linux, exact-directory) registers per directory by
+      design, so its numbers differ in kind, and judging them against this expected reads a transport
+      difference as a regression. Answer which transport the host is on before judging, and record that
+      answer with the reading.
       On a machine whose platform observes a subtree from ONE registration (macOS/FSEvents), build an
       adopter-shaped isolated fixture — 444 spec nodes, 53 linked worktrees whose sessions are non-offline,
       30 session records, its own SPEXCODE_HOME and a verified-free port — and start the real backend

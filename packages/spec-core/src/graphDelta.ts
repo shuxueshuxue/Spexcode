@@ -31,6 +31,33 @@ export function unitize(board: Boardish): { units: Units; ok: boolean } {
 // the snapshot tag: a digest over every unit's key + content hash, order-independent (keys sorted). Two
 // builds serializing equal content get equal tags; JSON.stringify equality is conservative (equal strings ⇒
 // equal values; a key-order difference at worst re-sends an unchanged unit, never misses a changed one).
+
+// @@@ the one true source for "what unit kinds exist" - consumers must NOT re-derive this from
+// unitize's body. That derivation was tried and it was wrong: reading the two keyed() calls yields
+// four kinds and misses `meta`, which carries identity and drives the map title plus two gates.
+// Exhaustiveness is a property of the OUTPUT set, so it lives beside the code that produces it.
+//
+// Unknown kinds are reported, never thrown: producer and consumer version independently once this
+// package is published, so a newly added kind must degrade to "ignored, and visibly so" rather than
+// crash a consumer that predates it. (Tolerating an unknown key is not the same as letting a
+// fallback branch stand in for handling a known one — only the latter hides a never-taken path.)
+export type UnitKeyKind =
+  | { kind: 'node'; id: string }
+  | { kind: 'nodes-order' }
+  | { kind: 'session'; id: string }
+  | { kind: 'sessions-order' }
+  | { kind: 'meta' }
+  | { kind: 'unknown'; key: string }
+
+export function unitKeyKind(key: string): UnitKeyKind {
+  if (key === 'nodes#order') return { kind: 'nodes-order' }
+  if (key === 'sess#order') return { kind: 'sessions-order' }
+  if (key === 'meta') return { kind: 'meta' }
+  if (key.startsWith('node:') && key.length > 'node:'.length) return { kind: 'node', id: key.slice(5) }
+  if (key.startsWith('sess:') && key.length > 'sess:'.length) return { kind: 'session', id: key.slice(5) }
+  return { kind: 'unknown', key }
+}
+
 export function tagOf(units: Units): string {
   const h = createHash('sha1')
   for (const key of [...units.keys()].sort()) {

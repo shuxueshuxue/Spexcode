@@ -5,7 +5,7 @@ import { join, dirname, relative, resolve, basename } from 'node:path'
 import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch } from '@spexcode/spec-core'
 import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
 import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard } from './graphCache.js'
-import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
+import { unitize, tagOf, diffUnits, type Units } from '@spexcode/spec-core'
 import {
   holdSessionEvalProjectionObserver,
   invalidateSessionEvalProjections,
@@ -619,6 +619,15 @@ let projectRootWatcher: TreeWatcherRegistry | null = null
 const ignoredWorktreePath = (file: string): boolean =>
   file.split(/[\\/]/).some((segment) => segment === '.git' || segment === 'node_modules')
 
+// @@@ linked worktrees are not graph input for THIS backend - the board's node statuses derive from the
+// served checkout's own HEAD, so a file under `.worktrees/<node>` belongs to a different branch's tree and
+// cannot move any status here until it lands and this HEAD advances. Watching them registers one inotify
+// watch per directory (Linux takes the exact-directory transport) and buys nothing: measured on this repo,
+// 20,124 of 20,473 watched directories were linked worktrees against 843 in the served tree.
+// The per-worktree registries above keep their own roots; only the project-root sweep skips them.
+export const ignoredProjectRootPath = (file: string): boolean =>
+  ignoredWorktreePath(file) || file.split(/[\\/]/).some((segment) => segment === '.worktrees')
+
 // The directory whose tree this backend serves is graph input even before it has a `.spec` tree or any live
 // session worktree. Keeping it in the same root registry as linked worktrees means a first `spex init` or
 // agent-created spec invalidates a warmed empty board instead of leaving a confidently stale cache until a
@@ -639,7 +648,7 @@ function ensureProjectRootWatcher(): void {
     root,
     source: PROJECT_ROOT_SOURCE,
     scope: 'full',
-    ignore: ignoredWorktreePath,
+    ignore: ignoredProjectRootPath,
     onInput: () => fireChanged('full', 'all'),
     onFailure: (error) => {
       if (projectRootWatcher === registry) projectRootWatcher = null

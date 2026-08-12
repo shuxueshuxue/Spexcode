@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
+import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
-import { HARNESSES, defaultLauncher, harnessById, resolveLauncher, type Harness } from './harness.js'
+import { HARNESSES, MISSING_DEFAULT_LAUNCHER_ERROR, defaultLauncher, harnessById, launcherList, resolveLauncher, type Harness } from './harness.js'
 
 const PKG = fileURLToPath(new URL('..', import.meta.url))
 const SPEX = join(PKG, 'bin', 'spex.mjs')
@@ -13,6 +14,16 @@ const SPEX = join(PKG, 'bin', 'spex.mjs')
 export const FLAT_BRANCH = 'flatcode'
 const DEFAULT_ROUNDS = 6
 const DEFAULT_COVERAGE = 90
+
+// A Flatcode run begins outside the target repository, so an installed CLI cannot rely on that directory
+// already having SpexCode launcher profiles. These are the regular local agent commands an operator can select
+// at the boundary; an existing named launcher still wins and preserves its configured command.
+export const FLAT_AGENT_CHOICES = [
+  { name: 'claude', label: 'Claude Code', harness: 'claude', cmd: 'claude' },
+  { name: 'codex', label: 'Codex', harness: 'codex', cmd: 'codex' },
+  { name: 'opencode', label: 'OpenCode', harness: 'opencode', cmd: 'opencode' },
+  { name: 'pi', label: 'Pi', harness: 'pi', cmd: 'pi' },
+] as const
 
 // @@@ prose language - a spec is written FOR the people who maintain the repository, and for most of the
 // world that is not English. The language governs the prose only: node ids are directory names, which
@@ -265,11 +276,9 @@ function repairPrompt(gate: FlatGate, doctor: string, coverageFloor: number, lan
   return lines.join('\n')
 }
 
-// The launcher IS the choice, exactly as it is for a session ([[launcher-select]]) — same config, same
-// fail-loud resolution, same wording. Flatcode adds one requirement on top: the resolved harness must be able
-// to run a turn that ends.
-function resolveTurnHarness(launcher: string | undefined, root: string): { harness: Harness; cmd: string; name: string } {
-  const name = launcher ?? defaultLauncher(root)
+type FlatTurnHarness = { harness: Harness; cmd: string; name: string; harnessId: string }
+
+function configuredTurnHarness(name: string, root: string): FlatTurnHarness {
   const chosen = resolveLauncher(name, root)
   const harness = harnessById(chosen.harness)
   if (!harness.oneShotTurn) {
@@ -279,7 +288,54 @@ function resolveTurnHarness(launcher: string | undefined, root: string): { harne
       `cannot run a conversion round. Harnesses that can: ${capable}. Pick a launcher on one of those with --launcher.`,
     )
   }
-  return { harness, cmd: chosen.cmd, name }
+  return { harness, cmd: chosen.cmd, name, harnessId: harness.id }
+}
+
+function builtinTurnHarness(name: string): FlatTurnHarness | null {
+  const choice = FLAT_AGENT_CHOICES.find((candidate) => candidate.name === name)
+  if (!choice) return null
+  const harness = harnessById(choice.harness)
+  if (!harness.oneShotTurn) return null
+  return { harness, cmd: choice.cmd, name: choice.name, harnessId: choice.harness }
+}
+
+// The launcher IS the choice, exactly as it is for a session ([[launcher-select]]) when the caller has a
+// project config. Flatcode also works as a global command from an unrelated directory, where no launcher
+// registry exists yet: a regular agent name then names both its one-shot runner and the harness that init
+// persists in the clone. There is no implicit fallback because a non-interactive run must never guess auth.
+function resolveTurnHarness(launcher: string | undefined, root: string): FlatTurnHarness {
+  if (launcher) {
+    const configured = launcherList(root)
+    if (configured.some((candidate) => candidate.name === launcher)) return configuredTurnHarness(launcher, root)
+    const builtin = builtinTurnHarness(launcher)
+    if (builtin) return builtin
+    if (configured.length) return configuredTurnHarness(launcher, root)
+    throw new Error(`spex flat: unknown launcher '${launcher}'. Choose one of: ${FLAT_AGENT_CHOICES.map((choice) => choice.name).join(', ')}.`)
+  }
+  return configuredTurnHarness(defaultLauncher(root), root)
+}
+
+async function chooseTurnHarness(root: string, stdin: NodeJS.ReadStream = process.stdin, stdout: NodeJS.WriteStream = process.stdout): Promise<FlatTurnHarness> {
+  try {
+    return resolveTurnHarness(undefined, root)
+  } catch (error) {
+    if ((error as Error).message !== MISSING_DEFAULT_LAUNCHER_ERROR) throw error
+  }
+  if (!stdin.isTTY || !stdout.isTTY) {
+    throw new Error(`spex flat: no configured launcher in ${root}. Pass --launcher <name> (${FLAT_AGENT_CHOICES.map((choice) => choice.name).join(', ')}).`)
+  }
+  stdout.write('Choose the agent that will convert this repository:\n')
+  for (const [index, choice] of FLAT_AGENT_CHOICES.entries()) stdout.write(`  ${index + 1}. ${choice.label}\n`)
+  const prompt = createInterface({ input: stdin, output: stdout })
+  try {
+    const answer = (await prompt.question('Agent [1]: ')).trim() || '1'
+    const position = Number(answer)
+    const choice = Number.isInteger(position) ? FLAT_AGENT_CHOICES[position - 1] : undefined
+    if (!choice) throw new Error(`spex flat: expected a number from 1 to ${FLAT_AGENT_CHOICES.length}`)
+    return builtinTurnHarness(choice.name)!
+  } finally {
+    prompt.close()
+  }
 }
 
 async function git(args: readonly string[], cwd: string): Promise<Run> {
@@ -314,7 +370,11 @@ export type FlatResult = {
   profile: FlatProfile
 }
 
-export async function flatNew(options: FlatOptions, log: (line: string) => void = console.log): Promise<FlatResult> {
+export async function flatNew(
+  options: FlatOptions,
+  log: (line: string) => void = console.log,
+  choose: (root: string) => Promise<FlatTurnHarness> = chooseTurnHarness,
+): Promise<FlatResult> {
   const rounds = options.rounds ?? DEFAULT_ROUNDS
   const coverageFloor = options.coverage ?? DEFAULT_COVERAGE
   if (!Number.isInteger(rounds) || rounds < 1) throw new Error('spex flat: --rounds must be a positive integer')
@@ -322,7 +382,9 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
 
   // Resolve the agent BEFORE touching the network or the disk: a typo'd launcher name is knowable up front,
   // and discovering it after cloning would charge a fetch for a mistake that cost nothing to catch.
-  const { harness, cmd, name: launcherName } = resolveTurnHarness(options.launcher, process.cwd())
+  const { harness, cmd, name: launcherName, harnessId } = options.launcher
+    ? resolveTurnHarness(options.launcher, process.cwd())
+    : await choose(process.cwd())
 
   const name = basename(options.target.replace(/\.git$/, '').replace(/\/+$/, '')) || 'flat'
   const out = resolve(options.out ?? `${name}.flat`)
@@ -358,21 +420,26 @@ export async function flatNew(options: FlatOptions, log: (line: string) => void 
       `extensions; a repository outside it would gate on an empty governed set, which passes vacuously.`,
     )
   }
-  const configPath = join(repo, 'spexcode.json')
-  const existing = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {}
-  const writeConfig = (chosen: FlatProfile) => writeFileSync(configPath, `${JSON.stringify({
-    ...existing,
-    // Name the graph after the repository it reads, not after Flatcode's checkout directory — otherwise every
-    // flat in the world renders under the title "repo".
-    dashboard: { title: name, ...(existing.dashboard ?? {}) },
-    lint: { ...(existing.lint ?? {}), governedRoots: chosen.governedRoots, sourceExtensions: chosen.sourceExtensions },
-  }, null, 2)}\n`)
-  writeConfig(proposed)
-
   // --- seed ----------------------------------------------------------------------------------------------
-  const init = await spex(['init', '--harness', harness.dispatchId], repo)
+  const init = await spex(['init', '--harness', harnessId], repo)
   if (init.code !== 0) throw new Error(`spex flat: seeding .spec failed — ${init.stderr.trim() || init.stdout.trim()}`)
   log(`seeded .spec · launcher ${launcherName} (${harness.id})`)
+
+  // Init must run before the profile write. A fresh clone has no config, and init is the one operation that
+  // seeds the selected harness plus its matching named launcher. Writing a partial config first made init
+  // preserve that file, leaving the clone with a harness target but no launcher profile for the agent it used.
+  const configPath = join(repo, 'spexcode.json')
+  const writeConfig = (chosen: FlatProfile) => {
+    const existing = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {}
+    writeFileSync(configPath, `${JSON.stringify({
+      ...existing,
+      // Name the graph after the repository it reads, not after Flatcode's checkout directory — otherwise every
+      // flat in the world renders under the title "repo".
+      dashboard: { title: name, ...(existing.dashboard ?? {}) },
+      lint: { ...(existing.lint ?? {}), governedRoots: chosen.governedRoots, sourceExtensions: chosen.sourceExtensions },
+    }, null, 2)}\n`)
+  }
+  writeConfig(proposed)
 
   // --- confirm the governed set BEFORE anything is measured against it ------------------------------------
   // Commit the seed FIRST. Lint refuses to enumerate source while the spec tree it is asked about is
@@ -620,8 +687,8 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flatcode 软件二向箔 — 读懂任意代码库</title>
-<meta name="description" content="Flatcode 通读一个仓库，把每一部分是干什么的写下来，再拿这些文字去对照代码检查。">
+<title>Flatcode 软件二向箔 | 代码库说明</title>
+<meta name="description" content="Flatcode 为代码库生成 .spec 说明，并检查说明的结构和源码覆盖情况。">
 <!-- Inlined, because a static host with no favicon answers a 404 on every single visit. The mark is the
      name: a solid body above, flattened to a line below. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2310b981'/%3E%3Crect x='8' y='7' width='16' height='9' rx='2' fill='%23041b12' opacity='.75'/%3E%3Crect x='6' y='21' width='20' height='3.5' rx='1.75' fill='%23041b12'/%3E%3C/svg%3E">
@@ -643,18 +710,10 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
     margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans);
     font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased;
   }
-  /* One soft light source behind the hero. Cheap, and it stops the page reading as a flat black rectangle. */
-  .glow {
-    position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background:
-      radial-gradient(52rem 30rem at 50% -8rem, rgba(16,185,129,.22), transparent 68%),
-      radial-gradient(34rem 22rem at 18% 4rem, rgba(56,189,248,.09), transparent 72%),
-      radial-gradient(34rem 22rem at 84% 10rem, rgba(139,92,246,.07), transparent 72%);
-  }
-  .wrap { position: relative; z-index: 1; max-width: 68rem; margin: 0 auto; padding: 0 1.5rem; }
+  .wrap { max-width: 68rem; margin: 0 auto; padding: 0 1.5rem; }
 
   nav { display: flex; align-items: center; justify-content: space-between; padding: 1.5rem 0; }
-  .brand { display: flex; align-items: center; gap: .6rem; font-weight: 600; letter-spacing: -.01em; }
+  .brand { display: flex; align-items: center; gap: .6rem; font-weight: 600; }
   .brand svg { display: block; }
   .nav-links { display: flex; align-items: center; gap: .5rem; }
   nav a.ghost {
@@ -665,48 +724,64 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
   nav a.ghost.icon { padding: .45rem .6rem; }
   nav a.ghost:hover { color: var(--fg); border-color: var(--line-hi); }
 
-  header.hero { padding: 6rem 0 4.5rem; max-width: 46rem; margin: 0 auto; text-align: center; }
+  header.hero {
+    position: relative; isolation: isolate; overflow: hidden; min-height: min(33rem, calc(100vh - 9rem));
+    margin: 0 calc(50% - 50vw) 4rem; padding: 6rem max(1.5rem, calc((100vw - 68rem) / 2)); display: flex;
+    align-items: center; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  }
+  .hero-image { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+  .hero-shade { position: absolute; z-index: -1; inset: 0; background: rgba(4, 6, 7, .56); }
+  .hero-content { max-width: 38rem; }
   .eyebrow {
-    display: inline-flex; align-items: center; gap: .5rem; font-size: .8125rem; color: var(--accent-soft);
-    background: rgba(16,185,129,.08); border: 1px solid rgba(16,185,129,.2);
-    padding: .3rem .7rem; border-radius: 999px; margin-bottom: 1.5rem;
+    font-size: .8125rem; color: var(--accent-soft); margin-bottom: 1.25rem;
   }
   h1 {
-    font-size: clamp(2.6rem, 6.5vw, 4.25rem); line-height: 1.02; letter-spacing: -.035em;
+    font-size: 4.25rem; line-height: 1.02;
     font-weight: 620; margin: 0 0 1.25rem;
   }
   h1 em { font-style: normal; color: var(--accent-soft); }
-  .lede { font-size: clamp(1.05rem, 2.2vw, 1.2rem); color: var(--muted); margin: 0 auto 2.5rem; max-width: 36rem; }
+  .lede { font-size: 1.125rem; color: #c0c5cc; margin: 0; max-width: 35rem; }
 
+  section.onboarding { padding-bottom: 4.5rem; }
+  .section-label { color: var(--accent-soft); font-family: var(--mono); font-size: .75rem; margin: 0 0 .6rem; }
+  .section-intro { max-width: 39rem; color: var(--muted); margin: 0 0 2.25rem; }
+  .setup-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .setup-step { min-height: 15rem; padding: 1.5rem 1.25rem 1.75rem 0; border-right: 1px solid var(--line); }
+  .setup-step + .setup-step { padding-left: 1.25rem; }
+  .setup-step:last-child { border-right: 0; }
+  .setup-step h3 { margin: 0 0 .5rem; font-size: 1rem; font-weight: 600; }
+  .setup-step p { color: var(--muted); font-size: .875rem; margin: .8rem 0 0; }
+  .step-number { color: var(--dim); font-family: var(--mono); font-size: .75rem; display: block; margin-bottom: .6rem; }
+  .agent-choice { display: block; color: var(--muted); font-size: .8125rem; margin-bottom: .45rem; }
+  .agent-choice select {
+    width: 100%; min-height: 2.6rem; color: var(--fg); background: var(--panel); border: 1px solid var(--line-hi);
+    border-radius: 6px; padding: .45rem .65rem; font: inherit;
+  }
+  .command-row { display: flex; align-items: center; gap: .5rem; margin-top: .85rem; }
   .cmd {
-    display: flex; align-items: center; gap: .75rem; background: var(--panel); border: 1px solid var(--line);
-    border-radius: 12px; padding: .85rem 1rem; font-family: var(--mono); font-size: .875rem;
-    width: fit-content; max-width: 100%; margin: 0 auto; text-align: left;
+    display: flex; align-items: center; gap: .5rem; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: .75rem .8rem; font-family: var(--mono); font-size: .8125rem;
+    min-width: 0; flex: 1; text-align: left;
   }
   .cmd .prompt { color: var(--accent); user-select: none; }
   .cmd code { color: var(--fg); white-space: nowrap; overflow-x: auto; flex: 1; }
-  .cmd button {
-    flex: none; background: transparent; border: 1px solid var(--line); color: var(--muted);
-    border-radius: 7px; padding: .3rem .6rem; font: inherit; font-size: .75rem; cursor: pointer;
+  .copy-button {
+    flex: none; width: 2.5rem; height: 2.5rem; display: inline-grid; place-items: center; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 6px; color: var(--muted); cursor: pointer;
     transition: color .15s, border-color .15s;
   }
-  .cmd button:hover { color: var(--fg); border-color: var(--line-hi); }
-
-  .how { display: grid; gap: 1.75rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-         padding: 1rem 0 4.5rem; border-top: 1px solid var(--line); margin-top: 1rem; padding-top: 3rem; }
-  .how h4 { margin: 0 0 .4rem; font-size: .9375rem; font-weight: 600; }
-  .how p { margin: 0; color: var(--muted); font-size: .9375rem; }
-  .how .step { color: var(--dim); font-family: var(--mono); font-size: .75rem; margin-bottom: .6rem; }
+  .copy-button:hover { color: var(--fg); border-color: var(--line-hi); }
+  .copy-button svg { width: 1rem; height: 1rem; }
 
   section.gallery { padding-bottom: 6rem; }
   .sec-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1.5rem; }
-  .sec-head h2 { font-size: 1.0625rem; font-weight: 600; margin: 0; letter-spacing: -.01em; }
+  .sec-head h2 { font-size: 1.0625rem; font-weight: 600; margin: 0; }
   .sec-head span { color: var(--dim); font-size: .875rem; }
 
   .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); }
   .card {
     display: block; padding: 1.25rem; background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; color: inherit; text-decoration: none;
+    border-radius: 8px; color: inherit; text-decoration: none;
     transition: border-color .18s, transform .18s, background .18s;
   }
   .card:hover { border-color: var(--line-hi); background: #12151a; transform: translateY(-2px); }
@@ -728,16 +803,22 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
   footer a { color: var(--muted); text-decoration: none; }
   footer a:hover { color: var(--fg); }
   @media (max-width: 640px) {
-    header.hero { padding: 3.5rem 0 2.5rem; }
-    /* The command still scrolls inside its own chip; a smaller face just means less of it is hidden. */
-    .cmd { font-size: .78rem; padding: .75rem .85rem; gap: .5rem; }
-    .how { padding-top: 2.25rem; gap: 1.5rem; }
+    nav { padding: 1rem 0; }
+    nav a.ghost { padding: .4rem .55rem; }
+    header.hero { min-height: 29rem; margin-bottom: 3rem; padding-top: 4rem; padding-bottom: 3rem; }
+    .hero-image { object-position: 66% center; }
+    .hero-shade { background: rgba(4, 6, 7, .66); }
+    h1 { font-size: 2.625rem; }
+    .lede { font-size: 1rem; }
+    .setup-grid { grid-template-columns: 1fr; }
+    .setup-step, .setup-step + .setup-step { min-height: 0; padding: 1.4rem 0; border-right: 0; border-bottom: 1px solid var(--line); }
+    .setup-step:last-child { border-bottom: 0; }
+    .cmd { font-size: .75rem; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
-<div class="glow"></div>
 <div class="wrap">
   <nav>
     <div class="brand">
@@ -751,30 +832,62 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
       </a>
     </div>
   </nav>
+</div>
 
   <header class="hero">
-    <div class="eyebrow">软件二向箔 · 由 SpexCode 驱动</div>
-    <h1>读懂<em>任意</em>代码库。</h1>
-    <p class="lede">
-      Flatcode 通读一个仓库，把每一部分「是干什么的」写下来——意图、不变量、源码本身说不出口的东西。
-      然后它拿这些文字去对照代码检查，过不了就不发布。
-    </p>
-    <div class="cmd">
-      <span class="prompt">$</span>
-      <code id="cmd">spex flat new https://github.com/owner/repo</code>
-      <button type="button" id="copy" aria-label="Copy command">copy</button>
+    <img class="hero-image" src="./flatcode-banner.webp" alt="代码库整理为规格图谱">
+    <div class="hero-shade"></div>
+    <div class="hero-content">
+      <div class="eyebrow">软件二向箔，基于 SpexCode</div>
+      <h1>代码库的<em>职责说明</em>。</h1>
+      <p class="lede">
+        Flatcode 分析一个仓库，为其中的功能和模块生成 .spec 说明。
+        它会检查说明的结构和对源码的覆盖情况，未通过检查的结果会标为部分完成。
+      </p>
     </div>
   </header>
 
-  <div class="how">
-    <div><div class="step">01</div><h4>它通读整个仓库</h4><p>一个 agent 走完源码，写出一棵 spec 树——一个节点对应一份真实职责，而不是一个文件配一个节点。</p></div>
-    <div><div class="step">02</div><h4>它被打分，而不是被信任</h4><p>每一轮都要测量：lint 零错误，覆盖率达到下限。agent 说自己写完了，不算数。</p></div>
-    <div><div class="step">03</div><h4>你像看地图一样读它</h4><p>结果是一张可导航的图谱。点开任意节点，读这块系统背后的那段文字。</p></div>
-  </div>
+<div class="wrap">
+  <section class="onboarding" aria-labelledby="start-title">
+    <p class="section-label">开始转换</p>
+    <h2 id="start-title">安装后选择本机 agent</h2>
+    <p class="section-intro">只需安装一次。执行命令时，Flatcode 会克隆仓库，初始化 .spec 和所选 agent 的配置，再开始转换。</p>
+    <div class="setup-grid">
+      <div class="setup-step">
+        <span class="step-number">01</span>
+        <h3>安装 SpexCode</h3>
+        <div class="cmd"><span class="prompt">$</span><code>npm i -g spexcode</code></div>
+        <p>需要 Node 22 或更高版本和 git。</p>
+      </div>
+      <div class="setup-step">
+        <span class="step-number">02</span>
+        <h3>选择 agent</h3>
+        <label class="agent-choice" for="agent">用于读取源码和生成说明</label>
+        <select id="agent" name="agent">
+          <option value="claude">Claude Code</option>
+          <option value="codex">Codex</option>
+          <option value="opencode">OpenCode</option>
+          <option value="pi">Pi</option>
+        </select>
+        <p>也可以在终端直接运行命令后再选择。</p>
+      </div>
+      <div class="setup-step">
+        <span class="step-number">03</span>
+        <h3>转换仓库</h3>
+        <div class="command-row">
+          <div class="cmd"><span class="prompt">$</span><code id="cmd">spex flat new https://github.com/owner/repo --launcher claude</code></div>
+          <button type="button" class="copy-button" id="copy" aria-label="复制命令" title="复制命令">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </div>
+        <p>转换结果保存在本地目录，不会推送到源仓库。</p>
+      </div>
+    </div>
+  </section>
 
   <section class="gallery">
     <div class="sec-head">
-      <h2>已经压平的仓库</h2>
+      <h2>已生成说明的仓库</h2>
       <span>${entries.length} 个</span>
     </div>
     <div class="grid">
@@ -783,17 +896,20 @@ ${cards}
   </section>
 
   <footer>
-    由 <a href="https://github.com/shuxueshuxue/spexcode" target="_blank" rel="noopener noreferrer">SpexCode</a> 构建 ·
+    由 <a href="https://github.com/shuxueshuxue/spexcode" target="_blank" rel="noopener noreferrer">SpexCode</a> 构建。
     <a href="https://spexcode.net/zh/flatcode/">文档</a>。
-    这里每一张图谱都是已提交 spec 的只读投影——没有会话，没有写入路径，没有后端。
+    本站仅显示已提交的 spec，不显示会话，也不提供写入功能。
   </footer>
 </div>
 <script>
-  // Progressive: the command is readable and selectable without this; the button just saves a drag.
+  var command = document.getElementById('cmd')
+  var agent = document.getElementById('agent')
+  agent.addEventListener('change', function () {
+    command.textContent = 'spex flat new https://github.com/owner/repo --launcher ' + agent.value
+  })
   document.getElementById('copy').addEventListener('click', function () {
-    var text = document.getElementById('cmd').textContent
-    var done = function () { var b = this; b.textContent = 'copied'; setTimeout(function () { b.textContent = 'copy' }, 1400) }.bind(this)
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () {})
+    var text = command.textContent
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text)
   })
 </script>
 </body>
@@ -848,6 +964,7 @@ export async function flatGallery(out: string, flatDirs: readonly string[], log:
   const rank = (entry: GalleryEntry) => (entry.lang.toLowerCase().startsWith('zh') ? 0 : entry.lang.toLowerCase() === 'en' ? 2 : 1)
   entries.sort((a, b) => rank(a) - rank(b) || a.slug.localeCompare(b.slug))
   receipts.sort((a, b) => a.slug.localeCompare(b.slug))
+  copyFileSync(join(PKG, 'src', 'flatcode-banner.webp'), join(target, 'flatcode-banner.webp'))
   writeFileSync(join(target, 'index.html'), galleryIndexHtml(entries))
   // The manifest is what makes a publish auditable: it names every entry and hashes each flat's own release
   // manifest, so what landed on a host can be compared with what was built without trusting the transport.

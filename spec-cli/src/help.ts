@@ -213,8 +213,12 @@ The product is a directory: <out>/repo holds the clone with the spec tree commit
 branch, <out>/flat.json holds the reading. Nothing is pushed, nothing is served, no session or project is
 registered — the target repository never lands on anyone's board.
 
---launcher picks the agent exactly like a session does, and must name a harness with a non-interactive
-turn; a launcher whose harness has none is refused by name rather than quietly swapped.
+--launcher picks the agent exactly like a session does when the current directory already has launcher
+profiles. From a fresh directory, it accepts the built-in names \`claude\`, \`codex\`, \`opencode\`, or \`pi\` and
+uses that choice both for the conversion turn and for \`spex init\` inside the clone. Without a configured
+default or --launcher, an interactive terminal asks which agent to use; a non-interactive call must pass
+--launcher. A launcher whose harness has no non-interactive turn is refused by name rather than quietly
+swapped.
 
 --lang <code> writes the spec PROSE in that language (\`--lang zh\`, \`--lang ja\`, or a spelled-out name):
 every node's title, desc and body, since a spec is written for whoever maintains that repository. Node ids

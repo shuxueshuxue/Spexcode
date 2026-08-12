@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { confirmProfile, galleryIndexHtml, gallerySlug, gatePassed, profileFiles, readGate, type FlatGate } from './flat.js'
+import { FLAT_AGENT_CHOICES, confirmProfile, galleryIndexHtml, gallerySlug, gatePassed, profileFiles, readGate, type FlatGate } from './flat.js'
 import { HARNESSES, harnessById } from './harness.js'
 
 test('profiling governs tracked source and ignores what no spec could claim', () => {
@@ -171,6 +171,18 @@ test('the gallery index escapes what it prints and links relatively', () => {
   // An unknown language gets the neutral dot rather than an invented colour.
   assert.ok(html.includes('#3178c6') === false && html.includes('#3572a5'), 'known languages carry their own colour')
   assert.ok(html.includes('#6b7280'), 'an unlisted language falls back to neutral')
+})
+
+test('the gallery gives a fresh visitor the install, agent, and clone-init path', () => {
+  const html = galleryIndexHtml([])
+  assert.match(html, /npm i -g spexcode/, 'the one-time CLI installation is visible')
+  assert.match(html, /<select id="agent"/, 'the visitor can choose the conversion agent')
+  for (const choice of FLAT_AGENT_CHOICES) {
+    assert.match(html, new RegExp(`<option value="${choice.name}">${choice.label}</option>`), `${choice.label} is selectable`)
+  }
+  assert.match(html, /spex flat new https:\/\/github\.com\/owner\/repo --launcher claude/, 'the displayed run names an agent')
+  assert.match(html, /src="\.\/flatcode-banner\.webp"/, 'the gallery references its packaged banner relatively')
+  assert.match(html, /会克隆仓库，初始化 \.spec 和所选 agent 的配置/, 'the command owns cloning and initialization')
 })
 
 test('every harness declaring a one-shot turn carries the prompt exactly one way', () => {

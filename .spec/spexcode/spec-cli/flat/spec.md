@@ -18,9 +18,11 @@ related:
 # flat
 
 **Flatcode**（中文：软件二向箔）turns a repository nobody has ever specced into a `.spec` tree, from one
-command, on one machine. `spex flat new <repo-url|path>` clones or adopts the target, infers what counts as
-its source, seeds `.spec`, then runs an agent until the spec tree passes a gate. It owns no server, no
-account, no queue, and no hostname: the whole capability is a local command whose product is a directory.
+command, on one machine. After installing `spex`, `spex flat new <repo-url|path>` asks which local coding
+agent will run the conversion when the caller has no configured launcher. It then clones or adopts the target,
+infers what counts as its source, seeds `.spec` and that agent's harness configuration in the clone, then runs
+the chosen agent until the spec tree passes a gate. It owns no server, no account, no queue, and no hostname:
+the whole capability is a local command whose product is a directory.
 
 The reason this is a command and not a campaign someone supervises is that the expensive part —
 an agent reading an unfamiliar codebase and writing intent down — already happens today by hand, and its
@@ -77,6 +79,14 @@ exits. Flatcode starts no tmux window, registers no session, creates no worktree
 the target repository never becomes a SpexCode project and never appears on anyone's board. An adapter that
 has no non-interactive mode declares none, and Flatcode refuses that launcher by name rather than
 substituting one that would silently behave differently.
+
+`--launcher <name>` remains the non-interactive selection: an existing caller configuration resolves that
+named launcher, preserving its command and authentication setup. A caller with no SpexCode configuration can
+name one of the regular built-in agent names (`claude`, `codex`, `opencode`, or `pi`) directly; the
+same choice is used to seed the cloned repository with `spex init --harness`. With neither a configuration
+nor `--launcher`, the CLI asks on a terminal rather than guessing an agent. A non-terminal caller must name
+`--launcher` explicitly. Therefore a one-time global install does not require adopting the directory from
+which the conversion is launched, and the cloned repository is initialized before the first agent turn.
 
 The spec tree is committed onto a dedicated branch inside Flatcode's own clone, because the graph payload is
 anchored to a Git revision and drift is derived from history. That branch is never pushed. Adopting a local

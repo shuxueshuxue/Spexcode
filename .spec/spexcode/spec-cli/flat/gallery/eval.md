@@ -8,9 +8,10 @@ scenarios:
       request the same entry WITHOUT its trailing slash. Verify every release hash in gallery.json against the
       bytes being served before any of it.
     expected: >
-      Each manifest hash matches, the index lists exactly the flats the manifest names, the clicked entry
-      renders its graph under its own path prefix and opens a document, the slashless URL lands on the same
-      page, and the browser console stays empty — including no 404 for a favicon nobody shipped.
+      Each manifest hash matches, the index lists exactly the flats the manifest names, its banner asset loads,
+      the agent selector changes the displayed conversion command, the clicked entry renders its graph under
+      its own path prefix and opens a document, the slashless URL lands on the same page, and the browser
+      console stays empty — including no 404 for a favicon nobody shipped.
     tags: [frontend-e2e, cli]
   - name: publish-leaves-a-receipt
     description: >

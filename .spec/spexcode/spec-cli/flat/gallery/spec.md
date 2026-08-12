@@ -19,6 +19,14 @@ records the same list plus a SHA-256 of every flat's own release manifest. The c
 artifacts and invents no format: a flat in the gallery is byte-identical to the flat on the machine that
 produced it.
 
+The index is also the self-serve entry point. It shows the one-time `npm i -g spexcode` install, asks the
+visitor to choose the local agent that will run the conversion, and updates the displayed `spex flat new`
+command with that explicit launcher. It states that the command clones the requested repository and initializes
+`.spec`, `spexcode.json`, and the selected harness before the conversion rounds begin; it never tells a
+visitor to perform those internal steps by hand. A packaged bitmap banner depicts the repository-to-graph
+transformation and is copied beside `index.html`, so an assembled gallery has no asset dependency on the
+machine that built it.
+
 ## The slug belongs to the source, and cannot leave the root
 
 A flat is served at the slug of the repository it READ, never at the name of the directory Flatcode wrote

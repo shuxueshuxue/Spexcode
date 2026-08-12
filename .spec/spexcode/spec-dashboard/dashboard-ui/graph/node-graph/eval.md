@@ -47,20 +47,18 @@ scenarios:
       positions before settling with focus centred, preserving the move's direction; node containers may
       transition opacity but never transform. The filed reading carries video because a settled still cannot
       distinguish a connected camera move from detached structural animation.
-  - name: governance-group-keeps-plugin-tree-reachable
+  - name: plugins-node-uses-ordinary-tree
     tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/plugin-node.e2e.mjs
     description: >-
-      Open a newly adopted project's graph whose `.plugins` branch contains SpexCode's generated governance
-      specs. On the initial frame, count the ordinary project nodes and the collapsed governance entry, then
-      read the group label and its whole-subtree count. Focus the governance entry and drill through every
-      nested branch, recording which `.plugins` node ids become real rendered tiles along the way.
+      Open a graph whose `.plugins` branch contains nested specs. On the initial frame, inspect the `.plugins`
+      tile against its graph payload. It must display the raw `.plugins` title and version, plus the ordinary
+      direct-child `▸N` tab when collapsed. Focus the tile and confirm only its immediate children appear.
     expected: >-
-      The initial graph makes the user's project visually primary: ordinary project tiles occupy the first
-      structure while one explicitly-labelled SpexCode governance group states the complete number of
-      governance specs. The group is a compact entry, not a filter: after ordinary focus/drill navigation,
-      every governance node is rendered and reachable, with no missing descendants or replacement data
-      source. The filed evidence includes the initial and expanded browser screenshots plus the two exact
-      node counts.
+      `.plugins` is an ordinary graph node: no renamed group label, dashed group style, subtree count, or
+      path-derived data attribute appears. Its raw identity and direct-child count agree with the payload,
+      and normal focus reveals its immediate children. The filed evidence includes initial and expanded
+      browser screenshots.
 ---
 # eval.md — node-graph
 

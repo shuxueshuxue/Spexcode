@@ -1,23 +1,21 @@
 ---
 scenarios:
-  - name: project-and-governance-composition
+  - name: whole-tree-composition
     tags: [frontend-e2e, desktop]
+    test: spec-dashboard/test/plugin-node.e2e.mjs
     description: >-
-      Open a newly adopted project's graph with generated `.plugins` governance. Inspect the bottom-left
-      composition strip on the initial browser frame and compare its project and SpexCode counts to the
-      actual parent-descendant partition in the graph payload.
+      Open the graph and inspect the bottom-left composition strip against the complete graph payload.
     expected: >-
-      The composition strip names the project count separately from the SpexCode governance count, while
-      its accessible summary still states the whole-tree total. It never implies that governance nodes were
-      removed: the two counts add to the payload's node count.
+      The strip starts with the complete tree's node count. Its mutually exclusive status-dot counts sum to
+      that same total; paths, including `.plugins`, create no separate presentation category.
   - name: stats-strip-renders
     tags: [frontend-e2e, desktop]
     description: >-
       Open the dashboard at http://localhost:5173 and let the spec-graph settle. Look at the
-      bottom-left: a graph-stats strip should read its project/SpexCode governance partition, then
-      the four status dots (●merged ●active ●drift ●pending) each with a count, then ⚠ drift-node
+      bottom-left: a graph-stats strip should read the whole-tree total, then the four status dots
+      (●merged ●active ●drift ●pending) each with a count, then ⚠ drift-node
       and ◆ open-issue counts, then the yatsu score circles. Confirm the figures are COUNTS of
-      distinct things: project plus governance equals the four status-dot counts summed, and ◆ is
+      distinct things: the whole-tree total equals the four status-dot counts summed, and ◆ is
       the DEDUPED distinct open-issue count (not the per-node sum — an issue on several nodes counts
       once). Confirm the yatsu score circles count SCENARIOS, not nodes — cross-check a coverage
       chip's number against the per-scenario tally (a node with several scenarios contributes each;
@@ -26,8 +24,8 @@ scenarios:
       INSIDE the ring (grey ✓ / grey ✗), never an invented glyph. Capture the strip and file with
       `spex eval add graph-stats --scenario stats-strip-renders --image <png> --pass`.
     expected: >-
-      The strip renders all three clusters; the project and governance figures together equal the
-      four status-dot counts summed; ◆ is the deduped distinct open-issue count; the coverage circles
+      The strip renders all three clusters; its whole-tree total equals the four status-dot counts summed;
+      ◆ is the deduped distinct open-issue count; the coverage circles
       count scenarios (not nodes), so their figures match the per-scenario tally and exceed a
       per-node roll-up; a stale score shows the greyed verdict mark inside the ring (no ⊘ or other
       invented glyph). The filed reading carries the screenshot as image evidence and a pass verdict.
@@ -48,8 +46,8 @@ scenarios:
 # eval.md — graph-stats
 
 The strip is a product surface measured by **looking** (YATU): the agent drives the running dashboard,
-screenshots the rendered bottom-left strip, and checks the arithmetic the strip promises — project plus
-governance equals the four status-dot counts summed, ◆ is the *deduped* distinct open-issue count, and a
+screenshots the rendered bottom-left strip, and checks the arithmetic the strip promises — its whole-tree
+total equals the four status-dot counts summed, ◆ is the *deduped* distinct open-issue count, and a
 stale score is the greyed verdict inside the ring — then confirms that repeatedly clicking a multi-node chip
 *walks* focus through every node it counts and wraps. Both readings are image evidence with a verdict, not
 a `blob: null` placeholder.

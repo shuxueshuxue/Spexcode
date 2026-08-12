@@ -8,7 +8,6 @@ code:
   - spec-dashboard/src/SpecNode.jsx#SpecNode
   - spec-dashboard/src/SpecNode.jsx#Editors
   - spec-dashboard/src/SpecNode.jsx#EDGE_ANCHOR_PROPS
-  - spec-dashboard/src/SpecNode.jsx#governanceSummary
 related:
   - spec-dashboard/src/Dashboard.jsx
   - spec-dashboard/src/data.js
@@ -18,12 +17,13 @@ related:
   - spec-dashboard/src/color.js
   - spec-dashboard/src/Legend.jsx
   - spec-dashboard/src/Modal.jsx
+  - spec-dashboard/test/plugin-node.e2e.mjs
 ---
 # node-graph
 
 A **drill-down** tidy-tree of the spec-node neighbourhood: navigate by **relationship**, not by hunting a full forest where siblings blur into cousins. Only the focused node's **ancestor spine is expanded** — every other subtree collapses to a single tile — so the **root layer is always a short, readable column** no matter how deep or bushy the real tree is. (A point-per-node tidy tree otherwise spends vertical space equal to its *leaf count*, sprawling the high-level nodes — the ones you most want to grasp together — worst.) The tree **re-plots as focus moves** and the **camera follows focus**, framing the focused tile at the graph pane's geometric centre while its neighbourhood expands and collapses around it. Layout is horizontal left→right: depth is the column (root at the left); each layer is an **evenly-spaced column** and an expanded node's children form a block **centred on that node** — so focus moving within a column never reflows it, and a deep expansion can no longer spread the shallow rows apart. Tiles never touch; edges read bold when they touch the focus, faint otherwise. A **collapsed node** (children hidden) carries a small **`▸N` tab on its right edge** naming its hidden direct-child count, so a leaf and a closed branch never look alike; it picks up the focus colour on the focused node. Keys follow the same relationships (see [[keyboard-nav]]): ←/→ drill out/in, ↑/↓ walk siblings in the focused column.
 
-The reserved `.plugins` subtree is a real **SpexCode governance group**, never an omitted node class. On a project's first graph paint it stays collapsed by that same drill-down rule, but its tile says **SpexCode governance** and carries the count of the whole group (the `.plugins` root plus every descendant), rather than making a new user infer a system subtree's size from its raw directory name or direct-child tab. The project root and its ordinary children are therefore the first visual structure. Focusing or opening the governance tile uses the ordinary tree navigation unchanged: its immediate children appear, and further focus moves expose every descendant. The group may be visually compact at rest; its nodes, edges, popup content, search results, and navigation paths remain complete.
+Every spec node, including the reserved `.plugins` branch, renders its backend identity unchanged. The ordinary drill-down rule applies uniformly: a collapsed node shows its raw title, version, and direct-child `▸N` tab; focusing it reveals its immediate children. The graph does not invent visual node classes, subtree totals, or presentation-only partitions from a path name.
 
 A re-plot separates **structure** from **navigation feedback**. In graph coordinates the structure updates atomically: newly revealed tiles and their solid tree edges appear together at final geometry, persisting tiles never interpolate between slots, and removed branches leave together. Above that stable topology, a keyboard or programmatic focus move gives direction in screen coordinates: the camera eases onto the target at constant zoom and focus-neighbour opacity settles gently; a pending reparent's dashed overlay arrow flows in its author's colour. None of those cues changes a tile's graph position or a solid edge endpoint, so the tree stays connected throughout the camera move. Mouse focus still expands in place without moving the camera.
 

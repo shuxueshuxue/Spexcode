@@ -35,7 +35,7 @@ honest than a node roll-up.
 
 Three clusters, each answering one question:
 
-- **Composition — what the tree IS.** The leading partition says how many specs are **project** intent and how many belong to the reserved `.plugins` **SpexCode governance** group; together they are the whole-tree total named by the accessible label. The project count excludes the `.plugins` root and every descendant, while the governance count includes that root and all of its descendants. This is a visual partition, not a filtered board: status dots still count the complete tree, remain mutually exclusive, and sum to the accessible total. A project with no `.plugins` group simply has its whole count in project intent.
+- **Composition — what the tree IS.** The leading total names every spec node in the tree, followed by the four status dots (merged, active, drift, pending). Status dots are mutually exclusive and sum to that total: "how big, and how settled". Path names never create presentation-only partitions.
 - **Attention — what NEEDS a human.** `⚠N` counts **nodes whose code is ahead of their spec**; `◆N` counts
   **distinct open issues** linked to the tree (deduped by number). Both count distinct things — an issue on
   three nodes is one issue. Lean per-node open ids provide only this dedupe/walk identity, never issue rows;

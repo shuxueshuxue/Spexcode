@@ -33,30 +33,6 @@ const EDGE_ANCHOR_PROPS = {
 export { STATUS, GLYPH } from './specMeta.js'
 import { STATUS, GLYPH } from './specMeta.js'
 
-// The backend already gives every node's source path and parent. Keep the reserved `.plugins` branch's
-// grouping in the graph consumer: it is a presentation partition, never a second backend node class.
-export function governanceSummary(specs) {
-  const root = specs.find((node) => node.path?.endsWith('/.plugins/spec.md'))
-  if (!root) return { rootId: null, count: 0 }
-  const children = new Map()
-  for (const node of specs) {
-    if (!node.parent) continue
-    const siblings = children.get(node.parent) || []
-    siblings.push(node.id)
-    children.set(node.parent, siblings)
-  }
-  const ids = new Set([root.id])
-  const pending = [root.id]
-  while (pending.length) {
-    for (const id of children.get(pending.pop()) || []) {
-      if (ids.has(id)) continue
-      ids.add(id)
-      pending.push(id)
-    }
-  }
-  return { rootId: root.id, count: ids.size }
-}
-
 function Editors({ data }) {
   const t = useT()
   // several pending ops from one session collapse to one face — dedupe by id
@@ -83,7 +59,6 @@ function IssueBadge({ summary, t }) {
 export default function SpecNode({ data, selected }) {
   const t = useT()
   const s = STATUS[data.status] || STATUS.pending
-  const governance = data.governanceCount > 0
   const ago = timeAgo(data.lastEdited, t)
   const overlays = data.overlays || []
   const lead = overlays[0]                                   // primary author -> ring colour
@@ -94,20 +69,18 @@ export default function SpecNode({ data, selected }) {
     'spec-node', data.status,
     selected ? 'focused' : '',
     data.ghost ? 'ghost' : '',
-    governance ? 'governance-group' : '',
     deleted ? 'deleted' : '',
     overlays.length ? 'has-overlay' : '',
     dirty ? 'ov-dirty' : '',
   ].filter(Boolean).join(' ')
   return (
-    <div className={cls} style={lead ? { '--ov': labelColor(lead.seed) } : undefined}
-      {...(governance ? { 'data-governance-root': '', 'data-governance-count': data.governanceCount } : {})}>
+    <div className={cls} style={lead ? { '--ov': labelColor(lead.seed) } : undefined}>
       <Handle type="target" position={Position.Left} {...EDGE_ANCHOR_PROPS} />
       <div className="node-row1">
         <span className="node-dot" style={{ background: s.color }}>
           {data.status === 'active' && <span className="pulse" style={{ background: s.color }} />}
         </span>
-        <span className="node-title">{governance ? t('specNode.governanceTitle') : data.title}</span>
+        <span className="node-title">{data.title}</span>
         {/* pending ops replace the age — an overlay means the node is being touched NOW */}
         {ops.length > 0 ? (
           <span className="ov-marks" data-tip={overlays.map((o) => t('specNode.opTitle', { op: t(`legend.opRows.${o.op}`), label: o.label, uncommitted: !o.committed })).join('\n')}>
@@ -116,9 +89,7 @@ export default function SpecNode({ data, selected }) {
         ) : ago ? <span className="node-ago">{ago}</span> : null}
       </div>
       <div className="node-row2">
-        {governance
-          ? <span className="node-governance-count" data-tip={t('specNode.governanceCountTitle', { n: data.governanceCount })}>{t('specNode.governanceCount', { n: data.governanceCount })}</span>
-          : <span className="node-ver">{data.version ? `v${data.version}` : ''}</span>}
+        <span className="node-ver">{data.version ? `v${data.version}` : ''}</span>
         {data.drift > 0 && (
           <span className="drift-badge" data-tip={(data.driftFiles || []).map((d) => `${d.file}: ${t('specNode.driftAhead', { n: d.behind })}`).join('\n')}>
             ⚠{data.drift}
@@ -130,9 +101,7 @@ export default function SpecNode({ data, selected }) {
       </div>
       {/* collapsed node gets a ▸N tab naming its hidden child count (App sets data.collapsed/childCount). */}
       {data.collapsed && (
-        <span className="node-expand" data-tip={governance
-          ? t('specNode.governanceExpandable', { n: data.governanceCount })
-          : t('specNode.expandable', { n: data.childCount })}>▸{governance ? data.governanceCount : data.childCount}</span>
+        <span className="node-expand" data-tip={t('specNode.expandable', { n: data.childCount })}>▸{data.childCount}</span>
       )}
       <Handle type="source" position={Position.Right} {...EDGE_ANCHOR_PROPS} />
     </div>

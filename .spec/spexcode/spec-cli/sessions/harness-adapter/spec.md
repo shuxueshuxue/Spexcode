@@ -379,7 +379,11 @@ surface:
   context — `AGENTS.md` + skills + project config — by walking the thread cwd, so one project-scoped server
   behaves analogously to a per-worktree claude launch; its PROJECT HOOKS are the one exception, read from the
   root checkout per the events/shim point above) and stores the returned `thread.id` on the governed record as `harness_session_id` — no capture hook,
-  no rollout-file scan, no cwd guess. The
+  no rollout-file scan, no cwd guess. The server may register that thread before the first user message materializes
+  it. In that window `thread/turns/list` returns the exact protocol refusal `is not materialized yet;
+  thread/turns/list is unavailable before first user message`; the lifecycle adapter treats only that response as a
+  proven no-turn interrupt result. Timeouts and all other transport, ownership, or turn-state errors remain refusal
+  paths. The
   app-server `--listen unix://<sock>` endpoint is a WebSocket at path `/rpc` (the same upgrade the `--remote`
   TUI performs); delivery speaks WebSocket JSON-RPC over that Unix socket directly — NOT `codex app-server
   proxy` (a dumb byte relay that performs no HTTP upgrade, which the server rejects).

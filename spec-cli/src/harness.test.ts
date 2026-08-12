@@ -1307,6 +1307,39 @@ test('Codex native interrupt addresses the fresh active turn and waits until it 
   }
 })
 
+test('Codex native interrupt treats an unmaterialized thread as having no turn', { skip: platform() !== 'linux' }, async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-interrupt-unmaterialized-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const target = 'unmaterialized-interrupt-target'
+  const interrupts: unknown[] = []
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/turns/list') throw new Error(`thread ${target} is not materialized yet; thread/turns/list is unavailable before first user message`)
+    if (message.method === 'turn/interrupt') { interrupts.push(message.params); return {} }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  const root = runtimeRoot()
+  const socket = codexAppServerSock(root)
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(root, { recursive: true })
+    owner = startCodexOwner(root)
+    assert.deepEqual(await codexHarness.interrupt?.({ session: 'unmaterialized-interrupt-session', harnessSessionId: target, runtimeDir: root }), { ok: true })
+    assert.deepEqual(interrupts, [], 'an unmaterialized thread has no native turn to interrupt')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('Codex interrupt waits for an exact generation proof that is still being published', { skip: platform() !== 'linux' }, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR

@@ -68,6 +68,11 @@ guard, then may invoke the adapter's exact native interrupt for its recorded tar
 and then repeat the complete cold proof
 before deleting anything. An unsupported, rejected, generation-swapped, unknown, or still-active interrupt is a
 loud close refusal; it never substitutes a PID signal, changes a sibling, or skips the ordinary cold proof.
+An adapter may have a registered native thread that has not yet received its first user message. When its protocol
+explicitly reports that `thread/turns/list` is unavailable because that thread is not materialized yet, the report is
+positive evidence that there is no turn to interrupt, so close proceeds to the ordinary cold proof. This exception is
+exact and protocol-scoped; a timeout, transport failure, ownership ambiguity, or any other unknown turn state still
+refuses loudly.
 
 For a shared resident adapter, lifecycle mutation uses a target-scoped proof rather than the resource report's
 full projection. It first proves the shared PID/start/detached-receipt/socket generation, obtains the paginated loaded-ID

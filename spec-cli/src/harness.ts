@@ -1209,7 +1209,11 @@ function codexRunningTurn(sock: string, threadId: string): Promise<{ ok: true; t
     const handle = (json: string) => {
       let message: JsonRpc
       try { message = JSON.parse(json) } catch { return }
-      if (message.error) return done({ ok: false, error: `Codex target thread ${threadId} turn census failed: ${message.error.message || JSON.stringify(message.error)}` })
+      if (message.error) {
+        const error = message.error.message || JSON.stringify(message.error)
+        if (isCodexUnmaterializedThreadError(threadId, error)) return done({ ok: true, turnPresence: 'idle' })
+        return done({ ok: false, error: `Codex target thread ${threadId} turn census failed: ${error}` })
+      }
       if (message.id === 1 && message.result) {
         send({ method: 'initialized', params: {} })
         // The guard needs only the current turn. `thread/read {includeTurns:true}` materializes the
@@ -1241,6 +1245,12 @@ function codexRunningTurn(sock: string, threadId: string): Promise<{ ok: true; t
 }
 
 const CODEX_INTERRUPT_SETTLE_MS = 15_000
+// Codex registers a thread before the first user message is materialized. That exact protocol refusal is a
+// positive no-turn fact for terminal close, not a transport or ownership ambiguity; every other census error
+// remains fail-closed.
+const isCodexUnmaterializedThreadError = (threadId: string, error: string): boolean =>
+  error.includes(threadId) && error.includes('is not materialized yet') &&
+  error.includes('thread/turns/list is unavailable before first user message')
 
 async function interruptCodexTurn(rec: HarnessDeliveryRecord): Promise<DispatchResult> {
   if (!rec.harnessSessionId) return { ok: false, error: 'no exact Codex thread identity is registered' }

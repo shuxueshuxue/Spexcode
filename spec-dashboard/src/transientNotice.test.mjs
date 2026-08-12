@@ -17,6 +17,9 @@ test('transient notices expire by default, can be paused, and remain dismissible
   assert.match(notice, /onPointerEnter=\{\(\) => pause\(notice\.id\)\}/)
   assert.match(notice, /onFocus=\{\(\) => pause\(notice\.id\)\}/)
   assert.match(notice, /<IconButton icon="x"[^>]*onClick=\{\(\) => dismiss\(notice\.id\)\}/)
+  assert.match(notice, /notice\.duration > 0 && <span className="tn-progress" aria-hidden="true" \/>/)
+  assert.match(notice, /style=\{\{ '--tn-duration': `\$\{notice\.duration\}ms` \}\}/)
+  assert.match(notice, /data-paused=\{notice\.paused \? 'true' : undefined\}/)
 })
 
 test('one root provider serves full and lightweight dashboard routes', () => {
@@ -39,4 +42,6 @@ test('notice chrome stays palette-native and below interactive overlays', () => 
   assert.match(css, /\.tn-notice\.success\s*\{\s*--tn-tone:\s*var\(--green\);\s*\}/)
   assert.match(css, /\.tn-notice\.error\s*\{\s*--tn-tone:\s*var\(--red\);\s*\}/)
   assert.match(css, /@media \(max-width: 640px\)\s*\{\s*\.tn-viewport\s*\{[^}]*bottom:\s*calc\(68px \+ env\(safe-area-inset-bottom\)\);/s)
+  assert.match(css, /\.tn-progress\s*\{[^}]*animation:\s*tn-progress var\(--tn-duration\) linear forwards;/s)
+  assert.match(css, /\.tn-notice\[data-paused='true'\] \.tn-progress\s*\{\s*animation-play-state:\s*paused;/s)
 })

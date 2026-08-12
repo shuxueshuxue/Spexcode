@@ -23,6 +23,8 @@ function TransientNoticeViewport({ notices, dismiss, pause, resume }) {
         <div
           key={notice.id}
           className={`tn-notice ${notice.kind}`}
+          data-paused={notice.paused ? 'true' : undefined}
+          style={{ '--tn-duration': `${notice.duration}ms` }}
           role={notice.kind === 'error' ? 'alert' : 'status'}
           onPointerEnter={() => pause(notice.id)}
           onPointerLeave={() => resume(notice.id)}
@@ -32,6 +34,7 @@ function TransientNoticeViewport({ notices, dismiss, pause, resume }) {
           <Icon name={iconFor[notice.kind]} size={16} className="tn-icon" />
           <span className="tn-message">{notice.message}</span>
           <IconButton icon="x" size={14} className="tn-dismiss" label={t('common.close')} onClick={() => dismiss(notice.id)} />
+          {notice.duration > 0 && <span className="tn-progress" aria-hidden="true" />}
         </div>
       ))}
     </div>
@@ -67,7 +70,7 @@ export function TransientNoticeProvider({ children }) {
     if (!text) return null
     const { kind, duration } = noticeOptions(options)
     const id = `notice-${++nextNoticeId}`
-    setNotices((current) => [...current, { id, kind, message: text }])
+    setNotices((current) => [...current, { id, kind, message: text, duration, paused: false }])
     if (duration) schedule(id, duration)
     return id
   }, [schedule])
@@ -78,12 +81,14 @@ export function TransientNoticeProvider({ children }) {
     window.clearTimeout(timer.handle)
     timer.handle = null
     timer.remaining = Math.max(0, timer.deadline - Date.now())
+    setNotices((current) => current.map((notice) => notice.id === id ? { ...notice, paused: true } : notice))
   }, [])
 
   const resume = useCallback((id) => {
     const timer = timers.current.get(id)
     if (!timer || timer.handle) return
     schedule(id, timer.remaining)
+    setNotices((current) => current.map((notice) => notice.id === id ? { ...notice, paused: false } : notice))
   }, [schedule])
 
   useEffect(() => () => {

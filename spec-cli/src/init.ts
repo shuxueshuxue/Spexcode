@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync, renameS
 import { join, resolve, relative, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { gitBinary, readConfig, readJsonConfig, templateConfigPath } from '@spexcode/spec-core'
-import { resolveHarnessTargets, parseHarnessFlag, NATIVE_HARNESS_IDS } from './harness-select.js'
+import { gitBinary, parseFrontmatter, readConfig, readJsonConfig, templateConfigPath } from '@spexcode/spec-core'
+import { resolveHarnessTargets, partitionHarnesses, parseHarnessFlag, NATIVE_HARNESS_IDS } from './harness-select.js'
 
 // this file lives at <pkgRoot>/src/init.ts, so `..` is the package root — the same derivation the
 // launch paths use, never a hardcoded repo path (so a relocated/installed package still finds its data).
@@ -38,14 +38,15 @@ const presetRank = (name: string): number => (PRESET_TIERS as readonly string[])
 
 // recursively copy srcDir -> destDir, NEVER overwriting an existing file. Returns the repo-relative
 // paths of files actually written (so the caller can report exactly what was planted vs already there).
-function copyTreeNoClobber(srcDir: string, destDir: string, base: string): string[] {
+function copyTreeNoClobber(srcDir: string, destDir: string, base: string, includeDir: (dir: string) => boolean = () => true): string[] {
+  if (!includeDir(srcDir)) return []
   const written: string[] = []
   mkdirSync(destDir, { recursive: true })
   for (const e of readdirSync(srcDir, { withFileTypes: true })) {
     const src = join(srcDir, e.name)
     const dest = join(destDir, e.name)
     if (e.isDirectory()) {
-      written.push(...copyTreeNoClobber(src, dest, base))
+      written.push(...copyTreeNoClobber(src, dest, base, includeDir))
     } else if (existsSync(dest)) {
       // additive only — a pre-existing file is the user's, leave it untouched.
       continue
@@ -55,6 +56,17 @@ function copyTreeNoClobber(srcDir: string, destDir: string, base: string): strin
     }
   }
   return written
+}
+
+function seedableForEvents(dir: string, reachableEvents: ReadonlySet<string>): boolean {
+  const spec = join(dir, 'spec.md')
+  if (!existsSync(spec)) return true
+  const { fm } = parseFrontmatter(readFileSync(spec, 'utf8'))
+  const values = (value: string | string[] | undefined) => Array.isArray(value) ? value : value ? [value] : []
+  const surfaces = values(fm.surface).flatMap((value) => value.split(',')).map((value) => value.trim())
+  if (!surfaces.includes('hook')) return true
+  const events = values(fm.events).flatMap((value) => value.split(',')).map((value) => value.trim()).filter(Boolean)
+  return !events.length || events.some((event) => reachableEvents.has(event))
 }
 
 // resolve the target repo's git hooks dir the same way scripts/install-hooks.sh does — the COMMON dir's
@@ -120,8 +132,11 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
     console.error(`spex init: --harness is required — name the harness(es) this repo delivers into, e.g. \`spex init --harness claude\`. Known native ids: ${NATIVE_HARNESS_IDS.join(', ')} (comma-separate several; a plugin bundle: --harness plugin:<folder>). A pre-existing spexcode.json "harnesses" field also satisfies this.`)
     process.exit(1)
   }
+  let selectedNativeEvents: ReadonlySet<string> | null = null
   try {
-    resolveHarnessTargets(chosenHarnesses)
+    const targets = resolveHarnessTargets(chosenHarnesses)
+    const native = partitionHarnesses(targets).selected
+    if (native.length) selectedNativeEvents = new Set(native.flatMap((h) => h.events))
   } catch (e) {
     console.error(`spex init: ${(e as Error).message}`)
     process.exit(1)
@@ -135,7 +150,11 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   if (existsSync(specDest)) {
     console.warn(`• .spec already exists at ${specDest} — skipping spec scaffold (won't overwrite an existing tree).`)
   } else {
-    const planted = copyTreeNoClobber(join(TEMPLATES, 'spec'), specDest, targetDir)
+    const includeSeedDir = (dir: string) => selectedNativeEvents === null || seedableForEvents(dir, selectedNativeEvents)
+    const planted = copyTreeNoClobber(
+      join(TEMPLATES, 'spec'), specDest, targetDir,
+      includeSeedDir,
+    )
     console.log(`✓ seeded ${planted.length} spec file(s) under .spec/ (root 'project' node + default .plugins)`)
     // 1a. stack the selected preset's package(s) ON TOP of the default set — cumulative, so every tier from
     // just above `default` up to the selection is planted. Each lives under templates/presets/<tier>/ mirroring
@@ -144,7 +163,7 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
       const tier = PRESET_TIERS[r]
       const pkg = join(TEMPLATES, 'presets', tier)
       if (!existsSync(pkg)) { console.warn(`• preset '${tier}' has no package at ${pkg} — skipped.`); continue }
-      const added = copyTreeNoClobber(pkg, join(specDest, 'project'), targetDir)
+      const added = copyTreeNoClobber(pkg, join(specDest, 'project'), targetDir, includeSeedDir)
       console.log(`✓ seeded preset '${tier}' (${added.length} file(s)) into .plugins`)
     }
   }

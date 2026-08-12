@@ -42,6 +42,19 @@ scenarios:
       claim/file. Codex-only reports and plants AGENTS.md, the Codex shim, and scoped Codex trust, with no
       CLAUDE.md or Claude shim claim/file. The starter project spec describes the initialized system, hook,
       command, and skill surfaces without the obsolete claim that the seed consists only of core plus tidy.
+  - name: selected-harness-reachable-hook-seed
+    tags: [cli]
+    test:
+      path: spec-cli/src/init.test.ts
+      name: --harness seeds hook nodes only when a selected native adapter can emit their events
+    description: >-
+      In fresh git repositories, run the real `spex init` for zcode-only, claude-only, and zcode+claude
+      delivery. Count plugin spec nodes and inspect the two hooks whose events are unavailable in zcode.
+    expected: >-
+      zcode-only seeds 20 of the default 22 plugin nodes: idle/idle.sh and session-fail/fail.sh are absent,
+      while every hook reachable by zcode remains. Claude-only and zcode+claude keep all 22 nodes, because
+      either selected adapter can emit Notification and StopFailure. The decision follows adapter event data,
+      never a harness-name branch.
 ---
 # eval.md — spex-init
 

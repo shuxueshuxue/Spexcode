@@ -2513,7 +2513,7 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .tn-notice {
   --tn-tone: var(--blue);
   width: 100%; box-sizing: border-box; display: grid; grid-template-columns: 16px minmax(0, 1fr) 24px; align-items: start; gap: 9px;
-  padding: 9px 8px 9px 10px; color: var(--ink2); background: color-mix(in srgb, var(--panel) 96%, transparent);
+  position: relative; overflow: hidden; padding: 9px 8px 9px 10px; color: var(--ink2); background: color-mix(in srgb, var(--panel) 96%, transparent);
   border: 1px solid color-mix(in srgb, var(--tn-tone) 42%, var(--line)); border-left: 3px solid var(--tn-tone); border-radius: 7px;
   box-shadow: 0 10px 24px color-mix(in srgb, var(--ink) 15%, transparent); font-family: var(--mono); font-size: var(--type-control);
   line-height: var(--leading-relaxed); pointer-events: auto; animation: tn-arrive .16s ease-out both;
@@ -2528,7 +2528,14 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 }
 .tn-dismiss:hover { color: var(--ink2); background: color-mix(in srgb, var(--line) 45%, transparent); }
 .tn-dismiss:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.tn-progress {
+  position: absolute; right: 0; bottom: 0; left: 0; height: 2px; transform-origin: right center;
+  background: var(--tn-tone); animation: tn-progress var(--tn-duration) linear forwards;
+  pointer-events: none;
+}
+.tn-notice[data-paused='true'] .tn-progress { animation-play-state: paused; }
 @keyframes tn-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes tn-progress { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 @media (max-width: 640px) {
   .tn-viewport { right: max(10px, env(safe-area-inset-right)); bottom: calc(68px + env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 20px)); }
 }

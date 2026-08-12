@@ -32,8 +32,11 @@ that notice; separate actions remain a compact newest-last stack rather than ove
 
 The viewport is fixed to the dashboard edge, above page content and below modal/popup layers. Its calm,
 single-row Obsidian-like grammar is the existing palette: a small semantic icon, concise text, and a familiar
-close icon in a lightly raised, theme-native surface. It uses dashboard CSS variables only, including the
-existing unified type scale; a theme flip reskins it without component logic. On narrow screens it respects
+close icon in a lightly raised, theme-native surface. Notices with an expiry also show a two-pixel semantic-color
+progress rule along their bottom edge; it is the visual lifecycle cue only, with no remaining-time label. The rule
+pauses and resumes with the notice timer while hovered or keyboard-focused, and is omitted for persistent notices.
+It uses dashboard CSS variables only, including the existing unified type scale; a theme flip reskins it without
+component logic. On narrow screens it respects
 the safe edges, uses the available width, and sits above the fixed phone tab bar rather than covering a
 thumb-reachable navigation control.
 

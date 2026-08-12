@@ -49,7 +49,7 @@ The successful receipt names what to read, monitor, and reply on. --ssh uses an 
 communication tunnel: its full id anchors the remote project, creation stays parentless and remote, and its
 prompt carries a runnable reply path over that same tunnel.`],
     ls: [['spex session ls [SEL…] [--children[=<PARENT-SEL>]] [--status a,b] [--all] [--json]', 'spex session ls --ssh <address> <FULL-SESSION-ID> [--children=<PARENT-SEL>] [--status a,b] [--json]'],
-      'One-shot table of this project\'s living sessions, with each direct parent beside the row. --children scopes it to the caller\'s direct children; --children=<PARENT-SEL> names another parent without changing positional selector grammar. The heading summarizes the displayed scope by status. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it. An explicit id missing from the board is diagnosed from terminal-close history: closed is a successful answer, while no live, archived, or closed history is a named miss. --ssh uses an existing gateway-to-gateway communication tunnel; its full id anchors one remote project rather than filtering the table, and archive projection stays unavailable on that peer route.', ['selector']],
+      'One-shot table of this project\'s live sessions, with each direct parent beside the row. --children scopes it to the caller\'s direct children; --children=<PARENT-SEL> names another parent without changing positional selector grammar. The heading summarizes the displayed scope by status. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it. An explicit id missing from the session list is diagnosed from terminal-close history: closed is a successful answer, while no live, archived, or closed history is a named miss. --ssh uses an existing gateway-to-gateway communication tunnel; its full id anchors one remote project rather than filtering the table, and archive projection stays unavailable on that peer route.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
     files: [['spex session files add <path>', 'spex session files ls', 'spex session files retract <path>'],
       'Publish, list, or withdraw YOUR session’s live file paths. Posting stores an absolute path beside the session record without copying bytes; the dashboard downloads it only when the human clicks.'],
@@ -201,9 +201,9 @@ consume the same visible diagnosis.`,
        spex flat site <flat-dir>
        spex flat gallery --out <dir> <flat-dir>…
 
-For a repository URL, clones the target into an isolated flat. For a local path, works directly in that clean
+For a repository URL, clones the target into an isolated flat. For a local path, operates directly in that clean
 repository and adds only \`.spec\` work. A new local repository receives the ordinary \`.spec\` adoption seed;
-an initialized one keeps its \`.spec\`, configuration, and launcher. It then runs an agent round after round
+an initialized one retains its \`.spec\`, configuration, and launcher. It then runs an agent round after round
 until the spec tree passes a gate: zero \`spex spec lint\` errors, coverage at or above --coverage (default
 90%), with \`spex doctor\`'s altitude findings fed back as the next round's instructions. The agent saying it
 finished is not the signal — the measurement is.
@@ -211,7 +211,7 @@ finished is not the signal — the measurement is.
 Rounds are bounded (--rounds, default 6). Exhausting the budget reports a PARTIAL flat naming what still
 fails and exits non-zero; it never reports a pass it did not measure.
 
-The product is a sibling \`<out>/flat.json\` reading. A URL flat additionally holds its clone at \`<out>/repo\`
+The product is a sibling \`<out>/flat.json\` result record. A URL flat additionally holds its clone at \`<out>/repo\`
 on the \`flatcode\` branch. A local flat commits only \`.spec\` in its source repository's current branch;
 Flatcode rejects a dirty repository and fails if the agent touches anything outside \`.spec\`. Nothing is pushed,
 nothing is served, and no session or project is registered.

@@ -2806,7 +2806,7 @@ export async function reviewPayload(id: string): Promise<ReviewPayload | null> {
 
 const MERGE_PROMPT = `Merge your branch into main, then settle the session honestly.
 
-1. In your own worktree, merge the latest main into your branch. Resolve any conflicts there and re-run the proof.
+1. In your own worktree, merge the latest main into your branch. Resolve any conflicts there and re-run the tests.
 2. Atomic landing: main only receives the completed branch as one no-ff merge. Never resolve conflicts in the shared main checkout.
 3. Verify main advanced cleanly with no merge left in progress. If this task is settled, run \`spex session done --propose close\` as your FINAL action; otherwise declare the state that is true.`
 

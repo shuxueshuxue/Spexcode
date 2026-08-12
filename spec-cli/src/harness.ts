@@ -1485,7 +1485,7 @@ async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), exp
     const turn = await codexRunningTurn(sock, threadId)
     if (!turn.ok) return { ok: false, reason: turn.error }
     if (codexRuntimeGeneration(dir, endpoint) !== generation)
-      return { ok: false, reason: 'shared Codex app-server generation changed during unmaterialized-thread proof' }
+      return { ok: false, reason: 'shared Codex app-server generation changed while confirming an unmaterialized thread' }
     if (turn.unmaterialized) {
       const loadedTarget = loaded.referenceIds.includes(threadId)
       const guard: SharedRuntimeMutationGuard = {

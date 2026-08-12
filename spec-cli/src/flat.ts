@@ -260,7 +260,7 @@ function repairPrompt(gate: FlatGate, doctor: string, coverageFloor: number, lan
   if (doctor.trim()) {
     lines.push(
       ``,
-      `SPEC HEALTH — nodes reading as mechanics dumps rather than intent, and parents fanned too wide:`,
+      `SPEC HEALTH — nodes phrased as mechanics dumps rather than intent, and parents fanned too wide:`,
       ``,
       doctor.trim(),
       ``,
@@ -392,7 +392,7 @@ export async function flatNew(
   if (!isUrl(options.target)) {
     local = resolve(options.target)
     if (!existsSync(join(local, '.git'))) throw new Error(`spex flat: ${local} is not a git repository`)
-    const dirty = await gitOrThrow(['status', '--porcelain'], local, 'reading the working tree')
+    const dirty = await gitOrThrow(['status', '--porcelain'], local, 'checking the working tree')
     if (dirty) throw new Error(`spex flat: ${local} has uncommitted changes — Flatcode commits a spec tree and will not mix it with work it did not write`)
     source = local
   }
@@ -401,7 +401,7 @@ export async function flatNew(
     const fromSource = relative(local, out)
     return !fromSource || (!fromSource.startsWith(`..${sep}`) && fromSource !== '..' && !isAbsolute(fromSource))
   })()
-  if (outputInsideSource) throw new Error(`spex flat: ${out} is inside ${local}; Flatcode's reading must stay beside the source repository`)
+  if (outputInsideSource) throw new Error(`spex flat: ${out} is inside ${local}; Flatcode's output must stay beside the source repository`)
   const repo = local ?? join(out, 'repo')
   const configPath = join(repo, 'spexcode.json')
   const initialized = Boolean(local && existsSync(join(repo, '.spec')) && existsSync(configPath))
@@ -428,7 +428,7 @@ export async function flatNew(
     if (clone.code !== 0) throw new Error(`spex flat: clone failed — ${clone.stderr.trim()}`)
     await gitOrThrow(['checkout', '--quiet', '-b', FLAT_BRANCH], repo, `creating the ${FLAT_BRANCH} branch`)
   }
-  const revision = await gitOrThrow(['rev-parse', 'HEAD'], repo, 'reading the cloned revision')
+  const revision = await gitOrThrow(['rev-parse', 'HEAD'], repo, 'identifying the cloned revision')
 
   // --- profile -------------------------------------------------------------------------------------------
   const tracked = (await gitOrThrow(['ls-files'], repo, 'listing tracked files')).split('\n').filter(Boolean)
@@ -498,7 +498,7 @@ export async function flatNew(
     const beforeUntracked = new Set((await gitOrThrow(['ls-files', '--others', '--exclude-standard'], repo, 'recording untracked files')).split('\n').filter(Boolean))
     const code = await runTurn(harness.oneShotTurn!(prompt, cmd), repo)
     if (code !== 0) log(`round ${round}: the agent turn exited ${code}; measuring anyway`)
-    const after = await gitOrThrow(['rev-parse', 'HEAD'], repo, 'reading the agent round')
+    const after = await gitOrThrow(['rev-parse', 'HEAD'], repo, 'checking the agent round')
     if (after !== before) await gitOrThrow(['reset', '--soft', before], repo, 'taking ownership of the agent commit')
     await assertOnlyFlatChanges(repo, before, beforeUntracked)
     await commit(repo, `flatcode: round ${round}`, ['.spec'])
@@ -1121,7 +1121,7 @@ async function assertOnlyFlatChanges(repo: string, before: string, beforeUntrack
     // the agent made, including ones it committed itself. New non-spec paths did not exist at the boundary and
     // are removed by their exact git-reported names. A rejected round therefore cannot leave source changes
     // behind under the misleading name of a documentation run.
-    const baseline = new Set((await gitOrThrow(['ls-tree', '-r', '--name-only', before], repo, 'reading the round baseline')).split('\n').filter(Boolean))
+    const baseline = new Set((await gitOrThrow(['ls-tree', '-r', '--name-only', before], repo, 'loading the round baseline')).split('\n').filter(Boolean))
     await gitOrThrow(['reset', '--mixed', before], repo, 'discarding the agent commit')
     for (const path of forbidden) {
       if (baseline.has(path)) {

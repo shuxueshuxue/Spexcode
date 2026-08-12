@@ -222,7 +222,7 @@ export async function clientSessionClosure(selector: string): Promise<SessionClo
     if (r.headers.get('x-spexcode-close-history') !== 'v1')
       throw new BackendError(`backend does not support terminal close history; refusing to label ${selector} as never existed (update the backend)`, 501)
     if (r.status === 404) return null
-    if (!r.ok) throw new BackendError(`backend error ${r.status} reading close history for ${selector}`, r.status)
+    if (!r.ok) throw new BackendError(`backend error ${r.status} retrieving close history for ${selector}`, r.status)
     return await r.json() as SessionClosure
   }, () => findSessionClosure(selector))
 }

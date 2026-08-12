@@ -121,7 +121,7 @@ test('merge dispatch gives the agent the short local landing flow', { timeout: 1
       'merge prompt timeline append',
     )
     const prompt = timeline.find((event) => event.kind === 'sent' && event.text.startsWith('Merge your branch into main'))!.text
-    assert.match(prompt, /In your own worktree, merge the latest main into your branch\. Resolve any conflicts there and re-run the proof\./)
+    assert.match(prompt, /In your own worktree, merge the latest main into your branch\. Resolve any conflicts there and re-run the tests\./)
     assert.match(prompt, /Atomic landing: main only receives the completed branch as one no-ff merge\. Never resolve conflicts in the shared main checkout\./)
     assert.match(prompt, /Verify main advanced cleanly with no merge left in progress\./)
     assert.doesNotMatch(prompt, /REVIEWED_GENERATION|LANDING_MERGED|printf|expectedBranchHead|reviewEpoch/)

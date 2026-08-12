@@ -201,7 +201,9 @@ consume the same visible diagnosis.`,
        spex flat site <flat-dir>
        spex flat gallery --out <dir> <flat-dir>…
 
-Clones the target, works out what counts as its source, seeds .spec, then runs an agent round after round
+For a repository URL, clones the target into an isolated flat. For a local path, works directly in that clean
+repository and adds only \`.spec\` work. A new local repository receives the ordinary \`.spec\` adoption seed;
+an initialized one keeps its \`.spec\`, configuration, and launcher. It then runs an agent round after round
 until the spec tree passes a gate: zero \`spex spec lint\` errors, coverage at or above --coverage (default
 90%), with \`spex doctor\`'s altitude findings fed back as the next round's instructions. The agent saying it
 finished is not the signal — the measurement is.
@@ -209,16 +211,17 @@ finished is not the signal — the measurement is.
 Rounds are bounded (--rounds, default 6). Exhausting the budget reports a PARTIAL flat naming what still
 fails and exits non-zero; it never reports a pass it did not measure.
 
-The product is a directory: <out>/repo holds the clone with the spec tree committed on the \`flatcode\`
-branch, <out>/flat.json holds the reading. Nothing is pushed, nothing is served, no session or project is
-registered — the target repository never lands on anyone's board.
+The product is a sibling \`<out>/flat.json\` reading. A URL flat additionally holds its clone at \`<out>/repo\`
+on the \`flatcode\` branch. A local flat commits only \`.spec\` in its source repository's current branch;
+Flatcode rejects a dirty repository and fails if the agent touches anything outside \`.spec\`. Nothing is pushed,
+nothing is served, and no session or project is registered.
 
 --launcher picks the agent exactly like a session does when the current directory already has launcher
 profiles. From a fresh directory, it accepts the built-in names \`claude\`, \`codex\`, \`opencode\`, or \`pi\` and
-uses that choice both for the conversion turn and for \`spex init\` inside the clone. Without a configured
-default or --launcher, an interactive terminal asks which agent to use; a non-interactive call must pass
---launcher. A launcher whose harness has no non-interactive turn is refused by name rather than quietly
-swapped.
+uses that choice both for the conversion turn and for \`spex init\` on a new target. An initialized local
+project uses its own configured launcher. Without a configured default or --launcher, an interactive terminal
+asks which agent to use; a non-interactive call must pass --launcher. A launcher whose harness has no
+non-interactive turn is refused by name rather than quietly swapped.
 
 --lang <code> writes the spec PROSE in that language (\`--lang zh\`, \`--lang ja\`, or a spelled-out name):
 every node's title, desc and body, since a spec is written for whoever maintains that repository. Node ids

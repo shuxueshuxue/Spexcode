@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { cpSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import { HARNESSES, MISSING_DEFAULT_LAUNCHER_ERROR, defaultLauncher, harnessById, launcherList, resolveLauncher, type Harness } from './harness.js'
@@ -380,21 +380,13 @@ export async function flatNew(
   if (!Number.isInteger(rounds) || rounds < 1) throw new Error('spex flat: --rounds must be a positive integer')
   if (!Number.isFinite(coverageFloor) || coverageFloor < 0 || coverageFloor > 100) throw new Error('spex flat: --coverage must be between 0 and 100')
 
-  // Resolve the agent BEFORE touching the network or the disk: a typo'd launcher name is knowable up front,
-  // and discovering it after cloning would charge a fetch for a mistake that cost nothing to catch.
-  const { harness, cmd, name: launcherName, harnessId } = options.launcher
-    ? resolveTurnHarness(options.launcher, process.cwd())
-    : await choose(process.cwd())
-
   const name = basename(options.target.replace(/\.git$/, '').replace(/\/+$/, '')) || 'flat'
-  const out = resolve(options.out ?? `${name}.flat`)
-  const repo = join(out, 'repo')
-  if (existsSync(repo)) throw new Error(`spex flat: ${repo} already exists — name a different --out or remove it`)
 
   // --- acquire -------------------------------------------------------------------------------------------
-  // Everything knowable about the target is checked BEFORE anything is created. Creating the output
-  // directory first left an empty `<name>.flat` behind every time a target was rejected — litter in the
-  // caller's cwd from a run that did nothing, and the caller has to clean up after a command that failed.
+  // A local repository IS the intended home for its .spec tree. Flatcode only adds that governed intent; it
+  // never makes a throwaway copy of a repository the caller already has, and it refuses dirty state so its
+  // commits cannot accidentally absorb unrelated work. A remote URL has no such home, so it remains isolated
+  // in <out>/repo.
   let source = options.target
   let local: string | null = null
   if (!isUrl(options.target)) {
@@ -404,12 +396,39 @@ export async function flatNew(
     if (dirty) throw new Error(`spex flat: ${local} has uncommitted changes — Flatcode commits a spec tree and will not mix it with work it did not write`)
     source = local
   }
-  mkdirSync(out, { recursive: true })
-  log(local ? `cloning local ${local}` : `cloning ${options.target}`)
-  const clone = await run('git', ['clone', '--quiet', local ?? options.target, repo], out)
-  if (clone.code !== 0) throw new Error(`spex flat: clone failed — ${clone.stderr.trim()}`)
+  const out = resolve(options.out ?? (local ? join(dirname(local), `${basename(local)}.flat`) : `${name}.flat`))
+  const outputInsideSource = local && (() => {
+    const fromSource = relative(local, out)
+    return !fromSource || (!fromSource.startsWith(`..${sep}`) && fromSource !== '..' && !isAbsolute(fromSource))
+  })()
+  if (outputInsideSource) throw new Error(`spex flat: ${out} is inside ${local}; Flatcode's reading must stay beside the source repository`)
+  const repo = local ?? join(out, 'repo')
+  const configPath = join(repo, 'spexcode.json')
+  const initialized = Boolean(local && existsSync(join(repo, '.spec')) && existsSync(configPath))
+  if (local && existsSync(out)) {
+    const previous = join(out, 'flat.json')
+    const recorded = existsSync(previous) ? JSON.parse(readFileSync(previous, 'utf8')) as { repo?: unknown } : null
+    if (recorded?.repo !== local) throw new Error(`spex flat: ${out} already exists for another purpose — name a different --out`)
+  }
+  if (!local && existsSync(repo)) throw new Error(`spex flat: ${repo} already exists — name a different --out or remove it`)
+
+  // An existing SpexCode project names its own local launcher. A new local repository and a remote conversion
+  // inherit the launch boundary from the calling directory, whose configuration is the only one available yet.
+  const launcherRoot = local && existsSync(configPath) ? local : process.cwd()
+  const { harness, cmd, name: launcherName, harnessId } = options.launcher
+    ? resolveTurnHarness(options.launcher, launcherRoot)
+    : await choose(launcherRoot)
+
+  if (local) {
+    log(`using local ${local}`)
+  } else {
+    mkdirSync(out, { recursive: true })
+    log(`cloning ${options.target}`)
+    const clone = await run('git', ['clone', '--quiet', options.target, repo], out)
+    if (clone.code !== 0) throw new Error(`spex flat: clone failed — ${clone.stderr.trim()}`)
+    await gitOrThrow(['checkout', '--quiet', '-b', FLAT_BRANCH], repo, `creating the ${FLAT_BRANCH} branch`)
+  }
   const revision = await gitOrThrow(['rev-parse', 'HEAD'], repo, 'reading the cloned revision')
-  await gitOrThrow(['checkout', '--quiet', '-b', FLAT_BRANCH], repo, `creating the ${FLAT_BRANCH} branch`)
 
   // --- profile -------------------------------------------------------------------------------------------
   const tracked = (await gitOrThrow(['ls-files'], repo, 'listing tracked files')).split('\n').filter(Boolean)
@@ -420,15 +439,10 @@ export async function flatNew(
       `extensions; a repository outside it would gate on an empty governed set, which passes vacuously.`,
     )
   }
-  // --- seed ----------------------------------------------------------------------------------------------
-  const init = await spex(['init', '--harness', harnessId], repo)
-  if (init.code !== 0) throw new Error(`spex flat: seeding .spec failed — ${init.stderr.trim() || init.stdout.trim()}`)
-  log(`seeded .spec · launcher ${launcherName} (${harness.id})`)
-
-  // Init must run before the profile write. A fresh clone has no config, and init is the one operation that
-  // seeds the selected harness plus its matching named launcher. Writing a partial config first made init
-  // preserve that file, leaving the clone with a harness target but no launcher profile for the agent it used.
-  const configPath = join(repo, 'spexcode.json')
+  // --- seed or resume ------------------------------------------------------------------------------------
+  // An initialized local project already has a .spec tree, policy, and launcher choice. It is not a fresh
+  // adopter merely because Flatcode has not run there: preserve those choices exactly and let the gate tell
+  // the agent what remains. Every other target receives the ordinary adoption seed before its first turn.
   const writeConfig = (chosen: FlatProfile) => {
     const existing = existsSync(configPath) ? JSON.parse(readFileSync(configPath, 'utf8')) : {}
     writeFileSync(configPath, `${JSON.stringify({
@@ -439,27 +453,31 @@ export async function flatNew(
       lint: { ...(existing.lint ?? {}), governedRoots: chosen.governedRoots, sourceExtensions: chosen.sourceExtensions },
     }, null, 2)}\n`)
   }
-  writeConfig(proposed)
-
-  // --- confirm the governed set BEFORE anything is measured against it ------------------------------------
-  // Commit the seed FIRST. Lint refuses to enumerate source while the spec tree it is asked about is
-  // untracked, and it reports that refusal as an empty governed set — indistinguishable, to a caller reading
-  // only the numbers, from a repository whose every root the source policy rejected. Reading before the commit
-  // made a healthy two-file repository look vacuous.
-  await commit(repo, 'flatcode: profile and seed .spec')
-  let gate = await gateOf(repo)
-  const profile = confirmProfile(proposed, gate.sourceFiles)
-  const dropped = proposed.governedRoots.filter((root) => !profile.governedRoots.includes(root))
-  if (dropped.length) {
-    // Re-read rather than argue that the numbers cannot have moved. The first draft of this reasoned that
-    // narrowing only removes roots contributing zero files, so the reading above must still stand — and that
-    // reasoning is exactly the kind this command exists to refuse. The config that produced a reading is part
-    // of the reading; change the config, measure again. One subprocess is cheaper than a report that is right
-    // only as long as an assumption holds.
-    writeConfig(profile)
-    await commit(repo, `flatcode: narrow governed roots to ${profile.governedRoots.join(', ')}`)
+  let gate: FlatGate
+  let profile: FlatProfile
+  if (initialized) {
     gate = await gateOf(repo)
-    log(`dropped ${dropped.join(', ')} — lint's source policy governs nothing there`)
+    profile = profileFiles(gate.sourceFiles)
+    log(`resuming existing .spec · launcher ${launcherName} (${harness.id})`)
+  } else {
+    const init = await spex(['init', '--harness', harnessId], repo)
+    if (init.code !== 0) throw new Error(`spex flat: seeding .spec failed — ${init.stderr.trim() || init.stdout.trim()}`)
+    log(`seeded .spec · launcher ${launcherName} (${harness.id})`)
+
+    // Init must run before the profile write. A fresh clone has no config, and init is the one operation that
+    // seeds the selected harness plus its matching named launcher. Writing a partial config first made init
+    // preserve that file, leaving the clone with a harness target but no launcher profile for the agent it used.
+    writeConfig(proposed)
+    await commit(repo, 'flatcode: profile and seed .spec', ['.spec', 'spexcode.json'])
+    gate = await gateOf(repo)
+    profile = confirmProfile(proposed, gate.sourceFiles)
+    const dropped = proposed.governedRoots.filter((root) => !profile.governedRoots.includes(root))
+    if (dropped.length) {
+      writeConfig(profile)
+      await commit(repo, `flatcode: narrow governed roots to ${profile.governedRoots.join(', ')}`, ['spexcode.json'])
+      gate = await gateOf(repo)
+      log(`dropped ${dropped.join(', ')} — lint's source policy governs nothing there`)
+    }
   }
   if (!gate.governed) {
     throw new Error(
@@ -476,16 +494,22 @@ export async function flatNew(
     const doctor = round === 1 ? '' : (await spex(['doctor'], repo)).stdout
     const prompt = round === 1 ? surveyPrompt(profile, coverageFloor, options.lang) : repairPrompt(gate, doctor, coverageFloor, options.lang)
     log(`round ${round}/${rounds} — coverage ${gate.coverage}% · ${gate.errors} lint error(s)`)
+    const before = await gitOrThrow(['rev-parse', 'HEAD'], repo, 'recording the round start')
+    const beforeUntracked = new Set((await gitOrThrow(['ls-files', '--others', '--exclude-standard'], repo, 'recording untracked files')).split('\n').filter(Boolean))
     const code = await runTurn(harness.oneShotTurn!(prompt, cmd), repo)
     if (code !== 0) log(`round ${round}: the agent turn exited ${code}; measuring anyway`)
-    await commit(repo, `flatcode: round ${round}`)
+    const after = await gitOrThrow(['rev-parse', 'HEAD'], repo, 'reading the agent round')
+    if (after !== before) await gitOrThrow(['reset', '--soft', before], repo, 'taking ownership of the agent commit')
+    await assertOnlyFlatChanges(repo, before, beforeUntracked)
+    await commit(repo, `flatcode: round ${round}`, ['.spec'])
     gate = await gateOf(repo)
   }
 
   const passed = gatePassed(gate, coverageFloor)
+  mkdirSync(out, { recursive: true })
   const result: FlatResult = { out, repo, source, revision, rounds: round, gate, passed, profile }
   writeFileSync(join(out, 'flat.json'), `${JSON.stringify({
-    schema: 'spexcode.flat/v1',
+    schema: 'spexcode.flat/v1', repo,
     source, revision, branch: FLAT_BRANCH, launcher: launcherName, harness: harness.id,
     rounds: round, roundBudget: rounds, coverageFloor, passed, lang: options.lang ?? 'en',
     gate: { errors: gate.errors, governed: gate.governed, uncovered: gate.uncovered, coverage: gate.coverage },
@@ -516,8 +540,8 @@ export async function flatSite(flatDir: string, log: (line: string) => void = co
   const out = resolve(flatDir)
   const recordPath = join(out, 'flat.json')
   if (!existsSync(recordPath)) throw new Error(`spex flat site: ${out} is not a flat — no flat.json. Run \`spex flat new\` first.`)
-  const record = JSON.parse(readFileSync(recordPath, 'utf8')) as { source: string; revision: string; gate?: { coverage?: number; governed?: number } }
-  const repo = join(out, 'repo')
+  const record = JSON.parse(readFileSync(recordPath, 'utf8')) as { repo?: string; source: string; revision: string; gate?: { coverage?: number; governed?: number } }
+  const repo = record.repo && existsSync(record.repo) ? record.repo : join(out, 'repo')
   const site = join(out, 'site')
 
   const shell = publicShellDir()
@@ -851,7 +875,7 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
   <section class="onboarding" aria-labelledby="start-title">
     <p class="section-label">开始转换</p>
     <h2 id="start-title">安装后选择本机 agent</h2>
-    <p class="section-intro">只需安装一次。执行命令时，Flatcode 会克隆仓库，初始化 .spec 和所选 agent 的配置，再开始转换。</p>
+    <p class="section-intro">只需安装一次。仓库 URL 会被克隆并初始化；本地仓库则直接补全 .spec，已有设置会保留。</p>
     <div class="setup-grid">
       <div class="setup-step">
         <span class="step-number">01</span>
@@ -880,7 +904,7 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
           </button>
         </div>
-        <p>转换结果保存在本地目录，不会推送到源仓库。</p>
+        <p>URL 的结果放在独立目录；本地仓库只会提交 .spec，不会推送。</p>
       </div>
     </div>
   </section>
@@ -1070,11 +1094,44 @@ async function gateOf(repo: string): Promise<FlatGate> {
 
 // Flatcode's own commits bypass the lint hook on purpose: an intermediate round is EXPECTED to be incomplete,
 // and a hook that refused it would strand the round's work uncommitted where the next round cannot see it.
-// The gate reading, not the commit hook, is what decides whether this flat converged.
-async function commit(repo: string, message: string): Promise<void> {
-  await git(['add', '-A'], repo)
+// The gate reading, not the commit hook, is what decides whether this flat converged. The path list is also
+// the write boundary for an adopted local repository: Flatcode owns intent, never the source it describes.
+async function commit(repo: string, message: string, paths: readonly string[]): Promise<void> {
+  await git(['add', '--', ...paths], repo)
   const staged = await git(['diff', '--cached', '--quiet'], repo)
   if (staged.code === 0) return
   const result = await run('git', ['-c', 'user.name=Flatcode', '-c', 'user.email=flatcode@spexcode.invalid', 'commit', '--quiet', '--no-verify', '-m', message], repo)
   if (result.code !== 0) throw new Error(`spex flat: committing "${message}" failed — ${result.stderr.trim()}`)
+}
+
+async function assertOnlyFlatChanges(repo: string, before: string, beforeUntracked: ReadonlySet<string>): Promise<void> {
+  const readings = await Promise.all([
+    gitOrThrow(['diff', '--name-only', `${before}..`], repo, 'checking committed agent changes'),
+    gitOrThrow(['diff', '--name-only'], repo, 'checking unstaged agent changes'),
+    gitOrThrow(['diff', '--cached', '--name-only'], repo, 'checking staged agent changes'),
+    gitOrThrow(['ls-files', '--others', '--exclude-standard'], repo, 'checking untracked agent changes'),
+  ])
+  const changed = [...new Set(readings.flatMap((reading, index) => reading.split('\n').filter((path) =>
+    Boolean(path) && (index !== 3 || !beforeUntracked.has(path)),
+  )))]
+  const forbidden = changed.filter((path) => path !== '.spec' && !path.startsWith('.spec/'))
+  if (forbidden.length) {
+    // The repository was clean before the round. Resetting to that exact revision leaves the agent's .spec
+    // edits in the working tree, then restoring only baseline non-spec paths erases every source/config edit
+    // the agent made, including ones it committed itself. New non-spec paths did not exist at the boundary and
+    // are removed by their exact git-reported names. A rejected round therefore cannot leave source changes
+    // behind under the misleading name of a documentation run.
+    const baseline = new Set((await gitOrThrow(['ls-tree', '-r', '--name-only', before], repo, 'reading the round baseline')).split('\n').filter(Boolean))
+    await gitOrThrow(['reset', '--mixed', before], repo, 'discarding the agent commit')
+    for (const path of forbidden) {
+      if (baseline.has(path)) {
+        await gitOrThrow(['checkout', before, '--', path], repo, `restoring ${path}`)
+        continue
+      }
+      const target = resolve(repo, path)
+      if (!target.startsWith(`${repo}${sep}`)) throw new Error(`spex flat: invalid agent path ${JSON.stringify(path)}`)
+      rmSync(target, { force: true, recursive: true })
+    }
+    throw new Error(`spex flat: the agent changed files outside .spec (${forbidden.join(', ')}). Flatcode discarded those changes and will not commit them.`)
+  }
 }

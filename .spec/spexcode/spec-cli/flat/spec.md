@@ -19,10 +19,11 @@ related:
 
 **Flatcode**（中文：软件二向箔）turns a repository nobody has ever specced into a `.spec` tree, from one
 command, on one machine. After installing `spex`, `spex flat new <repo-url|path>` asks which local coding
-agent will run the conversion when the caller has no configured launcher. It then clones or adopts the target,
-infers what counts as its source, seeds `.spec` and that agent's harness configuration in the clone, then runs
-the chosen agent until the spec tree passes a gate. It owns no server, no account, no queue, and no hostname:
-the whole capability is a local command whose product is a directory.
+agent will run the conversion when the caller has no configured launcher. A repository URL is cloned into an
+isolated flat; a local repository is the target and receives only `.spec` intent commits. An already initialized
+local project keeps its existing `.spec`, `spexcode.json`, and launcher configuration. Flatcode infers source,
+then runs the chosen agent until the spec tree passes a gate. It owns no server, no account, no queue, and no
+hostname: the whole capability is a local command whose durable work is readable project intent.
 
 The reason this is a command and not a campaign someone supervises is that the expensive part —
 an agent reading an unfamiliar codebase and writing intent down — already happens today by hand, and its
@@ -66,8 +67,10 @@ gated. This file does not get to assert what is governed, for the same reason it
 convergence — and reimplementing the exclusion policy here to predict the answer would put a second copy of
 it in the tree for the copies to drift apart.
 
-The confirmed profile is committed into the clone so the reading is reproducible and so the user can correct
-it and re-run. The seed is committed **before** the confirming reading, because lint declines to enumerate
+For a new target, the confirmed profile is committed with the adoption seed so the reading is reproducible and
+so the user can correct it and re-run. An initialized local project keeps its established governed set: lint's
+own source list is the reading rather than a reason to rewrite project policy. The seed is committed **before**
+the confirming reading, because lint declines to enumerate
 source while the spec tree it is asked about is untracked, and it reports that refusal the same way it
 reports a repository whose every root the policy rejected: an empty governed set. Reading first therefore
 makes a healthy repository look vacuous, and the refusal is indistinguishable from the real one.
@@ -83,15 +86,17 @@ substituting one that would silently behave differently.
 `--launcher <name>` remains the non-interactive selection: an existing caller configuration resolves that
 named launcher, preserving its command and authentication setup. A caller with no SpexCode configuration can
 name one of the regular built-in agent names (`claude`, `codex`, `opencode`, or `pi`) directly; the
-same choice is used to seed the cloned repository with `spex init --harness`. With neither a configuration
-nor `--launcher`, the CLI asks on a terminal rather than guessing an agent. A non-terminal caller must name
-`--launcher` explicitly. Therefore a one-time global install does not require adopting the directory from
-which the conversion is launched, and the cloned repository is initialized before the first agent turn.
+same choice is used to seed a new target with `spex init --harness`. An initialized local project resolves its
+own default launcher first. With neither a configuration nor `--launcher`, the CLI asks on a terminal rather
+than guessing an agent. A non-terminal caller must name `--launcher` explicitly. Therefore a one-time global
+install does not require adopting the directory from which a URL conversion is launched, while a local project
+can continue from the configuration it already has.
 
-The spec tree is committed onto a dedicated branch inside Flatcode's own clone, because the graph payload is
-anchored to a Git revision and drift is derived from history. That branch is never pushed. Adopting a local
-path in place is the same pipeline with the clone step skipped, and it refuses a dirty tree instead of
-committing work it did not write.
+A URL conversion commits the spec tree onto a dedicated `flatcode` branch inside Flatcode's isolated clone,
+because the graph payload is anchored to a Git revision and drift is derived from history. That branch is never
+pushed. A local path runs on its checked-out branch, refuses a dirty tree, and commits only `.spec` (or the
+initial `.spec` plus `spexcode.json` adoption seed). Agent changes outside `.spec` fail the run and are never
+included in a Flatcode commit. Its `flat.json` reading is written beside the source repository, never inside it.
 
 ## What it hands off, and what it is not
 

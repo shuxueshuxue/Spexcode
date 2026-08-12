@@ -1,7 +1,54 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { FLAT_AGENT_CHOICES, confirmProfile, galleryIndexHtml, gallerySlug, gatePassed, profileFiles, readGate, type FlatGate } from './flat.js'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { FLAT_AGENT_CHOICES, confirmProfile, flatNew, galleryIndexHtml, gallerySlug, gatePassed, profileFiles, readGate, type FlatGate } from './flat.js'
 import { HARNESSES, harnessById } from './harness.js'
+
+const SPEX_BIN = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'spex.mjs')
+
+const gitAvailable = () => {
+  try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true } catch { return false }
+}
+
+const git = (repo: string, args: string[]) =>
+  execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8', env: { ...process.env, SPEXCODE_ALLOW_MAIN: '1' } }).trim()
+
+function initializedLocalRepo() {
+  const root = mkdtempSync(join(tmpdir(), 'flat-local-'))
+  const repo = join(root, 'app')
+  const bin = join(root, 'bin')
+  mkdirSync(repo, { recursive: true })
+  mkdirSync(bin)
+  git(repo, ['init', '-q', '-b', 'main'])
+  git(repo, ['config', 'user.name', 'Flat test'])
+  git(repo, ['config', 'user.email', 'flat-test@example.invalid'])
+  writeFileSync(join(repo, 'src-one.ts'), 'export const answer = 42\n')
+  writeFileSync(join(repo, 'src-two.ts'), 'export const second = 24\n')
+  git(repo, ['add', '-A'])
+  git(repo, ['commit', '-qm', 'source'])
+  execFileSync(process.execPath, [SPEX_BIN, 'init', '.', '--harness', 'codex'], {
+    cwd: repo,
+    stdio: 'ignore',
+    env: { ...process.env, SPEXCODE_HOME: join(root, 'spex-home'), CODEX_HOME: join(root, 'codex-home') },
+  })
+  mkdirSync(join(repo, '.spec', 'project', 'source-one'), { recursive: true })
+  mkdirSync(join(repo, '.spec', 'project', 'source-two'), { recursive: true })
+  writeFileSync(join(repo, '.spec', 'project', 'source-one', 'spec.md'), `---\ntitle: source one\nstatus: active\nhue: 165\ndesc: Exposes the first fixture value.\ncode:\n  - src-one.ts\n---\n# source one\n\nThe source module exposes the first fixture value.\n`)
+  writeFileSync(join(repo, '.spec', 'project', 'source-two', 'spec.md'), `---\ntitle: source two\nstatus: active\nhue: 165\ndesc: Exposes the second fixture value.\ncode:\n  - src-two.ts\n---\n# source two\n\nThe source module exposes the second fixture value.\n`)
+  const config = JSON.parse(readFileSync(join(repo, 'spexcode.json'), 'utf8'))
+  config.sessions = { launchers: { local: { harness: 'codex', cmd: join(bin, 'codex') } }, defaultLauncher: 'local' }
+  config.lint = { governedRoots: ['.'], sourceExtensions: ['ts'] }
+  writeFileSync(join(repo, 'spexcode.json'), `${JSON.stringify(config, null, 2)}\n`)
+  writeFileSync(join(bin, 'codex'), '#!/bin/sh\n[ "$1" = "exec" ] && [ "$2" = "-" ] || exit 64\ncat >/dev/null\n')
+  execFileSync('chmod', ['+x', join(bin, 'codex')])
+  git(repo, ['add', '-A'])
+  git(repo, ['commit', '-qm', 'initialized'])
+  return { root, repo, config: readFileSync(join(repo, 'spexcode.json'), 'utf8') }
+}
 
 test('profiling governs tracked source and ignores what no spec could claim', () => {
   const profile = profileFiles([
@@ -182,7 +229,79 @@ test('the gallery gives a fresh visitor the install, agent, and clone-init path'
   }
   assert.match(html, /spex flat new https:\/\/github\.com\/owner\/repo --launcher claude/, 'the displayed run names an agent')
   assert.match(html, /src="\.\/flatcode-banner\.webp"/, 'the gallery references its packaged banner relatively')
-  assert.match(html, /会克隆仓库，初始化 \.spec 和所选 agent 的配置/, 'the command owns cloning and initialization')
+  assert.match(html, /仓库 URL 会被克隆并初始化；本地仓库则直接补全 \.spec/, 'the page distinguishes URL cloning from local continuation')
+})
+
+test('an initialized local repository is continued in place with only its .spec committed', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const { root, repo, config } = initializedLocalRepo()
+  const result = await flatNew({ target: repo, rounds: 1, coverage: 100 }, () => {})
+  assert.equal(result.repo, repo, 'the source repository is the flat repository')
+  assert.equal(result.rounds, 0, 'a fully covered existing spec does not invoke the agent')
+  assert.equal(result.passed, true)
+  assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), config, 'the existing project configuration stays byte-identical')
+  assert.ok(existsSync(join(root, 'app.flat', 'flat.json')), 'the reading lives beside the source repository')
+  assert.equal(existsSync(join(root, 'app.flat', 'repo')), false, 'a local repository is never cloned into its flat record')
+  assert.equal(git(repo, ['status', '--porcelain']), '', 'the completed repository is clean')
+  await flatNew({ target: repo, rounds: 1, coverage: 100 }, () => {})
+  assert.equal(git(repo, ['status', '--porcelain']), '', 're-running refreshes the same reading without changing the repository')
+})
+
+test('a local flat site reads the source repository named in its record', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const { repo } = initializedLocalRepo()
+  const result = await flatNew({ target: repo, rounds: 1, coverage: 100 }, () => {})
+  const { flatSite } = await import('./flat.js')
+  const site = await flatSite(result.out, () => {})
+  assert.equal(site.nodes, 3)
+  assert.ok(existsSync(join(result.out, 'site', 'public-graph.json')))
+})
+
+test('a local conversion uses its configured runner and commits only .spec', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const { root, repo, config } = initializedLocalRepo()
+  writeFileSync(join(repo, '.spec', 'project', 'source-one', 'spec.md'), `---\ntitle: source one\nstatus: active\nhue: 165\ndesc: Exposes the first fixture value.\n---\n# source one\n\nThe source module exposes the first fixture value.\n`)
+  git(repo, ['add', '.spec'])
+  git(repo, ['commit', '-qm', 'remove coverage'])
+  const runner = join(root, 'bin', 'codex')
+  writeFileSync(runner, `#!/bin/sh
+[ "$1" = "exec" ] && [ "$2" = "-" ] || exit 64
+cat >/dev/null
+mkdir -p .spec/project/source-one
+cat > .spec/project/source-one/spec.md <<'SPEC'
+---
+title: source one
+status: active
+hue: 165
+desc: Exposes the first fixture value.
+code:
+  - src-one.ts
+---
+# source one
+
+The source module exposes the first fixture value.
+SPEC
+git -c user.name=Agent -c user.email=agent@example.invalid add .spec
+git -c user.name=Agent -c user.email=agent@example.invalid commit --no-verify -qm 'agent spec draft'
+`)
+  execFileSync('chmod', ['+x', runner])
+  const result = await flatNew({ target: repo, rounds: 1, coverage: 100 }, () => {})
+  assert.equal(result.rounds, 1)
+  assert.equal(result.passed, true)
+  assert.equal(readFileSync(join(repo, 'spexcode.json'), 'utf8'), config, 'the selected local launcher configuration is preserved')
+  assert.deepEqual(git(repo, ['show', '--format=', '--name-only', 'HEAD']).split('\n').filter(Boolean), ['.spec/project/source-one/spec.md'])
+  assert.equal(git(repo, ['log', '-1', '--format=%an']), 'Flatcode', 'Flatcode owns the committed measurement')
+  assert.equal(git(repo, ['status', '--porcelain']), '')
+})
+
+test('a local conversion discards agent source changes rather than committing them', { skip: !gitAvailable() && 'git not available' }, async () => {
+  const { root, repo } = initializedLocalRepo()
+  writeFileSync(join(repo, '.spec', 'project', 'source-one', 'spec.md'), `---\ntitle: source one\nstatus: active\nhue: 165\ndesc: Exposes the first fixture value.\n---\n# source one\n\nThe source module exposes the first fixture value.\n`)
+  git(repo, ['add', '.spec'])
+  git(repo, ['commit', '-qm', 'remove coverage'])
+  const runner = join(root, 'bin', 'codex')
+  writeFileSync(runner, '#!/bin/sh\n[ "$1" = "exec" ] && [ "$2" = "-" ] || exit 64\ncat >/dev/null\nprintf "export const answer = 0\\n" > src-one.ts\n')
+  execFileSync('chmod', ['+x', runner])
+  await assert.rejects(flatNew({ target: repo, rounds: 1, coverage: 100 }, () => {}), /outside \.spec/)
+  assert.equal(readFileSync(join(repo, 'src-one.ts'), 'utf8'), 'export const answer = 42\n', 'the source file is restored')
+  assert.equal(git(repo, ['status', '--porcelain']), '', 'the rejected local round leaves no source change behind')
 })
 
 test('every harness declaring a one-shot turn carries the prompt exactly one way', () => {

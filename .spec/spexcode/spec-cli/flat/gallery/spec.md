@@ -21,9 +21,9 @@ produced it.
 
 The index is also the self-serve entry point. It shows the one-time `npm i -g spexcode` install, asks the
 visitor to choose the local agent that will run the conversion, and updates the displayed `spex flat new`
-command with that explicit launcher. It states that the command clones the requested repository and initializes
-`.spec`, `spexcode.json`, and the selected harness before the conversion rounds begin; it never tells a
-visitor to perform those internal steps by hand. A packaged bitmap banner depicts the repository-to-graph
+command with that explicit launcher. It states that a repository URL is cloned and initialized before conversion,
+while a local repository is continued in place and receives only `.spec` work; it never tells a visitor to
+perform those internal steps by hand. A packaged bitmap banner depicts the repository-to-graph
 transformation and is copied beside `index.html`, so an assembled gallery has no asset dependency on the
 machine that built it.
 

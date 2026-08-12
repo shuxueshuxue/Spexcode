@@ -20,6 +20,16 @@ scenarios:
       and the reported file count equals the gate's governed count. A config naming a root the gate ignores,
       or a count the gate contradicts, is a failure.
     tags: [cli]
+  - name: continue-an-initialized-local-repository
+    description: >
+      In a clean local Git repository already adopted with `spex init --harness codex`, run `spex flat new .`
+      through its configured Codex launcher. Read the driver's verdict, the source repository's history and
+      status, its existing configuration, and the sibling flat record.
+    expected: >
+      The run uses the local launcher, adds and commits only `.spec` in the source repository, preserves the
+      existing `spexcode.json` byte-for-byte, creates no clone beneath the flat record, and converges only when
+      the ordinary lint gate does. A runner that writes a source file fails before Flatcode commits it.
+    tags: [cli]
   - name: refuse-a-launcher-that-cannot-run-a-turn
     description: >
       Invoke `spex flat new` with `--launcher` naming a launcher whose harness declares no non-interactive

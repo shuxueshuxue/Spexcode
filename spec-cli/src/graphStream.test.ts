@@ -7,6 +7,7 @@ import { join } from 'node:path'
 
 import {
   TreeWatcherRegistry,
+  ignoredProjectRootPath,
   addPendingGraphChange,
   consolidatedRecursiveWatch,
   graphWatcherCensus,
@@ -410,5 +411,57 @@ test('the refs watcher delivers the ref path, so a relevant ref still invalidate
     watchers.close()
   } finally {
     rmSync(common, { recursive: true, force: true })
+  }
+})
+
+test('the project-root sweep skips linked worktrees but still sees the served tree', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-rootsweep-'))
+  for (let node = 0; node < 12; node++) mkdirSync(join(root, '.spec', `n${node}`), { recursive: true })
+  // a linked worktree carries a whole second checkout: it is where nearly every watched directory came from
+  for (let node = 0; node < 40; node++) {
+    mkdirSync(join(root, '.worktrees', 'other-branch', '.spec', `n${node}`), { recursive: true })
+  }
+  mkdirSync(join(root, 'node_modules', 'dep'), { recursive: true })
+
+  const { opened, factory } = fakeFactory()
+  const inputs: string[] = []
+  const registry = new TreeWatcherRegistry({
+    root,
+    source: 'fixture-project-root',
+    scope: 'full',
+    transport: 'exact-directory',
+    ignore: ignoredProjectRootPath,
+    watchFactory: factory,
+    onInput: (_event, rel) => inputs.push(rel),
+    onFailure: () => {},
+  })
+
+  try {
+    assert.equal(registry.refresh(), true)
+    const watched = registry.paths()
+    assert.equal(
+      watched.some((path) => path.split(/[\\/]/).includes('.worktrees')),
+      false,
+      'a linked worktree is another branch tree: it cannot move a status derived from this HEAD',
+    )
+    assert.equal(
+      watched.some((path) => path.split(/[\\/]/).includes('node_modules')),
+      false,
+      'the existing exclusions still hold',
+    )
+
+    // ★ the half that "watch count dropped" cannot distinguish: the served tree must STILL be observed.
+    // Cutting the useful directories reads exactly the same on the count alone.
+    assert.equal(
+      watched.includes(join(root, '.spec', 'n7')),
+      true,
+      'the served tree is graph input and must remain watched',
+    )
+    const served = opened.find((entry) => entry.path === join(root, '.spec', 'n7'))
+    assert.ok(served, 'the served spec directory holds a real registration')
+    served.watcher.emit('change', 'change', 'spec.md')
+    assert.equal(inputs.length, 1, 'a spec edit in the served tree still fires a graph change')
+  } finally {
+    registry.close()
   }
 })

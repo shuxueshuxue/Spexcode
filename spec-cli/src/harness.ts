@@ -1008,7 +1008,7 @@ export function codexTurnFailureObserver(
 }
 
 // Protocol-verified cold/restore/control seam. The Codex schema (`codex app-server generate-json-schema --experimental`)
-// defines thread/archive and thread/unarchive with {threadId}, plus turn/interrupt with {threadId, turnId}; no
+// defines thread/archive, thread/delete, and thread/unarchive with {threadId}, plus turn/interrupt with {threadId, turnId}; no
 // guessed method or process command is used.
 type CodexGenerationFence = { dir: string; endpoint: CodexGenerationEndpoint; generation: string }
 // A failed mutation says whether the server can still commit it. `refused` means the request never reached the
@@ -1016,7 +1016,7 @@ type CodexGenerationFence = { dir: string; endpoint: CodexGenerationEndpoint; ge
 // `unknown` means the request was sent and no verdict came back — the server may still be executing it, so
 // sending anything else down the same connection queues behind that work and fails too.
 type CodexMutationOutcome = { ok: true } | { ok: false; error: string; commit: 'refused' | 'unknown' }
-function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/unarchive' | 'turn/interrupt', threadId: string, fence?: CodexGenerationFence, turnId?: string, budgetMs = CODEX_MUTATION_BASE_MS): Promise<CodexMutationOutcome> {
+function codexThreadMutation(sock: string, method: 'thread/archive' | 'thread/delete' | 'thread/unarchive' | 'turn/interrupt', threadId: string, fence?: CodexGenerationFence, turnId?: string, budgetMs = CODEX_MUTATION_BASE_MS): Promise<CodexMutationOutcome> {
   const generationError = () => fence && codexRuntimeGeneration(fence.dir, fence.endpoint) !== fence.generation
     ? `Codex ${method} refused because the shared app-server generation changed`
     : null
@@ -1192,12 +1192,14 @@ async function waitForCodexGeneration(dir: string, endpoint: CodexGenerationEndp
 // that tracks the thread COUNT. Interrupt must additionally name the turn to interrupt, and only a turn read
 // carries the id — a cost that tracks that one thread's persisted HISTORY. So this read stays for interrupt,
 // where the target is by definition active and short-lived, and no gate may be routed back through it.
-function codexRunningTurn(sock: string, threadId: string): Promise<{ ok: true; turnPresence: 'idle' | 'active' | 'unknown'; turnId?: string } | { ok: false; error: string }> {
+type CodexTurnCensus = { ok: true; turnPresence: 'idle' | 'active' | 'unknown'; turnId?: string; unmaterialized?: true } | { ok: false; error: string }
+
+function codexRunningTurn(sock: string, threadId: string): Promise<CodexTurnCensus> {
   return new Promise((resolve) => {
     const conn: Socket = createConnection(sock)
     const fs: FrameState = { buf: Buffer.alloc(0), fragOp: 0, fragBuf: Buffer.alloc(0) }
     let upgraded = false, settled = false
-    const done = (result: { ok: true; turnPresence: 'idle' | 'active' | 'unknown'; turnId?: string } | { ok: false; error: string }) => {
+    const done = (result: CodexTurnCensus) => {
       if (settled) return
       settled = true; clearTimeout(timer); try { conn.destroy() } catch {}; resolve(result)
     }
@@ -1209,7 +1211,11 @@ function codexRunningTurn(sock: string, threadId: string): Promise<{ ok: true; t
     const handle = (json: string) => {
       let message: JsonRpc
       try { message = JSON.parse(json) } catch { return }
-      if (message.error) return done({ ok: false, error: `Codex target thread ${threadId} turn census failed: ${message.error.message || JSON.stringify(message.error)}` })
+      if (message.error) {
+        const error = message.error.message || JSON.stringify(message.error)
+        if (isCodexUnmaterializedThreadError(threadId, error)) return done({ ok: true, turnPresence: 'idle', unmaterialized: true })
+        return done({ ok: false, error: `Codex target thread ${threadId} turn census failed: ${error}` })
+      }
       if (message.id === 1 && message.result) {
         send({ method: 'initialized', params: {} })
         // The guard needs only the current turn. `thread/read {includeTurns:true}` materializes the
@@ -1241,6 +1247,12 @@ function codexRunningTurn(sock: string, threadId: string): Promise<{ ok: true; t
 }
 
 const CODEX_INTERRUPT_SETTLE_MS = 15_000
+// Codex can report an exact pre-materialization refusal, or that a previously loaded id is no longer loaded.
+// Both are positive no-turn facts for terminal close; every transport or ownership ambiguity remains fail-closed.
+const isCodexUnmaterializedThreadError = (threadId: string, error: string): boolean =>
+  (error.includes(threadId) && error.includes('is not materialized yet') &&
+    error.includes('thread/turns/list is unavailable before first user message')) ||
+  error.includes(`thread not loaded: ${threadId}`)
 
 async function interruptCodexTurn(rec: HarnessDeliveryRecord): Promise<DispatchResult> {
   if (!rec.harnessSessionId) return { ok: false, error: 'no exact Codex thread identity is registered' }
@@ -1362,6 +1374,7 @@ const CODEX_COLD_PLAN = Symbol('codex-cold-plan')
 type CodexColdPlan = Readonly<{
   [CODEX_COLD_PLAN]: true
   kind: 'codex-cold-subtree-v1'
+  unmaterialized?: true
   threadId: string
   generation: string
   endpoint: CodexGenerationEndpoint
@@ -1395,6 +1408,34 @@ function isEndpointLike(value: unknown): value is CodexGenerationEndpoint {
     typeof (value as CodexGenerationEndpoint).socketPath === 'string'
 }
 
+function makeCodexColdPlan(input: {
+  threadId: string
+  generation: string
+  endpoint: CodexGenerationEndpoint
+  guard: SharedRuntimeMutationGuard
+  descendantIds: readonly string[]
+  parentEdges: readonly (readonly [string, string])[]
+  subtreeIds: readonly string[]
+  activeIds: readonly string[]
+  archivedIds: readonly string[]
+  unmaterialized?: true
+}): CodexColdPlan {
+  return Object.freeze({
+    [CODEX_COLD_PLAN]: true as const,
+    kind: 'codex-cold-subtree-v1' as const,
+    ...(input.unmaterialized ? { unmaterialized: true as const } : {}),
+    threadId: input.threadId,
+    generation: input.generation,
+    endpoint: input.endpoint,
+    guard: input.guard,
+    descendantIds: Object.freeze([...input.descendantIds]),
+    parentEdges: Object.freeze([...input.parentEdges]),
+    subtreeIds: Object.freeze([...input.subtreeIds]),
+    activeIds: Object.freeze([...input.activeIds]),
+    archivedIds: Object.freeze([...input.archivedIds]),
+  })
+}
+
 async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), expectedGeneration?: string, endpoint = legacyCodexGenerationEndpoint(dir)): Promise<CodexColdPreflight> {
   const generation = expectedGeneration ?? codexMutationGeneration(dir, endpoint)
   if (!generation)
@@ -1425,6 +1466,43 @@ async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), exp
   const descendantIds = [...activeDescendants.ids, ...archivedDescendants.ids]
   if (descendantIds.includes(threadId)) return { ok: false, reason: `Codex target ${threadId} is duplicated in its own descendant closure` }
 
+  const activeSet = new Set(activeList.ids)
+  const archivedSet = new Set(archivedList.ids)
+  if (!activeSet.has(threadId) && !archivedSet.has(threadId) && descendantIds.length === 0) {
+    // A Codex thread id can be registered before the server materializes its first user message. The exact
+    // protocol refusal is the only proof that this absent native target is that startup window, rather than
+    // an unowned/reassigned record that must stay fail-closed.
+    const turn = await codexRunningTurn(sock, threadId)
+    if (!turn.ok) return { ok: false, reason: turn.error }
+    if (codexRuntimeGeneration(dir, endpoint) !== generation)
+      return { ok: false, reason: 'shared Codex app-server generation changed during unmaterialized-thread proof' }
+    if (turn.unmaterialized) {
+      const loadedTarget = loaded.referenceIds.includes(threadId)
+      const guard: SharedRuntimeMutationGuard = {
+        healthy: true,
+        referenceIds: [...loaded.referenceIds],
+        targetTurnPresence: 'none',
+        descendantIds: [],
+      }
+      return {
+        ok: true,
+        ...(loadedTarget ? {} : { alreadyCold: true }),
+        receipt: makeCodexColdPlan({
+          threadId,
+          generation,
+          endpoint,
+          guard,
+          descendantIds: [],
+          parentEdges: [],
+          subtreeIds: [threadId],
+          activeIds: loadedTarget ? [threadId] : [],
+          archivedIds: [],
+          unmaterialized: true,
+        }),
+      }
+    }
+  }
+
   const parentById = new Map([...activeDescendants.parentById, ...archivedDescendants.parentById])
   const depthById = new Map<string, number>()
   for (const id of descendantIds) {
@@ -1442,8 +1520,6 @@ async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), exp
     depthById.set(id, depth)
   }
 
-  const activeSet = new Set(activeList.ids)
-  const archivedSet = new Set(archivedList.ids)
   const subtreeIds = [...descendantIds, threadId]
   for (const id of subtreeIds) {
     const inActive = activeSet.has(id)
@@ -1485,19 +1561,7 @@ async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), exp
     .concat(activeSet.has(threadId) ? [threadId] : [])
   const archivedIds = [...archivedDescendants.ids, ...(archivedSet.has(threadId) ? [threadId] : [])]
   const parentEdges = descendantIds.map((id) => [id, parentById.get(id)!] as const)
-  const receipt: CodexColdPlan = Object.freeze({
-    [CODEX_COLD_PLAN]: true as const,
-    kind: 'codex-cold-subtree-v1',
-    threadId,
-    generation,
-    endpoint,
-    guard,
-    descendantIds: Object.freeze([...descendantIds]),
-    parentEdges: Object.freeze(parentEdges),
-    subtreeIds: Object.freeze([...subtreeIds]),
-    activeIds: Object.freeze(activeIds),
-    archivedIds: Object.freeze(archivedIds),
-  })
+  const receipt = makeCodexColdPlan({ threadId, generation, endpoint, guard, descendantIds, parentEdges, subtreeIds, activeIds, archivedIds })
   return { ok: true, ...(activeIds.length ? {} : { alreadyCold: true }), receipt }
 }
 
@@ -2607,6 +2671,11 @@ export const codexHarness: Harness = {
         return { ok: false, reason: `Codex target descendant closure changed during archive (before=${plan.descendantIds.join(', ')}; after=${after.receipt.descendantIds.join(', ')})` }
       if (after.receipt.activeIds.length)
         return { ok: false, reason: `Codex target subtree remains in the active collection (${after.receipt.activeIds.join(', ')})` }
+      if (plan.unmaterialized) {
+        if (after.receipt.archivedIds.length || after.receipt.guard.referenceIds.includes(threadId))
+          return { ok: false, reason: 'unmaterialized Codex target remains in native state after delete' }
+        return { ok: true }
+      }
       if (!sameIdSet(plan.subtreeIds, after.receipt.archivedIds))
         return { ok: false, reason: 'Codex target subtree is not uniquely archived after cold teardown' }
       const afterIds = new Set(after.receipt.guard.referenceIds.filter((referenceId) => !subtreeSet.has(referenceId)))
@@ -2618,14 +2687,15 @@ export const codexHarness: Harness = {
       // Only a loaded member pays the rollout flush, and an unreadable size must not become a small budget,
       // so it fails closed before the server is asked to mutate anything.
       let budgetMs = CODEX_MUTATION_BASE_MS
-      if (loadedSet.has(id)) {
+      if (loadedSet.has(id) && !plan.unmaterialized) {
         const rollout = codexRolloutBytes(id)
         if ('unreadable' in rollout) return compensate(`Codex subtree member ${id} is loaded and its rollout exists but cannot be measured, so the archive flush budget is unknown`)
         budgetMs = codexArchiveBudgetMs(rollout.bytes)
       }
-      const archived = await codexThreadMutation(sock, 'thread/archive', id, fence, undefined, budgetMs)
+      const archived = await codexThreadMutation(sock, plan.unmaterialized ? 'thread/delete' : 'thread/archive', id, fence, undefined, budgetMs)
       if (archived.ok) continue
-      const reason = `${archived.error} while archiving Codex subtree member ${id}`
+      const action = plan.unmaterialized ? 'deleting' : 'archiving'
+      const reason = `${archived.error} while ${action} Codex subtree member ${id}`
       // Compensating an unknown commit is what turns one slow member into a false "compensation failed": the
       // unarchive queues behind an archive the server is still executing and times out too. Report the unknown
       // commit instead — that is the recovery token resume already reconciles.
@@ -2648,6 +2718,7 @@ export const codexHarness: Harness = {
     if (suppliedReceipt !== undefined) {
       if (!isCodexColdPlan(suppliedReceipt) || suppliedReceipt.threadId !== rec.harnessSessionId)
         return { ok: false, reason: 'Codex cold compensation receipt is invalid or names a different target' }
+      if (suppliedReceipt.unmaterialized) return { ok: true }
       return codexRestoreColdPlan(suppliedReceipt)
     }
     const endpoint = codexEndpointForRecord(rec)

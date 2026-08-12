@@ -5,7 +5,7 @@ import { join, dirname, relative, resolve, basename } from 'node:path'
 import { sessionsRoot, gitCommonDir, repoRoot, sessionBranchIndex, mainBranch } from '@spexcode/spec-core'
 import { hotSignature, warmSignature, listSessions, pendingSessionCreateWorktreePaths } from './sessions.js'
 import { getBoard, getBoardForSessionRefresh, invalidateBoard, patrolBoard } from './graphCache.js'
-import { unitize, tagOf, diffUnits, type Units } from './graphDelta.js'
+import { unitize, tagOf, diffUnits, type Units } from '@spexcode/spec-core'
 import {
   holdSessionEvalProjectionObserver,
   invalidateSessionEvalProjections,

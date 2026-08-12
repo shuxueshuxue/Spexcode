@@ -9,6 +9,7 @@ export async function readSpecs(root: string) {
 export * from './anchors.js'
 export * from './git.js'
 export * from './graph.js'
+export * from './graphDelta.js'
 export * from './harness-identity.js'
 export * from './layout.js'
 export * from './process-identity.js'

@@ -4,7 +4,7 @@ status: active
 hue: 185
 desc: The graph's incremental push — snapshots decompose into keyed units and changes ship as hash-chained patches, provably equivalent to a full refetch and never bigger than one.
 code:
-  - spec-cli/src/graphDelta.ts
+  - packages/spec-core/src/graphDelta.ts
 related:
   - spec-cli/src/graphStream.ts
   - spec-dashboard/src/data.js
@@ -51,3 +51,18 @@ The transport that carries these frames — event sources, debounce, subscriber 
 `graph-changed` mode — stays [[graph-stream]]'s contract; the client wiring (apply mirror, fallback
 stand-down) stays [[dashboard-shell]]'s. This node owns the algebra: units, tags, diff, apply, and the
 equivalence obligations anything touching them must keep true.
+
+The unit decomposition lives in `@spexcode/spec-core`, not in the CLI, because the guarantee that
+travels with it is a property of the published surface: two consumers now read these units — the
+CLI's SSE path and any process that imports the package — and a second copy of the decomposition
+would be a second answer to "which unit kinds exist".
+
+That question has one answer here and nowhere else, via `unitKeyKind`. Deriving it from `unitize`'s
+body is what a reader will try, and it is wrong: the two `keyed()` calls yield four kinds and miss
+`meta`, which carries identity and drives the map title and two gates. Exhaustiveness is a property
+of the emitted set, so it is checked against that set, not against the code that emits it.
+
+An unrecognised key is reported as unknown, never thrown. Producer and consumer version separately
+once this package is published, so a kind added later must degrade to "ignored, and visibly so" in a
+consumer that predates it. Tolerating an unknown key is not the same as letting a fallback branch
+stand in for handling a known one; only the latter hides a path that is never taken.

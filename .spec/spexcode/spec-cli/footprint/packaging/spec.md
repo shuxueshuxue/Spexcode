@@ -47,11 +47,12 @@ scaffolding only, not an extra normal-adopter step.
 The installable unit remains the **monorepo root**, now with one real workspace package: `@spexcode/spec-core`.
 Its source lives at `packages/spec-core/src`; the root manifest declares `packages/*`, `spec-cli`, `spec-eval`, and
 `spec-forge` as workspaces, depends on the local L0 package, and ships `packages/spec-core` in its explicit `files`
-allowlist. `@spexcode/spec-core` has three deliberately narrow package exports. `.` is the Node-side core entry and
+allowlist. `@spexcode/spec-core` has four deliberately narrow package exports. `.` is the Node-side core entry and
 owns the root-explicit `readSpecs(root)` reader. `./review` is the browser-safe review domain only: its
 filter, query, and session presentation functions have no Node, React, store, endpoint, or service
 dependency. `./identity` is the same kind of browser-safe identity registry shared by validation and
-rendering. The dashboard imports only those named pure-domain entries; it never imports `.` and therefore
+rendering. `./graph-delta` is the browser-safe unit algebra, with no `node:*` dependency in its entire
+module graph. The dashboard imports only those named pure-domain entries; it never imports `.` and therefore
 cannot pull Node-only graph/store modules into Vite. No source-file subpaths are exported. The package is
 intentionally not `private`, so this workspace has the same npm resolution boundary an adopter receives;
 this refactor does not publish it or prepare any registry action. The private `spec-cli` manifest also

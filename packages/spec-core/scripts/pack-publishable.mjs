@@ -28,6 +28,10 @@ const published = {
   types: "./dist/index.d.ts",
   exports: {
     ".": { types: "./dist/index.d.ts", default: "./dist/index.js" },
+    "./graph-delta": {
+      types: "./dist/graph-delta.d.ts",
+      default: "./dist/graph-delta.js",
+    },
     "./review": { types: "./dist/review/index.d.ts", default: "./dist/review/index.js" },
     "./identity": { types: "./dist/identity-presets.d.ts", default: "./dist/identity-presets.js" },
   },

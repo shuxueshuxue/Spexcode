@@ -4,8 +4,10 @@ status: active
 hue: 185
 desc: The graph's incremental push — snapshots decompose into keyed units and changes ship as hash-chained patches, provably equivalent to a full refetch and never bigger than one.
 code:
-  - packages/spec-core/src/graphDelta.ts
+  - packages/spec-core/src/graph-delta.ts
 related:
+  - packages/spec-core/src/graphDelta.ts
+  - packages/spec-core/scripts/graph-delta-browser-entry.test.mjs
   - spec-cli/src/graphStream.ts
   - spec-dashboard/src/data.js
   - spec-dashboard/src/App.jsx
@@ -55,7 +57,11 @@ equivalence obligations anything touching them must keep true.
 The unit decomposition lives in `@spexcode/spec-core`, not in the CLI, because the guarantee that
 travels with it is a property of the published surface: two consumers now read these units — the
 CLI's SSE path and any process that imports the package — and a second copy of the decomposition
-would be a second answer to "which unit kinds exist".
+would be a second answer to "which unit kinds exist". The browser-safe `@spexcode/spec-core/graph-delta`
+entry exports the zero-I/O unit algebra (`unitize`, `unitKeyKind`, diff, apply, reconstruction, and unit
+values); its module graph contains no `node:*` import. The existing `.` entry stays Node-side and retains
+tags plus every existing export, so browser consumers have an explicit pure boundary without changing
+Node consumers' resolution.
 
 That question has one answer here and nowhere else, via `unitKeyKind`. Deriving it from `unitize`'s
 body is what a reader will try, and it is wrong: the two `keyed()` calls yield four kinds and miss

@@ -787,7 +787,7 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
   .card:hover { border-color: var(--line-hi); background: #12151a; transform: translateY(-2px); }
   .card:hover .go { color: var(--accent-soft); transform: translateX(2px); }
   .card-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  .card h3 { margin: 0; font-size: 1rem; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .card h3 { margin: 0; font-size: 1rem; font-weight: 600; overflow-wrap: anywhere; }
   .card .owner { color: var(--dim); font-weight: 400; }
   .go { color: var(--dim); flex: none; transition: color .18s, transform .18s; }
   .langs { display: flex; flex-wrap: wrap; gap: .5rem; margin: .85rem 0 1rem; }

@@ -62,17 +62,14 @@ function Stat({ count, ids, focusId, onJump, title, cls = '', children }) {
   )
 }
 
-export default function GraphStats({ specs, governance, focusId, onJump }) {
+export default function GraphStats({ specs, focusId, onJump }) {
   const t = useT()
   const s = useMemo(() => summarize(specs), [specs])
-  const governanceCount = Math.min(governance?.count || 0, s.total)
-  const projectCount = s.total - governanceCount
   const jump = (id) => id && onJump?.(id)
   return (
-    <div className="graph-stats" role="group" aria-label={t('stats.aria', { project: projectCount, governance: governanceCount, total: s.total })}>
-      {/* Composition first names what belongs to this project; governance remains visible as its own group. */}
-      <span className="bstat-total bstat-project" data-tip={t('stats.projectTitle', { n: projectCount })}>{t('stats.projectCount', { n: projectCount })}</span>
-      {governanceCount > 0 && <span className="bstat-governance" data-tip={t('stats.governanceTitle', { n: governanceCount })}>{t('stats.governanceCount', { n: governanceCount })}</span>}
+    <div className="graph-stats" role="group" aria-label={t('stats.aria')}>
+      {/* composition — the four status dots, counted. The leading number is the whole tree's size. */}
+      <span className="bstat-total" data-tip={t('stats.totalTitle', { n: s.total })}>{s.total}</span>
       {STATUS_ORDER.map((k) => (
         <Stat key={k} count={s.status[k].length} ids={s.status[k]} focusId={focusId} onJump={jump}
           title={t('stats.statusTitle', { n: s.status[k].length, status: t(`status.${k}`) })}>

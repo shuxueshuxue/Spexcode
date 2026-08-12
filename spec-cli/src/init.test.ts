@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -183,6 +183,36 @@ test('--harness seeds only the selected launchers, with automatic permission lim
       assert.ok(!existsSync(join(proj, 'CLAUDE.md')) && !existsSync(join(proj, '.claude')), 'no claude artifacts for a codex-only selection')
     }
   }
+})
+
+test('--harness seeds hook nodes only when a selected native adapter can emit their events', { skip: !gitAvailable() && 'git not available' }, () => {
+  const node = (proj: string, name: string) => join(proj, '.spec', 'project', '.plugins', 'core', name)
+  const pluginNodeCount = (proj: string) => readdirSync(join(proj, '.spec', 'project', '.plugins'), { recursive: true })
+    .filter((path) => path === 'spec.md' || String(path).endsWith('/spec.md')).length
+  const cases: ReadonlyArray<readonly [string, number]> = [
+    ['zcode', 20],
+    ['claude', 22],
+    ['zcode,claude', 22],
+  ]
+  for (const [selected, expectedNodes] of cases) {
+    const { proj, spex } = freshRepo()
+    spex('init', '.', '--harness', selected)
+    assert.equal(pluginNodeCount(proj), expectedNodes, selected)
+    const zcodeOnly = selected === 'zcode'
+    assert.equal(existsSync(node(proj, 'idle')), !zcodeOnly, `${selected}: idle follows the reachable events`)
+    assert.equal(existsSync(node(proj, 'session-fail')), !zcodeOnly, `${selected}: session-fail follows the reachable events`)
+    assert.equal(existsSync(join(node(proj, 'idle'), 'idle.sh')), !zcodeOnly, `${selected}: idle script follows its node`)
+    assert.equal(existsSync(join(node(proj, 'session-fail'), 'fail.sh')), !zcodeOnly, `${selected}: session-fail script follows its node`)
+    assert.ok(existsSync(node(proj, 'stop-gate')), `${selected}: reachable Stop hook remains`)
+  }
+
+  const { proj, spex } = freshRepo()
+  spex('init', '.', '--harness', 'zcode')
+  assert.ok(existsSync(join(proj, 'AGENTS.md')), 'zcode contract remains materialized')
+  assert.ok(existsSync(join(proj, '.zcode', 'skills', 'distill', 'SKILL.md')), 'zcode skill remains materialized')
+  const settings = JSON.parse(readFileSync(join(proj, '.zcode', 'settings.json'), 'utf8'))
+  assert.deepEqual(Object.keys(settings.hooks), ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'], 'zcode shim binds exactly its declared events')
+  assert.ok(!('Notification' in settings.hooks) && !('StopFailure' in settings.hooks), 'unreachable events never enter zcode settings')
 })
 
 test('a fresh selected-harness default drives no-choice session creation and pins its safe command', { skip: !gitAvailable() && 'git not available' }, async () => {

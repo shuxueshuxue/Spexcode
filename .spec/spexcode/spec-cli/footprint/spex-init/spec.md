@@ -27,7 +27,12 @@ when the package is installed outside the dogfood repo — never a hardcoded rep
   `--preset <name>` a named non-default package under `templates/presets/<name>/` would be copied in **on
   top** — cumulative — though no non-default tier ships today. The spexcode-only plugins live only
   in the dogfood `.plugins`, never in the template, so they are never seeded. [[init-preset]] owns which
-  sets exist; this command owns the copy.
+  sets exist; this command owns the copy. Hook nodes are selected from the same chosen native adapter set as
+  launchers: a hook is seeded when at least one selected adapter declares one of its events. A hook whose
+  declared events are unreachable from every selected native adapter is omitted together with its co-located
+  script; it could never be delivered. This is event-data intersection, not a harness-name branch, so a
+  multi-harness selection keeps a hook when either adapter can emit it. Plugin-only delivery retains the
+  complete seed because its host adapter is outside this native selection.
 - **The git hooks** — `templates/hooks/*` (the main-guard + footprint-surgery pre-commit, the
   footprint-refresh post-checkout/post-merge anchors ([[commit-surgery]]), and the session-stamp
   prepare-commit-msg) copied into the target's resolved common hooks dir. This is the **one canonical

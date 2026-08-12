@@ -60,6 +60,19 @@ declares the same local core package and locks that link: its direct imports mus
 `cd spec-cli && npm ci` replaces the package tree. That install boundary cannot depend on a root-workspace
 hoist surviving a second, package-local installation.
 
+The `files` allowlist is also where this repository's own boundary is settled, so it is worth stating beside
+it: the repo holds the product — the mechanism, the policy it enforces, and the tests and specs holding both
+down — while what only ONE deployment knows (its hosts, its filesystem paths, the rows naming what it
+publishes) lives with that deployment. The test is not "is it text" or "something similar is already here";
+it is **does an adopter need this?** A file no code here reads and no adopter receives is deployment
+configuration wearing the product's clothes: it reads as product to the next person and invites the next one
+beside it. That is how a top-level `ops/` of nginx vhosts accumulated, and why a second vhost was later added
+next to the first for no better reason than the first being there. Where a deployment must reach in, give it
+a seam — a flag or a path it supplies — rather than a row; having to edit this repository to publish one more
+host means the boundary was drawn in the wrong place. This rule deliberately does NOT live in the agent
+contract: [[plugin-system]] keeps this repo's `.plugins` in parity with the adopter seed, so a note that only
+governs this repository cannot go there without spending every adopted project's context on it.
+
 The root tarball otherwise preserves the runtime layout: `spec-cli/{src,bin,templates,hooks}`, the siblings
 `spec-eval/src` and `spec-forge/src`, and the dashboard builds `spec-dashboard/dist` and
 `spec-dashboard/dist-public`. There are **two** dashboard builds because graph-only mode is baked in at build

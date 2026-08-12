@@ -46,6 +46,10 @@ assert.equal(await tile.locator('.node-expand').textContent(), `▸${children.le
 const stats = page.locator('.graph-stats')
 assert.equal(await stats.locator('.bstat-total').textContent(), String(board.nodes.length))
 assert.equal(await stats.locator('.bstat-project, .bstat-governance').count(), 0)
+const statusOrder = ['merged', 'active', 'drift', 'pending']
+const statusCounts = statusOrder.map((status) => board.nodes.filter((node) => node.status === status).length)
+assert.equal(statusCounts.reduce((total, count) => total + count, 0), board.nodes.length)
+assert.deepEqual(await stats.locator('.bstat:has(.bstat-dot)').allTextContents(), statusCounts.map(String))
 await page.screenshot({ path: resolve(OUT, 'plugins-ordinary.png'), fullPage: true })
 
 await tile.click()

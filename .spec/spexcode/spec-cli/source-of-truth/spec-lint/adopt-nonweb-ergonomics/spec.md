@@ -44,6 +44,10 @@ The [[spec-lint]] coverage/config seam supplies one source set to spec coverage 
 - **Zero-match is honest.** An empty result warns with the active roots, include policy, exclude globs, and
   test globs, then names the same `lint` knobs as the repair entrypoint.
 
+The same algebra can be evaluated against an explicit immutable Git tip when a changed-scope reader needs to
+compare historical source. That mode reads regular text from the tip tree without treating the historical snapshot
+as the current checkout; the default `HEAD` path keeps the live-worktree behavior above.
+
 `normalizeConfig` compiles extension compatibility and forgiving slash-less globs into canonical policy.
 The source module consumes only that policy and never imports the language-adapter registry; language
 structure and semantics remain solely behind the adapter seam.

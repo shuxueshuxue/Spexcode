@@ -25,3 +25,8 @@ loading/failure, and the shared scroll owner below the sticky status/header stac
 measures wrapping, target geometry, overflow, keyboard activation, and the named accessibility navigation.
 The run emits desktop/mobile videos, screenshots, a timeline, and the machine-readable network ledger used
 for before/after review.
+
+The node preview is bounded by meaning as well as count: its timeline response may contain at most one latest
+`result` item for each `(node, scenario)` pair, never the raw measurement history. Its summary reports the actual
+returned count against the response total, exposes the single list door for the full review surface, and does not
+render a second node-local “view all” link.

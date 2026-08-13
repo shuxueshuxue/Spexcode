@@ -57,6 +57,10 @@ borrow the caller's local cwd and therefore stay outside this first group.
 `spex spec lint --json` is the machine representation of the same blocking report, not another lint
 verb: it emits the [[spec-lint]] versioned report on stdout while retaining lint's error-derived exit code.
 
+The `flat` drawer exposes three real verbs: `flat new` measures a repository into a spec tree, `flat site`
+emits a relocatable graph-only static site, and `flat gallery` assembles several sites under one index.
+These bounded conversion/preview operations do not create sessions, serve a backend, or push the target.
+
 The resource surface keeps one lifecycle: `spex session resources [--json]` is the self-categorized, read-only
 host report. It may explain reclaim eligibility but never issues mutation authority; stop and close remain the
 only lifecycle verbs that release session resources. Both take a selector naming ANOTHER session, and every

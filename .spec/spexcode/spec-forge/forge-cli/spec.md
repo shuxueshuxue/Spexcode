@@ -19,8 +19,8 @@ forge is a value (`--store <host>`), never a command drawer ([[cli-surface]]).
 
 - `spex issue links [--store github] [--node <id>] [--json]` — read the host's open issues/PRs through the
   chosen driver, resolve them against the real node ids ([[links]]), and print `node → linked work`. A
-  header line reports both the link counts and how many issues/PRs were scanned (so an empty result is
-  legible: nothing linked vs nothing to scan). `--node` narrows to one node; `--json` emits the raw
+  header line reports both the link counts and how many issue/PR records were traced (so an empty result is
+  legible: nothing linked vs nothing to trace). `--node` narrows to one node; `--json` emits the raw
   resolved structure.
 - `spex issue links --pending [--store github] [--node <id>] [--json]` — the same read, resolved instead to the
   open issues flagged `needs-eval`, printed as `node → evaluation owed` with the same header and

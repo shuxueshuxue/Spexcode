@@ -22,7 +22,8 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
 - **What** — the same gates the manager weighs at review plus the published-user smoke: generated
   [[init-preset]] parity (every adopter plugin byte, path, and executable bit is the canonical projection),
   **`spex lint`** (fails on graph errors; coverage and drift stay advisory), the **[[dead-words]] gate**
-  (retired vocabulary cannot reappear on product surfaces), the
+  (retired vocabulary cannot reappear on product surfaces), the **docs-release producer test** (the published
+  immutable guidance bundle remains reproducible), the
   **`tsc --noEmit`** type check on the CLI package, the CLI package's complete **unit/integration suite**, and
   one data-driven **production clean-init matrix**. The suite runs from the package directory after both root
   and package installs, so subprocess fixtures resolve the same local `tsx`/TypeScript that production-facing
@@ -47,7 +48,11 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   A bare tarball install cannot honestly rely on those artifacts alone: dependency ranges make npm request
   registry packuments even when every selected tarball is cached. The lock-driven `npm ci --offline` proves the
   packed package and its exact production graph install with no registry access instead of depending on warm,
-  machine-local metadata.
+  machine-local metadata. When the packed manifest contains a `file:` workspace dependency, the smoke harness
+  rewrites that lock entry to the dependency's path inside the packed root before the offline install; it must never
+  ask the consumer for a sibling from the source checkout. The adoption leg also runs a negative control: the
+  installed managed hook rejects a direct commit on `main`, preserves the staged source tree, and only the explicit
+  adoption allowance may create the seed commit containing `.spec` and `spexcode.json`.
   Full git history is fetched because lint derives the version timeline and drift from git.
 - **Why a backstop and not the only gate** — the [[main-guard]] hook still gives fast *local* feedback and
   blocks direct commits on `main`; CI guarantees the [[spec-lint]] contract holds even when that hook is

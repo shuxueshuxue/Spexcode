@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto'
 import { listSessions } from './sessions.js'
 import { getBoard, getBoardForForgeRevision } from './graphCache.js'
-import { type SessionEvalOrderRow, buildSessionEvals, type SessionEvals } from '../../spec-eval/src/sessioneval.js'
-import { evalTimeline } from '../../spec-eval/src/evaltab.js'
+import { type SessionEvalOrderRow, buildSessionEvals, type SessionEvals } from '@spexcode/spec-eval/sessioneval'
+import { evalTimeline } from '@spexcode/spec-eval/evaltab'
 import { issuesEnabled as issuesEnabledForReview } from './localIssues.js'
 import { issueStores as issueStoresForReview } from './issues.js'
 import { hasReviewSnapshot, readReviewSnapshot } from '@spexcode/spec-core'
-import { residentForgeRevision, residentForgeState } from '../../spec-forge/src/resident.js'
+import { residentForgeRevision, residentForgeState } from '@spexcode/spec-forge/resident'
 // @ts-expect-error The browser-safe domain module is deliberately plain JS so the browser and server execute
 // the exact same tokenizer/matcher through the one public review entry.
 import { EVAL_FILTER_KIND, evalFilterModel, evalReviewState, issueFilterModel, tokenFilterState } from '@spexcode/spec-core/review'

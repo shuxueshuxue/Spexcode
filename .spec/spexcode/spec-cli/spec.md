@@ -16,6 +16,10 @@ related:
 ---
 # spec-cli
 
+The backend package is `@spexcode/spec-cli`; its declared dependencies are `@spexcode/spec-core`,
+`@spexcode/spec-eval`, and `@spexcode/spec-forge`. It is the composition boundary that installs spec-eval's
+host port with the session, issue, source-policy, and transport implementations.
+
 ## raw source
 
 One of three SpexCode packages (with spec-dashboard and spec-eval). It is the server + CLI: read the

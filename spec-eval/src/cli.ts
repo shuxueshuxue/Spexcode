@@ -2,16 +2,14 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join, relative, dirname } from 'node:path'
 import { repoRoot, headSha, driftIndex, stagedFiles, git, commitReachable } from '@spexcode/spec-core'
 import { loadSpecs } from '@spexcode/spec-core'
-import { loadConfig } from '../../spec-cli/src/lint.js'
-import { trackedSourceFiles } from '../../spec-cli/src/source-files.js'
+import { evalHost } from './host.js'
 import { mainBranch, envSessionId, readRawRecord } from '@spexcode/spec-core'
 import { evalNodes, evalNodesAt, validateScenarios, resolveEvalNode, scenarioCodeAxis, scenarioHash, scenarioProjection, writeScenarioMeasurementMetadata, EVAL_FILE, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readReadings, readSidecar, appendReading, appendRetraction, latestPerScenario, evidenceOf, isJsonBlob, type Reading, type Verdict, type Evidence, type EvidenceKind, type Retraction } from './sidecar.js'
 import { staleAxes, contentProbeFor, anchorProbeFor, anchorProblems, type AnchorDemand, type ContentProbeDemand } from './freshness.js'
 import { parseRelation, relationClaimsPath } from '@spexcode/spec-core'
 import { scenarioIndex } from './scenariofresh.js'
-import { loadEvalRemarkTracks, trackKey } from '../../spec-cli/src/issues.js'
-import { stripRefSigil } from '../../spec-cli/src/mentions.js'
+import { evalRemarkTracks, trackKey } from './host.js'
 import { putBlob, blobPath, listBlobs, gc, isStrayBlob } from './cache.js'
 import { validateTimeline, normalizeTimeline } from './timeline.js'
 import { evalTimeline, readBlobByHash, type EvalTimeline } from './evaltab.js'
@@ -102,7 +100,8 @@ export function nodeChanged(dirRel: string, codeFiles: readonly string[], change
 
 async function scan(args: string[] = []): Promise<number> {
   const root = repoRoot()
-  const cfg = loadConfig(root)
+  const cfg = evalHost().loadConfig?.(root)
+  if (!cfg) throw new Error('spec-eval host is not configured: loadConfig')
   const changedOnly = has(args, 'changed')
   let changed: Set<string> | null = null
   if (changedOnly) {
@@ -117,7 +116,9 @@ async function scan(args: string[] = []): Promise<number> {
   }
   // eval-coverage fires on ANY governed source file per the same classifier as spec coverage, not just
   // frontend — so backend/CLI/non-web source is held to the loss discipline too, not exempted.
-  const sourceFiles = new Set(trackedSourceFiles(root, cfg.governedRoots, cfg))
+  const sourceLoader = evalHost().trackedSourceFiles
+  if (!sourceLoader) throw new Error('spec-eval host is not configured: trackedSourceFiles')
+  const sourceFiles = new Set(sourceLoader(root, cfg.governedRoots, cfg))
   const idx = await driftIndex(root)
   // the off-history content fallback ([[eval-core]]): a rebased/folded-away anchor with byte-identical
   // governed content reads fresh instead of false-positive stale. Lazy — in-history readings never probe.
@@ -130,7 +131,7 @@ async function scan(args: string[] = []): Promise<number> {
   const specs = await loadSpecs()
   // the non-git REMARK freshness axis ([[remark-teeth]]): the trunk remark track, read ONCE — the CLI is the
   // whole model, so `spex eval lint` shows a remark-stale scenario with no server running.
-  const remarkTracks = loadEvalRemarkTracks()
+  const remarkTracks = evalRemarkTracks()
   // a file may be governed by several nodes — ordinary composition, not a hub to skip (see governed-related).
   // A change to a shared governed file legitimately triggers EVERY governing node's eval signal, mirroring how
   // lint's drift now fans to every owner; nobody's loss signal is suppressed. An over-owned file is lint's
@@ -315,7 +316,7 @@ async function evalCmd(args: string[]): Promise<number> {
     return 2
   }
   const sel = positional(args)
-  const ref = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)   // node args tolerate @/[[ ]] sigils ([[mentions]])
+  const ref = !sel || sel === '.' ? currentNodeId(root) : evalHost().stripRefSigil!(sel)   // node args tolerate @/[[ ]] sigils ([[mentions]])
   if (!ref) { console.error('spex eval add .: no current node (no .session/node-branch here) — name a node'); return 2 }
   // resolve LOUD ([[eval-core]]): exact canonical id, else a unique bare leaf; an ambiguous leaf lists its
   // candidate canonical ids instead of filing against an arbitrary node.
@@ -462,7 +463,7 @@ async function retractCmd(args: string[]): Promise<number> {
     return 2
   }
   const sel = positional(args)
-  const ref = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
+  const ref = !sel || sel === '.' ? currentNodeId(root) : evalHost().stripRefSigil!(sel)
   if (!ref) { console.error('spex eval retract .: no current node (no .session/node-branch here) — name a node'); return 2 }
   // node resolution mirrors eval's: exact canonical id, else a unique bare leaf, ambiguous fails loud.
   const res = resolveEvalNode(evalNodes(root), ref)
@@ -535,7 +536,7 @@ async function okCmd(args: string[]): Promise<number> {
   }
   const sel = positional(args)
   if (!sel || sel === '.') { console.error('spex eval ok: name a node — usage: spex eval ok <node> --scenario <name>'); return 2 }
-  const node = stripRefSigil(sel)
+  const node = evalHost().stripRefSigil!(sel)
   const scName = flag(args, 'scenario')
   const res = resolveEvalNode(evalNodes(root), node)
   if (!res.ok) { console.error(`spex eval ok: ${res.error}`); return 1 }
@@ -583,7 +584,9 @@ async function clean(args: string[]): Promise<number> {
 
 function checkStaged(): number {
   const root = repoRoot()
-  const tagLibrary = loadConfig(root).scenarioTags
+  const config = evalHost().loadConfig?.(root)
+  if (!config) throw new Error('spec-eval host is not configured: loadConfig')
+  const tagLibrary = config.scenarioTags
   const staged = stagedFiles(root)
   let bad = false
 
@@ -611,7 +614,7 @@ function checkStaged(): number {
 async function show(args: string[]): Promise<number> {
   const root = repoRoot()
   const sel = positional(args)
-  const ref = !sel || sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
+  const ref = !sel || sel === '.' ? currentNodeId(root) : evalHost().stripRefSigil!(sel)
   if (!ref) { console.error('spex eval ls .: no current node (no .session/node-branch here) — name a node'); return 2 }
   // resolve LOUD before the timeline: an ambiguous bare leaf must list its candidate canonical ids, never
   // fall through to a false "declares no scenarios". A ref matching NO measurable node still renders the honest
@@ -761,7 +764,7 @@ async function scenarioLs(args: string[]): Promise<number> {
       const fixedNodes = evalNodesAt(root, before.head)
       const selected = sel
         ? (() => {
-            const ref = sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
+            const ref = sel === '.' ? currentNodeId(root) : evalHost().stripRefSigil!(sel)
             if (!ref) throw new Error('no current node (no session/node-branch here) — name a node')
             const res = resolveEvalNode(fixedNodes, ref)
             if (!res.ok) throw new Error(res.error)
@@ -777,7 +780,7 @@ async function scenarioLs(args: string[]): Promise<number> {
   }
   let nodes = evalNodes(root)
   if (sel) {
-    const ref = sel === '.' ? currentNodeId(root) : stripRefSigil(sel)
+    const ref = sel === '.' ? currentNodeId(root) : evalHost().stripRefSigil!(sel)
     if (!ref) { console.error('spex eval scenario ls .: no current node (no session/node-branch here) — name a node'); return 2 }
     const res = resolveEvalNode(nodes, ref)
     if (!res.ok) { console.error(`spex eval scenario ls: ${res.error}`); return 1 }
@@ -862,8 +865,9 @@ async function blobGet(args: string[]): Promise<number> {
   const local = readBlobByHash(hash)   // validates 64-hex before touching the fs, then reads the shared cache
   if (local.ok) return emitBlob(local.bytes, out)
   if (local.reason === 'invalid') { console.error(`spex evidence get: bad hash '${hash}' — an evidence hash is 64 hex chars`); return 2 }
-  const { apiBase } = await import('../../spec-cli/src/sessions.js')
-  const url = `${await apiBase()}/api/evidence/${hash}`
+  const api = evalHost().apiBase
+  if (!api) throw new Error('spec-eval host is not configured: apiBase')
+  const url = `${await api()}/api/evidence/${hash}`
   let backendMiss: string
   try {
     const r = await fetch(url)

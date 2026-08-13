@@ -1,7 +1,9 @@
 import { relative, dirname } from 'node:path'
 import { repoRoot, driftIndex, historyIndex, commitReachable, type DriftIndex, type HistoryIndex } from '@spexcode/spec-core'
 import { loadSpecs } from '@spexcode/spec-core'
-import { loadEvalRemarkTracks, trackKey, type RemarkTrack, type Issue, type Reply } from '../../spec-cli/src/issues.js'
+import { evalRemarkTracks, trackKey } from './host.js'
+import type { RemarkTrack, Issue, Reply } from './remarks.js'
+export type { RemarkTrack, Issue, Reply } from './remarks.js'
 import { evalNodes, scenarioCodeAxis, type EvalNode, type ScenarioTestReference } from './scenarios.js'
 import { readSidecar, applyRetractions, evidenceOf, isJsonBlob, humanOkFor, type Verdict, type EvidenceKind, type Retraction, type Reading, type HumanOk } from './sidecar.js'
 import type { RelationEntry } from '@spexcode/spec-core'
@@ -95,7 +97,7 @@ export async function evalContext(
 ): Promise<EvalContext> {
   const nodes = ynodes ?? evalNodes(root)
   const scidx = await scenarioIndex(root, nodes.map((n) => n.evalPath))
-  return { root, specs, idx, hidx, scidx, ynodes: nodes, remarks: remarks ?? loadEvalRemarkTracks() }
+  return { root, specs, idx, hidx, scidx, ynodes: nodes, remarks: remarks ?? evalRemarkTracks() }
 }
 
 // @@@ one read, one batch - the freshness engine's Git work is immutable-object work, so it is owned ONCE
@@ -114,7 +116,7 @@ export async function evalTimelines(ids: readonly string[], ctx?: EvalContext, o
   const idx = ctx?.idx ?? await driftIndex(root)
   const hidx = ctx?.hidx ?? await historyIndex(root)
   const scidx = ctx?.scidx ?? await scenarioIndex(root, ynodes.map((n) => n.evalPath))
-  const tracks = ctx?.remarks ?? loadEvalRemarkTracks()
+  const tracks = ctx?.remarks ?? evalRemarkTracks()
   const probe = contentProbeFor(root)
   const anchors = anchorProbeFor(root, idx)
 

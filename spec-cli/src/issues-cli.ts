@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { closeIssue, createIssue, findIssue, isRemark, mergedIssues, promote, type ForgeSlice, type Issue } from './issues.js'
-import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from '../../spec-forge/src/drivers.js'
+import { FORGE_DRIVERS, forgeDriverFor, resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { currentSession, issuesEnabled, reply, resolveRemark, retractRemark } from './localIssues.js'
 import { summarizeDispatch, summarizeLoopIn } from './mentions.js'
 import { loadSpecsLite } from '@spexcode/spec-core'
@@ -92,7 +92,7 @@ async function issueVerbs(args: string[]): Promise<number> {
     return 0
   }
   if (args[0] === 'links') {
-    const { runIssueLinks } = await import('../../spec-forge/src/cli.js')
+    const { runIssueLinks } = await import('@spexcode/spec-forge/cli')
     return runIssueLinks(args.slice(1))
   }
   if (args[0] === 'close') {

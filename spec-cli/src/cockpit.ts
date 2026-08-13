@@ -1,5 +1,5 @@
 import { reviewPayload, type ReviewEvalGate, type ReviewPayload } from './sessions.js'
-import { sessionEvalProjection } from '../../spec-eval/src/sessioneval.js'
+import { sessionEvalProjection } from '@spexcode/spec-eval/sessioneval'
 
 // @@@ cockpit - where the manager's review answer is ASSEMBLED ([[manager-cockpit]]). It sits above both the
 // session layer and the eval layer and may import either; that is what makes it the only honest home for a

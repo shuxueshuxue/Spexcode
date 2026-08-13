@@ -37,7 +37,7 @@ async function threadOriginators(thread: Issue): Promise<(string | null)[]> {
   const parsed = parseEvalConcern(thread.concern)
   if (!parsed) return [thread.by]
   const { node, scenario } = parsed
-  const { evalReadingFiler } = await import('../../spec-eval/src/filing.js')
+  const { evalReadingFiler } = await import('@spexcode/spec-eval/filing')
   const chain: (string | null)[] = [evalReadingFiler(node, scenario)]
   try {
     const { listSessions } = await import('./sessions.js')

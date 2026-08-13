@@ -12,6 +12,12 @@ one optimization: **a spec is a loss-function design** (what we want), **issues/
 optimizer** (driving the code toward it), and **eval is the evaluation** — the measured loss, how far
 live behavior sits from the spec.
 
+This directory is a real package named `@spexcode/spec-eval`. Its public entrypoints are the eval engine,
+timeline, scenarios, and host port. It depends explicitly on `@spexcode/spec-core` and never imports the CLI:
+session review identity/payload, remark tracks, source policy, and trunk-commit transport arrive through the
+host port installed by spec-cli. That direction is intentional: these values are CLI context, not reusable
+eval concepts, so the cycle is broken by passing the context rather than copying its implementation.
+
 ## A spec carries how to measure its loss
 
 Beyond the target, a node's **`eval.md`** says how to measure the loss against it — one or more

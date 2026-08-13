@@ -1,11 +1,15 @@
 {
   "name": "@spexcode/spec-cli",
   "version": "0.6.2",
-  "private": true,
   "type": "module",
   "description": "SpexCode CLI + server — INTERNAL monorepo package. The published npm unit is `spexcode` at the repo ROOT (it ships this package's src plus the sibling spec-eval/spec-forge src and the dashboard dist, preserving the layout so the cross-package ../../spec-* imports resolve). See .spec/spexcode/spec-cli/packaging.",
   "bin": {
     "spex": "bin/spex.mjs"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./ranker": "./src/ranker.ts",
+    "./eval-host": "./src/eval-host.ts"
   },
   "scripts": {
     "serve": "node bin/spex.mjs serve",
@@ -14,6 +18,8 @@
   },
   "dependencies": {
     "@spexcode/spec-core": "file:../packages/spec-core",
+    "@spexcode/spec-eval": "file:../spec-eval",
+    "@spexcode/spec-forge": "file:../spec-forge",
     "tsx": "^4.19.2"
   },
   "optionalDependencies": {

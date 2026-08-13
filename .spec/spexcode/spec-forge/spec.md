@@ -7,6 +7,10 @@ desc: A forge link tracer — reads a forge's open issues/PRs and resolves each 
 ---
 # spec-forge
 
+This directory is the real `@spexcode/spec-forge` package. Its forge port, links, drivers, resident cache,
+and CLI entrypoints are exported explicitly and its only internal package dependency is the single shared
+`@spexcode/spec-core` source.
+
 A sibling package (alongside spec-cli, spec-dashboard, spec-eval) that relates an external **forge**'s
 work objects to the spec graph. The two are different *kinds* of thing on different axes: a spec node
 **defines** (the condition/need), while a forge **issue/PR does** (the working process toward it). An

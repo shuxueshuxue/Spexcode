@@ -12,8 +12,8 @@ import { loadSpecs, loadSpecsLite, specContent, specHistory, specDiffAt, loadCon
 import { issuesEnabled, resolveRemark, retractRemark } from './localIssues.js'
 import { closeIssue, createIssue, findIssue, issueStores, mergedIssues, promote } from './issues.js'
 import { remarkWithLoopIn, replyIssueWithLoopIn } from './loop-in.js'
-import { residentForgeState, refreshForgeNow } from '../../spec-forge/src/resident.js'
-import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
+import { residentForgeState, refreshForgeNow } from '@spexcode/spec-forge/resident'
+import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { dispatchNewMentions, summarizeDispatch, summarizeLoopIn } from './mentions.js'
 import { resolveLayout, mainBranch } from '@spexcode/spec-core'
 import { getBoardJson } from './graphCache.js'
@@ -24,11 +24,11 @@ import { listSessions, sendText, interruptSession, rawKey, stopSession, closeSes
 import { readTimeline } from './session-timeline.js'
 import { readSessionExecution, sessionExecutionStream } from './session-execution.js'
 import { defaultHarness, HARNESSES, dashboardLauncherList, launcherDefault } from './harness.js'
-import { readBlobByHash } from '../../spec-eval/src/evaltab.js'
-import { putBlob } from '../../spec-eval/src/cache.js'
-import { fileHumanReading } from '../../spec-eval/src/filing.js'
-import { fileHumanOk } from '../../spec-eval/src/humanok.js'
-import { buildExportModel, renderExportHtml, buildSessionEvals, SessionEvalUnavailableError } from '../../spec-eval/src/sessioneval.js'
+import { readBlobByHash } from '@spexcode/spec-eval/evaltab'
+import { putBlob } from '@spexcode/spec-eval/cache'
+import { fileHumanReading } from '@spexcode/spec-eval/filing'
+import { fileHumanOk } from '@spexcode/spec-eval/humanok'
+import { buildExportModel, renderExportHtml, buildSessionEvals, SessionEvalUnavailableError } from '@spexcode/spec-eval/sessioneval'
 import { appendUpload, cancelUpload, completeUpload, createUpload, evidenceMaxBytes, startUploadReaper, UploadError, uploadStatus } from './uploads.js'
 import { listSessionFiles, openSessionFile, SESSION_FILE_PREVIEW_MAX_BYTES, sessionFilePreviewKind, SessionFileError } from './session-files.js'
 import { attachViewer, detachViewer, resizeBridge, hideViewer, forwardInput, superviseBridges, type Viewer } from './pty-bridge.js'
@@ -38,6 +38,9 @@ import { evalDetailReview, evalsReview, issuesReview } from './reviews.js'
 import { collectResourceReport, ResourceConflict } from './host-resources.js'
 import { reparentRequest, SessionReparentRequestError } from './session-reparent.js'
 import { buildGuidanceCatalog } from './guidance-catalog.js'
+import { installEvalHost } from './eval-host.js'
+
+installEvalHost()
 
 // last-resort net: an unforeseen async throw (e.g. a worktree vanishing mid-read during a worker
 // self-merge) is logged and the server KEEPS SERVING instead of exiting and dropping the public port.

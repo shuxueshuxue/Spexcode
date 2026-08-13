@@ -13,6 +13,7 @@ import { evalRemarkTracks, trackKey } from './host.js'
 import { putBlob, blobPath, listBlobs, gc, isStrayBlob } from './cache.js'
 import { validateTimeline, normalizeTimeline } from './timeline.js'
 import { evalTimeline, readBlobByHash, type EvalTimeline } from './evaltab.js'
+export { isUiPath } from './ui-path.js'
 
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(`--${name}`)
@@ -51,13 +52,6 @@ function currentNodeId(root: string): string | null {
   } catch { /* detached / no branch */ }
   return null
 }
-
-// isUiPath answers a FRONTEND-specific question — "does this node need a real BROWSER reading?" — and is
-// consumed by the session-eval's `uncoveredFrontend` blindspot, NOT by eval lint's coverage check. Scan uses
-// the shared tracked-source classifier instead, so a non-web project's sources are held to the loss discipline
-// too; this stays web-shaped on purpose.
-const UI_FILE = /\.(jsx|tsx|vue|svelte|css)$/
-export const isUiPath = (p: string) => UI_FILE.test(p) || p.includes('spec-dashboard/')
 
 type ChangedScope = { base: string; paths: Set<string>; config: string }
 

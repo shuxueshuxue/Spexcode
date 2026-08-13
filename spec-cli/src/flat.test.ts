@@ -228,6 +228,8 @@ test('the gallery gives a fresh visitor the install, agent, and clone-init path'
     assert.match(html, new RegExp(`<option value="${choice.name}">${choice.label}</option>`), `${choice.label} is selectable`)
   }
   assert.match(html, /spex flat new https:\/\/github\.com\/owner\/repo --launcher claude/, 'the displayed run names an agent')
+  assert.match(html, /\.agent-select select \{[\s\S]*appearance: none/, 'the agent selector uses the gallery control style')
+  assert.match(html, /class="agent-select"/, 'the agent selector has a styled wrapper')
   assert.match(html, /src="\.\/flatcode-banner\.webp"/, 'the gallery references its packaged banner relatively')
   assert.match(html, /仓库 URL 会被克隆并初始化；本地仓库则直接补全 \.spec/, 'the page distinguishes URL cloning from local continuation')
 })

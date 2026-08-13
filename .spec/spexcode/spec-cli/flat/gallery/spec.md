@@ -25,7 +25,9 @@ command with that explicit launcher. It states that a repository URL is cloned a
 while a local repository is continued in place and receives only `.spec` work; it never tells a visitor to
 perform those internal steps by hand. A packaged bitmap banner depicts the repository-to-graph
 transformation and is copied beside `index.html`, so an assembled gallery has no asset dependency on the
-machine that built it.
+machine that built it. The agent choice keeps native keyboard and screen-reader behavior while using the
+gallery's dark control styling, and the banner is encoded as a same-dimension, high-quality WebP so the hero
+does not make the first visit wait on an unnecessarily large download.
 
 ## The slug belongs to the source, and cannot leave the root
 

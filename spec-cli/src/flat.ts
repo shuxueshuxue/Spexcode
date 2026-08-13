@@ -767,9 +767,22 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
   .setup-step p { color: var(--muted); font-size: .875rem; margin: .8rem 0 0; }
   .step-number { color: var(--dim); font-family: var(--mono); font-size: .75rem; display: block; margin-bottom: .6rem; }
   .agent-choice { display: block; color: var(--muted); font-size: .8125rem; margin-bottom: .45rem; }
-  .agent-choice select {
-    width: 100%; min-height: 2.6rem; color: var(--fg); background: var(--panel); border: 1px solid var(--line-hi);
-    border-radius: 6px; padding: .45rem .65rem; font: inherit;
+  .agent-select { position: relative; }
+  .agent-select::after {
+    content: ""; position: absolute; right: .85rem; top: 50%; width: .48rem; height: .48rem;
+    border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted);
+    transform: translateY(-65%) rotate(45deg); pointer-events: none;
+  }
+  .agent-select select {
+    appearance: none; width: 100%; min-height: 2.75rem; color: var(--fg); background: var(--panel);
+    border: 1px solid var(--line-hi); border-radius: 8px; padding: .55rem 2.5rem .55rem .75rem;
+    font: inherit; cursor: pointer; transition: border-color .15s, box-shadow .15s, background .15s;
+  }
+  .agent-select select:hover { background: #12151a; border-color: #3b434e; }
+  .agent-select select:focus-visible {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(16, 185, 129, .18);
+  }
+  .agent-select select option { color: var(--fg); background: var(--panel);
   }
   .command-row { display: flex; align-items: center; gap: .5rem; margin-top: .85rem; }
   .cmd {
@@ -877,12 +890,14 @@ export function galleryIndexHtml(entries: readonly GalleryEntry[]): string {
         <span class="step-number">02</span>
         <h3>选择 agent</h3>
         <label class="agent-choice" for="agent">用于读取源码和生成说明</label>
-        <select id="agent" name="agent">
-          <option value="claude">Claude Code</option>
-          <option value="codex">Codex</option>
-          <option value="opencode">OpenCode</option>
-          <option value="pi">Pi</option>
-        </select>
+        <div class="agent-select">
+          <select id="agent" name="agent">
+            <option value="claude">Claude Code</option>
+            <option value="codex">Codex</option>
+            <option value="opencode">OpenCode</option>
+            <option value="pi">Pi</option>
+          </select>
+        </div>
         <p>也可以在终端直接运行命令后再选择。</p>
       </div>
       <div class="setup-step">

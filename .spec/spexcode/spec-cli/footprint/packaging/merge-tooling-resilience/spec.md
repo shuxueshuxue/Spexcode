@@ -34,7 +34,13 @@ Two rules make the tooling survive it:
 - **Graceful degradation, explicit code.** Before spawning tsx, the launcher scans the source trees the CLI
   imports (spec-cli ←→ spec-eval ←→ spec-forge) for conflict markers. If any file carries one, it prints a
   single actionable message naming the conflicted file(s) — "resolve the merge, then retry" — and exits
-  **75** (EX_TEMPFAIL: transient, retry later). No stacktrace ever reaches the caller.
+**75** (EX_TEMPFAIL: transient, retry later). No stacktrace ever reaches the caller.
+
+The launcher is also the process-identity boundary for project and host control planes. For `serve` and
+`dashboard` it removes adapter-declared session identity variables before starting tsx, including the
+legacy fallback manifest when no explicit variable list is present. Ordinary session/read/write commands
+retain their identity; clearing it later inside `cli.ts` would be too late because tsx's compiler helper
+would already inherit the session.
 
 Exit 75 is the contract callers key on: the pre-commit lint shim treats it as advisory-skip (a commit
 elsewhere is never walled behind a merge someone else is resolving; CI still enforces), and the stop-gate's

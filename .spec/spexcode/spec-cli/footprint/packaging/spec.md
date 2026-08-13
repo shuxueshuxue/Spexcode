@@ -7,6 +7,7 @@ code:
   - scripts/prepack.mjs
 related:
   - package.json
+  - package-lock.json
   - spec-cli/package.json
   - spec-eval/package.json
   - spec-forge/package.json
@@ -85,9 +86,10 @@ the compiled CLI for `serve` or `dashboard`, it removes the invoking session's a
 variables from the child environment. Both installed `spex serve` and the source tree's canonical `npm run api`
 route through this launcher. Ordinary session/read/write verbs keep their identity unchanged.
 
-Release identity advances in lockstep across the public root manifest and the private `spec-cli` manifest,
-with each lockfile's root package metadata matching its manifest. The private manifest carries the same
-version so source-tree and installed CLI diagnostics name one release.
+Release identity advances in lockstep across the complete public package set, not only the root and CLI. The
+guarded [[release-publish]] action owns the release order and rejects an incomplete registry set before it can
+leave public package entrypoints at different release versions. The root workspace lock metadata matches that
+committed manifest graph; release publication never changes versions or lockfiles as a side effect.
 
 The installed terminal follows the same artifact rule. `node-pty` is pinned to an upstream release whose
 Darwin prebuilds publish `spawn-helper` as an executable, and a narrow dependency-artifact test verifies both

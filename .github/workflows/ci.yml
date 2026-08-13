@@ -30,6 +30,8 @@ jobs:
         run: npm run lint
       - name: Docs release producer
         run: npm run test:docs-release
+      - name: Package release producer
+        run: npm run test:release-publish && npm run release:check
       - name: dead-words gate (retired vocabulary must not resurface on command/route/label/file/node surfaces)
         run: node scripts/dead-words.mjs
       - name: typecheck

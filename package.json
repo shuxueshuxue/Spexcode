@@ -1,6 +1,6 @@
 {
   "name": "spexcode",
-  "version": "0.6.2",
+  "version": "0.6.5",
   "type": "module",
   "description": "SpexCode — a spec-driven, self-developing dev tool. The `spex` CLI + spec server reads the .spec tree and its git history, and serves the dashboard.",
   "license": "MIT",
@@ -29,12 +29,19 @@
     "lint": "node scripts/sync-init-plugins.mjs --check && cd spec-cli && npm run -s lint",
     "sync:init-plugins": "node scripts/sync-init-plugins.mjs --write",
     "test:init-plugins": "node --test scripts/sync-init-plugins.test.mjs",
+    "test:release-publish": "node --test scripts/release-publish.test.mjs",
+    "release:check": "node scripts/release-publish.mjs",
+    "release:publish": "node scripts/release-publish.mjs --publish",
+    "prepublishOnly": "node scripts/release-publish.mjs --from-package-publish",
     "test:docs-release": "node --test scripts/docs-release.test.mjs scripts/reference-snapshot.test.mjs",
     "hooks": "bash scripts/install-hooks.sh",
     "prepack": "node scripts/sync-init-plugins.mjs --check && node scripts/prepack.mjs"
   },
   "dependencies": {
-    "@spexcode/spec-cli": "0.6.2"
+    "@spexcode/spec-cli": "0.6.5"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "optionalDependencies": {
     "@hono/node-server": "^1.13.7",

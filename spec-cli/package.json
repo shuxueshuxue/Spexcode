@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/spec-cli",
-  "version": "0.6.2",
+  "version": "0.6.5",
   "type": "module",
   "description": "SpexCode CLI + server. The root spexcode package delegates to this compiled package; dashboard assets live in @spexcode/spec-dashboard.",
   "bin": {
@@ -24,16 +24,20 @@
     "@spexcode/spec-eval",
     "@spexcode/spec-forge"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "node ../scripts/build-dist.mjs",
+    "prepublishOnly": "node ../scripts/release-publish.mjs --from-package-publish",
     "serve": "npm run build && node bin/spex.mjs serve",
     "lint": "npm run build && node bin/spex.mjs spec lint",
     "test": "tsx --import ../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {
-    "@spexcode/spec-core": "0.6.4",
-    "@spexcode/spec-eval": "0.0.0",
-    "@spexcode/spec-forge": "0.0.0"
+    "@spexcode/spec-core": "0.6.5",
+    "@spexcode/spec-eval": "0.6.5",
+    "@spexcode/spec-forge": "0.6.5"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/spec-eval",
-  "version": "0.0.0",
+  "version": "0.6.5",
   "type": "module",
   "exports": {
     ".": "./dist/index.js",
@@ -17,12 +17,16 @@
   },
   "files": ["dist"],
   "description": "The eval/loss engine \u2014 eval.md declares scenarios, a flat evals.ndjson sidecar records readings (a second git-as-database axis), freshness compares each reading's stored scenario-contract hash and git ancestry on its governed code, and evidence lives content-addressed under the shared git common dir. `spex eval add|ls|scenario ls|lint|retract|clean`.",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "node ../scripts/build-dist.mjs",
+    "prepublishOnly": "node ../scripts/release-publish.mjs --from-package-publish",
     "test": "tsx --import ../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {
-    "@spexcode/spec-core": "0.6.4"
+    "@spexcode/spec-core": "0.6.5"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

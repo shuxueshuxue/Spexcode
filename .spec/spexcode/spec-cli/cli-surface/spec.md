@@ -13,6 +13,7 @@ related:
   - spec-cli/src/session-create-cli.test.ts
   - spec-cli/src/session-ls-cli.test.ts
   - spec-cli/src/session-declarations.cli.test.ts
+  - spec-cli/src/unknown-command-cli.test.ts
 ---
 # cli-surface
 

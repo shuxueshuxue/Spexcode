@@ -20,8 +20,10 @@ The metapackage is not a release unit by itself. A release is the committed set 
 `@spexcode/spec-core`, `@spexcode/spec-eval`, `@spexcode/spec-forge`, `@spexcode/spec-cli`,
 `@spexcode/spec-dashboard`, and `spexcode`. They all carry one exact release version. Every internal package
 reference, including the dashboard's build-time references, names that same version. The root remains last:
-the publication order is core, eval, forge, CLI, dashboard, root. Dashboard is independent of the root's
-install closure, but it is still a public installation entrypoint and belongs to the same release action.
+the publication order is core, dashboard, eval, forge, CLI, root. Dashboard is independent of the root's
+install closure, but it is still a public installation entrypoint and belongs to the same release action. It
+follows core (its only runtime dependency) and precedes CLI, so when a new CLI first tells someone to install
+the dashboard package, that exact same-version repair is already resolvable from the registry.
 
 `npm run release:check` is the local rehearsal: it validates the version/dependency graph, builds the owned
 artifacts, and preflights every package tarball, so CI can execute that exact path on a change branch.

@@ -6,7 +6,7 @@ scenarios:
       Run the release rehearsal against the committed package manifests and exercise the producer's registry
       state checks with an all-absent set and a deliberately partial set.
     expected: >
-      The rehearsal emits core, eval, forge, CLI, dashboard, root in order without publishing. A partial
+      The rehearsal emits core, dashboard, eval, forge, CLI, root in order without publishing. A partial
       registry set fails before any publish command. A direct package npm publish is refused with the release
       command that owns the operation.
     test:

@@ -30,7 +30,7 @@ function changeManifest(base, entry, change) {
 test('release producer keeps one complete ordered package set', () => {
   const plan = releasePlan()
   assert.equal(plan.version, JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version)
-  assert.deepEqual(plan.entries.map((entry) => entry.id), ['core', 'eval', 'forge', 'cli', 'dashboard', 'root'])
+  assert.deepEqual(plan.entries.map((entry) => entry.id), ['core', 'dashboard', 'eval', 'forge', 'cli', 'root'])
   assert.equal(registryState(plan.entries, () => false), 'absent')
   assert.equal(registryState(plan.entries, () => true), 'complete')
   assert.equal(registryState(plan.entries, (name) => name === '@spexcode/spec-core'), 'partial (@spexcode/spec-core)')

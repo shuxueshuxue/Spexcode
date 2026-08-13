@@ -17,14 +17,14 @@ import { dirname, join, basename, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spexcodeHome, encodeProject } from '@spexcode/spec-core'
 import { git } from '@spexcode/spec-core'
-import { serveStatic, resolveDistDir, ensureDashboardBuilt } from './gateway.js'
+import { serveStatic, resolveDistDir } from './gateway.js'
 import { startHubGateway, type HubExtensions } from './gateway-hub.js'
 import { MachinePeerGateway } from './machine-peer.js'
-import { tsxBin } from './tsx-bin.js'
 import { DEFAULT_PROJECT_ICON, requireIdentityChoice } from '@spexcode/spec-core/identity'
 import {
   resolveProjectIdentity, writeGatewayIcon, type ResolvedIdentity,
 } from '@spexcode/spec-core'
+import { cliEntrypointArgs } from './tsx-bin.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -262,7 +262,7 @@ export function reconcileNow(): Promise<ProjectEntry[]> {
 // the same supervisor `spex serve` boots — no second implementation of any domain semantics. The spawned
 // env is scrubbed of routing state (SPEXCODE_API_URL/PORT/session/instance ids) so a child never inherits
 // the gateway's — or another project's — backend routing.
-const cliEntry = join(here, 'cli.ts')
+const cliArgs = cliEntrypointArgs(join(here, '..'), here)
 function scrubbedEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env }
   delete env.SPEXCODE_API_URL; delete env.PORT
@@ -272,7 +272,7 @@ function scrubbedEnv(): NodeJS.ProcessEnv {
 
 export function runSpex(root: string, args: string[], timeoutMs = 120_000): Promise<{ code: number | null; output: string }> {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [tsxBin(join(here, '..')), cliEntry, ...args], { cwd: root, env: scrubbedEnv() })
+    const child = spawn(process.execPath, [...cliArgs, ...args], { cwd: root, env: scrubbedEnv() })
     let output = ''
     child.stdout.on('data', (d) => { output += d })
     child.stderr.on('data', (d) => { output += d })
@@ -419,7 +419,7 @@ export async function startBackend(root: string, waitMs = 45_000): Promise<Proje
   mkdirSync(logDir, { recursive: true })
   const logFile = join(logDir, 'serve.log')
   const log = openSync(logFile, 'a')
-  const child = spawn(process.execPath, [tsxBin(join(here, '..')), cliEntry, 'serve', '--port', String(port)],
+  const child = spawn(process.execPath, [...cliArgs, 'serve', '--port', String(port)],
     { cwd: root, env: scrubbedEnv(), detached: true, stdio: ['ignore', log, log] })
   child.unref()
   closeSync(log)   // the child holds its own copy; keep no fd open in the gateway
@@ -465,7 +465,6 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 
 export function startHostDashboard(opts: HostDashboardOpts): HostDashboard {
   const distDir = opts.distDir ?? resolveDistDir()
-  if (!opts.distDir) ensureDashboardBuilt(join(here, '..', '..'), distDir)
 
   const peers = new MachinePeerGateway()
   peers.start()

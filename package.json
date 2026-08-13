@@ -5,7 +5,7 @@
   "description": "SpexCode — a spec-driven, self-developing dev tool. The `spex` CLI + spec server reads the .spec tree and its git history, and serves the dashboard.",
   "license": "MIT",
   "bin": {
-    "spex": "spec-cli/bin/spex.mjs"
+    "spex": "bin/spex.mjs"
   },
   "workspaces": [
     "packages/*",
@@ -15,25 +15,14 @@
     "spec-dashboard"
   ],
   "files": [
-    "packages/spec-core",
-    "spec-cli/src",
-    "!spec-cli/src/**/*.test.ts",
-    "spec-cli/bin",
-    "spec-cli/templates",
-    "spec-cli/hooks",
-    "spec-eval/src",
-    "!spec-eval/src/**/*.test.ts",
-    "spec-forge/src",
-    "!spec-forge/src/**/*.test.ts",
-    "spec-dashboard/dist",
-    "spec-dashboard/dist-public",
-    "README.md"
+    "bin"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "api": "cd spec-cli && npm run serve",
+    "build": "npm run build --workspace=@spexcode/spec-core && npm run build --workspace=@spexcode/spec-eval && npm run build --workspace=@spexcode/spec-forge && npm run build --workspace=@spexcode/spec-cli",
+    "api": "npm run build && node bin/spex.mjs serve",
     "web": "cd spec-dashboard && npm run dev",
     "build:public": "node scripts/public-graph-build.mjs",
     "test:public-graph": "npm run build:public && node spec-dashboard/test/public-graph-static.e2e.mjs",
@@ -45,8 +34,7 @@
     "prepack": "node scripts/sync-init-plugins.mjs --check && node scripts/prepack.mjs"
   },
   "dependencies": {
-    "@spexcode/spec-core": "file:packages/spec-core",
-    "tsx": "^4.19.2"
+    "@spexcode/spec-cli": "0.6.2"
   },
   "optionalDependencies": {
     "@hono/node-server": "^1.13.7",
@@ -57,5 +45,14 @@
   "devDependencies": {
     "@types/node": "^20.16.0",
     "typescript": "^5.6.3"
-  }
+  },
+  "bundleDependencies": [
+    "@spexcode/spec-cli"
+  ],
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "author": ""
 }

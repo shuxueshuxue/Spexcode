@@ -5,6 +5,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import { HARNESSES, MISSING_DEFAULT_LAUNCHER_ERROR, defaultLauncher, harnessById, launcherList, resolveLauncher, type Harness } from './harness.js'
+import { ensureDashboardArtifact } from './dashboard-assets.js'
 
 const PKG = fileURLToPath(new URL('..', import.meta.url))
 const SPEX = join(PKG, 'bin', 'spex.mjs')
@@ -518,14 +519,9 @@ export async function flatNew(
   return result
 }
 
-// @@@ publicShellDir - the graph-only dashboard build, bundled-or-monorepo, mirroring gateway.ts's
-// resolveDistDir. The shell is a build artifact of SpexCode and identical for every flat; only the payload
-// beside it is per-repository. That split is why a flat renders with no backend and no build step of its own.
+// The graph-only shell belongs to the dashboard package; its static bytes remain independent from a flat's payload.
 export function publicShellDir(): string {
-  const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
-  const bundled = join(pkgRoot, 'dashboard-public-dist')
-  if (existsSync(join(bundled, 'index.html'))) return bundled
-  return join(pkgRoot, '..', 'spec-dashboard', 'dist-public')
+  return ensureDashboardArtifact('dist-public')
 }
 
 // The one spec-root directory under .spec. `spex init` names it for the project, so it is `project` in a
@@ -545,12 +541,6 @@ export async function flatSite(flatDir: string, log: (line: string) => void = co
   const site = join(out, 'site')
 
   const shell = publicShellDir()
-  if (!existsSync(join(shell, 'index.html'))) {
-    throw new Error(
-      `spex flat site: no graph-only dashboard build at ${shell}. In a source checkout, build it once with ` +
-      `\`npm run build:public\`; an installed spexcode ships it.`,
-    )
-  }
   mkdirSync(site, { recursive: true })
   cpSync(join(shell, 'index.html'), join(site, 'index.html'))
   cpSync(join(shell, 'assets'), join(site, 'assets'), { recursive: true })

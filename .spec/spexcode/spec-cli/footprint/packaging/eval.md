@@ -3,26 +3,26 @@ scenarios:
   - name: shipped-tarball-carries-what-the-verbs-need
     tags: [cli]
     description: >
-      Build the real tarball with `npm pack`, install it into a scratch prefix with `npm install <tgz>`, and
-      from that prefix alone drive a verb whose work depends on a build artifact not in git — `spex flat site`,
-      which copies the graph-only dashboard shell beside a flat's payload. Nothing in the run may read the
-      source checkout. Compare the shell the command emitted against the one inside the installed package.
+      Build the root and dashboard tarballs, install only the root into a scratch prefix, then install the
+      dashboard tarball explicitly. From that prefix alone drive `spex flat site`, which copies the graph-only
+      dashboard shell beside a flat's payload. Nothing in the run may read the source checkout. Compare the
+      shell the command emitted against the one inside the installed dashboard package.
     expected: >
-      The verb exits 0 and the artifact it copied is byte-identical to the copy inside the installed package —
-      proving it came from the tarball, not from a checkout that happened to be nearby. A verb that works only
-      where the repository is present is broken for every user, and it fails in the one direction a source
-      checkout can never reveal.
+      The verb exits 0 and the artifact it copied is byte-identical to the copy inside the installed dashboard
+      package - proving it came from a package tarball, not from a checkout that happened to be nearby. A verb
+      that works only where the repository is present is broken for every user, and it fails in the one direction
+      a source checkout can never reveal.
     related: [scripts/prepack.mjs, package.json, spec-cli/src/flat.ts]
-  - name: dashboard-serves-bundled
+  - name: dashboard-serves-owned-package
     tags: [cli]
     description: >
-      Against a built bundle, run `spex serve ui --port P --api-port 8787` and drive it as a browser would
-      with curl: the dashboard index, a hashed bundled asset, an unknown SPA route, and an /api hit that must
-      reach a running `spex serve`. Read the startup line and confirm the bind is loopback-only.
+      After explicitly installing the dashboard package beside a clean root install, run `spex serve ui --port P
+      --api-port 8787` and drive it as a browser would with curl: the dashboard index, a hashed bundled asset,
+      an unknown SPA route, and an /api hit that must reach a running `spex serve`. Read the startup line and
+      confirm the bind is loopback-only.
     expected: |
-      Startup logs which dist it serves ("serving monorepo build" — the package ships spec-dashboard/dist
-      in-layout, so the sibling-path resolver finds the SHIPPED bundle even in a clean npm install) and
-      "[gateway] dashboard on http://localhost:P". GET / → 200 and is the BUNDLED index.html (contains
+      Startup logs the resolved `@spexcode/spec-dashboard` dist and "[gateway] dashboard on
+      http://localhost:P". GET / -> 200 and is the bundled index.html (contains
       <title>SpexCode</title> and a hashed /assets/index-*.js reference, not a vite dev shell). GET that
       asset → 200 text/javascript. An unknown non-file route (/some/deep/route) → 200 (SPA fallback to
       index.html). GET /api/graph is proxied to the backend — 200 application/json when `spex serve` is up,
@@ -37,15 +37,14 @@ scenarios:
       installed package the way a new user would: run `npx spex --help`, create a fresh git repo, and run the
       installed `spex init` inside it.
     expected: |
-      The tarball builds the bundled dashboard during prepack and installs into the clean consumer project.
-      `npx spex --help` starts the CLI without looking for a missing nested `spec-cli/node_modules/.bin/tsx`.
+      The root tarball installs into the clean consumer project without dashboard, TypeScript, tsx, or esbuild.
+      `npx spex --help` starts the compiled CLI through Node.
       Inside a fresh git repo, `spex init` exits 0 and plants `.spec/project/spec.md` plus `spexcode.json`.
       The consumer's production `node_modules` does not contain TypeScript; host projects carry the compiler
       only when their own development or JS-anchor setup needs it.
     code:
       - package.json
       - spec-cli/bin/spex.mjs
-      - spec-cli/src/tsx-bin.ts
     related:
       - spec-cli/src/init.ts
       - scripts/prepack.mjs
@@ -67,29 +66,24 @@ scenarios:
   - name: omit-optional-l0-adopter
     tags: [cli]
     description: >
-      From a clean SpexCode checkout, install only the L0 dependency set with
-      `npm install --omit=optional --omit=dev --ignore-scripts`; explicitly install the matching
-      `@esbuild/<platform>-<arch>` compiler binary with `--omit=optional --no-save --no-package-lock
-      --ignore-scripts`, then drive every L0 verb through the shipped launcher. Run `spec lint`, `graph`,
+      From a clean root-tarball install, drive every L0 verb through the shipped launcher. Run `spec lint`, `graph`,
       `materialize`, `init --harness claude` in a fresh Git directory, and `guide`. In the same dependency
-      set, drive `serve` and `dashboard` without their optional packages. Finally, drive the read-only L0
+      set, drive `serve ui` and `dashboard` without the dashboard package. Finally, drive the read-only L0
       verbs from a real non-TypeScript adopter whose tracked config governs `.` with `sourceExtensions: [py]`;
       run `materialize` only in a disposable clone of that adopter and compare the live project's Git state
       before and after.
     expected: >
       Every L0 verb exits 0: lint reports zero errors, graph renders a nonempty tree, materialize completes,
-      init seeds `.spec/project/spec.md` and `spexcode.json`, and guide prints the workflow. `serve` and
-      `dashboard` each exit 1 before binding a port, with no stack trace and an actionable command installing
-      precisely their missing Hono/node-pty dependencies. The Python adopter's real `.`/`py` configuration is
+      init seeds `.spec/project/spec.md` and `spexcode.json`, and guide prints the workflow. `serve ui` and
+      `dashboard` each exit 1 before binding a port, with no stack trace and the dashboard installation command.
+      The Python adopter's real `.`/`py` configuration is
       honored by its lint and graph reads, its live worktree remains byte-for-byte Git-clean, and materialize
-      succeeds in the isolated clone. The explicit esbuild package is only necessary because the probe
-      suppresses lifecycle scripts; normal `npm install --omit=optional` retains esbuild's postinstall repair.
+      succeeds in the isolated clone.
     code:
       - package.json
       - spec-cli/package.json
       - spec-cli/bin/spex.mjs
       - spec-cli/src/cli.ts
-      - spec-cli/src/tsx-bin.ts
     related:
       - spec-cli/src/init.ts
       - spec-cli/src/materialize.ts
@@ -111,5 +105,5 @@ scenarios:
 
 YATU through the real product surface: drive the actual `spex dashboard` listener over HTTP with curl, as an
 installed user's browser would — never assert the serve from an internal helper. The dist under test is the
-PREBUILT bundle (`dashboard-dist`, what the published package ships), not a vite dev server. The install
-scenario is likewise measured from a clean npm consumer project, not by running source-tree helpers.
+prebuilt bundle in `@spexcode/spec-dashboard`, not a vite dev server. The install scenario is likewise
+measured from a clean npm consumer project, not by running source-tree helpers.

@@ -3,50 +3,60 @@
 import net from 'node:net'
 import http from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import type { Dirent } from 'node:fs'
 import { stat, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { installProcessGuards } from '@spexcode/spec-core'
 import { listenOrExit } from './listen.js'
-import { resolvePublicConfig, startGateway, ensureDashboardBuilt, resolveDistDir } from './gateway.js'
-import { tsxBin } from './tsx-bin.js'
+import { resolvePublicConfig, startGateway, resolveDistDir } from './gateway.js'
 import { publishEndpoint, dropOwnEndpoint } from './host.js'
 import { repoRoot as servedRepoRoot } from '@spexcode/spec-core'
 import { resolveProjectIdentity } from '@spexcode/spec-core'
 import { startResourceMonitor } from './host-resources.js'
 import { registerBackendInstance, unregisterBackendInstance } from './runtime-ownership.js'
 import { sessionIdentityEnvVars } from './harness.js'
+import { serverEntrypointArgs } from './tsx-bin.js'
 
 // the supervisor OWNS the public port, so it must outlive any transient throw: an uncaught error here is
 // logged and survived, never an exit that closes the port (and the tmux session) and takes the frontend down.
 installProcessGuards()
 
 const here = dirname(fileURLToPath(import.meta.url))
-const tsx = tsxBin(join(here, '..'))   // tsx's JS entry (dist/cli.mjs), run via `node` below — dev or published
-const entry = join(here, 'index.ts')                          // the real Hono server
+const packageRoot = join(here, '..')
+const sourceRoot = join(packageRoot, 'src')
+const workspaceRoot = existsSync(sourceRoot) ? join(packageRoot, '..') : null
+const entryArgs = serverEntrypointArgs(packageRoot, here)
 const publicPort = Number(process.env.PORT || 8787)
+const projectRoot = servedRepoRoot() // the actual git tree whose source/spec/config the child serves
 
 // @@@ public mode ([[public-mode]]) - with `spex serve --public`, the supervisor is NOT the internet face:
 // the gateway is. The raw-TCP proxy retreats to a loopback internal port (the trusted boundary local agents
 // reach) and the password-gated TLS gateway takes the public port, proxying /api + WS back to that loopback
 // port. Off → unchanged: the proxy itself owns the public port and SPEXCODE_API_URL points there.
-const publicCfg = resolvePublicConfig(join(here, '..', '..'))
+const publicCfg = resolvePublicConfig(projectRoot)
 // the port the raw-TCP proxy actually binds: a private loopback port in public mode, the public port otherwise.
 const proxyPort = publicCfg ? await freePort() : publicPort
 // what launched agents inherit as their `spex` endpoint — ALWAYS the loopback proxy, so local agents never
 // meet the password gate (loopback is the trust boundary). Equals the public port when public mode is off.
 const childApiBase = `http://127.0.0.1:${proxyPort}`
 
-// every package src tree the child imports at runtime; spec-dashboard is absent (its own vite/HMR).
-const repoRoot = join(here, '..', '..')
-const watchRoots = [
-  here,                                  // spec-cli/src — the backend's own source
-  join(repoRoot, 'spec-forge', 'src'),
-  join(repoRoot, 'spec-eval', 'src'),
-  join(repoRoot, 'packages', 'l0', 'src'),
-]
+// An installed package only has compiled JavaScript. In a source workspace keep the development loop honest:
+// observe the source closure, compile it, then make the supervisor's normal zero-downtime swap. A source edit
+// must never cause a restart that still runs the old dist.
+const watchRoots = workspaceRoot
+  ? [sourceRoot, join(workspaceRoot, 'spec-forge', 'src'), join(workspaceRoot, 'spec-eval', 'src'), join(workspaceRoot, 'packages', 'spec-core', 'src')]
+  : [here]
+function buildWorkspace(): boolean {
+  if (!workspaceRoot) return true
+  console.log('[supervisor] building workspace artifacts')
+  const result = spawnSync('npm', ['run', 'build'], { cwd: workspaceRoot, stdio: 'inherit' })
+  if (result.status === 0) return true
+  console.error('[supervisor] workspace build failed — keeping current backend')
+  return false
+}
 
 // @@@ instance identity - one id for this serve's whole lifetime, minted at supervisor start and handed to
 // every child via env, so the endpoint record and the live backend answer with the SAME identity across
@@ -54,7 +64,6 @@ const watchRoots = [
 // served root) against the live /api/instance answer — a recycled port serving a DIFFERENT project or a
 // different serve generation fails the match and is treated as offline, never proxied to.
 const instanceId = randomUUID()
-const projectRoot = servedRepoRoot() // the actual git tree whose source/spec/config the child serves
 // A backend is a project control plane, never the session that happened to invoke `spex serve`. Strip every
 // adapter identity before any hot child is spawned; otherwise all backend work is falsely charged to that
 // caller long after its session ends.
@@ -77,7 +86,7 @@ function freePort(): Promise<number> {
   })
 }
 
-// poll GET /health until 200; ~15s budget (150 × 100ms) covers a slow tsx+Hono cold start. False → keep old.
+// poll GET /health until 200; ~15s budget covers a cold Node + Hono start. False → keep old.
 function waitHealthy(port: number, tries = 150): Promise<boolean> {
   return new Promise((resolve) => {
     const retry = (left: number) => { if (left <= 1) resolve(false); else setTimeout(() => attempt(left - 1), 100) }
@@ -102,7 +111,7 @@ async function boot(): Promise<Backend | null> {
   // process.env.SPEXCODE_API_URL: the env this serve itself inherited may carry ANOTHER project's backend
   // (the exact misroute [[remote-client]]'s ladder exists to kill), and a worker's env is its routing
   // LIFELINE — it must be a deterministic backend-injected fact, not an inheritance gamble.
-  const child = spawn(process.execPath, [tsx, entry], { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: childApiBase, SPEXCODE_INSTANCE_ID: instanceId } })
+  const child = spawn(process.execPath, entryArgs, { stdio: 'inherit', env: { ...process.env, PORT: String(port), SPEXCODE_API_URL: childApiBase, SPEXCODE_INSTANCE_ID: instanceId } })
   // if the ACTIVE backend dies unexpectedly (crash, OOM), restart it so the public port keeps serving.
   // Planned retirement sets current to the NEW child first, so the old child's exit fails this identity
   // check and is ignored. boot()'s ~5s health budget rate-limits any crash loop.
@@ -122,6 +131,7 @@ async function reload(reason: string): Promise<void> {
   try {
     do {
       pending = false
+      if (!buildWorkspace()) break
       const next = await boot()
       if (!next) { console.error(`[supervisor] new backend failed health check (${reason}) — keeping current`); break }
       const old = current
@@ -196,14 +206,11 @@ const first = await boot()
 if (!first) { console.error('[supervisor] initial backend failed to start'); process.exit(1) }
 current = first
 // reap the booted child if a port bind fails, so a "can't own my port → exit" never leaves a zombie child.
-// SIGTERM (not SIGKILL): the child is a `tsx` wrapper around the real node server — SIGKILL kills the wrapper
-// instantly and ORPHANS the server still bound to its port, whereas tsx FORWARDS SIGTERM to it (the same
-// signal the reload drain uses). Sent synchronously here, before the process.exit that follows.
+// SIGTERM lets the direct Node child release its backend port before the supervisor exits.
 const reapChild = () => { unregisterBackendInstance(instanceId); try { current?.child.kill('SIGTERM') } catch { /* already gone */ } }
 if (publicCfg) {
   // public mode: the raw proxy stays on loopback; the password-gated gateway owns the public port.
-  const distDir = resolveDistDir() // bundled <pkg>/dashboard-dist when installed, else monorepo spec-dashboard/dist
-  ensureDashboardBuilt(repoRoot, distDir)
+  const distDir = resolveDistDir()
   listenOrExit(proxy, proxyPort, { host: '127.0.0.1', label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: () => { recordEndpoint(childApiBase); console.log(`spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})`) } })
   startGateway({ publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir, onBindFail: reapChild })
 } else {
@@ -211,9 +218,10 @@ if (publicCfg) {
 }
 startResourceMonitor()
 
-// watch every imported source tree; debounce a burst of writes (a merge touching several files across
-// packages) into one reload. A root that can't be watched (a package absent in some checkout) is logged
-// and skipped — the supervisor owns the public port and must never die over a missing watch.
+// Watch the source closure in a workspace and the emitted directory in an installed package. Debounce a
+// burst of writes (a merge touching several files across packages) into one rebuild and reload. A root that
+// can't be watched (a package absent in some checkout) is logged and skipped — the supervisor owns the
+// public port and must never die over a missing watch.
 // fs.watch — even recursive — is NOT reliable for a long-lived supervisor: its inotify watches are silently
 // dropped when a watched dir is rewritten (a git merge, a `materialize`) and NEVER re-established, so reloads
 // quietly stop (observed: the watcher fired a few times then went deaf for hours). A cheap mtime poll can't go

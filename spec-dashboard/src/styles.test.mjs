@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { createRequire } from 'node:module'
 
 const here = dirname(fileURLToPath(import.meta.url))
+const require = createRequire(import.meta.url)
 const css = readFileSync(join(here, 'styles.css'), 'utf8')
 const terminal = readFileSync(join(here, 'SessionTerm.jsx'), 'utf8')
 const terminalFont = readFileSync(join(here, 'terminalFont.js'), 'utf8')
@@ -15,7 +17,7 @@ const mobileApp = readFileSync(join(here, 'MobileApp.jsx'), 'utf8')
 const thread = readFileSync(join(here, 'Thread.jsx'), 'utf8')
 const issues = readFileSync(join(here, 'IssuesPage.jsx'), 'utf8')
 const resizable = readFileSync(join(here, 'useResizable.js'), 'utf8')
-const xtermRuntime = readFileSync(join(here, '../node_modules/@xterm/xterm/lib/xterm.mjs'), 'utf8')
+const xtermRuntime = readFileSync(join(dirname(require.resolve('@xterm/xterm/package.json')), 'lib/xterm.mjs'), 'utf8')
 
 test('dashboard typography declarations use the shared scale', () => {
   const contracts = {

@@ -3,23 +3,26 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./sessioneval": "./src/sessioneval.ts",
-    "./evaltab": "./src/evaltab.ts",
-    "./cli": "./src/cli.ts",
-    "./cache": "./src/cache.ts",
-    "./filing": "./src/filing.ts",
-    "./humanok": "./src/humanok.ts",
-    "./scenarios": "./src/scenarios.ts",
-    "./host": "./src/host.ts"
-    ,"./remarks": "./src/remarks.ts"
+    ".": "./dist/index.js",
+    "./sessioneval": "./dist/sessioneval.js",
+    "./evaltab": "./dist/evaltab.js",
+    "./cli": "./dist/cli.js",
+    "./cache": "./dist/cache.js",
+    "./filing": "./dist/filing.js",
+    "./humanok": "./dist/humanok.js",
+    "./scenarios": "./dist/scenarios.js",
+    "./host": "./dist/host.js",
+    "./remarks": "./dist/remarks.js",
+    "./package.json": "./package.json"
   },
+  "files": ["dist"],
   "description": "The eval/loss engine \u2014 eval.md declares scenarios, a flat evals.ndjson sidecar records readings (a second git-as-database axis), freshness compares each reading's stored scenario-contract hash and git ancestry on its governed code, and evidence lives content-addressed under the shared git common dir. `spex eval add|ls|scenario ls|lint|retract|clean`.",
   "scripts": {
+    "build": "node ../scripts/build-dist.mjs",
     "test": "tsx --import ../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {
-    "@spexcode/spec-core": "file:../packages/spec-core"
+    "@spexcode/spec-core": "0.6.4"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

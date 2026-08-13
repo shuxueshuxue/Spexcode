@@ -26,10 +26,11 @@ not duplicate the eval engine or its remark types. Its defining contract has a f
 
 ## raw source
 
-One of three SpexCode packages (with spec-dashboard and spec-eval). It is the server + CLI: read the
+One of the SpexCode packages (with spec-core, spec-eval, spec-forge, and spec-dashboard). It is the server + CLI: read the
 `.spec` tree and its git history, serve them over an API, ship the `spex` CLI, and house the
 **source-of-truth** guards (git-as-database, the worktree linker, the guards, the linter) here — under
-the CLI where they belong, not under the dashboard. Hono + tsx, **no build step**.
+the CLI where they belong, not under the dashboard. It publishes compiled JavaScript; TypeScript remains
+development source rather than a consumer runtime requirement.
 
 ## expanded spec
 
@@ -50,15 +51,15 @@ without draining buffered pipe writes, silently truncating a large dump at the ~
 verbs exit through a shared **flush-then-exit** helper that waits for stdout to drain first — a >64KB piped
 board or issue dump arrives whole, never a JSON cut off mid-object that reads as complete.
 
-The `serve` script (the `npm run api` entry) hot-reloads the backend on changes to **any source tree the
-child actually imports** — its own `spec-cli/src/**` plus the sibling packages it loads at runtime
-(`spec-forge`, `spec-eval`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it reads via fs
-or never imports (the frontend is a separate vite server with its own HMR). Watching only its own dir was a
-real gap: a merge touching `spec-forge` reached disk while the running child kept the stale code, so a fix
-could ship to `main` yet stay invisible on the live dashboard. **The reload must be zero-downtime: port 8787
-never has a gap.** A `tsx watch` restart left a
-~1-2s window where every API call was refused (a node merge touching backend code took the dashboard
-down); that window must not exist.
+The `serve` script (the `npm run api` entry) hot-reloads the backend on changes to **any source tree in the
+compiled runtime closure** — its own `spec-cli/src/**` plus the sibling packages it loads at runtime
+(`spec-forge`, `spec-eval`, `spec-core`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it
+reads via fs or never imports (the frontend is a separate vite server with its own HMR). In a source workspace
+the supervisor rebuilds that closure before it reloads; an installed package watches only its shipped `dist`.
+Watching only its own dir was a real gap: a merge touching `spec-forge` reached disk while the running child
+kept the stale code, so a fix could ship to `main` yet stay invisible on the live dashboard. **The reload must
+be zero-downtime: port 8787 never has a gap.** A process restart left a ~1-2s window where every API call was
+refused (a node merge touching backend code took the dashboard down); that window must not exist.
 
 The mechanism is a tiny **supervisor** (`serve` runs `supervise.ts`) that owns the public port as a
 raw-TCP proxy and runs the real Hono server as a child on a private port. On a source change it boots a

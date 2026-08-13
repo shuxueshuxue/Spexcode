@@ -8,32 +8,37 @@ import { createServer } from 'node:net'
 import { once } from 'node:events'
 import { fileURLToPath } from 'node:url'
 import { processStartToken } from '@spexcode/spec-core'
+import { cliEntrypointArgs, serverEntrypointArgs } from './tsx-bin.js'
 
-// @@@ cross-platform tsx resolution ([[platform-support]]) - the launcher must run tsx's JS entry through
-// `node` (process.execPath), NEVER spawn the `.bin/tsx` shim. On Windows that shim is an extensionless sh
-// script child_process.spawn can't execute — the #37 `spawn …\.bin\tsx ENOENT` crash of `spex init`.
+// @@@ compiled release launcher ([[release-launcher]]) - the launcher runs its own emitted JavaScript through
+// Node, never a TypeScript loader or a shell shim. This keeps installed commands independent of build tools.
 const SRC = dirname(fileURLToPath(import.meta.url))
 const LAUNCHER = join(SRC, '..', 'bin', 'spex.mjs')
 const ROOT = join(SRC, '..', '..')
 
-test('the launcher actually runs a CLI command through node + tsx', () => {
-  // an offline read-only command: proves the resolve-then-spawn path launches the TypeScript CLI end to end.
+test('the launcher actually runs a compiled CLI command through node', () => {
+  // An offline read-only command proves the release launcher starts the emitted CLI end to end.
   const out = execFileSync(process.execPath, [LAUNCHER, 'help'], { encoding: 'utf8' })
   assert.match(out, /SpexCode CLI/)
 })
 
-test('the launcher spawns process.execPath against a resolved tsx JS entry, not the .bin shim', () => {
+test('the launcher spawns process.execPath against its compiled CLI, not a TypeScript loader', () => {
   const src = readFileSync(LAUNCHER, 'utf8')
-  // spawns through THIS node binary…
   assert.match(src, /spawn\(process\.execPath,/)
-  // …resolving tsx's JS entry (dist/cli.mjs) via Node's own resolver…
-  assert.match(src, /resolve\('tsx\/package\.json'\)/)
-  assert.match(src, /dist',\s*'cli\.mjs'/)
-  // …and never reaches for the platform-specific `.bin/tsx` shim.
+  assert.match(src, /dist',\s*'cli\.js'/)
+  assert.doesNotMatch(src, /tsx\/package\.json|cli\.ts/)
   assert.doesNotMatch(src, /'\.bin'/)
 })
 
-test('serve and dashboard scrub session identity before tsx can spawn its helper', () => {
+test('source callers keep their development loader while compiled callers stay on dist', () => {
+  const packageRoot = join(SRC, '..')
+  assert.equal(cliEntrypointArgs(packageRoot, SRC).at(-1), join(SRC, 'cli.ts'))
+  assert.equal(serverEntrypointArgs(packageRoot, SRC).at(-1), join(SRC, 'index.ts'))
+  assert.deepEqual(cliEntrypointArgs(packageRoot, join(packageRoot, 'dist')), [join(packageRoot, 'dist', 'cli.js')])
+  assert.deepEqual(serverEntrypointArgs(packageRoot, join(packageRoot, 'dist')), [join(packageRoot, 'dist', 'index.js')])
+})
+
+test('serve and dashboard scrub session identity before the compiled CLI starts', () => {
   const src = readFileSync(LAUNCHER, 'utf8')
   assert.match(src, /args\[0\] === 'serve'/)
   assert.match(src, /args\[0\] === 'dashboard'/)
@@ -42,7 +47,7 @@ test('serve and dashboard scrub session identity before tsx can spawn its helper
   assert.match(src, /spawn\(process\.execPath,[\s\S]*\{ stdio: 'inherit', env \}/)
 })
 
-test('canonical npm run api crosses the scrub boundary before the tsx process tree starts', {
+test('canonical npm run api crosses the scrub boundary before the compiled CLI process tree starts', {
   skip: process.platform !== 'linux' ? 'process-tree environment proof reads Linux /proc' : false,
 }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-api-scrub-'))
@@ -68,11 +73,10 @@ test('canonical npm run api crosses the scrub boundary before the tsx process tr
     },
   })
   const output: Buffer[] = []
-  let ownedTree: { pid: number; startToken: string }[] = []
   child.stdout?.on('data', (chunk) => output.push(chunk))
   child.stderr?.on('data', (chunk) => output.push(chunk))
   try {
-    const deadline = Date.now() + 20_000
+    const deadline = Date.now() + 45_000
     let healthy = false
     while (Date.now() < deadline) {
       try { healthy = (await fetch(`http://127.0.0.1:${port}/health`)).status === 200 } catch { /* still booting */ }
@@ -91,13 +95,9 @@ test('canonical npm run api crosses the scrub boundary before the tsx process tr
       changed = false
       for (const row of rows) if (!descendants.has(row.pid) && descendants.has(row.ppid)) { descendants.add(row.pid); changed = true }
     }
-    ownedTree = [...descendants].flatMap((pid) => {
-      const startToken = processStartToken(pid)
-      return startToken ? [{ pid, startToken }] : []
-    })
-    const tsx = rows.find((row) => descendants.has(row.pid) && row.args.includes('tsx/dist/cli.mjs'))
-    assert.ok(tsx, 'canonical package script did not route through bin/spex.mjs into the resolved tsx entry')
-    const controlPlane = new Set<number>([tsx.pid])
+    const cli = rows.find((row) => descendants.has(row.pid) && row.args.includes('/spec-cli/dist/cli.js'))
+    assert.ok(cli, 'canonical package script did not route through bin/spex.mjs into the compiled CLI entry')
+    const controlPlane = new Set<number>([cli.pid])
     for (let changed = true; changed;) {
       changed = false
       for (const row of rows) if (!controlPlane.has(row.pid) && controlPlane.has(row.ppid)) { controlPlane.add(row.pid); changed = true }
@@ -107,21 +107,19 @@ test('canonical npm run api crosses the scrub boundary before the tsx process tr
       assert.ok(!env.some((entry) => entry.startsWith('SPEXCODE_SESSION_ID=') || entry.startsWith('CODEX_THREAD_ID=')), `PID ${pid} inherited session identity after the launcher boundary`)
     }
   } finally {
-    const signalOwned = (signal: NodeJS.Signals) => {
-      for (const identity of [...ownedTree].reverse()) if (processStartToken(identity.pid) === identity.startToken) {
-        try { process.kill(identity.pid, signal) } catch { /* vanished after the exact identity read */ }
-      }
-    }
-    signalOwned('SIGTERM')
+    // Detached gives this fixture one process group. Signal that group even when health assertion fails before
+    // the descendant scan, otherwise a slow first build leaks an entire test backend into later cases.
+    const signalGroup = (signal: NodeJS.Signals) => { try { process.kill(-child.pid!, signal) } catch { /* already gone */ } }
+    signalGroup('SIGTERM')
     if (child.exitCode === null) await Promise.race([once(child, 'exit'), new Promise((resolve) => setTimeout(resolve, 3000))])
-    for (let i = 0; i < 30 && ownedTree.some((identity) => processStartToken(identity.pid) === identity.startToken); i++) {
+    for (let i = 0; i < 30 && processStartToken(child.pid!) !== null; i++) {
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    signalOwned('SIGKILL')
-    for (let i = 0; i < 20 && ownedTree.some((identity) => processStartToken(identity.pid) === identity.startToken); i++) {
+    signalGroup('SIGKILL')
+    for (let i = 0; i < 20 && processStartToken(child.pid!) !== null; i++) {
       await new Promise((resolve) => setTimeout(resolve, 50))
     }
-    assert.deepEqual(ownedTree.filter((identity) => processStartToken(identity.pid) === identity.startToken), [], 'canonical npm api fixture leaves no exact descendant alive')
+    assert.equal(processStartToken(child.pid!), null, 'canonical npm api fixture leaves no process group leader alive')
     rmSync(home, { recursive: true, force: true })
   }
 })

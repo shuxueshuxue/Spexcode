@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 
 // @@@ tsxBin - tsx's JS ENTRY (dist/cli.mjs), dev-or-published, run through `node` by the caller
 // (`spawn(process.execPath, [tsxBin(pkgDir), entry, …])`). In the dev monorepo tsx sits in
@@ -15,4 +15,22 @@ export function tsxBin(pkgDir: string): string {
   } catch {
     throw new Error(`tsx runtime not found from ${pkgDir} — run \`npm install\` in the SpexCode package`)
   }
+}
+
+// A direct source invocation is a development/test contract. A compiled launcher in the same workspace
+// must still execute dist so an installed release never accidentally reintroduces a tsx requirement.
+function sourceInvocation(pkgDir: string, callerDir: string): boolean {
+  return resolve(callerDir) === join(resolve(pkgDir), 'src')
+}
+
+export function cliEntrypointArgs(pkgDir: string, callerDir: string): string[] {
+  return sourceInvocation(pkgDir, callerDir)
+    ? [tsxBin(pkgDir), join(pkgDir, 'src', 'cli.ts')]
+    : [join(pkgDir, 'dist', 'cli.js')]
+}
+
+export function serverEntrypointArgs(pkgDir: string, callerDir: string): string[] {
+  return sourceInvocation(pkgDir, callerDir)
+    ? [tsxBin(pkgDir), join(pkgDir, 'src', 'index.ts')]
+    : [join(pkgDir, 'dist', 'index.js')]
 }

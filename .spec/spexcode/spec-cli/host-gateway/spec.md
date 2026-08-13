@@ -68,7 +68,10 @@ committed `spexcode.json`: it works while the backend is offline, treats an abse
 only a top-level JSON object, writes atomically, and rejects a stale revision rather than overwriting a
 concurrent edit. It never exposes `spexcode.local.json`, whose machine-specific layer may carry sensitive
 paths. Sibling structured icon routes revision-check and update only the canonical project or host field;
-they never create another setting. Operations remain **spawned `spex` verbs, never forked logic**:
+they never create another setting. Operations remain **spawned `spex` verbs, never forked logic**. A source
+host module invokes its source entry through the repository's development loader; a compiled or installed host
+invokes the matching `dist` entry through Node, so host children never make an installed user acquire the build
+chain:
 `/projects/:id/init` and `/doctor`
 run the real `spex init` / `spex doctor` with cwd = the project root (same git/harness/additive
 guarantees, exit code + transcript returned), and `/projects/:id/serve` starts an offline project's

@@ -10,7 +10,7 @@ import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, sele
 import { historyEventCachePathForTests } from '@spexcode/spec-core'
 
 const freshAnchors = (tag: string) =>
-  import(new URL(`anchors.ts?${tag}`, import.meta.resolve('@spexcode/spec-core')).href) as Promise<typeof import('@spexcode/spec-core')>
+  import(new URL(`anchors.js?${tag}`, import.meta.resolve('@spexcode/spec-core')).href) as Promise<typeof import('@spexcode/spec-core')>
 
 // [[code-anchor]] — the structured relation grammar (ONE parser for code: and related:) and the
 // multi-selector hit engine: selectors on one base file are OR'd, a commit counts ONCE, and each hit

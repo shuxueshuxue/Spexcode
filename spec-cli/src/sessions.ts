@@ -1,7 +1,6 @@
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
-import { createRequire } from 'node:module'
 import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, openSync, closeSync, unlinkSync, writeSync } from 'node:fs'
 import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -20,6 +19,7 @@ import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { bindCodexGeneration, codexGenerationBindingForSession, commitCodexGenerationRegistration, prepareCodexGenerationClose, prepareCodexGenerationRegistration, readCodexGenerationLedger } from './codex-runtime-generations.js'
+import { cliEntrypointArgs } from './tsx-bin.js'
 
 const pexec = promisify(execFile)
 export const TMUX_SOCK = process.env.SPEXCODE_TMUX || 'spexcode'
@@ -2016,10 +2016,8 @@ async function resetFailedMaterializeCandidate(rec: SessRec, signal: AbortSignal
 async function materializeSessionCandidate(rec: SessRec, signal: AbortSignal): Promise<SessRec> {
   throwIfCreateAborted(signal, 'materialize')
   try {
-    const req = createRequire(join(pkgRoot(), 'package.json'))
-    const tsxImport = req.resolve('tsx/esm')
     await new Promise<void>((resolvePromise, reject) => {
-      const child = spawn(process.execPath, ['--import', tsxImport, join(pkgRoot(), 'src', 'cli.ts'), 'materialize'], {
+      const child = spawn(process.execPath, [...cliEntrypointArgs(pkgRoot(), dirname(fileURLToPath(import.meta.url))), 'materialize'], {
         cwd: rec.worktreePath,
         env: process.env,
         detached: true,

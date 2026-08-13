@@ -1,69 +1,45 @@
 #!/usr/bin/env node
-// @@@ spex launcher - this repo has no build step, so the installed `spex` bin shells to tsx to
-// run the TypeScript CLI directly. After `npm link` (or a global install) `spex lint` works anywhere.
+// @@@ spex launcher ([[release-launcher]]) - package installs execute the package's compiled CLI directly;
+// tsx remains a development tool and never enters an adopter's runtime closure.
 import { spawn } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
-// @@@ self-contained - resolve tsx + cli from THIS package, not the cwd. A fresh worktree off main has
-// no node_modules, so `npx tsx` there would try to install; using the package's own tsx makes a global
-// `spex` work from any cwd (agents, git hooks) against this package's code, operating on the cwd.
+// Resolve from THIS package rather than cwd, so global and project-local installs run one compiled CLI.
 const pkg = join(dirname(fileURLToPath(import.meta.url)), '..') // spec-cli/
-const cli = join(pkg, 'src', 'cli.ts')
+const cli = join(pkg, 'dist', 'cli.js')
 
-// @@@ mid-merge guard - no build step means every spex call parses this package's live TypeScript, so
-// while a merge conflict is being resolved in the checkout that hosts it, the source holds conflict
-// markers and tsx dies with a raw esbuild stacktrace — on EVERY call, including the Stop hook and an
-// agent's `spex session done`. Catch that one transient state up front: scan the source trees the CLI
-// imports (spec-cli ←→ spec-eval ←→ spec-forge), and if any file carries a marker, print one actionable
-// line and exit 75 (EX_TEMPFAIL: transient, retry) instead of spawning tsx into the stacktrace.
-const srcRoots = [join(pkg, 'src'), join(pkg, '..', 'spec-eval', 'src'), join(pkg, '..', 'spec-forge', 'src')]
-const conflicted = srcRoots.flatMap((root) => {
-  if (!existsSync(root)) return []
-  return readdirSync(root, { recursive: true })
-    .filter((f) => /\.(ts|tsx|js|mjs)$/.test(String(f)))
-    .map((f) => join(root, String(f)))
-    .filter((path) => {
-      try { return /^<{7} /m.test(readFileSync(path, 'utf8')) } catch { return false }
-    })
-})
-if (conflicted.length) {
-  console.error('spex: paused mid-merge — unresolved conflict markers in the source spex runs:')
-  for (const f of conflicted) console.error(`  ${f}`)
-  console.error('spex executes this TypeScript directly (no build step); resolve the merge, then retry. (exit 75)')
-  process.exit(75)
-}
-// @@@ cross-platform tsx resolution ([[platform-support]]) - resolve tsx's JS ENTRY (dist/cli.mjs) with
-// Node's own resolver from spec-cli, then run it through THIS node binary (process.execPath). tsx may live
-// in spec-cli/node_modules (dev) or be hoisted above the installed `spexcode` package (a real consumer
-// project) — one resolver covers both without hardcoded consumer paths. We deliberately never spawn the
-// `.bin/tsx` shim, nor a `.mjs` directly: on Windows the shim is an extensionless sh script and the `.mjs`
-// leans on a shebang, neither of which `child_process.spawn` can execute — that is the #37 crash
-// (`spawn …\node_modules\.bin\tsx ENOENT`) of `spex init`. `node dist/cli.mjs …` is shell-free and identical
-// on every OS.
-function resolveTsxCli() {
-  try {
-    const req = createRequire(join(pkg, 'package.json'))
-    return join(dirname(req.resolve('tsx/package.json')), 'dist', 'cli.mjs')
-  } catch {
-    console.error('spex: cannot find the `tsx` runtime this package needs — run `npm install` in the SpexCode package, then retry.')
-    process.exit(69)
+// @@@ mid-merge guard ([[merge-tooling-resilience]]) - a released package contains no source to scan;
+// a source workspace does. Refuse to run its possibly stale dist while its imported source trees still
+// carry unresolved conflict markers, so hooks keep the retryable exit-75 contract during a merge.
+const sourceRoot = join(pkg, 'src')
+if (existsSync(sourceRoot)) {
+  const srcRoots = [sourceRoot, join(pkg, '..', 'spec-eval', 'src'), join(pkg, '..', 'spec-forge', 'src')]
+  const conflicted = srcRoots.flatMap((root) => {
+    if (!existsSync(root)) return []
+    return readdirSync(root, { recursive: true })
+      .filter((f) => /\.(ts|tsx|js|mjs)$/.test(String(f)))
+      .map((f) => join(root, String(f)))
+      .filter((path) => {
+        try { return /^<{7} /m.test(readFileSync(path, 'utf8')) } catch { return false }
+      })
+  })
+  if (conflicted.length) {
+    console.error('spex: paused mid-merge - unresolved conflict markers in the source SpexCode runs:')
+    for (const file of conflicted) console.error(`  ${file}`)
+    console.error('resolve the merge, rebuild SpexCode, then retry. (exit 75)')
+    process.exit(75)
   }
 }
-const tsxCli = resolveTsxCli()
 const args = process.argv.slice(2)
 const env = { ...process.env }
-// A backend/dashboard is a project or host control plane, never the managed session that happened to start
-// it. Scrub before tsx starts: doing this inside cli.ts is too late because tsx's resident esbuild helper has
-// already inherited the caller. New session launches provide the adapter-registry-derived key manifest; the
-// fallback covers sessions created before that manifest existed.
+// A backend/dashboard is a project or host control plane, never the managed session that happened to start it.
 if (args[0] === 'serve' || args[0] === 'dashboard') {
   const identityKeys = (env.SPEXCODE_SESSION_IDENTITY_VARS
     || 'SPEXCODE_SESSION_ID,CLAUDE_CODE_SESSION_ID,CODEX_THREAD_ID,OPENCODE_SESSION_ID,PI_SESSION_ID')
     .split(',').map((key) => key.trim()).filter(Boolean)
   for (const key of identityKeys) delete env[key]
 }
-spawn(process.execPath, [tsxCli, cli, ...args], { stdio: 'inherit', env })
+spawn(process.execPath, [cli, ...args], { stdio: 'inherit', env })
   .on('exit', (code) => process.exit(code ?? 0))

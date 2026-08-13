@@ -26,7 +26,7 @@ test('aggregate counts are anchors minted by the scenario-less evalAddress form 
   // the list-filter grammar lives in the address/query layer alone — the aggregate href is the
   // canonical token text (default view + node qualifier), never hand-rolled in a component
   assert.match(address, /routeHash\('evals', null, \{ q: nodeEvalQuery\(address\.nodeId\) \}\)/)
-  const reviewQuery = read('reviewQuery.js')
+  const reviewQuery = readFileSync(join(here, '../../packages/spec-core/src/review/reviewQuery.js'), 'utf8')
   assert.match(reviewQuery, /export const nodeEvalQuery = \(nodeId\) => setToken\(EVAL_QUERY_DEFAULT, 'node', nodeId\)/)
   for (const source of [nodeView, score]) {
     assert.doesNotMatch(source, /#\/evals\?/, 'no hand-rolled evals-list hash outside address.js')

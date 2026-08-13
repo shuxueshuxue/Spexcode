@@ -94,11 +94,13 @@ workflow on its own.
 When you want the live board (the graph, sessions, evals), start the runtime:
 
 ```sh
+npm i -g @spexcode/spec-dashboard # install the optional UI package once
 spex serve       # this project's backend — prints its URL
 spex dashboard   # the machine's one gateway — every project behind one URL
 ```
 
-One `spex dashboard` per machine is enough: every project you serve shows up behind it, and its
+The dashboard is a separate package so writing-only installs do not carry frontend build output. One `spex dashboard`
+per machine is enough: every project you serve shows up behind it, and its
 `/projects` page manages them from the browser.
 [Getting started](https://spexcode.net/getting-started/) walks the rest of the setup.
 

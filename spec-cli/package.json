@@ -2,34 +2,42 @@
   "name": "@spexcode/spec-cli",
   "version": "0.6.2",
   "type": "module",
-  "description": "SpexCode CLI + server — INTERNAL monorepo package. The published npm unit is `spexcode` at the repo ROOT (it ships this package's src plus the sibling spec-eval/spec-forge src and the dashboard dist, preserving the layout so the cross-package ../../spec-* imports resolve). See .spec/spexcode/spec-cli/packaging.",
+  "description": "SpexCode CLI + server. The root spexcode package delegates to this compiled package; dashboard assets live in @spexcode/spec-dashboard.",
   "bin": {
     "spex": "bin/spex.mjs"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./ranker": "./src/ranker.ts",
-    "./eval-host": "./src/eval-host.ts"
+    ".": "./dist/index.js",
+    "./bin/spex.mjs": "./bin/spex.mjs",
+    "./ranker": "./dist/ranker.js",
+    "./eval-host": "./dist/eval-host.js",
+    "./package.json": "./package.json"
   },
+  "files": [
+    "bin",
+    "dist",
+    "templates",
+    "hooks"
+  ],
+  "bundledDependencies": [
+    "@spexcode/spec-core",
+    "@spexcode/spec-eval",
+    "@spexcode/spec-forge"
+  ],
   "scripts": {
-    "serve": "node bin/spex.mjs serve",
-    "lint": "tsx src/cli.ts spec lint",
+    "build": "node ../scripts/build-dist.mjs",
+    "serve": "npm run build && node bin/spex.mjs serve",
+    "lint": "npm run build && node bin/spex.mjs spec lint",
     "test": "tsx --import ../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {
-    "@spexcode/spec-core": "file:../packages/spec-core",
-    "@spexcode/spec-eval": "file:../spec-eval",
-    "@spexcode/spec-forge": "file:../spec-forge",
-    "tsx": "^4.19.2"
-  },
-  "optionalDependencies": {
-    "@hono/node-server": "^1.13.7",
-    "@hono/node-ws": "^1.0.4",
-    "hono": "^4.6.14",
-    "node-pty": "1.2.0-beta.14"
+    "@spexcode/spec-core": "0.6.4",
+    "@spexcode/spec-eval": "0.0.0",
+    "@spexcode/spec-forge": "0.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }
 }

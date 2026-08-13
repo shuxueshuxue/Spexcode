@@ -65,11 +65,12 @@ spex init --harness claude,codex,opencode,pi,zcode,claude-headless,opencode-head
 需要看板(图谱、session、eval)时,再启动运行时:
 
 ```sh
+npm i -g @spexcode/spec-dashboard # 单独安装可选 UI 包（只需一次）
 spex serve       # 本项目的后端,打印它的 URL
 spex dashboard   # 本机唯一的 gateway,所有项目共用一个 URL
 ```
 
-一台机器起一个 `spex dashboard` 就够了:所有在跑的项目都会出现在它下面,`/projects` 页面直接在浏览器里管理它们。剩下的步骤见 [Getting started](https://spexcode.net/getting-started/)。
+dashboard 是单独的包,所以只写作的安装不会带前端构建产物。一台机器起一个 `spex dashboard` 就够了:所有在跑的项目都会出现在它下面,`/projects` 页面直接在浏览器里管理它们。剩下的步骤见 [Getting started](https://spexcode.net/getting-started/)。
 
 ## 这套系统是怎么工作的
 

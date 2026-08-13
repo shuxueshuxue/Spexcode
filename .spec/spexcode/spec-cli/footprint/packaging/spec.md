@@ -2,39 +2,41 @@
 title: packaging
 status: active
 hue: 280
-desc: SpexCode installs as one npm package (`npm i -g spexcode` → `spex`); the tarball is the monorepo's runtime subset with the layout preserved, and the natural post-install startup is two commands on two ports.
+desc: SpexCode's root metapackage launches compiled package artifacts; dashboard assets stay in their owning optional package.
 code:
   - scripts/prepack.mjs
 related:
-  - packages/spec-core/package.json
-  - packages/spec-core/src/index.ts
-  - packages/spec-core/src/review/index.js
-  - packages/spec-core/src/identity-presets.js
-  - spec-cli/src/cli.ts
   - package.json
-  - package-lock.json
   - spec-cli/package.json
-  - spec-cli/package-lock.json
+  - spec-eval/package.json
+  - spec-forge/package.json
+  - packages/spec-core/package.json
+  - spec-cli/src/cli.ts
   - spec-cli/bin/spex.mjs
-  - spec-cli/src/tsx-bin.ts
-  - spec-cli/src/launcher-tsx.test.ts
   - spec-cli/src/node-pty-package.test.ts
 ---
 # packaging
 
-SpexCode's installation contract is a single installable npm package named `spexcode`: users install only
-that package, and its child packages distribute inside it. `@spexcode/spec-core` is also published separately
-for external projects to depend on directly. `npm i -g spexcode` puts **one** command on PATH — `spex` — and
-nothing else the user must wire. Installing `spexcode` requires Node >= 22. The package carries everything the
-tool needs on a machine that has never seen the source: the CLI, its `spex init` templates, the git/harness
-hooks, and the **prebuilt** dashboard. There is no build step on the user's machine — the launcher runs the
-TypeScript directly through tsx (a real dependency, not a dev-only tool), the dogfood's no-build stance.
+SpexCode's default installation contract is a single installable npm package named `spexcode`: `npm i -g
+spexcode` puts **one** command on PATH — `spex` — and nothing else the user must wire. Installing it requires
+Node >= 22. The root is a thin metapackage: its `files` list contains only its bin (npm includes the README
+automatically), and declared dependencies select the compiled CLI closure. It does not repeat a hand-maintained
+list of child package directories. `@spexcode/spec-core` remains separately published for external projects to
+depend on directly.
+
+Every runtime package ships its own `dist` and exports JavaScript from that directory. Package builds emit a
+fresh sibling tree and replace `dist` only after the compile succeeds, so development readers never observe a
+partially written artifact. TypeScript, tsx, Vite,
+and esbuild are development/build tools only; an installed user never compiles SpexCode and does not carry
+tsx or esbuild in the default install closure. The CLI package carries its templates and hooks as runtime
+assets beside `dist`. Its launcher and all internal self-spawns run compiled entries through Node, so no
+published callback reaches a `src/*.ts` path.
 The full TypeScript compiler is deliberately not runtime cargo: it remains a development dependency for
 SpexCode's own typecheck and JS anchors, while an adopter's optional JS-anchor extractor resolves that
 adopter's TypeScript and fails loud when it is absent ([[code-anchor]]).
 
 **L0 is the adoption floor, not a daemon fallback.** `spex spec lint`, `spex graph`, `spex materialize`,
-`spex init`, and `spex guide` need only Node and the ordinary `tsx` dependency, so a clean source checkout
+`spex init`, and `spex guide` need only Node and the compiled default CLI closure, so a clean install
 after `npm install --omit=optional` can start and use the spec/code asset without Hono or a native addon.
 `hono`, `@hono/node-server`, `@hono/node-ws`, and `node-pty` belong to the optional daemon tier only. A
 `spex serve` or `spex dashboard` without any required daemon package refuses before importing daemon code:
@@ -44,21 +46,16 @@ that also uses `--ignore-scripts` suppresses esbuild's own platform-binary repai
 installs the matching `@esbuild/<platform>-<arch>` package with `--no-save --no-package-lock`; that is test
 scaffolding only, not an extra normal-adopter step.
 
-The installable unit remains the **monorepo root**, now with one real workspace package: `@spexcode/spec-core`.
-Its source lives at `packages/spec-core/src`; the root manifest declares `packages/*`, `spec-cli`, `spec-eval`, and
-`spec-forge` as workspaces, depends on the local L0 package, and ships `packages/spec-core` in its explicit `files`
-allowlist. `@spexcode/spec-core` has four deliberately narrow package exports. `.` is the Node-side core entry and
+The repository holds five real workspace packages: `@spexcode/spec-core`, `@spexcode/spec-eval`,
+`@spexcode/spec-forge`, `@spexcode/spec-cli`, and `@spexcode/spec-dashboard`. Their manifests name their real
+package dependencies by release version; local workspace resolution is a development convenience, not a
+published `file:` contract. `@spexcode/spec-core` has four deliberately narrow package exports. `.` is the Node-side core entry and
 owns the root-explicit `readSpecs(root)` reader. `./review` is the browser-safe review domain only: its
 filter, query, and session presentation functions have no Node, React, store, endpoint, or service
 dependency. `./identity` is the same kind of browser-safe identity registry shared by validation and
 rendering. `./graph-delta` is the browser-safe unit algebra, with no `node:*` dependency in its entire
 module graph. The dashboard imports only those named pure-domain entries; it never imports `.` and therefore
-cannot pull Node-only graph/store modules into Vite. No source-file subpaths are exported. The package is
-intentionally not `private`, so this workspace has the same npm resolution boundary an adopter receives;
-this refactor does not publish it or prepare any registry action. The private `spec-cli` manifest also
-declares the same local core package and locks that link: its direct imports must resolve after
-`cd spec-cli && npm ci` replaces the package tree. That install boundary cannot depend on a root-workspace
-hoist surviving a second, package-local installation.
+cannot pull Node-only graph/store modules into Vite. No source-file subpaths are exported.
 
 The `files` allowlist is also where this repository's own boundary is settled, so it is worth stating beside
 it: the repo holds the product — the mechanism, the policy it enforces, and the tests and specs holding both
@@ -73,37 +70,20 @@ host means the boundary was drawn in the wrong place. This rule deliberately doe
 contract: [[plugin-system]] keeps this repo's `.plugins` in parity with the adopter seed, so a note that only
 governs this repository cannot go there without spending every adopted project's context on it.
 
-The root tarball otherwise preserves the runtime layout: `spec-cli/{src,bin,templates,hooks}`, the siblings
-`spec-eval/src` and `spec-forge/src`, and the dashboard builds `spec-dashboard/dist` and
-`spec-dashboard/dist-public`. There are **two** dashboard builds because graph-only mode is baked in at build
-time, so the full dashboard cannot double as the read-only shell [[flat]] copies beside a flat's payload —
-ship only `dist` and `spex flat site` works in a source checkout and nowhere else, telling an installed user
-to run a build script they do not have. The dists are the shipped artifacts not in git, so they are built
-by the **`prepack`** lifecycle hook — the point npm runs *whenever it builds a tarball*, on both `npm pack`
-and `npm publish` (but never on a plain `npm install`). That makes tarball-completeness the contract of
-*producing a tarball at all*, not a publish-only afterthought: pack and publish emit the identical complete
-package, and `npm pack` self-corrects a stale or missing dist instead of silently shipping one. The remaining
-spec-cli, spec-eval, and spec-forge cross-imports retain their in-package relative layout; L0 is the explicit
-exception and resolves through declared root and CLI package dependencies. The bin and all entry source stay under
-`spec-cli/src`, so each module's `pkgRoot` still lands
-at `spec-cli/` and its asset lookups (templates, hooks, dist) are unchanged. The one thing that moves is
-tsx: spec-cli is now a subdir, and a real npm install may hoist the dependency outside the `spexcode`
-package into the consuming project's `node_modules`. So the launcher and every baked `tsx + cli.ts`
-callback resolve it by one shared rule: use Node's own package resolver from `spec-cli` to find tsx's JS
-entry (`tsx/dist/cli.mjs`), then run it through the current Node binary (`process.execPath`). That covers the
-dev monorepo, a global install, and a project-local install without hardcoded consumer paths — and stays
-cross-platform ([[platform-support]]): it never spawns the `.bin/tsx` shim (an extensionless sh script
-`child_process.spawn` cannot execute on Windows) nor a `.mjs` by its shebang, the crash that broke
-`spex init` on native Windows. The repo-root
-`README.md` ships too, so the npm page reads the same as GitHub. The internal `spec-cli` package stays
-private — the one public name belongs to the tool a user installs.
+`@spexcode/spec-dashboard` is a leaf and deliberately outside the root's default closure. It publishes two
+prebuilt assets, `dist` and `dist-public`, because graph-only mode is baked at build time and [[flat]] needs
+the latter without a frontend build tool. A person who wants UI installs it explicitly with
+`npm install @spexcode/spec-dashboard`; a person who does not gets a smaller, fully usable writing surface.
+The dashboard's own `prepack` produces both artifacts, and its tarball contains neither frontend source nor
+Vite/esbuild. The CLI discovers both assets by resolving the dashboard package manifest, not by walking to a
+sibling directory. An absent package fails before a UI process binds, naming that exact installation command;
+an incomplete package fails with its missing artifact and a repair. It never hides commands, crashes with a
+resolution stack, or serves an empty page.
 
-The launcher also owns the earliest process-identity boundary for project/host control planes. Before loading
-tsx for `serve` or `dashboard`, it removes the invoking session's adapter-declared identity variables from the
-child environment; doing so later in `cli.ts` would leave tsx's already-spawned compiler helper falsely owned
-by that session. Both the installed `spex serve` and the source tree's canonical `npm run api` / private
-`npm run serve` route through this same launcher; no supported package script invokes `tsx src/cli.ts serve`
-directly. Ordinary session/read/write verbs keep their identity unchanged.
+The launcher also owns the earliest process-identity boundary for project/host control planes. Before running
+the compiled CLI for `serve` or `dashboard`, it removes the invoking session's adapter-declared identity
+variables from the child environment. Both installed `spex serve` and the source tree's canonical `npm run api`
+route through this launcher. Ordinary session/read/write verbs keep their identity unchanged.
 
 Release identity advances in lockstep across the public root manifest and the private `spec-cli` manifest,
 with each lockfile's root package metadata matching its manifest. The private manifest carries the same
@@ -138,16 +118,12 @@ silently collides two projects. (The pairing is the *explicit* multi-project sto
 one `spex dashboard` reaching every backend the user runs — is [[host-gateway]]'s contract.)
 
 `spex serve ui` shares the serve-the-built-dashboard engine with [[public-mode]] — local serve is that
-same gateway with no TLS and no password, on loopback unless `--host` widens it. The dogfood monorepo is unaffected: its root keeps
-the `npm run api`/`npm run web` dev loop, and the dist resolver falls back to the sibling
-`spec-dashboard/dist` whenever no bundled copy is present. Those root scripts delegate into a sibling
-package with `cd spec-cli && npm run …`, never `npm --prefix spec-cli run …`: npm's `--prefix` is
-overloaded — it also sets the **global install prefix**, which npm exports as `npm_config_prefix` to the
-backend and every agent it launches, silently redirecting those agents' own `npm i -g` self-updates into the
-repo tree instead of the real global root.
+same gateway with no TLS and no password, on loopback unless `--host` widens it. The dogfood monorepo keeps
+`npm run api` and `npm run web` as development loops, but those are not a requirement imposed on an adopter.
 
-The packaging contract is verified as the user would meet it, not by inspecting files: CI builds the tarball,
-installs that tarball into a clean consumer project, runs `npx spex --help`, `spex --version`, and
-`spex graph --json`, then runs `spex init` inside a fresh git repo and checks that the seed `.spec` tree and
-`spexcode.json` landed. A tarball that contains the right files but cannot start from an npm install is a
-packaging failure.
+The packaging contract is verified as the user would meet it, not by inspecting files: CI builds the root and
+dashboard tarballs, installs the root into a clean consumer project, runs `spex --help`, `spex --version`,
+and `spex graph --json`, then runs `spex init` inside a fresh git repo. It proves the L0 verbs work without the
+dashboard, proves `spex serve ui` fails with the dashboard install command in that state, then installs the
+dashboard tarball and proves `spex serve ui`, `spex dashboard`, and `spex flat site` use its own static assets.
+A tarball that contains the right files but cannot start from an npm install is a packaging failure.

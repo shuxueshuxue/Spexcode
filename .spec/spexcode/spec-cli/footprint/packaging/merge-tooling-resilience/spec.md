@@ -28,11 +28,15 @@ Two rules make the tooling survive it:
 - **One entry.** Every spex invocation goes through the launcher (`spec-cli/bin/spex.mjs`) - the PATH bin,
   the hook-baked `SPEX` (materialize + the codex launch script), and the git-hook fallbacks alike. Nothing
   bakes a raw source entry: the launcher owns compiled execution and this guard, so every caller inherits both.
-- **Graceful degradation, explicit code.** When `spec-cli/src` exists, the launcher scans the source trees the
-  CLI imports (spec-cli <- spec-eval <- spec-forge) for conflict markers. If any file carries one, it prints a
-  single actionable message naming the conflicted file(s) - "resolve the merge, rebuild SpexCode, then retry" -
-  and exits **75** (EX_TEMPFAIL: transient, retry later). A published package has no source tree to scan and
-  executes its shipped `dist` directly.
+  In a source workspace it also builds the complete runtime closure whenever its emitted entries are absent or
+  older than source, before it runs a hook against candidate source. The `dist` directories are deliberately
+  untracked, so a clean checkout must be able to take this path; a published package has no source tree and
+  therefore never builds at runtime.
+- **Graceful degradation, explicit code.** When `spec-cli/src` exists, the launcher scans the source trees in
+  its runtime closure (spec-cli, spec-core, spec-eval, and spec-forge) for conflict markers. If any file carries
+  one, it prints a single actionable message naming the conflicted file(s) - "resolve the merge, rebuild
+  SpexCode, then retry" - and exits **75** (EX_TEMPFAIL: transient, retry later). A published package has no
+  source tree to scan and executes its shipped `dist` directly.
 
 The launcher is also the process-identity boundary for project and host control planes. For `serve` and
 `dashboard` it removes adapter-declared session identity variables before starting the compiled CLI, including the

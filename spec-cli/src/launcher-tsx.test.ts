@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
@@ -20,6 +20,38 @@ test('the launcher actually runs a compiled CLI command through node', () => {
   // An offline read-only command proves the release launcher starts the emitted CLI end to end.
   const out = execFileSync(process.execPath, [LAUNCHER, 'help'], { encoding: 'utf8' })
   assert.match(out, /SpexCode CLI/)
+})
+
+test('a source workspace launcher builds its missing runtime closure before it invokes it', () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-source-launcher-'))
+  const launcher = join(root, 'spec-cli', 'bin', 'spex.mjs')
+  try {
+    mkdirSync(join(root, 'spec-cli', 'bin'), { recursive: true })
+    mkdirSync(join(root, 'spec-cli', 'src'), { recursive: true })
+    copyFileSync(LAUNCHER, launcher)
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ scripts: { build: 'node build.mjs' } }))
+    writeFileSync(join(root, 'build.mjs'), `
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+const outputs = [
+  'spec-cli/dist/cli.js',
+  'packages/spec-core/dist/index.js',
+  'spec-eval/dist/index.js',
+  'spec-forge/dist/index.js',
+]
+for (const output of outputs) {
+  const path = join(process.cwd(), output)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, output === 'spec-cli/dist/cli.js' ? 'console.log("compiled source workspace")\\n' : 'export {}\\n')
+}
+`)
+
+    const out = execFileSync(process.execPath, [launcher, 'help'], { cwd: root, encoding: 'utf8' })
+    assert.match(out, /compiled source workspace/)
+    assert.ok(existsSync(join(root, 'spec-cli', 'dist', 'cli.js')))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('the launcher spawns process.execPath against its compiled CLI, not a TypeScript loader', () => {

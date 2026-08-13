@@ -4,6 +4,12 @@ status: active
 session: 861e8ed1-064b-489e-b623-ff79dac86dc1
 hue: 140
 desc: eval is the evaluation in spec=loss / commits=optimizer — a spec carries how to measure its loss, the agent measures it, eval keeps score and flags stale.
+code:
+  - spec-eval/src/index.ts
+related:
+  - spec-eval/src/host.ts
+  - spec-eval/src/remarks.ts
+  - spec-eval/src/ui-path.ts
 ---
 # spec-eval
 
@@ -11,6 +17,24 @@ The third SpexCode package, with [[spec-cli]], [[spec-dashboard]], and [[spec-fo
 one optimization: **a spec is a loss-function design** (what we want), **issues/commits are the
 optimizer** (driving the code toward it), and **eval is the evaluation** — the measured loss, how far
 live behavior sits from the spec.
+
+This directory is a real package named `@spexcode/spec-eval`. Its public entrypoints are the eval engine,
+timeline, scenarios, and host port. It depends explicitly on `@spexcode/spec-core` and never imports the CLI:
+session review identity/payload, remark tracks, source policy, and trunk-commit transport arrive through the
+host port installed by spec-cli. That direction is intentional: these values are CLI context, not reusable
+eval concepts, so the cycle is broken by passing the context rather than copying its implementation.
+
+The host contract fails loudly by capability: session review identity/payload are required by session-eval;
+the CLI commands require the specific `loadConfig`, `trackedSourceFiles`, `stripRefSigil`, `apiBase`, or
+`commitTrunkData` capability they invoke. A standalone eval engine may omit the remark-track loader: it then
+uses an intentionally empty remark map, while scenario declarations, readings, freshness, scores, and content
+revision remain valid; remark replies, dangling-remark state, and remark-derived review context are unavailable.
+The raw issues bytes are still included in the content fingerprint without copying the CLI's parser. No other
+host field has a silent fallback.
+
+The package entry is part of that boundary: `index.ts` exposes the public eval surface. The host port, remark
+record shapes, and frontend-proof classifier have their own focused governance nodes so each defining file has
+one drift owner.
 
 ## A spec carries how to measure its loss
 

@@ -1,11 +1,21 @@
 {
   "name": "@spexcode/spec-forge",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./port": "./src/port.ts",
+    "./links": "./src/links.ts",
+    "./drivers": "./src/drivers.ts",
+    "./resident": "./src/resident.ts",
+    "./cli": "./src/cli.ts"
+  },
   "description": "Host-agnostic forge link tracer — reads a forge's open issues/PRs and resolves each to the spec node it serves (issue-body `Spec: <id>` marker + `node/<id>` PR branch). Read-only; a node's status stays git-derived.",
   "scripts": {
     "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@spexcode/spec-core": "file:../packages/spec-core"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

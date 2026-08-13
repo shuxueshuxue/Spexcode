@@ -1,42 +1,20 @@
-import type { ForgeIssue, ForgeLabel, ForgePR } from '../../spec-forge/src/port.js'
-import { resolveLinks } from '../../spec-forge/src/links.js'
-import { FORGE_DRIVERS, forgeDriverFor, forgeIssueStores, resolveForgeHost } from '../../spec-forge/src/drivers.js'
+import type { ForgeIssue, ForgeLabel, ForgePR } from '@spexcode/spec-forge/port'
+import { resolveLinks } from '@spexcode/spec-forge/links'
+import { FORGE_DRIVERS, forgeDriverFor, forgeIssueStores, resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { closeLocalIssue, loadLocalIssues, loadOne, postLocalIssue, reply, issuesEnabled, replyLocalIssue, parseEvalConcern } from './localIssues.js'
 import { dispatchNewMentions, parseMentions, type DispatchOutcome, type LoopIn } from './mentions.js'
 import { envSessionId } from '@spexcode/spec-core'
 import { loadSpecsLite } from '@spexcode/spec-core'
+import type { Reply, Issue, RemarkTrack } from '@spexcode/spec-eval/remarks'
+export type { Reply, Issue } from '@spexcode/spec-eval/remarks'
 
 // A Reply is a plain thread post `{by, at, body}` — OR, when it carries the fields below, a REMARK
 // ([[remark-substrate]]): a reply that pins a RESOLVABLE concern to its host (an issue or a scenario). A
 // remark is not a new record type: it is a reply with the mutable `resolved` bit, a stable `rid` (so it is
 // addressable across retracts), and the `targetCodeSha` it was authored against (the reading it judges). A
 // plain reply omits them all and parses/serializes unchanged (backward compatible). `isRemark` = rid set.
-export type Reply = {
-  by: string
-  at: string
-  body: string
-  rid?: string            // stable per-remark id; a reply is a remark iff this is set. Ref: `<thread-id>#<rid>`
-  targetCodeSha?: string  // the reading/codeSha the remark was authored against (worktree HEAD by default)
-  resolved?: boolean      // the ONE mutable teeth bit — false at author, true after a deliberate `spex remark resolve`
-  resolvedAt?: string
-  resolvedBy?: string
-}
 export const isRemark = (r: Reply): boolean => r.rid !== undefined
 export type IssueLabel = ForgeLabel
-export type Issue = {
-  id: string
-  store: string      // 'local' | a forge host ('github') — the adapter that holds it
-  concern: string
-  by: string
-  status: string     // its own lifecycle: local open|landed; forge open|closed
-  nodes: string[]
-  created: string
-  body: string
-  replies: Reply[]
-  evidence: string[] // content-addressed evidence hashes — the typed cross-node finding reference
-  labels: IssueLabel[] // platform-supplied display metadata; local threads carry none
-  url?: string       // a forge permalink; a local issue has none
-}
 
 export type ForgeState = { issues: ForgeIssue[]; prs: ForgePR[] }
 export type ForgeSlice = { host: string; state: ForgeState }
@@ -68,7 +46,6 @@ function forgeIssueBody(concern: string, body: string | undefined, nodes: string
 // annotator all read ONE join. It returns, per pair, the thread plus its REMARK replies (the resolvable
 // ones — a plain comment on the thread is not a remark). The teeth ([[remark-teeth]]) read the remark
 // signals; the annotator reads the thread.
-export type RemarkTrack = { threadId: string; node: string; scenario: string; thread: Issue; remarks: Reply[] }
 
 // `eval: <node> · <scenario>` — node first (never contains ' · '), then the scenario (may). One thread per
 // pair (EventDetail.jsx evalConcern / localIssues.ts resolveRemarkHost mint it), so the last write wins is fine.

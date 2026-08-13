@@ -4,8 +4,16 @@ status: active
 session: 3def572e
 hue: 280
 desc: A forge link tracer — reads a forge's open issues/PRs and resolves each to the spec node it serves (issue-body marker + node/<id> PR branch). Read-only; a node's status stays git-derived.
+code:
+  - spec-forge/src/index.ts
 ---
 # spec-forge
+
+This directory is the real `@spexcode/spec-forge` package. Its forge port, links, drivers, resident cache,
+and CLI entrypoints are exported explicitly and its only internal package dependency is the single shared
+`@spexcode/spec-core` source.
+The package entry in `src/index.ts` is governed with this boundary so the exported surface cannot drift without
+coverage.
 
 A sibling package (alongside spec-cli, spec-dashboard, spec-eval) that relates an external **forge**'s
 work objects to the spec graph. The two are different *kinds* of thing on different axes: a spec node

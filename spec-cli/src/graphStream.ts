@@ -12,7 +12,7 @@ import {
   releaseSessionEvalProjectionObserver,
   setSessionEvalProjectionNotify,
   setSessionEvalProjectionWarmup,
-} from '../../spec-eval/src/sessioneval.js'
+} from '@spexcode/spec-eval/sessioneval'
 
 type Scope = 'sessions' | 'full'
 type EvalTarget = 'all' | { id?: string; path?: string }

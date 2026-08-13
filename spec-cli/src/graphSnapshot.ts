@@ -2,13 +2,13 @@ import { loadSpecs } from '@spexcode/spec-core'
 import { resolveLayout } from '@spexcode/spec-core'
 import { listSessions } from './sessions.js'
 import { driftIndex, historyIndex, repoRoot } from '@spexcode/spec-core'
-import { residentForgeRevision, residentForgeState } from '../../spec-forge/src/resident.js'
-import { resolveForgeHost } from '../../spec-forge/src/drivers.js'
+import { residentForgeRevision, residentForgeState } from '@spexcode/spec-forge/resident'
+import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
 import { boardThreads } from './issues.js'
 import { buildBoard as assembleBoard, spliceSessions as spliceBoardSessions, type BoardSnapshot } from '@spexcode/spec-core'
-import { evalContext, evalTimelines } from '../../spec-eval/src/evaltab.js'
-import { evalNodesAsync } from '../../spec-eval/src/scenarios.js'
-import { sessionEvalProjections } from '../../spec-eval/src/sessioneval.js'
+import { evalContext, evalTimelines } from '@spexcode/spec-eval/evaltab'
+import { evalNodesAsync } from '@spexcode/spec-eval/scenarios'
+import { sessionEvalProjections } from '@spexcode/spec-eval/sessioneval'
 
 // The application adapter is the sole reader of runtime/forge state. graph.ts only receives this result.
 export async function boardSnapshot(): Promise<BoardSnapshot> {

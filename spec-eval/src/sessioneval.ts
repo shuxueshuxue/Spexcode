@@ -22,8 +22,6 @@ import {
 import { touchRoot } from '@spexcode/spec-core'
 import { loadSpecs } from '@spexcode/spec-core'
 import { mainBranch } from '@spexcode/spec-core'
-import { reviewIdentity, reviewPayload, type ReviewIdentity } from '../../spec-cli/src/sessions.js'
-import { loadEvalRemarkTracks } from '../../spec-cli/src/issues.js'
 import {
   anchorHitCommits,
   diffHunkRanges,
@@ -40,9 +38,22 @@ import {
   type Unit,
 } from '@spexcode/spec-core'
 import { evalTimelines, evalContext, readBlobByHash, type EvalEntry, type EvalTimeline, type ScenarioInfo } from './evaltab.js'
-import { isUiPath } from './cli.js'
+import { isUiPath } from './ui-path.js'
 import { readReadings } from './sidecar.js'
 import { parseScenarios, scenarioCodeAxis, scenarioHash, type Scenario } from './scenarios.js'
+import { evalRemarkSourceFingerprint, evalRemarkTracks, type ReviewIdentity, type ReviewPayload, type EvalHostPort } from './host.js'
+export type { EvalHostPort } from './host.js'
+
+let sessionEvalHostValue: EvalHostPort | null = null
+export function setSessionEvalHost(next: EvalHostPort): void {
+  if (typeof next?.reviewIdentity !== 'function') throw new SessionEvalUnavailableError('spec-eval host is not configured: reviewIdentity')
+  if (typeof next?.reviewPayload !== 'function') throw new SessionEvalUnavailableError('spec-eval host is not configured: reviewPayload')
+  sessionEvalHostValue = next
+}
+export function sessionEvalHost(): EvalHostPort {
+  if (!sessionEvalHostValue) throw new SessionEvalUnavailableError('spec-eval host is not configured')
+  return sessionEvalHostValue
+}
 
 // ---- the model ----
 
@@ -800,7 +811,7 @@ export type ExportModel = {
 
 // null when no session has that id (route → 404).
 export async function buildExportModel(id: string): Promise<ExportModel | null> {
-  const identity = reviewIdentity(id)
+  const identity = sessionEvalHost().reviewIdentity(id)
   if (!identity) return null
   // root EVERYTHING at the SESSION's worktree — readings, freshness, AND the spec tree itself. The
   // worktree's .spec is the branch's pending proposal ([[source-of-truth]]): a node the branch ADDED
@@ -809,7 +820,7 @@ export async function buildExportModel(id: string): Promise<ExportModel | null> 
   const wtPath = worktreePathForBranch(identity.branch)
   const ctxRoot = wtPath ?? repoRoot()
   return withEventLedgerDemand(ctxRoot, async () => {
-    const payload = await reviewPayload(id)
+    const payload = await sessionEvalHost().reviewPayload(id)
     return payload
       ? withEventLedgerBuild(ctxRoot, () => buildExportModelInLedger(id, payload, wtPath, ctxRoot))
       : null
@@ -907,7 +918,7 @@ async function buildExportModelInLedger(id: string, payload: ReviewPayloadValue,
 }
 
 // the gate checklist, derived from the cockpit payload's gates (the SAME numbers `spex session review` prints).
-function gateRows(p: NonNullable<Awaited<ReturnType<typeof reviewPayload>>>): ExportGate[] {
+function gateRows(p: ReviewPayload): ExportGate[] {
   const g = p.gates
   return [
     { label: 'lint', ok: g.lint.errorCount === 0, detail: `${g.lint.errorCount} error(s), ${g.lint.warningCount} warning(s)` },
@@ -1619,7 +1630,7 @@ async function sessionImpactForContext(
   return { impact, shas }
 }
 
-type ReviewPayloadValue = NonNullable<Awaited<ReturnType<typeof reviewPayload>>>
+type ReviewPayloadValue = NonNullable<ReviewPayload>
 type SessionEvalModel = Omit<SessionEvals, 'summary' | 'evalRevision'>
 
 async function buildSessionEvalModel(
@@ -1727,11 +1738,11 @@ export async function sessionEvalContentRevision(wtPath: string): Promise<string
       return `${path}\0<gone>`
     }
   }))
-  const remarks = [...loadEvalRemarkTracks()]
+  const remarks = [...evalRemarkTracks()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, track]) => [key, track.thread])
   return createHash('sha256')
-    .update([mainSha, headSha, mergeBase, status, dirtyDiff, ...untracked, JSON.stringify(remarks)].join('\0'))
+    .update([mainSha, headSha, mergeBase, status, dirtyDiff, ...untracked, JSON.stringify(remarks), evalRemarkSourceFingerprint()].join('\0'))
     .digest('hex')
 }
 
@@ -2075,7 +2086,7 @@ export class SessionEvalProjectionCache {
 }
 
 async function buildSummaryAttempt(id: string, _path: string): Promise<SummaryBuildResult> {
-  const identity = reviewIdentity(id)
+  const identity = sessionEvalHost().reviewIdentity(id)
   if (!identity) return { kind: 'missing' }
   const wtPath = worktreePathForBranch(identity.branch)
   const ctxPath = wtPath ?? repoRoot()
@@ -2162,7 +2173,7 @@ export async function awaitSessionEvalProjectionIdle(): Promise<void> { await pr
 export async function buildSessionEvals(id: string, pick?: SessionEvalFocus): Promise<SessionEvals | null> {
   // A full model is demand-only. It joins its session's current summary flight, but unrelated summaries never
   // gate this demand; a cached stable cut then replays without re-deriving Git state.
-  const identity = reviewIdentity(id)
+  const identity = sessionEvalHost().reviewIdentity(id)
   if (!identity) return null
   const wtPath = worktreePathForBranch(identity.branch)
   const ctxPath = wtPath ?? repoRoot()

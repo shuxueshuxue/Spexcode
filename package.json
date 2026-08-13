@@ -11,7 +11,8 @@
     "packages/*",
     "spec-cli",
     "spec-eval",
-    "spec-forge"
+    "spec-forge",
+    "spec-dashboard"
   ],
   "files": [
     "packages/spec-core",

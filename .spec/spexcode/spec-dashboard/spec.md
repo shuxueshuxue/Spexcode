@@ -9,6 +9,10 @@ code:
 ---
 # spec-dashboard
 
+The dashboard is the `@spexcode/spec-dashboard` package. It declares its `@spexcode/spec-core` and
+`@spexcode/spec-cli` dependencies explicitly; search ranking is consumed from the CLI package's public
+`ranker` export rather than reaching across directories.
+
 One of three SpexCode packages (alongside spec-cli and spec-eval). The front end: a
 node-graph where every node is a spec, navigated by logic. It reads `main` (the ground
 truth) and overlays in-progress worktrees; each version change is attributed to a

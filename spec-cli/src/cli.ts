@@ -3,6 +3,8 @@ export {} // make this a module so top-level await is allowed
 // by several verbs (spec owner, graph, issue/eval node args) — a CLI reference arg tolerates an optional @/[[ ]]
 // sigil ([[mentions]]).
 import { stripRefSigil } from './mentions.js'
+import { installEvalHost } from './eval-host.js'
+installEvalHost()
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 const cmd = process.argv[2]
@@ -573,7 +575,7 @@ if (cmd === 'serve') {
       // asserted: a message that enumerates one axis cannot report what the other holds. The empty
       // nodeCode fallback is exact HERE and only here — reaching this branch means no spec node code:-claims
       // the file, so no scenario can anchor to it by inheriting its node's claim, only by an explicit one.
-      const { evalNodes, scenarioCodeAxis } = await import('../../spec-eval/src/scenarios.js')
+      const { evalNodes, scenarioCodeAxis } = await import('@spexcode/spec-eval/scenarios')
       const anchored: string[] = []
       for (const n of evalNodes(process.cwd())) {
         for (const sc of n.scenarios) {
@@ -693,7 +695,7 @@ if (cmd === 'serve') {
     }
   } else if (['add', 'ls', 'scenario', 'lint', 'ok', 'retract', 'clean'].includes(sub)) {
     // node-scoped verbs — thin route; the logic lives in spec-eval.
-    const { runEval } = await import('../../spec-eval/src/cli.js')
+    const { runEval } = await import('@spexcode/spec-eval/cli')
     await flushExit(await runEval(process.argv.slice(3)))
   } else {
     console.error(`spex eval: unknown verb '${sub}' — add | ls | scenario ls/write | lint | ok | retract | clean  (spex help eval)`)
@@ -704,7 +706,7 @@ if (cmd === 'serve') {
   if (process.argv[3] === undefined) {
     console.log((await import('./help.js')).commandHelp('evidence'))
   } else {
-    const { runEvidence } = await import('../../spec-eval/src/cli.js')
+    const { runEvidence } = await import('@spexcode/spec-eval/cli')
     await flushExit(await runEvidence(process.argv.slice(3)))
   }
 } else if (cmd === 'issue') {
@@ -1396,7 +1398,7 @@ if (cmd === 'serve') {
   } else if (sub === 'check-staged') {
     // the pre-commit hook's eval backstop: a staged stray evidence blob or malformed eval.md rejects the
     // commit. Logic lives in spec-eval; the hook shims here.
-    const { checkStaged } = await import('../../spec-eval/src/cli.js')
+    const { checkStaged } = await import('@spexcode/spec-eval/cli')
     process.exit(checkStaged())
   } else if (sub === 'session-state') {
     // a lifecycle hook authors the session's state: active|awaiting|parked|error|asking

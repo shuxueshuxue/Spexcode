@@ -7,6 +7,8 @@ desc: The server + CLI — reads .spec and git, serves the API, and houses the s
 code:
   - spec-cli/src/index.ts
 related:
+  - spec-cli/src/eval-host.ts
+related:
   - spec-cli/src/reaper.ts
   - spec-cli/src/reaper.test.ts
   - spec-cli/src/supervise.ts
@@ -15,6 +17,12 @@ related:
   - spec-cli/src/guidance-catalog.ts
 ---
 # spec-cli
+
+The backend package is `@spexcode/spec-cli`; its declared dependencies are `@spexcode/spec-core`,
+`@spexcode/spec-eval`, and `@spexcode/spec-forge`. It is the composition boundary that installs spec-eval's
+host port with the session, issue, source-policy, and transport implementations.
+`eval-host.ts` is that one-way composition seam: it installs the concrete CLI capabilities at startup and does
+not duplicate the eval engine or its remark types. Its defining contract has a focused governance node.
 
 ## raw source
 

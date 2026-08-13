@@ -6,11 +6,9 @@ import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// @@@ mid-merge guard ([[merge-tooling-resilience]]) - the launcher must refuse to spawn tsx into a source
-// tree that holds merge-conflict markers, degrading to one actionable line + exit 75 instead of the raw
-// esbuild stacktrace that used to hit every spex call (Stop hook included) while a merge was being resolved.
-// Hermetic: the launcher is copied into a fixture package whose cli.ts is conflicted, so the preflight fires
-// before tsx is ever needed. The marker is built by concatenation so THIS file never trips the real guard.
+// @@@ mid-merge guard ([[merge-tooling-resilience]]) - a workspace launcher must refuse to run its compiled
+// CLI when its source tree holds conflict markers, degrading to one actionable line + exit 75. The marker is
+// built by concatenation so THIS file never trips the real guard.
 const SRC = dirname(fileURLToPath(import.meta.url))
 const LAUNCHER = join(SRC, '..', 'bin', 'spex.mjs')
 const MARKER = '<<<' + '<<<< HEAD'

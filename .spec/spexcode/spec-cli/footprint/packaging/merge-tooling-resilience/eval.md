@@ -7,8 +7,8 @@ scenarios:
       .git/MERGE_HEAD exists, exactly the state a dispatched merge-resolution leaves main in). Run the
       launcher from that clone: `node spec-cli/bin/spex.mjs internal trunk`.
     expected: >
-      A single clean stderr message — "spex: paused mid-merge — unresolved conflict markers in the source
-      spex runs", naming the conflicted file(s) and telling the caller to resolve the merge and retry — and
+      A single clean stderr message - "spex: paused mid-merge - unresolved conflict markers in the source
+      SpexCode runs", naming the conflicted file(s) and telling the caller to resolve the merge, rebuild, and retry - and
       exit code 75 (EX_TEMPFAIL). No esbuild TransformError, no raw stacktrace.
     tags: [cli]
     code: spec-cli/bin/spex.mjs

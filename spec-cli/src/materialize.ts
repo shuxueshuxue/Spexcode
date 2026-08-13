@@ -20,9 +20,9 @@ export type MaterializeResult = { contentHash: string; planted: MaterializedArti
 
 const PKG = fileURLToPath(new URL('..', import.meta.url))                 // installed spec-cli root
 const DISPATCH = join(PKG, 'hooks', 'dispatch.sh')
-// the ONE spex entry: the launcher (bin/spex.mjs), never a raw `tsx cli.ts` pair — the launcher owns tsx
-// resolution AND the mid-merge guard (a conflicted source tree degrades to one line + exit 75, not an
-// esbuild stacktrace), so every hook-baked callback inherits both.
+// the ONE spex entry: the launcher (bin/spex.mjs), never a raw source entry - the launcher runs compiled
+// CLI code and keeps the source-workspace mid-merge guard (one line + exit 75), so every hook callback
+// inherits both.
 const SPEX = join(PKG, 'bin', 'spex.mjs')
 // the manifest + content-hash marker + plugin-folder ledger land in the materialized TREE's own slot of the
 // GLOBAL per-project store (layout.treeSlotDir — trees/<enc-worktree>), NOT the worktree and NOT one shared

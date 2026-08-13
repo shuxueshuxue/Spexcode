@@ -531,8 +531,8 @@ function codexEndpointForRecord(rec: HarnessLivenessRecord & { harnessSessionId?
 
 // the spex launcher (bin/spex.mjs), baked into the codex launch script (mirrors materialize.ts's SPEX) so
 // the launch shell can call back into `spex codex-launch` to own the thread + fire the first turn before it
-// exec's the visible TUI. The launcher, never a raw `tsx cli.ts` pair: it owns tsx resolution and the
-// mid-merge guard (conflicted source → one line + exit 75, not a stacktrace).
+// exec's the visible TUI. The launcher, never a raw source entry: it runs the compiled CLI and keeps the
+// source-workspace mid-merge guard (conflicted source -> one line + exit 75, not a stacktrace).
 const PKG = fileURLToPath(new URL('..', import.meta.url))
 const SPEX = join(PKG, 'bin', 'spex.mjs')
 

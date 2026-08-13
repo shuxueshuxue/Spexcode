@@ -9,7 +9,7 @@ scenarios:
     expected: >
       ONE actionable line — "the session runtime needs a POSIX host" plus the honest fix pointer (WSL2 on
       Windows, install-tmux on a bare POSIX host) — and a clean exit 69 (EX_UNAVAILABLE). Never a cryptic
-      downstream `spawn … tsx ENOENT` or an esbuild stacktrace.
+      downstream module-loader error or a raw stacktrace.
     tags: [cli, backend-api]
     code: spec-cli/src/runtime-guard.ts
 ---

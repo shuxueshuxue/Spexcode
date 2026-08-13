@@ -1,23 +1,28 @@
 {
   "name": "@spexcode/spec-core",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "type": "module",
   "description": "SpexCode's dependency-minimal spec graph core.",
   "files": [
-    "src",
+    "dist",
     "templates"
   ],
   "exports": {
-    ".": "./src/index.ts",
-    "./graph-delta": "./src/graph-delta.ts",
-    "./review": "./src/review/index.js",
-    "./identity": "./src/identity-presets.js"
+    ".": "./dist/index.js",
+    "./graph-delta": "./dist/graph-delta.js",
+    "./review": "./dist/review/index.js",
+    "./identity": "./dist/identity-presets.js",
+    "./package.json": "./package.json"
   },
   "engines": {
     "node": ">=22"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node ../../scripts/build-dist.mjs",
+    "prepublishOnly": "node ../../scripts/release-publish.mjs --from-package-publish",
     "pack:publishable": "node scripts/pack-publishable.mjs"
   }
 }

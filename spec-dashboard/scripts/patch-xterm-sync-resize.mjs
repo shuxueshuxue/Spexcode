@@ -1,7 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 
-const root = new URL('../node_modules/@xterm/xterm/', import.meta.url)
+const require = createRequire(import.meta.url)
+const root = new URL(`file://${require.resolve('@xterm/xterm/package.json').replace(/\/package\.json$/, '/')}`)
 const pkg = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'))
 
 if (pkg.version !== '6.0.0') {

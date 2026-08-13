@@ -59,10 +59,9 @@ Linux, not a second codepath.
 
 Two mechanisms keep the contract honest at the boundary rather than only in prose:
 
-- **The launcher stays cross-platform** so the read-only commands reach a Windows user at all: it resolves
-  tsx's JS entry and runs it through `node`, never the `.bin/tsx` shim (an unspawnable sh script on Windows) —
-  the tsx-resolution rule owned by [[packaging]]. That is what turns the reported `spawn …\.bin\tsx ENOENT`
-  crash of `spex init` into a command that simply works.
+- **The launcher stays cross-platform** so the read-only commands reach a Windows user at all: it runs the
+  package's compiled JavaScript through `node`, never a shell shim or TypeScript loader. That keeps `spex init`
+  independent of a platform-specific build-chain executable.
 - **The session runtime is gated.** `spex serve` — the entry to the session runtime on a host — checks for
   its load-bearing primitive (tmux) and, if absent, prints ONE actionable line and exits before any cryptic
   downstream failure: point a Windows user at WSL2 (no POSIX analog exists), and a bare POSIX host that merely

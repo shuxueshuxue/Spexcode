@@ -1,32 +1,37 @@
 {
   "name": "@spexcode/spec-dashboard",
-  "version": "0.0.0",
+  "version": "0.6.5",
   "type": "module",
   "exports": {
-    ".": "./src/main.jsx"
+    ".": "./dist/index.html",
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "dist-public"],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "predev": "node scripts/patch-xterm-sync-resize.mjs",
     "dev": "vite",
-    "postinstall": "node scripts/patch-xterm-sync-resize.mjs",
     "test": "node --test src/*.test.mjs src/i18n/*.test.mjs",
     "test:identity-e2e": "node test/identity-chain.e2e.mjs",
     "prebuild": "node scripts/patch-xterm-sync-resize.mjs",
     "build": "vite build",
+    "build:public": "VITE_PUBLIC_GRAPH_ONLY=1 vite build --outDir dist-public --base ./",
+    "prepack": "npm run build && npm run build:public",
+    "prepublishOnly": "node ../scripts/release-publish.mjs --from-package-publish",
     "preview": "vite preview"
   },
-  "dependencies": {
-    "@spexcode/spec-cli": "file:../spec-cli",
-    "@spexcode/spec-core": "file:../packages/spec-core",
+  "devDependencies": {
+    "@spexcode/spec-cli": "0.6.5",
+    "@spexcode/spec-core": "0.6.5",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "6.0.0",
     "@xyflow/react": "^12.3.5",
     "katex": "^0.17.0",
     "markdown-it": "^14.3.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
+    "react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "vite": "^5.4.10"
   }

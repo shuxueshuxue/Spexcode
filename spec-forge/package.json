@@ -1,21 +1,28 @@
 {
   "name": "@spexcode/spec-forge",
-  "version": "0.0.0",
+  "version": "0.6.5",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./port": "./src/port.ts",
-    "./links": "./src/links.ts",
-    "./drivers": "./src/drivers.ts",
-    "./resident": "./src/resident.ts",
-    "./cli": "./src/cli.ts"
+    ".": "./dist/index.js",
+    "./port": "./dist/port.js",
+    "./links": "./dist/links.js",
+    "./drivers": "./dist/drivers.js",
+    "./resident": "./dist/resident.js",
+    "./cli": "./dist/cli.js",
+    "./package.json": "./package.json"
   },
+  "files": ["dist"],
   "description": "Host-agnostic forge link tracer — reads a forge's open issues/PRs and resolves each to the spec node it serves (issue-body `Spec: <id>` marker + `node/<id>` PR branch). Read-only; a node's status stays git-derived.",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "build": "node ../scripts/build-dist.mjs",
+    "prepublishOnly": "node ../scripts/release-publish.mjs --from-package-publish",
     "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@spexcode/spec-core": "file:../packages/spec-core"
+    "@spexcode/spec-core": "0.6.5"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

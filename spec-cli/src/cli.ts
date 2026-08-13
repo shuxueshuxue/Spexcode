@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 const cmd = process.argv[2]
 
 if (cmd === '--version' || cmd === '-v') {
-  const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }
+  const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
   console.log(manifest.version)
   process.exit(0)
 }
@@ -37,7 +37,7 @@ async function assertDaemonDependencies(command: 'spex serve' | 'spex dashboard'
 // (loadConfig on a malformed spexcode.json) surfaces as uncaughtException, not unhandledRejection, so BOTH
 // paths route through the same printer.
 function fatal(e: unknown): never {
-  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError'].includes(e.name)) console.error(`spex: ${e.message}`)
+  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError', 'DashboardAssetError'].includes(e.name)) console.error(`spex: ${e.message}`)
   else console.error(e)
   process.exit(1)
 }
@@ -373,6 +373,8 @@ if (cmd === 'serve') {
   // two processes, two verbs in one operator drawer.
   const target = positionals(3)[0]
   if (target === 'ui') {
+    const { ensureDashboardArtifact } = await import('./dashboard-assets.js')
+    ensureDashboardArtifact('dist')
     await assertDaemonDependencies('spex serve')
     // the natural post-install UI: serve the bundled dashboard on its OWN port (loopback by default;
     // --host widens the bind for LAN/tailnet viewing), proxying /api + the terminal socket to a
@@ -387,11 +389,10 @@ if (cmd === 'serve') {
     await assertDaemonDependencies('spex serve')
     // fail loud, not cryptic ([[platform-support]]): serve IS the entry to the session runtime, which needs a
     // POSIX host (tmux/bash/unix-sockets). On a non-POSIX host (native Windows) point at WSL2 and exit here,
-    // before importing the supervisor spawns tsx into a downstream ENOENT.
+    // before importing the supervisor starts the backend.
     const { assertSessionRuntime } = await import('./runtime-guard.js')
     assertSessionRuntime()
-    // the supervisor owns the public port and runs index.ts as a child for zero-downtime reloads; it
-    // (not `tsx watch`) is what watches spec-cli/src, so the package `serve` script must NOT use --watch.
+    // the supervisor owns the public port and runs the compiled index.js child for zero-downtime reloads.
     // --port is sugar over the PORT env supervise.ts reads — set BEFORE importing so it takes effect. This
     // mirrors `spex serve ui --api-port`, so one host runs many projects (each `serve --port N` paired with
     // a `serve ui --api-port N`), cwd picking which project's .spec is served — no shared default collides.
@@ -406,6 +407,8 @@ if (cmd === 'serve') {
     process.exit(2)
   }
 } else if (cmd === 'dashboard') {
+  const { ensureDashboardArtifact } = await import('./dashboard-assets.js')
+  ensureDashboardArtifact('dist')
   await assertDaemonDependencies('spex dashboard')
   // the HOST-level dashboard ([[host-gateway]]): ONE gateway for every project this user serves. The
   // engine is [[gateway-hub]] (routing + [[gateway-auth]] authorization: admin scope implicit from

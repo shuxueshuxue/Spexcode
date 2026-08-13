@@ -44,7 +44,7 @@ across a deploy keep watching a dead stack, and Esc would close the surface behi
 **Scope is deliberately the cross-component overlays** — a row's rename and close-confirm modals,
 the row context-menu. The board's own keys are **out of scope and unchanged**: the help/settings/search
 modals and the locked-session release route through one already-coherent handler ([[keyboard-nav]]), and a
-panel's internal sub-states (its completion menu, nav-mode's raw-key forwarding, the graph legend) order
-their own Esc within that one panel. Those never raced, so they keep their single handler; because the stack
+panel's internal sub-states (its completion menu, the native Command Box/type-mode raw-key forwarding, the graph
+legend) order their own Esc within that one panel. Those never raced, so they keep their single handler; because the stack
 is silent when empty, they behave exactly as before. New overlays that float above another surface should
 join the stack rather than add a fresh window listener — that is the whole point of having one.

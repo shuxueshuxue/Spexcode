@@ -34,6 +34,12 @@ Two rules make the tooling survive it:
   and exits **75** (EX_TEMPFAIL: transient, retry later). A published package has no source tree to scan and
   executes its shipped `dist` directly.
 
+The launcher is also the process-identity boundary for project and host control planes. For `serve` and
+`dashboard` it removes adapter-declared session identity variables before starting the compiled CLI, including the
+legacy fallback manifest when no explicit variable list is present. Ordinary session/read/write commands
+retain their identity; clearing it later inside `cli.ts` would be too late because the spawned control-plane
+process would already inherit the session.
+
 Exit 75 is the contract callers key on: the pre-commit lint shim treats it as advisory-skip (a commit
 elsewhere is never walled behind a merge someone else is resolving; CI still enforces), and the stop-gate's
 existing bounded block/escape paths stay clean because `$SPEX` failures now carry a real reason. This is

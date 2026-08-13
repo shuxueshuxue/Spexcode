@@ -22,4 +22,7 @@ Source (2) lets a project pin its endpoint **once, in the repo**, but it only re
 (one SpexCode checkout serving many external projects) instead points the same board at each project
 per-launch with `API_URL` (source 1) — the board is a project-agnostic viewer, one dev-server per
 project. The backend itself is chosen the other way — by the cwd `spex serve` runs in (the
-[[portable-layout]] seam) and its `PORT` — so this node is only the dashboard→backend hop.
+[[portable-layout]] seam) and its `PORT` — so this node is only the dashboard→backend hop. The Vite
+development proxy also accepts `/p/<project-id>/api/...` and strips that scope before forwarding to the one
+selected development backend. This is a development twin of the multi-project gateway route; it does not
+implement gateway project selection or credentials.

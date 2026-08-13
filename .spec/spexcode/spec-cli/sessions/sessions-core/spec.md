@@ -44,6 +44,9 @@ source set are read compatibly: the present parent edge proves `parent`, otherwi
 The manager's merge dispatch prompt owns the post-landing handoff: once the verified base branch has advanced,
 it names `spex session done --propose close` as the final action only when the task is settled, its worktree is
 no longer needed, and no human decision or follow-up remains; otherwise the agent declares the state that is true.
+The merge dispatch itself is intentionally a plain prompt: the server does not accept review-generation OIDs,
+epochs, or idempotency headers and never mutates `main`; the worker re-syncs and re-runs proof in its own worktree
+before the one no-ff landing.
 [[session-reparent]] uses that same target ownership: it takes the ordinary record locks while changing a
 child's parent pointer and watcher list, then delegates current-state delivery to the existing dispatch path.
 The core never asks a former watcher to participate in its own removal. A null replacement parent is the

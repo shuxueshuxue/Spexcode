@@ -98,4 +98,6 @@ the ordinary `spex session watch <id>` is the explicit repair, not a second crea
 A peer-created session is not that local child case. Its JSON still reaches stdout, but its stderr receipt names
 the peer spelling for a later snapshot and explicitly says that no managed watch exists across the machine
 boundary. The remote prompt's reply hint is the return path; a local `session wait` or `session watch` is not
-misrepresented as a monitor for the remote row.
+misrepresented as a monitor for the remote row. The session list describes live rows in its heading. An explicit
+id absent from that live list is resolved through archived state and the terminal-close ledger before it is called
+a named miss.

@@ -45,10 +45,9 @@ It removes, for the resolved project:
   pre-slot manifest, the project's session records, backend control files, and versioned history-event ledgers.
   This is SpexCode's per-project runtime
   tier ([[runtime]]), not the user's spec asset, so the whole dir is ours to delete.
-- **the retired hashed event-cache root**, when present — the brief `projects/<sha256(git-common-dir)>/`
-  layout used a second identity for the same project. Its name is derived from the live Git common dir and its
-  contents were exclusively SpexCode history ledgers, so the forgetting pass removes that whole legacy root too;
-  a current install never creates it.
+- The retired hashed event-cache layout is no longer a runtime input or uninstall target. Current stores use
+  the per-project runtime root and its tree slots only; an old cache is historical residue for a separate
+  migration operation, not something this command discovers or deletes.
 - **any spexcode plugin bundle** — a `plugins/spexcode` directory or a `.claude-plugin/plugin.json` whose
   `name == spexcode`, under configured/standard hosts and hosts recovered from current or legacy ledgers **before
   store deletion**. Other plugins survive; standard-host scanning also catches hand-dropped bundles.

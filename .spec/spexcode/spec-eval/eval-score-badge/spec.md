@@ -41,6 +41,9 @@ renders the tile/stat-bar count; `ScoreBadge` delegates the per-reading `icon + 
 [[review-chrome]]'s ONE `ReviewState` mapping, so graph/eval-tab glances and the routed Evals list/detail/A-B
 cannot disagree or fall back to Unicode. The node tile ([[node-graph]]) and
 the node-info stat bar render `ScenarioCount`; the eval tab ([[eval-tab]]) renders the per-reading circle.
+When the board already carries a server-computed summary, `ScenarioCount` consumes that total/pass/state
+tally directly; it does not rebuild scenario joins in the browser. The local scenario join remains the
+fallback for callers that provide declarations and readings instead of a summary.
 
 **Tags are the second at-a-glance adornment.** Beside the satisfaction count, a scenario carries
 classification [[eval-core]] tags; `score.jsx` exports the one shared **`TagChips`** element that renders

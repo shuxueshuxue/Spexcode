@@ -18,6 +18,14 @@ session review identity/payload, remark tracks, source policy, and trunk-commit 
 host port installed by spec-cli. That direction is intentional: these values are CLI context, not reusable
 eval concepts, so the cycle is broken by passing the context rather than copying its implementation.
 
+The host contract fails loudly by capability: session review identity/payload are required by session-eval;
+the CLI commands require the specific `loadConfig`, `trackedSourceFiles`, `stripRefSigil`, `apiBase`, or
+`commitTrunkData` capability they invoke. A standalone eval engine may omit the remark-track loader: it then
+uses an intentionally empty remark map, while scenario declarations, readings, freshness, scores, and content
+revision remain valid; remark replies, dangling-remark state, and remark-derived review context are unavailable.
+The raw issues bytes are still included in the content fingerprint without copying the CLI's parser. No other
+host field has a silent fallback.
+
 ## A spec carries how to measure its loss
 
 Beyond the target, a node's **`eval.md`** says how to measure the loss against it — one or more

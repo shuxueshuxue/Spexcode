@@ -1,6 +1,6 @@
 import { relative } from 'node:path'
 import { repoRoot } from '@spexcode/spec-core'
-import { evalHost } from './host.js'
+import { requireEvalHost } from './host.js'
 import { evalNodes, resolveEvalNode } from './scenarios.js'
 import { readReadings, readSidecar, appendHumanOk, humanOkFor, type HumanOk } from './sidecar.js'
 
@@ -23,8 +23,7 @@ export function fileHumanOk(nodeId: string, scenario: string, by: string): OkRes
   if (existing) return { ok: true, humanOk: existing, already: true, landed: 'committed' }
   const row: HumanOk = { kind: 'human-ok', scenario, okTs: latest.ts, okSha: latest.codeSha, by, ts: new Date().toISOString() }
   appendHumanOk(node.sidecarPath, row)
-  const commit = evalHost().commitTrunkData
-  if (!commit) throw new Error('spec-eval host is not configured: commitTrunkData')
+  const commit = requireEvalHost('commitTrunkData')
   const landed = commit(relative(root, node.sidecarPath), `eval(${node.id}): human-ok '${scenario}' @ ${latest.ts} by ${by}`)
   return { ok: true, humanOk: row, already: false, landed: landed === 'not-primary' ? 'uncommitted' : 'committed' }
 }

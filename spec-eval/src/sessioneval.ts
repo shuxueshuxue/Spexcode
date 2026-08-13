@@ -41,11 +41,15 @@ import { evalTimelines, evalContext, readBlobByHash, type EvalEntry, type EvalTi
 import { isUiPath } from './ui-path.js'
 import { readReadings } from './sidecar.js'
 import { parseScenarios, scenarioCodeAxis, scenarioHash, type Scenario } from './scenarios.js'
-import { evalRemarkSourceFingerprint, type ReviewIdentity, type ReviewPayload, type EvalHostPort } from './host.js'
+import { evalRemarkSourceFingerprint, evalRemarkTracks, type ReviewIdentity, type ReviewPayload, type EvalHostPort } from './host.js'
 export type { EvalHostPort } from './host.js'
 
 let sessionEvalHostValue: EvalHostPort | null = null
-export function setSessionEvalHost(next: EvalHostPort): void { sessionEvalHostValue = next }
+export function setSessionEvalHost(next: EvalHostPort): void {
+  if (typeof next?.reviewIdentity !== 'function') throw new SessionEvalUnavailableError('spec-eval host is not configured: reviewIdentity')
+  if (typeof next?.reviewPayload !== 'function') throw new SessionEvalUnavailableError('spec-eval host is not configured: reviewPayload')
+  sessionEvalHostValue = next
+}
 export function sessionEvalHost(): EvalHostPort {
   if (!sessionEvalHostValue) throw new SessionEvalUnavailableError('spec-eval host is not configured')
   return sessionEvalHostValue
@@ -1734,7 +1738,7 @@ export async function sessionEvalContentRevision(wtPath: string): Promise<string
       return `${path}\0<gone>`
     }
   }))
-  const remarks = [...(sessionEvalHostValue?.loadEvalRemarkTracks() ?? new Map())]
+  const remarks = [...evalRemarkTracks()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, track]) => [key, track.thread])
   return createHash('sha256')

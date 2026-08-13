@@ -25,7 +25,7 @@ export type ReviewPayload = {
 export type EvalHostPort = EvalHost & {
   reviewIdentity: (id: string) => ReviewIdentity | null
   reviewPayload: (id: string) => Promise<ReviewPayload | null>
-  loadEvalRemarkTracks: () => Map<string, RemarkTrack>
+  loadEvalRemarkTracks?: () => Map<string, RemarkTrack>
 }
 let services: EvalHost = {}
 
@@ -37,6 +37,15 @@ export function setEvalRemarkTracks(loader: () => Map<string, RemarkTrack>): voi
 
 export function setEvalHost(next: EvalHost): void { services = { ...services, ...next } }
 export function evalHost(): EvalHost { return services }
+
+// CLI-backed commands must fail at the capability boundary, rather than letting an absent
+// service turn into an unrelated TypeError or an empty result. Remark reads are the one
+// deliberate standalone downgrade and stay on evalRemarkTracks() below.
+export function requireEvalHost<K extends keyof EvalHost>(field: K): NonNullable<EvalHost[K]> {
+  const value = services[field]
+  if (value == null) throw new Error(`spec-eval host is not configured: ${String(field)}`)
+  return value as NonNullable<EvalHost[K]>
+}
 
 export function evalRemarkTracks(): Map<string, RemarkTrack> {
   return remarks()

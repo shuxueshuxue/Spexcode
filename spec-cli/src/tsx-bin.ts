@@ -17,6 +17,14 @@ export function tsxBin(pkgDir: string): string {
   }
 }
 
+function tsxLoader(pkgDir: string): string {
+  try {
+    return createRequire(join(pkgDir, 'package.json')).resolve('tsx/esm')
+  } catch {
+    throw new Error(`tsx runtime not found from ${pkgDir} — run \`npm install\` in the SpexCode package`)
+  }
+}
+
 // A direct source invocation is a development/test contract. A compiled launcher in the same workspace
 // must still execute dist so an installed release never accidentally reintroduces a tsx requirement.
 function sourceInvocation(pkgDir: string, callerDir: string): boolean {
@@ -25,12 +33,12 @@ function sourceInvocation(pkgDir: string, callerDir: string): boolean {
 
 export function cliEntrypointArgs(pkgDir: string, callerDir: string): string[] {
   return sourceInvocation(pkgDir, callerDir)
-    ? [tsxBin(pkgDir), join(pkgDir, 'src', 'cli.ts')]
+    ? ['--import', tsxLoader(pkgDir), join(pkgDir, 'src', 'cli.ts')]
     : [join(pkgDir, 'dist', 'cli.js')]
 }
 
 export function serverEntrypointArgs(pkgDir: string, callerDir: string): string[] {
   return sourceInvocation(pkgDir, callerDir)
-    ? [tsxBin(pkgDir), join(pkgDir, 'src', 'index.ts')]
+    ? ['--import', tsxLoader(pkgDir), join(pkgDir, 'src', 'index.ts')]
     : [join(pkgDir, 'dist', 'index.js')]
 }

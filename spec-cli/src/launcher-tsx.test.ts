@@ -32,6 +32,8 @@ test('the launcher spawns process.execPath against its compiled CLI, not a TypeS
 
 test('source callers keep their development loader while compiled callers stay on dist', () => {
   const packageRoot = join(SRC, '..')
+  assert.deepEqual(cliEntrypointArgs(packageRoot, SRC).slice(0, 1), ['--import'])
+  assert.deepEqual(serverEntrypointArgs(packageRoot, SRC).slice(0, 1), ['--import'])
   assert.equal(cliEntrypointArgs(packageRoot, SRC).at(-1), join(SRC, 'cli.ts'))
   assert.equal(serverEntrypointArgs(packageRoot, SRC).at(-1), join(SRC, 'index.ts'))
   assert.deepEqual(cliEntrypointArgs(packageRoot, join(packageRoot, 'dist')), [join(packageRoot, 'dist', 'cli.js')])

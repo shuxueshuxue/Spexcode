@@ -4,6 +4,12 @@ status: active
 session: 861e8ed1-064b-489e-b623-ff79dac86dc1
 hue: 140
 desc: eval is the evaluation in spec=loss / commits=optimizer — a spec carries how to measure its loss, the agent measures it, eval keeps score and flags stale.
+code:
+  - spec-eval/src/index.ts
+related:
+  - spec-eval/src/host.ts
+  - spec-eval/src/remarks.ts
+  - spec-eval/src/ui-path.ts
 ---
 # spec-eval
 
@@ -25,6 +31,10 @@ uses an intentionally empty remark map, while scenario declarations, readings, f
 revision remain valid; remark replies, dangling-remark state, and remark-derived review context are unavailable.
 The raw issues bytes are still included in the content fingerprint without copying the CLI's parser. No other
 host field has a silent fallback.
+
+The package entry is part of that boundary: `index.ts` exposes the public eval surface. The host port, remark
+record shapes, and frontend-proof classifier have their own focused governance nodes so each defining file has
+one drift owner.
 
 ## A spec carries how to measure its loss
 

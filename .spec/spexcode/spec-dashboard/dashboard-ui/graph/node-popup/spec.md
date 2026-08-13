@@ -94,8 +94,10 @@ axis does not fork field semantics inside the popup.
 
 The "change it in place" surface — the live terminal — belongs to the *session* doing the changing
 (`Enter`; see [[session-console]] and [[command-box]]), keyed to that session rather than pinned to a node.
-The panel sizes to **itself**, never to xterm's measured width (each pane scrolls its own content, no stray
-horizontal scrollbar) — but that sizing lives in `styles.css`, the dashboard's shared stylesheet governed by
+The graph-only static build is a read-only projection: it supplies the node body from the embedded public
+document, exposes only the spec pane, and never attempts backend eval/history/issues/edit requests. The full
+dashboard keeps the complete pane registry above. The panel sizes to **itself**, never to xterm's measured
+width (each pane scrolls its own content, no stray horizontal scrollbar) — but that sizing lives in `styles.css`, the dashboard's shared stylesheet governed by
 [[node-graph]]; this node owns only the popup component, so a style change elsewhere is never drift here.
 The original intention survives as one work loop across two truthful surfaces: intent in the node popup,
 live change in the session console.

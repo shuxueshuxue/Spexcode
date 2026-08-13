@@ -53,6 +53,12 @@ The graph is built **once per change, not once per poll — and only as much of 
   so a blinded observer is still repaired and reported by [[graph-stream]]. This is validation, not a second
   poller or TTL.
 
+  Before sampling that revision, the graph boundary confirms that its resolved root is a Git repository. A
+  directory before `git init` is a valid place to begin adoption but has no board to derive, so this read refuses
+  with the shared absolute-path repair before session/runtime layout can run a raw Git command. CLI assembly and
+  direct history reads consume that same precondition; a Git child that starts after the boundary still reports
+  its real transport failure rather than being relabelled as an uninitialized workspace.
+
   The two obligations settle differently, because this revision can settle only one of them. A structural
   `full` claim whose full revision did not move is DISCHARGED without assembly — bytes the board never reads
   (a generated harness artifact rewritten inside a live worktree, a linked worktree no governed record names)

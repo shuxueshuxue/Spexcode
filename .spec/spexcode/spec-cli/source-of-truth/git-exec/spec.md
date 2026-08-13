@@ -8,6 +8,7 @@ code:
   - packages/spec-core/src/git.ts#gitBinary
   - packages/spec-core/src/git.ts#git
   - packages/spec-core/src/git.ts#gitBuffer
+  - packages/spec-core/src/git.ts#requireGitWorkspace
   - packages/spec-core/src/git.ts#warnIfTimedOut
   - packages/spec-core/src/git.ts#gitInterpretationIdentity
   - packages/spec-core/src/git.ts#sourceIndexes
@@ -17,6 +18,7 @@ code:
 related:
   - packages/spec-core/src/git.ts
   - spec-cli/src/git.test.ts
+  - spec-cli/src/workspace-precondition.cli.test.ts
   - spec-eval/src/freshness.ts
   - spec-cli/src/sessions.ts
 ---
@@ -87,6 +89,13 @@ as empty history before any history command is assembled. Both history and drift
 versions, topology, events, or tip until the first commit exists, while the working-tree graph can still observe
 the first uncommitted `.spec` tree normally. A genuinely unreadable `HEAD`, an explicit invalid revision, or a
 Git child failure remains loud: this is one legal Git state, never a caller-side catch or a broad error fallback.
+
+Repository discovery is an earlier product boundary than this transport seam. A directory before `git init`
+must be refused once as a Git-workspace precondition: name its absolute path and direct the reader to run
+`git init` there before retrying. History entrances and graph assembly consume that common refusal before they
+ask this seam to derive anything, so they cannot expose an internal history purpose or raw child stderr for the
+same missing repository. `gitRequiredA` remains the common safety net after that boundary; it preserves a real
+child failure rather than guessing that every failed Git invocation means the directory needs initialization.
 
 ## who reads this classification
 

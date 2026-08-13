@@ -181,6 +181,14 @@ states are specified in [[spec-node-states]]. The loader also attaches the body'
 — raw source and expanded spec — there being no agent-narrated current-state part, because what's-done
 is derived, never narrated (see [[three-part-body]]).
 
+A directory before `git init` is a valid adoption starting state, but it has no Git-backed graph or history
+to derive. The Git-workspace boundary owns that distinction before a board touches runtime/layout state and
+before any public history entrance starts a projection. Its one user-facing refusal names the resolved absolute
+workspace and says to run `git init` there before retrying. Thus graph assembly and direct history callers
+receive the same repair, while `gitRequiredA` remains a transport safety net for a Git child that did run and
+failed; a missing executable, timeout, unreadable checkout, or malformed Git metadata keeps that original
+failure rather than being misrepresented as an uninitialized directory.
+
 This node owns the derivation pair: the loader/aggregator (`specs.ts`) and its git-access layer
 (`git.ts`). The loader also assigns each node a unique-by-construction id: its leaf dir name, or the minimal
 parent-qualified suffix when that name collides — always a single URL-safe token, never a `/`-path

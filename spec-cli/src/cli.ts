@@ -30,14 +30,15 @@ async function assertDaemonDependencies(command: 'spex serve' | 'spex dashboard'
 }
 
 // Registered before any await so a fatal top-level error lands here. Errors we OWN — BackendError, the
-// loud malformed-config ConfigError, the --api/--port UsageError, the write-guard GuardError — are
+// loud malformed-config ConfigError, the --api/--port UsageError, the write-guard GuardError, and a
+// GitWorkspaceError that teaches a fresh directory how to continue — are
 // matched BY NAME (to avoid importing them) and rendered as a one-line `spex: <message>` (a user's
 // config typo or a refused cross-project write must read as their situation, not a SpexCode stack dump);
 // anything else prints in full so a real bug keeps its trace. A synchronous throw inside an awaited call
 // (loadConfig on a malformed spexcode.json) surfaces as uncaughtException, not unhandledRejection, so BOTH
 // paths route through the same printer.
 function fatal(e: unknown): never {
-  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError', 'DashboardAssetError'].includes(e.name)) console.error(`spex: ${e.message}`)
+  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError', 'DashboardAssetError', 'GitWorkspaceError'].includes(e.name)) console.error(`spex: ${e.message}`)
   else console.error(e)
   process.exit(1)
 }

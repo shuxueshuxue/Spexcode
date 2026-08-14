@@ -250,7 +250,7 @@ export async function clientCapture(id: string): Promise<CaptureResult> {
 }
 
 // POST /api/sessions/:id/input {kind:"text"} appends the prompt to the durable timeline, then best-effort
-// pokes the resolved adapter. HTTP failure means the append itself was refused.
+// pokes the resolved adapter. HTTP failure means the append was refused, including a proven stranded transport.
 export async function clientSend(id: string, text: string, from?: string): Promise<DispatchResult> {
   await guarded('session send')
   // `from` = the sending agent's own session id; the recipient's log records the sender ([[session-timeline]]) only when

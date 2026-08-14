@@ -131,6 +131,11 @@ throws a clear `no backend reachable at <url>` with a non-zero exit. A Cache ver
 source it read, on stderr, every time. A Remote-transport verb fails loud. What no verb ever does is answer
 from a different source while claiming the one it was asked for.
 
+For text `send`, a reachable backend's non-2xx `DispatchResult {ok:false,error}` is also a final owner answer:
+the client preserves that exact reason for the CLI rather than recasting it as a transport failure or attempting
+a local fallback. This includes the adapter-owned stranded-transport refusal; only the backend can know whether
+the target's durable queue may accept another message.
+
 **Failure stays distinct from emptiness.** A monitoring read must let a manager tell "I couldn't read" from
 "the screen is blank": `show --capture` returns a genuinely empty pane as success, but maps unknown-session,
 offline (no live pane), and a capture error to distinct non-zero outcomes — a blank screen that exits 0 is

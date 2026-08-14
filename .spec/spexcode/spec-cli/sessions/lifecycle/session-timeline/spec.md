@@ -72,10 +72,13 @@ while a full observer still sees the exact full sequence. A sealed segment may l
 but no live cursor authorizes semantic deletion: archive preserves every segment and close remains the one
 physical deletion boundary.
 
-**The append is what ACCEPTS a message; the queue is what owes it.** `sendText` appends the `sent` line and
-enqueues the same message in one hold of the session's record lock ([[dispatch]]), and reports success on that
-write. Acceptance therefore never depends on the transport, which is what dissolved the "delivered but
-unconfirmed" state — but it is not itself the handover. A keyed acceptance whose process dies before queue
+**The append is what ACCEPTS an admissible message; the queue is what owes it.** `sendText` appends the `sent`
+line and enqueues the same message in one hold of the session's record lock ([[dispatch]]), and reports success
+on that write. Before that append, a resolved adapter may prove its native transport unreachable; joined with a
+still-live registered agent this is a stranded worker, not a transport race, so the send fails loud without
+creating a `sent` line or new debt. An unproven transport remains admissible and keeps the queue retry. This
+exception preserves the dissolution of the "delivered but unconfirmed" state — the append is not itself the
+handover. A keyed acceptance whose process dies before queue
 publication is reconstructed from its private receipt by the same-key retry. The message reaches the agent
 when [[delivery-queue]]'s drain hands it to the harness adapter as an ordinary prompt, retried until it lands;
 the private settlement then makes later response replay inert even if the session has since stopped or been

@@ -401,9 +401,18 @@ surface:
   app-server `--listen unix://<sock>` endpoint is a WebSocket at path `/rpc` (the same upgrade the `--remote`
   TUI performs); delivery speaks WebSocket JSON-RPC over that Unix socket directly — NOT `codex app-server
   proxy` (a dumb byte relay that performs no HTTP upgrade, which the server rejects).
-  `deliver(rec, text)` is a **best-effort immediate poke**, never a second delivery decision. The log append
-  already made the message durable ([[dispatch]]), so every adapter returns only whether this attempt reached
-  its native input channel; failure leaves the same `mid` OWED, for the delivery queue to retry. **claude** writes
+  Before a NEW prompt becomes debt, an adapter may report its native input transport as **reachable**,
+  **unproven**, or **unreachable**. These are transport facts, not lifecycle verdicts: an unproven probe keeps
+  ordinary queue-and-retry behavior, while sessions-core joins a proven-unreachable result with its independent
+  live registered-pid witness. Only that combination is a **stranded** session: a live worker whose launch-time
+  input address can no longer be rebound, so accepting another message would make unclaimable debt. `send`
+  refuses before log append or enqueue, names the stranded rendezvous reason, the current queue count, and the
+  `session send <id> --keys "<keys>"` tmux bypass. The board liveness remains `unknown`: a dead transport is
+  never permission to call the agent dead. No product path classifies `/tmp`; each adapter proves its own
+  native transport. `deliver(rec, text)` after acceptance remains a **best-effort immediate poke**, never a
+  second delivery decision. The log append already made an admissible message durable ([[dispatch]]), so every
+  adapter returns only whether this attempt reached its native input channel; failure leaves the same `mid`
+  OWED, for the delivery queue to retry. **claude** writes
   one `{type:reply,text,mid}` line and retries the write a small fixed number of times. Its single-connection
   daemon may still lose a poke when another connection replaces it, but that cannot lose the message; no
   repaint, receipt, kick classification, or transport outcome state remains. Claude's

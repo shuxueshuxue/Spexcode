@@ -1185,8 +1185,8 @@ if (cmd === 'serve') {
         console.error(`spex session send --keys: nothing delivered to ${full} (offline, unknown session, or no valid key token)`)
         process.exit(1)
       }
-      // The backend decides send success at the timeline append. A dead adapter poke only delays context
-      // injection, while a refused record write prints the reason and exits non-zero.
+      // A send is accepted at its timeline append, except a proven-unreachable transport attached to a live
+      // registered agent: that stranded combination refuses before it can add unclaimable queue debt.
       // BIDIRECTIONAL: stamp the SENDER (this send process's OWN session — the only process that knows it, via
       // ownSessionId from CLAUDE_CODE_SESSION_ID) + a one-line reply hint into the delivered
       // message, so the recipient can reply over the SAME send. The sender's row (hence its display label) is
@@ -1214,8 +1214,9 @@ if (cmd === 'serve') {
       const r = sendArgs.sshAddress
         ? await c.clientSendThroughPeer(sendArgs.sshAddress, full, text, from)
         : await c.clientSend(full, text, from)
-      console.log(r.ok ? 'sent' : `dispatch failed: ${r.error}`)
-      process.exit(r.ok ? 0 : 1)
+      if (r.ok) { console.log('sent'); process.exit(0) }
+      console.error(`dispatch failed: ${r.error}`)
+      process.exit(1)
     } else if (sub === 'show') {
       // the session RECORD as one per-id read (status · node · branch · launcher · the full originating
       // prompt); --capture swaps in the LIVE PANE face of the same read. The pane contract is unchanged from

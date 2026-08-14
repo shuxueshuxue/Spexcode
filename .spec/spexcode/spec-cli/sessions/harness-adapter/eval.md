@@ -487,6 +487,29 @@ scenarios:
       history any one of them holds, so a thread that has been alive for weeks stays retirable. A loaded thread
       with a genuinely running turn still refuses with an active-turn reason, and presence the app-server did not
       report is still `unknown` and still fails closed: the false timeout goes away, the gate does not.
+  - name: stranded-rendezvous-refuses-text-send
+    tags: [backend-api, cli]
+    code:
+      - spec-cli/src/harness.ts#DeliveryTransportState
+      - spec-cli/src/harness.ts#rendezvousDeliveryTransport
+      - spec-cli/src/sessions.ts#sendText
+    related:
+      - spec-cli/src/session-timeline.test.ts
+      - spec-cli/src/session-send-cli.test.ts
+    test:
+      path: spec-cli/src/session-timeline.test.ts
+      name: a live agent with a proven-dead rendezvous transport is stranded before enqueue
+    description: >-
+      In an isolated session store, create one test-only rendezvous listener for a governed interactive record,
+      close and unlink only that fixture socket, and keep its registered agent pid alive. Send text through the
+      CLI/input surface, then inspect the output, timeline, and pending queue. Repeat with the listener still
+      live.
+    expected: >-
+      The missing/refusing launch-time listener plus a live registered pid is named stranded, with its existing
+      queued-message count and the `session send --keys` tmux bypass; output contains no `sent`, the request is
+      non-2xx, and neither a sent timeline event nor new pending debt is created. A live listener still accepts
+      and hands over text. An inconclusive listener probe remains ordinary retryable delivery debt and liveness
+      remains `unknown`, never offline.
   # harness-delivery-campaign:start
   - name: delivery-combo-claude-launch-idle
     tags: [backend-api, cli]

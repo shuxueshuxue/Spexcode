@@ -14,6 +14,7 @@ const TARGET = 'send-parser-target'
 
 type Run = { code: number | null; stdout: string; stderr: string }
 type Request = { method: string; url: string; body: unknown }
+type InputResult = { ok: boolean; error?: string }
 
 async function runCli(args: string[], env: NodeJS.ProcessEnv): Promise<Run> {
   const child = spawn(process.execPath, [tsxCli, cli, ...args], {
@@ -28,7 +29,7 @@ async function runCli(args: string[], env: NodeJS.ProcessEnv): Promise<Run> {
   return { code, stdout, stderr }
 }
 
-async function withBackend(run: (api: string, requests: Request[], env: NodeJS.ProcessEnv) => Promise<void>): Promise<void> {
+async function withBackend(run: (api: string, requests: Request[], env: NodeJS.ProcessEnv) => Promise<void>, inputResult: InputResult = { ok: true }): Promise<void> {
   const requests: Request[] = []
   const server = createServer((req, res) => {
     const chunks: Buffer[] = []
@@ -40,7 +41,8 @@ async function withBackend(run: (api: string, requests: Request[], env: NodeJS.P
       if (req.method === 'GET' && req.url === '/api/sessions?all=1') {
         res.end(JSON.stringify([{ id: TARGET }]))
       } else if (req.method === 'POST' && req.url === `/api/sessions/${TARGET}/input`) {
-        res.end(JSON.stringify({ ok: true }))
+        res.statusCode = inputResult.ok ? 200 : 502
+        res.end(JSON.stringify(inputResult))
       } else {
         res.statusCode = 404
         res.end(JSON.stringify({ error: 'unexpected fixture route' }))
@@ -78,6 +80,21 @@ test('session send keeps the message positional when routing flags appear before
       { kind: 'text', text: 'message after flag' },
       { kind: 'text', text: '--force' },
     ])
+  })
+})
+
+test('session send never prints sent when the backend names a stranded transport', async () => {
+  await withBackend(async (api, _requests, env) => {
+    const result = await runCli(['session', 'send', TARGET, 'do not enqueue', '--api', api], env)
+    assert.equal(result.code, 1)
+    assert.equal(result.stdout, '')
+    assert.doesNotMatch(result.stdout + result.stderr, /\bsent\b/)
+    assert.match(result.stderr, /dispatch failed: session send-parser-target is stranded: its launch-time rendezvous listener is absent or refusing connections/)
+    assert.match(result.stderr, /3 queued messages are waiting/)
+    assert.match(result.stderr, /spex session send send-parser-target --keys/)
+  }, {
+    ok: false,
+    error: 'session send-parser-target is stranded: its launch-time rendezvous listener is absent or refusing connections while its registered agent process is still alive; 3 queued messages are waiting with no transport to claim them. Use `spex session send send-parser-target --keys "<keys>"` to steer the live tmux pane, then repair the control transport before sending text.',
   })
 })
 

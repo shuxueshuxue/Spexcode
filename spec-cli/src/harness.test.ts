@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
+import { activeTurnIdFromThread, assertRvSockPath, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot, sessionArtifactPath } from '@spexcode/spec-core'
 import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from '@spexcode/spec-core'
@@ -2102,14 +2102,18 @@ test('rendezvousListening: tri-state — live listener, proven-dead stale file/a
   if (existsSync(rvSock(id))) assert.equal(await rendezvousListening(id, 500), 'dead')
 })
 
-test('a rendezvous path is a launch-time FACT: stamped per runtime, legacy for whatever launched before it', () => {
+test('a rendezvous path is a launch-time FACT: new paths are fixed hashes, old stamped paths stay live', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-rv-stamp-'))
   const prev = process.env.SPEXCODE_HOME
   const prevTmp = process.env.TMPDIR
   process.env.SPEXCODE_HOME = home
   process.env.TMPDIR = join(home, 'macos-platform-temp-' + 'x'.repeat(160))
+  const id = `unit-stamp-${process.pid}-${Date.now()}`
+  const legacyId = `legacy-stamp-${process.pid}-${Date.now()}`
+  const oldRoot = join('/tmp', `spex-rv-old-stamp-${process.pid}-${Date.now()}`)
+  const oldPath = join(oldRoot, `spexcode-rv-${legacyId}.sock`)
+  const oldServer = createServer(() => {})
   try {
-    const id = `unit-stamp-${process.pid}-${Date.now()}`
     // nothing stamped → the UNSCOPED path a pre-stamp launch really bound. A running agent must never be
     // re-addressed by a formula it never heard of; that is what keeps the change from stranding the fleet.
     assert.equal(rvSock(id), legacyRvSock(id))
@@ -2117,17 +2121,43 @@ test('a rendezvous path is a launch-time FACT: stamped per runtime, legacy for w
     const stamped = stampRvSock(id)
     assert.equal(rvSock(id), stamped)
     assert.notEqual(stamped, legacyRvSock(id))
+    assert.match(stamped, new RegExp(`${home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/s/[0-9a-f]{16}/c$`), stamped)
+    assert.doesNotMatch(stamped, new RegExp(id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'session identity is record data, not path text')
     // the same id in ANOTHER runtime is a DIFFERENT socket: two worlds (a fixture, a copied record) hold one
     // id all the time — they must never share one transport, which is what let a foreign teardown reach in.
     assert.notEqual(scopedRvSock(id, '/runtime/a'), scopedRvSock(id, '/runtime/b'))
-    // A macOS-style deep TMPDIR must not participate in a new socket path: it makes connect() fail EINVAL
-    // despite the filesystem inode existing. The literal /tmp spelling stays below Darwin's 104-byte sun_path.
-    assert.ok(stamped.startsWith(`/tmp/spexcode-rv-${process.getuid?.() ?? 0}/`), stamped)
-    assert.ok(stamped.length < 104, `sun_path-safe on macOS too (${stamped.length})`)
+    // A macOS-style deep TMPDIR must not participate in a new socket path. The durable SpexCode home is still
+    // below the Darwin limit because the only variable path segment is a fixed-length hash.
+    assert.ok(!stamped.startsWith(process.env.TMPDIR), stamped)
+    assert.ok(Buffer.byteLength(stamped) < 104, `sun_path-safe on macOS too (${Buffer.byteLength(stamped)} bytes)`)
+
+    // Even a long home retains the fixed 31-byte suffix (<home>/.spexcode/s/<16hex>/c). A truly oversized
+    // home is refused before bind, rather than becoming the deceptive inode-present/connect-EINVAL state.
+    process.env.SPEXCODE_HOME = join('/Users', 'u'.repeat(39), '.spexcode')
+    const longHomePath = assertRvSockPath(id)
+    assert.equal(Buffer.byteLength(longHomePath), 77)
+    assert.ok(Buffer.byteLength(longHomePath) < 104)
+    process.env.SPEXCODE_HOME = join('/', 'u'.repeat(72), '.spexcode')
+    assert.throws(() => assertRvSockPath(id), /rendezvous socket path is 104 bytes \(must be < 104\).*shorten SPEXCODE_HOME/)
+    process.env.SPEXCODE_HOME = home
+
+    // A previously launched worker has its exact old /tmp path stamped beside the record. Deriving a new path
+    // must not rewrite that address or its liveness reading.
+    mkdirSync(dirname(sessionArtifactPath(legacyId, 'rv.path')), { recursive: true })
+    mkdirSync(dirname(oldPath), { recursive: true })
+    writeFileSync(sessionArtifactPath(legacyId, 'rv.path'), oldPath)
+    await new Promise<void>((resolve, reject) => { oldServer.once('error', reject); oldServer.listen(oldPath, resolve) })
+    assert.equal(rvSock(legacyId), oldPath)
+    assert.equal(await rendezvousListening(legacyId, 500), 'live')
+    assert.notEqual(scopedRvSock(legacyId), oldPath)
+    assert.equal(rvSock(legacyId), oldPath)
+    assert.equal(await rendezvousListening(legacyId, 500), 'live')
   } finally {
+    await new Promise<void>((resolve) => oldServer.close(() => resolve()))
     if (prev === undefined) delete process.env.SPEXCODE_HOME; else process.env.SPEXCODE_HOME = prev
     if (prevTmp === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = prevTmp
     rmSync(home, { recursive: true, force: true })
+    rmSync(oldRoot, { recursive: true, force: true })
   }
 })
 

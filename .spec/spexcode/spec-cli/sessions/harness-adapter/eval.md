@@ -255,19 +255,23 @@ scenarios:
   - name: claude-rendezvous-short-path-on-macos
     tags: [backend-api]
     description: >-
-      On macOS, with the platform's ordinary deep `/var/folders/...` TMPDIR, launch a REAL governed Claude
-      session through a configured reclaude launcher. Read its stamped `rv.path`, measure its byte length, then
-      wait through the launch grace and read the board plus the real delivery path.
+      Start from github#97's loss reading: five Claude rendezvous sockets under `/tmp/spexcode-rv-<uid>/` were
+      removed by host cleanup while their 87-byte names remained under the Unix limit. On macOS, launch a REAL
+      governed Claude session through a configured reclaude launcher, read its stamped `rv.path`, and measure
+      its UTF-8 byte length. Derive the same path against a long home without binding it, then use a fixed
+      fixture whose `rv.path` already names an old `/tmp/...` listener and read its resolution and liveness.
     expected: >-
-      The stamped socket is in SpexCode's per-uid 0700 literal `/tmp` directory and remains below macOS's
-      ~104-byte sun_path ceiling. The real Claude accepts the liveness connect, the board becomes
-      `online`/`working` rather than permanently `unknown`, and a real `spex session send` reaches the session.
-      A socket inode at an overlong TMPDIR path is not accepted as evidence: its client connect fails EINVAL,
-      which is the pre-fix failure this scenario locks.
+      The new stamp is in SpexCode's durable `<home>/.spexcode/s/<16hex>/c` store, not an OS temporary-cleanup
+      namespace, and is below the 104-byte `sun_path` cap even for the long-home calculation. The real Claude
+      accepts the liveness connect, and the board becomes `online`/`working` rather than permanently `unknown`.
+      A path at/over the cap refuses during session creation before any bind, instead of producing the deceptive
+      inode-present/connect-`EINVAL` state. The fixed old `/tmp` stamp remains exactly its old address and its
+      live-listener reading does not change: no re-derivation strands an existing worker.
     code:
-      - spec-cli/src/harness.ts#rendezvousSocketBase
+      - spec-cli/src/harness.ts#assertRvSockPath
       - spec-cli/src/harness.ts#scopedRvSock
       - spec-cli/src/harness.ts#stampRvSock
+      - spec-cli/src/sessions.ts
   - name: claude-delivery-survives-sessions-panel
     tags: [backend-api]
     description: >-

@@ -13,7 +13,7 @@ import { claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadle
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
 import { opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
 import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless, piHeadlessColdRuntime } from './pi-headless.js'
-import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath } from '@spexcode/spec-core'
+import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath, spexcodeHome } from '@spexcode/spec-core'
 import { git } from '@spexcode/spec-core'
 import { shQuote } from './sh.js'
 import { detachedRuntimeGenerationToken, migrateLegacyDetachedRuntimeReceipt, processStartToken, verifyDetachedRuntime, type VerifiedDetachedRuntime } from '@spexcode/spec-core'
@@ -394,9 +394,9 @@ export type HarnessArtifacts = { skills: readonly string[]; agents: readonly str
 // sessions.ts starts `claude` with CLAUDE_BG_BACKEND=daemon + CLAUDE_BG_RENDEZVOUS_SOCK=<this path> set ONLY on
 // that one spawned command (env prefix, never global). claude opens a unix socket here; writing one line
 // `{"type":"reply","text":"…"}\n` injects + submits the text as a prompt — no PTY typing, so multi-line input
-// and Enters can't be corrupted the way `tmux send-keys` was. It lives in tmpdir tied to the claude process, so
-// no extra lifecycle. liveness CONNECTS to it (a live LISTENER, not merely the file — see rendezvousListening);
-// deliver writes to it.
+// and Enters can't be corrupted the way `tmux send-keys` was. It lives in SpexCode's own durable store, and
+// its launch-time stamp still gives it no independent lifecycle. liveness CONNECTS to it (a live LISTENER, not
+// merely the file — see rendezvousListening); deliver writes to it.
 //
 // The path is a LAUNCH-TIME FACT, recorded — not a formula every consumer re-derives. The id alone was not
 // enough to name it: `SPEXCODE_HOME` scopes the store and `SPEXCODE_TMUX` scopes the tmux server, so two
@@ -411,19 +411,23 @@ export type HarnessArtifacts = { skills: readonly string[]; agents: readonly str
 // the unscoped path — so those keep working untouched, and the fallback retires as they turn over.
 export const legacyRvSock = (id: string) => join(tmpdir(), `spexcode-rv-${id}.sock`)
 
-// @@@ rendezvousSocketBase - macOS's TMPDIR commonly expands to /var/folders/<long-user-path>, leaving a
-// UUID-scoped socket beyond its 104-byte sun_path limit. It can be created and observed by pathname but every
-// connect fails EINVAL, which looks exactly like an unresponsive worker. Use a literal short /tmp spelling
-// (not tmpdir(), whose resolved form is long on macOS) with the same private per-uid directory pattern as the
-// Codex runtime socket. Existing launches retain their stamped old path through rvSock(); only new launches use
-// this base.
-const rendezvousSocketBase = () => {
-  const base = join('/tmp', `spexcode-rv-${process.getuid?.() ?? 0}`)
-  mkdirSync(base, { recursive: true, mode: 0o700 })
-  return base
-}
+// @@@ scoped rendezvous path - a rendezvous endpoint IS this session's address, so it needs a durable home and
+// a bounded name. `<SPEXCODE_HOME>/s/<16hex>/c` is both: the store is SpexCode-owned (normally ~/.spexcode),
+// while one fixed digest of runtime scope + session identity gives every world/session its own short directory
+// without carrying either raw value in the pathname. This is deliberately NOT the Codex app-server rule: that
+// endpoint routes project-shared threads; this one names a session-owned listener. Existing launches retain
+// their stamped old path through rvSock(); only a new stamp uses this derivation.
+const RENDEZVOUS_SUN_PATH_LIMIT = 104
 export const scopedRvSock = (id: string, dir = runtimeRoot()) =>
-  join(rendezvousSocketBase(), `spexcode-rv-${createHash('sha1').update(dir).digest('hex').slice(0, 12)}-${id}.sock`)
+  join(spexcodeHome(), 's', createHash('sha1').update(`${dir}\0${id}`).digest('hex').slice(0, 16), 'c')
+export function assertRvSockPath(id: string, dir = runtimeRoot()): string {
+  const path = scopedRvSock(id, dir)
+  const bytes = Buffer.byteLength(path)
+  if (bytes >= RENDEZVOUS_SUN_PATH_LIMIT) {
+    throw new Error(`rendezvous socket path is ${bytes} bytes (must be < ${RENDEZVOUS_SUN_PATH_LIMIT}): ${path}; shorten SPEXCODE_HOME before creating this session`)
+  }
+  return path
+}
 const rvStamp = (id: string) => sessionArtifactPath(id, 'rv.path')
 export const rvSock = (id: string): string => {
   try { return readFileSync(rvStamp(id), 'utf8').trim() || legacyRvSock(id) } catch { return legacyRvSock(id) }
@@ -431,7 +435,8 @@ export const rvSock = (id: string): string => {
 // launch's half: derive this session's socket in ITS runtime and record it, so every later reader (launch env,
 // liveness probe, delivery, teardown) reads the one path the agent actually bound.
 export function stampRvSock(id: string, dir = runtimeRoot()): string {
-  const path = scopedRvSock(id, dir)
+  const path = assertRvSockPath(id, dir)
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
   mkdirSync(dirname(rvStamp(id)), { recursive: true })
   writeFileSync(rvStamp(id), path)
   return path

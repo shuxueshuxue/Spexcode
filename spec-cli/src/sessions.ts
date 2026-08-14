@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
 import { git, gitA, gitTry, repoRoot, mergeBaseDiff, mergeConflicts, withGitAbortSignal, isGitObjectId, type ReviewDiffFile } from '@spexcode/spec-core'
 import { loadConfig, loadSpecs, loadSpecsLite, type ConfigPreset, type SpecLite } from '@spexcode/spec-core'
-import { adapterLoadedReferenceState, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
+import { adapterLoadedReferenceState, assertRvSockPath, defaultHarness, HARNESSES, sessionIdentityEnvVars, defaultLauncher, harnessById, procSnapshot, resolveLauncher, rendezvousListening, stampRvSock, type Harness, type HarnessLaunchReadinessFence, type TurnFailure, type FailureSubscription, type DispatchResult, type PaneProbe, type ProcTable } from './harness.js'
 import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
@@ -2248,6 +2248,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
         chosen = resolveLauncher(lname)
         h = harnessById(chosen.harness)
         pinned = h.baseCmd(chosen.cmd)
+        if (h.ownsRendezvous) assertRvSockPath(id)
       } catch (error) {
         throw new SessionCreateError('session_create_failed', phase, error instanceof Error ? error.message : String(error), 400)
       }

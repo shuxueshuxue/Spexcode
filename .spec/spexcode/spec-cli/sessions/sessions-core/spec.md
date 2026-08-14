@@ -222,10 +222,13 @@ the human's own words following byte-for-byte; the alternative was refusing to c
 no `if (harness)` and no per-adapter prompt escape exists in the launch path ([[harness-adapter]]).
 
 A launch is likewise refused **before** a window opens when the transport can already settle it: no worktree,
-no branch, no resolvable launcher command. Those are facts about this machine that no number of attempts can
-change, so each is one loud refusal carrying its own code — never a launch that fast-exits and is retried on a
-wall clock ([[launch]]). What the transport cannot settle stays with the bounded readiness retry, and what only
-the harness can recognize is the harness's to declare ([[harness-adapter]]).
+no branch, no resolvable launcher command, or a rendezvous owner's derived socket pathname at/over its OS byte
+limit. Those are facts about this machine that no number of attempts can change, so each is one loud refusal
+carrying its own code — never a launch that fast-exits and is retried on a wall clock ([[launch]]). The
+rendezvous check is a generic `ownsRendezvous` preflight and the adapter owns its derivation; it runs during
+creation before any candidate resource exists and again before its launch-time stamp. What the transport cannot
+settle stays with the bounded readiness retry, and what only the harness can recognize is the harness's to
+declare ([[harness-adapter]]).
 
 An unreadable governed record has one separate recovery control: **quarantine** is neither `close` nor a
 repair. The caller supplies the exact former adapter/thread (or explicitly no native thread), tmux session,

@@ -141,7 +141,7 @@ function sessionVerbHelp(verb: string): string | null {
 const ENTRIES: Record<string, Entry> = {
   // ── project verbs (implicit object = this project) ────────────────────────
   graph: {
-    line: 'graph                 the assembled view: bare = readable tree · --json = full payload · --public = static graph snapshot',
+    line: 'graph                 list the assembled spec nodes: bare = readable tree · --json = full payload · --public = static graph snapshot',
     body: `Usage: spex graph [--focus <id>] [--depth N] [--json] | spex graph --public [--out <path>] [--content-dir <path>]
 
 The normal assembled view is merged spec tree + worktree overlay + sessions. Bare it renders the
@@ -517,6 +517,16 @@ export function commandHelp(name: string, verb?: string): string | null {
   const oneLiner = e.line.replace(/^\S+(\s+\S+)*?\s{2,}/, '')   // the map line minus its "cmd args" column
   const header = oneLiner ? `spex ${name} — ${oneLiner}\n\n` : ''  // unlisted entries (internal, help) lead with their own Usage
   return `${header}${e.body}${e.see ? `\n\nsee also: ${e.see}` : ''}\n\nmap: spex help · skills: spex guide`
+}
+
+// The public help map is also the command-suggestion catalog: the command name and its own help prose are
+// one truth, so a new public command becomes suggestible when it becomes typeable.
+export type PublicCommand = Readonly<{ name: string; text: string }>
+
+export function publicCommands(): readonly PublicCommand[] {
+  return Object.entries(ENTRIES)
+    .filter(([name]) => name !== 'internal')
+    .map(([name, entry]) => ({ name, text: `${entry.line}\n${entry.body}` }))
 }
 
 export type HelpCatalogEntry = Readonly<{ id: string; title: string; text: string }>

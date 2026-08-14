@@ -13,6 +13,7 @@ related:
   - spec-cli/src/session-create-cli.test.ts
   - spec-cli/src/session-ls-cli.test.ts
   - spec-cli/src/session-declarations.cli.test.ts
+  - spec-cli/src/unknown-command-cli.test.ts
 ---
 # cli-surface
 
@@ -172,7 +173,11 @@ has a move:
 
 Dead-end rule: an unknown command, unknown drawer verb, unknown help topic, unknown guide topic, and
 a bare `spex internal` each fail loud AND name the layer to go back to; a removed spelling fails
-loud AND names its replacement — never a silent exit.
+loud AND names its replacement — never a silent exit. A top-level unknown command also consults the
+public command table as a nearest-intent catalog: when a candidate is close enough, the rejection names
+that real command as the repair while retaining `spex help` as the map; an unrelated token offers only
+the map rather than inventing a command. This is one derived matcher over the command surface, never
+a per-typo alias table, so a guessed `list` or `nodes` can route to `spex graph`, the real spec-node tree.
 
 Naming the layer is not the whole duty when the message also names the ALTERNATIVES, because a list can be
 complete, loud, and wrong at once. Where those alternatives are a registry ANOTHER module owns, the hub

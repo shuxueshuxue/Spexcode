@@ -359,12 +359,19 @@ surface:
   for 30+ minutes". A `connect()` is the honest test: a live claude accepts it, a stale file refuses it
   (ECONNREFUSED, instant), an absent file ENOENTs (instant) — so a dead claude reads `offline` within seconds.
   The rendezvous pathname is a launch-time fact, stamped beside the session record so future derivations cannot
-  strand an existing worker. New paths live in a short, per-uid `0700` directory under the literal `/tmp`
-  spelling, not the platform's expanded `TMPDIR`: macOS commonly expands that variable under `/var/folders/...`,
-  and adding the runtime hash plus session UUID can exceed its ~104-byte `sun_path` cap. That failure is
-  particularly deceptive — the socket inode can exist while every `connect()` fails `EINVAL`, falsely reading
-  every otherwise healthy Claude session as `unknown`. The short path is therefore unconditional, like Codex's
-  short app-server path; platform limits belong at this transport boundary, never in lifecycle semantics.
+  strand an existing worker. A NEW rendezvous owner gets its socket under SpexCode's own durable home — normally
+  `<home>/.spexcode/s/<16hex>/c` (or that user's `SPEXCODE_HOME`) — never an OS temporary-cleanup namespace.
+  The 16 hex digits are one fixed digest of runtime scope + session identity; the leaf is the constant `c`, so
+  neither raw session id nor project name becomes pathname text, while two worlds holding the same session id
+  still cannot share a listener. The directory is created `0700`. This satisfies BOTH constraints at once:
+  the home-owned store survives host temporary cleanup, and the fixed 31-byte suffix leaves a known byte budget
+  below macOS's ~104-byte `sun_path` cap. The owner calculates its UTF-8 path bytes during session creation and
+  refuses loudly before a worktree/window/bind when the result is not `< 104`; it also checks before stamping.
+  That prevents the deceptive `EINVAL` state where an inode exists but every `connect()` fails and a healthy
+  worker reads `unknown`. An old stamped `/tmp/...` value remains that worker's address forever: readers use the
+  stamp unchanged, with no flag day. This rule belongs ONLY to `ownsRendezvous` adapters, whose endpoint is the
+  session's identity; it does not change Codex's deliberately project-shared app-server, whose endpoint routes
+  many threads and intentionally carries no session identity.
   (The pane command is always the wrapper/shell while claude runs as its child, so claude still IGNORES the pane
   probe.) **codex** = the tmux window is up AND a
   **codex process is live in the pane's DESCENDANT process tree**. The pane's FOREGROUND name is NOT the signal:

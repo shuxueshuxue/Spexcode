@@ -164,4 +164,5 @@ pass**, deferring to the next tick: under load the safe move is to add no comput
 undercount ([[state]] board honesty applied to the cap). `reopen` relaunches a **confirmed-dead** session (the
 resume guard refuses an alive one — [[state]]) and **waits for its rendezvous socket** before returning, so
 a follow-on [[dispatch]] hits a live socket. `closeSession` is the only removal — human-only, deleting the
-worktree, **sweeping the rendezvous socket** (in the tmpdir), and removing the session's global record dir.
+worktree, **sweeping the rendezvous socket** from SpexCode's durable rendezvous store, and removing the session's
+global record dir.

@@ -506,8 +506,29 @@ scenarios:
       The retirement completes. The cold proof establishes each loaded member's turn presence from the paginated
       collection census it already performs, whose cost tracks how many native threads exist rather than how much
       history any one of them holds, so a thread that has been alive for weeks stays retirable. A loaded thread
-      with a genuinely running turn still refuses with an active-turn reason, and presence the app-server did not
-      report is still `unknown` and still fails closed: the false timeout goes away, the gate does not.
+      with a genuinely running turn still refuses with an active-turn reason. When the census cannot determine an
+      otherwise uniquely owned member, cold teardown reads only that member's bounded durable rollout tail:
+      `task_complete` settles the unknown turn, while a missing, unreadable, incomplete, or non-terminal tail still
+      refuses and names both the live Codex client and rollout evidence. The gate never thread-reads history.
+  - name: codex-rollout-tail-settles-unknown-cold-member
+    tags: [backend-api, cli]
+    code:
+      - spec-cli/src/harness.ts#codexColdPreflightOnce
+      - spec-cli/src/harness.ts#codexRolloutTurnSettlement
+    related: spec-cli/src/session-archive-cold-close.api.test.ts
+    test:
+      path: spec-cli/src/session-archive-cold-close.api.test.ts
+      name: CLI close settles an unknown Codex member from rollout without weakening active or missing-evidence refusals
+    description: >-
+      In an isolated project with a fixture Codex app-server and a real detached app-server owner, invoke the public
+      CLI `session close` path for three temporary governed records with real Git worktrees. Make one loaded member's
+      live status unknown while the final JSONL rollout record is `event_msg`/`task_complete`; make a second target
+      own a live active child; and make a third unknown member have no rollout at all.
+    expected: >-
+      The terminal-rollout target closes and removes its record. The live active child still rejects close with the
+      exact existing `Codex subtree member <id> has an active turn` reason. The unknown member without terminal
+      evidence still rejects and identifies both the absent determinate live Codex client state and missing rollout,
+      with its record retained. The fixture mutates no pre-existing user session, worktree, branch, or app-server.
   - name: stranded-rendezvous-refuses-text-send
     tags: [backend-api, cli]
     code:

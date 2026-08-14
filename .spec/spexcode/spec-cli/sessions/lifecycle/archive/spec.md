@@ -61,8 +61,14 @@ subtree census runs again after the mutation and before success. A new, missing,
 in that interval refuses and compensates instead of filing a false zero-runtime proof.
 Archive eligibility reads the target's live native turn state, not its public lifecycle/status projection: a turn in
 flight refuses with zero mutation, while a loaded target the runtime reports idle may archive even if a hook-authored
-public status still reads working. That live state comes from the census the ownership proof already performs, so
-eligibility never costs a transcript read — a target alive for weeks stays archivable.
+public status still reads working. A Codex subtree member whose live client reports `active` is that same immediate
+refusal; durable history never countermand it. Only when that client cannot determine a uniquely-owned member's turn
+state may the Codex adapter inspect the constant-size tail of that member's durable rollout: a final native turn-end
+record (currently `event_msg` / `task_complete`, plus documented equivalent terminal records) proves the turn settled.
+An absent, unreadable, incomplete, or non-terminal rollout tail remains a loud refusal, and the error names both the
+missing live-client determination and the rollout's own absence. Thus ordinary eligibility still costs no transcript
+read — a target alive for weeks stays archivable — while a vanished client cannot turn its own lost observation into a
+permanent terminal veto.
 That rule is for reversible archive. A human-confirmed terminal `close` first passes the same exact target-ownership
 guard, then may invoke the adapter's exact native interrupt for its recorded target turn, wait for that turn to settle,
 and then repeat the complete cold proof

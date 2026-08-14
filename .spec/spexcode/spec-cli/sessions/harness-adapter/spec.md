@@ -272,8 +272,11 @@ surface:
   a long-lived session unmutatable against any fixed budget, and raising the budget only moves the threshold. Turn
   IDENTITY is the separate question: only interrupt needs to name the turn it interrupts, so only interrupt pays a
   transcript read, against a target that is by definition active. Presence the app-server did not report — including
-  two native sources contradicting each other — is unknown and fails closed; it is never derived from something
-  cheaper. The periodic report keeps its short bounded
+  two native sources contradicting each other — never becomes an `active` verdict. For Codex cold teardown alone, an
+  otherwise uniquely-owned member with that unknown presence may consult the final record in its durable rollout tail:
+  a terminal native event proves its turn settled, while a missing, unreadable, incomplete, or non-terminal tail stays
+  fail-closed and names both the live Codex client and rollout evidence in the refusal. A live `active` report remains
+  the unchanged immediate refusal; the durable tail cannot override it. The periodic report keeps its short bounded
   probe budget; a lifecycle mutation's explicit target census has its own longer bounded budget so a busy shared
   app-server does not turn a safe target proof into a false refusal. A transport-local census refusal is retried
   a small bounded number of times with the same generation fence; semantic ownership refusals return immediately.

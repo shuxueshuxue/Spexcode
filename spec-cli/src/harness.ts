@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
+import { closeSync, openSync, readSync, writeFileSync, readFileSync, existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import { createHash, randomBytes } from 'node:crypto'
@@ -1589,7 +1589,15 @@ async function codexColdPreflightOnce(threadId: string, dir = runtimeRoot(), exp
   for (const id of loadedSubtreeIds) {
     const presence = codexPresenceFromStatus(statusById.get(id))
     if (presence === 'active') return { ok: false, reason: `Codex subtree member ${id} has an active turn` }
-    if (presence === 'unknown') return { ok: false, reason: `Codex subtree member ${id} turn state is unknown` }
+    if (presence === 'unknown') {
+      const rollout = codexRolloutTurnSettlement(id)
+      if (!rollout.settled) {
+        return {
+          ok: false,
+          reason: `Codex subtree member ${id} turn state is unknown: live Codex client did not report a determinate turn state; ${rollout.reason}`,
+        }
+      }
+    }
     if (archivedSet.has(id)) return { ok: false, reason: `Codex archived subtree member ${id} remains loaded` }
   }
 
@@ -2113,6 +2121,37 @@ export function codexRolloutBytes(threadId: string, root?: string): { bytes: num
   const path = codexRolloutPath(threadId, root)
   if (path) { try { return { bytes: statSync(path).size } } catch { return { unreadable: true } } }
   return { bytes: 0 }
+}
+
+type CodexRolloutTurnSettlement = { settled: true } | { settled: false; reason: string }
+const CODEX_ROLLOUT_TAIL_BYTES = 64 * 1024
+const CODEX_ROLLOUT_TERMINAL_EVENTS = new Set(['task_complete', 'task_completed', 'turn_complete', 'turn_completed'])
+
+function codexRolloutTurnSettlement(threadId: string, root?: string): CodexRolloutTurnSettlement {
+  const path = codexRolloutPath(threadId, root)
+  if (!path) return { settled: false, reason: 'rollout is missing' }
+  let fd: number | null = null
+  try {
+    const size = statSync(path).size
+    if (size === 0) return { settled: false, reason: 'rollout has no terminal record' }
+    const length = Math.min(size, CODEX_ROLLOUT_TAIL_BYTES)
+    const tail = Buffer.allocUnsafe(length)
+    fd = openSync(path, 'r')
+    if (readSync(fd, tail, 0, length, size - length) !== length)
+      return { settled: false, reason: 'rollout tail is unreadable' }
+    const line = tail.toString('utf8').split('\n').reverse().find((value) => value.trim())
+    if (!line) return { settled: false, reason: 'rollout has no terminal record' }
+    let event: unknown
+    try { event = JSON.parse(line) } catch { return { settled: false, reason: 'rollout tail is incomplete or malformed' } }
+    const payload = event && typeof event === 'object' ? (event as { payload?: unknown }).payload : null
+    const terminal = event && typeof event === 'object' && (event as { type?: unknown }).type === 'event_msg' &&
+      payload && typeof payload === 'object' && CODEX_ROLLOUT_TERMINAL_EVENTS.has(String((payload as { type?: unknown }).type || ''))
+    return terminal ? { settled: true } : { settled: false, reason: 'rollout has no terminal record' }
+  } catch {
+    return { settled: false, reason: 'rollout tail is unreadable' }
+  } finally {
+    if (fd !== null) closeSync(fd)
+  }
 }
 // poll until the thread's rollout lands (resume-ready) or the budget runs out. Returns false on timeout so the
 // caller can FAIL LOUD instead of handing `resume` / the stored record a non-resumable id. The budget must

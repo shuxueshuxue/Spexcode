@@ -30,14 +30,18 @@ product launched. Interactive Claude/pi/opencode use the rendezvous protocol, Co
 [[claude-headless]] uses a controller that writes Claude-native stream-json stdin. Multi-line prompts and Enters
 therefore cannot be corrupted the way `tmux send-keys` could.
 
-**Acceptance is the append; the handover is the adapter, retried.** `sendText` appends one `sent` line to the
-target's durable log and enqueues the message on that session's delivery queue ([[delivery-queue]]) inside one
-hold of its record lock ([[session-timeline]]), and reports success on that write — a sender learns whether the
-message was accepted, never whether a socket was reachable. It then drains the queue immediately, so a live
-agent sees the message in its current turn; whatever that drain could not hand over stays queued and is
-retried by the serve that owns the project root. The channel is the ONLY way a message enters an agent, so it
-arrives in exactly the shape a human prompt does. There is no send-keys fallback, no PTY prompt typing, and no
-hook-injected copy — a turn-boundary hook reports freshness and never carries conversation.
+**Acceptance is the append; the handover is the adapter, retried.** `sendText` normally appends one `sent` line
+to the target's durable log and enqueues the message on that session's delivery queue ([[delivery-queue]])
+inside one hold of its record lock ([[session-timeline]]), and reports success on that write. The one refusal
+before that append is a **stranded transport**: the resolved adapter proves its native prompt transport
+unreachable while the independent registered pid proves its worker still lives. That combination cannot
+self-heal, so the response names the transport cause, existing queued count, and the raw-key tmux bypass; it
+adds neither history nor queue debt, and `/api/sessions/:id/input` is non-2xx. A merely unproven probe is not
+stranded and keeps the ordinary queue retry, while a dead worker may be made addressable by resume. An accepted
+message is drained immediately so a live agent sees it in its current turn; whatever that drain could not hand
+over stays queued and is retried by the serve that owns the project root. The channel is the ONLY way a message
+enters an agent, so it arrives in exactly the shape a human prompt does. There is no send-keys fallback, no PTY
+prompt typing, and no hook-injected copy — a turn-boundary hook reports freshness and never carries conversation.
 
 Locating the truth in the file is what dissolves the hardest failure this mechanism ever had. Claude's
 rendezvous daemon keeps **ONE connection** and destroys the previous socket on every new connect,

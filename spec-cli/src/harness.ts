@@ -43,6 +43,13 @@ export type HarnessLaunchReadinessFence = {
 }
 export type TurnFailure = { message: string; completedAt: number | null }
 export type FailureSubscription = { close(): void; readonly closed: Promise<string | null> }
+// An adapter's native input transport can be ready, temporarily inconclusive, or proven unreachable. This is
+// deliberately separate from agent liveness: sessions.ts joins an unreachable transport with its independent
+// registered-pid witness before it calls the conversation stranded.
+export type DeliveryTransportState =
+  | { kind: 'reachable' }
+  | { kind: 'unproven' }
+  | { kind: 'unreachable'; reason: string }
 // the per-pane runtime probe the caller snapshots ONCE for the whole session list and hands liveness():
 // the pane's root pid (tmux `#{pane_pid}`), the hot-tier `pidAlive` verdict, and — ONLY on the legacy path —
 // one whole-box pid→(ppid, comm) table (a single `ps` spawn).
@@ -300,6 +307,10 @@ export interface Harness {
   // (mid-turn, not queued for after the agent stops) or `turn/start`s a fresh turn when the thread is idle.
   // `ok=false` leaves the message OWED on the session's delivery queue, for a later pass to hand over.
   deliver(rec: HarnessDeliveryRecord, text: string): Promise<DispatchResult>
+  // Report what the adapter can prove about its native prompt transport BEFORE a new debt is accepted. An
+  // inconclusive probe remains retryable; a proven-unreachable channel is joined with the session-owned pid
+  // witness by sessions.ts, which is the only place allowed to call a live agent's transport stranded.
+  deliveryTransport?(rec: HarnessDeliveryRecord): Promise<DeliveryTransportState>
   // Observe native turn failures that this harness does not expose as a lifecycle hook. The adapter owns the
   // transport subscription; sessions owns observer reconciliation and the active-only lifecycle CAS.
   observeTurnFailures?(rec: HarnessDeliveryRecord, onFailure: (failure: TurnFailure) => void): FailureSubscription
@@ -460,6 +471,14 @@ export function listenerAt(path: string, timeoutMs = 800): Promise<ListenerProbe
   })
 }
 export const rendezvousListening = (id: string, timeoutMs = 800): Promise<ListenerProbe> => listenerAt(rvSock(id), timeoutMs)
+const rendezvousDeliveryTransportAt = async (path: string): Promise<DeliveryTransportState> => {
+  const probe = await listenerAt(path)
+  if (probe === 'live') return { kind: 'reachable' }
+  if (probe === 'unproven') return { kind: 'unproven' }
+  return { kind: 'unreachable', reason: 'its launch-time rendezvous listener is absent or refusing connections' }
+}
+const rendezvousDeliveryTransport = (rec: HarnessDeliveryRecord): Promise<DeliveryTransportState> =>
+  rendezvousDeliveryTransportAt(rvSock(rec.session))
 // The app-server Unix socket MUST live on a SHORT, sun_path-safe path — NOT nested under the project runtime
 // dir. macOS caps `sun_path` at ~104 bytes, and `runtimeRoot()` flattens the ENTIRE project path into one
 // dash-segment (`encodeProject`), so `<runtimeRoot>/codex-app-server.sock` blew past the cap on a deep macOS
@@ -592,6 +611,17 @@ function claudeForkTransport(sourceSessionId: string, runtimeDir?: string): Clau
   }
   return null
 }
+
+async function claudeDeliveryTransport(rec: HarnessDeliveryRecord): Promise<DeliveryTransportState> {
+  const fork = claudeForkTransport(rec.session, rec.runtimeDir)
+  if (!fork) return rendezvousDeliveryTransport(rec)
+  const forkState = await rendezvousDeliveryTransportAt(fork.sock)
+  if (forkState.kind !== 'unreachable' || fork.sock === rvSock(rec.session)) return forkState
+  // A stale roster row must not strand a source worker whose stamped launch transport is still reachable.
+  return rendezvousDeliveryTransport(rec)
+}
+
+const unprovenDeliveryTransport = async (): Promise<DeliveryTransportState> => ({ kind: 'unproven' })
 
 function replyViaSocket(sock: string, text: string, mid?: string, auth?: string): Promise<DispatchResult> {
   return new Promise((resolve) => {
@@ -2471,6 +2501,7 @@ export const claudeHarness: Harness = {
   // dead-pane-reads-working bug). See rendezvousListening.
   liveness: socketListenerLiveness,
   leafOwnerNeedle: (rec) => rec.session,
+  deliveryTransport: claudeDeliveryTransport,
   deliver: (rec, text) => deliverViaClaudeRendezvous(rec.session, text, rec.mid, rec.runtimeDir),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
   coldRuntime: async () => ({ ok: true }),
@@ -2506,6 +2537,7 @@ export const claudeHeadlessHarness: Harness = {
   // Liveness is the intact, non-stopped record's property. A missing controller/child fails loudly at control
   // time rather than turning an idle (no child) session into a speculative offline row.
   liveness: recordOnline,
+  deliveryTransport: unprovenDeliveryTransport,
   deliver: deliverViaClaudeHeadless,
   interrupt: interruptClaudeHeadless,
   cleanupRuntime: (rec) => unlinkSocks(claudeHeadlessSock(rec.session)),
@@ -2930,6 +2962,7 @@ export const piHarness: Harness = {
   // socket the generated extension binds. socketLive is already probed for every windowed session.
   liveness: socketListenerLiveness,
   leafOwnerNeedle: (rec) => rec.session,
+  deliveryTransport: rendezvousDeliveryTransport,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text, rec.mid),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
   coldRuntime: async () => ({ ok: true }),
@@ -2947,6 +2980,7 @@ export const piHeadlessHarness: Harness = {
   id: 'pi-headless',
   sessionEnvVar: harnessIdentity('pi-headless').sessionEnvVar,
   headless: true,
+  deliveryTransport: unprovenDeliveryTransport,
   // The controller is a per-session process launched in the target tmux pane. Its launch-registered PID
   // and argv session id are exact leaf ownership evidence; record-backed liveness does not make it shared.
   runtimeOwnership: 'leaf',
@@ -3046,6 +3080,7 @@ export const opencodeHarness: Harness = {
   // load still reads honestly from the process signal instead of a false offline.
   liveness: socketListenerOrPidAliveLiveness,
   leafOwnerNeedle: (rec) => rec.session,
+  deliveryTransport: rendezvousDeliveryTransport,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text, rec.mid),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
   coldRuntime: async () => ({ ok: true }),
@@ -3064,6 +3099,7 @@ export const opencodeHeadlessHarness: Harness = {
   sessionEnvVar: harnessIdentity('opencode-headless').sessionEnvVar,
   headless: true,
   runtimeOwnership: 'adapter',
+  deliveryTransport: unprovenDeliveryTransport,
   launchCmd: (_id, _runtimeDir, cmd) => opencodeHeadlessLaunchCommand(opencodeBaseCmd(cmd)),
   // A sleeping native conversation is still addressable by its non-stopped record. Transport breakage belongs
   // to the next delivery, where the live rendezvous or pane wake reports it loudly.

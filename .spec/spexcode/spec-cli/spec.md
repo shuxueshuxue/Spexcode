@@ -163,7 +163,8 @@ audit answer after record removal). `closure` returns only its target id and clo
 second historical session collection. Every closure response carries its capability marker, including a 404,
 so a client can distinguish no close fact from a backend that lacks the route. `merge` is a **dispatch to the session's own
 agent**, not a server merge — it returns `{dispatched}` and never touches main's tree. Text input appends a
-whole prompt to the target timeline, then best-effort pokes its adapter; only a refused append is 502.
+whole admissible prompt to the target timeline, then best-effort pokes its adapter; a proven-unreachable native
+transport paired with a still-live registered worker refuses before that append as stranded, and is also 502.
 `rawkey` keeps tmux send-keys for nav; `socket` streams pane bytes. Session
 mutations that commit no transition also answer with a non-2xx JSON error, so a refused stop or close cannot
 paint as a successful request on the dashboard; the lifecycle guard remains the authority on whether the

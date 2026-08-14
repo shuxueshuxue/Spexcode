@@ -134,13 +134,16 @@ takes it — a backend is the convenient owner of the launch environment and a s
 of the invariant, and a read that takes no lock needs no permission from anyone. That is what lets this
 layer be a brick an external system can drive rather than a service it must be granted access to.
 
-A text send takes the target record lock for the durable timeline append; an agent-attributed send also takes
-its named sender's lock in sorted order. Close keeps that sender lock through terminal record removal and then
-publishes the delivery queue's sender-revocation marker, so a stale process cannot append after close returns.
-Both locks release before the adapter poke: a native turn can synchronously invoke lifecycle hooks that re-enter
-the record writer, so no record lock spans the handover. The delivery queue's own lock is what makes a handover
-exactly-once and recognizes revoked unhanded debt, while normal adapter/runtime guards remain the authority for
-concurrent lifecycle operations.
+A text send takes the target record lock for its durable timeline append; an agent-attributed send also takes
+its named sender's lock in sorted order. Before a new append, sessions-core asks the resolved adapter's optional
+transport witness. Its proven-unreachable answer becomes a stranded refusal only when this layer's independent
+registered-pid witness still proves the worker alive; an unproven transport remains queue-retryable and does not
+change liveness. Close keeps the sender lock through terminal record removal and then publishes the delivery
+queue's sender-revocation marker, so a stale process cannot append after close returns. Both locks release
+before the adapter poke: a native turn can synchronously invoke lifecycle hooks that re-enter the record writer,
+so no record lock spans the handover. The delivery queue's own lock is what makes a handover exactly-once and
+recognizes revoked unhanded debt, while normal adapter/runtime guards remain the authority for concurrent
+lifecycle operations.
 
 Archive may carry an opaque adapter cold-preflight receipt across its exact leaf/tmux stop, into the same adapter's
 cold commit, and through the final record/offline publication boundary. This shared layer forwards that one in-memory

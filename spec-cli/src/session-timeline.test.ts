@@ -1,14 +1,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { appendSent, currentHumanTurn, lastHumanSendVia, readTimeline, sentDispatchReceipt, settleSentDispatch, timelineEvents } from './session-timeline.js'
-import { pendingMessages } from './delivery-queue.js'
-import { rvSock } from './harness.js'
-import { projectPublicRecordEntry, sessionRecordPath, sessionStoreDir, type RawRecord } from '@spexcode/spec-core'
+import { enqueue, pendingMessages } from './delivery-queue.js'
+import { rvSock, stampRvSock } from './harness.js'
+import { projectPublicRecordEntry, sessionArtifactPath, sessionRecordPath, sessionStoreDir, type RawRecord } from '@spexcode/spec-core'
 import { cancelSessionWatch, composeSessionPrompt, listSessionWatches, markState, sendText, subscribeSessionWatch, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
 // The reply-channel signal must be SYMMETRIC (the [[session-timeline]] write surface): the phone's
@@ -421,6 +423,36 @@ test('a send the adapter cannot take still succeeds, and the message stays OWED'
     assert.equal(evs.length, 1)
     assert.equal(evs[0].kind === 'sent' && evs[0].text, 'the insert will fail')
     assert.equal(pendingMessages(ID).length, 1, 'nothing was handed over, so the session still owes it')
+  })
+})
+
+test('a live agent with a proven-dead rendezvous transport is stranded before enqueue', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-stranded-send-'))
+  seedSessionRecord(home)
+  await withHomeAsync(home, async () => {
+    const sock = stampRvSock(ID)
+    const listener = createServer()
+    await new Promise<void>((resolve, reject) => { listener.once('error', reject); listener.listen(sock, resolve) })
+    await new Promise<void>((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()))
+    rmSync(sock, { force: true }) // only the socket created by this fixture
+
+    const agent = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    assert.ok(agent.pid)
+    writeFileSync(sessionArtifactPath(ID, 'agent.pid'), `${agent.pid}\n`)
+    enqueue(ID, { mid: 'already-owed', text: 'older debt', from: null })
+    try {
+      const result = await sendText(ID, 'must not join the abandoned queue')
+      assert.equal(result.ok, false)
+      assert.doesNotMatch(result.error ?? '', /\bsent\b/)
+      assert.match(result.error ?? '', /stranded: its launch-time rendezvous listener is absent or refusing connections/)
+      assert.match(result.error ?? '', /1 queued message is waiting/)
+      assert.match(result.error ?? '', new RegExp(`spex session send ${ID} --keys`))
+      assert.equal(timelineEvents(ID).filter((event) => event.kind === 'sent').length, 0)
+      assert.deepEqual(pendingMessages(ID).map((message) => message.mid), ['already-owed'])
+    } finally {
+      agent.kill()
+      await once(agent, 'exit')
+    }
   })
 })
 

@@ -125,7 +125,9 @@ gone, as is every deprecated alias: there are no two spellings that reach one ha
 that "still runs but warns". The raw-key escape hatch is not a verb but the last-resort face of one:
 `session send <SEL> --keys "<keys>"` — every surface that teaches it (help, the session drawer
 entry, the contract block) must mark it unstable and say "try a plain send first", because the raw
-key path can confirm dangerous dialogs.
+key path can confirm dangerous dialogs. A plain-text `session send` prints `sent` on stdout ONLY after its
+backend accepts the message; any backend refusal prints the named dispatch reason on stderr and exits non-zero,
+so a stranded native transport cannot look like a successful command in scripts or a terminal.
 
 **Signposts, one version only.** Every spelling v0.3.0 removed (the bare promoted verbs, the bare
 session subs, `yatsu`/`blob`/`issues`/`forge`/`tree`/`board`, top-level

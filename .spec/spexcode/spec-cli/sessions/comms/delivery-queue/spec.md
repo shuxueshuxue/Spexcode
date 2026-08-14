@@ -48,8 +48,11 @@ deleted rather than stored as an empty list, so "is anything owed?" is the exist
 
 **The enqueue rides the append.** `sendText` records the `sent` line and enqueues the same message inside one
 hold of the session's record lock ([[dispatch]]); a keyed acceptance additionally holds this queue's lock, in
-the common record-then-delivery order. Success is still decided by the record write, unchanged: the queue is
-what the message is owed, not whether it was accepted. The record is written first — a crash between the two
+the common record-then-delivery order. A proven-unreachable adapter transport joined to a still-live registered
+agent is the one pre-append refusal: that session is stranded and new text must name the cause, debt count, and
+raw-key bypass instead of creating more unclaimable debt. A transient/unproven probe, or a dead worker that a
+later resume can address, keeps the ordinary acceptance rule: the queue is what the accepted message is owed,
+not an immediate-poke receipt. The record is written first — a crash between the two
 writes leaves a message that is visible but undelivered, never one delivered but unrecorded. For the keyed
 merge intent, the receipt carries the already-composed transport bytes, so the same request reconstructs that
 one missing debt rather than mistaking the durable receipt for completed delivery.

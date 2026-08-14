@@ -58,6 +58,12 @@ borrow the caller's local cwd and therefore stay outside this first group.
 `spex spec lint --json` is the machine representation of the same blocking report, not another lint
 verb: it emits the [[spec-lint]] versioned report on stdout while retaining lint's error-derived exit code.
 
+A product precondition that has a direct repair is a user error at this boundary, not an implementation
+exception: the CLI renders one `spex:` line naming the situation and its next action, without a Node stack or
+raw child stderr. Git-workspace discovery supplies the ordinary example — an absolute workspace before
+`git init` is named, and the reader is directed to initialize that same directory before retrying. A Git child
+that fails after the precondition remains an underlying failure rather than being rewritten into this repair.
+
 The `flat` drawer exposes three real verbs: `flat new` measures a repository into a spec tree, `flat site`
 emits a relocatable graph-only static site, and `flat gallery` assembles several sites under one index.
 These bounded conversion/preview operations do not create sessions, serve a backend, or push the target.

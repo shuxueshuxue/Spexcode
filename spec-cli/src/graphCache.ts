@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import { rebasePublishedSessions } from '@spexcode/spec-core'
 import { buildBoard, spliceSessions } from './graphSnapshot.js'
-import { headSha, repoRoot, withGitAbortSignal } from '@spexcode/spec-core'
+import { headSha, repoRoot, requireGitWorkspace, withGitAbortSignal } from '@spexcode/spec-core'
 import { listSessionIds, mainBranch, mainCheckout, readPublicRecordEntry, sessionArtifactPath, sessionRecordPath } from '@spexcode/spec-core'
 import { boardThreads } from './issues.js'
 import { resolveForgeHost } from '@spexcode/spec-forge/drivers'
@@ -164,6 +164,7 @@ function sessionInputRevision(): SessionInputRevision {
 
 function boardInputRevision(board: Board | null): BoardInputRevision {
   const root = repoRoot()
+  requireGitWorkspace(root)
   const session = sessionInputRevision()
   // Durable active records are the current root set; a cached ordinary row may be stale and must not replace
   // them. The one projection-only addition is explicit: listSessions republishes an archived-runtime hazard

@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, chmodSync, exist
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
-import { driftFor, ancestorsOf, primeAncestorClosures, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, worktreeSpecDeltas, driftIndex, historyIndex, sourceIndexes, sourceIndexesFull, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, type DriftIndex } from '@spexcode/spec-core'
+import { driftFor, ancestorsOf, primeAncestorClosures, inAncestors, commitReachable, mergeBaseDiff, worktreeSpecDelta, worktreeSpecDeltas, driftIndex, historyIndex, sourceIndexes, sourceIndexesFull, rowsFor, pathRangeEvents, historyCacheStats, resetHistoryCachesForTests, historyEventCachePathForTests, withGitAbortSignal, git, gitA, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, unionTopology, GitWorkspaceError, type DriftIndex } from '@spexcode/spec-core'
 import { loadSpecs } from '@spexcode/spec-core'
 
 // build a DriftIndex by hand from DAG edges: `parents` maps each commit to its parent hashes —
@@ -25,6 +25,30 @@ function idx(parents: Record<string, string[]>, parts: TestIndexParts = {}): Dri
   return { ord, parents: p, fileEvents, lineageEvents: fileEvents, lineageKeys: (path) => [path], acks: new Map(), specNodes: new Map(), anc: new Map(), ...rest }
 }
 const LINEAR = { TIP: ['B'], B: ['A'], A: ['VER'], VER: [] } // TIP -> B -> A -> VER
+
+test('every history entrance gives a non-Git workspace the same actionable precondition', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-nongit-history-'))
+  const expected = `workspace is not a Git repository: ${root}. Run \`git init\` in that directory, then retry.`
+  const reads: (() => Promise<unknown>)[] = [
+    () => historyIndex(root),
+    () => driftIndex(root),
+    () => sourceIndexes(root),
+    () => sourceIndexesFull(root),
+    () => unionTopology(root, ['0'.repeat(40)]),
+  ]
+  try {
+    for (const read of reads) {
+      await assert.rejects(async () => read(), (error: unknown) => {
+        assert.ok(error instanceof GitWorkspaceError)
+        assert.equal(error.message, expected)
+        return true
+      })
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+    resetHistoryCachesForTests()
+  }
+})
 
 test('one persistent event transaction stays full-history-equivalent across seed, reopen, and advance', async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-index-oracle-'))

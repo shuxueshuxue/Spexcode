@@ -1,5 +1,22 @@
 ---
 scenarios:
+  - name: non-git-workspace-is-actionable
+    tags: [cli]
+    test:
+      path: spec-cli/src/workspace-precondition.cli.test.ts
+      name: graph rejects a non-Git workspace with one actionable message and no runtime stack
+    code:
+      - packages/spec-core/src/git.ts#requireGitWorkspace
+      - spec-cli/src/graphSnapshot.ts#boardSnapshot
+      - spec-cli/src/graphCache.ts#boardInputRevision
+      - spec-cli/src/cli.ts#fatal
+    description: >-
+      From an empty non-Git directory, run the real `spex graph --json` command and retain its complete
+      stdout/stderr transcript with the process exit code.
+    expected: >-
+      The command exits non-zero with one actionable refusal that calls the absolute workspace non-Git and
+      directs `git init` in that same directory before retrying. Its output contains no Node runtime stack,
+      `Command failed:`, raw Git stderr, or internal history-derivation purpose.
   - name: undeclared-stop
     tags: [backend-api]
     test: { path: spec-cli/scenarios/harness-live-matrix.ts, name: "claude+codex / undeclared-stop" }

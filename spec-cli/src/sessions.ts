@@ -13,7 +13,7 @@ import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDi
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
 import { appendSent, recordStatus, lastHumanSendVia, sentDispatchReceipt, settleSentDispatch, type SentDispatchReceipt, type SentDispatchState } from './session-timeline.js'
-import { drain, enqueue, ensurePendingWhileLocked, owesDelivery, pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, senderDeliveryRevoked, withDeliveryLocks, type PendingMessage } from './delivery-queue.js'
+import { drain, enqueue, ensurePendingWhileLocked, owesDelivery, pendingMessages, pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, senderDeliveryRevoked, withDeliveryLocks, type PendingMessage } from './delivery-queue.js'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
@@ -3665,11 +3665,10 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
   return [heading, header, ...rows, statusLegend(color)].join('\n')
 }
 
-// @@@ sendText - THE APPEND ACCEPTS, THE QUEUE OWES ([[dispatch]]). One hold of the record lock records the
-// message in the durable log AND enqueues it ([[delivery-queue]]); success is decided by that write, so a
-// sender learns whether the message was accepted and never whether a socket was reachable. The handover is a
-// separate act: drain the queue into the harness adapter as an ordinary prompt. What stays LOUD is only what
-// genuinely cannot be recorded: an unknown session id, or a log that refuses the write.
+// @@@ sendText - THE APPEND ACCEPTS, THE QUEUE OWES ([[dispatch]]), except a live agent whose native transport
+// is PROVEN unreachable. That stranded combination cannot ever drain, so it refuses before creating new debt.
+// A merely unproven transport retains the ordinary append-and-retry behavior; liveness remains independently
+// unknown so no user is invited to kill a live worker.
 // A RETIRED session (worktree gone) still receives: the record gate governs the lifecycle axis, and a message
 // that cannot reach an agent must at least leave a trace ([[session-timeline]]).
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
@@ -3690,6 +3689,18 @@ type SendTextOptions = {
   idempotency?: DispatchIdempotency
   acceptGuard?: (record: SessRec) => Promise<void>
   deferDrain?: boolean
+}
+class StrandedDeliveryError extends Error {}
+async function strandedDeliveryError(rec: SessRec): Promise<StrandedDeliveryError | null> {
+  const h = harnessById(rec.harness || defaultHarness.id)
+  if (!h.deliveryTransport) return null
+  const transport = await h.deliveryTransport({ ...rec, runtimeDir: runtimeRoot() })
+  if (transport.kind !== 'unreachable' || agentAlive(rec.session) !== true) return null
+  const queued = pendingMessages(rec.session).length
+  const noun = queued === 1 ? 'message is' : 'messages are'
+  return new StrandedDeliveryError(
+    `session ${rec.session} is stranded: ${transport.reason} while its registered agent process is still alive; ${queued} queued ${noun} waiting with no transport to claim them. Use \`spex session send ${rec.session} --keys "<keys>"\` to steer the live tmux pane, then repair the control transport before sending text.`,
+  )
 }
 export async function sendText(id: string, text: string, from?: string, opts: SendTextOptions = {}): Promise<AcceptedDispatch> {
   if (!text) return { ok: false, error: 'empty prompt — nothing to dispatch' }
@@ -3720,6 +3731,8 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
           }
         }
         await opts.acceptGuard?.(rec)
+        const stranded = await strandedDeliveryError(rec)
+        if (stranded) throw stranded
         // Composed at ACCEPT time, once: the log keeps the raw conversational text plus the effective reply channel,
         // the queue keeps the transport form. Composing again at handover would let a later send change the hints on
         // a message that was already accepted.
@@ -3737,9 +3750,12 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
     })
   } catch (error) {
     const code = (error as { code?: DispatchAcceptCode })?.code
+    const detail = error instanceof StrandedDeliveryError
+      ? error.message
+      : `could not append the message to session ${id}'s log: ${error instanceof Error ? error.message : String(error)} — prompt NOT delivered`
     return {
       ok: false,
-      error: `could not append the message to session ${id}'s log: ${error instanceof Error ? error.message : String(error)} — prompt NOT delivered`,
+      error: detail,
       ...(code ? { code } : {}),
     }
   }

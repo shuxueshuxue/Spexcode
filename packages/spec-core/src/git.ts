@@ -1108,6 +1108,32 @@ export async function gitRequiredA(args: string[], purpose: string, options: { i
   }
 }
 
+const checkedGitWorkspaces = new Set<string>()
+
+// A Git-backed read needs a repository before it can derive history. This is not a Git transport failure:
+// it is the product precondition, shared by every history entrance.
+export class GitWorkspaceError extends Error {
+  constructor(root: string) {
+    super(`workspace is not a Git repository: ${resolve(root)}. Run \`git init\` in that directory, then retry.`)
+    this.name = 'GitWorkspaceError'
+  }
+}
+
+export function requireGitWorkspace(root: string): void {
+  const workspace = resolve(root)
+  if (checkedGitWorkspaces.has(workspace)) return
+  try {
+    if (git(['-C', workspace, 'rev-parse', '--git-dir']).trim()) {
+      checkedGitWorkspaces.add(workspace)
+      return
+    }
+  } catch (error: any) {
+    // Exit 128 is Git's repository-discovery rejection. Spawn and timeout failures keep their own cause.
+    if (error?.status !== 128 || !String(error?.stderr ?? '').includes('not a git repository')) throw error
+  }
+  throw new GitWorkspaceError(workspace)
+}
+
 // memoized: repoRoot is constant per process, but resolveLayout() calls it per request — avoid a git fork each time.
 let repoRootCache: string | null = null
 export function repoRoot(): string {
@@ -1328,6 +1354,7 @@ function pendingParent(root: string, tip: string): string | null {
 }
 
 export function historyIndex(root: string, tip = 'HEAD'): Promise<HistoryIndex> {
+  requireGitWorkspace(root)
   if (tip !== 'HEAD') {
     const resolved = git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
     // An issue-only candidate changes no governed content, but its lint result still includes the
@@ -1987,6 +2014,7 @@ async function buildDriftIndex(root: string, tip: string, transient: boolean, us
   return idx
 }
 export function driftIndex(root: string, tip = 'HEAD'): Promise<DriftIndex> {
+  requireGitWorkspace(root)
   if (tip !== 'HEAD') {
     const resolved = git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
     if (pendingOnlyIssues(root, resolved)) {
@@ -2059,6 +2087,7 @@ async function buildIndexPair(root: string, tip: string, transient: boolean, use
 
 // Standing correctness oracle: same projection, but every immutable stream comes from Git root history.
 export function sourceIndexesFull(root: string, tip = 'HEAD'): Promise<[HistoryIndex, DriftIndex]> {
+  requireGitWorkspace(root)
   const head = tip === 'HEAD' ? headOrEmpty(root) : ''
   const resolved = tip === 'HEAD'
     ? (head || 'HEAD')
@@ -2069,6 +2098,7 @@ export function sourceIndexesFull(root: string, tip = 'HEAD'): Promise<[HistoryI
 // History and drift are one product projection. Building them together is what gives one lint one ledger
 // transaction; the public single-index functions remain for consumers that genuinely need only one side.
 export function sourceIndexes(root: string, tip = 'HEAD'): Promise<[HistoryIndex, DriftIndex]> {
+  requireGitWorkspace(root)
   if (tip !== 'HEAD') {
     const resolved = git(['-C', root, 'rev-parse', `${tip}^{commit}`]).trim()
     if (pendingOnlyIssues(root, resolved)) {
@@ -2104,7 +2134,7 @@ export function historyCacheStats(): { historyHeads: number; driftHeads: number;
 // Production callers retain the bounded index caches; this is not a correctness escape hatch.
 export function resetHistoryCachesForTests(): void {
   indexCache.clear(); driftIdxCache.clear(); indexRoots.clear(); driftRoots.clear()
-  eventPathMemo.clear(); gitObjectFormatMemo.clear()
+  eventPathMemo.clear(); gitObjectFormatMemo.clear(); checkedGitWorkspaces.clear()
 }
 export function historyEventCachePathForTests(root: string): string { return eventCacheLocation(root).path }
 // @@@ one ordinary ancestry memo, with a batch entrance - every closure below has exactly the same dense
@@ -2210,6 +2240,7 @@ export function inAncestors(idx: Reachability, bits: Uint8Array, sha: string): b
 // structure, never a graft into the shared index: making off-history tips reachable there would silently
 // switch every ancestry-vs-content decision that keys on `undefined`.
 export async function unionTopology(root: string, revisions: readonly string[]): Promise<Reachability> {
+  requireGitWorkspace(root)
   const roster = [...new Set(revisions)].filter(Boolean)
   const reach: Reachability = { ord: new Map(), parents: new Map(), anc: new Map() }
   if (!roster.length) return reach

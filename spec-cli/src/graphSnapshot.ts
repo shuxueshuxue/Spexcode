@@ -1,4 +1,4 @@
-import { loadSpecs } from '@spexcode/spec-core'
+import { loadSpecs, requireGitWorkspace } from '@spexcode/spec-core'
 import { resolveLayout } from '@spexcode/spec-core'
 import { listSessions } from './sessions.js'
 import { driftIndex, historyIndex, repoRoot } from '@spexcode/spec-core'
@@ -13,6 +13,7 @@ import { sessionEvalProjections } from '@spexcode/spec-eval/sessioneval'
 // The application adapter is the sole reader of runtime/forge state. graph.ts only receives this result.
 export async function boardSnapshot(): Promise<BoardSnapshot> {
   const root = repoRoot()
+  requireGitWorkspace(root)
   const [specs, sessions] = await Promise.all([loadSpecs(), listSessions()])
   const layout = await resolveLayout({ activeSessionIds: sessions.map((session) => session.id) })
   const nodeIds = [...new Set([

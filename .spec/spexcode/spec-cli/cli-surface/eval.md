@@ -1,5 +1,21 @@
 ---
 scenarios:
+  - name: unknown-command-teaches-nearest-repair
+    description: >
+      Through the real built `node spec-cli/bin/spex.mjs` CLI, run `spex list` and `spex nodes`,
+      recording each full stderr and exit code before the repair. After the repair, repeat both
+      probes and require each rejection to name a genuine public command that lists spec nodes;
+      execute that named command in the same transcript and retain its node output as the
+      cross-check. Also run an unrelated input such as `spex zzzzqqq` and record its full rejection.
+    expected: >
+      `list` and `nodes` each exit 2 but teach `spex graph`, the real command that prints the
+      spec-node tree; the transcript's subsequent graph run exits 0 and lists nodes. The advice
+      is derived by one nearest-command mechanism over the public command table, not per-typo
+      aliases. An unrelated token still exits 2, gives the usable `spex help` fallback, stays
+      crash-free, and never names a command outside the public table.
+    tags: [cli]
+    code: [spec-cli/src/cli.ts, spec-cli/src/help.ts]
+    related: spec-cli/src/tree.ts
   - name: valued-session-new-flags-stay-out-of-positionals
     description: >
       Through the real `spex session new` CLI, pass a nonexistent `--prompt-file` with a spaced `--name`, then

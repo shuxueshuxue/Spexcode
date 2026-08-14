@@ -9,6 +9,38 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 const cmd = process.argv[2]
 
+function levenshtein(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, index) => index)
+  for (let i = 1; i <= a.length; i++) {
+    let previous = row[0]
+    row[0] = i
+    for (let j = 1; j <= b.length; j++) {
+      const current = row[j]
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, previous + (a[i - 1] === b[j - 1] ? 0 : 1))
+      previous = current
+    }
+  }
+  return row[b.length]
+}
+
+function nearestPublicCommand(input: string, commands: readonly import('./help.js').PublicCommand[]): string | null {
+  const query = input.toLowerCase()
+  if (!/^[a-z0-9-]+$/.test(query)) return null
+  const similarity = (a: string, b: string) => 1 - levenshtein(a, b) / Math.max(a.length, b.length)
+  const words = (text: string) => text.toLowerCase().match(/[a-z0-9-]+/g) ?? []
+  let best: { name: string; score: number } | null = null
+  for (const command of commands) {
+    const [headline = '', ...detail] = command.text.split('\n')
+    const score = Math.max(
+      similarity(query, command.name),
+      ...words(headline).map((word) => similarity(query, word)),
+      ...words(detail.join('\n')).map((word) => similarity(query, word) * 0.8),
+    )
+    if (!best || score > best.score) best = { name: command.name, score }
+  }
+  return best && best.score >= 0.8 ? best.name : null
+}
+
 if (cmd === '--version' || cmd === '-v') {
   const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
   console.log(manifest.version)
@@ -30,14 +62,15 @@ async function assertDaemonDependencies(command: 'spex serve' | 'spex dashboard'
 }
 
 // Registered before any await so a fatal top-level error lands here. Errors we OWN — BackendError, the
-// loud malformed-config ConfigError, the --api/--port UsageError, the write-guard GuardError — are
+// loud malformed-config ConfigError, the --api/--port UsageError, the write-guard GuardError, and a
+// GitWorkspaceError that teaches a fresh directory how to continue — are
 // matched BY NAME (to avoid importing them) and rendered as a one-line `spex: <message>` (a user's
 // config typo or a refused cross-project write must read as their situation, not a SpexCode stack dump);
 // anything else prints in full so a real bug keeps its trace. A synchronous throw inside an awaited call
 // (loadConfig on a malformed spexcode.json) surfaces as uncaughtException, not unhandledRejection, so BOTH
 // paths route through the same printer.
 function fatal(e: unknown): never {
-  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError', 'DashboardAssetError'].includes(e.name)) console.error(`spex: ${e.message}`)
+  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError', 'DashboardAssetError', 'GitWorkspaceError'].includes(e.name)) console.error(`spex: ${e.message}`)
   else console.error(e)
   process.exit(1)
 }
@@ -1479,6 +1512,8 @@ if (cmd === 'serve') {
     process.exit(2)
   }
 } else {
-  console.error(`spex: unknown command '${cmd}' (try: spex help)`)
+  const { publicCommands } = await import('./help.js')
+  const suggestion = nearestPublicCommand(cmd!, publicCommands())
+  console.error(`spex: unknown command '${cmd}'${suggestion ? ` — try: spex ${suggestion}` : ''} (try: spex help)`)
   process.exit(2)
 }

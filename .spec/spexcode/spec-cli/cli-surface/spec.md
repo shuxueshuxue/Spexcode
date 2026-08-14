@@ -13,6 +13,7 @@ related:
   - spec-cli/src/session-create-cli.test.ts
   - spec-cli/src/session-ls-cli.test.ts
   - spec-cli/src/session-declarations.cli.test.ts
+  - spec-cli/src/unknown-command-cli.test.ts
 ---
 # cli-surface
 
@@ -56,6 +57,12 @@ borrow the caller's local cwd and therefore stay outside this first group.
 
 `spex spec lint --json` is the machine representation of the same blocking report, not another lint
 verb: it emits the [[spec-lint]] versioned report on stdout while retaining lint's error-derived exit code.
+
+A product precondition that has a direct repair is a user error at this boundary, not an implementation
+exception: the CLI renders one `spex:` line naming the situation and its next action, without a Node stack or
+raw child stderr. Git-workspace discovery supplies the ordinary example — an absolute workspace before
+`git init` is named, and the reader is directed to initialize that same directory before retrying. A Git child
+that fails after the precondition remains an underlying failure rather than being rewritten into this repair.
 
 The `flat` drawer exposes three real verbs: `flat new` measures a repository into a spec tree, `flat site`
 emits a relocatable graph-only static site, and `flat gallery` assembles several sites under one index.
@@ -166,7 +173,11 @@ has a move:
 
 Dead-end rule: an unknown command, unknown drawer verb, unknown help topic, unknown guide topic, and
 a bare `spex internal` each fail loud AND name the layer to go back to; a removed spelling fails
-loud AND names its replacement — never a silent exit.
+loud AND names its replacement — never a silent exit. A top-level unknown command also consults the
+public command table as a nearest-intent catalog: when a candidate is close enough, the rejection names
+that real command as the repair while retaining `spex help` as the map; an unrelated token offers only
+the map rather than inventing a command. This is one derived matcher over the command surface, never
+a per-typo alias table, so a guessed `list` or `nodes` can route to `spex graph`, the real spec-node tree.
 
 Naming the layer is not the whole duty when the message also names the ALTERNATIVES, because a list can be
 complete, loud, and wrong at once. Where those alternatives are a registry ANOTHER module owns, the hub

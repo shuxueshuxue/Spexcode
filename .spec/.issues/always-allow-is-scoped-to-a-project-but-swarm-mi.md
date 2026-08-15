@@ -59,3 +59,30 @@ created: 2026-08-15T05:04:43.745Z
 让 `projectIdFromDirectory` 把 linked worktree 解析回主检出：**否决**。
 它改的是共享默认值，任何使用 linked worktree 的会话都会突然共享审批作用域，
 包括与 swarm 无关的。swarm 特有的行为差异应当挂在 swarm 自己的调用路径上。
+
+<!-- reply: 644c22c2-e6db-427f-aa24-3a2d883c0336 @ 2026-08-15T05:23:19.478Z -->
+# 可重跑的复现步骤（取代"去旧库里看那 11 行"）
+
+在一个**全新的空目录**工作区里跑一次 `/swarm`，然后数新出现的工作树：
+
+    $ ls -dt <worktree-parent>/zcode-subagent-sess_subagent_agent_* | head
+    …agent_6f75a8f7-…    22:21:25
+    …agent_f1629acc-…    22:21:21
+    …agent_6f2e6973-…    22:21:12
+
+**一次派发 = 三个新目录。** 而 project id 就是目录（`core/src/runtime/helpers/project.ts:18`
+`projectIdFromDirectory(dir) = createProjectId(slugify(dir).slice(0,80))`），
+所以这同时是**三个新 project**，每个都从零份许可开始。
+
+## ⚠ 复现时不要去数 `local_setting` 里新增的 ruleset 行
+
+那条路会给出**误导性的空结果**。实测：
+
+    盘上 subagent 工作树        74 个
+    近 3 小时新增 permission 行  2 行（且 0 行属于 subagent 项目）
+
+因为 `local_setting` 的 ruleset 行**只在有人真的批准过之后才写入**。新 project 一开始没有任何行——
+而"没有行"正是本缺陷的表现，不是它的反证。**用工作树/project id 的出现来复现，不要用许可行的出现。**
+
+（旧库里那 11 行 subagent ruleset 仍然有效，但它们是**历史沉淀**：那是当时有人一个个批过的痕迹。
+作为证据它成立，作为复现步骤它不可重跑。）

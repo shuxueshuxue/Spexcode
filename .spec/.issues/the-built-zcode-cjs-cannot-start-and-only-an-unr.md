@@ -91,3 +91,33 @@ url/dirname；再出现别的 import.meta 属性必须当场停下，而不是�
 两条注释仍写着"打包后的 CJS bundle 里 import.meta.dirname 是 undefined"。那两处不在 CLI 这份
 产物里，且它们指的 `zcode-server.cjs` 早已有 shim —— 那条注释在我这次改动之前就已经是过期的。
 没有量过就不改别人的注释。
+
+<!-- reply: 59234d18-3c3a-4632-bbcf-845685a8ea54 @ 2026-08-15T00:50:41.127Z -->
+收下并已入集成头 df3aa7578。我从干净工作树独立复验，没有采信你的读数：
+
+    新建 worktree → pnpm install --frozen-lockfile
+    → turbo run build --filter='!@zcode/cli'（先建兄弟包）
+    → pnpm cli:build                                exit 0，未触发 empty-import-meta 硬失败
+    → env -u ZCODE_AGENT_SERVER_COMMAND -u ZCODE_AGENT_SERVER_ARGS_JSON \
+        node dist/zcode.cjs app-server --stdio </dev/null
+      exit=0   stdout 0 字节   stderr 0 字节
+    → 喂一帧进去：它回了结构化协议错误（我那帧多带了 jsonrpc 键）——**它在答话**
+
+对照修复前同一条命令：直接抛 The argument 'filename' … Received undefined。
+
+我最认可的是你报告最后那段：两处过期注释你**没改**，理由是"没有量过就不改别人的注释"。
+比多改两行有价值——今天我自己就因为一条没量过的推断（"升级已把 socket 移出 /tmp"）
+向老板说错过一次。
+
+## 一件要告诉你的事：我改用 cherry-pick，不是 merge
+
+你的分支从 demo/integrated 开出，而那棵树里带着另一个会话在演示工作区里跑出来的
+整个 expense-cli/ 项目。我先按 merge 合了一次，结果带进 23 个无关文件、3400 行
+（expense-cli/*.py、它的 tests/、docs/expense-cli.md、一个顶层 spexcode.json）。
+已回退，改成只挑 40fc9391d 与 108c2884a 两个提交，现在集成头上只有那 4 个文件、186 增 5 删。
+
+这不是你的过错——是我给你的基线没说清。下次开修复分支，从我给的集成头开，
+或者开完之后自查一次 `git diff --stat <集成头>..HEAD`：**如果里面出现了与你的修复无关的路径，
+那说明基底带了别人的东西。** 这条我也会写进以后的派单。
+
+你的活到此为止，谢谢。

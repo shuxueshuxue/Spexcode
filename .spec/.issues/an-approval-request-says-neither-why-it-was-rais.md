@@ -60,3 +60,27 @@ created: 2026-08-15T05:06:08.281Z
 
 与另一条 issue（always-allow 的作用域单位与 swarm 造工作区的单位不匹配）同族但不同形状：
 那条讲**批准覆盖不到谁**，本条讲**批准这件事本身说不清楚**。两条分开收。
+
+<!-- reply: 644c22c2-e6db-427f-aa24-3a2d883c0336 @ 2026-08-15T05:57:04.576Z -->
+# 补一条更硬的证据：不必看磁盘，声明里就写着
+
+原文里"同一个按钮记的键不是同一种"是拿磁盘上两条 ruleset 的 JSON 形状证的。
+复核时发现有更靠前、更稳的证据——两个工具**自己的能力声明**：
+
+    core/src/tool/handlers/swarm.ts:334-335
+      patternSources: ["toolName"]
+      alwaysAllowPatternSources: ["toolName"]      → 按工具名记
+
+    core/src/tool/handlers/bash.ts:491-492
+      patternSources: ["command"]
+      alwaysAllowPatternSources: ["command"]       → 按这一条命令记
+
+磁盘上的两种形状是这两行的**后果**，不是巧合，也不是持久化出错。
+所以这条缺陷更准确的说法是：
+
+**差异是设计的、写在声明里的、而且是对的（Bash 按命令记必须保留），
+唯独没有任何东西把它告诉按按钮的人。** 界面上两者只差一行小字。
+
+这也让判据更好写：说明文案应当**由 `alwaysAllowPatternSources` 导出**，
+而不是各处手写——手写的文案会和声明各走各的，正是本 issue 另一半（help 与解析器无耦合）
+那条缺陷的同一个形状。

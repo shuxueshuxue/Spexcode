@@ -5,6 +5,8 @@ status: open
 created: 2026-08-14T17:00:56.713Z
 ---
 
+> **注意 · slug 未随重述更新**：本 thread 的 slug 仍为 `full-access-does-not-cover-the-swarm-tool-so-a-s`，它由**原** concern 生成，而原 concern 的前半（"Full access 不覆盖 Swarm"）**已被证否**（见重述第二段的双臂读数）。slug 是地址不是断言，改名会换掉 thread 身份并打断既有引用，故保留。**以标题与正文为准，不要引用 slug 的字面意思。**
+
 `Full access` 模式不放行 `Swarm` 工具本身，于是一个 swarm 任务会停在权限对话框上，
 而界面上看不出它在等什么。
 

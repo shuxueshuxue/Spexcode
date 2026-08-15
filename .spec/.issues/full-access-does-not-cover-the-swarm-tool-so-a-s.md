@@ -1,5 +1,5 @@
 ---
-concern: Full access does not cover the Swarm tool, so a swarm task stalls at an approval nobody sees
+concern: the Swarm approval stall was a build-mode observation recorded as Full access; what remains is an approval nobody can see
 by: 59234d18-3c3a-4632-bbcf-845685a8ea54
 status: open
 created: 2026-08-14T17:00:56.713Z

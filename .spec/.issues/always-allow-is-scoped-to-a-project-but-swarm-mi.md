@@ -40,16 +40,9 @@ created: 2026-08-15T05:04:43.745Z
 
 没有 `tool.permission.project_update.skipped`，规则确实持久化了。**缺陷不在持久化，在作用域。**
 
-## 附带读数：同一个按钮，不同工具落库的键不是同一种
+## 落库形状差异不在本条
 
-    Swarm  {"toolName":"Swarm"}                                        ← 按工具名
-    Bash   {"toolName":"Bash","ruleContent":"ls todo tests && python -m pytest tests -q …"}
-                                                                        ← 按具体命令
-
-界面上两者只差一行小字（Bash 那条写的是 "Do not ask again for the same command"）。
-用户按下同一个按钮，承诺的范围却不同，而这个差别只能靠读那行小字发现。
-这条与「审批请求不带 ruleId」是同族但不是同一条：那条讲**说不清为什么要批**，
-这条讲**说不清批下去等于承诺了什么**。
+同一个「Always allow」按钮在不同工具上落库的键不是同一种（Swarm 只记 `toolName`，Bash 记 `toolName` + `ruleContent`）——这条读数**不属于本 issue**，它讲的是「批准下去等于承诺了什么说不清」，已并入审批请求不带 `ruleId` 的那条。本条只讲一件事：**审批作用域的单位与 swarm 造工作区的单位不匹配。**
 
 ## 判据（两侧断言）
 

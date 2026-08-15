@@ -121,3 +121,46 @@ url/dirname；再出现别的 import.meta 属性必须当场停下，而不是�
 那说明基底带了别人的东西。** 这条我也会写进以后的派单。
 
 你的活到此为止，谢谢。
+
+<!-- reply: 644c22c2-e6db-427f-aa24-3a2d883c0336 @ 2026-08-15T04:15:48.622Z -->
+产品级读数补上了。之前那条回复的证据是 stdio 探针（我自己 spawn 产物），这条是**服务端自己解析、自己拉起**。
+
+栈：`/home/jeffry/zcode-wt/demo-head-644c` @ `b2d27eeaf`，自带 backend（:20051）+ vite（:20050），
+**全程没有设 `ZCODE_AGENT_SERVER_COMMAND` / `ZCODE_AGENT_SERVER_ARGS_JSON`**——正是本 issue 说的那个
+"没人记录的环境变量"，这次一个都没有。
+
+真实用户路径（浏览器驱动，新建任务）触发后，backend 日志：
+
+    [zcode-agent] ZCode agent spawn preflight {
+      '/home/jeffry/zcode-wt/demo-head-644c/apps/zcode-cli/packages/cli/dist/zcode.cjs',
+    [zcode-agent] ZCode agent process started {
+
+即：`resolveBundledWorkspaceZCodeAgentCommand` 选中了**构建产物**（不是 tsx 源码兜底），并且它
+**起来了**——没有一条 `ZCode agent transport closed`。
+
+## 还发现一件比原 issue 更靠前的事
+
+原 issue 说"`pnpm cli:build` 产出的 zcode.cjs 一启动就死"。补充：在干净树上**它根本产不出来**。
+`pnpm --filter "./apps/zcode-cli/packages/**" build` 在 bootstrap 的 tsc 上失败，pnpm 递归构建当场
+中止（`ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL`, exit 2），拓扑序在 bootstrap 之后的 `cli` 与
+`browser-use-plugin` **一次都没被尝试**。cli 单独跑 1.6 秒就 Done——它本身从来没坏过。
+
+所以这个 issue 的完整形状是两层：**建不出来**（构建链中止），以及**建出来也起不来**（cjs 的
+import.meta 塌成空对象）。两层都修了：
+
+    b4e4045f4 / 40fc9391d  fix(cli-build): give the CJS bundle a working import.meta
+    df3aa7578 / 108c2884a  fix(zcode-agent): name the executable when the agent never starts
+    bedbdb4f4              fix(build): let the zcode-cli build chain reach the CLI package
+    315057b57              fix(protocol-v4): let a task_output row carry notification_only
+
+链路级 fail→pass（先删掉两个 dist 再全量重跑）：
+    修前  bootstrap Failed / exit 2 / cli 与 browser-use-plugin 无 dist
+    修后  exit 0 / 两个都 Done / zcode.cjs 28.5MB / error TS 计数 0
+
+集成头 `b2d27eeaf` 上两边套件一起跑 174 passed；对方在含 subagent-explore 的覆盖面上另跑 70 passed / 1 failed，
+那 1 条是既有红（`terminal-next-actions`），与本 issue 无关，已单独记账。
+
+## 仍未关闭的原因
+
+修复只在本地未 push 的 z-code 分支上（本项目 z-code 侧一律不 push、不开非 draft MR）。
+判据两侧都已实测通过，但落地到人类在用的那套演示栈还需要人类的一次决定，所以这条我留开。

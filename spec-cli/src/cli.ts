@@ -397,7 +397,7 @@ async function stateKit() {
 // reach here — the signpost table above already exited.)
 if (cmd && cmd !== 'help' && (has('help') || process.argv.includes('-h'))) {
   const { commandHelp, overviewHelp } = await import('./help.js')
-  console.log(commandHelp(cmd, cmd === 'session' ? process.argv[3] : undefined) ?? overviewHelp())
+  console.log(commandHelp(cmd, cmd === 'session' || cmd === 'runtime' ? process.argv[3] : undefined) ?? overviewHelp())
   process.exit(0)
 }
 
@@ -810,6 +810,9 @@ if (cmd === 'serve') {
     console.error(`spex peer: unknown verb '${sub}' — connect | ls | disconnect  (spex help peer)`)
     process.exit(2)
   }
+} else if (cmd === 'runtime') {
+  const { runRuntimeRotate } = await import('./runtime-rotate.js')
+  await runRuntimeRotate(process.argv.slice(3))
 } else if (cmd === 'session') {
   const sub = process.argv[3]
   if (sub === undefined) {

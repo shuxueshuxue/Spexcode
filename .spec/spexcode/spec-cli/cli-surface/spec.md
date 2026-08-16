@@ -8,6 +8,7 @@ code:
 related:
   - spec-cli/src/guide.ts
   - spec-cli/src/help.ts
+  - spec-cli/src/runtime-rotate.ts
   - spec-cli/src/session-declarations.ts
   - spec-cli/src/session-send-cli.test.ts
   - spec-cli/src/session-create-cli.test.ts
@@ -31,8 +32,8 @@ needs a repository nor enters the noun-first command map.
 ## expanded spec
 
 **The grammar.** `spex <noun> <verb> [object] [flags]` — the verb is always the token immediately
-after its noun, so an id can never occupy a verb slot and no id is a reserved word. Seven noun drawers
-(`spec` · `session` · `peer` · `eval` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
+after its noun, so an id can never occupy a verb slot and no id is a reserved word. Eight noun drawers
+(`spec` · `session` · `runtime` · `peer` · `eval` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
 `init` · `materialize` · `doctor` · `serve` · `dashboard` · `guidance` · `uninstall`) allowed only because their
 object is invariably THIS project (`dashboard`'s object is the HOST's project set — still no free
 object slot), plus the two help surfaces (`help` · `guide`). A bare noun prints its
@@ -76,6 +77,13 @@ declaration word (`done --propose close`), and the two differ in who acts: a man
 dispatched, versus a worker proposing its own end for the human to perform. Any prose that nudges an agent to
 reclaim what it started — the propose-close cleanup nudge included — scopes its sweep to what the agent
 spawned and excludes the running session by name, because `.` and a bare own id are valid selectors here.
+
+`spex runtime rotate codex [--launcher <name>]` is the explicit shared-Codex repair: it only starts a
+fresh, proven generation and switches NEW traffic to it. The previous root enters the runtime ledger's
+draining state and remains addressable for its exact bound work; this CLI has no kill or migration verb.
+Its launcher is an adapter/auth choice, not a positional source of truth: the configured default applies
+only when it is a Codex launcher, and a non-Codex default requires an explicit configured Codex
+`--launcher` rather than guessing a command or credential.
 
 Objects and payloads are parsed by role after recognized flags and their values are removed, never by a fixed
 `process.argv` slot. Thus a routing flag may follow a selector before or after a write payload without becoming

@@ -358,6 +358,17 @@ edit the spec instead — same commit as the code.`,
     body: sessionDrawerHelp(),
     see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',
   },
+  runtime: {
+    line: 'runtime rotate codex  move new Codex traffic to a fresh app-server generation while the old one drains',
+    body: `Usage: spex runtime rotate codex [--launcher <name>]
+
+rotate codex starts and proves a fresh detached Codex app-server, then atomically routes NEW Codex
+sessions there. The former current root becomes draining: its exact bound sessions, unowned clients,
+and native peers remain untouched. The command never kills a root; ordinary zero-reference reclamation
+is the only later release path. The selected launcher must use the Codex adapter. Without --launcher,
+the configured default launcher is used.`,
+    see: 'spex session resources (inspect shared runtime ownership) · spex session new (start work on the new root)',
+  },
   eval: {
     line: 'eval <verb>           the measurement system: add · ls · scenario ls/write · lint · ok · retract · clean',
     body: `Usage: spex eval add [<node>|.] [--scenario <name>] (--pass|--fail) [--note <text>]
@@ -512,6 +523,13 @@ export function commandHelp(name: string, verb?: string): string | null {
     const exact = sessionVerbHelp(verb)
     if (exact) return `${exact}\n\nsee also: spex session (the complete drawer)\n\nmap: spex help · skills: spex guide`
   }
+  if (name === 'runtime' && verb === 'rotate') {
+    return `Usage: spex runtime rotate codex [--launcher <name>]
+
+Start and prove a fresh Codex app-server generation, then route NEW Codex sessions there. Existing
+sessions stay bound to the prior root while it drains; this command never kills it. --launcher must
+name a configured Codex launcher.\n\nsee also: spex runtime (the complete drawer)\n\nmap: spex help · skills: spex guide`
+  }
   const e = ENTRIES[name]
   if (!e) return null
   const oneLiner = e.line.replace(/^\S+(\s+\S+)*?\s{2,}/, '')   // the map line minus its "cmd args" column
@@ -583,6 +601,7 @@ Project verbs (implicit object = this project)
 Noun drawers
   ${ENTRIES.spec.line}
   ${ENTRIES.session.line}
+  ${ENTRIES.runtime.line}
   ${ENTRIES.peer.line}
   ${ENTRIES.eval.line}
   ${ENTRIES.issue.line}

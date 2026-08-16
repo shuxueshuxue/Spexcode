@@ -184,15 +184,22 @@ hooks yet (CI, a cloud agent): generated and excluded, the artifacts never arriv
     see: 'spex doctor (verify the materialized artifacts actually reach an agent)',
   },
   doctor: {
-    line: 'doctor                diagnose spec health and whether the workflow reaches this agent  [--contract|--conflicts]',
+    line: 'doctor                diagnose project health; repair app-server only on explicit request  [--contract|--conflicts]',
     body: `Usage: spex doctor                spec-health findings + delivery report: preconditions · git-hook floor ·
                                   contract · hooks + handler existence · backend · footprint
        spex doctor --contract     print the composed surface:system text any agent here reads
        spex doctor --conflicts    detect double-delivery (loose artifacts beside the managed ones)
+       spex doctor repair app-server [--launcher <name>]
+                                  prove a fresh app-server, then switch new sessions to it
 
 Bare doctor is the opt-in, read-only health surface: it reports altitude and breadth findings without
 putting them in the lint gate, then audits workflow delivery. Run it directly or let the tidy workflow
-consume the same visible diagnosis.`,
+consume the same visible diagnosis.
+
+Use repair app-server only when new sessions cannot be accepted and existing work must stay connected.
+It proves a fresh app-server before routing future Codex sessions there. Existing sessions stay on the
+previous server while it drains; the command does not kill or move them. --launcher selects a configured
+Codex launcher, or the configured default is used when it is one.`,
     see: 'spex spec lint (deterministic graph/contract gate) · spex materialize (repair delivery artifacts)',
   },
   flat: {
@@ -358,17 +365,6 @@ edit the spec instead — same commit as the code.`,
     body: sessionDrawerHelp(),
     see: 'spex eval ls --session <SEL> (the session’s measured loss) · spex help eval',
   },
-  runtime: {
-    line: 'runtime rotate codex  move new Codex traffic to a fresh app-server generation while the old one drains',
-    body: `Usage: spex runtime rotate codex [--launcher <name>]
-
-rotate codex starts and proves a fresh detached Codex app-server, then atomically routes NEW Codex
-sessions there. The former current root becomes draining: its exact bound sessions, unowned clients,
-and native peers remain untouched. The command never kills a root; ordinary zero-reference reclamation
-is the only later release path. The selected launcher must use the Codex adapter. Without --launcher,
-the configured default launcher is used.`,
-    see: 'spex session resources (inspect shared runtime ownership) · spex session new (start work on the new root)',
-  },
   eval: {
     line: 'eval <verb>           the measurement system: add · ls · scenario ls/write · lint · ok · retract · clean',
     body: `Usage: spex eval add [<node>|.] [--scenario <name>] (--pass|--fail) [--note <text>]
@@ -523,12 +519,13 @@ export function commandHelp(name: string, verb?: string): string | null {
     const exact = sessionVerbHelp(verb)
     if (exact) return `${exact}\n\nsee also: spex session (the complete drawer)\n\nmap: spex help · skills: spex guide`
   }
-  if (name === 'runtime' && verb === 'rotate') {
-    return `Usage: spex runtime rotate codex [--launcher <name>]
+  if (name === 'doctor' && verb === 'repair') {
+    return `Usage: spex doctor repair app-server [--launcher <name>]
 
-Start and prove a fresh Codex app-server generation, then route NEW Codex sessions there. Existing
-sessions stay bound to the prior root while it drains; this command never kills it. --launcher must
-name a configured Codex launcher.\n\nsee also: spex runtime (the complete drawer)\n\nmap: spex help · skills: spex guide`
+Use this explicit repair when new sessions cannot be accepted but existing work must stay connected.
+It proves a fresh app-server, then routes future Codex sessions there. Existing sessions stay bound to
+the prior server while it drains; this command never kills or moves them. --launcher must name a
+configured Codex launcher.\n\nsee also: spex doctor (the complete command) · spex session resources\n\nmap: spex help · skills: spex guide`
   }
   const e = ENTRIES[name]
   if (!e) return null
@@ -601,7 +598,6 @@ Project verbs (implicit object = this project)
 Noun drawers
   ${ENTRIES.spec.line}
   ${ENTRIES.session.line}
-  ${ENTRIES.runtime.line}
   ${ENTRIES.peer.line}
   ${ENTRIES.eval.line}
   ${ENTRIES.issue.line}

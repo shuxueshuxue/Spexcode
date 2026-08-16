@@ -496,7 +496,9 @@ function usage(): number {
   console.error(`spex doctor — diagnose spec health and how the SpexCode workflow reaches your agent
   (bare)         spec-health findings + delivery report: preconditions · git-hook floor · contract · hooks(+handlers) · backend · footprint
   --contract     print the surface:system contract text (hand it to any agent)
-  --conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)`)
+  --conflicts    detect double-delivery — the same agent reached via loose native delivery AND a plugin bundle (exits non-zero on conflict)
+  repair app-server [--launcher <name>]
+                  prove a fresh app-server, then switch new sessions to it without moving existing sessions`)
   return 0
 }
 
@@ -506,6 +508,10 @@ export async function runDoctor(args: string[]): Promise<number> {
   if (args.includes('--migrate')) return migrationRemoved()
   if (args.includes('--contract')) return contract()
   if (args.includes('--conflicts')) return await conflicts()
+  if (args[0] === 'repair') {
+    const { runDoctorRepairAppServer } = await import('./runtime-rotate.js')
+    return await runDoctorRepairAppServer(args)
+  }
   switch (args[0]) {
     case undefined: return await doctor()
     case 'contract': case 'conflicts':

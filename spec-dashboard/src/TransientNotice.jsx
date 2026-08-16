@@ -1,24 +1,30 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Icon, IconButton } from './icons.jsx'
 import { useT } from './i18n/index.jsx'
+import { resolveNoticeDuration } from './noticeTiming.js'
 
-const DEFAULT_DURATION = 5000
 const NoticeContext = createContext(null)
 let nextNoticeId = 0
 
-function noticeOptions(options = {}) {
+function noticeOptions(message, options = {}) {
   const kind = ['success', 'error', 'info'].includes(options.kind) ? options.kind : 'info'
-  const duration = options.duration === undefined ? DEFAULT_DURATION : options.duration
-  if (!Number.isFinite(duration) || duration < 0) throw new Error('notice duration must be a non-negative finite number')
+  const duration = resolveNoticeDuration(message, options.duration)
   return { kind, duration }
 }
 
-function TransientNoticeViewport({ notices, dismiss, pause, resume }) {
+function TransientNoticeViewport({ notices, dismiss, setInteraction }) {
   const t = useT()
+  const viewport = useRef(null)
+
+  useLayoutEffect(() => {
+    const element = viewport.current
+    if (element) element.scrollTop = element.scrollHeight
+  }, [notices.length])
+
   if (!notices.length) return null
   const iconFor = { success: 'circle-check', error: 'circle-x', info: 'info' }
   return (
-    <div className="tn-viewport">
+    <div className="tn-viewport" ref={viewport}>
       {notices.map((notice) => (
         <div
           key={notice.id}
@@ -26,10 +32,10 @@ function TransientNoticeViewport({ notices, dismiss, pause, resume }) {
           data-paused={notice.paused ? 'true' : undefined}
           style={{ '--tn-duration': `${notice.duration}ms` }}
           role={notice.kind === 'error' ? 'alert' : 'status'}
-          onPointerEnter={() => pause(notice.id)}
-          onPointerLeave={() => resume(notice.id)}
-          onFocus={() => pause(notice.id)}
-          onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) resume(notice.id) }}
+          onPointerEnter={() => setInteraction(notice.id, 'pointer', true)}
+          onPointerLeave={() => setInteraction(notice.id, 'pointer', false)}
+          onFocus={() => setInteraction(notice.id, 'focus', true)}
+          onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setInteraction(notice.id, 'focus', false) }}
         >
           <Icon name={iconFor[notice.kind]} size={16} className="tn-icon" />
           <span className="tn-message">{notice.message}</span>
@@ -44,6 +50,7 @@ function TransientNoticeViewport({ notices, dismiss, pause, resume }) {
 export function TransientNoticeProvider({ children }) {
   const [notices, setNotices] = useState([])
   const timers = useRef(new Map())
+  const interactions = useRef(new Map())
 
   const clearTimer = useCallback((id) => {
     const timer = timers.current.get(id)
@@ -54,6 +61,7 @@ export function TransientNoticeProvider({ children }) {
 
   const dismiss = useCallback((id) => {
     clearTimer(id)
+    interactions.current.delete(id)
     setNotices((current) => current.filter((notice) => notice.id !== id))
   }, [clearTimer])
 
@@ -68,39 +76,42 @@ export function TransientNoticeProvider({ children }) {
   const notify = useCallback((message, options) => {
     const text = String(message ?? '').trim()
     if (!text) return null
-    const { kind, duration } = noticeOptions(options)
+    const { kind, duration } = noticeOptions(text, options)
     const id = `notice-${++nextNoticeId}`
+    interactions.current.set(id, { pointer: false, focus: false })
     setNotices((current) => [...current, { id, kind, message: text, duration, paused: false }])
     if (duration) schedule(id, duration)
     return id
   }, [schedule])
 
-  const pause = useCallback((id) => {
+  const setInteraction = useCallback((id, source, active) => {
+    const interaction = interactions.current.get(id)
+    if (!interaction || interaction[source] === active) return
+    interaction[source] = active
+    const paused = interaction.pointer || interaction.focus
     const timer = timers.current.get(id)
     if (!timer) return
-    window.clearTimeout(timer.handle)
-    timer.handle = null
-    timer.remaining = Math.max(0, timer.deadline - Date.now())
-    setNotices((current) => current.map((notice) => notice.id === id ? { ...notice, paused: true } : notice))
-  }, [])
-
-  const resume = useCallback((id) => {
-    const timer = timers.current.get(id)
-    if (!timer || timer.handle) return
-    schedule(id, timer.remaining)
-    setNotices((current) => current.map((notice) => notice.id === id ? { ...notice, paused: false } : notice))
+    if (paused && timer.handle) {
+      window.clearTimeout(timer.handle)
+      timer.handle = null
+      timer.remaining = Math.max(0, timer.deadline - Date.now())
+    } else if (!paused && !timer.handle) {
+      schedule(id, timer.remaining)
+    }
+    setNotices((current) => current.map((notice) => notice.id === id ? { ...notice, paused } : notice))
   }, [schedule])
 
   useEffect(() => () => {
     for (const { handle } of timers.current.values()) if (handle) window.clearTimeout(handle)
     timers.current.clear()
+    interactions.current.clear()
   }, [])
 
   const value = useMemo(() => ({ notify, dismiss }), [notify, dismiss])
   return (
     <NoticeContext.Provider value={value}>
       {children}
-      <TransientNoticeViewport notices={notices} dismiss={dismiss} pause={pause} resume={resume} />
+      <TransientNoticeViewport notices={notices} dismiss={dismiss} setInteraction={setInteraction} />
     </NoticeContext.Provider>
   )
 }

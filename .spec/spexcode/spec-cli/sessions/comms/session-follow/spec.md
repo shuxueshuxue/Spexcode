@@ -46,7 +46,9 @@ path projects those rows to unique watcher ids, appends one normal `sent` event 
 enqueues one ordinary prompt for adapter delivery. A busy or offline watcher therefore receives the next retry
 exactly like a normal `spex session send`; an available watcher receives a terminal insert in its current turn.
 Installing a source or reparenting a child directly sends the child's current authored state — a new supervisor
-needs that context even when it is routine `active`/working. Later state writes take the transition path instead:
+needs that context even when it is routine `active`/working. The creation transaction is the one ordering
+exception: it owns a deferred initial snapshot until the launch queue has resolved queued capacity or published
+readiness-backed working; [[sessions-core]] owns that fence. Later state writes take the transition path instead:
 a parent-only watch suppresses routine working, while a `manual` source explicitly asks for the complete feed and
 includes it. The sources form one set: an overlapping manual+parent row still projects to one delivery, with
 manual's complete-feed policy winning for later state changes. Thus a one-shot `ls` remains a current-state read,

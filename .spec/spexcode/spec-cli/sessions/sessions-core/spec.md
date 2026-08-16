@@ -41,9 +41,21 @@ reader fallback for callers with no governed delivery address. A watcher identit
 source set: `manual` comes from the explicit watch command and `parent` comes from the tree relationship.
 The entry persists while either source exists, and the transition path projects the source set to one watcher
 id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Source installation and
-reparenting directly dispatch the current state. Only a later state write consults the source policy: parent-only
-suppresses `active`/working and manual includes it. Thus manual+parent yields the complete later-state feed
-without a duplicate or a second mechanism.
+reparenting directly dispatch the current state, except that creation installs its parent source with one durable
+initial-snapshot debt. The launch queue resolves that debt exactly once: a real capacity decision publishes the
+still-queued snapshot, while an admitted launch publishes only after its adapter readiness fence has established
+that the existing active/resource publication is observably working. A launch attempt that fails readiness keeps
+that resource contract and its loud failure note, but retires the debt without fabricating working. A synchronous
+launch/preflight failure likewise retires the debt rather than misreporting its queued record as capacity backlog;
+only the queue's proven full-capacity branch may publish queued. Only a later state write consults the source
+policy. A retryable launch error retains the same debt for the next queue attempt, and a restarted supervisor may
+reclaim readiness observation for an already-active launch without launching or replaying its prompt. Each accepted
+snapshot is keyed by the debt token and authored state; before clearing the token, delivery compares the latest state
+under the record lock and accepts any raced actionable state with its own key. A crash before that compare therefore
+replays neither an accepted initial snapshot nor an accepted catch-up, while still delivering an authored asking,
+review, or error that raced acceptance. Parent-only `active`/working is the suppressed terminal of that comparison;
+manual includes it. Thus creation ordering does not weaken routine-working suppression, and manual+parent yields the
+complete later-state feed without a duplicate or a second mechanism.
 Creation and
 [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
 source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.

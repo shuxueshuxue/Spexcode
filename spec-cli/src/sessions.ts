@@ -470,7 +470,7 @@ function writeRecord(rec: SessRec): void {
 }
 
 export type WatchSource = 'manual' | 'parent'
-type WatchEntry = { watcher: string; createdAt: string; sources: WatchSource[] }
+type WatchEntry = { watcher: string; createdAt: string; sources: WatchSource[]; snapshotPending?: string }
 export type SessionWatch = { target: string; createdAt: string }
 const watchPath = (target: string) => sessionArtifactPath(target, 'watchers.json')
 
@@ -492,7 +492,10 @@ function readWatchEntries(target: string): WatchEntry[] {
         // The former one-source format cannot name an origin. Its child pointer is the only durable witness
         // that this watcher was installed for parent supervision; every other legacy row is a manual watch.
         : [watcher === parent ? 'parent' : 'manual']
-      return sources.length ? [{ watcher, createdAt, sources }] : []
+      const snapshotPending = (entry as { snapshotPending?: unknown }).snapshotPending
+      return sources.length ? [{ watcher, createdAt, sources,
+        ...(sources.includes('parent') && typeof snapshotPending === 'string' && snapshotPending ? { snapshotPending } : {}),
+      }] : []
     })
   } catch { return [] }
 }
@@ -507,12 +510,17 @@ function writeWatchEntries(target: string, entries: WatchEntry[]): void {
   renameSync(tmp, path)
 }
 
-function addWatchSource(entries: WatchEntry[], watcher: string, source: WatchSource): { entries: WatchEntry[]; added: boolean } {
+function addWatchSource(entries: WatchEntry[], watcher: string, source: WatchSource, deferInitialSnapshot = false): { entries: WatchEntry[]; added: boolean } {
   const existing = entries.find((entry) => entry.watcher === watcher)
-  if (!existing) return { entries: [...entries, { watcher, createdAt: new Date().toISOString(), sources: [source] }], added: true }
+  const snapshotPending = deferInitialSnapshot && !existing?.sources.includes('manual') ? randomUUID() : undefined
+  if (!existing) return { entries: [...entries, {
+    watcher, createdAt: new Date().toISOString(), sources: [source], ...(snapshotPending ? { snapshotPending } : {}),
+  }], added: true }
   if (existing.sources.includes(source)) return { entries, added: false }
   return {
-    entries: entries.map((entry) => entry === existing ? { ...entry, sources: [...entry.sources, source] } : entry),
+    entries: entries.map((entry) => entry === existing ? {
+      ...entry, sources: [...entry.sources, source], ...(snapshotPending ? { snapshotPending } : {}),
+    } : entry),
     added: true,
   }
 }
@@ -523,7 +531,10 @@ function removeWatchSource(entries: WatchEntry[], watcher: string, source: Watch
     if (entry.watcher !== watcher || !entry.sources.includes(source)) return [entry]
     removed = true
     const sources = entry.sources.filter((candidate) => candidate !== source)
-    return sources.length ? [{ ...entry, sources }] : []
+    if (!sources.length) return []
+    if (source !== 'parent') return [{ ...entry, sources }]
+    const { snapshotPending: _pending, ...withoutParentDebt } = entry
+    return [{ ...withoutParentDebt, sources }]
   })
   return { entries: next, removed }
 }
@@ -549,7 +560,7 @@ function shouldDeliverWatchTransition(target: SessRec, sources: readonly WatchSo
 
 function scheduleWatchNotifications(target: SessRec): void {
   const watchers = readWatchEntries(target.session)
-    .filter((entry) => shouldDeliverWatchTransition(target, entry.sources))
+    .filter((entry) => !entry.snapshotPending && shouldDeliverWatchTransition(target, entry.sources))
     .map((entry) => entry.watcher)
   if (!watchers.length) return
   queueMicrotask(() => {
@@ -561,19 +572,117 @@ function scheduleWatchNotifications(target: SessRec): void {
   })
 }
 
+const watchSnapshotState = (target: SessRec): string => JSON.stringify([target.status, target.proposal, target.note])
+
+async function deliverPendingWatchSnapshots(targetId: string, forceCurrent = true): Promise<void> {
+  const pending = readWatchEntries(targetId).filter((entry) => entry.snapshotPending)
+  for (const original of pending) {
+    const token = original.snapshotPending!
+    let force = forceCurrent
+    for (;;) {
+      const target = readRecord(targetId)
+      const entry = readWatchEntries(targetId)
+        .find((candidate) => candidate.watcher === original.watcher && candidate.snapshotPending === token)
+      if (!target || !entry) break
+      const state = watchSnapshotState(target)
+      const shouldDeliver = force || shouldDeliverWatchTransition(target, entry.sources)
+      if (!shouldDeliver) {
+        let settled = false
+        await withRecordLock(targetId, async () => {
+          const current = readRecord(targetId)
+          const entries = readWatchEntries(targetId)
+          const pendingEntry = entries.find((candidate) => candidate.watcher === original.watcher && candidate.snapshotPending === token)
+          if (!current || !pendingEntry || watchSnapshotState(current) !== state) return
+          const next = entries.map((candidate) => {
+            if (candidate !== pendingEntry) return candidate
+            const { snapshotPending: _pending, ...cleared } = candidate
+            return cleared
+          })
+          writeWatchEntries(targetId, next)
+          settled = true
+        })
+        if (settled) break
+        force = false
+        continue
+      }
+
+      const identity = `${targetId}\0${entry.watcher}\0${token}\0${state}`
+      const delivered = await sendText(entry.watcher, watchMessage(target), targetId, {
+        idempotency: {
+          operation: 'watch-initial-snapshot',
+          requestDigest: digest(identity),
+          payloadHash: digest(`watch-initial-snapshot\0${identity}\0${watchMessage(target)}`),
+        },
+        acceptGuard: async () => {
+          const current = readRecord(targetId)
+          const stillPending = readWatchEntries(targetId)
+            .some((candidate) => candidate.watcher === entry.watcher && candidate.snapshotPending === token)
+          if (!current || !stillPending || watchSnapshotState(current) !== state)
+            throw new ResourceConflict('watch initial snapshot changed before acceptance')
+        },
+      })
+      if (!delivered.ok) {
+        if (delivered.error?.includes('watch initial snapshot changed before acceptance')) continue
+        console.error(`spex session watch: could not deliver initial ${targetId} state to ${entry.watcher}: ${delivered.error}`)
+        break
+      }
+      force = false
+
+      let settled = false
+      await withRecordLock(targetId, async () => {
+        const current = readRecord(targetId)
+        const entries = readWatchEntries(targetId)
+        const pendingEntry = entries.find((candidate) => candidate.watcher === entry.watcher && candidate.snapshotPending === token)
+        if (!current || !pendingEntry) { settled = true; return }
+        const currentState = watchSnapshotState(current)
+        if (currentState !== state && shouldDeliverWatchTransition(current, pendingEntry.sources)) return
+        const next = entries.map((candidate) => {
+          if (candidate !== pendingEntry) return candidate
+          const { snapshotPending: _pending, ...cleared } = candidate
+          return cleared
+        })
+        writeWatchEntries(targetId, next)
+        settled = true
+      })
+      if (settled) break
+    }
+  }
+}
+
+async function clearPendingWatchSnapshots(targetId: string): Promise<void> {
+  await withRecordLock(targetId, async () => {
+    const entries = readWatchEntries(targetId)
+    const next = entries.map((entry) => {
+      if (!entry.snapshotPending) return entry
+      const { snapshotPending: _pending, ...settled } = entry
+      return settled
+    })
+    if (next.some((entry, index) => entry !== entries[index])) writeWatchEntries(targetId, next)
+  })
+}
+
 export async function subscribeSessionWatch(watcher: string, targets: string[], source: WatchSource = 'manual'): Promise<{ watched: string[] }> {
   managedWatchRecord(watcher)
   const watched: string[] = []
   for (const target of [...new Set(targets)]) {
     if (target === watcher) throw new ResourceConflict('a session cannot watch itself')
-    const targetRecord = managedWatchRecord(target)
+    let targetRecord: SessRec | null = null
+    let added = false
+    let pending = false
     withRecordLockSync(target, () => {
+      targetRecord = managedWatchRecord(target)
       const entries = readWatchEntries(target)
-      const next = addWatchSource(entries, watcher, source)
+      const next = addWatchSource(entries, watcher, source, source === 'parent' && targetRecord!.status === 'queued')
       if (next.added) writeWatchEntries(target, next.entries)
+      added = next.added
+      pending = next.entries.some((entry) => entry.watcher === watcher && !!entry.snapshotPending)
     })
-    const delivered = await sendText(watcher, watchMessage(targetRecord), target)
-    if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
+    if (pending) {
+      if (source === 'manual') await deliverPendingWatchSnapshots(target)
+    } else if (source === 'manual' || added) {
+      const delivered = await sendText(watcher, watchMessage(targetRecord!), target)
+      if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
+    }
     watched.push(target)
   }
   return { watched }
@@ -1481,32 +1590,53 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown): void {
 
 function observeQueuedLaunchReadiness(id: string, harness: Harness): void {
   void waitForReady(id, harness)
-    .then((readiness) => {
-      if (harness.launchPayloadProof && !readiness) {
+    .then(async (readiness) => {
+      if (!readiness) {
         const committed = !!readRecord(id)?.harnessSessionId
-        throw new ResourceConflict(committed
-          ? 'post-proof adapter liveness did not become ready before launch readiness timed out'
-          : 'native identity and first-turn rollout proof did not arrive before launch readiness timed out')
+        throw new ResourceConflict(harness.launchPayloadProof
+          ? committed
+            ? 'post-proof adapter liveness did not become ready before launch readiness timed out'
+            : 'native identity and first-turn rollout proof did not arrive before launch readiness timed out'
+          : 'adapter liveness did not become ready before launch readiness timed out')
       }
-      return drainSession(id)
+      let readyToPublish = false
+      await withRecordLock(id, async () => {
+        const candidate = readRecord(id)
+        if (!candidate) return
+        const stillReady = await readiness.validate(() => {
+          const current = readRecord(id)
+          return current ? { ...current, runtimeDir: runtimeRoot() } : null
+        })
+        if (!stillReady) throw new ResourceConflict('launch readiness changed before queued publication')
+        const current = readRecord(id)
+        if (!current) return
+        if (current.status === 'queued') writeRecord({ ...current, status: 'active', proposal: null, note: null, launchOwner: null })
+        readyToPublish = true
+      })
+      if (!readyToPublish) return
+      await deliverPendingWatchSnapshots(id)
+      await drainSession(id)
     })
     .catch(async (error) => {
       try { await withRecordLock(id, async () => noteQueuedLaunchFailureUnlocked(id, error)) }
       catch (recordError) {
         console.error(`spex: session ${id}: queued launch failure could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}; original failure: ${error instanceof Error ? error.message : String(error)}`)
       }
+      await clearPendingWatchSnapshots(id)
     })
     .finally(() => launching.delete(id))
 }
 
-// launch a prepared `queued` worktree: feed it its parked launch prompt, flip it to active. Returns false
-// (leaving it queued, to be retried next drain) if the worktree/prompt is gone or the tmux launch threw.
-async function startQueuedUnlocked(id: string): Promise<boolean> {
-  if (archiving.has(id)) return false
+type QueuedStartResult = 'started' | 'blocked' | 'retryable'
+// Launch a prepared `queued` worktree. Deterministic blockers retire its creation snapshot debt; a transport
+// attempt that may succeed on the next drain keeps that durable debt for the eventual real outcome.
+async function startQueuedUnlocked(id: string): Promise<QueuedStartResult> {
+  if (archiving.has(id)) return 'retryable'
   const wt = await findWorktree(id)
-  if (!wt) return false
-  if (archiving.has(id) || wt.rec.archived) return false
-  if (!canDrainQueued(wt.rec)) return false
+  if (!wt) return 'blocked'
+  if (archiving.has(id)) return 'retryable'
+  if (wt.rec.archived) return 'blocked'
+  if (!canDrainQueued(wt.rec)) return 'retryable'
   const h = harnessById(wt.rec.harness || defaultHarness.id)
   if (h.launchPayloadProof && existsSync(sessionArtifactPath(id, 'launch.proof'))) {
     launching.add(id)
@@ -1521,7 +1651,7 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
       writeRecord({ ...recovered, status: 'active', proposal: null, note: null, launchOwner: null })
       observeQueuedLaunchReadiness(id, h)
       readinessOwnsSlot = true
-      return true
+      return 'started'
     } finally {
       if (!readinessOwnsSlot) launching.delete(id)
     }
@@ -1533,7 +1663,7 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
       console.error(`spex: ${message}`)
       writeRecord({ ...wt.rec, note: message })
     }
-    return false
+    return 'blocked'
   }
   // a queued worktree can go missing while it waits (a human cleaned up, a disk moved). Draining it would open
   // a window that fast-exits and burn the retry budget every tick, so refuse ONCE, loudly, and stamp the reason
@@ -1544,7 +1674,7 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
       console.error(`spex: not launching queued session ${id}: ${blocked.message}`)
       writeRecord({ ...wt.rec, note: blocked.message })
     }
-    return false
+    return 'blocked'
   }
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
   let readinessOwnsSlot = false
@@ -1553,7 +1683,7 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
       const sq = shQuote(launchPrompt)
       await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
     } catch {
-      return false   // launch failed → stays `queued`, retried on the next drain tick
+      return 'retryable'   // launch failed → stays `queued`, with its initial debt, for the next drain tick
     }
     // the note this record may carry is the QUEUED state's word (a launch-blocker message stamped above); the
     // launch just succeeded, so it is spent. Clearing it with the transition is what keeps "a stored note
@@ -1566,12 +1696,12 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
     // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.
     observeQueuedLaunchReadiness(id, h)
     readinessOwnsSlot = true
-    return true
+    return 'started'
   } finally {
     if (!readinessOwnsSlot) launching.delete(id)
   }
 }
-const startQueued = (id: string): Promise<boolean> => withSessionTransition(id, () => withRecordLock(id, () => startQueuedUnlocked(id)))
+const startQueued = (id: string): Promise<QueuedStartResult> => withSessionTransition(id, () => withRecordLock(id, () => startQueuedUnlocked(id)))
 
 async function drainQueueUnlocked(): Promise<void> {
   if (draining) return
@@ -1580,13 +1710,32 @@ async function drainQueueUnlocked(): Promise<void> {
     const cap = maxActive()   // read once per drain pass (spexcode.json → env → default); won't shift mid-burst
     for (;;) {
       const [sessions, snap] = await Promise.all([listSessions(), liveSnapshot()])
+      for (const session of sessions) {
+        const rec = readRecord(session.id)
+        if (!rec || launching.has(session.id) || !readWatchEntries(session.id).some((entry) => entry.snapshotPending)) continue
+        if (rec.status === 'queued') continue
+        if (rec.status === 'active' && !rec.stopped && !rec.archived) {
+          launching.add(session.id)
+          observeQueuedLaunchReadiness(session.id, harnessById(rec.harness || defaultHarness.id))
+          continue
+        }
+        await deliverPendingWatchSnapshots(session.id, false)
+      }
       // if the liveness probe FAILED (tmux timing out — the overload condition), occupancy is UNKNOWABLE: every
       // session would read window-less and isOccupying would undercount, so the drainer would OVER-launch and pile
       // MORE compute onto an already-thrashing box. Under load, do the safe thing — launch nothing this pass and
       // let the next tick re-drain once the probe recovers ([[state]] board honesty applied to the cap).
       if (snap.probeFailed) break
       const occupied = sessions.reduce((n, s) => n + (launching.has(s.id) || isOccupying(s, snap) ? 1 : 0), 0)
-      if (occupied >= cap) break
+      if (occupied >= cap) {
+        const authority = backendLaunchAuthority()
+        await Promise.all(sessions.filter((session) => {
+          if (session.status !== 'queued') return false
+          const rec = readRecord(session.id)
+          return !!rec && canDrainQueued(rec, authority)
+        }).map((session) => deliverPendingWatchSnapshots(session.id)))
+        break
+      }
       const authority = backendLaunchAuthority()
       const next = sessions.find((s) => {
         if (s.status !== 'queued' || launching.has(s.id)) return false
@@ -1594,7 +1743,11 @@ async function drainQueueUnlocked(): Promise<void> {
         return !!rec && canDrainQueued(rec, authority)
       })
       if (!next) break
-      if (!(await startQueued(next.id))) break   // launch failed → stop this pass; a later tick retries
+      const started = await startQueued(next.id)
+      if (started !== 'started') {
+        if (started === 'blocked') await clearPendingWatchSnapshots(next.id)
+        break   // launch failed → stop this pass; a later tick retries
+      }
     }
   } finally { draining = false }
 }
@@ -2361,6 +2514,11 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           if (gitMismatch) throw new SessionCreateError('session_create_failed', phase, `refusing session publication: ${gitMismatch}`, 500)
           throwIfCreateAborted(signal, phase)
           writeRecord(rec)
+          if (rec.parent && readRecord(rec.parent)?.governed) {
+            const watchers = readWatchEntries(id)
+            const next = addWatchSource(watchers, rec.parent, 'parent', true)
+            if (next.added) writeWatchEntries(id, next.entries)
+          }
           published = true
           const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(rec, root)
           if (receiptFailure) console.error(`spex: published session ${id.slice(0, 8)} remains the fence for its candidate receipt: ${receiptFailure}`)

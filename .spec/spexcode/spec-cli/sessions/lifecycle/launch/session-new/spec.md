@@ -113,6 +113,17 @@ recovers the receipt. The published record is already a normal durable `queued` 
 launch payload present, so backend restart and the ordinary queue supervisor can recover it. Queue draining is
 requested only after publication and is not awaited by the HTTP receipt; a slow, stopped, or broken launcher
 therefore cannot hold session creation open. This is the existing queue mechanism, not a second create worker.
+When the record has a governed parent, publication also installs that parent source before requesting the drain,
+but defers its initial snapshot behind the same queue decision. Capacity-confirmed backlog resolves it once as
+`queued`; an admitted worker resolves it once as `working` only after launch readiness is revalidated against the
+existing active/resource publication. A readiness failure preserves that resource contract and records the
+existing loud failure note, while retiring the debt without a fabricated working snapshot. The deferred snapshot
+is also retired without delivery when synchronous launch/preflight fails; such a failure must not impersonate the
+queue's proven full-capacity decision. A retryable launcher failure retains the same debt for the next queue pass. On
+server restart, an active row with debt may reclaim only its readiness observer: it does not launch again or replay the
+prompt. Snapshot acceptance is idempotent by debt token and authored state, including an actionable state that races
+the initial acceptance, so crash replay neither duplicates accepted messages nor loses the raced transition. The debt
+does not turn the later parent-only working suppression into a special transition rule.
 The successful HTTP route also nudges the graph's `sessions` projection after publication, so dashboard row
 delivery does not depend on the session-store watcher; any candidate worktree registry refresh remains its own
 asynchronous full convergence.

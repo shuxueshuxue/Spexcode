@@ -1,20 +1,29 @@
 ---
 scenarios:
   - name: managed-watch-delivers-child-transition
-    tags: [cli]
+    tags: [cli, backend-api]
     description: >-
-      From a real governed parent session, create a real child, then read `spex session watch list` in the
-      parent's terminal and inspect its received child-state snapshot. Have the child declare review, then
-      return to working, and inspect the parent's terminal/timeline. Add an independent manual watch, repeat
-      the working transition, then cancel that manual source.
+      From a real governed parent session, create a child through the real queued launch path while holding
+      adapter readiness after the parent relation is installed. Inspect the parent's timeline before readiness,
+      after an early active hook, and after readiness succeeds. Repeat with the active cap already full, with
+      deterministic and retryable launch failures, and with restart/replay at both durable receipt boundaries.
+      Then have the child declare review and return to working. Add an independent manual watch, repeat the
+      working transition, then cancel or reparent that source combination.
     expected: >-
-      Creation performs one successful, one-shot watch registration: list names the child and the command
-      does not remain running, and the parent receives exactly one ordinary send-backed current-state snapshot,
-      including an initial working state. The later review declaration is delivered, but the parent-only return
-      to working is not. The independent manual source makes that working transition arrive exactly once;
-      cancelling it restores the parent-only suppression. A temporarily unavailable parent keeps every accepted
-      message in its normal delivery queue. A shell with no governed parent records no subscription and is
-      instead given the background `spex session wait <child>` fallback.
+      The relation exists immediately but neither queued nor an early active hook reaches the parent before the
+      readiness fence. A successful admitted launch yields exactly one initial working snapshot; a proven-full
+      capacity decision yields exactly one queued snapshot. Deterministic or readiness failure never fabricates
+      either outcome, while a retryable failure keeps the same debt until success. Restart reclaims readiness
+      without relaunching or replaying the prompt. Re-entry after the initial receipt, or after a raced asking,
+      review, or error receipt, produces exactly one of each accepted state and clears the debt only after the
+      latest state is accepted; a later parent-only working state remains suppressed. Removing the parent source
+      removes its debt without silencing a retained manual source. A temporarily unavailable parent keeps every
+      accepted message in its normal delivery queue. A shell with no governed parent records no subscription and
+      is instead given the background `spex session wait <child>` fallback.
+    code: spec-cli/src/sessions.ts
+    test:
+      path: spec-cli/src/session-timeline.test.ts
+      name: creation parent watch publishes its initial snapshot only after active readiness publication
   - name: wait-edge-triggered-return
     tags: [backend-api]
     description: >-

@@ -172,6 +172,14 @@ created. If the drainer wins first, status is no longer queued and ordinary live
 target/runtime/work ambiguity fails loudly with the queued row intact. Close reports success and releases
 capacity only after worktree, branch, prompt, and record removal have each been proven complete.
 
+A launched row that never received a native thread binding is a different residue, not a queued row and not an
+archive candidate. Terminal close may retire it only after the adapter reports no live local worker, its PID is
+missing or proven dead, its rendezvous is dead, no launch/recovery remains, and its worktree is clean with no
+ahead commit. The close then removes only that row's stale tmux/local adapter artifacts and durable worktree,
+branch, and record. It never interrupts, archives, or otherwise claims an unbound app-server peer; any such
+native peer remains visible and protective as unowned runtime state. A live/recycled PID, live or unproven
+rendezvous, in-progress launch, dirty work, or ahead branch leaves the row intact.
+
 Archiving never removes or moves the worktree/branch and writes no timeline row. Success means the exact leaf is
 stopped and the record is archived; a failed stop means no archive field change. An archived record is therefore
 always offline and consumes no active slot or loaded-thread reference of its own.

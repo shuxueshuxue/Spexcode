@@ -3165,6 +3165,28 @@ async function assertColdRetirementSafe(id: string, rec: SessRec): Promise<void>
   }
 }
 
+async function assertDiscardableWorktree(id: string, path: string, branch: string | null, kind: 'prepared' | 'unbound'): Promise<void> {
+  if (existsSync(path)) {
+    const status = await gitTry(['-C', path, 'status', '--porcelain', '--untracked-files=all'])
+    if (!status.ok) throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} worktree status is unreadable`)
+    if (status.stdout.trim()) throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} worktree has dirty work`)
+  }
+  if (branch) {
+    const resolved = await gitTry(['-C', mainRoot(), 'rev-parse', '--verify', `${branch}^{commit}`])
+    if (resolved.ok) {
+      const count = await gitTry(['-C', mainRoot(), 'rev-list', '--count', `${mainBranch()}..${branch}`])
+      if (!count.ok) throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} branch ancestry is unreadable`)
+      const ahead = Number(count.stdout.trim())
+      if (!Number.isFinite(ahead) || ahead !== 0)
+        throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} branch is ${Number.isFinite(ahead) ? ahead : 'an unknown number of'} commit(s) ahead`)
+    } else if (resolved.failure !== 'exit') {
+      throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} branch identity is unreadable`)
+    } else if (existsSync(path)) {
+      throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} worktree exists but branch ${branch} is missing`)
+    }
+  }
+}
+
 // A never-launched queue owns only prepared disk state. The transition/record locks around close serialize
 // this check with startQueued: whichever wins decides whether the record is still a queue or has become live.
 // No shared-runtime probe belongs here because a valid prepared row has no adapter thread to look up.
@@ -3184,29 +3206,31 @@ async function assertQueuedRetirementSafe(id: string, rec: SessRec, path: string
     const pid = readAgentPid(pidPath)
     throw new ResourceConflict(`refusing to close queued session ${id}: target leaf PID artifact ${Number.isFinite(pid) && pid > 0 ? pid : 'is unreadable'}; never-launched ownership is ambiguous`)
   }
-
-  if (existsSync(path)) {
-    const status = await gitTry(['-C', path, 'status', '--porcelain', '--untracked-files=all'])
-    if (!status.ok) throw new ResourceConflict(`refusing to close queued session ${id}: prepared worktree status is unreadable`)
-    if (status.stdout.trim()) throw new ResourceConflict(`refusing to close queued session ${id}: prepared worktree has dirty work`)
-  }
-  if (branch) {
-    const resolved = await gitTry(['-C', mainRoot(), 'rev-parse', '--verify', `${branch}^{commit}`])
-    if (resolved.ok) {
-      const count = await gitTry(['-C', mainRoot(), 'rev-list', '--count', `${mainBranch()}..${branch}`])
-      if (!count.ok) throw new ResourceConflict(`refusing to close queued session ${id}: prepared branch ancestry is unreadable`)
-      const ahead = Number(count.stdout.trim())
-      if (!Number.isFinite(ahead) || ahead !== 0)
-        throw new ResourceConflict(`refusing to close queued session ${id}: prepared branch is ${Number.isFinite(ahead) ? ahead : 'an unknown number of'} commit(s) ahead`)
-    } else if (resolved.failure !== 'exit') {
-      throw new ResourceConflict(`refusing to close queued session ${id}: prepared branch identity is unreadable`)
-    } else if (existsSync(path)) {
-      throw new ResourceConflict(`refusing to close queued session ${id}: prepared worktree exists but branch ${branch} is missing`)
-    }
-  }
+  await assertDiscardableWorktree(id, path, branch, 'prepared')
 }
 
-async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch: string | null; rec: SessRec }, source: CloseSource): Promise<boolean> {
+// A launch may leave its row active before Codex publishes the native thread binding. This close path owns
+// only the record's dead local launch residue; an unbound app-server peer stays unowned and untouched.
+async function assertUnboundRetirementSafe(id: string, rec: SessRec, path: string, branch: string | null): Promise<void> {
+  if (rec.harnessSessionId || rec.status === 'queued' || rec.archived)
+    throw new ResourceConflict(`refusing to close unbound session ${id}: it is not an unbound live-record residue`)
+  if (rec.adapterRecovery || rec.launchReadinessPending || launching.has(id) || existsSync(sessionArtifactPath(id, 'launch')))
+    throw new ResourceConflict(`refusing to close unbound session ${id}: launch or recovery is still in progress`)
+
+  const [snap, socket] = await Promise.all([liveSnapshot(id), rendezvousListening(id)])
+  if (snap.probeFailed) throw new ResourceConflict(`refusing to close unbound session ${id}: liveness probe failed; local worker absence is unproven`)
+  const harness = harnessById(rec.harness || defaultHarness.id)
+  if (harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online')
+    throw new ResourceConflict(`refusing to close unbound session ${id}: its adapter still reports a live worker`)
+  if (socket === 'live') throw new ResourceConflict(`refusing to close unbound session ${id}: target rendezvous transport already exists`)
+  if (socket === 'unproven') throw new ResourceConflict(`refusing to close unbound session ${id}: target rendezvous state is ambiguous`)
+  const leaf = await inspectSessionLeafIdentity(id, rec)
+  if (leaf.state !== 'missing' && leaf.state !== 'dead')
+    throw new ResourceConflict(`refusing to close unbound session ${id}: ${leaf.state === 'unknown' ? leaf.reason : 'target leaf identity is live or ambiguous'}`)
+  await assertDiscardableWorktree(id, path, branch, 'unbound')
+}
+
+async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch: string | null; rec: SessRec }, source: CloseSource, unboundRetired = false): Promise<boolean> {
   const root = mainRoot()
   const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(wt.rec, root)
   if (receiptFailure) throw new ResourceConflict(`refusing destructive close for ${id}: ${receiptFailure}; public record and resources remain the authority fence`)
@@ -3216,7 +3240,7 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   if (!retired) {
     if (wt.rec.archived) await assertColdRetirementSafe(id, wt.rec)
     else if (wt.rec.status === 'queued') await assertQueuedRetirementSafe(id, wt.rec, wt.path, wt.branch)
-    else throw new ResourceConflict(`refusing to close ${id}: target runtime was not cold-retired first`)
+    else if (!unboundRetired) throw new ResourceConflict(`refusing to close ${id}: target runtime was not cold-retired first`)
   }
   // The marker protects only the destructive half. A failed cold proof must leave a normal, resumable binding.
   if (closesCodexBinding) prepareCodexGenerationClose(runtimeRoot(), id, wt.rec.harnessSessionId!)
@@ -3271,25 +3295,34 @@ async function closeSessionUnlocked(id: string, source: CloseSource): Promise<bo
       `refusing destructive close for ${id}: the unreadable record proves no adapter, leaf, worktree, or branch owner (${guard}). ${evidence}. Runtime remains at ${runtime}; worktree and branch ownership is unknown and was not touched; no process signal or deletion was attempted.`)
   }
   if (!wt) return false
+  let unboundRetired = false
   if (!retirementReason(wt.rec) && !wt.rec.archived && wt.rec.status !== 'queued') {
-    // A confirmed terminal close may end an exact native turn before cold proof. Ordinary archive deliberately
-    // remains non-destructive while a turn is active; close already means discard this session's work.
     const harness = harnessById(wt.rec.harness || defaultHarness.id)
-    assertSessionOwnerSafe(id, harness.id)
-    const interrupt = harness.interrupt
-    if (interrupt) {
-      const result = await interrupt({ ...wt.rec, runtimeDir: runtimeRoot() })
-      if (!result.ok) throw new ResourceConflict(`refusing to close ${id}: native interrupt failed (${result.error || 'unknown error'})`)
+    if (!wt.rec.harnessSessionId) {
+      await assertUnboundRetirementSafe(id, wt.rec, wt.path, wt.branch)
+      await tmuxOk(['kill-session', '-t', id])
+      await assertTargetTmuxAbsent(id, 'after unbound residue retirement')
+      await harness.cleanupRuntime(wt.rec)
+      unboundRetired = true
+    } else {
+      // A confirmed terminal close may end an exact native turn before cold proof. Ordinary archive deliberately
+      // remains non-destructive while a turn is active; close already means discard this session's work.
+      assertSessionOwnerSafe(id, harness.id)
+      const interrupt = harness.interrupt
+      if (interrupt) {
+        const result = await interrupt({ ...wt.rec, runtimeDir: runtimeRoot() })
+        if (!result.ok) throw new ResourceConflict(`refusing to close ${id}: native interrupt failed (${result.error || 'unknown error'})`)
+      }
+      const archived = await archiveSessionUnlocked(id)
+      if (!archived) return false
+      wt = await findWorktree(id)
+      if (!wt) return false
     }
-    const archived = await archiveSessionUnlocked(id)
-    if (!archived) return false
-    wt = await findWorktree(id)
-    if (!wt) return false
   }
   const target = wt
   return target.branch
-    ? withRecordLock(sessionCandidateLockId(target.path, target.branch), () => closeOwnedSessionUnlocked(id, target, source))
-    : closeOwnedSessionUnlocked(id, target, source)
+    ? withRecordLock(sessionCandidateLockId(target.path, target.branch), () => closeOwnedSessionUnlocked(id, target, source, unboundRetired))
+    : closeOwnedSessionUnlocked(id, target, source, unboundRetired)
 }
 export const closeSession = (id: string, rawSource?: unknown): Promise<boolean> => {
   const source = normalizeCloseSource(rawSource)

@@ -1637,14 +1637,52 @@ async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expecte
   throw new Error('unreachable Codex cold preflight retry state')
 }
 
+type CodexOrphanEndpointScan =
+  | { endpoint: CodexGenerationEndpoint; generation: string; containsTarget: boolean }
+  | { endpoint: CodexGenerationEndpoint; reason: string }
+
+type CodexOrphanEndpointResolution =
+  | { ok: true; endpoint: CodexGenerationEndpoint; generation: string }
+  | { ok: false; reason: string }
+
+// A corrupt record has no binding we can trust. Locate its one materialized native thread before cold proof;
+// choosing current or legacy would redirect a destructive operation across a generation boundary.
+async function codexEndpointForOrphanThread(threadId: string, dir = runtimeRoot()): Promise<CodexOrphanEndpointResolution> {
+  const tracked = codexGenerationEndpoints(dir)
+  const endpoints = tracked.length ? tracked : [legacyCodexGenerationEndpoint(dir)]
+  const scans: CodexOrphanEndpointScan[] = await Promise.all(endpoints.map(async (endpoint) => {
+    const generation = codexMutationGeneration(dir, endpoint)
+    if (!generation) return { endpoint, reason: 'Codex shared app-server generation is unproven' }
+    const [active, archived] = await Promise.all([
+      codexThreadList(endpoint.socketPath, { archived: false, sourceKinds: [] }),
+      codexThreadList(endpoint.socketPath, { archived: true, sourceKinds: [] }),
+    ])
+    if (codexRuntimeGeneration(dir, endpoint) !== generation)
+      return { endpoint, reason: 'Codex shared app-server generation changed during orphan location' }
+    if (!active.ok) return { endpoint, reason: active.error }
+    if (!archived.ok) return { endpoint, reason: archived.error }
+    return { endpoint, generation, containsTarget: active.ids.includes(threadId) || archived.ids.includes(threadId) }
+  }))
+  const failed = scans.find((scan): scan is Extract<CodexOrphanEndpointScan, { reason: string }> => 'reason' in scan)
+  if (failed) return { ok: false, reason: `${failed.reason} while locating orphan Codex thread ${threadId} on generation ${failed.endpoint.id}` }
+  const matches = scans.filter((scan): scan is Extract<CodexOrphanEndpointScan, { containsTarget: boolean }> =>
+    'containsTarget' in scan && scan.containsTarget)
+  if (matches.length !== 1) {
+    const detail = matches.length ? matches.map((scan) => scan.endpoint.id).join(', ') : 'none'
+    return { ok: false, reason: `Codex orphan thread ${threadId} has ${matches.length === 0 ? 'no materialized' : 'ambiguous'} generation location (${detail})` }
+  }
+  return { ok: true, endpoint: matches[0].endpoint, generation: matches[0].generation }
+}
+
 async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSessionId: string }): Promise<HarnessOrphanThreadQuarantine> {
   const dir = runtimeRoot()
-  const generation = codexMutationGeneration(dir)
-  if (!generation) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
   const owners = governedSharedRuntimeOwners(dir, 'codex-app-server', threadId, opts.excludingSessionId)
   if (owners === null) return { ok: false, reason: 'governed Codex thread-owner census is unreadable' }
   if (owners.length) return { ok: false, reason: `Codex native thread ${threadId} has governed owner(s) ${owners.join(', ')}` }
-  const before = await codexColdPreflight(threadId, dir, generation)
+  const location = await codexEndpointForOrphanThread(threadId, dir)
+  if (!location.ok) return location
+  const { endpoint, generation } = location
+  const before = await codexColdPreflight(threadId, dir, generation, endpoint)
   if (!before.ok) return before
   const plan = before.receipt
   if (plan.descendantIds.length || plan.guard.descendantIds.length)
@@ -1665,7 +1703,6 @@ async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSe
   if (plan.activeIds.length !== 1 || plan.activeIds[0] !== threadId || plan.archivedIds.length)
     return { ok: false, reason: `Codex native thread ${threadId} is not one exact active orphan` }
   const siblingIds = plan.guard.referenceIds.filter((id) => id !== threadId)
-  const legacy = legacyCodexGenerationEndpoint(dir)
   // Quarantine archives one exact orphan, so it pays the same flush a subtree member does when that orphan is
   // loaded; the budget is derived the same way rather than being a second, differently-wrong constant.
   let orphanBudgetMs = CODEX_MUTATION_BASE_MS
@@ -1674,9 +1711,9 @@ async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSe
     if ('unreadable' in rollout) return { ok: false, reason: `Codex native thread ${threadId} is loaded and its rollout exists but cannot be measured, so the archive flush budget is unknown` }
     orphanBudgetMs = codexArchiveBudgetMs(rollout.bytes)
   }
-  const archived = await codexThreadMutation(legacy.socketPath, 'thread/archive', threadId, { dir, endpoint: legacy, generation }, undefined, orphanBudgetMs)
+  const archived = await codexThreadMutation(endpoint.socketPath, 'thread/archive', threadId, { dir, endpoint, generation }, undefined, orphanBudgetMs)
   if (!archived.ok) return { ok: false, reason: `${archived.error} while archiving orphan Codex thread ${threadId}${archived.commit === 'unknown' ? '; commit state is unknown' : ''}` }
-  const after = await codexColdPreflight(threadId, dir, generation)
+  const after = await codexColdPreflight(threadId, dir, generation, endpoint)
   const failed = (reason: string): HarnessOrphanThreadQuarantine => ({ ok: false, reason })
   if (!after.ok) {
     const restored = await rollback()

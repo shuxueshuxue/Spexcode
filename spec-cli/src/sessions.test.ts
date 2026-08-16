@@ -817,6 +817,7 @@ test('public close cancels a clean never-launched queue without entering the unr
   const previousCwd = process.cwd()
   const originalShared = codexHarness.sharedRuntimes
   const originalCleanup = codexHarness.cleanupRuntime
+  let cleanupCalls = 0
   const home = mkdtempSync(join(tmpdir(), 'spex-queued-close-'))
   const project = join(home, 'project')
   const branches: string[] = []
@@ -852,7 +853,7 @@ test('public close cancels a clean never-launched queue without entering the unr
     residency: async () => ({ healthy: true, referenceIds: ['unrelated-unowned-a', 'unrelated-unowned-b'] }),
     probe: async () => { throw new Error('never-launched queue close must not enter the shared-runtime guard') },
   }]
-  codexHarness.cleanupRuntime = async () => { throw new Error('never-launched queue close must not invoke adapter cleanup') }
+  codexHarness.cleanupRuntime = async () => { cleanupCalls++ }
 
   try {
     const clean = prepare('clean')
@@ -860,6 +861,25 @@ test('public close cancels a clean never-launched queue without entering the unr
     assert.equal(existsSync(clean.path), false, 'queue close removes the prepared worktree')
     assert.equal(existsSync(sessionStoreDir(clean.id)), false, 'queue close removes record and prepared prompt')
     assert.equal(execFileSync('git', ['-C', main, 'branch', '--list', clean.branch], { encoding: 'utf8' }).trim(), '', 'queue close removes the prepared branch')
+    assert.equal(cleanupCalls, 0, 'never-launched queue close does not invoke adapter cleanup')
+
+    const unbound = prepare('unbound')
+    const raw = JSON.parse(readFileSync(sessionRecordPath(unbound.id), 'utf8'))
+    writeFileSync(sessionRecordPath(unbound.id), `${JSON.stringify({ ...raw, status: 'active', launch_owner: '' }, null, 2)}\n`)
+    rmSync(sessionArtifactPath(unbound.id, 'launch'))
+    assert.equal(await closeSession(unbound.id), true)
+    assert.equal(existsSync(unbound.path), false, 'unbound launch residue close removes the clean worktree')
+    assert.equal(existsSync(sessionStoreDir(unbound.id)), false, 'unbound launch residue close removes its record')
+    assert.equal(cleanupCalls, 1, 'unbound residue cleanup reaches only its adapter-local cleanup seam')
+
+    const unboundDirty = prepare('unbound-dirty')
+    const dirtyRaw = JSON.parse(readFileSync(sessionRecordPath(unboundDirty.id), 'utf8'))
+    writeFileSync(sessionRecordPath(unboundDirty.id), `${JSON.stringify({ ...dirtyRaw, status: 'active', launch_owner: '' }, null, 2)}\n`)
+    rmSync(sessionArtifactPath(unboundDirty.id, 'launch'))
+    writeFileSync(join(unboundDirty.path, 'uncommitted.txt'), 'owned work\n')
+    await assert.rejects(closeSession(unboundDirty.id), /unbound worktree has dirty work/)
+    assert.equal(existsSync(sessionRecordPath(unboundDirty.id)), true, 'dirty unbound residue preserves its record')
+    assert.equal(existsSync(unboundDirty.path), true, 'dirty unbound residue preserves its worktree')
 
     const dirty = prepare('dirty')
     writeFileSync(join(dirty.path, 'uncommitted.txt'), 'owned work\n')

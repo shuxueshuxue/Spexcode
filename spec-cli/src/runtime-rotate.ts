@@ -1,18 +1,17 @@
 import { mainCheckout, runtimeRoot } from '@spexcode/spec-core'
 import { rotateCodexCurrentGeneration } from './codex-runtime-generations.js'
 import { codexBinary, defaultLauncher, resolveLauncher, sessionIdentityEnvVars } from './harness.js'
-import { commandHelp } from './help.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
-type RotateArgs = Readonly<{ launcher: string | null }>
+type AppServerRepairArgs = Readonly<{ launcher: string | null }>
 
 function usageError(message: string): never {
-  console.error(`spex runtime rotate codex: ${message}`)
-  console.error('usage: spex runtime rotate codex [--launcher <name>]')
+  console.error(`spex doctor repair app-server: ${message}`)
+  console.error('usage: spex doctor repair app-server [--launcher <name>]')
   process.exit(2)
 }
 
-function parseRotateArgs(args: string[]): RotateArgs {
+function parseAppServerRepairArgs(args: string[]): AppServerRepairArgs {
   const positionals: string[] = []
   let launcher: string | null = null
   for (let index = 0; index < args.length; index++) {
@@ -25,23 +24,19 @@ function parseRotateArgs(args: string[]): RotateArgs {
     } else if (arg.startsWith('--')) usageError(`unknown flag ${arg}`)
     else positionals.push(arg)
   }
-  if (positionals.length !== 2 || positionals[0] !== 'rotate' || positionals[1] !== 'codex')
-    usageError('expected rotate codex')
+  if (positionals.length !== 2 || positionals[0] !== 'repair' || positionals[1] !== 'app-server')
+    usageError('expected repair app-server')
   return { launcher }
 }
 
-export async function runRuntimeRotate(args: string[]): Promise<void> {
-  if (!args.length) {
-    console.log(commandHelp('runtime'))
-    return
-  }
-  const parsed = parseRotateArgs(args)
+export async function runDoctorRepairAppServer(args: string[]): Promise<number> {
+  const parsed = parseAppServerRepairArgs(args)
   const project = mainCheckout()
   const root = runtimeRoot()
   const launcherName = parsed.launcher ?? defaultLauncher(project)
   const launcher = resolveLauncher(launcherName, project)
   if (launcher.harness !== 'codex' && launcher.harness !== 'codex-headless') {
-    usageError(`launcher '${launcher.name}' uses ${launcher.harness}; select a configured Codex launcher with --launcher`)
+    usageError(`launcher '${launcher.name}' does not provide a switchable app-server; select a configured Codex launcher with --launcher`)
   }
   const command = process.env.SPEXCODE_CODEX_SERVER_CMD || codexBinary(launcher.cmd)
   const env = { ...process.env }
@@ -57,5 +52,6 @@ export async function runRuntimeRotate(args: string[]): Promise<void> {
       env,
     })
   })
-  console.log(`rotated Codex runtime ${rotation.previous.id} -> ${rotation.current.id} (launcher ${launcher.name})`)
+  console.log(`switched app-server ${rotation.previous.id} -> ${rotation.current.id} (launcher ${launcher.name})`)
+  return 0
 }

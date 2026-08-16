@@ -268,6 +268,7 @@ const SIGNPOSTS: Record<string, string> = {
   blob: 'spex evidence put|get',
   issues: 'spex issue — ls (was: bare issues) · show · open · reply · close · promote; on|off|status → the `issues.enabled` key in spexcode.json; `issues nudge` → spex internal nudge',
   forge: 'spex issue links [--pending] [--store <host>]  (--host is now --store)',
+  runtime: 'spex doctor repair app-server',
   new: 'spex session new',
   ls: 'spex session ls',
   watch: 'spex session watch',
@@ -397,7 +398,7 @@ async function stateKit() {
 // reach here — the signpost table above already exited.)
 if (cmd && cmd !== 'help' && (has('help') || process.argv.includes('-h'))) {
   const { commandHelp, overviewHelp } = await import('./help.js')
-  console.log(commandHelp(cmd, cmd === 'session' || cmd === 'runtime' ? process.argv[3] : undefined) ?? overviewHelp())
+  console.log(commandHelp(cmd, cmd === 'session' || cmd === 'doctor' ? process.argv[3] : undefined) ?? overviewHelp())
   process.exit(0)
 }
 
@@ -810,9 +811,6 @@ if (cmd === 'serve') {
     console.error(`spex peer: unknown verb '${sub}' — connect | ls | disconnect  (spex help peer)`)
     process.exit(2)
   }
-} else if (cmd === 'runtime') {
-  const { runRuntimeRotate } = await import('./runtime-rotate.js')
-  await runRuntimeRotate(process.argv.slice(3))
 } else if (cmd === 'session') {
   const sub = process.argv[3]
   if (sub === undefined) {

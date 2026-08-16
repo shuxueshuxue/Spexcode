@@ -524,11 +524,11 @@ export async function rotateCodexCurrentGeneration(
       }
       const current = previous.current ? previous.generations[previous.current] : null
       if (!current || current.state !== 'current')
-        throw new Error('there is no proven canonical Codex generation to rotate; launch a Codex session first')
+        throw new Error('there is no proven canonical app-server generation to switch; launch a Codex session first')
       if (!endpointIdentity(current.endpoint)) {
         if (goneGeneration(current.endpoint))
           throw new Error('canonical Codex generation is already dead; a normal Codex launch will replace it')
-        throw new Error('canonical Codex generation is unproven; refusing to rotate traffic')
+        throw new Error('canonical app-server generation is unproven; refusing to switch traffic')
       }
       if (previous.pending) {
         const pending = previous.generations[previous.pending]

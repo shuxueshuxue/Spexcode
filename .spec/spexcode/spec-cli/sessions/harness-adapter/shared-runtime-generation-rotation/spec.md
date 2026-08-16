@@ -44,15 +44,14 @@ lock reaper carries its own exact owner nonce, so a stale reaper cannot delete a
 live reservation that does not finish fails loudly rather than being stolen. An incomplete, replaced,
 or ambiguous candidate is not adopted by signature.
 
-`spex runtime rotate codex` is the explicit operator trigger for a current root that remains exactly
-identifiable but is unhealthy (for example it has exhausted its worker or memory budget). It selects a
-configured Codex launcher, starts and proves a fresh detached-v3 endpoint, then atomically changes only
-the canonical pointer: the former current endpoint becomes `draining`, every existing binding remains
-unchanged, and new traffic reaches the fresh current endpoint. The command never signals either root.
-If the current endpoint is ambiguous it refuses; if it is already proven dead, ordinary launch repair
-remains the one replacement path. A candidate that proved live while publication could not safely prove
-the former current endpoint remains an owner-stamped pending reservation for an explicit retry, never an
-unrecorded orphan or an assumed replacement.
+`spex doctor repair app-server` is the explicit operator trigger when a current root remains exactly
+identifiable but new sessions need a different app-server. It selects a configured Codex launcher, starts and
+proves a fresh detached-v3 endpoint, then atomically changes only the canonical pointer: the former current
+endpoint becomes `draining`, every existing binding remains unchanged, and new traffic reaches the fresh current
+endpoint. The command never signals either root and never runs automatically. If the current endpoint is
+ambiguous it refuses; if it is already proven dead, ordinary launch repair remains the one replacement path. A
+candidate that proved live while publication could not safely prove the former current endpoint remains an
+owner-stamped pending reservation for an explicit retry, never an unrecorded orphan or an assumed replacement.
 
 New Spex Codex traffic resolves the current pointer at the launch boundary. A newly started native
 thread is bound to that exact generation before it is accepted as the governed session's thread; a

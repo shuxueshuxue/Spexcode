@@ -49,10 +49,10 @@ test('every allowed flag read as a value is declared to the positional scanner',
       if (node.expression.text === 'flag' && node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0])) {
         valueReads.add(node.arguments[0].text)
       }
-      if (node.expression.text === 'rejectUnknownFlags') {
+      if (node.expression.text === 'rejectUnknownFlags' || node.expression.text === 'rejectUnknownBackendFlags') {
         rejectUnknownCalls++
         const names = strings(node.arguments[2])
-        assert.ok(names, 'rejectUnknownFlags allowlists must be literal string arrays')
+        assert.ok(names, `${node.expression.text} allowlists must be literal string arrays`)
         for (const name of names) allowedFlags.add(name)
       }
     }

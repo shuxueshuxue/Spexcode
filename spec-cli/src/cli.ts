@@ -100,6 +100,13 @@ function flushExit(code = 0): Promise<never> {
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
 const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--ssh', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
+const EXPLICIT_BACKEND_ROUTE_FLAGS = ['api', 'port', 'password', 'insecure'] as const
+const EXPLICIT_BACKEND_VALUE_FLAGS = EXPLICIT_BACKEND_ROUTE_FLAGS
+  .filter((name) => VALUE_FLAGS.has(`--${name}`))
+  .map((name) => `--${name}`)
+const EXPLICIT_BACKEND_BARE_FLAGS = EXPLICIT_BACKEND_ROUTE_FLAGS
+  .filter((name) => !VALUE_FLAGS.has(`--${name}`))
+  .map((name) => `--${name}`)
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -110,7 +117,7 @@ function positionals(from: number): string[] {
   return out
 }
 
-function rejectUnknownFlags(command: string, from: number, allowed: readonly string[], attached: readonly string[] = []): void {
+function rejectFlags(command: string, from: number, allowed: readonly string[], attached: readonly string[] = []): void {
   const known = new Set(allowed.map((name) => `--${name}`))
   for (let i = from; i < process.argv.length; i++) {
     const token = process.argv[i]
@@ -122,6 +129,14 @@ function rejectUnknownFlags(command: string, from: number, allowed: readonly str
     }
     if (VALUE_FLAGS.has(token)) i++
   }
+}
+
+function rejectUnknownFlags(command: string, from: number, allowed: readonly string[], attached: readonly string[] = []): void {
+  rejectFlags(command, from, allowed, attached)
+}
+
+function rejectUnknownBackendFlags(command: string, from: number, allowed: readonly string[], attached: readonly string[] = []): void {
+  rejectFlags(command, from, [...allowed, ...EXPLICIT_BACKEND_ROUTE_FLAGS], attached)
 }
 
 // `--children` deliberately has an optional value only in its attached form. A separated following token
@@ -157,8 +172,8 @@ function sessionSendUsage(detail: string, keys = false): never {
 }
 
 function parseSessionSendArgs(args: string[]): SessionSendArgs {
-  const valueFlags = new Set(['--api', '--port', '--keys', '--password', '--ssh'])
-  const bareFlags = new Set(['--insecure'])
+  const valueFlags = new Set([...EXPLICIT_BACKEND_VALUE_FLAGS, '--keys', '--ssh'])
+  const bareFlags = new Set(EXPLICIT_BACKEND_BARE_FLAGS)
   const values = new Map<string, string>()
   const positionals: string[] = []
   let endOfOptions = false
@@ -233,8 +248,8 @@ function sessionTargetUsage(verb: 'show' | 'close', detail: string): never {
 
 function parseSessionTargetArgs(verb: 'show' | 'close', args: string[]): SessionTargetArgs {
   const values = new Map<string, string>()
-  const valueFlags = new Set(['--api', '--port', '--password', '--ssh'])
-  const bareFlags = new Set(verb === 'show' ? ['--capture', '--json', '--insecure'] : ['--insecure'])
+  const valueFlags = new Set([...EXPLICIT_BACKEND_VALUE_FLAGS, '--ssh'])
+  const bareFlags = new Set([...EXPLICIT_BACKEND_BARE_FLAGS, ...(verb === 'show' ? ['--capture', '--json'] : [])])
   const positionals: string[] = []
   for (let i = 0; i < args.length; i++) {
     const token = args[i]
@@ -828,7 +843,7 @@ if (cmd === 'serve') {
     }
     const newPositionals = positionals(4)
     const peerAnchor = parseSessionPeerAnchor('new', newPositionals)
-    rejectUnknownFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'name', 'base', 'api', 'port', 'ssh'])
+    rejectUnknownBackendFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'name', 'base', 'ssh'])
     if (peerAnchor && newPositionals.length > 2) sessionPeerAnchorUsage('new', '--ssh accepts one full-id anchor and one inline prompt at most')
     const { createSession, ownSessionId, withPeerSenderHint } = await import('./sessions.js')
     const promptFile = flag('prompt-file')
@@ -881,7 +896,7 @@ if (cmd === 'serve') {
     // The backend's default projection excludes cold archives. --all and an explicit selector request the
     // history projection so an operator can still inspect or unarchive one deliberately.
     const selectors = positionals(4)
-    rejectUnknownFlags('spex session ls', 4, ['status', 'all', 'json', 'api', 'port', 'ssh', 'children'], ['children'])
+    rejectUnknownBackendFlags('spex session ls', 4, ['status', 'all', 'json', 'ssh', 'children'], ['children'])
     const peerAnchor = parseSessionPeerAnchor('ls', selectors)
     const children = childrenScopeOption()
     if (peerAnchor && selectors.length !== 1) sessionPeerAnchorUsage('ls', '--ssh accepts exactly one full-id project anchor, not session selectors')
@@ -936,7 +951,7 @@ if (cmd === 'serve') {
       console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked, true, scope))
     }
   } else if (sub === 'resources') {
-    rejectUnknownFlags('spex session resources', 4, ['json', 'api', 'port'])
+    rejectUnknownBackendFlags('spex session resources', 4, ['json'])
     const { clientResources } = await import('./client.js')
     const report = await clientResources()
     if (has('json')) console.log(JSON.stringify(report, null, 2))
@@ -1140,7 +1155,7 @@ if (cmd === 'serve') {
       if (!closed) { console.error(`spex session close: no such session ${full} (record remains; no close was committed)`); process.exit(1) }
       console.log(`closed ${full}`)
     } else if (sub === 'quarantine') {
-      rejectUnknownFlags('spex session quarantine', 4, ['adapter', 'thread', 'tmux', 'worktree', 'branch', 'restore', 'api', 'port'])
+      rejectUnknownBackendFlags('spex session quarantine', 4, ['adapter', 'thread', 'tmux', 'worktree', 'branch', 'restore'])
       if (!id) { console.error('usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <session-id> --worktree <absent-path> --branch <absent-branch> (--thread is adapter-native; omit it for Claude)') ; process.exit(2) }
       if (has('restore')) {
         // Quarantine addresses an unreadable row which selector resolution intentionally excludes. Both the
@@ -1157,7 +1172,7 @@ if (cmd === 'serve') {
         console.log(`quarantined ${quarantined.id} -> ${quarantined.bundle}`)
       }
     } else if (sub === 'reparent') {
-      rejectUnknownFlags('spex session reparent', 4, ['to', 'api', 'port'])
+      rejectUnknownBackendFlags('spex session reparent', 4, ['to'])
       const children = positionals(4)
       const to = flag('to')
       if (!children.length || !to) {

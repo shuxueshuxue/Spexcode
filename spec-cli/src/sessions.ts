@@ -622,8 +622,15 @@ function watchMessage(target: SessRec): string {
   return `[spex watch] ${target.session} is ${status}${note}`
 }
 
+function shouldDeliverWatchTransition(target: SessRec, sources: readonly WatchSource[]): boolean {
+  // @@@watch-delivery-policy - Relationship setup sends current state; manual opts into working changes.
+  return target.status !== 'active' || sources.includes('manual')
+}
+
 function scheduleWatchNotifications(target: SessRec): void {
-  const watchers = readWatchEntries(target.session).map((entry) => entry.watcher)
+  const watchers = readWatchEntries(target.session)
+    .filter((entry) => shouldDeliverWatchTransition(target, entry.sources))
+    .map((entry) => entry.watcher)
   if (!watchers.length) return
   queueMicrotask(() => {
     for (const watcher of watchers) {
@@ -753,11 +760,13 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
       }
     }))
   })
+  const notified: string[] = []
   if (parent) for (const child of notify) {
     const delivered = await sendText(parent, watchMessage(child), child.session)
     if (!delivered.ok) throw new ResourceConflict(`reparent committed but could not queue ${child.session}'s current state for ${parent}: ${delivered.error}`)
+    notified.push(child.session)
   }
-  return { children, parent, notified: notify.map((child) => child.session) }
+  return { children, parent, notified }
 }
 
 // Share one liveness snapshot rather than spawning tmux for every displayed session.

@@ -38,7 +38,11 @@ loop, second transport, or bidirectional index enters the shared layer. `wait` r
 reader fallback for callers with no governed delivery address. A watcher identity owns a small independent
 source set: `manual` comes from the explicit watch command and `parent` comes from the tree relationship.
 The entry persists while either source exists, and the transition path projects the source set to one watcher
-id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Creation and
+id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Source installation and
+reparenting directly dispatch the current state. Only a later state write consults the source policy: parent-only
+suppresses `active`/working and manual includes it. Thus manual+parent yields the complete later-state feed
+without a duplicate or a second mechanism.
+Creation and
 [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
 source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.
 The manager's merge dispatch prompt owns the post-landing handoff: once the verified base branch has advanced,
@@ -48,7 +52,7 @@ The merge dispatch itself is intentionally a plain prompt: the server does not a
 epochs, or idempotency headers and never mutates `main`; the worker re-syncs and re-runs proof in its own worktree
 before the one no-ff landing.
 [[session-reparent]] uses that same target ownership: it takes the ordinary record locks while changing a
-child's parent pointer and watcher list, then delegates current-state delivery to the existing dispatch path.
+child's parent pointer and watcher list, then delegates the current-state snapshot to the existing dispatch path.
 The core never asks a former watcher to participate in its own removal. A null replacement parent is the
 same transaction's top-level detach: it removes the former relation and its pending delivery without creating
 a root record, new watcher, or notification.

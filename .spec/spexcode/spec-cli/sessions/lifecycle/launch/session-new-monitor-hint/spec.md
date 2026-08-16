@@ -77,8 +77,8 @@ prints the bare, parseable session **JSON to STDOUT** exactly as before, then pr
 - **current result** — the session JSON is on stdout now, and `spex session ls <id>` is the later one-shot
   snapshot;
 - **next lifecycle change** — a governed parent automatically installs the child's `parent` watch source after
-  creation, registering durable send-backed status delivery. `spex session reparent <id> --to <parent>` moves
-  that source; `watch cancel` affects only an independent manual watch. A caller without a governed session
+  creation, first delivering the child's current-state snapshot and then every declared state except routine
+  working. `spex session reparent <id> --to <parent>` moves that source; `watch cancel` affects only an independent manual watch. A caller without a governed session
   address backgrounds `spex session wait <id>` to observe a non-actionable to actionable edge and exits as the
   wake-up. `spex session watch stream <id>` is the continuous human stream and never exits;
 - **response channel** — `spex session send <id> "<msg>"` is the ordinary path and succeeds once it appends

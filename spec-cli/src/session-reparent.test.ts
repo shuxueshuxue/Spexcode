@@ -125,15 +125,21 @@ test('session reparent rewrites parent/watch through live backend and only falls
     assert.equal(parentOf(childBDir), newParent)
     assert.deepEqual(watchers(childBDir).map((entry) => [entry.watcher, entry.sources]), [[newParent, ['parent']]])
     const oldParentTimelineBefore = timelineText(sessionDir(home, oldParent))
+    const newParentTimelineAtHandoff = timelineText(sessionDir(home, newParent))
+    assert.match(newParentTimelineAtHandoff, new RegExp(childA), 'reparent delivers the first child current-state snapshot')
+    assert.match(newParentTimelineAtHandoff, new RegExp(childB), 'reparent delivers an already-working child current-state snapshot')
     const manualWatchState = await runCli(['session', 'done', '--propose', 'merge', '--session', childA, '--api', `http://127.0.0.1:${port}`], env)
     assert.equal(manualWatchState.code, 0, manualWatchState.err)
     await waitFor(async () => timelineText(sessionDir(home, oldParent)).length > oldParentTimelineBefore.length,
       'the former parent\'s overlapping manual watch must survive reparent')
+    await waitFor(async () => timelineText(sessionDir(home, newParent)).length > newParentTimelineAtHandoff.length,
+      'the new parent must receive a later non-working child transition')
     assert.match(timelineText(sessionDir(home, oldParent)), /review/)
     assert.deepEqual(pendingFrom(childADir), [], 'a moved child does not retain an undelivered command from its former supervisor')
     const newParentTimeline = timelineText(sessionDir(home, newParent))
     assert.match(newParentTimeline, new RegExp(childA))
     assert.match(newParentTimeline, new RegExp(childB))
+    assert.match(newParentTimeline, /review/)
 
     writeFileSync(join(childADir, 'pending.json'), JSON.stringify([{ mid: 'new-parent-command', text: 'stale continue', from: newParent }]) + '\n')
     const detached = await fetch(`http://127.0.0.1:${port}/api/sessions/reparent`, {

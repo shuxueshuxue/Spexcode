@@ -1368,7 +1368,8 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   // invocation's own single-quoted segments — the codex `$@`/`$tid` script, the prompt — reach sh verbatim,
   // parsed exactly ONCE, never double-expanded. Each retry attempt rewrites agent.pid with a fresh `$$`.
   const pidPath = join(storeDir(id), 'agent.pid')
-  const born = `sh -c ${shQuote(`printf %s "$$" > ${shQuote(pidPath)}; exec env ${invocation}`)}`
+  const receiptPath = join(storeDir(id), 'agent.identity.json')
+  const born = `sh -c ${shQuote(`rm -f ${shQuote(receiptPath)}; printf %s "$$" > ${shQuote(pidPath)}; exec env ${invocation}`)}`
   // Bounded relaunch on a FAST exit: the agent launcher can exit within seconds before the rendezvous socket
   // ever appears. That is enough evidence to retry, but not enough evidence to name the cause. Once the agent
   // has run past LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal
@@ -2965,28 +2966,132 @@ export async function mergeSession(id: string): Promise<MergeSessionResult> {
 // then SIGKILL, each bounded. This is also what lets the socket sweep run at all — a still-answering listener
 // is never ours to unlink, so an un-killed agent would otherwise strand its own socket forever.
 // The escalation is IDENTITY-GUARDED: a recorded pid can have been recycled by an unrelated process, so we
-// signal only a pid whose argv still names THIS session. Unidentifiable → we signal nothing and let the
-// adapter's proof-of-death rule leave the transport alone; never a blind kill on a stale number.
+// signal only the immutable pid/start instance whose ownership was witnessed in the exact tmux pane closure.
+// Unidentifiable → we signal nothing and let the adapter's proof-of-death rule leave the transport alone.
 const AGENT_EXIT_GRACE_MS = 3000
-type LeafIdentity = { pid: number; startToken: string; ownerNeedle: string }
+const SESSION_LEAF_RECEIPT_VERSION = 1
+const SESSION_LEAF_RECEIPT_KIND = 'session-leaf'
+export type SessionLeafReceipt = {
+  version: 1
+  kind: 'session-leaf'
+  sessionId: string
+  pid: number
+  startToken: string
+}
+type SessionLeafReceiptCandidate = { ok: boolean; receipt?: SessionLeafReceipt; reason?: string }
+
+export function parseSessionLeafReceipt(raw: string, sessionId: string): SessionLeafReceipt | null {
+  let value: unknown
+  try { value = JSON.parse(raw) } catch { return null }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const row = value as Record<string, unknown>
+  const keys = Object.keys(row).sort()
+  if (keys.join(',') !== 'kind,pid,sessionId,startToken,version') return null
+  if (row.version !== SESSION_LEAF_RECEIPT_VERSION || row.kind !== SESSION_LEAF_RECEIPT_KIND || row.sessionId !== sessionId) return null
+  if (!Number.isSafeInteger(row.pid) || (row.pid as number) <= 0 || typeof row.startToken !== 'string' || !row.startToken) return null
+  return row as SessionLeafReceipt
+}
+
+function pidInPaneClosure(pid: number, panePid: number, procs: ProcTable): boolean {
+  const seen = new Set<number>()
+  for (let current = pid; current > 0 && !seen.has(current);) {
+    if (current === panePid) return true
+    seen.add(current)
+    const row = procs.get(current)
+    if (!row || row.ppid === current) return false
+    current = row.ppid
+  }
+  return false
+}
+
+export function sessionLeafReceiptCandidate(
+  sessionId: string,
+  pid: number,
+  panePid: number | null,
+  procs: ProcTable | null,
+  startBefore: string | null,
+  startAfter: string | null,
+): SessionLeafReceiptCandidate {
+  if (!panePid) return { ok: false, reason: 'exact target pane PID is unavailable' }
+  if (!procs) return { ok: false, reason: 'process snapshot is unavailable' }
+  if (!startBefore || !startAfter) return { ok: false, reason: 'leaf process-start identity is unreadable' }
+  if (startBefore !== startAfter) return { ok: false, reason: 'leaf process-start identity changed during ancestry observation' }
+  if (!pidInPaneClosure(pid, panePid, procs)) return { ok: false, reason: `registered leaf PID ${pid} is not in exact target pane ${panePid} descendant closure` }
+  return {
+    ok: true,
+    receipt: { version: SESSION_LEAF_RECEIPT_VERSION, kind: SESSION_LEAF_RECEIPT_KIND, sessionId, pid, startToken: startAfter },
+  }
+}
+
+export function sessionLeafReceiptIdentityState(
+  receipt: SessionLeafReceipt,
+  registeredPid: number | null,
+  currentStartToken: string | null,
+  liveness: 'alive' | 'dead' | 'unknown',
+): 'same-live' | 'gone' | 'pid-reused' | 'unknown' | 'registration-changed' | 'registration-missing' {
+  if (registeredPid == null) return 'registration-missing'
+  if (registeredPid !== receipt.pid) return 'registration-changed'
+  if (liveness === 'unknown') return 'unknown'
+  if (liveness === 'dead') return currentStartToken ? 'unknown' : 'gone'
+  if (!currentStartToken) return 'unknown'
+  return currentStartToken === receipt.startToken ? 'same-live' : 'pid-reused'
+}
+
+const sessionLeafReceiptPath = (id: string) => sessionArtifactPath(id, 'agent.identity.json')
+function readSessionLeafReceipt(id: string): { state: 'missing' } | { state: 'invalid'; reason: string } | { state: 'valid'; receipt: SessionLeafReceipt } {
+  const path = sessionLeafReceiptPath(id)
+  let raw: string
+  try { raw = readFileSync(path, 'utf8') }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { state: 'missing' }
+    return { state: 'invalid', reason: `leaf birth receipt is unreadable (${error instanceof Error ? error.message : String(error)})` }
+  }
+  const receipt = parseSessionLeafReceipt(raw, id)
+  return receipt ? { state: 'valid', receipt } : { state: 'invalid', reason: 'leaf birth receipt is malformed or names a different session' }
+}
+
+function writeSessionLeafReceipt(id: string, receipt: SessionLeafReceipt): void {
+  const path = sessionLeafReceiptPath(id)
+  const temp = `${path}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    writeFileSync(temp, `${JSON.stringify(receipt)}\n`, { mode: 0o600 })
+    renameSync(temp, path)
+  } finally { rmSync(temp, { force: true }) }
+}
+
+function clearSessionLeafArtifacts(id: string): void {
+  rmSync(sessionArtifactPath(id, 'agent.pid'), { force: true })
+  pidRegistry.delete(id)
+  rmSync(sessionLeafReceiptPath(id), { force: true })
+}
+
+type LeafIdentity = { pid: number; startToken: string; receipt: SessionLeafReceipt }
 type LeafIdentityObservation =
   | { state: 'missing' }
   | { state: 'dead'; pid: number }
   | { state: 'owned'; identity: LeafIdentity }
-  | { state: 'unrelated'; pid: number; startToken: string }
   | { state: 'unknown'; pid?: number; reason: string }
+const sameSessionLeafReceipt = (left: SessionLeafReceipt, right: SessionLeafReceipt): boolean =>
+  left.version === right.version && left.kind === right.kind && left.sessionId === right.sessionId
+  && left.pid === right.pid && left.startToken === right.startToken
+
 async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, leaf: LeafIdentity): Promise<void> {
-  const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
-  if (pid !== leaf.pid)
-    throw new ResourceConflict(`refusing to stop ${id}: session leaf identity changed before signal`)
-  if (!Number.isFinite(pid) || pid <= 0) return
+  const pid = leaf.pid
   const startToken = leaf.startToken
   const alive = (): boolean => leafAlive(pid)
   const identityState = (): 'same' | 'gone' | 'changed' => {
-    if (readAgentPid(sessionArtifactPath(id, 'agent.pid')) !== leaf.pid) return 'changed'
-    const current = processStartToken(pid)
-    if (!current) return alive() ? 'changed' : 'gone'
-    return current === startToken ? 'same' : 'changed'
+    const stored = readSessionLeafReceipt(id)
+    if (stored.state !== 'valid' || !sameSessionLeafReceipt(stored.receipt, leaf.receipt)) return 'changed'
+    const registered = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
+    const liveness = leafProcessLiveness(pid)
+    const currentStartToken = sessionLeafStartToken(pid)
+    const state = sessionLeafReceiptIdentityState(
+      stored.receipt,
+      Number.isSafeInteger(registered) ? registered : null,
+      currentStartToken,
+      liveness,
+    )
+    return state === 'same-live' ? 'same' : state === 'gone' ? 'gone' : 'changed'
   }
   const initialState = identityState()
   if (initialState === 'gone') return
@@ -2999,20 +3104,15 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, l
     return !alive()
   }
   if (await gone(AGENT_EXIT_GRACE_MS)) return                        // the pane's SIGHUP took it — the normal path
-  const sameAgentInstance = async (): Promise<boolean> => {
-    if (processStartToken(pid) !== startToken) return false
-    const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
-    return argv.includes(leaf.ownerNeedle) && processStartToken(pid) === startToken
-  }
   for (const sig of ['SIGTERM', 'SIGKILL'] as const) {
     await beforeSignal()
     const state = identityState()
     if (state === 'gone') return
     if (state === 'changed') throw new ResourceConflict(`refusing to stop ${id}: session leaf identity changed during escalation`)
-    if (!await sameAgentInstance()) throw new ResourceConflict(`refusing to stop ${id}: leaf PID ${pid}@${startToken} no longer proves ownership`)
     try { process.kill(pid, sig) } catch { return }                  // vanished between checks
     if (await gone(sig === 'SIGTERM' ? AGENT_EXIT_GRACE_MS : 1000)) return
   }
+  throw new ResourceConflict(`refusing to stop ${id}: exact leaf PID ${pid}@${startToken} remains live after escalation`)
 }
 
 // @@@ stopAgentProcess - the shared teardown both stop and close begin with, so there is ONE kill path, not
@@ -3024,39 +3124,105 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, l
 // @@@ leafAlive - does this pid name a live process? EPERM counts as alive (a process we may not signal is
 // still a process); only ESRCH is absence. Kept local: git.ts carries its own copy for lock reclamation, and
 // collapsing the two is part of the spec/eval unification lane, not of this fix.
-const leafAlive = (pid: number): boolean => {
-  try { process.kill(pid, 0); return true }
-  catch (error) { return (error as NodeJS.ErrnoException)?.code !== 'ESRCH' }
+export type SessionLeafProcessProbe = Readonly<{
+  startToken(pid: number): string | null
+  liveness(pid: number): 'alive' | 'dead' | 'unknown'
+}>
+const hostLeafProcessLiveness = (pid: number): 'alive' | 'dead' | 'unknown' => {
+  try { process.kill(pid, 0); return 'alive' }
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code
+    if (code === 'ESRCH') return 'dead'
+    if (code === 'EPERM') return 'alive'
+    return 'unknown'
+  }
 }
+let sessionLeafProcessProbe: SessionLeafProcessProbe = {
+  startToken: processStartToken,
+  liveness: hostLeafProcessLiveness,
+}
+export function installSessionLeafProcessProbeForTest(probe: SessionLeafProcessProbe): () => void {
+  const previous = sessionLeafProcessProbe
+  sessionLeafProcessProbe = probe
+  return () => { sessionLeafProcessProbe = previous }
+}
+const sessionLeafStartToken = (pid: number): string | null => sessionLeafProcessProbe.startToken(pid)
+const leafProcessLiveness = (pid: number): 'alive' | 'dead' | 'unknown' => sessionLeafProcessProbe.liveness(pid)
+const leafAlive = (pid: number): boolean => leafProcessLiveness(pid) !== 'dead'
 
-// One identity seam serves both signal teardown and cold retirement. A PID is only a locator: a live process
-// becomes target-owned when its immutable start identity is readable AND its argv carries the harness-owned
-// native identity. A live PID with a proven different argv is a stale artifact, while malformed/unreadable
-// evidence remains unknown and therefore blocks every destructive path.
+// A retained leaf can mint durable ownership only while its registered PID is in the exact target pane's process
+// closure. The receipt then binds that one immutable process instance across tmux reparenting and crash retry.
 async function inspectSessionLeafIdentity(id: string, rec: SessRec): Promise<LeafIdentityObservation> {
   if (harnessById(rec.harness || defaultHarness.id).runtimeOwnership === 'adapter') return { state: 'missing' }
   const path = sessionArtifactPath(id, 'agent.pid')
   let raw: string
   try { raw = readFileSync(path, 'utf8') }
   catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return { state: 'missing' }
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      const stored = readSessionLeafReceipt(id)
+      if (stored.state === 'invalid') return { state: 'unknown', reason: stored.reason }
+      if (stored.state === 'missing') return { state: 'missing' }
+      const liveness = leafProcessLiveness(stored.receipt.pid)
+      const current = sessionLeafStartToken(stored.receipt.pid)
+      const state = sessionLeafReceiptIdentityState(stored.receipt, stored.receipt.pid, current, liveness)
+      if (state === 'same-live')
+        return { state: 'unknown', pid: stored.receipt.pid, reason: 'leaf birth receipt remains live but agent.pid registration is missing' }
+      if (state === 'unknown')
+        return { state: 'unknown', pid: stored.receipt.pid, reason: 'leaf birth receipt PID is live but its process-start identity is unreadable' }
+      if (state !== 'gone' && state !== 'pid-reused')
+        return { state: 'unknown', pid: stored.receipt.pid, reason: `leaf birth receipt cannot reconcile a missing registration (${state})` }
+      rmSync(sessionLeafReceiptPath(id), { force: true })
+      return { state: 'dead', pid: stored.receipt.pid }
+    }
     return { state: 'unknown', reason: `leaf PID artifact is unreadable (${error instanceof Error ? error.message : String(error)})` }
   }
   const pid = Number(raw.trim())
   if (!Number.isSafeInteger(pid) || pid <= 0) return { state: 'unknown', reason: 'leaf PID artifact is malformed' }
-  const startToken = processStartToken(pid)
-  if (!startToken) return leafAlive(pid) ? { state: 'unknown', pid, reason: `leaf PID ${pid} is alive but its process-start identity is unreadable` } : { state: 'dead', pid }
-  const ownerNeedle = harnessById(rec.harness || defaultHarness.id).leafOwnerNeedle?.(rec)
-  if (!ownerNeedle) return { state: 'unknown', pid, reason: `no exact harness identity is registered for leaf PID ${pid}` }
-  let argv: string
-  try { argv = (await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' })).stdout.trim() }
-  catch { return { state: 'unknown', pid, reason: `leaf PID ${pid} argv identity is unreadable` } }
-  if (!argv) return { state: 'unknown', pid, reason: `leaf PID ${pid} argv identity is empty` }
-  const endToken = processStartToken(pid)
-  if (!endToken || endToken !== startToken)
-    return { state: 'unknown', pid, reason: `leaf PID ${pid} process-start identity changed during ownership read` }
-  if (argv.includes(ownerNeedle)) return { state: 'owned', identity: { pid, startToken, ownerNeedle } }
-  return { state: 'unrelated', pid, startToken }
+  const stored = readSessionLeafReceipt(id)
+  if (stored.state === 'invalid') return { state: 'unknown', pid, reason: stored.reason }
+  if (stored.state === 'valid') {
+    const liveness = leafProcessLiveness(pid)
+    const current = sessionLeafStartToken(pid)
+    const state = sessionLeafReceiptIdentityState(stored.receipt, pid, current, liveness)
+    if (state === 'same-live') return { state: 'owned', identity: { pid, startToken: current!, receipt: stored.receipt } }
+    if (state === 'gone') {
+      clearSessionLeafArtifacts(id)
+      return { state: 'dead', pid }
+    }
+    if (state === 'pid-reused') {
+      const snap = await liveSnapshot(id)
+      if (snap.probeFailed) return { state: 'unknown', pid, reason: 'target pane state is unreadable while reconciling a retired leaf receipt' }
+      if (snap.windows.has(id)) return { state: 'unknown', pid, reason: `leaf birth receipt no longer matches PID ${pid} while the exact target pane remains live` }
+      clearSessionLeafArtifacts(id)
+      return { state: 'dead', pid }
+    }
+    if (state === 'unknown') return { state: 'unknown', pid, reason: `leaf PID ${pid} is live but its process-start identity is unreadable` }
+    return { state: 'unknown', pid, reason: 'leaf birth receipt and agent.pid registration disagree' }
+  }
+
+  const snap = await liveSnapshot(id)
+  if (snap.probeFailed) return { state: 'unknown', pid, reason: 'exact target pane is unreadable; leaf birth receipt cannot be minted' }
+  const panePid = snap.windows.get(id)?.panePid ?? null
+  const startBefore = sessionLeafStartToken(pid)
+  if (!startBefore) {
+    const live = leafProcessLiveness(pid)
+    if (live !== 'dead') return { state: 'unknown', pid, reason: `leaf PID ${pid} process-start identity is unreadable while liveness is ${live}` }
+    clearSessionLeafArtifacts(id)
+    return { state: 'dead', pid }
+  }
+  let procs: ProcTable | null = null
+  try { procs = await procSnapshot() } catch { /* fail closed below */ }
+  const startAfter = sessionLeafStartToken(pid)
+  const candidate = sessionLeafReceiptCandidate(id, pid, panePid, procs, startBefore, startAfter)
+  if (!candidate.ok || !candidate.receipt) return { state: 'unknown', pid, reason: candidate.reason || 'leaf birth receipt proof failed' }
+  if (readAgentPid(path) !== pid || sessionLeafStartToken(pid) !== candidate.receipt.startToken)
+    return { state: 'unknown', pid, reason: `leaf PID ${pid} identity changed before receipt commit` }
+  writeSessionLeafReceipt(id, candidate.receipt)
+  const committed = readSessionLeafReceipt(id)
+  if (committed.state !== 'valid' || !sameSessionLeafReceipt(committed.receipt, candidate.receipt)
+    || readAgentPid(path) !== pid || sessionLeafStartToken(pid) !== candidate.receipt.startToken)
+    return { state: 'unknown', pid, reason: `leaf PID ${pid} identity changed while receipt committed` }
+  return { state: 'owned', identity: { pid, startToken: candidate.receipt.startToken, receipt: candidate.receipt } }
 }
 
 async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIdentity | null> {
@@ -3068,8 +3234,6 @@ async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIde
   }
   if (observed.state === 'dead') return null
   if (observed.state === 'owned') return observed.identity
-  if (observed.state === 'unrelated')
-    throw new ResourceConflict(`refusing to stop ${id}: leaf PID ${observed.pid}@${observed.startToken} does not prove argv ownership`)
   throw new ResourceConflict(`refusing to stop ${id}: ${observed.reason}`)
 }
 
@@ -3083,11 +3247,25 @@ async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = f
   const harness = harnessById(rec.harness || defaultHarness.id)
   const leaf = await assertSessionLeafOwned(id, rec)
   // Adapter-owned headless sessions may have no live leaf PID, but launch still created an exact tmux session
-  // wrapper. Kill that session-id unconditionally; runtimeOwnership only changes the PID/argv proof, never the
+  // wrapper. Kill that session-id unconditionally; runtimeOwnership only changes the leaf receipt proof, never the
   // exact tmux teardown.
   await tmuxOk(['kill-session', '-t', id])
   await assertTargetTmuxAbsent(id, 'after kill')
-  if (leaf) await killAgentProcess(id, assertOwned, leaf)
+  if (leaf) {
+    await killAgentProcess(id, assertOwned, leaf)
+    const registered = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
+    const liveness = leafProcessLiveness(leaf.pid)
+    const currentStartToken = sessionLeafStartToken(leaf.pid)
+    const finalState = sessionLeafReceiptIdentityState(
+      leaf.receipt,
+      Number.isSafeInteger(registered) ? registered : null,
+      currentStartToken,
+      liveness,
+    )
+    if (finalState !== 'gone' && finalState !== 'pid-reused')
+      throw new ResourceConflict(`refusing to stop ${id}: exact leaf teardown remains ${finalState}`)
+    clearSessionLeafArtifacts(id)
+  }
   launchedAt.delete(id)
   await harness.cleanupRuntime(rec)
   if (requireCold) {
@@ -3327,7 +3505,7 @@ async function assertQueuedRetirementSafe(id: string, rec: SessRec, path: string
 // A launch may leave its row active before Codex publishes the native thread binding. This close path owns
 // only the record's dead local launch residue; an unbound app-server peer stays unowned and untouched.
 async function assertUnboundRetirementSafe(id: string, rec: SessRec, path: string, branch: string | null): Promise<void> {
-  if (rec.harnessSessionId || rec.status === 'queued' || rec.archived)
+  if (harnessById(rec.harness || defaultHarness.id).exactNativeTargetId(rec) || rec.status === 'queued' || rec.archived)
     throw new ResourceConflict(`refusing to close unbound session ${id}: it is not an unbound live-record residue`)
   if (rec.adapterRecovery || rec.launchReadinessPending || launching.has(id) || existsSync(sessionArtifactPath(id, 'launch')))
     throw new ResourceConflict(`refusing to close unbound session ${id}: launch or recovery is still in progress`)
@@ -3413,7 +3591,7 @@ async function closeSessionUnlocked(id: string, source: CloseSource): Promise<bo
   let unboundRetired = false
   if (!retirementReason(wt.rec) && !wt.rec.archived && wt.rec.status !== 'queued') {
     const harness = harnessById(wt.rec.harness || defaultHarness.id)
-    if (!wt.rec.harnessSessionId) {
+    if (!harness.exactNativeTargetId(wt.rec)) {
       await assertUnboundRetirementSafe(id, wt.rec, wt.path, wt.branch)
       await tmuxOk(['kill-session', '-t', id])
       await assertTargetTmuxAbsent(id, 'after unbound residue retirement')

@@ -149,14 +149,15 @@ visible, counted, and protective. An unhealthy/unknown probe reports an unknown 
 The existing stop transition asks the adapter-owned target-scoped mutation proof before touching tmux or a leaf.
 That proof hard-gates the shared PID/start/detached-receipt/socket generation, uses the lightweight loaded-ID census, and
 reads only the exact target thread when it is loaded; full per-reference report projection is read-only evidence,
-not mutation authority. The mutation scope is exact: a target leaf with a registered PID/start token and matching
-argv/identity may be stopped even when unrelated sibling or unowned loaded references are slow or unresponsive;
+not mutation authority. The mutation scope is exact: a target leaf with a strict session-leaf receipt binding the
+registered PID/start identity may be stopped even when unrelated sibling or unowned loaded references are slow or unresponsive;
 their loaded IDs remain protective against any shared app-server/control-plane teardown, which this path never
 performs. An unhealthy loaded-ID census, unknown exact target read, target active turn or descendant, or unproven
 shared-root identity fails closed before any leaf signal. A target thread that is itself ambiguous or unowned, or
-a missing/mismatched leaf PID/start/argv proof, blocks before mutation. The launch
-artifact and verifier-owned detached launch receipt are rechecked immediately before the leaf signal and before each
-bounded OS escalation; a PID reuse or topology change fails loudly. The report issues no token and has no mutation route;
+a missing/malformed/cross-session leaf receipt or mismatched PID/start proof, blocks before mutation. The launch
+artifact, session-leaf receipt, and verifier-owned detached launch receipt are rechecked immediately before the leaf
+signal and before each bounded OS escalation; unreadable identity or registration change fails loudly, while proven
+PID reuse is never signalled. The report issues no token and has no mutation route;
 stop and close remain the only lifecycle verbs. Project-shared control planes and backends are reported with
 their teardown owner and references; a session stop never stands in for that owner. There is no `pkill`,
 `pgrep`, command-regex signal, port-based signal, automatic close, or branch/worktree deletion in this mechanism.

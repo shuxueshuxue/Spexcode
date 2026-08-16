@@ -12,6 +12,25 @@ import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt }
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
 const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
+
+test('adapter native target identity distinguishes pinned, captured, and absent conversations', () => {
+  const pinned = { session: 'governed-id', harnessSessionId: null }
+  const empty = { session: 'governed-id', harnessSessionId: '' }
+  const captured = { session: 'governed-id', harnessSessionId: 'native-id' }
+  assert.equal(claudeHarness.exactNativeTargetId(pinned), 'governed-id')
+  assert.equal(piHarness.exactNativeTargetId(pinned), 'governed-id')
+  assert.equal(claudeHeadlessHarness.exactNativeTargetId(pinned), 'governed-id')
+  assert.equal(piHeadlessHarness.exactNativeTargetId(pinned), 'governed-id')
+  assert.equal(codexHarness.exactNativeTargetId(pinned), null)
+  assert.equal(codexHarness.exactNativeTargetId(empty), null)
+  assert.equal(codexHarness.exactNativeTargetId(captured), 'native-id')
+  assert.equal(codexHeadlessHarness.exactNativeTargetId(pinned), null)
+  assert.equal(opencodeHarness.exactNativeTargetId(pinned), null)
+  assert.equal(opencodeHarness.exactNativeTargetId(empty), null)
+  assert.equal(opencodeHarness.exactNativeTargetId(captured), 'native-id')
+  assert.equal(opencodeHeadlessHarness.exactNativeTargetId(pinned), null)
+  assert.equal(zcodeHarness.exactNativeTargetId(captured), null)
+})
 // The real app-server stamps every thread/list row with its live turn state, and the adapter's gates read it
 // there. A fixture that omits `status` is declaring "nothing is running on this thread", so fill that in here
 // rather than in every handler; a fixture that means the opposite says so explicitly on the row.

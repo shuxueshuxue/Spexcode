@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, drainQueue, drainSession, findSessionClosure, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, drainQueue, drainSession, findSessionClosure, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -28,6 +28,38 @@ const waitUntil = async (check: () => boolean, label: string, timeoutMs = 5000) 
     await sleep(20)
   }
 }
+
+test('session leaf receipt is strict and only exact stable pane ancestry can mint it', () => {
+  const procs = new Map([
+    [10, { ppid: 1, comm: 'bash' }],
+    [20, { ppid: 10, comm: 'launch.sh' }],
+    [30, { ppid: 20, comm: 'pi' }],
+    [40, { ppid: 1, comm: 'unrelated' }],
+  ])
+  const minted = sessionLeafReceiptCandidate('session-a', 30, 10, procs, 'start-a', 'start-a')
+  assert.equal(minted.ok, true)
+  if (!minted.ok) return
+  assert.deepEqual(minted.receipt, {
+    version: 1, kind: 'session-leaf', sessionId: 'session-a', pid: 30, startToken: 'start-a',
+  })
+  assert.match(sessionLeafReceiptCandidate('session-a', 40, 10, procs, 'start-u', 'start-u').reason ?? '', /not in.*pane/u)
+  assert.match(sessionLeafReceiptCandidate('session-a', 30, null, procs, 'start-a', 'start-a').reason ?? '', /pane/u)
+  assert.match(sessionLeafReceiptCandidate('session-a', 30, 10, null, 'start-a', 'start-a').reason ?? '', /process snapshot/u)
+  assert.match(sessionLeafReceiptCandidate('session-a', 30, 10, procs, 'start-a', 'start-b').reason ?? '', /changed/u)
+
+  const encoded = JSON.stringify(minted.receipt)
+  assert.deepEqual(parseSessionLeafReceipt(encoded, 'session-a'), minted.receipt)
+  assert.equal(parseSessionLeafReceipt(encoded, 'session-b'), null, 'a receipt cannot cross session ownership')
+  assert.equal(parseSessionLeafReceipt('{', 'session-a'), null)
+  assert.equal(parseSessionLeafReceipt(JSON.stringify({ ...minted.receipt, extra: true }), 'session-a'), null, 'strict shape rejects extra authority fields')
+  assert.equal(sessionLeafReceiptIdentityState(minted.receipt, 30, 'start-a', 'alive'), 'same-live')
+  assert.equal(sessionLeafReceiptIdentityState(minted.receipt, 30, null, 'dead'), 'gone', 'ESRCH is the death witness')
+  assert.equal(sessionLeafReceiptIdentityState(minted.receipt, 30, null, 'alive'), 'unknown', 'a live PID with unreadable start identity stays fail-closed')
+  assert.equal(sessionLeafReceiptIdentityState(minted.receipt, 30, null, 'unknown'), 'unknown', 'an inconclusive kill-0 stays fail-closed')
+  assert.equal(sessionLeafReceiptIdentityState(minted.receipt, 30, 'reused-start', 'alive'), 'pid-reused')
+  assert.equal(sessionLeafReceiptIdentityState(minted.receipt, 31, 'other-start', 'alive'), 'registration-changed')
+  assert.equal(sessionLeafReceiptIdentityState(minted.receipt, null, null, 'dead'), 'registration-missing')
+})
 
 const LIVE_PROJECT_SESSIONS = '/home/jeffry/.spexcode/projects/-home-jeffry-spexcode/sessions'
 type LiveSessionsCensus = { ids: string[]; count: number; hash: string }
@@ -170,6 +202,10 @@ test('launchScript registers the agent pid before exec and preserves tricky quot
 
   let child: ReturnType<typeof spawn> | null = null
   const pidPath = sessionArtifactPath(id, 'agent.pid')
+  const receiptPath = sessionArtifactPath(id, 'agent.identity.json')
+  const launchBody = readFileSync(script, 'utf8')
+  assert.ok(launchBody.indexOf(receiptPath) >= 0 && launchBody.indexOf(receiptPath) < launchBody.indexOf(pidPath),
+    'every launch attempt retires the old receipt before registering its replacement PID')
   try {
     child = spawn('bash', [script], { detached: true, stdio: 'ignore' })
     // wait for the wrapper to write agent.pid and for the stub to record its arg + exec sleep.
@@ -788,6 +824,9 @@ test('stop revalidates the exact leaf after every shared guard before TERM and K
       for (let i = 0; i < 50 && !(leafStart = processStartToken(leaf.pid!)); i++) await sleep(20)
       assert.ok(leafStart, `${signal} fixture acquired an exact leaf identity`)
       writeFileSync(sessionArtifactPath(id, 'agent.pid'), `${leaf.pid}\n`)
+      writeFileSync(sessionArtifactPath(id, 'agent.identity.json'), `${JSON.stringify({
+        version: 1, kind: 'session-leaf', sessionId: id, pid: leaf.pid, startToken: leafStart,
+      })}\n`)
 
       const identityLossCall = signal === 'SIGTERM' ? 2 : 3
       const probe = async (): Promise<SharedRuntimeProbe> => {
@@ -834,6 +873,198 @@ test('stop revalidates the exact leaf after every shared guard before TERM and K
     claudeHarness.cleanupRuntime = originalCleanup
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
+  }
+})
+
+test('stop consumes one durable leaf receipt across unreadable, dead-pane, and crash-retry paths', serial, async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousPath = process.env.PATH || ''
+  const previousTarget = process.env.SPEX_TEST_TMUX_TARGET
+  const previousPanePid = process.env.SPEX_TEST_TMUX_PANE_PID
+  const previousState = process.env.SPEX_TEST_TMUX_STATE
+  const previousKillPid = process.env.SPEX_TEST_TMUX_KILL_PID
+  const originalShared = claudeHarness.sharedRuntimes
+  const originalCleanup = claudeHarness.cleanupRuntime
+  const originalKill = process.kill
+  const home = mkdtempSync(join(tmpdir(), 'spex-leaf-receipt-stop-'))
+  const bin = join(home, 'bin')
+  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  const branch = execFileSync('git', ['branch', '--show-current'], { encoding: 'utf8' }).trim()
+  const children: ReturnType<typeof spawn>[] = []
+  mkdirSync(bin, { recursive: true })
+  writeFileSync(join(bin, 'tmux'), `#!/bin/sh
+command=
+target=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    list-panes|kill-session) command="$1" ;;
+    -t) shift; target="$1" ;;
+  esac
+  shift
+done
+[ "$target" = "$SPEX_TEST_TMUX_TARGET" ] || exit 1
+case "$command" in
+  list-panes)
+    [ ! -e "$SPEX_TEST_TMUX_STATE" ] || exit 1
+    printf '%s\\037%s\\037fixture\\n' "$target" "$SPEX_TEST_TMUX_PANE_PID"
+    ;;
+  kill-session)
+    if [ -n "$SPEX_TEST_TMUX_KILL_PID" ]; then kill -HUP "$SPEX_TEST_TMUX_KILL_PID" 2>/dev/null || true; fi
+    : > "$SPEX_TEST_TMUX_STATE"
+    ;;
+  *) exit 1 ;;
+esac
+`)
+  chmodSync(join(bin, 'tmux'), 0o755)
+  process.env.SPEXCODE_HOME = home
+  process.env.PATH = `${bin}:${previousPath}`
+  claudeHarness.sharedRuntimes = () => []
+  claudeHarness.cleanupRuntime = async () => {}
+
+  const observeLiveness = (pid: number): 'alive' | 'dead' | 'unknown' => {
+    try { originalKill(pid, 0); return 'alive' }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ESRCH') return 'dead'
+      if (code === 'EPERM') return 'alive'
+      return 'unknown'
+    }
+  }
+  const writeLiveRecord = (id: string, pid: number, startToken: string) => {
+    mkdirSync(sessionStoreDir(id), { recursive: true })
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+      session_id: id, governed: true, worktree_path: worktree, branch,
+      node: 'archive', title: '', name: '', parent: '', status: 'active', proposal: '',
+      merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: '',
+      stopped: false, archived: false, cold_proof: '', adapter_recovery: '',
+      launcher: 'claude', launch_cmd: 'claude', launch_owner: '',
+    }, null, 2)}\n`)
+    writeFileSync(sessionArtifactPath(id, 'agent.pid'), `${pid}\n`)
+    writeFileSync(sessionArtifactPath(id, 'agent.identity.json'), `${JSON.stringify({
+      version: 1, kind: 'session-leaf', sessionId: id, pid, startToken,
+    })}\n`)
+  }
+  const configureTmux = (id: string, marker: string, killPid?: number) => {
+    rmSync(marker, { force: true })
+    process.env.SPEX_TEST_TMUX_TARGET = id
+    process.env.SPEX_TEST_TMUX_PANE_PID = String(process.pid)
+    process.env.SPEX_TEST_TMUX_STATE = marker
+    if (killPid) process.env.SPEX_TEST_TMUX_KILL_PID = String(killPid)
+    else delete process.env.SPEX_TEST_TMUX_KILL_PID
+  }
+  const startLeaf = async () => {
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    children.push(child)
+    await waitUntil(() => !!child.pid && !!processStartToken(child.pid), 'leaf process start identity')
+    return { child, pid: child.pid!, startToken: processStartToken(child.pid!)! }
+  }
+
+  try {
+    for (const receiptCase of ['malformed', 'wrong-session'] as const) {
+      const id = `leaf-${receiptCase}-${process.pid}`
+      const marker = join(home, `${receiptCase}-pane-killed`)
+      const leaf = await startLeaf()
+      writeLiveRecord(id, leaf.pid, leaf.startToken)
+      const receiptFile = sessionArtifactPath(id, 'agent.identity.json')
+      const receipt = receiptCase === 'malformed'
+        ? '{broken\n'
+        : `${JSON.stringify({
+          version: 1, kind: 'session-leaf', sessionId: 'some-other-session', pid: leaf.pid, startToken: leaf.startToken,
+        })}\n`
+      writeFileSync(receiptFile, receipt)
+      configureTmux(id, marker)
+      const recordBefore = readFileSync(sessionRecordPath(id))
+      const pidBefore = readFileSync(sessionArtifactPath(id, 'agent.pid'))
+      await assert.rejects(stopSession(id), /receipt is malformed or names a different session/u)
+      assert.equal(existsSync(marker), false, `${receiptCase} receipt refuses before exact pane teardown`)
+      assert.equal(observeLiveness(leaf.pid), 'alive')
+      assert.deepEqual(readFileSync(sessionRecordPath(id)), recordBefore)
+      assert.deepEqual(readFileSync(sessionArtifactPath(id, 'agent.pid')), pidBefore)
+      assert.equal(readFileSync(receiptFile, 'utf8'), receipt)
+      assert.equal(existsSync(worktree), true)
+    }
+
+    const unreadableId = `leaf-unreadable-${process.pid}`
+    const unreadableMarker = join(home, 'unreadable-pane-killed')
+    const unreadable = await startLeaf()
+    writeLiveRecord(unreadableId, unreadable.pid, unreadable.startToken)
+    configureTmux(unreadableId, unreadableMarker)
+    const unreadableRecord = readFileSync(sessionRecordPath(unreadableId))
+    const unreadablePid = readFileSync(sessionArtifactPath(unreadableId, 'agent.pid'))
+    const unreadableReceipt = readFileSync(sessionArtifactPath(unreadableId, 'agent.identity.json'))
+    const resetUnreadable = installSessionLeafProcessProbeForTest({
+      liveness: observeLiveness,
+      startToken: (pid) => pid === unreadable.pid && existsSync(unreadableMarker) ? null : processStartToken(pid),
+    })
+    try {
+      await assert.rejects(stopSession(unreadableId), /session leaf identity changed before signal/u)
+    } finally { resetUnreadable() }
+    assert.equal(existsSync(unreadableMarker), true, 'the exact tmux teardown happened before identity became unreadable')
+    assert.equal(observeLiveness(unreadable.pid), 'alive', 'an unreadable live process is never signaled')
+    assert.deepEqual(readFileSync(sessionRecordPath(unreadableId)), unreadableRecord)
+    assert.deepEqual(readFileSync(sessionArtifactPath(unreadableId, 'agent.pid')), unreadablePid)
+    assert.deepEqual(readFileSync(sessionArtifactPath(unreadableId, 'agent.identity.json')), unreadableReceipt)
+    assert.equal(existsSync(worktree), true)
+
+    const deadId = `leaf-dead-pane-${process.pid}`
+    const deadMarker = join(home, 'dead-pane-killed')
+    const dead = await startLeaf()
+    writeLiveRecord(deadId, dead.pid, dead.startToken)
+    const deadExit = once(dead.child, 'exit')
+    dead.child.kill('SIGKILL')
+    await deadExit
+    configureTmux(deadId, deadMarker)
+    assert.equal(await stopSession(deadId), true)
+    assert.equal(existsSync(deadMarker), true, 'ESRCH permits teardown of the still-present exact pane')
+    assert.equal(existsSync(sessionArtifactPath(deadId, 'agent.pid')), false)
+    assert.equal(existsSync(sessionArtifactPath(deadId, 'agent.identity.json')), false)
+    assert.equal(JSON.parse(readFileSync(sessionRecordPath(deadId), 'utf8')).stopped, true)
+
+    const retryId = `leaf-crash-retry-${process.pid}`
+    const retryMarker = join(home, 'retry-pane-killed')
+    const retry = await startLeaf()
+    writeLiveRecord(retryId, retry.pid, retry.startToken)
+    configureTmux(retryId, retryMarker, retry.pid)
+    const retryRecord = readFileSync(sessionRecordPath(retryId))
+    let deadObservations = 0
+    const resetInterrupted = installSessionLeafProcessProbeForTest({
+      startToken: processStartToken,
+      liveness: (pid) => {
+        const observed = observeLiveness(pid)
+        if (pid === retry.pid && observed === 'dead') return ++deadObservations === 1 ? 'dead' : 'unknown'
+        return observed
+      },
+    })
+    try {
+      await assert.rejects(stopSession(retryId), /exact leaf teardown remains unknown/u)
+    } finally { resetInterrupted() }
+    await waitUntil(() => observeLiveness(retry.pid) === 'dead', 'tmux-killed receipt leaf')
+    assert.deepEqual(readFileSync(sessionRecordPath(retryId)), retryRecord)
+    assert.equal(existsSync(sessionArtifactPath(retryId, 'agent.pid')), true)
+    assert.equal(existsSync(sessionArtifactPath(retryId, 'agent.identity.json')), true)
+    delete process.env.SPEX_TEST_TMUX_KILL_PID
+    assert.equal(await stopSession(retryId), true, 'retry proves the receipt leaf dead after tmux reparent/crash boundary')
+    assert.equal(existsSync(sessionArtifactPath(retryId, 'agent.pid')), false)
+    assert.equal(existsSync(sessionArtifactPath(retryId, 'agent.identity.json')), false)
+    assert.equal(JSON.parse(readFileSync(sessionRecordPath(retryId), 'utf8')).stopped, true)
+  } finally {
+    claudeHarness.sharedRuntimes = originalShared
+    claudeHarness.cleanupRuntime = originalCleanup
+    for (const child of children) if (child.pid && observeLiveness(child.pid) === 'alive') {
+      try { originalKill(child.pid, 'SIGKILL') } catch { /* already exited */ }
+    }
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    process.env.PATH = previousPath
+    if (previousTarget === undefined) delete process.env.SPEX_TEST_TMUX_TARGET
+    else process.env.SPEX_TEST_TMUX_TARGET = previousTarget
+    if (previousPanePid === undefined) delete process.env.SPEX_TEST_TMUX_PANE_PID
+    else process.env.SPEX_TEST_TMUX_PANE_PID = previousPanePid
+    if (previousState === undefined) delete process.env.SPEX_TEST_TMUX_STATE
+    else process.env.SPEX_TEST_TMUX_STATE = previousState
+    if (previousKillPid === undefined) delete process.env.SPEX_TEST_TMUX_KILL_PID
+    else process.env.SPEX_TEST_TMUX_KILL_PID = previousKillPid
+    rmSync(home, { recursive: true, force: true })
   }
 })
 
@@ -953,7 +1184,11 @@ test('closing a proven-cold archive classifies stale leaf identity before retire
     writeColdRecord(pidId, pidThread)
     leaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', pidThread], { stdio: 'ignore' })
     for (let i = 0; i < 50 && !processStartToken(leaf.pid!); i++) await sleep(20)
+    const leafStart = processStartToken(leaf.pid!)!
     writeFileSync(sessionArtifactPath(pidId, 'agent.pid'), `${leaf.pid}\n`)
+    writeFileSync(sessionArtifactPath(pidId, 'agent.identity.json'), `${JSON.stringify({
+      version: 1, kind: 'session-leaf', sessionId: pidId, pid: leaf.pid, startToken: leafStart,
+    })}\n`)
     await assert.rejects(closeSession(pidId), /target leaf PID .* live or recycled/)
     assert.ok(processStartToken(leaf.pid!), 'ambiguous target PID is left alive; cold close sends no signal')
     assert.equal(existsSync(sessionRecordPath(pidId)), true, 'PID ambiguity preserves the shelf record')
@@ -964,8 +1199,12 @@ test('closing a proven-cold archive classifies stale leaf identity before retire
     unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
     for (let i = 0; i < 50 && !processStartToken(unrelated.pid!); i++) await sleep(20)
     writeFileSync(sessionArtifactPath(reusedId, 'agent.pid'), `${unrelated.pid}\n`)
-    assert.equal(await closeSession(reusedId), true, 'a live PID with a clearly unrelated argv is stale artifact, not target ownership')
-    assert.equal(existsSync(sessionRecordPath(reusedId)), false, 'proven-unrelated PID does not strand a cold row')
+    writeFileSync(sessionArtifactPath(reusedId, 'agent.identity.json'), `${JSON.stringify({
+      version: 1, kind: 'session-leaf', sessionId: reusedId, pid: unrelated.pid,
+      startToken: `retired-${processStartToken(unrelated.pid!)}`,
+    })}\n`)
+    assert.equal(await closeSession(reusedId), true, 'a receipt mismatch proves PID reuse without relying on argv')
+    assert.equal(existsSync(sessionRecordPath(reusedId)), false, 'receipt-proven PID reuse does not strand a cold row')
     assert.ok(processStartToken(unrelated.pid!), 'cold retirement never signals the unrelated live process')
 
     const unknownId = `cold-close-unknown-${process.pid}`

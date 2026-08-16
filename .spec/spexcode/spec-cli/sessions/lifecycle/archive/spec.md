@@ -146,18 +146,25 @@ closure route marks every one of its responses, including its no-history 404, as
 response. An unmarked 404 is an incompatible backend, not evidence of absence, and fails loudly with its
 upgrade repair rather than silently producing the never-existed answer.
 
-Close has three ownership-proof entries into that one terminal result. A live row first uses the ordinary exact
-stop proof, then removes its record, worktree, and branch. A proven-cold archived row must not pretend to be
+Close has three ownership-proof entries into that one terminal result. A live row is identified by the adapter's
+ability to derive its exact native target from the current record, not by whether the storage-only
+`harness_session_id` alias happens to be populated. A caller-pinned adapter therefore takes the ordinary exact
+interrupt/cold-stop path even when that alias is empty; an adapter-assigned conversation with no captured native id
+does not. The live path first uses the ordinary exact stop proof, then removes its record, worktree, and branch. A
+proven-cold archived row must not pretend to be
 live again just to retire: it verifies that the record's cold proof still binds the target adapter/thread and
 that every target-owned PID, tmux window, rendezvous transport, and loaded thread remains absent, then removes
 the record, worktree, and branch directly. That cold retirement path sends no signal and neither probes nor
 requires ownership of unrelated references on the shared project app-server; archive already returned the
 target's runtime. Any target runtime that has reappeared, stale/swapped target identity, unreadable cold proof,
 or ambiguous target ownership fails loudly before deletion and leaves the shelf row intact. A live PID is not
-ownership by number alone: the shared leaf-identity seam requires a readable process-start token and harness
-owner argv. A live PID whose argv proves a different process is a stale artifact and does not block cold
-retirement; malformed or unreadable PID/start/argv evidence remains unknown and fails closed, while an argv
-owner match remains live-owned and fails. Continuing-cold proof may list loaded IDs and the target's own native
+ownership by number alone: the shared leaf-identity seam requires a strict session leaf birth receipt. A retained
+legacy `agent.pid` may acquire that receipt only while one fresh process snapshot places the PID inside the exact
+target tmux pane's descendant closure and process-start identity is stable across the observation. A valid receipt
+whose PID/start remains live is exact ownership even after tmux teardown reparents the process; each TERM/KILL
+rechecks that same immutable identity. A valid receipt whose start no longer matches proves the original leaf gone
+or its PID reused and never authorizes a signal to the current process. A live PID without a valid receipt and exact
+pane ancestry is unknown, not a stale artifact inferred from argv, and fails closed. Continuing-cold proof may list loaded IDs and the target's own native
 collection/descendants, but it never `thread/read`s or waits on an unrelated loaded sibling.
 
 A prepared `queued` row that has never launched takes the other target-only retirement path. Close serializes
@@ -172,13 +179,24 @@ created. If the drainer wins first, status is no longer queued and ordinary live
 target/runtime/work ambiguity fails loudly with the queued row intact. Close reports success and releases
 capacity only after worktree, branch, prompt, and record removal have each been proven complete.
 
-A launched row that never received a native thread binding is a different residue, not a queued row and not an
-archive candidate. Terminal close may retire it only after the adapter reports no live local worker, its PID is
+A launched row from which its adapter cannot derive an exact native target is a different residue, not a queued row
+and not an archive candidate. An empty `harness_session_id` alone does not establish this state: it is expected for
+an adapter whose governed session id is already the pinned native conversation id. Terminal close may retire a true
+identity-less residue only after the adapter reports no live local worker, its PID is
 missing or proven dead, its rendezvous is dead, no launch/recovery remains, and its worktree is clean with no
 ahead commit. The close then removes only that row's stale tmux/local adapter artifacts and durable worktree,
 branch, and record. It never interrupts, archives, or otherwise claims an unbound app-server peer; any such
 native peer remains visible and protective as unowned runtime state. A live/recycled PID, live or unproven
 rendezvous, in-progress launch, dirty work, or ahead branch leaves the row intact.
+
+The leaf receipt has one crash matrix. Launch/retry removes the prior receipt before writing a new `agent.pid`, so
+old authority cannot cross into a replacement process; an absent receipt then needs exact live pane ancestry to be
+minted again. Teardown retains the receipt across tmux kill and direct-signal escalation. After proving the original
+leaf gone it removes `agent.pid` first and the receipt second: a crash between those deletes leaves a strict receipt
+whose dead/reused PID lets the retry finish without signalling anything. A missing PID plus a receipt whose original
+process is still live is contradictory and refuses. A malformed/cross-session receipt, a receipt/current PID
+mismatch while the target pane exists, or any unreadable pane/process/start observation refuses without repair.
+No receipt is persisted across a successful stop, and no receipt ever names a native conversation or shared runtime.
 
 Archiving never removes or moves the worktree/branch and writes no timeline row. Success means the exact leaf is
 stopped and the record is archived; a failed stop means no archive field change. An archived record is therefore

@@ -158,7 +158,11 @@ queue's sender-revocation marker, so a stale process cannot append after close r
 before the adapter poke: a native turn can synchronously invoke lifecycle hooks that re-enter the record writer,
 so no record lock spans the handover. The delivery queue's own lock is what makes a handover exactly-once and
 recognizes revoked unhanded debt, while normal adapter/runtime guards remain the authority for concurrent
-lifecycle operations.
+lifecycle operations. Direct close asks the resolved adapter whether the current record derives one exact native
+target identity. That adapter capability, not the presence of the storage alias `harness_session_id`, selects the
+ordinary interrupt/archive/cold-close path; no lifecycle branch names a harness or treats lifecycle status or
+liveness as identity. A record with no derivable native target remains on the narrower unbound-residue retirement
+path and fails closed while any local worker ownership is live or unproven.
 
 Archive may carry an opaque adapter cold-preflight receipt across its exact leaf/tmux stop, into the same adapter's
 cold commit, and through the final record/offline publication boundary. This shared layer forwards that one in-memory

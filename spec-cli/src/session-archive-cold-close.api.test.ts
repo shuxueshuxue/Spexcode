@@ -256,7 +256,7 @@ test('CLI close settles an unknown Codex member from rollout without weakening a
   }
 })
 
-test('public HTTP and CLI cold close ignore only proven-unrelated PID reuse', { timeout: 30_000 }, async () => {
+test('public HTTP and CLI cold close retire only receipt-proven PID reuse', { timeout: 30_000 }, async () => {
   const fixture = mkdtempSync(join(tmpdir(), 'spex-public-cold-close-'))
   const project = join(fixture, 'project')
   const home = join(fixture, 'home')
@@ -280,7 +280,7 @@ test('public HTTP and CLI cold close ignore only proven-unrelated PID reuse', { 
 
     const sessions = join(home, 'projects', project.replace(/[/.]/g, '-'), 'sessions')
     const closeLedger = join(home, 'projects', project.replace(/[/.]/g, '-'), 'session-close-ledger.ndjson')
-    const writeColdRecord = (id: string, pid: number) => {
+    const writeColdRecord = (id: string, pid: number, startToken?: string) => {
       const dir = join(sessions, id)
       mkdirSync(dir, { recursive: true })
       writeFileSync(join(dir, 'session.json'), JSON.stringify({
@@ -291,6 +291,9 @@ test('public HTTP and CLI cold close ignore only proven-unrelated PID reuse', { 
         adapter_recovery: '', launcher: 'claude', launch_cmd: 'claude', launch_owner: '',
       }, null, 2) + '\n')
       writeFileSync(join(dir, 'agent.pid'), `${pid}\n`)
+      if (startToken) writeFileSync(join(dir, 'agent.identity.json'), `${JSON.stringify({
+        version: 1, kind: 'session-leaf', sessionId: id, pid, startToken,
+      })}\n`)
       return join(dir, 'session.json')
     }
 
@@ -327,7 +330,9 @@ test('public HTTP and CLI cold close ignore only proven-unrelated PID reuse', { 
     const reusedId = 'cold-close-reused-public'
     unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
     assert.ok(unrelated.pid)
-    const reusedRecord = writeColdRecord(reusedId, unrelated.pid)
+    await waitFor(() => !!processStartToken(unrelated!.pid!), 'unrelated PID start identity')
+    const unrelatedStart = processStartToken(unrelated.pid)!
+    const reusedRecord = writeColdRecord(reusedId, unrelated.pid, `retired-${unrelatedStart}`)
     const closed = await fetch(`${base}/api/sessions/${reusedId}/close`, { method: 'POST' })
     assert.equal(closed.status, 200)
     assert.deepEqual(await closed.json(), { ok: true })
@@ -340,7 +345,7 @@ test('public HTTP and CLI cold close ignore only proven-unrelated PID reuse', { 
     assert.equal(closeEvents[0]?.target?.id, reusedId)
 
     const cliId = 'cold-close-cli-public'
-    const cliRecord = writeColdRecord(cliId, unrelated.pid)
+    const cliRecord = writeColdRecord(cliId, unrelated.pid, `retired-${unrelatedStart}`)
     const cliSuccess = spawnSync(process.execPath, [
       join(here, '..', 'bin', 'spex.mjs'), 'session', 'close', cliId, '--api', base,
     ], { cwd: project, env: { ...env, SPEXCODE_SESSION_ID: 'nonexistent-session-claim' }, encoding: 'utf8' })
@@ -356,7 +361,8 @@ test('public HTTP and CLI cold close ignore only proven-unrelated PID reuse', { 
     const ownedId = 'cold-close-owned-public'
     owned = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', ownedId], { stdio: 'ignore' })
     assert.ok(owned.pid)
-    const ownedRecord = writeColdRecord(ownedId, owned.pid)
+    await waitFor(() => !!processStartToken(owned!.pid!), 'owned PID start identity')
+    const ownedRecord = writeColdRecord(ownedId, owned.pid, processStartToken(owned.pid)!)
     const cli = spawnSync(process.execPath, [
       join(here, '..', 'bin', 'spex.mjs'), 'session', 'close', ownedId, '--api', base,
     ], { cwd: project, env, encoding: 'utf8' })
@@ -366,6 +372,7 @@ test('public HTTP and CLI cold close ignore only proven-unrelated PID reuse', { 
     assert.equal(processAlive(owned), true, 'CLI refusal never signals the owned PID')
     assert.equal(readFileSync(closeLedger, 'utf8').trim().split('\n').length, closeEvents.length,
       'a refused live close does not create a terminal-close audit event')
+
   } finally {
     await stopChild(backend)
     await stopChild(unrelated)
@@ -400,6 +407,34 @@ test('public close cold-retires a live owned runtime before deletion and refuses
   const refusalPidFile = join(refusalDir, 'agent.pid')
   const refusalSocket = join(fixture, 'refusal-rendezvous.sock')
   const refusalConfig = join(fixture, 'refusal-agent.json')
+  const piId = 'live-pi-pinned-id'
+  const piBranch = 'node/live-pi-pinned-id'
+  const piWorktree = join(fixture, 'pi-worktree')
+  const piRecord = join(sessions, piId, 'session.json')
+  const piPidFile = join(sessions, piId, 'agent.pid')
+  const piSocket = join(fixture, 'pi-rendezvous.sock')
+  const piConfig = join(fixture, 'pi-agent.json')
+  const piDeleteCapture = join(fixture, 'pi-cold-before-delete.txt')
+  const opencodeId = 'live-opencode-captured-id'
+  const opencodeNativeId = 'ses_captured_open_code'
+  const opencodeBranch = 'node/live-opencode-captured-id'
+  const opencodeWorktree = join(fixture, 'opencode-worktree')
+  const opencodeRecord = join(sessions, opencodeId, 'session.json')
+  const opencodePidFile = join(sessions, opencodeId, 'agent.pid')
+  const opencodeSocket = join(fixture, 'opencode-rendezvous.sock')
+  const opencodeConfig = join(fixture, 'opencode-agent.json')
+  const opencodeDeleteCapture = join(fixture, 'opencode-cold-before-delete.txt')
+  const codexId = 'live-codex-without-native-id'
+  const codexBranch = 'node/live-codex-without-native-id'
+  const codexWorktree = join(fixture, 'codex-worktree')
+  const codexRecord = join(sessions, codexId, 'session.json')
+  const codexPidFile = join(sessions, codexId, 'agent.pid')
+  const codexConfig = join(fixture, 'codex-agent.json')
+  const staleId = 'stale-unbound-residue'
+  const staleBranch = 'node/stale-unbound-residue'
+  const staleWorktree = join(fixture, 'stale-worktree')
+  const staleRecord = join(sessions, staleId, 'session.json')
+  const stalePidFile = join(sessions, staleId, 'agent.pid')
   let backend: ChildProcess | null = null
   const fixturePids: number[] = []
   try {
@@ -415,10 +450,27 @@ test('public close cold-retires a live owned runtime before deletion and refuses
     writeFileSync(join(bin, 'git'), `#!/bin/sh
 if [ "$1" = "-C" ] && [ "$3" = "worktree" ] && [ "$4" = "remove" ] && [ "$6" = "$LIVE_WORKTREE" ]; then
   grep -q '"archived": true' "$LIVE_RECORD" || exit 91
-  grep -q '"cold_proof": "cold-v1|' "$LIVE_RECORD" || exit 92
+  grep -q '"cold_proof": "cold-v1|claude|live-direct-close-public|no-resident-ref"' "$LIVE_RECORD" || exit 92
   test ! -e "$LIVE_SOCKET" || exit 93
-  ! kill -0 "$(cat "$LIVE_PID_FILE")" 2>/dev/null || exit 94
+  test ! -e "$LIVE_PID_FILE" || exit 94
+  test ! -e "$(dirname "$LIVE_PID_FILE")/agent.identity.json" || exit 90
   printf 'cold-retired-before-worktree-delete\\n' > "$LIVE_CAPTURE"
+fi
+if [ "$1" = "-C" ] && [ "$3" = "worktree" ] && [ "$4" = "remove" ] && [ "$6" = "$PI_WORKTREE" ]; then
+  grep -q '"archived": true' "$PI_RECORD" || exit 95
+  grep -q '"cold_proof": "cold-v1|pi|live-pi-pinned-id|no-resident-ref"' "$PI_RECORD" || exit 96
+  test ! -e "$PI_SOCKET" || exit 97
+  test ! -e "$PI_PID_FILE" || exit 98
+  test ! -e "$(dirname "$PI_PID_FILE")/agent.identity.json" || exit 99
+  printf 'cold-retired-before-worktree-delete\\n' > "$PI_CAPTURE"
+fi
+if [ "$1" = "-C" ] && [ "$3" = "worktree" ] && [ "$4" = "remove" ] && [ "$6" = "$OPENCODE_WORKTREE" ]; then
+  grep -q '"archived": true' "$OPENCODE_RECORD" || exit 81
+  grep -q '"cold_proof": "cold-v1|opencode|live-opencode-captured-id|thread:ses_captured_open_code"' "$OPENCODE_RECORD" || exit 82
+  test ! -e "$OPENCODE_SOCKET" || exit 83
+  test ! -e "$OPENCODE_PID_FILE" || exit 84
+  test ! -e "$(dirname "$OPENCODE_PID_FILE")/agent.identity.json" || exit 85
+  printf 'cold-retired-before-worktree-delete\\n' > "$OPENCODE_CAPTURE"
 fi
 exec /usr/bin/git "$@"
 `)
@@ -427,9 +479,12 @@ exec /usr/bin/git "$@"
     writeFileSync(agentScript, `const fs = require('node:fs')
 const net = require('node:net')
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
-try { fs.unlinkSync(config.socket) } catch {}
 fs.writeFileSync(config.pidFile, String(process.pid) + '\\n')
-net.createServer((socket) => socket.end()).listen(config.socket)
+if (config.processTitle) process.title = config.processTitle
+if (config.socket) {
+  try { fs.unlinkSync(config.socket) } catch {}
+  net.createServer((socket) => socket.end()).listen(config.socket)
+}
 setInterval(() => {}, 1000)
 `)
 
@@ -445,6 +500,16 @@ setInterval(() => {}, 1000)
       LIVE_PID_FILE: livePidFile,
       LIVE_SOCKET: liveSocket,
       LIVE_CAPTURE: deleteCapture,
+      PI_WORKTREE: piWorktree,
+      PI_RECORD: piRecord,
+      PI_PID_FILE: piPidFile,
+      PI_SOCKET: piSocket,
+      PI_CAPTURE: piDeleteCapture,
+      OPENCODE_WORKTREE: opencodeWorktree,
+      OPENCODE_RECORD: opencodeRecord,
+      OPENCODE_PID_FILE: opencodePidFile,
+      OPENCODE_SOCKET: opencodeSocket,
+      OPENCODE_CAPTURE: opencodeDeleteCapture,
     }
     delete env.SPEXCODE_API_URL
     backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
@@ -458,24 +523,27 @@ setInterval(() => {}, 1000)
     const base = `http://127.0.0.1:${port}`
     await waitFor(() => fetch(`${base}/health`).then((response) => response.ok).catch(() => false), `backend health\n${log}`)
 
-    const writeLiveRecord = (id: string, worktree: string, branch: string, socket: string) => {
+    const writeSessionRecord = (id: string, worktree: string, branch: string, socket: string | null, harness = 'claude', status = 'idle', nativeId = '') => {
       const dir = join(sessions, id)
       mkdirSync(dir, { recursive: true })
-      writeFileSync(join(dir, 'rv.path'), `${socket}\n`)
+      if (socket) writeFileSync(join(dir, 'rv.path'), `${socket}\n`)
       writeFileSync(join(dir, 'session.json'), JSON.stringify({
         session_id: id, governed: true, worktree_path: worktree, branch,
-        node: 'archive', title: '', name: '', parent: '', status: 'idle', proposal: '', merges: 0,
-        note: '', sortkey: '', createdAt: Date.now(), harness: 'claude', harness_session_id: '',
-        stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'claude', launch_cmd: 'claude', launch_owner: '',
+        node: 'archive', title: '', name: '', parent: '', status, proposal: status === 'awaiting' ? 'close' : '', merges: 0,
+        note: '', sortkey: '', createdAt: Date.now(), harness, harness_session_id: nativeId,
+        stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: harness, launch_cmd: harness, launch_owner: '',
       }, null, 2) + '\n')
     }
-    const startLiveAgent = async (id: string, worktree: string, branch: string, socket: string, pidFile: string, config: string, ownerArg: string) => {
+    const startLiveAgent = async (id: string, worktree: string, branch: string, socket: string | null, pidFile: string, config: string, ownerArg: string, harness = 'claude', status = 'idle', processTitle?: string, nativeId = '') => {
       git(project, 'worktree', 'add', '-q', '-b', branch, worktree, 'main')
-      writeLiveRecord(id, worktree, branch, socket)
-      writeFileSync(config, JSON.stringify({ pidFile, socket }) + '\n')
-      const started = spawnSync('/usr/bin/tmux', ['-L', tmuxServer, 'new-session', '-d', '-s', id, process.execPath, agentScript, config, ownerArg], { encoding: 'utf8' })
+      writeSessionRecord(id, worktree, branch, socket, harness, status, nativeId)
+      writeFileSync(config, JSON.stringify({ pidFile, socket, processTitle }) + '\n')
+      const started = spawnSync('/usr/bin/tmux', [
+        '-L', tmuxServer, 'new-session', '-d', '-s', id,
+        '/bin/bash', '-c', '"$1" "$2" "$3" & wait', 'spex-fixture', process.execPath, agentScript, config, ownerArg,
+      ], { encoding: 'utf8' })
       assert.equal(started.status, 0, started.stderr)
-      await waitFor(() => existsSync(pidFile) && Number.isInteger(Number(readFileSync(pidFile, 'utf8').trim())) && existsSync(socket), `agent ${id} startup`)
+      await waitFor(() => existsSync(pidFile) && Number.isInteger(Number(readFileSync(pidFile, 'utf8').trim())) && (!socket || existsSync(socket)), `agent ${id} startup`)
       const pid = Number(readFileSync(pidFile, 'utf8').trim())
       fixturePids.push(pid)
       await waitFor(async () => {
@@ -485,19 +553,32 @@ setInterval(() => {}, 1000)
       return pid
     }
 
-    // A: an online pane/socket whose leaf argv cannot prove this session's ownership refuses with all state intact.
-    const refusalPid = await startLiveAgent(refusalId, refusalWorktree, refusalBranch, refusalSocket, refusalPidFile, refusalConfig, 'different-owner')
+    // A: the exact pane remains live, but agent.pid points outside its process closure. Neither process is ours to infer.
+    const refusalPanePid = await startLiveAgent(refusalId, refusalWorktree, refusalBranch, refusalSocket, refusalPidFile, refusalConfig, refusalId)
+    const outside = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' })
+    assert.ok(outside.pid)
+    fixturePids.push(outside.pid)
+    await waitFor(() => pidAlive(outside.pid!), 'outside refusal process startup')
+    writeFileSync(refusalPidFile, `${outside.pid}\n`)
+    const refusalRecordBefore = readFileSync(refusalRecord)
+    const refusalHeadBefore = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: refusalWorktree, encoding: 'utf8' }).stdout
     const refused = await fetch(`${base}/api/sessions/${refusalId}/close`, { method: 'POST' })
     assert.equal(refused.status, 409)
+    assert.match(JSON.stringify(await refused.json()), /not in exact target pane/u)
+    assert.deepEqual(readFileSync(refusalRecord), refusalRecordBefore)
     assert.equal(existsSync(refusalRecord), true)
     assert.equal(existsSync(refusalWorktree), true)
     assert.equal(gitBranchExists(project, refusalBranch), true)
-    assert.equal(pidAlive(refusalPid), true)
+    assert.equal(spawnSync('git', ['rev-parse', 'HEAD'], { cwd: refusalWorktree, encoding: 'utf8' }).stdout, refusalHeadBefore)
+    assert.equal(pidAlive(refusalPanePid), true, 'the exact pane worker is untouched')
+    assert.equal(pidAlive(outside.pid), true, 'the closure-external registered PID is untouched')
+    assert.equal(readFileSync(refusalPidFile, 'utf8'), `${outside.pid}\n`)
+    assert.equal(existsSync(join(refusalDir, 'agent.identity.json')), false, 'failed ancestry never mints authority')
     assert.equal(existsSync(refusalSocket), true)
     assert.equal(existsSync(join(runtime, 'session-close-ledger.ndjson')), false, 'refusal emits no terminal-close audit event')
 
-    // B: direct public close starts from a live owned runtime; the git boundary records the completed cold archive.
-    const livePid = await startLiveAgent(liveId, liveWorktree, liveBranch, liveSocket, livePidFile, liveConfig, liveId)
+    // B: the field-observed error/online Claude shape still owns its pinned native id and takes normal cold close.
+    const livePid = await startLiveAgent(liveId, liveWorktree, liveBranch, liveSocket, livePidFile, liveConfig, liveId, 'claude', 'error')
     const closed = await fetch(`${base}/api/sessions/${liveId}/close`, { method: 'POST' })
     assert.equal(closed.status, 200)
     assert.deepEqual(await closed.json(), { ok: true })
@@ -511,6 +592,65 @@ setInterval(() => {}, 1000)
     assert.equal(closeEvents.length, 1)
     assert.equal(closeEvents[0]?.target?.id, liveId)
     assert.deepEqual(closeEvents[0]?.source, { kind: 'user' })
+
+    // C: Pi pins the same native id, but rewrites argv to plain `pi`; exact pane ancestry owns its leaf.
+    const piPid = await startLiveAgent(piId, piWorktree, piBranch, piSocket, piPidFile, piConfig, piId, 'pi', 'awaiting', 'pi')
+    const piClosed = await fetch(`${base}/api/sessions/${piId}/close`, { method: 'POST' })
+    assert.equal(piClosed.status, 200)
+    assert.deepEqual(await piClosed.json(), { ok: true })
+    assert.equal(readFileSync(piDeleteCapture, 'utf8'), 'cold-retired-before-worktree-delete\n')
+    assert.equal(pidAlive(piPid), false)
+    assert.equal(existsSync(piSocket), false)
+    assert.equal(existsSync(piRecord), false)
+    assert.equal(existsSync(piWorktree), false)
+    assert.equal(gitBranchExists(project, piBranch), false)
+    const postPiEvents = readFileSync(join(runtime, 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    assert.deepEqual(postPiEvents.map((event) => event.target?.id), [liveId, piId])
+
+    // D: captured OpenCode takes the same receipt path even after its argv loses both record and native ids.
+    const opencodePid = await startLiveAgent(
+      opencodeId, opencodeWorktree, opencodeBranch, opencodeSocket, opencodePidFile, opencodeConfig,
+      'not-an-owner-id', 'opencode', 'awaiting', 'opencode --auto --prompt', opencodeNativeId,
+    )
+    const opencodeClosed = await fetch(`${base}/api/sessions/${opencodeId}/close`, { method: 'POST' })
+    assert.equal(opencodeClosed.status, 200)
+    assert.deepEqual(await opencodeClosed.json(), { ok: true })
+    assert.equal(readFileSync(opencodeDeleteCapture, 'utf8'), 'cold-retired-before-worktree-delete\n')
+    assert.equal(pidAlive(opencodePid), false)
+    assert.equal(existsSync(opencodeSocket), false)
+    assert.equal(existsSync(opencodeRecord), false)
+    assert.equal(existsSync(opencodeWorktree), false)
+    assert.equal(gitBranchExists(project, opencodeBranch), false)
+    const successfulEvents = readFileSync(join(runtime, 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    assert.deepEqual(successfulEvents.map((event) => event.target?.id), [liveId, piId, opencodeId])
+
+    // E: Codex cannot derive an exact native thread from the governed id. A live local worker keeps every witness intact.
+    const codexPid = await startLiveAgent(codexId, codexWorktree, codexBranch, null, codexPidFile, codexConfig, codexId, 'codex', 'active', 'codex')
+    const codexRecordBefore = readFileSync(codexRecord)
+    const codexHeadBefore = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: codexWorktree, encoding: 'utf8' }).stdout
+    const codexRefused = await fetch(`${base}/api/sessions/${codexId}/close`, { method: 'POST' })
+    assert.equal(codexRefused.status, 409)
+    assert.match(JSON.stringify(await codexRefused.json()), /adapter still reports a live worker/u)
+    assert.deepEqual(readFileSync(codexRecord), codexRecordBefore)
+    assert.equal(existsSync(codexWorktree), true)
+    assert.equal(gitBranchExists(project, codexBranch), true)
+    assert.equal(spawnSync('git', ['rev-parse', 'HEAD'], { cwd: codexWorktree, encoding: 'utf8' }).stdout, codexHeadBefore)
+    assert.equal(pidAlive(codexPid), true)
+    assert.equal(readFileSync(join(runtime, 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').length, successfulEvents.length)
+
+    // F: even a cold-looking unbound residue stays protective when its leaf artifact cannot establish absence.
+    git(project, 'worktree', 'add', '-q', '-b', staleBranch, staleWorktree, 'main')
+    writeSessionRecord(staleId, staleWorktree, staleBranch, null, 'codex', 'error')
+    writeFileSync(stalePidFile, 'not-a-pid\n')
+    const staleRecordBefore = readFileSync(staleRecord)
+    const staleRefused = await fetch(`${base}/api/sessions/${staleId}/close`, { method: 'POST' })
+    assert.equal(staleRefused.status, 409)
+    assert.match(JSON.stringify(await staleRefused.json()), /leaf PID artifact is malformed/u)
+    assert.deepEqual(readFileSync(staleRecord), staleRecordBefore)
+    assert.equal(readFileSync(stalePidFile, 'utf8'), 'not-a-pid\n')
+    assert.equal(existsSync(staleWorktree), true)
+    assert.equal(gitBranchExists(project, staleBranch), true)
+    assert.equal(readFileSync(join(runtime, 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').length, successfulEvents.length)
   } finally {
     await stopChild(backend)
     spawnSync('/usr/bin/tmux', ['-L', tmuxServer, 'kill-server'], { stdio: 'ignore' })

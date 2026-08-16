@@ -61,6 +61,14 @@ The extension also exports `PI_SESSION_ID` (the adapter's `sessionEnvVar`) at `s
 subprocesses — and the agent's own `spex` calls — inherit their session identity; the pinned `--session-id`
 makes that id equal the governed record id, claude-style, so no alias step is needed anywhere.
 
+Pi rewrites its process title after launch: the live leaf's argv becomes only `pi`, even though the launch command
+carried `--session-id <governed-id>`. Leaf teardown therefore does not pretend that conversation identity is still
+an argv needle. It uses the same session-leaf birth receipt as every interactive leaf: a retained Pi acquires it only
+from exact pane ancestry plus a stable PID/start observation before tmux mutation, then strict PID/start continuity
+survives Pi's title rewrite, reparenting, and a teardown retry. `SPEXCODE_SESSION_ID` in `/proc` is not ownership
+evidence because descendants inherit it. Unknown pane, process table, ancestry, receipt, or start identity fails
+closed without a signal. This is lifecycle's OS-process mechanism, not a Pi adapter branch.
+
 ## trust — one saved decision plus a one-run flag
 
 pi gates every project-local resource (`.pi/extensions`, `.pi/skills`, `.pi/prompts`, `.pi/settings.json`)

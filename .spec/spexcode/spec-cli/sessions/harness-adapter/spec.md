@@ -256,8 +256,26 @@ surface:
   inherited ones removes a wrong answer without removing a right one. `launchEnv(id)`
   owns the transport bootstrap variables too: a rendezvous adapter returns its daemon mode + per-session socket,
   while a transport that needs neither returns no adapter env; the session launcher only composes those values
-  with the governed session id and configured home variables. A shared runtime also declares its PID/isolation
-  artifacts and a live control-plane probe through the adapter. The probe reports the runtime's loaded-thread
+  with the governed session id and configured home variables. The same id model is exposed as one **exact native
+  target identity** capability over the current record: a caller-pinned adapter derives the native conversation id
+  from the governed session id even when `harness_session_id` is empty, while a native-assigned adapter derives it
+  only from its captured alias and returns no identity before that alias exists. This capability says only which
+  exact native conversation the record owns. It says nothing about whether that conversation is live or whether a
+  local PID still belongs to it. Leaf ownership is a separate, unified lifecycle proof rather than another adapter id
+  model. Before tmux mutation, one target-scoped pane read and one process snapshot must prove the launch-registered
+  PID is in that governed session's pane descendant closure, with the PID's process-start token unchanged across the
+  observation. Only that proof may atomically mint the session leaf birth receipt
+  `{version,kind,sessionId,pid,startToken}`. A strict valid receipt plus the same live PID/start survives process-title
+  changes, tmux removal/reparenting, backend crashes, and a retry; every direct signal revalidates the receipt, current
+  `agent.pid`, and live start token. A process environment marker is never leaf ownership: it is inheritable by
+  unrelated descendants. Missing pane/PID/start, an unreadable process snapshot, ancestry absence, a changed token,
+  or a malformed receipt is unknown and refuses before mutation. A valid receipt whose original PID is dead or whose
+  start token now differs proves only that the original leaf is gone/PID-reused; the current PID is never signalled.
+  The detached-runtime receipt format is not reused because a session leaf is neither a detached process-group root
+  nor required to satisfy `PGID == PID` / Linux `SID == PID`. PID/start identity and runtime liveness remain separate
+  proofs. Product lifecycle code consumes native-target identity and leaf ownership independently and never
+  reconstructs an adapter's id model from record fields or harness names. A shared runtime also declares its
+  PID/isolation artifacts and a live control-plane probe through the adapter. The probe reports the runtime's loaded-thread
   set and whether each reference is active; active is a state of one loaded reference, not another reference.
   Record-only and queued sessions cannot invent a reference, while a loaded thread with no matching record stays
   in the set as unowned. Ownership joins only governed records belonging to adapters that declare that same

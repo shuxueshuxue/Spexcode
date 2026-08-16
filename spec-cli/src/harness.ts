@@ -300,10 +300,10 @@ export interface Harness {
   // Native identity and the first durable turn are established asynchronously by this adapter. Session
   // lifecycle retains its authoritative launch payload until the adapter completes that proof.
   launchPayloadProof?: true
-  // Exact leaf ownership evidence consumed by lifecycle teardown. The adapter returns the one argv identity
-  // token it registered for this record (session id, harness thread/generation, or null when unprovable);
-  // product lifecycle code never branches on harness names to invent this identity.
-  leafOwnerNeedle?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): string | null
+  // The exact native conversation target derivable from this record. Pinned-id adapters return the governed
+  // session id; native-assigned adapters return only a captured id; adapters with no native conversation return
+  // null. This is deliberately unrelated to OS leaf ownership and runtime liveness.
+  exactNativeTargetId(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): string | null
   // Poke a live session and report whether this immediate channel accepted the attempt. Claude-family adapters
   // write one idempotent rendezvous reply; Codex uses JSON-RPC on the same app-server WebSocket the
   // visible TUI uses — it reads the thread live and either `turn/steer`s the message INTO an in-progress turn
@@ -2584,7 +2584,7 @@ export const claudeHarness: Harness = {
   // the caller) — NOT the mere existence of a stale socket FILE a crashed claude leaves behind (the 30-min
   // dead-pane-reads-working bug). See rendezvousListening.
   liveness: socketListenerLiveness,
-  leafOwnerNeedle: (rec) => rec.session,
+  exactNativeTargetId: (rec) => rec.session,
   deliveryTransport: claudeDeliveryTransport,
   deliver: (rec, text) => deliverViaClaudeRendezvous(rec.session, text, rec.mid, rec.runtimeDir),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
@@ -2738,7 +2738,7 @@ export const codexHarness: Harness = {
     if (pane?.pidAlive !== undefined) return pane.pidAlive ? 'online' : 'offline'
     return paneTreeRunsCodex(pane) ? 'online' : 'offline'
   },
-  leafOwnerNeedle: (rec) => rec.harnessSessionId ?? null,
+  exactNativeTargetId: (rec) => rec.harnessSessionId || null,
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   observeTurnFailures: codexTurnFailureObserver,
   interrupt: interruptCodexTurn,
@@ -3054,7 +3054,7 @@ export const piHarness: Harness = {
   // claude's exact liveness: the window is up AND a live LISTENER answers on the rendezvous socket — the
   // socket the generated extension binds. socketLive is already probed for every windowed session.
   liveness: socketListenerLiveness,
-  leafOwnerNeedle: (rec) => rec.session,
+  exactNativeTargetId: (rec) => rec.session,
   deliveryTransport: rendezvousDeliveryTransport,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text, rec.mid),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
@@ -3124,7 +3124,7 @@ export const zcodeHarness: Harness = {
   clean(proj, arts, preserveProject) { cleanHarness(this, proj, arts, preserveProject) },
   slashCommands: () => [],
   liveness: panePidLiveness,
-  leafOwnerNeedle: (rec) => rec.session,
+  exactNativeTargetId: () => null,
   deliver: async () => { throw new Error(ZCODE_CONTROL_UNAVAILABLE) },
   cleanupRuntime: async () => { /* one-shot z-code owns no SpexCode transport to remove */ },
   coldRuntime: async () => ({ ok: true }),
@@ -3172,7 +3172,7 @@ export const opencodeHarness: Harness = {
   // (the plugin is alive), FALL BACK to the launch-registered agent.pid (kill-0) so a plugin that failed to
   // load still reads honestly from the process signal instead of a false offline.
   liveness: socketListenerOrPidAliveLiveness,
-  leafOwnerNeedle: (rec) => rec.session,
+  exactNativeTargetId: (rec) => rec.harnessSessionId || null,
   deliveryTransport: rendezvousDeliveryTransport,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text, rec.mid),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),

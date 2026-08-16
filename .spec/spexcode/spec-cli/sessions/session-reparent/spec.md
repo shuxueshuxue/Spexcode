@@ -47,9 +47,10 @@ parent's **unhanded** messages to each moved child; the child's immutable timeli
 message already claimed by the adapter before the transaction gets the queue lock may arrive before reparent
 returns, but an unhanded stale `continue` cannot arrive afterwards. This is a transfer of supervision, not a
 general messaging ACL: a still-live former session may deliberately send a new peer message later. After the
-rewrite commits, the new parent is sent the child's current authored state through normal dispatch, matching
-the parent-source installation. For a top-level detach there is no new target lock, parent source, or
-notification; the same old-parent queue revocation applies while an unrelated manual source remains intact.
+rewrite commits, the new parent is sent the child's current authored state through normal dispatch unless it is
+routine `active`/working, matching the parent-source installation. For a top-level detach there is no new target
+lock, parent source, or notification; the same old-parent queue revocation applies while an unrelated manual
+source remains intact.
 
 The command validates the complete batch before changing the first child and reports the committed child
 ids. A filesystem failure rolls back the in-memory watch rewrite for that child before releasing its lock;

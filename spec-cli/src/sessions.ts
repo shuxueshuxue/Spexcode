@@ -622,8 +622,15 @@ function watchMessage(target: SessRec): string {
   return `[spex watch] ${target.session} is ${status}${note}`
 }
 
+function shouldDeliverWatchState(target: SessRec, sources: readonly WatchSource[]): boolean {
+  // @@@parent-watch-delivery - Working is routine for a child; a manual watch explicitly asks for it.
+  return target.status !== 'active' || sources.includes('manual')
+}
+
 function scheduleWatchNotifications(target: SessRec): void {
-  const watchers = readWatchEntries(target.session).map((entry) => entry.watcher)
+  const watchers = readWatchEntries(target.session)
+    .filter((entry) => shouldDeliverWatchState(target, entry.sources))
+    .map((entry) => entry.watcher)
   if (!watchers.length) return
   queueMicrotask(() => {
     for (const watcher of watchers) {
@@ -645,8 +652,10 @@ export async function subscribeSessionWatch(watcher: string, targets: string[], 
       const next = addWatchSource(entries, watcher, source)
       if (next.added) writeWatchEntries(target, next.entries)
     })
-    const delivered = await sendText(watcher, watchMessage(targetRecord), target)
-    if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
+    if (shouldDeliverWatchState(targetRecord, [source])) {
+      const delivered = await sendText(watcher, watchMessage(targetRecord), target)
+      if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
+    }
     watched.push(target)
   }
   return { watched }
@@ -753,11 +762,14 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
       }
     }))
   })
+  const notified: string[] = []
   if (parent) for (const child of notify) {
+    if (!shouldDeliverWatchState(child, ['parent'])) continue
     const delivered = await sendText(parent, watchMessage(child), child.session)
     if (!delivered.ok) throw new ResourceConflict(`reparent committed but could not queue ${child.session}'s current state for ${parent}: ${delivered.error}`)
+    notified.push(child.session)
   }
-  return { children, parent, notified: notify.map((child) => child.session) }
+  return { children, parent, notified }
 }
 
 // Share one liveness snapshot rather than spawning tmux for every displayed session.

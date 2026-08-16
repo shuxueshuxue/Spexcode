@@ -133,7 +133,7 @@ test('session reparent rewrites parent/watch through live backend and only falls
     assert.deepEqual(pendingFrom(childADir), [], 'a moved child does not retain an undelivered command from its former supervisor')
     const newParentTimeline = timelineText(sessionDir(home, newParent))
     assert.match(newParentTimeline, new RegExp(childA))
-    assert.match(newParentTimeline, new RegExp(childB))
+    assert.doesNotMatch(newParentTimeline, new RegExp(childB), 'reparent does not announce an already-working child')
 
     writeFileSync(join(childADir, 'pending.json'), JSON.stringify([{ mid: 'new-parent-command', text: 'stale continue', from: newParent }]) + '\n')
     const detached = await fetch(`http://127.0.0.1:${port}/api/sessions/reparent`, {

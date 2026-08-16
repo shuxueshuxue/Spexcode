@@ -227,7 +227,7 @@ test('session new from a governed parent establishes its child watch before prin
   assert.equal(typeof watchers[0].createdAt, 'string')
   assert.deepEqual(watchers[0].sources, ['parent'])
   const messages = timelineText(parentDir)
-  assert.match(messages, new RegExp(WATCH_CHILD))
+  assert.doesNotMatch(messages, new RegExp(WATCH_CHILD), 'an already-working child does not wake its parent on installation')
 })
 
 test('session new uses lightweight instance authority and falls back only for explicit connection refusal', { timeout: 20_000 }, async () => {

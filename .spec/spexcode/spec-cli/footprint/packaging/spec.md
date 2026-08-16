@@ -128,7 +128,9 @@ same gateway with no TLS and no password, on loopback unless `--host` widens it.
 
 The packaging contract is verified as the user would meet it, not by inspecting files: CI builds the root and
 dashboard tarballs, installs the root into a clean consumer project, runs `spex --help`, `spex --version`,
-and `spex graph --json`, then runs `spex init` inside a fresh git repo. It proves the L0 verbs work without the
-dashboard, proves `spex serve ui` fails with the dashboard install command in that state, then installs the
-dashboard tarball and proves `spex serve ui`, `spex dashboard`, and `spex flat site` use its own static assets.
-A tarball that contains the right files but cannot start from an npm install is a packaging failure.
+and `spex graph --json`, then runs `spex init --harness codex` inside a fresh git repo. The explicit harness
+choice is the same first-adoption requirement [[spex-init]] owns; packaging must not introduce an implicit
+default merely to make a smoke test shorter. The smoke proves the L0 verbs work without the dashboard, proves
+`spex serve ui` fails with the dashboard install command in that state, then installs the dashboard tarball and
+proves `spex serve ui`, `spex dashboard`, and `spex flat site` use its own static assets. A tarball that contains
+the right files but cannot start from an npm install is a packaging failure.

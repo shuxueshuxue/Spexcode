@@ -35,11 +35,13 @@ scenarios:
     description: >
       Build the npm tarball with `npm pack`, install that tarball into a clean consumer project, then use the
       installed package the way a new user would: run `npx spex --help`, create a fresh git repo, and run the
-      installed `spex init` inside it.
+      installed `spex init --harness codex` inside it.
     expected: |
       The root tarball installs into the clean consumer project without dashboard, TypeScript, tsx, or esbuild.
       `npx spex --help` starts the compiled CLI through Node.
-      Inside a fresh git repo, `spex init` exits 0 and plants `.spec/project/spec.md` plus `spexcode.json`.
+      Inside a fresh git repo, `spex init --harness codex` exits 0 and plants `.spec/project/spec.md` plus
+      `spexcode.json`; the config records Codex as the selected delivery target. Bare init remains a loud
+      refusal because first adoption has no implicit harness choice.
       The consumer's production `node_modules` does not contain TypeScript; host projects carry the compiler
       only when their own development or JS-anchor setup needs it.
     code:

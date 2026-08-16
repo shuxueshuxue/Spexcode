@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { sessionStoreDir } from '@spexcode/spec-core'
-import { advanceFollow, followCursor, unreadSince } from './session-cursors.js'
+import { advanceFollow, followCursor, unreadSince } from '@spexcode/session-core'
 import { timelineDisplay, timelineEvents, timelineStamp } from './session-timeline.js'
 import { sessionTitle, type DisplayStatus, type Session } from './sessions.js'
 

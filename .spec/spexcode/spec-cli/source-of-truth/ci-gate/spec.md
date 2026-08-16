@@ -25,7 +25,7 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   (retired vocabulary cannot reappear on product surfaces), the **docs-release producer test** (the published
   immutable guidance bundle remains reproducible), the **[[release-publish]] producer test** (the complete
   public package set remains version-locked, ordered, and guarded against direct publication), the
-  **`tsc --noEmit`** type check on the CLI package, the CLI package's complete **unit/integration suite**, and
+  **`tsc --noEmit`** type check on the CLI package, the session-core protocol suite, the CLI package's complete **unit/integration suite**, and
   one data-driven **production clean-init matrix**. The suite runs from the package directory after both root
   and package installs, so subprocess fixtures resolve the same local `tsx`/TypeScript that production-facing
   tests invoke; a green workflow cannot coexist with a known main-branch unit failure.

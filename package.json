@@ -21,7 +21,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "npm run build --workspace=@spexcode/spec-core && npm run build --workspace=@spexcode/spec-eval && npm run build --workspace=@spexcode/spec-forge && npm run build --workspace=@spexcode/spec-cli",
+    "build": "npm run build --workspace=@spexcode/spec-core && npm run build --workspace=@spexcode/session-core && npm run build --workspace=@spexcode/spec-eval && npm run build --workspace=@spexcode/spec-forge && npm run build --workspace=@spexcode/spec-cli",
     "api": "npm run build && node bin/spex.mjs serve",
     "web": "cd spec-dashboard && npm run dev",
     "build:public": "node scripts/public-graph-build.mjs",

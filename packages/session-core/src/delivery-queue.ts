@@ -1,6 +1,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, writeSync } from 'node:fs'
 import { join } from 'node:path'
 import { runtimeRoot, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
+import { sentDispatchReceipt, settleSentDispatch } from './session-timeline.js'
 
 // @@@ delivery-queue - what a session still OWES its agent. The log ([[session-timeline]]) is the record and
 // grows forever; this is the debt and is consumed, so it lives in its own small file whose resting state is
@@ -12,7 +13,7 @@ export type PendingMessage = {
   mid: string
   text: string
   from: string | null
-  dispatch?: { operation: 'merge'; requestDigest: string }
+  dispatch?: { operation: string; requestDigest: string }
 }
 
 const queuePath = (id: string): string => sessionArtifactPath(id, 'pending.json')
@@ -62,7 +63,7 @@ function read(id: string): PendingMessage[] {
       && typeof (m as PendingMessage).mid === 'string'
       && typeof (m as PendingMessage).text === 'string'
       && ((m as PendingMessage).dispatch === undefined
-        || ((m as PendingMessage).dispatch?.operation === 'merge'
+        || (typeof (m as PendingMessage).dispatch?.operation === 'string'
           && typeof (m as PendingMessage).dispatch?.requestDigest === 'string')))
   } catch { return [] }   // absent, empty, or unparseable all mean the honest thing: nothing owed
 }
@@ -154,7 +155,19 @@ export async function drain(
         continue
       }
       let ok = false
-      try { ok = await insert(queued[0]) } catch { ok = false }
+      try {
+        const head = queued[0]
+        if (head.dispatch) {
+          const receipt = sentDispatchReceipt(id, head.dispatch.operation, head.dispatch.requestDigest)
+          if (!receipt || receipt.mid !== head.mid || !receipt.delivery
+            || receipt.delivery.text !== head.text || receipt.delivery.from !== head.from) return { delivered, remaining: queued.length }
+          if (receipt.delivered) ok = true
+          else {
+            ok = await insert(head)
+            if (ok) settleSentDispatch(id, head.mid)
+          }
+        } else ok = await insert(head)
+      } catch { ok = false }
       if (!ok) return { delivered, remaining: queued.length }
       // Re-read before removing: a send that landed while this pass ran appended to the tail, and rewriting a
       // stale snapshot minus the head would silently drop it.

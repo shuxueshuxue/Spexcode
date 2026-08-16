@@ -37,6 +37,9 @@ jobs:
       - name: typecheck
         working-directory: spec-cli
         run: npx tsc --noEmit
+      - name: Session protocol unit suite
+        working-directory: packages/session-core
+        run: npm test
       - name: Unit and integration suite
         working-directory: spec-cli
         run: npm test

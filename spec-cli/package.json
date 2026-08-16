@@ -21,6 +21,7 @@
   ],
   "bundledDependencies": [
     "@spexcode/spec-core",
+    "@spexcode/session-core",
     "@spexcode/spec-eval",
     "@spexcode/spec-forge"
   ],
@@ -35,6 +36,7 @@
     "test": "tsx --import ../scripts/test-home.mjs --test src/*.test.ts"
   },
   "dependencies": {
+    "@spexcode/session-core": "0.6.5",
     "@spexcode/spec-core": "0.6.5",
     "@spexcode/spec-eval": "0.6.5",
     "@spexcode/spec-forge": "0.6.5"

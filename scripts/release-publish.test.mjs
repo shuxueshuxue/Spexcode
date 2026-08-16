@@ -30,7 +30,7 @@ function changeManifest(base, entry, change) {
 test('release producer keeps one complete ordered package set', () => {
   const plan = releasePlan()
   assert.equal(plan.version, JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version)
-  assert.deepEqual(plan.entries.map((entry) => entry.id), ['core', 'dashboard', 'eval', 'forge', 'cli', 'root'])
+  assert.deepEqual(plan.entries.map((entry) => entry.id), ['core', 'dashboard', 'session', 'eval', 'forge', 'cli', 'root'])
   assert.equal(registryState(plan.entries, () => false), 'absent')
   assert.equal(registryState(plan.entries, () => true), 'complete')
   assert.equal(registryState(plan.entries, (name) => name === '@spexcode/spec-core'), 'partial (@spexcode/spec-core)')
@@ -47,6 +47,18 @@ test('release producer rejects a stale internal release reference before npm run
       manifest.dependencies['@spexcode/spec-eval'] = '0.0.0'
     })
     assert.throws(() => releasePlan(dir), /references @spexcode\/spec-eval@0\.0\.0/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('release producer rejects a stale session-core reference from its CLI consumer', () => {
+  const dir = fixture()
+  try {
+    changeManifest(dir, RELEASE_PACKAGES.find((entry) => entry.id === 'cli'), (manifest) => {
+      manifest.dependencies['@spexcode/session-core'] = '0.0.0'
+    })
+    assert.throws(() => releasePlan(dir), /references @spexcode\/session-core@0\.0\.0/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

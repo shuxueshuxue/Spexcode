@@ -1,7 +1,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, openSync, closeSync, unlinkSync, writeSync } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync } from 'node:fs'
 import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
@@ -12,8 +12,8 @@ import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
-import { appendSent, recordStatus, lastHumanSendVia, sentDispatchReceipt, settleSentDispatch, type SentDispatchReceipt, type SentDispatchState } from './session-timeline.js'
-import { drain, enqueue, ensurePendingWhileLocked, owesDelivery, pendingMessages, pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, senderDeliveryRevoked, withDeliveryLocks, type PendingMessage } from './delivery-queue.js'
+import { acceptMessage, drain, recordStatus, lastHumanSendVia, owesDelivery, pendingMessages, type MessageIdempotency } from '@spexcode/session-core'
+import { pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, withDeliveryLocks, trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from '@spexcode/session-core/internal'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
@@ -305,99 +305,18 @@ function readLiveRecord(id: string): SessRec | null {
   return rec
 }
 
-// Cross-process lifecycle serialization. Hooks and operator commands are separate CLI processes, so the
-// in-memory transition tail is only an optimization. This lock covers each read/modify/write or destructive
-// transition across archive/resume/stop/close and hook writers. It lives outside the record directory so close
-// may remove the record while its lock is held. A dead writer's lock is reclaimed; a live writer is waited for
-// with a bounded wall and then fails loudly rather than allowing a stale write to win.
-const recordLockRoot = () => join(runtimeRoot(), '.session-locks')
-const recordLockPath = (id: string) => join(recordLockRoot(), `${id}.lock`)
-const syncPause = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
-function acquireRecordLockSync(id: string, timeoutMs = 30_000): () => void {
-  mkdirSync(recordLockRoot(), { recursive: true })
-  const path = recordLockPath(id), deadline = Date.now() + timeoutMs
-  for (;;) {
-    try {
-      const fd = openSync(path, 'wx')
-      writeSync(fd, String(process.pid))
-      closeSync(fd)
-      return () => { try { unlinkSync(path) } catch { /* another recovery already removed it */ } }
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
-      let owner = 0
-      try { owner = Number(readFileSync(path, 'utf8').trim()) || 0 } catch { /* race with creator/releaser */ }
-      if (owner && owner !== process.pid) {
-        try { process.kill(owner, 0) } catch { try { unlinkSync(path) } catch { /* race */ }; continue }
-      }
-      if (Date.now() >= deadline) throw new ResourceConflict(`session ${id}: lifecycle transition lock timed out; refusing a stale write`)
-      syncPause(10)
-    }
-  }
-}
-const abortedOperation = (signal: AbortSignal): Error => signal.reason instanceof Error
-  ? signal.reason
-  : Object.assign(new Error('The operation was aborted'), { name: 'AbortError', code: 'ABORT_ERR' })
-async function recordLockPause(signal?: AbortSignal): Promise<void> {
-  if (!signal) { await new Promise((resolve) => setTimeout(resolve, 10)); return }
-  if (signal.aborted) throw abortedOperation(signal)
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(done, 10)
-    const abort = () => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(abortedOperation(signal)) }
-    function done() { signal!.removeEventListener('abort', abort); resolve() }
-    signal.addEventListener('abort', abort, { once: true })
-  })
-}
-async function acquireRecordLock(id: string, timeoutMs = 30_000, signal?: AbortSignal): Promise<() => void> {
-  mkdirSync(recordLockRoot(), { recursive: true })
-  const path = recordLockPath(id), deadline = Date.now() + timeoutMs
-  for (;;) {
-    if (signal?.aborted) throw abortedOperation(signal)
-    try {
-      const fd = openSync(path, 'wx')
-      writeSync(fd, String(process.pid))
-      closeSync(fd)
-      return () => { try { unlinkSync(path) } catch { /* another recovery already removed it */ } }
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
-      let owner = 0
-      try { owner = Number(readFileSync(path, 'utf8').trim()) || 0 } catch { /* race with creator/releaser */ }
-      if (owner && owner !== process.pid) {
-        try { process.kill(owner, 0) } catch { try { unlinkSync(path) } catch { /* race */ }; continue }
-      }
-      if (Date.now() >= deadline) throw new ResourceConflict(`session ${id}: lifecycle transition lock timed out; refusing a stale write`)
-      await recordLockPause(signal)
-    }
-  }
-}
-async function withRecordLock<T>(id: string, body: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-  const release = await acquireRecordLock(id, 30_000, signal)
-  try { return await body() } finally { release() }
-}
+const withRecordLock = withSessionRecordLock
 export function withSessionRecordLockSync<T>(id: string, body: () => T): T {
-  const release = acquireRecordLockSync(id)
-  try { return body() } finally { release() }
+  return coreWithSessionRecordLockSync(id, body)
 }
 const withRecordLockSync = withSessionRecordLockSync
-function tryRecordLockSync(id: string): (() => void) | null {
-  mkdirSync(recordLockRoot(), { recursive: true })
-  const path = recordLockPath(id)
-  try {
-    const fd = openSync(path, 'wx')
-    writeSync(fd, String(process.pid))
-    closeSync(fd)
-    return () => { try { unlinkSync(path) } catch { /* another recovery already removed it */ } }
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'EEXIST') return null
-    throw e
-  }
-}
 // Synchronous terminal input is another product turn-entry path. The PTY bridge uses this narrow seam to
 // enqueue input while holding the same durable record lock as archive, so an archive preflight cannot pass idle
 // and then race a just-queued TUI turn.
 export function withSessionInputLock<T>(id: string, body: () => T): T | null {
   // PTY input is synchronous. A single non-blocking open is the only safe barrier: EEXIST rejects this input
   // regardless of owner PID, so a same-process async archive can never be frozen behind Atomics.wait.
-  const release = tryRecordLockSync(id)
+  const release = trySessionRecordLockSync(id)
   if (!release) return null
   try { return body() } finally { release() }
 }
@@ -3715,18 +3634,9 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
 // A RETIRED session (worktree gone) still receives: the record gate governs the lifecycle axis, and a message
 // that cannot reach an agent must at least leave a trace ([[session-timeline]]).
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
-type DispatchIdempotency = SentDispatchReceipt
+type DispatchIdempotency = MessageIdempotency
 type DispatchAcceptCode = 'dispatch_key_reused' | 'session_merge_not_proposed'
 type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: DispatchAcceptCode }
-type DispatchDelivery = NonNullable<SentDispatchReceipt['delivery']>
-function keyedPendingMessage(receipt: SentDispatchReceipt, mid: string, delivery: DispatchDelivery): PendingMessage {
-  return {
-    mid,
-    text: delivery.text,
-    from: delivery.from,
-    dispatch: { operation: receipt.operation, requestDigest: receipt.requestDigest },
-  }
-}
 type SendTextOptions = {
   replyVia?: 'note'
   idempotency?: DispatchIdempotency
@@ -3753,44 +3663,28 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
     // a send either appends before close obtains the fence (and close's revocation voids its debt), or sees
     // the terminal marker before it records anything. Arbitrary legacy `from` values keep working; they just
     // name an otherwise-unused lock until a matching session is closed.
-    await withRecordLocks([id, ...(from ? [from] : [])].sort(), async () => {
-      if (from && senderDeliveryRevoked(from)) throw new ResourceConflict(`sender session ${from} is closed; prompt NOT delivered`)
-      const rec = readRecord(id)
-      if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
-      const accept = async () => {
-        if (opts.idempotency) {
-          const prior = sentDispatchReceipt(id, opts.idempotency.operation, opts.idempotency.requestDigest)
-          if (prior) {
-            if (prior.payloadHash !== opts.idempotency.payloadHash) {
-              const conflict = new ResourceConflict(`idempotency key is already bound to another ${opts.idempotency.operation} payload`)
-              Object.assign(conflict, { code: 'dispatch_key_reused' })
-              throw conflict
-            }
-            if (prior.delivery && !prior.delivered) {
-              ensurePendingWhileLocked(id, keyedPendingMessage(opts.idempotency, prior.mid, prior.delivery))
-            }
-            replayed = true
-            return
-          }
-        }
-        await opts.acceptGuard?.(rec)
-        const stranded = await strandedDeliveryError(rec)
+    let rec: SessRec | null = null
+    const accepted = await acceptMessage({
+      target: id,
+      text,
+      from,
+      idempotency: opts.idempotency,
+      validate: async () => {
+        rec = readRecord(id)
+        if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
+      },
+      prepare: async () => {
+        await opts.acceptGuard?.(rec!)
+        const stranded = await strandedDeliveryError(rec!)
         if (stranded) throw stranded
         // Composed at ACCEPT time, once: the log keeps the raw conversational text plus the effective reply channel,
         // the queue keeps the transport form. Composing again at handover would let a later send change the hints on
         // a message that was already accepted.
-        const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
-        const dispatchReceipt = opts.idempotency
-          ? { ...opts.idempotency, delivery: { text: prompt.text, from: from ?? null } }
-          : undefined
-        const appended = appendSent(id, text, from ?? null, prompt.replyVia, dispatchReceipt)
-        enqueue(id, opts.idempotency
-          ? keyedPendingMessage(opts.idempotency, appended.mid, dispatchReceipt!.delivery!)
-          : { mid: appended.mid, text: prompt.text, from: from ?? null })
-      }
-      if (opts.idempotency) await withDeliveryLocks([id], accept)
-      else await accept()
+        const prompt = await composeSessionPrompt(text, rec!, { from, replyVia: opts.replyVia })
+        return { text: prompt.text, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) }
+      },
     })
+    replayed = accepted.replayed
   } catch (error) {
     const code = (error as { code?: DispatchAcceptCode })?.code
     const detail = error instanceof StrandedDeliveryError
@@ -3818,12 +3712,6 @@ export async function drainSession(id: string): Promise<void> {
   if (!rec) return
   const h = harnessById(rec.harness || defaultHarness.id)
   await drain(id, async (msg) => {
-    if (msg.dispatch) {
-      const receipt = sentDispatchReceipt(id, msg.dispatch.operation, msg.dispatch.requestDigest)
-      if (!receipt || receipt.mid !== msg.mid || !receipt.delivery
-        || receipt.delivery.text !== msg.text || receipt.delivery.from !== msg.from) return false
-      if (receipt.delivered) return true
-    }
     // the pane guard ([[harness-adapter]] deliveryBlockedBy): the ONE pane state where the harness swallows a
     // prompt its channel confirms (claude's sessions panel), checkable only from the pane. Treated as a REFUSAL
     // rather than a skip — the message stays owed and the sweep hands it over once the pane leaves that state.
@@ -3833,7 +3721,6 @@ export async function drainSession(id: string): Promise<void> {
       } catch { /* no pane to consult — let the insert itself decide */ }
     }
     const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.mid }, msg.text)
-    if (delivered.ok && msg.dispatch) settleSentDispatch(id, msg.mid)
     return delivered.ok
   })
 }

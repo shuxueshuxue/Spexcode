@@ -6,6 +6,8 @@ desc: The shared session module every session feature builds on — the global p
 code:
   - spec-cli/src/sessions.ts
 related:
+  - packages/session-core/src/record-lock.ts
+  - packages/session-core/src/message.ts
   - spec-cli/src/sessionSlug.test.ts
   - spec-cli/src/session-create-cli.test.ts
   - spec-cli/src/sessions-hot.test.ts
@@ -132,14 +134,14 @@ a pinned run from an unpinned one. It also joins the idempotency payload hash �
 a different request, not the same one — while an unpinned create keeps its exact legacy record bytes and
 receipt hash, so nothing that never pinned gains a field.
 
-**Exclusion lives in the lock, never in a privileged process.** The per-session record lock is a filesystem
-lock with a PID liveness check, held across processes, so a session operation may run in whatever process
+**Exclusion lives in the lock, never in a privileged process.** The per-session record lock implementation is
+shared from `@spexcode/session-core`: a filesystem lock with a PID liveness check, held across processes, so a session operation may run in whatever process
 takes it — a backend is the convenient owner of the launch environment and a shared cache, not the holder
 of the invariant, and a read that takes no lock needs no permission from anyone. That is what lets this
 layer be a brick an external system can drive rather than a service it must be granted access to.
 
-A text send takes the target record lock for its durable timeline append; an agent-attributed send also takes
-its named sender's lock in sorted order. Before a new append, sessions-core asks the resolved adapter's optional
+A text send delegates its record-locked append-plus-queue acceptance to `@spexcode/session-core`; an
+agent-attributed send also fences its named sender in sorted order. Before a new append, sessions-core asks the resolved adapter's optional
 transport witness. Its proven-unreachable answer becomes a stranded refusal only when this layer's independent
 registered-pid witness still proves the worker alive; an unproven transport remains queue-retryable and does not
 change liveness. Close keeps the sender lock through terminal record removal and then publishes the delivery

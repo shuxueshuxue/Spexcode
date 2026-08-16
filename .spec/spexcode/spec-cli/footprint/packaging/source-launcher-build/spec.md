@@ -15,7 +15,7 @@ related:
 The release launcher must also be usable by repository hooks from a clean source checkout, where each
 package's `dist` directory is intentionally untracked. When the launcher finds the compiled runtime closure
 absent or older than the source trees it imports, it runs the workspace build before starting `dist/cli.js`.
-The recovery covers core, eval, forge, and CLI together: building only the CLI would leave its package imports
+The recovery covers core, session-core, eval, forge, and CLI together: building only the CLI would leave its package imports
 stale or missing.
 
 This is source-workspace behavior, identified by the presence of `spec-cli/src`. An installed package has no

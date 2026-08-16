@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { codexHarness } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { closeSession, sendText } from './sessions.js'
-import { drain, pendingMessages } from './delivery-queue.js'
+import { drain, pendingMessages } from '@spexcode/session-core'
 import { runtimeRoot, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
 test('close uses a target tmux probe when the global listing is busy', { concurrency: false }, async () => {

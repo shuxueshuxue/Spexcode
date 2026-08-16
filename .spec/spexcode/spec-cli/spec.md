@@ -19,14 +19,14 @@ related:
 # spec-cli
 
 The backend package is `@spexcode/spec-cli`; its declared dependencies are `@spexcode/spec-core`,
-`@spexcode/spec-eval`, and `@spexcode/spec-forge`. It is the composition boundary that installs spec-eval's
+`@spexcode/session-core`, `@spexcode/spec-eval`, and `@spexcode/spec-forge`. It is the composition boundary that installs spec-eval's
 host port with the session, issue, source-policy, and transport implementations.
 `eval-host.ts` is that one-way composition seam: it installs the concrete CLI capabilities at startup and does
 not duplicate the eval engine or its remark types. Its defining contract has a focused governance node.
 
 ## raw source
 
-One of the SpexCode packages (with spec-core, spec-eval, spec-forge, and spec-dashboard). It is the server + CLI: read the
+One of the SpexCode packages (with spec-core, session-core, spec-eval, spec-forge, and spec-dashboard). It is the server + CLI: read the
 `.spec` tree and its git history, serve them over an API, ship the `spex` CLI, and house the
 **source-of-truth** guards (git-as-database, the worktree linker, the guards, the linter) here — under
 the CLI where they belong, not under the dashboard. It publishes compiled JavaScript; TypeScript remains
@@ -53,7 +53,7 @@ board or issue dump arrives whole, never a JSON cut off mid-object that reads as
 
 The `serve` script (the `npm run api` entry) hot-reloads the backend on changes to **any source tree in the
 compiled runtime closure** — its own `spec-cli/src/**` plus the sibling packages it loads at runtime
-(`spec-forge`, `spec-eval`, `spec-core`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it
+(`spec-forge`, `spec-eval`, `spec-core`, `session-core`) — never on `.spec/**/spec.md` or `spec-dashboard` edits, which it
 reads via fs or never imports (the frontend is a separate vite server with its own HMR). In a source workspace
 the supervisor rebuilds that closure before it reloads; an installed package watches only its shipped `dist`.
 Watching only its own dir was a real gap: a merge touching `spec-forge` reached disk while the running child

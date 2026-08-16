@@ -98,10 +98,9 @@ subtree is all idle/offline. Yellow does NOT mean "needs the human" — it may j
 the supervisor chain will handle, a passive hint kept out of the zone/sort, never an escalation.
 
 **Behavioural contract.** The honesty of "parent status = group status" rides the ordinary managed
-[[session-follow]] relation: once the thin watch call has succeeded, each child declaration except routine
-`active`/working arrives in the parent's normal terminal prompt queue and wakes it exactly like an ordinary send.
-A caller without that managed address backgrounds `spex session wait <child>` and stays `parked` while it runs,
-only becoming `asking` when it
+[[session-follow]] relation: source installation and reparenting first deliver one child-state snapshot, then
+each later child declaration except routine `active`/working arrives in the parent's normal terminal prompt queue
+and wakes it exactly like an ordinary send. A caller without that managed address backgrounds `spex session wait <child>` and stays `parked` while it runs, only becoming `asking` when it
 genuinely needs the human. Strengthened in the `supervisor` config plugin.
 
 The original spawner is the normal source of a parent edge, but supervision recovery may deliberately change

@@ -45,12 +45,13 @@ has one watcher id and a small set of sources (`manual` and, when the tree owns 
 path projects those rows to unique watcher ids, appends one normal `sent` event to each watcher's timeline, and
 enqueues one ordinary prompt for adapter delivery. A busy or offline watcher therefore receives the next retry
 exactly like a normal `spex session send`; an available watcher receives a terminal insert in its current turn.
-A `parent` source suppresses the routine `active`/working state, both for an installation or reparent handoff and
-for later transitions: a supervisor wakes for every other authored declaration, while a one-shot `ls` remains the
-snapshot read. A `manual` source explicitly asks for the complete feed and includes working; an overlapping
-manual+parent row still projects to one delivery. Installation otherwise sends the target's current authored
-state, so a relationship created just after a fast child launch has a truthful starting point without spending a
-parent turn on routine work.
+Every delivery has one reason: a `snapshot` announces the current authored state when a source is installed or a
+child is reparented, while a `transition` announces a later state write. A snapshot always delivers — a new
+supervisor needs its worker's current state even when that state is routine `active`/working. A parent-only
+transition suppresses that routine working state, while a `manual` source explicitly asks for the complete feed
+and includes it. The sources form one set: an overlapping manual+parent row still projects to one delivery, with
+manual's complete-feed policy winning for transitions. Thus a one-shot `ls` remains a snapshot read, but a parent
+is not woken every time a known child resumes ordinary work.
 
 `spex session watch list` scans targets' `watchers.json` files to show the caller's relations, and
 `spex session watch cancel <SEL...>` removes only that caller's `manual` source from the selected targets.

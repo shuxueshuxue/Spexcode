@@ -158,7 +158,10 @@ scenarios:
       signposts `spex session review`, and `spex session review proof` signposts the canonical
       `spex eval ls --session <SEL> --export` — one stderr line, exit non-zero, the old verb never
       executes. Help: the map lists eval as its own noun, eval help teaches this same global result-first
-      order, and an --help probe never fires the verb.
+      order, and an --help probe never fires the verb. Multi-page reads aggregate pages whose shared
+      evalRevision is equal even though their page-response revisions differ. One real evalRevision drift
+      discards the partial result and retries from page one; drift on both bounded attempts fails loudly with
+      the observed revisions and no partial text or JSON.
   - name: eval-door-one-chrome
     tags: [frontend-e2e, desktop]
     test: spec-dashboard/test/evals-entry.e2e.mjs

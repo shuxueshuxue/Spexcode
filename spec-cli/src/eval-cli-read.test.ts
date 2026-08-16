@@ -106,3 +106,109 @@ test('session eval text omits the empty paged-list gate section', async () => {
   assert.match(stdout, /visible-row/)
   assert.doesNotMatch(stdout, /^\s*gates\s*:/m)
 })
+
+test('session eval aggregates stable snapshot pages whose response revisions differ', async () => {
+  const id = '33333333-4444-4555-8666-777777777777'
+  const snapshot = { epoch: 'epoch-a', generation: 7, content: 'content-a' }
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json')
+    if (req.url === '/api/sessions?all=1') return void res.end(JSON.stringify([{ id }]))
+    if (req.url?.startsWith('/api/evals?')) {
+      const page = Number(new URL(req.url, 'http://fixture').searchParams.get('page'))
+      return void res.end(JSON.stringify({
+        items: [{ node: `node-${page}`, filterKind: 'blind', scenario: `scenario-${page}` }],
+        page, pageCount: 2, total: 2, unknown: 0, revision: `page-response-${page}`,
+        evalRevision: snapshot, gates: [],
+      }))
+    }
+    res.statusCode = 404
+    res.end(JSON.stringify({ error: 'not found' }))
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  assert.ok(address && typeof address === 'object')
+
+  const { code, stdout, stderr } = await runCli(['eval', 'ls', '--session', id, '--json', '--api', `http://127.0.0.1:${address.port}`])
+  server.close()
+  await once(server, 'close')
+
+  assert.equal(code, 0, stderr)
+  const model = JSON.parse(stdout)
+  assert.deepEqual(model.items.map((item: any) => item.scenario), ['scenario-1', 'scenario-2'])
+  assert.deepEqual(model.evalRevision, snapshot)
+  assert.equal(model.revision, 'page-response-1')
+})
+
+test('session eval discards a drifted partial snapshot and retries from page one', async () => {
+  const id = '44444444-5555-4666-8777-888888888888'
+  let evalRequests = 0
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json')
+    if (req.url === '/api/sessions?all=1') return void res.end(JSON.stringify([{ id }]))
+    if (req.url?.startsWith('/api/evals?')) {
+      evalRequests++
+      const page = Number(new URL(req.url, 'http://fixture').searchParams.get('page'))
+      const attempt = Math.ceil(evalRequests / 2)
+      const evalRevision = attempt === 1
+        ? page === 1
+          ? { epoch: 'epoch-b', generation: 1, content: '2:old' }
+          : { epoch: 'epoch-b:1', generation: 2, content: 'old' }
+        : { epoch: 'epoch-b', generation: 3, content: 'stable' }
+      return void res.end(JSON.stringify({
+        items: [{ node: `attempt-${attempt}`, filterKind: 'blind', scenario: `attempt-${attempt}-page-${page}` }],
+        page, pageCount: 2, total: 2, unknown: 0, revision: `response-${evalRequests}`,
+        evalRevision, gates: [],
+      }))
+    }
+    res.statusCode = 404
+    res.end(JSON.stringify({ error: 'not found' }))
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  assert.ok(address && typeof address === 'object')
+
+  const { code, stdout, stderr } = await runCli(['eval', 'ls', '--session', id, '--json', '--api', `http://127.0.0.1:${address.port}`])
+  server.close()
+  await once(server, 'close')
+
+  assert.equal(code, 0, stderr)
+  assert.equal(evalRequests, 4)
+  assert.deepEqual(JSON.parse(stdout).items.map((item: any) => item.scenario), ['attempt-2-page-1', 'attempt-2-page-2'])
+})
+
+test('session eval fails loudly after two continuously drifted snapshot attempts', async () => {
+  const id = '55555555-6666-4777-8888-999999999999'
+  let evalRequests = 0
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json')
+    if (req.url === '/api/sessions?all=1') return void res.end(JSON.stringify([{ id }]))
+    if (req.url?.startsWith('/api/evals?')) {
+      evalRequests++
+      const page = Number(new URL(req.url, 'http://fixture').searchParams.get('page'))
+      return void res.end(JSON.stringify({
+        items: [{ node: 'moving', filterKind: 'blind', scenario: `discarded-${evalRequests}` }],
+        page, pageCount: 2, total: 2, unknown: 0, revision: `response-${evalRequests}`,
+        evalRevision: { epoch: 'epoch-c', generation: evalRequests, content: `content-${evalRequests}` }, gates: [],
+      }))
+    }
+    res.statusCode = 404
+    res.end(JSON.stringify({ error: 'not found' }))
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  assert.ok(address && typeof address === 'object')
+
+  const { code, stdout, stderr } = await runCli(['eval', 'ls', '--session', id, '--json', '--api', `http://127.0.0.1:${address.port}`])
+  server.close()
+  await once(server, 'close')
+
+  assert.equal(code, 1)
+  assert.equal(stdout, '')
+  assert.equal(evalRequests, 4)
+  assert.match(stderr, /snapshot changed during both fetch attempts/)
+  assert.match(stderr, /attempt 1: epoch-c@1 \(content-1\) -> epoch-c@2 \(content-2\) at page 2/)
+  assert.match(stderr, /attempt 2: epoch-c@3 \(content-3\) -> epoch-c@4 \(content-4\) at page 2/)
+})

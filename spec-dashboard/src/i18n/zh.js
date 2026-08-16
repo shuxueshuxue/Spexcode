@@ -697,6 +697,9 @@ export default {
     placeholder: '搜索节点、会话、议题、场景…',
     empty: '没有匹配项',
     hint: '↑↓ 选择 · ⏎ 跳转 · esc 关闭',
+    allResults: '完整评审列表',
+    allIssues: ({ n }) => `全部 issues · ${n}`,
+    allEvals: ({ n }) => `全部评测 · ${n}`,
     kind: { spec: '节点', session: '会话', issue: '议题', scenario: '场景' },
   },
 

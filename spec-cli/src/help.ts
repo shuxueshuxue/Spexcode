@@ -47,7 +47,7 @@ session to that node. --prompt-file <path>|- carries a long prompt without shell
 reproduced against a frozen commit; a base that names no commit is refused before anything is created.
 The successful receipt names what to read, monitor, and reply on. --ssh uses an existing gateway-to-gateway
 communication tunnel: its full id anchors the remote project, creation stays parentless and remote, and its
-prompt carries a runnable reply path over that same tunnel.`],
+prompt carries a runnable reply path over that same tunnel.`, ['project-bound']],
     ls: [['spex session ls [SEL…] [--children[=<PARENT-SEL>]] [--status a,b] [--all] [--json]', 'spex session ls --ssh <address> <FULL-SESSION-ID> [--children=<PARENT-SEL>] [--status a,b] [--json]'],
       'One-shot table of this project\'s live sessions, with each direct parent beside the row. --children scopes it to the caller\'s direct children; --children=<PARENT-SEL> names another parent without changing positional selector grammar. The heading summarizes the displayed scope by status. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it. An explicit id missing from the session list is diagnosed from terminal-close history: closed is a successful answer, while no live, archived, or closed history is a named miss. --ssh uses an existing gateway-to-gateway communication tunnel; its full id anchors one remote project rather than filtering the table, and archive projection stays unavailable on that peer route.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
@@ -109,8 +109,8 @@ const SESSION_HELP_GROUPS = [
   { title: 'Human escape hatch', verbs: ['attach'] },
 ] as const
 
-const SESSION_WRITE_NOTE = `Manager verbs that WRITE (send/interrupt/rename/resume/stop/close/merge/reparent) are PROJECT-BOUND: a backend serving
-another project's repo refuses loudly — name the target with --api <url> to drive it on purpose.`
+const SESSION_WRITE_NOTE = `PROJECT-BOUND WRITES loudly refuse a backend serving another project's repo —
+name the target with --api <url> to drive it on purpose.`
 
 function indent(text: string, spaces: number): string {
   const prefix = ' '.repeat(spaces)

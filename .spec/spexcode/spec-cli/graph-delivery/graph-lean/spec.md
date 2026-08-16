@@ -75,6 +75,11 @@ so closing that record removes both the graph row and its pointer; a later sessi
 
 **Demand routes own rows all the way down.** `/api/specs/lite` remains the node prose corpus but carries no
 scenario declarations; the search palette requests its bounded Issue/Eval planes through [[paged-review]].
+Those page-1 slices are summaries, not dead ends: beside the ranked matches, the palette exposes native
+keyboard-reachable anchors to the canonical Issues and Evals lists, preserving the current query and naming
+each plane's server total. The anchors are commands outside the ranked results, so pagination metadata never
+masquerades as a matched entity and every scenario's full declared prose remains reachable without restoring
+scenario rows to the graph or lite corpus.
 The node popup requests `node:`-filtered Issue rows and a paged Eval timeline through the same protocol.
 A direct Eval detail loads only the selected scenario's complete A/B history plus at most five lightweight
 ordered neighbors through [[paged-review]]'s ONE bounded detail projection; trunk and scoped sources share

@@ -5,6 +5,7 @@ import { repoRoot } from '@spexcode/spec-core'
 import { resourceBudgets, type ResourceReport } from './host-resources.js'
 import { envSessionId, listSessionIds, readPublicRecordEntry } from '@spexcode/spec-core'
 import { cockpitReview, type CockpitReview } from './cockpit.js'
+import type { SessionEvalRevision } from '@spexcode/spec-eval/sessioneval'
 import { apiBaseInfo, assertProjectMatch, findSessionClosure, fromRaw, optionArgv, resolveSession, toSession, type DisplayStatus, type Session, type SessionClosure, type Resolved, type DispatchResult, type ReviewPayload } from './sessions.js'
 import { resolveMachinePeer } from './machine-peer.js'
 
@@ -338,27 +339,41 @@ type SessionEvalPage = {
   unknown: number
   revision: string
   summary?: any
-  evalRevision?: any
+  evalRevision?: SessionEvalRevision
 }
 export type EvalsResult = { ok: true; model: SessionEvalPage & { id: string } } | { ok: false; status: number }
+
+const evalRevisionKey = (revision: SessionEvalRevision): string =>
+  JSON.stringify([revision.epoch, revision.generation, revision.content])
+
+const formatEvalRevision = (revision: SessionEvalRevision | undefined): string =>
+  revision ? `${revision.epoch}@${revision.generation} (${revision.content})` : 'missing'
+
 export async function clientEvals(id: string): Promise<EvalsResult> {
   const q = encodeURIComponent(`is:eval scope:${id}`)
+  const drifts: string[] = []
   for (let attempt = 0; attempt < 2; attempt++) {
     const items: any[] = []
     let first: SessionEvalPage | null = null
-    let changed = false
+    let snapshot: SessionEvalRevision | null = null
     for (let page = 1;; page++) {
       const r = await apiFetch(`/api/evals?q=${q}&page=${page}`)
       if (!r.ok) return { ok: false, status: r.status }
       const current = await r.json() as SessionEvalPage
       first ??= current
-      if (current.revision !== first.revision) { changed = true; break }
+      if (current.pageCount > 1 && !current.evalRevision) {
+        throw new BackendError(`session eval page ${page}/${current.pageCount} for ${id} has no evalRevision; cannot assemble a consistent snapshot`)
+      }
+      snapshot ??= current.evalRevision ?? null
+      if (current.evalRevision && snapshot && evalRevisionKey(current.evalRevision) !== evalRevisionKey(snapshot)) {
+        drifts.push(`attempt ${attempt + 1}: ${formatEvalRevision(snapshot)} -> ${formatEvalRevision(current.evalRevision)} at page ${page}`)
+        break
+      }
       items.push(...current.items)
-      if (page >= current.pageCount) break
+      if (page >= current.pageCount) return { ok: true, model: { ...first, id, items } }
     }
-    if (!changed) return { ok: true, model: { ...first!, id, items } }
   }
-  throw new BackendError(`session eval pages changed while fetching ${id}; retry the command`)
+  throw new BackendError(`session eval snapshot changed during both fetch attempts for ${id} (${drifts.join('; ')}); retry the command`)
 }
 
 // POST /api/sessions/:id/merge — a human merge intent dispatched to the session's own agent.

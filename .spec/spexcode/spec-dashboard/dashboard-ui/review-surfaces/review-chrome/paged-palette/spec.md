@@ -25,10 +25,16 @@ the shared server matcher, so the palette preserves each response's stable order
 IDF a second time to a match-only page. In particular, an exact query returning one review row remains one
 visible hit; it cannot collapse to zero because every document in that filtered slice contains the query.
 
-Every selectable palette row is a real matched node, session, Issue, or scenario. The review responses'
+Every selectable result row is a real matched node, session, Issue, or scenario. The review responses'
 pagination totals are transport metadata, not searchable entities: the palette never appends synthetic
-"showing N of M" / see-all rows to its ranked results. The canonical Issues and Evals lists remain available
-through the dashboard's normal navigation rather than masquerading as matches.
+"showing N of M" rows to its ranked results. Instead, a quiet command row below those results exposes one
+native anchor per non-empty review plane: **all Issues · N** and **all Evals · N**, where `N` is that page-1
+response's server total. Each anchor preserves the palette's current committed text in the canonical list
+query and is reached by ordinary Tab/Enter after the search input; it does not join Arrow-key entity ranking.
+The same un-nested anchors stay inside the palette at the narrowest desktop width; below that breakpoint the
+separate phone face remains unchanged and does not mount this desktop palette. Thus the bounded summary has a
+direct route to every matching Issue and every scenario's full declared prose without moving rows back into
+the graph or lite corpus.
 
 An Issue hit routes to its detail. A measured Eval hit routes to its detail; a blind scenario routes to the
 canonical node-filtered Evals list because it has no result detail. Plane boost, keyboard ownership, and

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, findSessionClosure, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sessionCreateRequest, spawnerClause, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, drainQueue, drainSession, findSessionClosure, fromRaw, turnFailureNote, turnFailureRetryDelay, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -123,7 +123,8 @@ test('Codex registration does not persist an unbound thread when exact generatio
     const root = runtimeRoot()
     mkdirSync(root, { recursive: true })
     writeFileSync(join(root, 'codex-app-server-generations.json'), '{"version":3,"revision":1,"current":null,"pending":null,"generations":{},"bindings":{}}\n')
-    assert.throws(() => markHarnessSessionId(id, 'native-thread'), /absent or reclaimed/)
+    writeFileSync(sessionArtifactPath(id, 'launch'), 'resolved task')
+    assert.throws(() => stageHarnessLaunchProof(id, 'native-thread', 'resolved task'), /absent or reclaimed/)
     assert.equal(readFileSync(sessionRecordPath(id), 'utf8'), before)
     assert.equal(readCodexGenerationLedger(root).bindings[id], undefined)
   } finally {
@@ -222,6 +223,287 @@ exit 0
 `)
   chmodSync(tmux, 0o755)
 }
+
+test('no-thread resume replays the authoritative launch payload before later durable sends', { timeout: 20_000, concurrency: false }, async () => {
+  const liveBefore = liveSessionsCensus()
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousPath = process.env.PATH
+  const originalLaunchCmd = codexHarness.launchCmd
+  const originalLaunchReady = (codexHarness as any).launchReady
+  const originalDeliver = codexHarness.deliver
+  const home = mkdtempSync(join(tmpdir(), 'spex-no-thread-resume-'))
+  process.env.SPEXCODE_HOME = home
+  const id = `no-thread-resume-${process.pid}`
+  assertIsolatedResumeStore(home, id)
+  const commandPath = join(home, 'tmux-command')
+  const launchPidPath = join(home, 'launch.pid')
+  const bin = join(home, 'bin')
+  writeResumeTmuxFixture(bin, commandPath, launchPidPath)
+  process.env.PATH = `${bin}:${previousPath}`
+  const invocationCount = join(home, 'invocation-count')
+  const firstTurnCount = join(home, 'first-turn-count')
+  const invocationArgc = join(home, 'invocation-argc')
+  const invocationPayload = join(home, 'invocation-payload')
+  const invocationThread = join(home, 'invocation-thread')
+  const helperPids = join(home, 'helper-pids')
+  const helper = join(home, 'adapter-launch.sh')
+  writeFileSync(helper, `#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$$" >> ${JSON.stringify(helperPids)}
+n=0; [ ! -f ${JSON.stringify(invocationCount)} ] || n=$(cat ${JSON.stringify(invocationCount)})
+printf '%s' "$((n + 1))" > ${JSON.stringify(invocationCount)}
+if [ "\${1-}" != "--resume" ]; then
+  f=0; [ ! -f ${JSON.stringify(firstTurnCount)} ] || f=$(cat ${JSON.stringify(firstTurnCount)})
+  printf '%s' "$((f + 1))" > ${JSON.stringify(firstTurnCount)}
+fi
+printf '%s' "$#" > ${JSON.stringify(invocationArgc)}
+printf '%s' "\${1-}" > ${JSON.stringify(invocationPayload)}
+printf '%s' "\${2-}" > ${JSON.stringify(invocationThread)}
+exec sleep 30
+`)
+  chmodSync(helper, 0o755)
+  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  const branch = execFileSync('git', ['branch', '--show-current'], { encoding: 'utf8' }).trim()
+  const resolvedLaunch = 'authoritative resolved first task\n\n- keep every byte\n- [[launch]] context'
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionArtifactPath(id, 'prompt'), 'raw originating prompt must never be replayed')
+  writeFileSync(sessionArtifactPath(id, 'launch'), resolvedLaunch)
+  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+    session_id: id, governed: true, worktree_path: worktree, branch,
+    node: 'launch', title: '', name: '', parent: '', status: 'active', proposal: '',
+    merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
+    stopped: true, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
+    launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
+  }, null, 2)}\n`)
+
+  const handedOver: string[] = []
+  let pending: Promise<Awaited<ReturnType<typeof resumeSession>>> | null = null
+  let rejectPostProofReadiness = false
+  try {
+    rmSync(sessionArtifactPath(id, 'launch'))
+    const missing = await resumeSession(id, { force: true })
+    assert.equal(missing.ok, false)
+    assert.equal(missing.refused, true)
+    assert.match(missing.error || '', /authoritative resolved launch payload is missing/)
+    assert.equal(existsSync(commandPath), false, 'missing authoritative payload refuses before any launch transport')
+    writeFileSync(sessionArtifactPath(id, 'launch'), resolvedLaunch)
+
+    const proofPath = sessionArtifactPath(id, 'launch.proof')
+
+    codexHarness.launchCmd = () => helper
+    codexHarness.deliver = async (_rec, text) => { handedOver.push(text); return { ok: true } }
+    ;(codexHarness as any).launchReady = async () => {
+      if (rejectPostProofReadiness) {
+        rejectPostProofReadiness = false
+        throw new Error('forced post-proof liveness rejection')
+      }
+      await waitUntil(() => existsSync(invocationPayload), 'recovery launch payload')
+      return { proof: { kind: 'fixture-native-id-and-rollout' }, validate: async () => true }
+    }
+
+    // This is the durable state left by the first start budget expiring before native identity/rollout proof.
+    // A later send is accepted, but cannot become the conversation's first actual task.
+    assert.deepEqual(await sendText(id, 'later durable task'), { ok: true })
+    await Promise.all([drainSession(id), drainSession(id)])
+    assert.deepEqual(handedOver, [], 'later durable send waits behind the authoritative launch payload')
+    assert.equal(readFileSync(sessionArtifactPath(id, 'launch'), 'utf8'), resolvedLaunch,
+      'the first timed-out start leaves the authoritative payload recoverable')
+
+    rejectPostProofReadiness = true
+    pending = resumeSession(id, { force: true })
+    await waitUntil(() => existsSync(invocationPayload), 'adapter first-turn acceptance')
+    assert.throws(() => stageHarnessLaunchProof(id, 'thread-recovered', `${resolvedLaunch}\nchanged`),
+      /differs from the authoritative resolved launch payload/)
+    assert.equal(existsSync(sessionArtifactPath(id, 'launch')), true, 'a mismatched proof consumes nothing')
+    assert.equal(stageHarnessLaunchProof(id, 'thread-recovered', resolvedLaunch), true)
+    assert.equal(stageHarnessLaunchProof(id, 'thread-recovered', resolvedLaunch), true,
+      'the adapter may retry the exact same durable proof')
+    assert.throws(() => stageHarnessLaunchProof(id, 'another-thread', resolvedLaunch),
+      /refusing to replace native launch proof/)
+    const postProofFailure = await pending
+    pending = null
+    assert.equal(postProofFailure.ok, false)
+    assert.match(postProofFailure.error || '', /forced post-proof liveness rejection/)
+
+    assert.equal(readFileSync(invocationArgc, 'utf8'), '1', 'recovery never creates an empty thread')
+    assert.equal(readFileSync(invocationPayload, 'utf8'), resolvedLaunch,
+      'the resolved launch payload is replayed complete as the first turn')
+    assert.equal(readFileSync(invocationCount, 'utf8'), '1', 'recovery creates one thread, without launch retries or duplicates')
+    assert.equal(readFileSync(firstTurnCount, 'utf8'), '1')
+    assert.deepEqual(handedOver, [], 'post-proof liveness failure does not release later delivery')
+    assert.equal(existsSync(sessionArtifactPath(id, 'launch')), false,
+      'adapter proof consumes the authoritative payload exactly once')
+    assert.equal(existsSync(proofPath), false, 'the committed receipt is consumed after its launch payload')
+    const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(stored.harness_session_id, 'thread-recovered')
+
+    assert.deepEqual(await resumeSession(id, { force: true }), { ok: true })
+    await waitUntil(() => readFileSync(invocationCount, 'utf8') === '2', 'idempotent native-thread resume')
+    assert.equal(readFileSync(invocationArgc, 'utf8'), '2')
+    assert.equal(readFileSync(invocationPayload, 'utf8'), '--resume')
+    assert.equal(readFileSync(invocationThread, 'utf8'), 'thread-recovered')
+    assert.equal(readFileSync(firstTurnCount, 'utf8'), '1', 'post-proof retry never invokes the first-turn path again')
+    assert.deepEqual(handedOver, ['later durable task'], 'retry drains the later task once after resuming the bound thread')
+  } finally {
+    if (pending) await pending.catch(() => {})
+    if (existsSync(helperPids)) for (const raw of readFileSync(helperPids, 'utf8').trim().split('\n')) {
+      const pid = Number(raw)
+      if (Number.isInteger(pid) && pid > 0) try { process.kill(pid, 'SIGTERM') } catch { /* already exited */ }
+    }
+    if (existsSync(launchPidPath)) {
+      const pid = Number(readFileSync(launchPidPath, 'utf8').trim())
+      if (Number.isInteger(pid) && pid > 0) try { process.kill(pid, 'SIGTERM') } catch { /* already exited */ }
+    }
+    const agentPidPath = sessionArtifactPath(id, 'agent.pid')
+    if (existsSync(agentPidPath)) {
+      const pid = Number(readFileSync(agentPidPath, 'utf8').trim())
+      if (Number.isInteger(pid) && pid > 0) try { process.kill(pid, 'SIGTERM') } catch { /* already exited */ }
+    }
+    codexHarness.launchCmd = originalLaunchCmd
+    ;(codexHarness as any).launchReady = originalLaunchReady
+    codexHarness.deliver = originalDeliver
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    process.env.PATH = previousPath
+    rmSync(home, { recursive: true, force: true })
+    assertLiveSessionsUnchanged(liveBefore, 'no-thread resume fixture')
+  }
+})
+
+test('queued proof rejection releases its slot and post-proof liveness resumes only the bound thread', { timeout: 20_000, concurrency: false }, async () => {
+  const liveBefore = liveSessionsCensus()
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousPath = process.env.PATH
+  const originalLaunchCmd = codexHarness.launchCmd
+  const originalLaunchReady = (codexHarness as any).launchReady
+  const originalDeliver = codexHarness.deliver
+  const home = mkdtempSync(join(tmpdir(), 'spex-queued-launch-proof-'))
+  process.env.SPEXCODE_HOME = home
+  const id = `queued-launch-proof-${process.pid}`
+  assertIsolatedResumeStore(home, id)
+  const commandPath = join(home, 'tmux-command')
+  const launchPidPath = join(home, 'launch.pid')
+  const bin = join(home, 'bin')
+  writeResumeTmuxFixture(bin, commandPath, launchPidPath)
+  process.env.PATH = `${bin}:${previousPath}`
+  const invocationCount = join(home, 'invocation-count')
+  const invocationArgs = join(home, 'invocation-args')
+  const firstTurnCount = join(home, 'first-turn-count')
+  const helperPids = join(home, 'helper-pids')
+  const helper = join(home, 'adapter-launch.sh')
+  writeFileSync(helper, `#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$$" >> ${JSON.stringify(helperPids)}
+n=0; [ ! -f ${JSON.stringify(invocationCount)} ] || n=$(cat ${JSON.stringify(invocationCount)})
+printf '%s' "$((n + 1))" > ${JSON.stringify(invocationCount)}
+if [ "\${1-}" != "--resume" ]; then
+  f=0; [ ! -f ${JSON.stringify(firstTurnCount)} ] || f=$(cat ${JSON.stringify(firstTurnCount)})
+  printf '%s' "$((f + 1))" > ${JSON.stringify(firstTurnCount)}
+fi
+printf '%s' "$*" > ${JSON.stringify(invocationArgs)}
+exec sleep 30
+`)
+  chmodSync(helper, 0o755)
+  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  const branch = execFileSync('git', ['branch', '--show-current'], { encoding: 'utf8' }).trim()
+  const launchPayload = 'queued authoritative first task\n\n- exact resolved context'
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionArtifactPath(id, 'launch'), launchPayload)
+  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+    session_id: id, governed: true, worktree_path: worktree, branch,
+    node: 'launch', title: '', name: '', parent: '', status: 'queued', proposal: '',
+    merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
+    stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'fixture',
+    launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
+  }, null, 2)}\n`)
+
+  const proofPath = sessionArtifactPath(id, 'launch.proof')
+  const proof = (overrides: Record<string, unknown> = {}) => ({
+    version: 1, sessionId: id, harnessId: 'codex', harnessSessionId: 'thread-queued',
+    launchPayloadHash: createHash('sha256').update(launchPayload).digest('hex'), generationId: null,
+    ...overrides,
+  })
+  const handedOver: string[] = []
+  let rejectPostProofReadiness = true
+  try {
+    codexHarness.launchCmd = () => helper
+    codexHarness.deliver = async (_rec, text) => { handedOver.push(text); return { ok: true } }
+    ;(codexHarness as any).launchReady = async () => {
+      if (rejectPostProofReadiness) {
+        rejectPostProofReadiness = false
+        throw new Error('forced post-proof queued liveness rejection')
+      }
+      return { proof: { kind: 'fixture-post-proof-live' }, validate: async () => true }
+    }
+    const rejectProof = async (contents: string, pattern: RegExp) => {
+      writeFileSync(proofPath, contents)
+      await assert.rejects(drainQueue(), pattern)
+      const rejected = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+      assert.match(rejected.note, /queued launch readiness failed/)
+      assert.equal(rejected.harness_session_id, '')
+      assert.equal(readFileSync(sessionArtifactPath(id, 'launch'), 'utf8'), launchPayload)
+      assert.equal(readFileSync(proofPath, 'utf8'), contents)
+      rmSync(proofPath)
+    }
+
+    await rejectProof('{broken', /native launch proof .* unreadable/)
+    await rejectProof(`${JSON.stringify(proof({ sessionId: 'wrong-session' }))}\n`, /governed adapter identity/)
+    await rejectProof(`${JSON.stringify(proof({ harnessId: 'codex-headless' }))}\n`, /governed adapter identity/)
+    await rejectProof(`${JSON.stringify(proof({ launchPayloadHash: 'wrong-payload' }))}\n`, /authoritative resolved launch payload/)
+    await rejectProof(`${JSON.stringify(proof({ generationId: 'wrong-generation' }))}\n`, /absent or reclaimed/)
+
+    await drainQueue()
+    await waitUntil(() => existsSync(invocationCount), 'queued first-turn launch')
+    assert.equal(readFileSync(invocationCount, 'utf8'), '1', 'removing the bad proof makes the next drain launch once')
+    assert.equal(readFileSync(firstTurnCount, 'utf8'), '1')
+    assert.equal(readFileSync(invocationArgs, 'utf8'), launchPayload)
+    assert.deepEqual(await sendText(id, 'later durable task'), { ok: true })
+    assert.deepEqual(handedOver, [])
+    assert.equal(stageHarnessLaunchProof(id, 'thread-queued', launchPayload), true)
+    assert.throws(() => stageHarnessLaunchProof(id, 'wrong-thread', launchPayload), /refusing to replace native launch proof/)
+    await waitUntil(() => /forced post-proof queued liveness rejection/.test(
+      JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).note || ''), 'post-proof queued liveness note')
+    await sleep(0)
+
+    const rejectedLiveness = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(rejectedLiveness.harness_session_id, 'thread-queued')
+    assert.equal(existsSync(sessionArtifactPath(id, 'launch')), false)
+    assert.equal(existsSync(proofPath), false)
+    assert.equal(readFileSync(invocationCount, 'utf8'), '1')
+    assert.deepEqual(handedOver, [], 'post-proof liveness rejection does not drain later delivery')
+
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify({ ...rejectedLiveness, status: 'queued' }, null, 2)}\n`)
+    await drainQueue()
+    const slotRetry = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.match(slotRetry.note, /authoritative resolved launch payload is missing/,
+      'the next drain reaches the record only after the asynchronous slot is released')
+    assert.equal(readFileSync(invocationCount, 'utf8'), '1')
+
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify({ ...slotRetry, status: 'active', stopped: true, note: '' }, null, 2)}\n`)
+    assert.deepEqual(await resumeSession(id, { force: true }), { ok: true })
+    await waitUntil(() => readFileSync(invocationCount, 'utf8') === '2', 'bound-thread resume')
+    assert.equal(readFileSync(invocationArgs, 'utf8'), '--resume thread-queued')
+    assert.equal(readFileSync(firstTurnCount, 'utf8'), '1', 'identity-only retry never calls the first-turn path')
+    assert.deepEqual(handedOver, ['later durable task'])
+  } finally {
+    if (existsSync(helperPids)) for (const raw of readFileSync(helperPids, 'utf8').trim().split('\n')) {
+      const pid = Number(raw)
+      if (Number.isInteger(pid) && pid > 0) try { process.kill(pid, 'SIGTERM') } catch { /* already exited */ }
+    }
+    if (existsSync(launchPidPath)) {
+      const pid = Number(readFileSync(launchPidPath, 'utf8').trim())
+      if (Number.isInteger(pid) && pid > 0) try { process.kill(pid, 'SIGTERM') } catch { /* already exited */ }
+    }
+    codexHarness.launchCmd = originalLaunchCmd
+    ;(codexHarness as any).launchReady = originalLaunchReady
+    codexHarness.deliver = originalDeliver
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    process.env.PATH = previousPath
+    rmSync(home, { recursive: true, force: true })
+    assertLiveSessionsUnchanged(liveBefore, 'queued launch proof fixture')
+  }
+})
 
 test('resume holds the launch-readiness fence after shared-runtime spawn until the adapter validates', { timeout: 20_000, concurrency: false }, async () => {
   const liveBefore = liveSessionsCensus()

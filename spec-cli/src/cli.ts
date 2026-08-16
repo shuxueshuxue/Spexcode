@@ -1348,11 +1348,11 @@ if (cmd === 'serve') {
     console.log(`sock=${quote(endpoint.socketPath)}; pid=${quote(endpoint.pidFile)}; receipt=${quote(endpoint.receiptFile)}; log=${quote(endpoint.logFile)}; export SPEXCODE_CODEX_GENERATION=${quote(endpoint.id)}`)
   } else if (sub === 'codex-launch') {
     // BACKEND-owned codex thread. On the shared per-project app-server: thread/start { cwd = this worktree }
-    // (codex loads that worktree's config/hooks/AGENTS.md), store the new id on the governed record (keyed by
-    // SPEXCODE_SESSION_ID), fire the launch prompt as the FIRST turn — materializing the rollout — and print the
-    // thread id. The launch script then `resume`s it in the visible TUI.
+    // (codex loads that worktree's config/hooks/AGENTS.md), fire the launch prompt as the FIRST turn —
+    // materializing the rollout — then stage the id + exact-payload proof for the session lifecycle owner and
+    // print the thread id. The launch script then `resume`s it in the visible TUI.
     const { codexStartThread, codexTurn, waitForCodexRollout, codexBinary, codexSupportsBypassHookTrust, codexLauncherThreadPolicy } = await import('./harness.js')
-    const { markHarnessSessionId } = await import('./sessions.js')
+    const { stageHarnessLaunchProof } = await import('./sessions.js')
     const sock = process.argv[4], cwd = process.argv[5]
     const prompt = process.argv.slice(6).join(' ')
     if (!sock || !cwd) { console.error('usage: spex internal codex-launch <sock> <cwd> [prompt...]'); process.exit(2) }
@@ -1381,7 +1381,7 @@ if (cmd === 'serve') {
       }
     }
     const sid = process.env.SPEXCODE_SESSION_ID
-    if (sid) markHarnessSessionId(sid, r.threadId)
+    if (sid) stageHarnessLaunchProof(sid, r.threadId, prompt)
     console.log(r.threadId)
   } else if (sub === 'opencode-capture') {
     // opencode MINTS its own session id (no launch flag pins it), so the generated plugin's FIRST event calls

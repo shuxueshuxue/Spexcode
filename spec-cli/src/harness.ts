@@ -297,6 +297,9 @@ export interface Harness {
   // commit. Null at the deadline is a launch failure; adapters without this seam retain the generic bounded
   // liveness fence.
   launchReady?(current: () => HarnessLaunchReadyRecord | null, deadline: number): Promise<HarnessLaunchReadinessFence | null>
+  // Native identity and the first durable turn are established asynchronously by this adapter. Session
+  // lifecycle retains its authoritative launch payload until the adapter completes that proof.
+  launchPayloadProof?: true
   // Exact leaf ownership evidence consumed by lifecycle teardown. The adapter returns the one argv identity
   // token it registered for this record (session id, harness thread/generation, or null when unprovable);
   // product lifecycle code never branches on harness names to invent this identity.
@@ -365,9 +368,9 @@ export interface Harness {
   // conversation (`--resume <id>`, the id we pinned at launch). codex's own thread id is un-pinnable on the
   // launch flag, so the BACKEND owns it: it `thread/start`s the thread and stores the id at launch, so reopen
   // resumes the SAME conversation via codex's own `resume <thread-id>` subcommand (the stored harnessSessionId,
-  // its rollout persisted on disk). Only a session whose thread id was never stored relaunches FRESH (empty
-  // tail) in the same worktree/record — there is nothing to resume.
-  resumeArg(rec: { session: string; harnessSessionId?: string | null }): string
+  // its rollout persisted on disk). An adapter may use the authoritative pending launch payload to recover a
+  // pre-identity launch; absence remains a loud adapter decision rather than an implicit empty tail.
+  resumeArg(rec: { session: string; harnessSessionId?: string | null }, pendingLaunchPayload?: string | null): string
 }
 
 // `ok` describes only this round's immediate adapter poke: the socket write, native controller request, or
@@ -862,8 +865,8 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     // TWO launch modes, on ONE tail channel ("$@"). reopen() hands a `--resume <thread-id>` tail (see
     // codexHarness.resumeArg) to bring the SAME conversation back: resume that OWNED thread DIRECTLY — no new
     // thread, no first-turn prompt. ANY other tail is a NEW launch: BACKEND owns the thread — `codex-launch`
-    // does thread/start { cwd = this worktree } on the shared per-project app-server, stores the new id on the
-    // governed record (SPEXCODE_SESSION_ID), and fires the tail as the FIRST turn, materializing the rollout.
+    // does thread/start { cwd = this worktree } on the shared per-project app-server, fires the tail as the
+    // FIRST turn, materializes the rollout, and stages the new id + payload proof for the lifecycle owner.
     // Either way it ends with a thread id, which the visible TUI then RESUMES (the rollout persists on disk),
     // rendering it natively. A new launch's tail is always ONE single-quoted prompt arg, so it can never be the
     // literal "--resume" marker — the discriminator is unambiguous. codex-launch only prints an id once its
@@ -2656,8 +2659,16 @@ function codexRuntimeDescriptors(runtimeDir: string): SharedRuntimeDescriptor[] 
     .map((endpoint) => codexRuntimeDescriptor(endpoint, runtimeDir))
 }
 
+function codexResumeArg(rec: { session: string; harnessSessionId?: string | null }, pendingLaunchPayload?: string | null): string {
+  if (rec.harnessSessionId) return `--resume ${rec.harnessSessionId}`
+  if (pendingLaunchPayload == null)
+    throw new Error(`session ${rec.session}: native identity is absent and the authoritative resolved launch payload is missing; refusing to create an empty thread`)
+  return shQuote(pendingLaunchPayload)
+}
+
 export const codexHarness: Harness = {
   id: 'codex',
+  launchPayloadProof: true,
   dispatchId: 'codex',
   headless: false,
   sharedRuntimeSpawn: true,
@@ -2869,8 +2880,8 @@ export const codexHarness: Harness = {
   sharedRuntimes: codexRuntimeDescriptors,
   // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
   // a tail handed to a bare `codex` — the script's final `codex … resume "$tid"` performs codex's own resume on
-  // the owned id, the SAME conversation); none → empty tail → relaunch a FRESH thread on the same worktree/record.
-  resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : ''),
+  // the owned id, the SAME conversation); no identity → replay the authoritative resolved launch payload.
+  resumeArg: codexResumeArg,
   // codex's own settled failure: a thread id whose rollout is not on disk can never be resumed, so the launch
   // that says so has already decided. (Its transient sibling — the rollout still being written — is handled
   // BEFORE launch by waitForCodexRollout, so what reaches here is the permanent case.)
@@ -2973,6 +2984,7 @@ async function codexHeadlessReadinessProof(current: () => HarnessLaunchReadyReco
 export const codexHeadlessHarness: Harness = {
   ...codexHarness,
   id: 'codex-headless',
+  launchPayloadProof: true,
   sessionEnvVar: harnessIdentity('codex-headless').sessionEnvVar,
   headless: true,
   runtimeOwnership: 'adapter',
@@ -2996,9 +3008,9 @@ export const codexHeadlessHarness: Harness = {
       await new Promise((resolve) => setTimeout(resolve, Math.min(200, remaining)))
     }
   },
-  // There is no TUI to restart and the project app-server keeps the thread addressable. A forced reopen therefore
-  // runs the headless launch's empty-tail no-op; normal resume remains guarded by record-backed online liveness.
-  resumeArg: () => '',
+  // There is no TUI to restart and the project app-server keeps an identified thread addressable. A pre-identity
+  // recovery still replays the authoritative resolved launch payload through codex-launch.
+  resumeArg: codexResumeArg,
 }
 
 // @@@ piHarness - the pi adapter (@earendil-works/pi-coding-agent). pi is the CLOSEST to claude of the four:

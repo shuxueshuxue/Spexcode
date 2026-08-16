@@ -59,6 +59,12 @@ background wait (leave it alone) versus a dead stop that won't move until a huma
 They carry distinct faces, so the board never reads "stuck, needs me" as "fine, self-resuming," or the
 reverse — and a still-going `parked` agent is never mistaken for one with something to act on.
 
+For adapters whose native id is minted at launch, absence of `harness_session_id` while the authoritative
+resolved `launch` payload remains is a recoverable pre-identity launch, not permission to create an empty
+conversation. Resume replays that payload through the adapter; only the adapter's proof that identity and the
+first durable turn both landed may bind `harness_session_id` and consume it. A missing payload leaves the record
+unchanged and refuses loudly.
+
 **Lifecycle and liveness are two orthogonal axes; neither overrides the other.** A session carries two
 independent facts, computed independently (a third, the human's `archived` filing decision, is orthogonal to
 BOTH and owned by [[archive]] — it never reads as a status and never rewrites one):
@@ -199,8 +205,8 @@ declared state (measured: a park erased within seconds, the session reading `wor
 hooks run inside the shared per-project app-server, whose env can carry another session's
 `SPEXCODE_SESSION_ID`, so Codex hook state starts from the payload `session_id` (the acting thread id) and aliases
 that through `harness_session_id` to the governed SpexCode record. That alias is created by the backend launch
-path: `spex internal codex-launch` asks the shared app-server to `thread/start { cwd }`, stores the returned thread id on
-the governed record, then fires the first prompt. The global record path is project key from the git common dir →
+path: `spex internal codex-launch` asks the shared app-server to `thread/start { cwd }`, fires and persists the
+first prompt, then stages the returned thread id for the lifecycle owner to bind on the governed record. The global record path is project key from the git common dir →
 `<store>/projects/<enc>/sessions/<id>/session.json`.
 The hooks split on the `governed` flag. The **board-lifecycle** hooks below (mark-active, the Stop gate,
 StopFailure→error, idle) act ONLY when that record reads `governed: true`; on a non-governed (user-self-launched)

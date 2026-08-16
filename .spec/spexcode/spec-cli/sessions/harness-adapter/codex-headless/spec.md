@@ -29,7 +29,8 @@ unchanged. There is no second materializer and no headless branch in materialize
 
 The launch command reuses Codex's existing app-server bootstrap and `spex internal codex-launch` path. A fresh
 launch starts the stable per-project app-server, calls `thread/start` for the governed worktree, sends the launch
-prompt as the first turn, waits for the rollout to persist, and stores the returned thread id. It then exits;
+prompt as the first turn, waits for the rollout to persist, and stages the returned thread id plus exact-payload
+proof for the session lifecycle owner to bind under its record lock. It then exits;
 there is deliberately no `codex --remote ... resume` TUI attach and no resident controller in the pane. The
 shared app-server remains alive for every thread in the project. Its adapter marks this launch as one-shot so
 the generic fast-exit recovery loop does not replay a successful first prompt into a duplicate thread.
@@ -48,7 +49,8 @@ The session record is the liveness address: while it exists and is not explicitl
 `online` regardless of the empty pane or process probes. `headless: true` keeps it out of the dashboard launcher
 picker by default and the note conversation is the console trunk. Human `stop` tears down the session runtime
 and marks the retained record stopped, so it reads `offline` until a proven resume clears the marker. Resume is
-the no-TUI form: `resumeArg` is empty because there is no TUI to reattach, but an absent shared server must be
+the no-TUI form: an identified thread resumes by its exact marker, while a pre-identity recovery replays the
+authoritative resolved launch payload; an absent shared server must be
 recreated through the canonical delegated spawn before the record can return online. The adapter's launch
 readiness is stricter than its steady-state record liveness: it proves one unchanged version-4 detached-launch
 receipt through the shared process adapter (exact PID/start and process group everywhere, plus `/proc` session on

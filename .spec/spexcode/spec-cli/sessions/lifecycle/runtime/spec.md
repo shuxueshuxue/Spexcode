@@ -16,14 +16,14 @@ related:
 ## raw source
 
 A session has runtime bookkeeping the harness scribbles for it — the lifecycle record, the originating
-prompt, a queued session's launch prompt, the launch script, the recorded inter-agent comms. None of it is
+prompt, the authoritative resolved launch payload until first-turn proof, the launch script, the recorded inter-agent comms. None of it is
 the agent's spec/code work, and putting any of it in the worktree was the
 root of two problems: it polluted the tree the agent commits, and it forced a 1:1 worktree↔session identity
 (a path key), so two agents in one folder would clobber. So the runtime lives OUTSIDE the worktree entirely,
 in a per-user GLOBAL store keyed by SpexCode's governed **`session_id`** — the worktree is left pristine
 (zero SpexCode files), and each agent gets its own record even when several share a folder. Claude Code's
-harness id equals that governed id; Codex mints its own thread id, so the backend stores that separately as
-`harness_session_id` when `codex-launch` completes `thread/start` for the worktree.
+harness id equals that governed id; Codex mints its own thread id, so the adapter stages it after first-turn
+durability and the lifecycle owner stores it separately as `harness_session_id`.
 
 ## expanded spec
 
@@ -42,7 +42,8 @@ a file in that dir:
 |---|---|
 | `session.json` | `readRecord` / `writeRecord` — the structured lifecycle record ([[state]]): state, governed, worktree_path, node, branch, createdAt, harness_session_id, … |
 | `prompt` | the originating human ask ([[launch]]) |
-| `launch` | the deferred launch prompt of a still-queued session ([[launch]]) |
+| `launch` | the authoritative resolved first-turn payload, retained through queue drain and failed launch until adapter proof consumes it ([[launch]]) |
+| `launch.proof` | the adapter's narrow staged receipt (native id, payload hash, runtime generation) after first-turn durability; the session lifecycle owner consumes it with `launch` under the record lock ([[harness-adapter]]) |
 | `launch.sh` | the whole launch invocation (`launchScript`, run via `bash <abs path>`) |
 | `rv.path` | the rendezvous socket THIS runtime handed the agent at launch ([[harness-adapter]]) — a launch-time fact like the pid, so every later reader reaches the agent by the path it actually bound rather than re-deriving one, and two worlds holding the same id never share a transport |
 | `spec-checked` / `spec-of-file-seen` | the [[inject-spec-first]] / [[inject-spec-of-file]] once-per-session sentinel + ledger |

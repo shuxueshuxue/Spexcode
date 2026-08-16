@@ -1,7 +1,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync } from 'node:fs'
 import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
@@ -167,9 +167,10 @@ function readPromptFile(id: string): string | null {
     return s.trim() ? s : null
   } catch { return null }
 }
-// Persist queued launch input across restarts; consume it once the launch begins.
+// The resolved first-turn payload is authoritative across queue drain and recovery. Adapters that mint native
+// identity keep it until they prove identity + first-turn durability; other adapters consume on submission.
 function writeLaunchFile(id: string, prompt: string): void {
-  try { writeFileSync(join(storeDir(id), 'launch'), prompt) } catch { /* best-effort; the drainer treats a missing file as nothing-to-launch */ }
+  writeFileSync(join(storeDir(id), 'launch'), prompt)
 }
 function readLaunchFile(id: string): string | null {
   try { const p = sessionArtifactPath(id, 'launch'); return existsSync(p) ? readFileSync(p, 'utf8') : null } catch { return null }
@@ -1469,6 +1470,34 @@ async function withSessionTransition<T>(id: string, body: () => Promise<T>): Pro
 }
 let draining = false   // re-entrancy guard: only one drain pass runs at a time (no double-launch)
 
+function noteQueuedLaunchFailureUnlocked(id: string, error: unknown): void {
+  const reason = error instanceof Error ? error.message : String(error)
+  const note = `queued launch readiness failed: ${reason}`
+  console.error(`spex: session ${id}: ${note}`)
+  const rec = readRecord(id)
+  if (rec && rec.note !== note) writeRecord({ ...rec, note })
+}
+
+function observeQueuedLaunchReadiness(id: string, harness: Harness): void {
+  void waitForReady(id, harness)
+    .then((readiness) => {
+      if (harness.launchPayloadProof && !readiness) {
+        const committed = !!readRecord(id)?.harnessSessionId
+        throw new ResourceConflict(committed
+          ? 'post-proof adapter liveness did not become ready before launch readiness timed out'
+          : 'native identity and first-turn rollout proof did not arrive before launch readiness timed out')
+      }
+      return drainSession(id)
+    })
+    .catch(async (error) => {
+      try { await withRecordLock(id, async () => noteQueuedLaunchFailureUnlocked(id, error)) }
+      catch (recordError) {
+        console.error(`spex: session ${id}: queued launch failure could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}; original failure: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    })
+    .finally(() => launching.delete(id))
+}
+
 // launch a prepared `queued` worktree: feed it its parked launch prompt, flip it to active. Returns false
 // (leaving it queued, to be retried next drain) if the worktree/prompt is gone or the tmux launch threw.
 async function startQueuedUnlocked(id: string): Promise<boolean> {
@@ -1477,8 +1506,34 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
   if (!wt) return false
   if (archiving.has(id) || wt.rec.archived) return false
   if (!canDrainQueued(wt.rec)) return false
+  const h = harnessById(wt.rec.harness || defaultHarness.id)
+  if (h.launchPayloadProof && existsSync(sessionArtifactPath(id, 'launch.proof'))) {
+    launching.add(id)
+    let readinessOwnsSlot = false
+    try {
+      try { consumeHarnessLaunchProofUnlocked(id) }
+      catch (error) {
+        noteQueuedLaunchFailureUnlocked(id, error)
+        throw error
+      }
+      const recovered = readRecord(id) || wt.rec
+      writeRecord({ ...recovered, status: 'active', proposal: null, note: null, launchOwner: null })
+      observeQueuedLaunchReadiness(id, h)
+      readinessOwnsSlot = true
+      return true
+    } finally {
+      if (!readinessOwnsSlot) launching.delete(id)
+    }
+  }
   const launchPrompt = readLaunchFile(id)
-  if (launchPrompt == null) return false   // a queued session always has one; if it's gone, don't spin on it
+  if (launchPrompt == null) {
+    const message = `authoritative resolved launch payload is missing for queued session ${id}; refusing to create an empty thread`
+    if (wt.rec.note !== message) {
+      console.error(`spex: ${message}`)
+      writeRecord({ ...wt.rec, note: message })
+    }
+    return false
+  }
   // a queued worktree can go missing while it waits (a human cleaned up, a disk moved). Draining it would open
   // a window that fast-exits and burn the retry budget every tick, so refuse ONCE, loudly, and stamp the reason
   // on the record — the drainer then leaves it alone instead of spinning on a launch that cannot work.
@@ -1491,24 +1546,29 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
     return false
   }
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
-  const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness (also drives waitForReady below)
+  let readinessOwnsSlot = false
   try {
-    const sq = shQuote(launchPrompt)
-    await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
-  } catch {
-    launching.delete(id)
-    return false   // launch failed → stays `queued`, retried on the next drain tick
+    try {
+      const sq = shQuote(launchPrompt)
+      await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
+    } catch {
+      return false   // launch failed → stays `queued`, retried on the next drain tick
+    }
+    // the note this record may carry is the QUEUED state's word (a launch-blocker message stamped above); the
+    // launch just succeeded, so it is spent. Clearing it with the transition is what keeps "a stored note
+    // belongs to the state currently declared" true for every writer — the invariant [[session-label]]'s
+    // headline precedence stands on.
+    const launched = readRecord(id) || wt.rec
+    writeRecord({ ...launched, status: 'active', proposal: null, note: null, launchOwner: null })
+    if (!h.launchPayloadProof) removeLaunchFile(id)
+    // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
+    // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.
+    observeQueuedLaunchReadiness(id, h)
+    readinessOwnsSlot = true
+    return true
+  } finally {
+    if (!readinessOwnsSlot) launching.delete(id)
   }
-  // the note this record may carry is the QUEUED state's word (a launch-blocker message stamped above); the
-  // launch just succeeded, so it is spent. Clearing it with the transition is what keeps "a stored note
-  // belongs to the state currently declared" true for every writer — the invariant [[session-label]]'s
-  // headline precedence stands on.
-  writeRecord({ ...wt.rec, status: 'active', proposal: null, note: null, launchOwner: null })
-  removeLaunchFile(id)   // consumed
-  // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
-  // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.
-  void waitForReady(id, h).finally(() => launching.delete(id))
-  return true
 }
 const startQueued = (id: string): Promise<boolean> => withSessionTransition(id, () => withRecordLock(id, () => startQueuedUnlocked(id)))
 
@@ -2368,7 +2428,7 @@ const SOCKET_READY_TIMEOUT_MS = 30000   // spans launchScript's bounded fast-fai
                                         // waitForReady (slot-hold + resume) waits through a daemon-race retry
                                         // instead of returning before a recovering socket
 const SOCKET_POLL_MS = 200
-async function waitForReady(id: string, harness: Harness, pending?: SessRec, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<HarnessLaunchReadinessFence | null> {
+async function waitForReady(id: string, harness: Harness, pending?: SessRec, timeoutMs = SOCKET_READY_TIMEOUT_MS, recordLockHeld = false): Promise<HarnessLaunchReadinessFence | null> {
   const current = () => {
     const stored = readRecord(id)
     const rec = stored && pending
@@ -2377,6 +2437,17 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
     return rec ? { ...rec, runtimeDir: runtimeRoot() } : null
   }
   const deadline = Date.now() + timeoutMs
+  if (harness.launchPayloadProof && !current()?.harnessSessionId) {
+    for (;;) {
+      if (existsSync(sessionArtifactPath(id, 'launch.proof'))) {
+        if (recordLockHeld) consumeHarnessLaunchProofUnlocked(id)
+        else await withRecordLock(id, async () => consumeHarnessLaunchProofUnlocked(id))
+        break
+      }
+      if (Date.now() >= deadline) return null
+      await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
+    }
+  }
   if (harness.launchReady) return harness.launchReady(current, deadline)
   const genericFence = (): HarnessLaunchReadinessFence => ({
     proof: Object.freeze({ kind: 'adapter-liveness', harnessId: harness.id, sessionId: id }),
@@ -2424,6 +2495,14 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   const blocked = launchPreflight(wt.rec)
   if (blocked) return { ok: false, refused: true, error: blocked.message }
   const h = harnessById(wt.rec.harness || defaultHarness.id)
+  // A prior adapter process may have proven identity + first-turn durability just before its session owner
+  // died. Consume that receipt before choosing a recovery tail, so retry resumes the proven thread instead of
+  // creating another one with the same first prompt.
+  if (h.launchPayloadProof && existsSync(sessionArtifactPath(id, 'launch.proof'))) {
+    consumeHarnessLaunchProofUnlocked(id)
+    wt = await findWorktree(id)
+    if (!wt) return { ok: false, error: `session ${id} disappeared while recovering native launch proof` }
+  }
   // An archived record is expected to be stopped, but the guard must still inspect physical liveness in case
   // it is a legacy/invariant-violating row. Ignore filing and stale stop metadata for this one safety probe so
   // resume can never kill a live leaf merely because the record was hidden.
@@ -2463,15 +2542,20 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   const current = wasArchived ? (readRecord(id) || { ...wt.rec, archived: false, stopped: true, coldProof: null }) : wt.rec
   const resumed: SessRec = { ...current, archived: false, coldProof: null, status: current.status === 'active' ? 'idle' : current.status, stopped: false }
   if (force || lv === 'offline') {
+    let resumeTail: string
+    try { resumeTail = h.resumeArg(wt.rec, readLaunchFile(id)).trim() }
+    catch (error) {
+      return { ok: false, refused: true, error: error instanceof Error ? error.message : String(error) }
+    }
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane (or a force-killed live one)
-    await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec))
+    await launch(id, wt.path, resumeTail, h, launcherCmd(wt.rec))
     let readiness: HarnessLaunchReadinessFence | null = null
     let readinessError = ''
-    try { readiness = await waitForReady(id, h, resumed) }
+    try { readiness = await waitForReady(id, h, resumed, SOCKET_READY_TIMEOUT_MS, true) }
     catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
     if (!readiness) {
       const failed = readRecord(id) || current
-      writeRecord({ ...failed, ...preResume, launchReadinessPending: null })
+      writeRecord({ ...failed, ...preResume, harnessSessionId: failed.harnessSessionId, launchReadinessPending: null })
       return {
         ok: false,
         refused: true,
@@ -2509,7 +2593,11 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   return { ok: true }
 }
 export const resumeSession = (id: string, opts: ResumeOptions = {}) =>
-  withSessionTransition(id, () => withRecordLock(id, () => resumeSessionUnlocked(id, opts)))
+  withSessionTransition(id, async () => {
+    const result = await withRecordLock(id, () => resumeSessionUnlocked(id, opts))
+    if (result.ok) await drainSession(id)
+    return result
+  })
 
 export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?: string; sessionId?: string } = {}): boolean {
   const id = opts.sessionId || ownSessionId()
@@ -2542,44 +2630,152 @@ export function markHeadlessTurnFailure(sessionId: string, harness: string, exit
   const outcome = /^\d+$/.test(exitCode) ? `exit code ${exitCode}` : `signal ${exitCode}`
   return markTurnFailure(sessionId, `${harness} turn exited with ${outcome}`)
 }
+function bindHarnessSessionIdUnlocked(rec: SessRec, harnessSessionId: string, generationId = process.env.SPEXCODE_CODEX_GENERATION?.trim()): void {
+  const id = rec.session
+  if (rec.harnessSessionId && rec.harnessSessionId !== harnessSessionId)
+    throw new ResourceConflict(`refusing to replace exact harness thread identity for ${id}; create a new governed session instead`)
+  const codex = rec.harness === 'codex' || rec.harness === 'codex-headless'
+  const root = runtimeRoot()
+  let priorBinding: ReturnType<typeof codexGenerationBindingForSession> = null
+  let registrationPrepared = false
+  if (codex) {
+    const ledger = readCodexGenerationLedger(root)
+    if (ledger.revision > 0 && !generationId) throw new ResourceConflict(`refusing to bind Codex thread ${harnessSessionId}: launch did not provide an exact generation id`)
+    priorBinding = codexGenerationBindingForSession(root, id)
+    if (priorBinding && (!generationId || priorBinding.generationId !== generationId || priorBinding.threadId !== harnessSessionId))
+      throw new ResourceConflict(`refusing to replace exact Codex generation binding for ${id}`)
+    if (generationId && !priorBinding) {
+      prepareCodexGenerationRegistration(root, id, harnessSessionId, generationId)
+      registrationPrepared = true
+    }
+  }
+  try {
+    writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
+  } catch (error) {
+    if (codex && generationId && registrationPrepared) {
+      try { bindCodexGeneration(root, id, harnessSessionId, null) }
+      catch (rollback) {
+        throw new ResourceConflict(`Codex generation binding persisted but session ${id} record write failed and rollback failed: ${rollback instanceof Error ? rollback.message : String(rollback)}`)
+      }
+    }
+    throw error
+  }
+  if (codex && generationId) commitCodexGenerationRegistration(root, id, harnessSessionId, generationId)
+}
+
+type StagedHarnessLaunchProof = {
+  version: 1
+  sessionId: string
+  harnessId: string
+  harnessSessionId: string
+  launchPayloadHash: string
+  generationId: string | null
+}
+
+function readHarnessLaunchProof(id: string): StagedHarnessLaunchProof {
+  try {
+    const proof = JSON.parse(readFileSync(sessionArtifactPath(id, 'launch.proof'), 'utf8')) as Partial<StagedHarnessLaunchProof> | null
+    if (!proof || proof.version !== 1 || typeof proof.sessionId !== 'string'
+      || typeof proof.harnessId !== 'string' || typeof proof.harnessSessionId !== 'string' || !proof.harnessSessionId
+      || typeof proof.launchPayloadHash !== 'string'
+      || (proof.generationId !== null && typeof proof.generationId !== 'string')) throw new Error('invalid receipt shape')
+    return proof as StagedHarnessLaunchProof
+  } catch (error) {
+    throw new ResourceConflict(`native launch proof for ${id} is unreadable: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+function sameHarnessLaunchProof(left: StagedHarnessLaunchProof, right: StagedHarnessLaunchProof): boolean {
+  return left.version === right.version && left.sessionId === right.sessionId && left.harnessId === right.harnessId
+    && left.harnessSessionId === right.harnessSessionId && left.launchPayloadHash === right.launchPayloadHash
+    && left.generationId === right.generationId
+}
+
+export function stageHarnessLaunchProof(sessionId: string | undefined, harnessSessionId: string | undefined, launchPayload: string): boolean {
+  const id = sessionId || ownSessionId()
+  if (!id || !harnessSessionId) return false
+  const rec = readLiveRecord(id)
+  if (!rec) return false
+  const harness = harnessById(rec.harness || defaultHarness.id)
+  if (!harness.launchPayloadProof)
+    throw new ResourceConflict(`harness ${harness.id} does not use native launch-payload proof`)
+  const pending = readLaunchFile(id)
+  if (pending == null)
+    throw new ResourceConflict(`refusing native launch proof for ${id}: authoritative resolved launch payload is missing`)
+  if (pending !== launchPayload)
+    throw new ResourceConflict(`refusing native launch proof for ${id}: first-turn payload differs from the authoritative resolved launch payload`)
+  const generationId = process.env.SPEXCODE_CODEX_GENERATION?.trim() || null
+  if (rec.harness === 'codex' || rec.harness === 'codex-headless') {
+    const ledger = readCodexGenerationLedger(runtimeRoot())
+    if (ledger.revision > 0 && !generationId)
+      throw new ResourceConflict(`refusing native launch proof for ${id}: launch did not provide an exact Codex generation id`)
+    if (generationId && (!ledger.generations[generationId] || ledger.generations[generationId].state === 'reclaimed'))
+      throw new ResourceConflict(`refusing to bind Codex thread ${harnessSessionId}: generation ${generationId} is absent or reclaimed`)
+  }
+  const proof: StagedHarnessLaunchProof = {
+    version: 1,
+    sessionId: id,
+    harnessId: harness.id,
+    harnessSessionId,
+    launchPayloadHash: createHash('sha256').update(launchPayload).digest('hex'),
+    generationId,
+  }
+  const path = sessionArtifactPath(id, 'launch.proof')
+  const temp = `${path}.${process.pid}.${randomUUID()}.tmp`
+  writeFileSync(temp, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 })
+  try {
+    linkSync(temp, path)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    const staged = readHarnessLaunchProof(id)
+    if (sameHarnessLaunchProof(staged, proof)) return true
+    throw new ResourceConflict(`refusing to replace native launch proof for ${id}: the staged session, thread, payload, or generation differs`)
+  } finally {
+    rmSync(temp, { force: true })
+  }
+}
+
+function consumeHarnessLaunchProofUnlocked(id: string): boolean {
+  const rec = readLiveRecord(id)
+  if (!rec) return false
+  const harness = harnessById(rec.harness || defaultHarness.id)
+  const proof = readHarnessLaunchProof(id)
+  if (proof.sessionId !== id || proof.harnessId !== harness.id)
+    throw new ResourceConflict(`native launch proof for ${id} does not match the governed adapter identity`)
+  const pending = readLaunchFile(id)
+  if (pending == null && rec.harnessSessionId !== proof.harnessSessionId)
+    throw new ResourceConflict(`refusing native launch proof for ${id}: authoritative resolved launch payload is missing`)
+  if (pending != null && proof.launchPayloadHash !== createHash('sha256').update(pending).digest('hex'))
+    throw new ResourceConflict(`native launch proof for ${id} does not match the authoritative resolved launch payload`)
+  bindHarnessSessionIdUnlocked(rec, proof.harnessSessionId, proof.generationId || undefined)
+  if (pending != null) {
+    try { rmSync(sessionArtifactPath(id, 'launch')) }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error(`spex: native launch proof committed for ${id}, but launch could not be consumed: ${error instanceof Error ? error.message : String(error)}`)
+        return true
+      }
+    }
+  }
+  try { rmSync(sessionArtifactPath(id, 'launch.proof')) }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+      console.error(`spex: native launch proof committed for ${id}, but launch.proof could not be consumed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  return true
+}
+
 export function markHarnessSessionId(sessionId: string | undefined, harnessSessionId: string | undefined): boolean {
   const id = sessionId || ownSessionId()
   if (!id || !harnessSessionId) return false
   return withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
     if (!rec) return false
-    if (rec.harnessSessionId && rec.harnessSessionId !== harnessSessionId)
-      throw new ResourceConflict(`refusing to replace exact harness thread identity for ${id}; create a new governed session instead`)
-    const codex = rec.harness === 'codex' || rec.harness === 'codex-headless'
-    const root = runtimeRoot()
-    let priorBinding: ReturnType<typeof codexGenerationBindingForSession> = null
-    let generationId: string | undefined
-    let registrationPrepared = false
-    if (codex) {
-      generationId = process.env.SPEXCODE_CODEX_GENERATION?.trim()
-      const ledger = readCodexGenerationLedger(root)
-      if (ledger.revision > 0 && !generationId) throw new ResourceConflict(`refusing to bind Codex thread ${harnessSessionId}: launch did not provide an exact generation id`)
-      priorBinding = codexGenerationBindingForSession(root, id)
-      if (priorBinding && (!generationId || priorBinding.generationId !== generationId || priorBinding.threadId !== harnessSessionId))
-        throw new ResourceConflict(`refusing to replace exact Codex generation binding for ${id}`)
-      if (generationId && !priorBinding) {
-        prepareCodexGenerationRegistration(root, id, harnessSessionId, generationId)
-        registrationPrepared = true
-      }
-    }
-    try {
-      writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
-    } catch (error) {
-      if (codex && generationId && registrationPrepared) {
-        try {
-          bindCodexGeneration(root, id, harnessSessionId, null)
-        } catch (rollback) {
-          throw new ResourceConflict(`Codex generation binding persisted but session ${id} record write failed and rollback failed: ${rollback instanceof Error ? rollback.message : String(rollback)}`)
-        }
-      }
-      throw error
-    }
-    if (codex && generationId) commitCodexGenerationRegistration(root, id, harnessSessionId, generationId)
+    const harness = harnessById(rec.harness || defaultHarness.id)
+    if (harness.launchPayloadProof)
+      throw new ResourceConflict(`harness ${harness.id} must stage native identity together with authoritative first-turn payload proof`)
+    bindHarnessSessionIdUnlocked(rec, harnessSessionId)
     return true
   })
 }
@@ -3711,6 +3907,7 @@ export async function drainSession(id: string): Promise<void> {
   const rec = readRecord(id)
   if (!rec) return
   const h = harnessById(rec.harness || defaultHarness.id)
+  if (h.launchPayloadProof && !rec.harnessSessionId) return
   await drain(id, async (msg) => {
     // the pane guard ([[harness-adapter]] deliveryBlockedBy): the ONE pane state where the harness swallows a
     // prompt its channel confirms (claude's sessions panel), checkable only from the pane. Treated as a REFUSAL

@@ -1932,12 +1932,13 @@ test('codex app-server socket path is short (sun_path-safe), stable per project,
   }
 })
 
-test('codex resumeArg is a --resume marker for the owned thread, empty when none captured', () => {
+test('codex resumeArg resumes the owned thread or replays the authoritative payload when identity is absent', () => {
   // the tail resumeSession() hands launch(): a captured thread id → `--resume <id>` (the launch script resumes that
-  // thread directly, the SAME conversation); none → empty (relaunch a fresh thread). It is NOT `resume <id>`,
-  // which the launch script would feed to codex-launch as a literal first-turn prompt.
+  // thread directly, the SAME conversation); none → the exact pending launch payload as the recovered first turn.
+  // It is NOT `resume <id>`, which the launch script would feed to codex-launch as a literal first-turn prompt.
   assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: 'th_abc' }), '--resume th_abc')
-  assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: null }), '')
+  assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: null }, 'resolved first\nturn'), "'resolved first\nturn'")
+  assert.throws(() => codexHarness.resumeArg({ session: 's1', harnessSessionId: null }), /authoritative resolved launch payload is missing/)
 })
 
 test('launchCmd cmd override wins over the ambient default (claude + codex) — the launcher-select seam', () => {

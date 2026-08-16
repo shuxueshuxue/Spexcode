@@ -401,7 +401,8 @@ surface:
   `thread/start { cwd: <this worktree> }`s on the shared server (codex resolves that worktree's per-cwd
   context — `AGENTS.md` + skills + project config — by walking the thread cwd, so one project-scoped server
   behaves analogously to a per-worktree claude launch; its PROJECT HOOKS are the one exception, read from the
-  root checkout per the events/shim point above) and stores the returned `thread.id` on the governed record as `harness_session_id` — no capture hook,
+  root checkout per the events/shim point above), proves its first durable turn, then stages the returned
+  `thread.id` for the lifecycle owner to store as `harness_session_id` — no capture hook,
   no rollout-file scan, no cwd guess. The server may register that thread before the first user message materializes
   it. In that window `thread/turns/list` returns the exact protocol refusal `is not materialized yet;
   thread/turns/list is unavailable before first user message` (or, after native cleanup, `thread not loaded: <id>`);
@@ -450,17 +451,30 @@ already interrupted, while a generation change, unreadable turn, or still-active
   replacement joins a thread already in `systemError`, the same resume response's `initialTurnsPage` supplies
   the latest turn id and completion time. A concurrent native `turn/started` cancels that historical projection,
   so an old failure cannot overwrite the new turn's active lifecycle.
-  `resumeArg(rec)` is the relaunch tail `reopen()` hands `launch()`, but the two harnesses consume that
+  `resumeArg(rec, pendingLaunchPayload)` is the relaunch tail `reopen()` hands `launch()`, but the two harnesses consume that
   tail differently and the codex side MUST honour that: **claude** `--resume <id>` is appended straight to the
   `claude` command (the SAME conversation, the id we pinned). **codex** has no bare `codex` to append to — its
   `launchCmd` is a bootstrap script that feeds the tail (`"$@"`) to `spex internal codex-launch`, which mints a NEW
   thread and fires the tail AS the first-turn prompt. So the codex resume tail is a `--resume <thread-id>`
   **marker** the script branches on: it resumes the owned thread DIRECTLY (skip `codex-launch`, no new thread,
   no prompt turn — `tid=<thread-id>`), then its final `codex … resume "$tid"` performs codex's own resume on the
-  owned id — its rollout persists on disk, the SAME conversation. Empty marker (no captured id) → a fresh thread
-  on the same worktree/record. The discriminator is sound because a new launch's tail is always ONE
+  owned id — its rollout persists on disk, the SAME conversation. With no captured id, Codex requires the
+  authoritative pending resolved launch payload and returns those exact bytes as the new thread's first prompt;
+  absence is a loud adapter refusal, never an empty fresh thread and never reconstruction from the raw
+  originating prompt. The discriminator is sound because a new launch's tail is always ONE
   single-quoted prompt arg, never the literal `--resume` — so a resume can never be mistaken for a prompt and
   fed to `codex-launch` (which would mint a NEW thread whose first message is the marker text).
+  An adapter that mints native identity during launch declares `launchPayloadProof`. Product lifecycle then
+  retains the authoritative `launch` artifact after transport submission and gates later delivery behind it.
+  The adapter stages a narrow shared proof receipt only after it has proven the native id plus first prompt
+  durability. Codex does so after `thread/start`, confirmed `turn/start`, and rollout discovery; the session
+  lifecycle owner validates the exact payload receipt, binds the id, and consumes both artifacts under the
+  record lock. Adapter
+  rows without this capability keep their existing transport-accepted consumption rule. This is one capability
+  seam, not a Codex branch in session or queue policy.
+  This receipt is the final identity-plus-first-rollout proof. The generic adapter `launchReady` fence that
+  follows it measures post-commit runtime liveness; its failure records a retryable liveness error but never
+  restores the first-turn payload or clears the proven identity, so recovery addresses the same native thread.
   The adapter also declares its own **settled launch failures** — the patterns of ITS output for a launch that
   running again cannot fix (claude: a `--resume` id it has no conversation for, a rejected credential; codex: a
   thread id with no rollout on disk). That declaration is the ONLY place a harness's error wording is ever
@@ -569,7 +583,7 @@ the main checkout, but its commands run `dispatch.sh` with the thread cwd as `pr
 against its own tree even though one project-scoped server (and one shared shim) drives them all. The session-id +
 global-store resolution every handler repeated is folded into the same helper (`hp_session_id`, `hp_store_dir`).
 There is NO codex thread-id capture hook: the backend OWNS the thread id (it `thread/start`s the thread at
-launch and stores the id as `harness_session_id` — see above), so no dispatcher or lifecycle hook branches on
+launch and stages the proven id for the lifecycle owner to store as `harness_session_id` — see above), so no dispatcher or lifecycle hook branches on
 Codex and Claude needs nothing here either (its pinned id already is the record id). But design C's hooks fire
 from the SHARED per-project app-server process, whose env can inherit the FIRST session's baked
 `SPEXCODE_SESSION_ID`, so a governed codex hook must NOT trust that env var. On codex, `hp_session_id` resolves
@@ -693,8 +707,8 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   shim at `<mainCheckout>/.codex/hooks.json` all five events fire for a worktree thread, and removing that file
   while the worktree's own `.codex/hooks.json` stays in place makes EVERY hook go silent — so a per-project
   server behaves like a per-worktree launch for everything except the hooks, which are genuinely per-project),
-  stores the returned `thread.id` on the governed record (`harness_session_id`, keyed by
-  `SPEXCODE_SESSION_ID`), then fires the prompt as the FIRST turn — materializing the thread's rollout on disk,
+  fires the prompt as the FIRST turn — materializing the thread's rollout on disk — then stages the returned
+  `thread.id` plus payload proof for the governed record (`harness_session_id`, keyed by `SPEXCODE_SESSION_ID`),
   which the visible `codex --remote unix://<sock> resume <tid>` TUI then renders natively (VERIFIED: the TUI
   resumes a backend-created thread once it has ≥1 turn, and a later `turn/steer`/`turn/start` also renders live
   in the pane). That resume reads the thread's ROLLOUT FILE
@@ -705,8 +719,8 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   not lost. A launch that hands the id to `resume` immediately dies with "no rollout found for thread id", and the
   launch retry loop then misreads that fast failure as a daemon race, sprays fresh threads, and stores the last
   (non-resumable) id — wedging every future reopen. The guard is ONE waypoint: `codex-launch` fires the first turn
-  then WAITS (`waitForCodexRollout`, 20s) for the rollout to land BEFORE it stores `harness_session_id` or prints
-  the id — so the id it returns is always resume-ready, and a genuine miss FAILS LOUD (non-zero, stores nothing;
+  then WAITS (`waitForCodexRollout`, 20s) for the rollout to land BEFORE it stages `harness_session_id` proof or prints
+  the id — so the id it returns is always resume-ready, and a genuine miss FAILS LOUD (non-zero, stages nothing;
   launch.sh aborts rather than `resume ""`). The 20s budget deliberately exceeds launch.sh's fast-fail threshold,
   so a real failure exits PAST it and the retry loop treats it as a true end, never a duplicate-prompt respray —
   turning a silent permanent wedge into an honest, non-duplicating retry. The rollout scan walks day-dirs

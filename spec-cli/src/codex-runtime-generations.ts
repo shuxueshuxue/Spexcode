@@ -373,6 +373,17 @@ type EnsureAction =
   | { kind: 'wait' }
   | { kind: 'current'; endpoint: CodexGenerationEndpoint }
 
+export type CodexGenerationRotation = Readonly<{
+  previous: CodexGenerationEndpoint
+  current: CodexGenerationEndpoint
+}>
+
+type RotateAction =
+  | { kind: 'start'; endpoint: CodexGenerationEndpoint }
+  | { kind: 'publish'; endpoint: CodexGenerationEndpoint }
+  | { kind: 'wait' }
+  | { kind: 'retry' }
+
 function publishPendingGeneration(root: string, endpoint: CodexGenerationEndpoint): Promise<CodexGenerationEndpoint> {
   return withLedgerLock(root, async () => {
     const previous = readCodexGenerationLedger(root)
@@ -467,6 +478,111 @@ export async function ensureCodexCurrentGeneration(root: string, start: (endpoin
       throw new Error(`candidate Codex generation ${action.endpoint.id} did not prove a live detached endpoint; current pointer was not switched`)
     }
     return publishPendingGeneration(root, action.endpoint)
+  }
+}
+
+// An operator can move NEW traffic off a current root that is still exactly identifiable but unhealthy. This is
+// deliberately not a restart: bindings remain on the old endpoint, which keeps serving them as draining until
+// its ordinary zero-reference reclamation proof succeeds.
+async function publishRotatedGeneration(root: string, endpoint: CodexGenerationEndpoint): Promise<CodexGenerationRotation> {
+  return withLedgerLock(root, async () => {
+    let previous = readCodexGenerationLedger(root)
+    if (previous.pending !== endpoint.id || !endpointIdentity(endpoint))
+      throw new Error('Codex generation rotation CAS lost or candidate identity changed before publication')
+    const previousId = previous.current
+    const old = previousId ? previous.generations[previousId] : null
+    if (!previousId || !old || old.state !== 'current')
+      throw new Error('canonical Codex generation changed during rotation; retry')
+    if (!endpointIdentity(old.endpoint)) {
+      // A root proven gone during the finite start window is safe to retire. Ambiguity remains a refusal: a
+      // ready candidate stays durably pending for a later explicit retry, rather than guessing at ownership.
+      const retired = retireGoneGenerationLocked(root, previous, previousId)
+      if (!retired) throw new Error('canonical Codex generation became unproven during rotation; refusing to switch traffic')
+      previous = retired
+    }
+    const generations = {
+      ...previous.generations,
+      [endpoint.id]: { state: 'current' as const, endpoint },
+    }
+    if (previous.current) generations[previous.current] = { state: 'draining' as const, endpoint: old.endpoint }
+    writeLedger(root, previous, { current: endpoint.id, pending: null, generations, bindings: previous.bindings })
+    return { previous: old.endpoint, current: endpoint }
+  })
+}
+
+export async function rotateCodexCurrentGeneration(
+  root: string,
+  start: (endpoint: CodexGenerationEndpoint) => Promise<void>,
+): Promise<CodexGenerationRotation> {
+  const deadline = Date.now() + 30_000
+  for (;;) {
+    const action = await withLedgerLock(root, async (): Promise<RotateAction> => {
+      let previous = readCodexGenerationLedger(root)
+      if (previous.revision === 0 && !existsSync(ledgerPath(root))) {
+        const bootstrapped = bootstrapLedger(root)
+        previous = writeLedger(root, previous, bootstrapped)
+      }
+      const current = previous.current ? previous.generations[previous.current] : null
+      if (!current || current.state !== 'current')
+        throw new Error('there is no proven canonical Codex generation to rotate; launch a Codex session first')
+      if (!endpointIdentity(current.endpoint)) {
+        if (goneGeneration(current.endpoint))
+          throw new Error('canonical Codex generation is already dead; a normal Codex launch will replace it')
+        throw new Error('canonical Codex generation is unproven; refusing to rotate traffic')
+      }
+      if (previous.pending) {
+        const pending = previous.generations[previous.pending]
+        if (!pending || pending.state !== 'starting') throw new Error('Codex generation ledger pending rotation is malformed')
+        // A prior coordinator may have completed the detached spawn but crashed before the pointer CAS.
+        if (endpointIdentity(pending.endpoint)) return { kind: 'publish', endpoint: pending.endpoint }
+        if (pending.reservation && processStartToken(pending.reservation.pid) === pending.reservation.startToken)
+          return { kind: 'wait' }
+        const generations = { ...previous.generations }
+        delete generations[pending.endpoint.id]
+        writeLedger(root, previous, { current: previous.current, pending: null, generations, bindings: previous.bindings })
+        return { kind: 'retry' }
+      }
+      const endpoint = newEndpoint(root)
+      const startToken = processStartToken(process.pid)
+      if (!startToken) throw new Error('cannot prove coordinator process identity for Codex generation rotation reservation')
+      mkdirSync(dirname(endpoint.pidFile), { recursive: true, mode: 0o700 })
+      writeLedger(root, previous, {
+        current: previous.current,
+        pending: endpoint.id,
+        generations: { ...previous.generations, [endpoint.id]: { state: 'starting', endpoint, reservation: { pid: process.pid, startToken } } },
+        bindings: previous.bindings,
+      })
+      return { kind: 'start', endpoint }
+    })
+    if (action.kind === 'publish') return publishRotatedGeneration(root, action.endpoint)
+    if (action.kind === 'retry') continue
+    if (action.kind === 'wait') {
+      if (Date.now() >= deadline) throw new Error('Codex generation rotation reservation owner is still live but did not publish; retry after it exits')
+      await sleep(50)
+      continue
+    }
+    try { await start(action.endpoint) }
+    catch (error) {
+      await withLedgerLock(root, async () => {
+        const previous = readCodexGenerationLedger(root)
+        if (previous.pending !== action.endpoint.id || endpointIdentity(action.endpoint)) return
+        const generations = { ...previous.generations }
+        delete generations[action.endpoint.id]
+        writeLedger(root, previous, { current: previous.current, pending: null, generations, bindings: previous.bindings })
+      })
+      throw error
+    }
+    if (!await waitForEndpoint(action.endpoint)) {
+      await withLedgerLock(root, async () => {
+        const previous = readCodexGenerationLedger(root)
+        if (previous.pending !== action.endpoint.id || endpointIdentity(action.endpoint)) return
+        const generations = { ...previous.generations }
+        delete generations[action.endpoint.id]
+        writeLedger(root, previous, { current: previous.current, pending: null, generations, bindings: previous.bindings })
+      })
+      throw new Error(`candidate Codex generation ${action.endpoint.id} did not prove a live detached endpoint; current pointer was not switched`)
+    }
+    return publishRotatedGeneration(root, action.endpoint)
   }
 }
 

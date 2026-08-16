@@ -38,10 +38,10 @@ loop, second transport, or bidirectional index enters the shared layer. `wait` r
 reader fallback for callers with no governed delivery address. A watcher identity owns a small independent
 source set: `manual` comes from the explicit watch command and `parent` comes from the tree relationship.
 The entry persists while either source exists, and the transition path projects the source set to one watcher
-id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Every watch delivery
-names either a relationship `snapshot` or a later state `transition`: snapshots always carry the current state,
-while a parent-only transition suppresses `active`/working and manual includes it. The source set resolves that
-policy once, so manual+parent yields the complete transition feed without a duplicate or a second mechanism.
+id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Source installation and
+reparenting directly dispatch the current state. Only a later state write consults the source policy: parent-only
+suppresses `active`/working and manual includes it. Thus manual+parent yields the complete later-state feed
+without a duplicate or a second mechanism.
 Creation and
 [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
 source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.

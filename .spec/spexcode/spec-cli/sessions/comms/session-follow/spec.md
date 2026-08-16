@@ -45,13 +45,12 @@ has one watcher id and a small set of sources (`manual` and, when the tree owns 
 path projects those rows to unique watcher ids, appends one normal `sent` event to each watcher's timeline, and
 enqueues one ordinary prompt for adapter delivery. A busy or offline watcher therefore receives the next retry
 exactly like a normal `spex session send`; an available watcher receives a terminal insert in its current turn.
-Every delivery has one reason: a `snapshot` announces the current authored state when a source is installed or a
-child is reparented, while a `transition` announces a later state write. A snapshot always delivers — a new
-supervisor needs its worker's current state even when that state is routine `active`/working. A parent-only
-transition suppresses that routine working state, while a `manual` source explicitly asks for the complete feed
-and includes it. The sources form one set: an overlapping manual+parent row still projects to one delivery, with
-manual's complete-feed policy winning for transitions. Thus a one-shot `ls` remains a snapshot read, but a parent
-is not woken every time a known child resumes ordinary work.
+Installing a source or reparenting a child directly sends the child's current authored state — a new supervisor
+needs that context even when it is routine `active`/working. Later state writes take the transition path instead:
+a parent-only watch suppresses routine working, while a `manual` source explicitly asks for the complete feed and
+includes it. The sources form one set: an overlapping manual+parent row still projects to one delivery, with
+manual's complete-feed policy winning for later state changes. Thus a one-shot `ls` remains a current-state read,
+but a parent is not woken every time a known child resumes ordinary work.
 
 `spex session watch list` scans targets' `watchers.json` files to show the caller's relations, and
 `spex session watch cancel <SEL...>` removes only that caller's `manual` source from the selected targets.

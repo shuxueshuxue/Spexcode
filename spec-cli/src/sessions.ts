@@ -622,16 +622,14 @@ function watchMessage(target: SessRec): string {
   return `[spex watch] ${target.session} is ${status}${note}`
 }
 
-type WatchDeliveryReason = 'snapshot' | 'transition'
-
-function shouldDeliverWatchState(target: SessRec, sources: readonly WatchSource[], reason: WatchDeliveryReason): boolean {
-  // @@@watch-delivery-policy - A new relationship needs a state snapshot; manual opts into working transitions.
-  return reason === 'snapshot' || target.status !== 'active' || sources.includes('manual')
+function shouldDeliverWatchTransition(target: SessRec, sources: readonly WatchSource[]): boolean {
+  // @@@watch-delivery-policy - Relationship setup sends current state; manual opts into working changes.
+  return target.status !== 'active' || sources.includes('manual')
 }
 
 function scheduleWatchNotifications(target: SessRec): void {
   const watchers = readWatchEntries(target.session)
-    .filter((entry) => shouldDeliverWatchState(target, entry.sources, 'transition'))
+    .filter((entry) => shouldDeliverWatchTransition(target, entry.sources))
     .map((entry) => entry.watcher)
   if (!watchers.length) return
   queueMicrotask(() => {
@@ -654,10 +652,8 @@ export async function subscribeSessionWatch(watcher: string, targets: string[], 
       const next = addWatchSource(entries, watcher, source)
       if (next.added) writeWatchEntries(target, next.entries)
     })
-    if (shouldDeliverWatchState(targetRecord, [source], 'snapshot')) {
-      const delivered = await sendText(watcher, watchMessage(targetRecord), target)
-      if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
-    }
+    const delivered = await sendText(watcher, watchMessage(targetRecord), target)
+    if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
     watched.push(target)
   }
   return { watched }
@@ -766,7 +762,6 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
   })
   const notified: string[] = []
   if (parent) for (const child of notify) {
-    if (!shouldDeliverWatchState(child, ['parent'], 'snapshot')) continue
     const delivered = await sendText(parent, watchMessage(child), child.session)
     if (!delivered.ok) throw new ResourceConflict(`reparent committed but could not queue ${child.session}'s current state for ${parent}: ${delivered.error}`)
     notified.push(child.session)

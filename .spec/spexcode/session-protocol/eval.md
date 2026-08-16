@@ -25,6 +25,25 @@ scenarios:
       name: a keyed retry restores debt lost after the receipt append, then settles exactly once
     code: packages/session-core/src/message.ts
     related: packages/session-core/src/delivery-queue.ts
+  - name: installed-session-lifecycle-dogfood
+    tags: [cli, backend-api]
+    description: >
+      Pack the root package, install it in a fresh consumer outside the source checkout, isolate SPEXCODE_HOME,
+      initialize a fresh Git project, and use only the installed CLI to start the backend and dispatch a real
+      Codex child. The child must finish by declaring close-pending with the exact terminal note
+      SESSION_CORE_PACKAGE_OK. Observe it through installed session wait and session show, then close that exact
+      child through the installed CLI.
+    expected: >
+      The installed root resolves its bundled session-core without source or TypeScript fallback; the real child
+      receives its complete originating prompt, reaches close-pending exactly once, and exposes only the exact
+      terminal marker through the narrow session record. The named worktree and branch exist before close and are
+      both retired afterward, proving installed create, record persistence, timeline wake, delivery, lifecycle,
+      and close use the extracted durable protocol end to end.
+    code: packages/session-core/src/index.ts
+    related:
+      - spec-cli/src/sessions.ts
+      - spec-cli/src/session-follow.ts
+      - spec-cli/package.json
 ---
 # session-core loss
 

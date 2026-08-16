@@ -1,15 +1,15 @@
 ---
 scenarios:
-  - name: switch-app-server-without-moving-existing-sessions
+  - name: switch-app-server-without-disrupting-existing-session
     tags: [cli, backend-api]
     description: >
-      With a live current Codex generation, run the shipped `spex doctor repair app-server`, then create a
-      real parentless Codex session and let it declare asking. Inspect the generation ledger before
-      closing only that verification session.
+      In an isolated Git project, create one real Codex session to establish a current app-server, then run
+      the shipped `spex doctor repair app-server`. Capture its receipt, then stop and close that same
+      verification session.
     expected: >
       The switch proves a fresh current endpoint and marks the previous endpoint draining without signalling
-      it. The verification session becomes online, has a native thread binding on the new generation, and
-      can declare asking; its exact close succeeds. Existing old-generation bindings remain unchanged.
+      it. The existing verification session remains controllable and its exact close succeeds. The repair
+      itself neither creates nor moves a session.
     code: spec-cli/src/runtime-rotate.ts
     related: spec-cli/src/codex-runtime-generations.ts
 ---

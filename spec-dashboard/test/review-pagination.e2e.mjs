@@ -157,6 +157,42 @@ try {
   metrics.checks.graphOnlyReviewRequests = graphOnlyReviewRequests
   await graphOnly.close()
 
+  const paletteRecording = recording('bounded-review-planes', 'Search pill demand-loads bounded review planes')
+  const paletteContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, recordVideo: { dir: paletteRecording.raw, size: { width: 1440, height: 900 } } })
+  const palettePage = await paletteContext.newPage()
+  const paletteVideo = palettePage.video()
+  const paletteReviewRequests = []
+  palettePage.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (path.endsWith('/api/issues') || path.endsWith('/api/evals')) paletteReviewRequests.push(request.url())
+  })
+  await palettePage.goto(`${base}/#/sessions`)
+  await palettePage.locator('.si-pill.search').waitFor({ state: 'visible', timeout: 45_000 })
+  assert.deepEqual(paletteReviewRequests, [], 'closed Palette receives no review rows')
+  const paletteIssueResponse = palettePage.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/api/issues'), { timeout: 45_000 })
+  const paletteEvalResponse = palettePage.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/api/evals'), { timeout: 45_000 })
+  await palettePage.locator('.si-pill.search').click()
+  const paletteIssueData = await (await paletteIssueResponse).json()
+  const paletteEvalData = await (await paletteEvalResponse).json()
+  assert.equal(paletteIssueData.items.length, 25)
+  assert.equal(paletteEvalData.items.length, 25)
+  await palettePage.waitForFunction(() => document.querySelectorAll('.search-item').length === 15)
+  const paletteTexts = await palettePage.locator('.search-item').allTextContents()
+  assert.equal(paletteTexts.some((text) => /showing \d+ of \d+/i.test(text)), false)
+  assert.equal(await palettePage.locator('.search-review-link').count(), 2)
+  await palettePage.locator('.search-input').focus()
+  await palettePage.keyboard.press('Tab')
+  assert.equal(await palettePage.evaluate(() => document.activeElement?.getAttribute('href')), '#/issues?q=is%3Aissue')
+  await palettePage.keyboard.press('Tab')
+  assert.equal(await palettePage.evaluate(() => document.activeElement?.getAttribute('href')), '#/evals?q=is%3Aeval')
+  paletteRecording.mark(`Issues 25/${paletteIssueData.total}; Evals 25/${paletteEvalData.total}; Tab reached both full-list anchors`)
+  await palettePage.screenshot({ path: join(out, 'bounded-palette.png'), fullPage: false })
+  await palettePage.keyboard.press('Enter')
+  await palettePage.waitForFunction(() => location.hash === '#/evals?q=is%3Aeval')
+  paletteRecording.mark('Enter routed to the canonical full Evals list')
+  await paletteContext.close()
+  await finishRecording(paletteRecording, paletteVideo)
+
   const desktopRecording = recording('paged-review-desktop-yatu', 'request pagination, history, overflow, and bounded consumers')
   desktop = await browser.newContext({ viewport: { width: 1440, height: 900 }, recordVideo: { dir: desktopRecording.raw, size: { width: 1440, height: 900 } } })
   const page = await desktop.newPage()
@@ -165,9 +201,10 @@ try {
   desktop.on('request', (request) => requestUrls.push(request.url()))
 
   const graphWaiting = page.waitForResponse((response) => apiPath(response).endsWith('/api/graph'), { timeout: 45_000 })
-  const evalWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('page') === '1')
-  await page.goto(`${base}/#/evals`)
+  await page.goto(`${base}/#/`)
   const graph = await readGraph(await graphWaiting)
+  const evalWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('page') === '1')
+  await page.locator('.rail-btn[href="#/evals"]').click()
   const eval1 = await measure(await evalWaiting, 'evals-initial-page-1')
   metrics.checks.initialLedgerBytes = graph.bytes + eval1.row.bytes
   if (requireLeanGraph) {
@@ -423,6 +460,10 @@ try {
   const desktopPaletteTexts = await page.locator('.search-item').allTextContents()
   assert.equal(desktopPaletteTexts.some((text) => /showing \d+ of \d+/i.test(text)), false,
     'pagination metadata never becomes a search result')
+  assert.deepEqual(await page.locator('.search-review-link').evaluateAll((links) => links.map((link) => link.getAttribute('href'))), [
+    '#/issues?q=is%3Aissue',
+    '#/evals?q=is%3Aeval',
+  ], 'bounded palette exposes canonical full-list anchors outside its entity results')
   const desktopEvalTarget = paletteEvals.data.items[0].scenario
   const desktopFilteredEvalWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('q') === `is:eval ${desktopEvalTarget}`)
   await page.locator('.search-input').fill(desktopEvalTarget)
@@ -480,49 +521,6 @@ try {
   await desktop.close()
   desktop = null
   await finishRecording(desktopRecording, video)
-
-  const paletteRecording = recording('bounded-review-planes', 'Search pill demand-loads bounded review planes')
-  const paletteContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, recordVideo: { dir: paletteRecording.raw, size: { width: 1440, height: 900 } } })
-  const palettePage = await paletteContext.newPage()
-  const paletteVideo = palettePage.video()
-  const paletteReviewRequests = []
-  palettePage.on('request', (request) => {
-    const path = new URL(request.url()).pathname
-    if (path.endsWith('/api/issues') || path.endsWith('/api/evals')) paletteReviewRequests.push(request.url())
-  })
-  await palettePage.goto(`${base}/#/sessions`)
-  await palettePage.locator('.si-pill.search').waitFor({ state: 'visible', timeout: 45_000 })
-  assert.deepEqual(paletteReviewRequests, [], 'closed Palette receives no review rows')
-  const paletteIssueResponse = palettePage.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/api/issues'), { timeout: 45_000 })
-  const paletteEvalResponse = palettePage.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/api/evals'), { timeout: 45_000 })
-  await palettePage.locator('.si-pill.search').click()
-  const paletteIssueData = await (await paletteIssueResponse).json()
-  const paletteEvalData = await (await paletteEvalResponse).json()
-  assert.equal(paletteIssueData.items.length, 25)
-  assert.equal(paletteEvalData.items.length, 25)
-  await palettePage.waitForFunction(() => document.querySelectorAll('.search-item').length === 15)
-  const paletteTexts = await palettePage.locator('.search-item').allTextContents()
-  assert.equal(paletteTexts.some((text) => /showing \d+ of \d+/i.test(text)), false)
-  const paletteEvalTarget = paletteEvalData.items[0].scenario
-  const filteredEvalResponse = palettePage.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return url.pathname.endsWith('/api/evals') && url.searchParams.get('q') === `is:eval ${paletteEvalTarget}`
-  }, { timeout: 45_000 })
-  await palettePage.locator('.search-input').fill(paletteEvalTarget)
-  const filteredEvalData = await (await filteredEvalResponse).json()
-  await palettePage.locator('.search-item:has(.k-scenario)').first().waitFor({ state: 'visible' })
-  const paletteEvalIndex = await palettePage.locator('.search-item').evaluateAll((rows) => rows.findIndex((row) => row.querySelector('.k-scenario')))
-  assert.ok(paletteEvalIndex >= 0)
-  for (let index = 0; index < paletteEvalIndex; index++) await palettePage.keyboard.press('ArrowDown')
-  const selectedEval = await palettePage.locator('.search-item.on .search-title').innerText()
-  assert.ok(filteredEvalData.items.some((item) => item.scenario === selectedEval))
-  paletteRecording.mark(`Issues 25/${paletteIssueData.total}; Evals 25/${paletteEvalData.total}; real Eval keyboard selected`)
-  await palettePage.screenshot({ path: join(out, 'bounded-palette.png'), fullPage: false })
-  await palettePage.keyboard.press('Enter')
-  await palettePage.waitForFunction(() => location.hash.startsWith('#/evals'))
-  paletteRecording.mark('Enter routed to the selected Eval entity')
-  await paletteContext.close()
-  await finishRecording(paletteRecording, paletteVideo)
 
   const mobileRecording = recording('paged-review-mobile-yatu', '390px wrapping, accessibility, and keyboard navigation')
   mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, recordVideo: { dir: mobileRecording.raw, size: { width: 390, height: 844 } } })

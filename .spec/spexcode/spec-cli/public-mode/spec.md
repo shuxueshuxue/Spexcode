@@ -50,7 +50,11 @@ cached index, never leaves the old build, and a lazy route (issues, its own chun
 
 **Compression is transport, so it lives at the gateway — once, for every deployment.** Text-ish responses
 ship gzipped when the client accepts it, static and proxied alike; upstream and product semantics never
-know compression exists. Three exclusions are load-bearing: an SSE stream is
+know compression exists. Both paths use one bandwidth-first zlib policy: maximum compression with a smaller
+working-memory table, which spends bounded CPU to keep installed minified JavaScript strictly below one third
+of its unencoded size while also reducing per-stream memory. Static results are memoized, so that CPU is paid
+once per artifact version; proxied responses remain streaming rather than being buffered to optimize size.
+Three exclusions are load-bearing: an SSE stream is
 never buffered (event latency), an already-encoded response is not re-encoded, and binary media
 (video/image evidence) passes through untouched — it gains nothing and would fight Range requests.
 

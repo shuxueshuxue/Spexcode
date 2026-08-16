@@ -83,6 +83,10 @@ Vite/esbuild. The CLI discovers both assets by resolving the dashboard package m
 sibling directory. An absent package fails before a UI process binds, naming that exact installation command;
 an incomplete package fails with its missing artifact and a repair. It never hides commands, crashes with a
 resolution stack, or serves an empty page.
+The tarball carries each canonical built asset once, without transport-specific compressed copies. Installed
+serving applies [[public-mode]]'s single gzip policy at the HTTP gateway, so raw asset bytes remain identical
+to the package artifact while negotiated wire bytes receive the same compression and cache headers in local,
+public, and host-gateway deployments.
 
 The launcher also owns the earliest process-identity boundary for project/host control planes. Before running
 the compiled CLI for `serve` or `dashboard`, it removes the invoking session's adapter-declared identity

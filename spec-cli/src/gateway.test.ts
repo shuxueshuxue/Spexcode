@@ -2,7 +2,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import net from 'node:net'
-import { proxyHttp } from './gateway.js'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { gunzipSync, gzipSync } from 'node:zlib'
+import { proxyHttp, serveStatic } from './gateway.js'
 
 function listen(server: http.Server): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -30,6 +34,44 @@ function getText(port: number, path: string): Promise<{ status: number; body: st
     request.on('error', reject)
   })
 }
+
+function getBuffer(port: number, path: string, headers: http.OutgoingHttpHeaders = {}): Promise<{
+  status: number
+  headers: http.IncomingHttpHeaders
+  body: Buffer
+}> {
+  return new Promise((resolve, reject) => {
+    const request = http.get({ host: '127.0.0.1', port, path, headers: { connection: 'close', ...headers } }, (response) => {
+      const chunks: Buffer[] = []
+      response.on('data', (chunk) => { chunks.push(Buffer.from(chunk)) })
+      response.on('end', () => resolve({ status: response.statusCode ?? 0, headers: response.headers, body: Buffer.concat(chunks) }))
+    })
+    request.on('error', reject)
+  })
+}
+
+test('serveStatic applies the shared gzip policy without changing asset cache semantics', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-gateway-gzip-'))
+  const source = Buffer.from(`const rows=[${Array.from({ length: 4000 }, (_, i) => `{id:${i},label:"row-${i % 37}"}`).join(',')}];`)
+  writeFileSync(join(dir, 'bundle.js'), source)
+
+  const server = http.createServer((req, res) => serveStatic(req, res, dir, req.url || '/'))
+  const port = await listen(server)
+  t.after(() => { server.close(); rmSync(dir, { recursive: true, force: true }) })
+
+  const plain = await getBuffer(port, '/bundle.js')
+  const encoded = await getBuffer(port, '/bundle.js', { 'accept-encoding': 'gzip' })
+
+  assert.equal(plain.status, 200)
+  assert.deepEqual(plain.body, source)
+  assert.equal(encoded.status, 200)
+  assert.equal(encoded.headers['content-encoding'], 'gzip')
+  assert.equal(encoded.headers.vary, 'Accept-Encoding')
+  assert.equal(encoded.headers['cache-control'], 'no-cache')
+  assert.deepEqual(encoded.body, gzipSync(source, { level: 9, memLevel: 5 }))
+  assert.deepEqual(gunzipSync(encoded.body), source)
+  assert.ok(encoded.body.length * 3 < source.length, `${encoded.body.length}/${source.length} must be strictly below one third`)
+})
 
 test('proxyHttp pairs normal and abruptly-closed downstream/upstream lifetimes', async (t) => {
   let activeSse = 0
@@ -98,7 +140,10 @@ test('proxyHttp pairs normal and abruptly-closed downstream/upstream lifetimes',
   assert.deepEqual(await getText(proxyPort, '/normal'), { status: 200, body: '{"ok":true}' })
 
   await new Promise<void>((resolve, reject) => {
-    const request = http.get({ host: '127.0.0.1', port: proxyPort, path: '/stream' }, (response) => {
+    const request = http.get({
+      host: '127.0.0.1', port: proxyPort, path: '/stream', headers: { 'accept-encoding': 'gzip' },
+    }, (response) => {
+      assert.equal(response.headers['content-encoding'], undefined)
       response.once('data', () => {
         response.destroy()
         request.destroy()

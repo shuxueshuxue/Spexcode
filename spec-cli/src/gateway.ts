@@ -209,6 +209,9 @@ function doLogin(req: http.IncomingMessage, res: http.ServerResponse, password: 
 // and would fight Range requests.
 const COMPRESSIBLE = /^(text\/|application\/(json|javascript|xml)|image\/svg)/
 const wantsGzip = (req: http.IncomingMessage) => /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))
+// zlib's larger default table can be counterproductive for minified text: memLevel 5 both compresses it
+// further and lowers each stream's working memory. One policy drives buffered and streamed gzip.
+const GZIP_OPTIONS = { level: 9, memLevel: 5 } as const
 
 // reverse-proxy an /api request to the loopback supervisor (which forwards to the live child) —
 // stream-gzipping compressible bodies (measured: the board JSON rides down at under a third).
@@ -298,7 +301,7 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
     const headers = { ...received.headers, 'content-encoding': 'gzip', vary: 'Accept-Encoding' }
     delete headers['content-length']   // streamed; the encoded length isn't knowable up front
     res.writeHead(received.statusCode || 502, headers)
-    transform = createGzip()
+    transform = createGzip(GZIP_OPTIONS)
     transform.once('error', failFromUpstream)
     received.pipe(transform).pipe(res)
   })
@@ -424,7 +427,7 @@ export function serveStatic(req: http.IncomingMessage, res: http.ServerResponse,
   if (wantsGzip(req) && COMPRESSIBLE.test(type)) {
     const mtime = statSync(file).mtimeMs
     let hit = gzMemo.get(file)
-    if (!hit || hit.mtime !== mtime) { hit = { mtime, gz: gzipSync(raw) }; gzMemo.set(file, hit) }
+    if (!hit || hit.mtime !== mtime) { hit = { mtime, gz: gzipSync(raw, GZIP_OPTIONS) }; gzMemo.set(file, hit) }
     res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding', 'Cache-Control': cacheControl })
     return res.end(hit.gz)
   }

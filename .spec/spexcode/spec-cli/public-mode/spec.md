@@ -54,6 +54,9 @@ know compression exists. Both paths use one bandwidth-first zlib policy: maximum
 working-memory table, which spends bounded CPU to keep installed minified JavaScript strictly below one third
 of its unencoded size while also reducing per-stream memory. Static results are memoized, so that CPU is paid
 once per artifact version; proxied responses remain streaming rather than being buffered to optimize size.
+Every eligible response advertises `Vary: Accept-Encoding` on both its identity and gzip representation,
+merging rather than replacing an upstream `Vary`, so a shared cache never treats whichever representation
+arrived first as universal. Responses excluded from gateway compression retain upstream variation unchanged.
 Three exclusions are load-bearing: an SSE stream is
 never buffered (event latency), an already-encoded response is not re-encoded, and binary media
 (video/image evidence) passes through untouched — it gains nothing and would fight Range requests.

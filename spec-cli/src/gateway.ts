@@ -213,6 +213,13 @@ const wantsGzip = (req: http.IncomingMessage) => /\bgzip\b/.test(String(req.head
 // further and lowers each stream's working memory. One policy drives buffered and streamed gzip.
 const GZIP_OPTIONS = { level: 9, memLevel: 5 } as const
 
+function appendVary(current: string | string[] | undefined, token: string): string {
+  const values = (Array.isArray(current) ? current : [current ?? ''])
+    .flatMap((value) => value.split(',')).map((value) => value.trim()).filter(Boolean)
+  if (!values.some((value) => value === '*' || value.toLowerCase() === token.toLowerCase())) values.push(token)
+  return values.join(', ')
+}
+
 // reverse-proxy an /api request to the loopback supervisor (which forwards to the live child) —
 // stream-gzipping compressible bodies (measured: the board JSON rides down at under a third).
 // `path` and `headers` optionally override routing inputs (the host gateway strips its /p/:projectId
@@ -292,13 +299,16 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
     received.once('close', () => { if (!received.complete) failFromUpstream() })
 
     const type = String(received.headers['content-type'] || '')
-    const skip = !wantsGzip(req) || received.headers['content-encoding'] || !COMPRESSIBLE.test(type) || type.startsWith('text/event-stream')
-    if (skip) {
-      res.writeHead(received.statusCode || 502, received.headers)
+    const eligible = !received.headers['content-encoding'] && COMPRESSIBLE.test(type) && !type.startsWith('text/event-stream')
+    const responseHeaders: http.OutgoingHttpHeaders = eligible
+      ? { ...received.headers, vary: appendVary(received.headers.vary, 'Accept-Encoding') }
+      : received.headers
+    if (!eligible || !wantsGzip(req)) {
+      res.writeHead(received.statusCode || 502, responseHeaders)
       received.pipe(res)
       return
     }
-    const headers = { ...received.headers, 'content-encoding': 'gzip', vary: 'Accept-Encoding' }
+    const headers = { ...responseHeaders, 'content-encoding': 'gzip' }
     delete headers['content-length']   // streamed; the encoded length isn't knowable up front
     res.writeHead(received.statusCode || 502, headers)
     transform = createGzip(GZIP_OPTIONS)
@@ -424,14 +434,17 @@ export function serveStatic(req: http.IncomingMessage, res: http.ServerResponse,
   const type = MIME[extname(file)] || 'application/octet-stream'
   const cacheControl = /[\\/]assets[\\/]/.test(file) ? 'public, max-age=31536000, immutable' : 'no-cache'
   const raw = readFileSync(file)
-  if (wantsGzip(req) && COMPRESSIBLE.test(type)) {
+  const compressible = COMPRESSIBLE.test(type)
+  const headers: http.OutgoingHttpHeaders = { 'Content-Type': type, 'Cache-Control': cacheControl }
+  if (compressible) headers.Vary = appendVary(undefined, 'Accept-Encoding')
+  if (wantsGzip(req) && compressible) {
     const mtime = statSync(file).mtimeMs
     let hit = gzMemo.get(file)
     if (!hit || hit.mtime !== mtime) { hit = { mtime, gz: gzipSync(raw, GZIP_OPTIONS) }; gzMemo.set(file, hit) }
-    res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding', 'Cache-Control': cacheControl })
+    res.writeHead(200, { ...headers, 'Content-Encoding': 'gzip' })
     return res.end(hit.gz)
   }
-  res.writeHead(200, { 'Content-Type': type, 'Cache-Control': cacheControl })
+  res.writeHead(200, headers)
   res.end(raw)
 }
 

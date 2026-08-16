@@ -134,14 +134,17 @@ Offline is reachable on purpose, not only by a crash. **`stop`** is the human-on
 of `resume`: it kills only the adapter-registered **session-owned leaf** plus that session's tmux + rendezvous
 socket, but **leaves every project-shared control plane untouched** ([[host-resource-budget]]) and leaves the
 worktree, branch, transcript, and global record, then writes only that record's `stopped` liveness marker, so the session reads `offline`
-and the relaunch panel offers to `--resume` the same conversation. The lifecycle fields the agent last authored
+and the relaunch panel offers to `--resume` the same conversation. That durable marker also fences launch
+admission: no automatic queue drain, supervisor restart, or idempotent replay may launch a stopped row, including
+a prepared row whose lifecycle is still `queued`. The lifecycle fields the agent last authored
 survive the stop untouched — whereas a proven-owner `close` removes the worktree AND sweeps the global record dir. **`resume`**
 is the inverse
 of `stop`, and it is symmetric: it brings the agent back up (relaunching it `--resume`d into the same
 conversation only when it is genuinely offline; both frontend relaunch entries invoke this same action) and
 clears `stopped` as it restores the runtime and settles the **resting** lifecycle under the SAME active-only
-guard `idle` uses — a resumed agent that was
-`active` (working) is now just sitting at its prompt → `idle`, while every deliberate declaration survives the
+guard `idle` uses — a resumed agent that was `active` (working), or was prepared as `queued` before this explicit
+launch, is now just sitting at its prompt → `idle`; a successful readiness publication can never retain `queued`
+alongside a live runtime. Every deliberate declaration survives the
 resume untouched (`awaiting` and **its proposal**, `asking`, `parked`, `error`). resume deliberately does NOT
 touch the proposal: resuming a session that is proposing a merge must not silently withdraw it — proposals are
 reversible only by MESSAGING the session (mark-active clears them), never as a hidden side-effect of a relaunch.

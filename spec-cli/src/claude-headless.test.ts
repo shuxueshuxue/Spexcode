@@ -1,9 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ClaudeHeadlessController, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
+import { ClaudeHeadlessController, claudeHeadlessColdRuntime, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
 import { claudeHarness, claudeHeadlessHarness, HARNESSES } from './harness.js'
 
 const waitFor = async (check: () => boolean, timeoutMs = 5_000) => {
@@ -29,14 +30,31 @@ test('claude-headless is a fifth adapter with Claude materialization and a repla
   assert.equal(claudeHeadlessHarness.sessionIdArg('abc'), '--session-id abc')
   assert.equal(claudeHeadlessHarness.resumeArg({ session: 'abc' }), '--resume abc')
   assert.equal(claudeHeadlessHarness.headless, true)
+  assert.equal(claudeHeadlessHarness.runtimeOwnership, 'leaf')
   assert.equal(claudeHeadlessHarness.ownsRendezvous, false)
-  assert.equal(claudeHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
+  assert.equal(claudeHeadlessHarness.liveness({ session: 'abc' }, true), 'online')
+  assert.equal(claudeHeadlessHarness.liveness({ session: 'abc' }, false), 'offline')
   assert.equal(claudeHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.match(claudeHeadlessHarness.launchCmd('abc', '/runtime', 'claude-custom'), /claude-headless-run.*abc.*claude-custom/)
   const cleanupId = `cleanup-${process.pid}`
   writeFileSync(claudeHeadlessSock(cleanupId), 'stale')
   await claudeHeadlessHarness.cleanupRuntime({ session: cleanupId })   // removal awaits its proof-of-death probe
   assert.equal(existsSync(claudeHeadlessSock(cleanupId)), false, 'adapter teardown removes a stale control socket')
+})
+
+test('stopped Claude headless skips native interrupt while cold proof still refuses a live controller', async (t) => {
+  const id = `claude-cold-${process.pid}`
+  const socket = claudeHeadlessSock(id)
+  rmSync(socket, { force: true })
+  assert.deepEqual(await interruptClaudeHeadless({ session: id, stopped: true }), { ok: true })
+  assert.deepEqual(await claudeHeadlessColdRuntime({ session: id }), { ok: true })
+
+  const server = createServer()
+  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, resolve) })
+  t.after(() => { server.close(); rmSync(socket, { force: true }) })
+  assert.deepEqual(await claudeHeadlessColdRuntime({ session: id }), {
+    ok: false, error: 'claude-headless controller is still live',
+  })
 })
 
 test('controller cold-resumes idle turns, steers the active child, and confirms interrupt', async (t) => {

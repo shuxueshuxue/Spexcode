@@ -2,7 +2,7 @@
 title: claude-headless
 status: active
 hue: 275
-desc: Claude Code's stream-json headless form as an independent harness adapter: Claude-identical materialization, a controller-owned turn process, record-backed liveness, and fail-loud control.
+desc: Claude Code's stream-json headless form as an independent harness adapter: Claude-identical materialization, a session-owned controller leaf, and fail-loud control.
 code:
   - spec-cli/src/claude-headless.ts
 related:
@@ -64,13 +64,14 @@ the existing tmux capture and reaper pipeline. It is not duplicated into a SpexC
 terminal-free user record is [[session-timeline]]. Partial/non-line output is dropped loudly rather than being
 presented as a complete event.
 
-Liveness is deliberately record-backed: while the session record exists and is not explicitly stopped, the
-adapter answers `online` regardless of controller, tmux, or child-process probes. This is a statement about the
-durable addressable session, not a claim that a turn process is resident. A broken/missing controller is surfaced
-by the next deliver or interrupt as a loud transport failure; it is never converted into a speculative `offline`.
-Human `stop` is different: it tears down the runtime and marks the retained record stopped, so liveness is
-`offline` until `resume` clears the marker and relaunches the same conversation. Closing remains the terminal
-operation that removes the record, worktree, tmux home, and control socket.
+The controller is a session-owned leaf in an exact tmux home, not an adapter resident. Launch therefore uses the
+same pane-ancestry-minted PID/start receipt as interactive leaves. While the home exists the non-stopped record is
+addressable even between child turns. Physical cold proof is stricter: the receipt-bound controller leaf and home
+must be gone and the controller socket must reject a connect probe. A successful human `stop` records that teardown,
+so later archive or close does not issue a second native interrupt or demand the already-consumed receipt again.
+The stopped bit alone is not authority: a live, unreadable, malformed, or reappeared leaf/home/socket refuses.
+`resume` clears the marker and relaunches the same conversation. Closing remains the terminal operation that removes
+the record, worktree, tmux home, and control socket.
 
 The controller reports every non-zero turn-child exit through the shared [[harness-adapter]] turn-outcome seam. If
 the record is still `active`, that exit projects lifecycle `error` with the Claude headless exit code; a zero exit

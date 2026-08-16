@@ -19,6 +19,7 @@ test('codex-headless composes Codex materialization and shared-runtime ownership
   assert.equal(codexHeadlessHarness.resumeArg({ session: 'abc' }, 'first task'), "'first task'")
   assert.throws(() => codexHeadlessHarness.resumeArg({ session: 'abc' }), /authoritative resolved launch payload is missing/)
   assert.equal(codexHeadlessHarness.headless, true)
+  assert.equal(codexHeadlessHarness.runtimeOwnership, 'adapter')
   assert.equal(codexHeadlessHarness.ownsRendezvous, false)
   assert.equal(codexHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
   assert.equal(codexHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')

@@ -68,12 +68,11 @@ evidence transcripts; it never mutates the CLI or rewrites the declarations. A n
 launcher + scenario data, with no new runner route. A harness whose evidence is only artifacts has not been
 measured. The shared matrix applies where the behavior has the shared process-resident meaning; a deliberate
 semantic difference is measured by a replacement scenario rather than forced into a false common shape.
-[[claude-headless]] replaces the matrix's stop/resume and kill/offline rows with its own idle-resume and
-record-liveness rows, and adds hard-interrupt readings. [[codex-headless]] replaces
+[[claude-headless]] replaces the matrix's TUI rows with its own session-home idle-resume, cold-retirement, and
+hard-interrupt readings. [[codex-headless]] replaces
 the matrix's process-resident stop/resume and kill/offline rows with its no-TUI idle-turn and record-liveness
 readings, while delivery remains the shared app-server `turn/start`/`turn/steer` path. [[pi-headless]] replaces
-the process-resident liveness and idle-resume rows with record-backed liveness plus pi's text-mode
-rendezvous-steer/cold-resume readings.
+the TUI rows with session-home liveness plus pi's text-mode rendezvous-steer/cold-resume and cold-retirement readings.
 [[zcode-harness]] is a deliberate one-shot exception: its `--prompt` launcher has no reusable control
 channel, so its replacement scenario measures launch prompt receipt, hook gates, declaration, and process
 liveness. `deliver` and `resume` explicitly reject rather than impersonating a control transport; no false
@@ -354,8 +353,8 @@ surface:
   one record may claim the target thread and it must be the session being resumed. The loaded-ID set establishes
   reference state but cannot establish record ownership. The post-pending validator repeats the full generation,
   loaded-reference, and owner join: an unload, restart, owner collision, or reassignment retains/restores the
-  original stopped/offline projection without a false transition. This launch fence does not replace steady-state headless liveness: once committed, a sleeping
-  headless conversation remains record-backed.
+  original stopped/offline projection without a false transition. This launch fence does not replace Codex's
+  steady-state shared-record liveness: once committed, its sleeping thread remains addressable through the app-server.
 - **worktree** — Claude has a native `--worktree` + `WorktreeCreate`/`WorktreeRemove` hooks; Codex has none
   (SpexCode manages the worktree itself). The adapter exposes whether the harness owns worktrees.
 - **pane-title semantics** (`paneTitleIsSelfSummary`) — whether the harness's tmux pane title IS the agent's
@@ -537,11 +536,15 @@ already interrupted, while a generation change, unreadable turn, or still-active
   nothing running is disturbed and the fallback retires as sessions turn over.
 
 Headless liveness describes a durable conversation that can accept another delivery; it does not erase the
-outcome of the last ephemeral turn. An intact record normally remains `online` between ephemeral turns because
-the adapter can accept another delivery without a resident turn process. The one explicit boundary is the
-human `stop`: after the runtime has been torn down, the retained record carries `stopped` and every headless
-adapter's shared record-backed liveness reads it `offline`. `resume` clears that marker as it relaunches the
-same conversation; close needs no marker handling because it removes the whole record. Turn outcomes enter the
+outcome of the last ephemeral turn. A shared resident adapter such as Codex remains `online` between turns from
+its intact record because its project app-server can address the thread without a session process. A session-home
+adapter such as Claude headless, OpenCode headless, or pi headless instead owns an exact tmux home and the ordinary
+session leaf birth receipt. Its public row remains addressable while that home exists; physical cold proof requires
+that the receipt-bound leaf and exact home are gone and every adapter-owned per-session listener rejects a connect
+probe. A human `stop` durably records that completed teardown. Archive and close may consume that witness without
+inventing a second leaf or native interrupt, but `stopped` alone never proves cold: a live, malformed, unreadable,
+or reappeared leaf/home/listener remains a loud refusal. `resume` clears the marker as it relaunches the same
+conversation; close needs no marker handling because it removes the whole record. Turn outcomes enter the
 session layer through each harness's native signal: Claude's StopFailure hook, a process-backed headless
 adapter's non-zero child exit, or the Codex app-server observer inherited by its interactive and headless forms.
 Every source reaches the same active-only `markTurnFailure` compare-and-set, changing a live undeclared
@@ -554,7 +557,7 @@ when the adapter's controller, pane home, or shared server can still accept the 
 The runtime's behavior-identical mechanics are shared once across adapter rows: shell arguments use one POSIX
 single-quote encoder; resident headless controllers use one newline-delimited JSON socket client and timeout;
 socket-backed headless delivery uses one `live` / `unproven` / `absent` gate before its adapter-specific cold
-wake; listener-backed liveness and record-backed liveness are named predicates; and per-session socket cleanup
+wake; listener-backed, session-home, and shared-record liveness are named predicates; and per-session socket cleanup
 uses one unlink helper. Adapter rows retain only the real differences: request payloads, timeout/error labels,
 cold-wake spawners, listener-or-pid fallback, delivery refusal text, and the sockets each runtime owns.
 

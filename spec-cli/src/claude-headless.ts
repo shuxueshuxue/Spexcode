@@ -52,10 +52,20 @@ export const deliverViaClaudeHeadless = (rec: ClaudeHeadlessDeliveryRecord, text
   })
 
 export const interruptClaudeHeadless = (rec: HarnessDeliveryRecord) =>
-  controlRequest(claudeHeadlessSock(rec.session), { type: 'interrupt' }, {
-    name: 'claude-headless', session: rec.session, timeoutMs: CONTROL_TIMEOUT_MS,
-    rejected: 'claude-headless control rejected the request',
-  })
+  rec.stopped || rec.archived
+    ? Promise.resolve({ ok: true })
+    : controlRequest(claudeHeadlessSock(rec.session), { type: 'interrupt' }, {
+      name: 'claude-headless', session: rec.session, timeoutMs: CONTROL_TIMEOUT_MS,
+      rejected: 'claude-headless control rejected the request',
+    })
+
+export async function claudeHeadlessColdRuntime(rec: Pick<HarnessDeliveryRecord, 'session'>): Promise<DispatchResult> {
+  const { listenerAt } = await import('./harness.js')
+  const probe = await listenerAt(claudeHeadlessSock(rec.session))
+  return probe === 'dead'
+    ? { ok: true }
+    : { ok: false, error: `claude-headless controller is still ${probe === 'live' ? 'live' : 'unproven'}` }
+}
 
 export class ClaudeHeadlessController {
   private server: Server | null = null

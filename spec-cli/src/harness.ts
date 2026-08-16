@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url'
 import { claudeSlashCommands, codexSlashCommands, opencodeSlashCommands, piSlashCommands, type SlashCommand } from './slash-commands.js'
 import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
-import { claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
+import { claudeHeadlessColdRuntime, claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
-import { opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
+import { opencodeHeadlessColdRuntime, opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
 import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless, piHeadlessColdRuntime } from './pi-headless.js'
 import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath, spexcodeHome } from '@spexcode/spec-core'
 import { git } from '@spexcode/spec-core'
@@ -380,6 +380,8 @@ export interface Harness {
 export type DispatchResult = { ok: boolean; error?: string }
 export type HarnessDeliveryRecord = {
   session: string
+  stopped?: boolean
+  archived?: boolean
   worktreePath?: string
   harnessSessionId?: string | null
   runtimeDir?: string
@@ -2514,6 +2516,7 @@ const panePidLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane
   (tmuxAlive && pane?.pidAlive === true ? 'online' : 'offline')
 
 const recordOnline: Harness['liveness'] = (rec) => rec.stopped ? 'offline' : 'online'
+const sessionHomeLiveness: Harness['liveness'] = (_rec, tmuxAlive) => tmuxAlive ? 'online' : 'offline'
 
 // @@@ unlinkSocks - remove ONLY the transport this teardown PROVED dead. `cleanupRuntime` unlinks *their*
 // socket, and the honest test of "theirs" is that the agent it just killed is GONE. It used to unlink on
@@ -2613,19 +2616,20 @@ export const claudeHeadlessHarness: Harness = {
   id: 'claude-headless',
   sessionEnvVar: harnessIdentity('claude-headless').sessionEnvVar,
   headless: true,
-  runtimeOwnership: 'adapter',
+  runtimeOwnership: 'leaf',
   ownsRendezvous: false,
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => claudeHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), claudeBaseCmd(cmd)),
   launchEnv: noLaunchEnv,
-  // Liveness is the intact, non-stopped record's property. A missing controller/child fails loudly at control
-  // time rather than turning an idle (no child) session into a speculative offline row.
-  liveness: recordOnline,
+  liveness: sessionHomeLiveness,
   deliveryTransport: unprovenDeliveryTransport,
   deliver: deliverViaClaudeHeadless,
   interrupt: interruptClaudeHeadless,
   cleanupRuntime: (rec) => unlinkSocks(claudeHeadlessSock(rec.session)),
-  coldRuntime: async () => ({ ok: false, reason: 'claude-headless has no exact resident unload verification' }),
+  coldRuntime: async (rec) => {
+    const result = await claudeHeadlessColdRuntime(rec)
+    return result.ok ? { ok: true } : { ok: false, reason: result.error || 'claude-headless runtime remains unproven' }
+  },
   deliveryBlockedBy: undefined,
 }
 
@@ -3067,7 +3071,7 @@ export const piHarness: Harness = {
 // pi-headless is an independent harness: its materialization surface is literally pi's, while a resident
 // controller owns non-interactive text-mode turns. Active turns steer through pi's rendezvous extension;
 // idle delivery cold-wakes the exact saved session with `--session` (never `--session-id`, which would create a
-// new conversation). The controller deliberately reports record-backed liveness, matching Claude headless.
+// new conversation). The exact tmux home is its public addressability and physical-cold boundary.
 export const piHeadlessHarness: Harness = {
   ...piHarness,
   id: 'pi-headless',
@@ -3075,11 +3079,11 @@ export const piHeadlessHarness: Harness = {
   headless: true,
   deliveryTransport: unprovenDeliveryTransport,
   // The controller is a per-session process launched in the target tmux pane. Its launch-registered PID
-  // and argv session id are exact leaf ownership evidence; record-backed liveness does not make it shared.
+  // and argv session id are exact leaf ownership evidence.
   runtimeOwnership: 'leaf',
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => piHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), piBaseCmd(cmd)),
-  liveness: recordOnline,
+  liveness: sessionHomeLiveness,
   deliver: deliverViaPiHeadless,
   cleanupRuntime: (rec) => unlinkSocks(piHeadlessSock(rec.session), rvSock(rec.session)),
   coldRuntime: async (rec) => {
@@ -3191,13 +3195,14 @@ export const opencodeHeadlessHarness: Harness = {
   id: 'opencode-headless',
   sessionEnvVar: harnessIdentity('opencode-headless').sessionEnvVar,
   headless: true,
-  runtimeOwnership: 'adapter',
+  runtimeOwnership: 'leaf',
   deliveryTransport: unprovenDeliveryTransport,
   launchCmd: (_id, _runtimeDir, cmd) => opencodeHeadlessLaunchCommand(opencodeBaseCmd(cmd)),
-  // A sleeping native conversation is still addressable by its non-stopped record. Transport breakage belongs
-  // to the next delivery, where the live rendezvous or pane wake reports it loudly.
-  liveness: recordOnline,
-  coldRuntime: async () => ({ ok: false, reason: 'opencode-headless has no exact resident unload verification' }),
+  liveness: sessionHomeLiveness,
+  coldRuntime: async (rec) => {
+    const result = await opencodeHeadlessColdRuntime(rec)
+    return result.ok ? { ok: true } : { ok: false, reason: result.error || 'opencode-headless runtime remains unproven' }
+  },
   deliver: async (rec, text) => {
     return deliverViaSocketOrWake(
       rec.session,

@@ -105,6 +105,14 @@ export function opencodeHeadlessWakeCommand(
   return turnHome([...runPrelude(opencodeCmd), ...resume].join('\n'), outcomePath)
 }
 
+export async function opencodeHeadlessColdRuntime(rec: Pick<HarnessDeliveryRecord, 'session'>): Promise<DispatchResult> {
+  const { rendezvousListening } = await import('./harness.js')
+  const probe = await rendezvousListening(rec.session)
+  return probe === 'dead'
+    ? { ok: true }
+    : { ok: false, error: `opencode-headless rendezvous is still ${probe === 'live' ? 'live' : 'unproven'}` }
+}
+
 type TurnOutcome =
   | { state: 'running'; pid: number }
   | { state: 'reporting'; pid: number; code: number }

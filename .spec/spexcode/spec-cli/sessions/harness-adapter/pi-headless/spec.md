@@ -2,7 +2,7 @@
 title: pi-headless
 status: active
 hue: 292
-desc: pi's non-interactive text-mode harness adapter: pi materialization, record-backed liveness, native rendezvous steer, and exact-session cold resume.
+desc: pi's non-interactive text-mode harness adapter: pi materialization, a session-owned controller leaf, native rendezvous steer, and exact-session cold resume.
 code:
   - spec-cli/src/pi-headless.ts
 related:
@@ -23,11 +23,13 @@ controller in the session's tmux window. It uses pi's default text output; `--mo
 used because it can hang on the supported local runtime.
 
 The adapter is literal object composition over `piHarness` for shim, contract, skills, trust, slash commands,
-events, and session identity. Its runtime is record-backed: while the governed session record exists and is not
-explicitly stopped it reports `online`; a missing controller, child, or rendezvous listener is surfaced by
-delivery as a loud transport error. Human `stop` tears down the runtime and marks the retained record stopped,
-so it reads `offline` until `resume` clears the marker and relaunches the same conversation. Its text output
-remains a transport detail; the note timeline is the terminal-free conversation.
+events, and session identity. Its controller is a session-owned leaf in an exact tmux home. The non-stopped row is
+addressable while that home exists; a missing child or rendezvous listener is surfaced by delivery as a loud
+transport error. Human `stop` tears down the receipt-bound leaf and home and records the result, so a later archive
+or close does not demand the consumed receipt again. Physical cold proof still connect-probes both the controller
+and rendezvous sockets; `stopped` without absent leaf/home/listeners refuses. `resume` clears the marker and
+relaunches the same conversation. Its text output remains a transport detail; the note timeline is the terminal-free
+conversation.
 
 The controller starts a fresh turn with `pi -p --session-id <id> <prompt>`. A delivery first probes pi's
 rendezvous socket. When a listener is present, the existing `deliverViaRendezvous` protocol sends
@@ -46,5 +48,5 @@ branch, and record removal.
 
 Each controller child reports a non-zero exit through the shared [[harness-adapter]] turn-outcome seam. The active
 undeclared record therefore becomes `error` with the pi turn's exit code, while zero exits and an agent-authored
-declaration that landed before teardown remain authoritative. Record-backed `online` still describes a controller
-that can accept a later delivery; it no longer masks the failed turn.
+declaration that landed before teardown remain authoritative. An addressable controller home can still read
+`online`; it no longer masks the failed turn.

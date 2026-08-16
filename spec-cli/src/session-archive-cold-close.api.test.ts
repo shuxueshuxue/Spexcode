@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { codexAppServerPid, codexAppServerReceipt, codexAppServerSock } from './harness.js'
+import { codexAppServerPid, codexAppServerReceipt, codexAppServerSock, listenerAt } from './harness.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 import { processStartToken } from '@spexcode/spec-core'
 
@@ -657,6 +657,128 @@ setInterval(() => {}, 1000)
     for (const pid of fixturePids) if (pidAlive(pid)) {
       try { process.kill(pid, 'SIGKILL') } catch { /* already exited */ }
     }
+    rmSync(fixture, { recursive: true, force: true })
+  }
+})
+
+test('session-owned headless adapters retire stopped cold homes without replaying control', { timeout: 30_000 }, async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'spex-headless-cold-retire-'))
+  const project = join(fixture, 'project')
+  const home = join(fixture, 'home')
+  const runtime = join(home, 'projects', project.replace(/[/.]/g, '-'))
+  const sessions = join(runtime, 'sessions')
+  const tmuxServer = `spex-headless-cold-${process.pid}`
+  let backend: ChildProcess | null = null
+  let liveListener: net.Server | null = null
+  try {
+    mkdirSync(project, { recursive: true })
+    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({ harnesses: ['claude-headless', 'opencode-headless', 'pi-headless'] }, null, 2) + '\n')
+    git(project, 'init', '-q', '-b', 'main')
+    git(project, 'config', 'user.email', 'headless-cold@example.test')
+    git(project, 'config', 'user.name', 'Headless Cold Fixture')
+    git(project, 'add', '.')
+    git(project, 'commit', '-qm', 'fixture')
+
+    const writeStopped = (id: string, harness: 'claude-headless' | 'opencode-headless' | 'pi-headless') => {
+      const dir = join(sessions, id)
+      const worktree = join(fixture, `${id}-worktree`)
+      const branch = `node/${id}`
+      git(project, 'worktree', 'add', '-q', '-b', branch, worktree, 'main')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'rv.path'), `${join(fixture, `${id}.sock`)}\n`)
+      writeFileSync(join(dir, 'session.json'), JSON.stringify({
+        session_id: id, governed: true, worktree_path: worktree, branch,
+        node: '', title: '', name: '', parent: '', status: 'idle', proposal: '', merges: 0,
+        note: '', sortkey: '', createdAt: Date.now(), harness,
+        harness_session_id: harness === 'opencode-headless' ? `ses_${id}` : id,
+        stopped: true, archived: false, cold_proof: '', adapter_recovery: '',
+        launcher: harness, launch_cmd: harness, launch_owner: '',
+      }, null, 2) + '\n')
+      return { id, dir, record: join(dir, 'session.json'), worktree, branch }
+    }
+
+    const suffix = String(process.pid)
+    const claude = writeStopped(`cold-claude-${suffix}`, 'claude-headless')
+    const opencode = writeStopped(`cold-opencode-${suffix}`, 'opencode-headless')
+    const pi = writeStopped(`cold-pi-${suffix}`, 'pi-headless')
+    const live = writeStopped(`live-home-${suffix}`, 'opencode-headless')
+    const unknown = writeStopped(`unknown-leaf-${suffix}`, 'pi-headless')
+    const listening = writeStopped(`live-listener-${suffix}`, 'opencode-headless')
+    writeFileSync(join(unknown.dir, 'agent.pid'), 'not-a-pid\n')
+    const started = spawnSync('/usr/bin/tmux', [
+      '-L', tmuxServer, 'new-session', '-d', '-s', live.id,
+      '/bin/sh', '-c', 'while :; do sleep 60; done',
+    ], { encoding: 'utf8' })
+    assert.equal(started.status, 0, started.stderr)
+    const listenerPath = readFileSync(join(listening.dir, 'rv.path'), 'utf8').trim()
+    liveListener = net.createServer((socket) => socket.end())
+    await new Promise<void>((resolve, reject) => {
+      liveListener!.once('error', reject)
+      liveListener!.listen(listenerPath, resolve)
+    })
+    assert.equal(await listenerAt(listenerPath), 'live')
+
+    const port = await freePort()
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      PORT: String(port),
+      SPEXCODE_HOME: home,
+      SPEXCODE_TMUX: tmuxServer,
+    }
+    delete env.SPEXCODE_API_URL
+    backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(here, 'index.ts')], {
+      cwd: project,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let log = ''
+    backend.stdout?.on('data', (chunk) => { log += String(chunk) })
+    backend.stderr?.on('data', (chunk) => { log += String(chunk) })
+    const base = `http://127.0.0.1:${port}`
+    await waitFor(() => fetch(`${base}/health`).then((response) => response.ok).catch(() => false), `backend health\n${log}`)
+
+    const [claudeClose, opencodeClose, piArchive] = await Promise.all([
+      fetch(`${base}/api/sessions/${claude.id}/close`, { method: 'POST' }),
+      fetch(`${base}/api/sessions/${opencode.id}/close`, { method: 'POST' }),
+      fetch(`${base}/api/sessions/${pi.id}/archive`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on: true }),
+      }),
+    ])
+    assert.deepEqual(
+      [claudeClose.status, opencodeClose.status, piArchive.status],
+      [200, 200, 200],
+      'stopped session-home adapters prove physical cold state without a second native interrupt or leaf teardown',
+    )
+    assert.equal(existsSync(claude.record), false)
+    assert.equal(existsSync(opencode.record), false)
+    assert.equal(existsSync(pi.record), true, 'archive retains the cold Pi record')
+    const archivedPi = JSON.parse(readFileSync(pi.record, 'utf8'))
+    assert.equal(archivedPi.archived, true)
+    assert.equal(archivedPi.stopped, true)
+    assert.match(archivedPi.cold_proof, /^cold-v1\|pi-headless\|/)
+    const piClose = await fetch(`${base}/api/sessions/${pi.id}/close`, { method: 'POST' })
+    assert.equal(piClose.status, 200)
+    assert.equal(existsSync(pi.record), false)
+
+    for (const target of [live, unknown, listening]) {
+      const before = readFileSync(target.record)
+      const response = await fetch(`${base}/api/sessions/${target.id}/close`, { method: 'POST' })
+      assert.equal(response.status, 409)
+      assert.deepEqual(readFileSync(target.record), before, `${target.id} refusal has zero record mutation`)
+      assert.equal(existsSync(target.worktree), true)
+      assert.equal(gitBranchExists(project, target.branch), true)
+    }
+    const paneStillLive = spawnSync('/usr/bin/tmux', ['-L', tmuxServer, 'has-session', '-t', live.id])
+    assert.equal(paneStillLive.status, 0, 'a reappeared exact home is not killed from stopped metadata alone')
+    assert.equal(readFileSync(join(unknown.dir, 'agent.pid'), 'utf8'), 'not-a-pid\n')
+    assert.equal(await listenerAt(listenerPath), 'live', 'a live adapter listener is not removed from stopped metadata alone')
+
+    const closeEvents = readFileSync(join(runtime, 'session-close-ledger.ndjson'), 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    assert.deepEqual(closeEvents.map((event) => event.target?.id).sort(), [claude.id, opencode.id, pi.id].sort())
+  } finally {
+    await stopChild(backend)
+    if (liveListener?.listening) await new Promise<void>((resolve) => liveListener!.close(() => resolve()))
+    spawnSync('/usr/bin/tmux', ['-L', tmuxServer, 'kill-server'], { stdio: 'ignore' })
     rmSync(fixture, { recursive: true, force: true })
   }
 })

@@ -74,6 +74,10 @@ guard, then may invoke the adapter's exact native interrupt for its recorded tar
 and then repeat the complete cold proof
 before deleting anything. An unsupported, rejected, generation-swapped, unknown, or still-active interrupt is a
 loud close refusal; it never substitutes a PID signal, changes a sibling, or skips the ordinary cold proof.
+A row whose successful stop already consumed its session leaf and recorded `stopped` has no current native turn to
+interrupt. Close proceeds directly to the same physical cold proof; it does not contact a now-absent controller.
+The bit alone is not sufficient evidence: any live or ambiguous leaf, exact tmux home, adapter listener, or shared
+resident reference still refuses with zero lifecycle mutation.
 An adapter may have a registered native thread that has not yet received its first user message. When its protocol
 explicitly reports that `thread/turns/list` is unavailable because that thread is not materialized yet, or reports the
 exact target as `thread not loaded`, the report is positive evidence that there is no turn to interrupt, so close proceeds

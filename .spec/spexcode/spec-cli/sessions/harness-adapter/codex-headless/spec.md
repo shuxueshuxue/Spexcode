@@ -35,6 +35,10 @@ there is deliberately no `codex --remote ... resume` TUI attach and no resident 
 shared app-server remains alive for every thread in the project. Its adapter marks this launch as one-shot so
 the generic fast-exit recovery loop does not replay a successful first prompt into a duplicate thread.
 
+Unlike the other headless adapters, Codex has a real shared resident control plane rather than a session-owned
+tmux-home leaf. It therefore retains adapter runtime ownership and proves cold state through its exact generation
+and loaded-thread census; it must not inherit the leaf/no-resident shortcut.
+
 Delivery directly reuses Codex's existing app-server JSON-RPC transport. It reads the owned thread and sends
 `turn/steer` while a turn is in progress or `turn/start` when the thread is idle, so an idle `spex session send`
 starts the next turn without spawning a process or waking a pane. Socket, thread, and RPC failures fail loudly

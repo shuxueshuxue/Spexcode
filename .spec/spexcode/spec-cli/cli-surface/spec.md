@@ -177,6 +177,8 @@ has a move:
    `spex session wait --help` answers with that VERB's exact usage, projected from the same definition
    the bare `spex session` drawer assembles; exact help never carries a copied second manual. Shared
    selector grammar and project-bound write warnings follow the relevant verb into that projection.
+   The project-bound warning applies to `session new` just as it does to project-bound writes that change
+   existing rows; creating a row does not create a second warning policy.
 3. `spex guide [topic]` — the skill layer ([[guide]]): workflows, file formats, settings. **help
    answers "what do I type", guide answers "how do I work".**
 

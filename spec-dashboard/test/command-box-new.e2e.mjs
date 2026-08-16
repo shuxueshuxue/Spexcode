@@ -160,14 +160,45 @@ try {
   await outcome.waitFor({ state: 'visible' })
   assert.match((await outcome.textContent()) || '', /new:fake.*->/)
   step('read spawned child receipt')
+
+  await page.locator('.si-command-box').waitFor({ state: 'hidden' })
+  await page.keyboard.press('Alt+i')
+  await page.waitForFunction(() => document.activeElement?.classList?.contains('si-command-input'))
+  const secondText = '@new:fake verify notification stacking'
+  await input.fill(secondText)
+  await page.locator('.si-command-send').click()
+  step('submit second worker request')
+  await page.waitForFunction(() => document.querySelectorAll('.tn-notice.success').length === 2)
+  const stackedNotices = await page.locator('.tn-notice.success').evaluateAll((nodes) => nodes.map((node) => {
+    const rect = node.getBoundingClientRect()
+    return { top: rect.top, bottom: rect.bottom, width: rect.width, duration: getComputedStyle(node).getPropertyValue('--tn-duration') }
+  }))
+  assert.equal(stackedNotices.length, 2)
+  assert.ok(stackedNotices[0].bottom <= stackedNotices[1].top, 'older notice stays above the newest notice')
+  assert.equal(stackedNotices[0].width, stackedNotices[1].width, 'stacked notices share one width')
+  for (const notice of stackedNotices) assert.ok(Number.parseFloat(notice.duration) >= 5000 && Number.parseFloat(notice.duration) <= 14000)
+  step('verify notice stack geometry')
+  await page.locator('.si-command-box').waitFor({ state: 'hidden' })
   await page.screenshot({ path: join(out, 'command-box-new-spawned.png'), fullPage: true })
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const mobileNotice = await page.locator('.tn-notice.success').last().evaluate((node) => {
+    const rect = node.getBoundingClientRect()
+    return { bottom: rect.bottom, width: rect.width }
+  })
+  assert.ok(mobileNotice.width <= 370, `mobile notice width ${mobileNotice.width}`)
+  assert.ok(mobileNotice.bottom <= 776, `mobile notice bottom ${mobileNotice.bottom}`)
+  step('verify mobile notice placement')
+  await page.screenshot({ path: join(out, 'command-box-new-mobile.png'), fullPage: true })
 
   const child = await waitFor(async () => {
     const sessions = await fetch(`${api}/api/sessions?all=1`).then((response) => response.json())
     return sessions.find((session) => session.parent === source && session.launcher === 'fake') || null
   }, 'child session spawned by Command Box')
   const sourceCapture = await fetch(`${api}/api/sessions/${source}/capture`).then((response) => response.text())
-  assert.match(sourceCapture, new RegExp(text))
+  const capturedInput = sourceCapture.replace(/\r?\n/g, '')
+  assert.match(capturedInput, new RegExp(text))
+  assert.match(capturedInput, new RegExp(secondText))
   assert.equal(child.parent, source)
   assert.equal(child.launcher, 'fake')
 

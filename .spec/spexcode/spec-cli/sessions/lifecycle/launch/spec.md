@@ -190,7 +190,14 @@ must never block a launch. A launch beyond the cap lands as a durable **`queued`
 (fully prepared, claude not started, its authoritative resolved payload parked as the `launch` artifact in the global store). A **drainer** starts
 queued sessions oldest-first the instant a slot frees — on every slot-freeing server action and on a
 periodic tick (catching frees the server never sees: a hook subprocess, a crash). A restart re-drains
-survivors. Occupancy is counted from the SAME liveness snapshot the board uses, so when that probe **fails**
+survivors. Every automatic drain, restart takeover, and replay uses one eligibility rule: the record must still
+be queued, must not carry the human's durable `stopped` marker, and must be unowned or owned by this public
+backend authority. Stop is therefore a negative admission fence, not another request to launch; repeated or
+racing drains cannot revive the retained row. Explicit resume is the inverse operation: after adapter readiness
+succeeds it consumes the queue state and authority lease and publishes the resting `idle` lifecycle, never a
+live `queued` row. A never-launched queued stop frees no occupied slot and does not ask the drainer to process
+itself; ordinary slot-freeing stops may still wake the same drainer for other eligible rows. Occupancy is counted
+from the SAME liveness snapshot the board uses, so when that probe **fails**
 (tmux timing out — the overload condition), occupancy is unknowable and the drainer **launches nothing this
 pass**, deferring to the next tick: under load the safe move is to add no compute, never to over-launch off an
 undercount ([[state]] board honesty applied to the cap). `reopen` relaunches a **confirmed-dead** session (the

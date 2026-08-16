@@ -660,6 +660,122 @@ touch ${JSON.stringify(consumed)}
   }
 })
 
+test('successful resume publishes a capacity-queued record as idle after readiness', serial, async () => {
+  const liveBefore = liveSessionsCensus()
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousPath = process.env.PATH
+  const originalLaunchReady = (codexHeadlessHarness as any).launchReady
+  const home = mkdtempSync(join(tmpdir(), 'spex-queued-resume-state-'))
+  const project = join(home, 'project'); mkdirSync(project)
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
+  writeFileSync(join(project, 'README.md'), 'fixture\n')
+  execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'add', '.'], { cwd: project })
+  execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
+  process.env.SPEXCODE_HOME = home
+  const id = `queued-resume-state-${process.pid}`
+  assertIsolatedResumeStore(home, id)
+  const commandPath = join(home, 'tmux-command')
+  const launchPidPath = join(home, 'launch.pid')
+  const bin = join(home, 'bin'); writeResumeTmuxFixture(bin, commandPath, launchPidPath)
+  process.env.PATH = `${bin}:${previousPath}`
+  const helper = join(home, 'helper.sh'); writeFileSync(helper, '#!/usr/bin/env bash\nexit 0\n'); chmodSync(helper, 0o755)
+  writeResumeFixtureRecord(id, project, helper)
+  const queued = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+    ...queued,
+    status: OWNED_QUEUE_RAW_STATUS,
+    stopped: false,
+    launch_owner: backendLaunchAuthority(),
+  }, null, 2)}\n`)
+  try {
+    ;(codexHeadlessHarness as any).launchReady = async () => ({
+      proof: { kind: 'queued-resume-ready' },
+      validate: async () => true,
+    })
+    assert.deepEqual(await resumeSession(id), { ok: true })
+
+    const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(stored.status, 'idle', 'readiness publishes a live lifecycle, never the pre-launch queue state')
+    assert.equal(stored.stopped, false)
+    assert.equal(stored.launch_owner, '')
+    const publicRow = (await listSessions(true)).find((row) => row.id === id)
+    assert.ok(publicRow)
+    assert.equal(publicRow.lifecycle, 'idle')
+    assert.notEqual(publicRow.status, 'queued')
+  } finally {
+    ;(codexHeadlessHarness as any).launchReady = originalLaunchReady
+    if (existsSync(launchPidPath)) {
+      const pid = Number(readFileSync(launchPidPath, 'utf8').trim())
+      if (Number.isInteger(pid) && pid > 0) try { process.kill(pid, 'SIGTERM') } catch { /* already exited */ }
+    }
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    process.env.PATH = previousPath
+    rmSync(home, { recursive: true, force: true })
+    assertLiveSessionsUnchanged(liveBefore, 'queued resume state fixture')
+  }
+})
+
+test('a stopped queued record is ineligible for automatic and repeated queue drains', serial, async () => {
+  const liveBefore = liveSessionsCensus()
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousPath = process.env.PATH
+  const originalLaunchReady = (claudeHarness as any).launchReady
+  const home = mkdtempSync(join(tmpdir(), 'spex-stopped-queue-drain-'))
+  const project = join(home, 'project'); mkdirSync(project)
+  execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
+  execFileSync('git', ['-C', project, '-c', 'user.name=queue-fixture', '-c', 'user.email=queue@example.test', 'commit', '--allow-empty', '-qm', 'fixture'])
+  process.env.SPEXCODE_HOME = home
+  const id = `stopped-queue-drain-${process.pid}`
+  assertIsolatedResumeStore(home, id)
+  const commandPath = join(home, 'tmux-command')
+  const launchPidPath = join(home, 'launch.pid')
+  const bin = join(home, 'bin'); writeResumeTmuxFixture(bin, commandPath, launchPidPath)
+  process.env.PATH = `${bin}:${previousPath}`
+  const launches = join(home, 'launches')
+  const helper = join(home, 'helper.sh')
+  writeFileSync(helper, `#!/usr/bin/env bash\nprintf x >> ${JSON.stringify(launches)}\n`)
+  chmodSync(helper, 0o755)
+  mkdirSync(sessionStoreDir(id), { recursive: true })
+  writeFileSync(sessionArtifactPath(id, 'launch'), 'prepared capacity-queued prompt')
+  writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+    session_id: id, governed: true, worktree_path: project, branch: 'main',
+    node: 'launch', title: '', name: '', parent: '', status: OWNED_QUEUE_RAW_STATUS, proposal: '',
+    merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'claude',
+    harness_session_id: id, stopped: false, archived: false, cold_proof: '', adapter_recovery: '',
+    launcher: 'fixture', launch_cmd: helper, launch_owner: backendLaunchAuthority(),
+    create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
+  }, null, 2)}\n`)
+  try {
+    ;(claudeHarness as any).launchReady = async () => ({
+      proof: { kind: 'stopped-queue-must-not-launch' },
+      validate: async () => true,
+    })
+    assert.equal(await stopSession(id), true, 'public stop commits the stopped record')
+    assert.equal(await stopSession(id), true, 're-entering stop is idempotent for the retained queued row')
+    await Promise.all([drainQueue(), drainQueue()])
+    await sleep(200)
+    await drainQueue()
+
+    const stored = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(stored.stopped, true)
+    assert.equal(stored.status, OWNED_QUEUE_RAW_STATUS, 'stop wins over every drain/replay entry')
+    assert.equal(existsSync(launches), false, 'no drain launches the stopped prepared prompt')
+    assert.equal(canDrainQueued(fromRaw(stored), backendLaunchAuthority()), false)
+  } finally {
+    ;(claudeHarness as any).launchReady = originalLaunchReady
+    if (existsSync(launchPidPath)) {
+      const pid = Number(readFileSync(launchPidPath, 'utf8').trim())
+      if (Number.isInteger(pid) && pid > 0) try { process.kill(pid, 'SIGTERM') } catch { /* already exited */ }
+    }
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    process.env.PATH = previousPath
+    rmSync(home, { recursive: true, force: true })
+    assertLiveSessionsUnchanged(liveBefore, 'stopped queue drain fixture')
+  }
+})
+
 test('resume missing, failed, or invalidated readiness preserves the stopped offline record', serial, async (t) => {
   for (const outcome of ['missing', 'timeout', 'thrown', 'invalidated'] as const) await t.test(outcome, async () => {
     const liveBefore = liveSessionsCensus()
@@ -1733,7 +1849,8 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
   assert.equal(reread.stopped, false, 'records from before stop tracking default to not stopped')
   assert.equal(canDrainQueued(reread, publicAuthority), true, 'a replacement child at the same public authority takes over')
   assert.equal(canDrainQueued(reread, 'http://127.0.0.1:8956'), false, 'a different backend authority cannot claim it')
-  assert.equal(canDrainQueued({ status: 'queued', launchOwner: null }, 'http://127.0.0.1:8956'), true, 'legacy unowned queues remain adoptable')
+  assert.equal(canDrainQueued({ status: 'queued', launchOwner: null, stopped: false }, 'http://127.0.0.1:8956'), true, 'legacy unowned queues remain adoptable')
+  assert.equal(canDrainQueued({ status: 'queued', launchOwner: null, stopped: true }, 'http://127.0.0.1:8956'), false, 'explicit stop fences even a legacy unowned queue')
 })
 
 test('a launch establishes identity: inherited session ids are stripped, this session\'s is set', serial, () => {

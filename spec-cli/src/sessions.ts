@@ -268,8 +268,8 @@ export function rawLifecycleStatus(rec: Pick<SessRec, 'status' | 'launchOwner'>)
   return rec.status === 'queued' && rec.launchOwner ? OWNED_QUEUE_RAW_STATUS : rec.status
 }
 
-export function canDrainQueued(rec: Pick<SessRec, 'status' | 'launchOwner'>, authority = backendLaunchAuthority()): boolean {
-  return rec.status === 'queued' && (rec.launchOwner === null || rec.launchOwner === authority)
+export function canDrainQueued(rec: Pick<SessRec, 'status' | 'launchOwner' | 'stopped'>, authority = backendLaunchAuthority()): boolean {
+  return rec.status === 'queued' && !rec.stopped && (rec.launchOwner === null || rec.launchOwner === authority)
 }
 
 // typed read of a session's record from the global store (null if it has none — a self-launched session that
@@ -2626,6 +2626,7 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
 }
 
 type ResumeOptions = { force?: boolean; guard?: boolean }
+const restingLifecycle = (status: Lifecycle): Lifecycle => status === 'active' || status === 'queued' ? 'idle' : status
 
 async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Promise<{ ok: boolean; error?: string; refused?: boolean; info?: string }> {
   const { force = false, guard = true } = opts
@@ -2699,7 +2700,7 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   // Archived sessions have no runtime by invariant. Resume first leaves cold storage, then the normal
   // starting -> online launch path recreates the same conversation.
   const current = wasArchived ? (readRecord(id) || { ...wt.rec, archived: false, stopped: true, coldProof: null }) : wt.rec
-  const resumed: SessRec = { ...current, archived: false, coldProof: null, status: current.status === 'active' ? 'idle' : current.status, stopped: false }
+  const resumed: SessRec = { ...current, archived: false, coldProof: null, status: restingLifecycle(current.status), stopped: false }
   if (force || lv === 'offline') {
     let resumeTail: string
     try { resumeTail = h.resumeArg(wt.rec, readLaunchFile(id)).trim() }
@@ -2726,7 +2727,7 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
       ...latest,
       archived: false,
       coldProof: null,
-      status: latest.status === 'active' ? 'idle' : latest.status,
+      status: restingLifecycle(latest.status),
       stopped: false,
       launchReadinessPending: launchReadinessPending(preResume),
     }
@@ -3444,7 +3445,7 @@ async function stopSessionUnlocked(id: string): Promise<boolean> {
   await stopAgentProcess(id, wt.rec)
   const rec = readRecord(id)
   if (rec) writeRecord({ ...rec, stopped: true })
-  requestQueueDrain()   // a stop frees a slot — start the next queued session if any
+  if (wt.rec.status !== 'queued') requestQueueDrain()   // a live stop frees a slot; a prepared queue never held one
   return !!wt
 }
 export const stopSession = (id: string): Promise<boolean> =>

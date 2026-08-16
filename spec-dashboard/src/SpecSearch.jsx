@@ -5,9 +5,10 @@ import { STATUS_COLOR, sessionHandle, sessionHeadline, sessionPresentationOrder 
 import { useT } from './i18n/index.jsx'
 import { rankDocs } from '@spexcode/spec-cli/ranker'
 import { useSpecCorpus } from './corpus.js'
-import { evalAddress, graphNodeAddress, issueAddress, sessionAddress } from './address.js'
+import { addressHash, evalAddress, graphNodeAddress, issueAddress, reviewListAddress, sessionAddress } from './address.js'
 import { EVAL_FILTER_KIND } from '@spexcode/spec-core/review'
 import { useReviewPage } from './reviewPage.js'
+import { Icon } from './icons.jsx'
 
 // a scenario row's dot reads its satisfaction the way the tile/panel do (score.jsx): green fresh pass · red
 // fresh fail · grey stale / never-measured.
@@ -200,6 +201,24 @@ export default function SpecSearch({ specs, sessions, onPick, onClose, boost = n
             </li>
           ))}
         </ul>
+        {(issuePage.data?.total > 0 || evalPage.data?.total > 0) && (
+          <nav className="search-review-links" aria-label={t('search.allResults')}>
+            {issuePage.data?.total > 0 && (
+              <a className="search-review-link" href={addressHash(reviewListAddress('issues', issueQuery))}>
+                <Icon name="issues" size={15} />
+                <span>{t('search.allIssues', { n: issuePage.data.total })}</span>
+                <Icon name="chevron-right" size={14} />
+              </a>
+            )}
+            {evalPage.data?.total > 0 && (
+              <a className="search-review-link" href={addressHash(reviewListAddress('evals', evalQuery))}>
+                <Icon name="evals" size={15} />
+                <span>{t('search.allEvals', { n: evalPage.data.total })}</span>
+                <Icon name="chevron-right" size={14} />
+              </a>
+            )}
+          </nav>
+        )}
         <div className="search-foot">{t('search.hint')}</div>
       </div>
     </div>

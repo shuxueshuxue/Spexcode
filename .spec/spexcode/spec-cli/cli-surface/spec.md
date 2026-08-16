@@ -32,8 +32,8 @@ needs a repository nor enters the noun-first command map.
 ## expanded spec
 
 **The grammar.** `spex <noun> <verb> [object] [flags]` — the verb is always the token immediately
-after its noun, so an id can never occupy a verb slot and no id is a reserved word. Eight noun drawers
-(`spec` · `session` · `runtime` · `peer` · `eval` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
+after its noun, so an id can never occupy a verb slot and no id is a reserved word. Seven noun drawers
+(`spec` · `session` · `peer` · `eval` · `issue` · `remark` · `evidence`), plus bare project verbs (`graph` ·
 `init` · `materialize` · `doctor` · `serve` · `dashboard` · `guidance` · `uninstall`) allowed only because their
 object is invariably THIS project (`dashboard`'s object is the HOST's project set — still no free
 object slot), plus the two help surfaces (`help` · `guide`). A bare noun prints its
@@ -78,12 +78,13 @@ dispatched, versus a worker proposing its own end for the human to perform. Any 
 reclaim what it started — the propose-close cleanup nudge included — scopes its sweep to what the agent
 spawned and excludes the running session by name, because `.` and a bare own id are valid selectors here.
 
-`spex runtime rotate codex [--launcher <name>]` is the explicit shared-Codex repair: it only starts a
-fresh, proven generation and switches NEW traffic to it. The previous root enters the runtime ledger's
+`spex doctor repair app-server [--launcher <name>]` is the explicit app-server continuity repair: it starts a
+fresh, proven generation and switches only NEW traffic to it. The previous root enters the runtime ledger's
 draining state and remains addressable for its exact bound work; this CLI has no kill or migration verb.
-Its launcher is an adapter/auth choice, not a positional source of truth: the configured default applies
-only when it is a Codex launcher, and a non-Codex default requires an explicit configured Codex
-`--launcher` rather than guessing a command or credential.
+Its launcher is an adapter/auth choice, not a positional source of truth: the configured default applies only
+when it is a Codex launcher, and a non-Codex default requires an explicit configured Codex `--launcher` rather
+than guessing a command or credential. It is never an automatic rotation policy. The retired `runtime` drawer
+is a non-executing signpost to this command; it is absent from the public map and has no compatibility alias.
 
 Objects and payloads are parsed by role after recognized flags and their values are removed, never by a fixed
 `process.argv` slot. Thus a routing flag may follow a selector before or after a write payload without becoming
@@ -141,7 +142,7 @@ so a stranded native transport cannot look like a successful command in scripts 
 **Signposts, one version only.** Every spelling v0.3.0 removed (the bare promoted verbs, the bare
 session subs, `yatsu`/`blob`/`issues`/`forge`/`tree`/`board`, top-level
 `search`/`owner`/`lint`/`ack`, `resolve`/`retract`, `session rawkey`, `session exit|reopen` (respelled
-`stop`/`resume`), `session capture|prompt` (folded into `show`), the hook verbs
+`stop`/`resume`), `session capture|prompt` (folded into `show`), the retired `runtime` drawer, the hook verbs
 `session state|fail|idle|commit-gate`, positional `doctor contract|conflicts`, `review proof`) maps
 to a signpost: one stderr line naming the new spelling, exit non-zero, and the old verb NEVER
 executes — a signpost is a tombstone, not an alias. Signposts are term-limited compatibility, removed

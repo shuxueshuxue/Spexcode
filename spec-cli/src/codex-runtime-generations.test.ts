@@ -166,7 +166,7 @@ function recordSession(root: string, sessionId: string, threadId: string): void 
   })}\n`)
 }
 
-test('an explicit rotation moves only new Codex traffic to a proved fresh root', { concurrency: false }, async () => {
+test('an explicit app-server switch moves only new Codex traffic to a proved fresh root', { concurrency: false }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-codex-generation-explicit-rotation-'))
   try {
     mkdirSync(join(root, 'sessions'), { recursive: true })
@@ -192,7 +192,7 @@ test('an explicit rotation moves only new Codex traffic to a proved fresh root',
 
     const receipt = readFileSync(rotation.current.receiptFile, 'utf8')
     writeFileSync(rotation.current.receiptFile, 'ambiguous replacement receipt\n')
-    await assert.rejects(rotateCodexCurrentGeneration(root, start), /canonical Codex generation is unproven/)
+    await assert.rejects(rotateCodexCurrentGeneration(root, start), /canonical app-server generation is unproven/)
     assert.equal(starts, 2, 'an ambiguous current root is never replaced behind its own back')
     assert.equal(readCodexGenerationLedger(root).current, rotation.current.id)
     writeFileSync(rotation.current.receiptFile, receipt)

@@ -3,9 +3,9 @@ scenarios:
   - name: advance-can-duplicate-never-skip
     tags: [cli]
     description: >-
-      Exercise `advanceFollow` against a real store through `spex session wait`/`watch`. Offer positions
-      lower and higher than the stored one, and confirm that sending a message to a session changes no
-      cursor at all.
+      Exercise `advanceFollow` against a real store through the installed public session-core package surface.
+      Offer positions lower and higher than the stored one, and confirm through the real CLI that sending a
+      message to a session changes no cursor at all.
     expected: >-
       A lower offer is ignored and a higher offer advances the reader, so advancement is monotonic. A send
       changes no position anywhere: a transport has no opinion about what has been READ, and what a session
@@ -26,8 +26,9 @@ scenarios:
   - name: whole-line-readable-position
     tags: [cli]
     description: >-
-      Write cursors through the TypeScript writer with several follows present, then read one target's
-      position back by matching a whole line — no JSON parser, no value regex that could match a neighbour.
+      Write cursors through the installed public package surface with several follows present, then read one
+      target's position back by matching a whole line — no JSON parser, no value regex that could match a
+      neighbour.
     expected: >-
       The file is one field per line, so a whole-line match finds a position exactly — the same shape and
       the same reason as the session record. Every write goes through the one writer that rewrites the file
@@ -48,8 +49,9 @@ scenarios:
 
 # session-cursors — yatsu
 
-Every scenario here has a product surface: `spex session wait` / `watch` are what land on cursors
-([[session-follow]]), so measure through that CLI and never through an import.
+Every scenario here has a supported surface: `spex session wait` exercises cursors from the product, while the
+installed `@spexcode/session-core` public entry exposes their reusable read/write contract. Never import a source
+file or substitute a unit test.
 
 The loss being scored is asymmetric and worth naming: a position that ends up too low costs an event read
 twice, while one too high costs an event nobody ever sees. Every scenario is a check that the second

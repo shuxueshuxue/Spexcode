@@ -78,13 +78,15 @@ scenarios:
     description: >-
       Make the target's adapter poke impossible to land (unlink its rendezvous socket, or stop the agent so
       no listener exists), then `spex session send <id> "<text>"` and read the command's exit and output.
-      Afterwards bring the agent back to a turn boundary and read what reaches its context.
+      Afterwards bring the agent back and let the owning backend's delivery sweep retry, then read what reaches
+      its context.
     expected: >-
       The send SUCCEEDS — delivery is the append, so the bytes are durable regardless of the poke — and the
       line is present in the target's timeline. Nothing reports a false failure and nothing reports a
-      delivery that did not happen. At the target's next turn boundary the unread line is injected into its
-      context exactly once and the cursor advances, so a message can be late but never lost and never
-      doubled. The pre-rewrite failure this replaces: a kicked socket write was the message's only copy.
+      delivery that did not happen. The pending queue retains the debt while the adapter is down; after the
+      runtime returns, a sweep delivers it as an ordinary prompt exactly once and removes the debt, so a message
+      can be late but never lost and never doubled. No follow cursor participates in delivery. The pre-rewrite
+      failure this replaces: a kicked socket write was the message's only copy.
   - name: one-move-appends-one-line
     tags: [backend-api]
     description: >-

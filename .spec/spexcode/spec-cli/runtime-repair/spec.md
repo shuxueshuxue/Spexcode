@@ -10,6 +10,7 @@ related:
   - spec-cli/src/help.ts
   - spec-cli/src/codex-runtime-generations.ts
   - spec-cli/src/codex-runtime-generations.test.ts
+  - spec-cli/src/runtime-rotate.cli.test.ts
 ---
 
 # runtime-repair
@@ -23,9 +24,10 @@ loaded conversations.
 ## expanded spec
 
 `spex runtime rotate codex [--launcher <name>]` is a local, explicit repair action. It resolves a
-configured Codex or Codex-headless launcher, removes session-specific environment identity from the
-detached child, and starts the matching app-server binary with a new ledger endpoint. The command is
-not a backend request and does not create a session or native thread itself.
+configured Codex or Codex-headless launcher from the project main checkout, then resolves the separate
+per-project runtime store for the generation ledger. It removes session-specific environment identity from
+the detached child and starts the matching app-server binary with a new ledger endpoint. The command is not
+a backend request and does not create a session or native thread itself.
 
 The generation ledger is the sole authority for publication. The command succeeds only after the new
 endpoint has proved its detached process and socket identity and the ledger has atomically made it

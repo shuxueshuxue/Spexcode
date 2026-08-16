@@ -1,4 +1,4 @@
-import { runtimeRoot } from '@spexcode/spec-core'
+import { mainCheckout, runtimeRoot } from '@spexcode/spec-core'
 import { rotateCodexCurrentGeneration } from './codex-runtime-generations.js'
 import { codexBinary, defaultLauncher, resolveLauncher, sessionIdentityEnvVars } from './harness.js'
 import { commandHelp } from './help.js'
@@ -36,9 +36,10 @@ export async function runRuntimeRotate(args: string[]): Promise<void> {
     return
   }
   const parsed = parseRotateArgs(args)
+  const project = mainCheckout()
   const root = runtimeRoot()
-  const launcherName = parsed.launcher ?? defaultLauncher(root)
-  const launcher = resolveLauncher(launcherName, root)
+  const launcherName = parsed.launcher ?? defaultLauncher(project)
+  const launcher = resolveLauncher(launcherName, project)
   if (launcher.harness !== 'codex' && launcher.harness !== 'codex-headless') {
     usageError(`launcher '${launcher.name}' uses ${launcher.harness}; select a configured Codex launcher with --launcher`)
   }

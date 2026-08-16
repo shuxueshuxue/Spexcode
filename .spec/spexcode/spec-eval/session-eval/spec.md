@@ -316,6 +316,13 @@ its `--export` flag, and the old `spex review proof` spelling is gone — a sign
 form and exits non-zero, never running ([[cli-surface]]). The read/write split stays intact: `spex eval
 ls --session` READS a session's evaluation; filing a reading remains `spex eval add`.
 
+That page walk is one snapshot read. A page's top-level `revision` hashes that page response and therefore
+legitimately differs from the next page; the shared `evalRevision` tuple (`epoch`, `generation`, `content`)
+identifies the session-eval cut. The CLI aggregates only pages carrying one equal tuple. If the tuple moves,
+it discards the partial aggregate and restarts at page one, for at most two complete attempts. A second drift
+fails loudly with the observed tuples and emits no partial text or JSON. Missing snapshot identity on a
+multi-page response is likewise unavailable, never guessed from page hashes.
+
 The impact snapshot carries PARSED relation entries, not a pair of projections to be reassembled. A node's
 relation is one list of `{path, selectors}`; `code`/`related` (bare paths) and `codeScoped`/`relatedScoped`
 (the selector-bearing subset) are views derived from it for consumers that want exactly those, and the

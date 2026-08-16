@@ -423,6 +423,10 @@ try {
   const desktopPaletteTexts = await page.locator('.search-item').allTextContents()
   assert.equal(desktopPaletteTexts.some((text) => /showing \d+ of \d+/i.test(text)), false,
     'pagination metadata never becomes a search result')
+  assert.deepEqual(await page.locator('.search-review-link').evaluateAll((links) => links.map((link) => link.getAttribute('href'))), [
+    '#/issues?q=is%3Aissue',
+    '#/evals?q=is%3Aeval',
+  ], 'bounded palette exposes canonical full-list anchors outside its entity results')
   const desktopEvalTarget = paletteEvals.data.items[0].scenario
   const desktopFilteredEvalWaiting = waitApi(page, 'evals', (url) => url.searchParams.get('q') === `is:eval ${desktopEvalTarget}`)
   await page.locator('.search-input').fill(desktopEvalTarget)
@@ -503,24 +507,17 @@ try {
   await palettePage.waitForFunction(() => document.querySelectorAll('.search-item').length === 15)
   const paletteTexts = await palettePage.locator('.search-item').allTextContents()
   assert.equal(paletteTexts.some((text) => /showing \d+ of \d+/i.test(text)), false)
-  const paletteEvalTarget = paletteEvalData.items[0].scenario
-  const filteredEvalResponse = palettePage.waitForResponse((response) => {
-    const url = new URL(response.url())
-    return url.pathname.endsWith('/api/evals') && url.searchParams.get('q') === `is:eval ${paletteEvalTarget}`
-  }, { timeout: 45_000 })
-  await palettePage.locator('.search-input').fill(paletteEvalTarget)
-  const filteredEvalData = await (await filteredEvalResponse).json()
-  await palettePage.locator('.search-item:has(.k-scenario)').first().waitFor({ state: 'visible' })
-  const paletteEvalIndex = await palettePage.locator('.search-item').evaluateAll((rows) => rows.findIndex((row) => row.querySelector('.k-scenario')))
-  assert.ok(paletteEvalIndex >= 0)
-  for (let index = 0; index < paletteEvalIndex; index++) await palettePage.keyboard.press('ArrowDown')
-  const selectedEval = await palettePage.locator('.search-item.on .search-title').innerText()
-  assert.ok(filteredEvalData.items.some((item) => item.scenario === selectedEval))
-  paletteRecording.mark(`Issues 25/${paletteIssueData.total}; Evals 25/${paletteEvalData.total}; real Eval keyboard selected`)
+  assert.equal(await palettePage.locator('.search-review-link').count(), 2)
+  await palettePage.locator('.search-input').focus()
+  await palettePage.keyboard.press('Tab')
+  assert.equal(await palettePage.evaluate(() => document.activeElement?.getAttribute('href')), '#/issues?q=is%3Aissue')
+  await palettePage.keyboard.press('Tab')
+  assert.equal(await palettePage.evaluate(() => document.activeElement?.getAttribute('href')), '#/evals?q=is%3Aeval')
+  paletteRecording.mark(`Issues 25/${paletteIssueData.total}; Evals 25/${paletteEvalData.total}; Tab reached both full-list anchors`)
   await palettePage.screenshot({ path: join(out, 'bounded-palette.png'), fullPage: false })
   await palettePage.keyboard.press('Enter')
-  await palettePage.waitForFunction(() => location.hash.startsWith('#/evals'))
-  paletteRecording.mark('Enter routed to the selected Eval entity')
+  await palettePage.waitForFunction(() => location.hash === '#/evals?q=is%3Aeval')
+  paletteRecording.mark('Enter routed to the canonical full Evals list')
   await paletteContext.close()
   await finishRecording(paletteRecording, paletteVideo)
 

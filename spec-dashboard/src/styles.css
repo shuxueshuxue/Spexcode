@@ -1023,6 +1023,15 @@ a.scenario-count:hover { background: var(--panel2); }
    scrollbar; chips + kind stay fixed. */
 .search-title { color: var(--ink2); font-weight: var(--weight-semibold); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .search-path { color: var(--muted); font-size: var(--type-meta); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.search-review-links { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-top: 1px solid var(--line); background: var(--panel); }
+.search-review-link {
+  flex: 1 1 160px; min-width: 0; min-height: 32px; display: flex; align-items: center; gap: 7px; padding: 6px 8px;
+  border-radius: 3px; color: var(--ink2); text-decoration: none;
+}
+.search-review-link span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-review-link:hover { background: var(--panel2); }
+.search-review-link:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; background: var(--panel2); }
+.search-review-link > svg { flex: none; color: var(--muted); }
 .search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: var(--type-meta); }
 
 /* ---- session interface (#/sessions): two panes, right content morphs ---- */

@@ -96,7 +96,7 @@ test('every control is a token BUILDER over the committed text — no private fi
   assert.match(page, /queryParam\(text, EVAL_QUERY_DEFAULT\)/)
 })
 
-test('bounded secondary consumers expose one real-entity page; embedded panes alone link to full lists', () => {
+test('bounded secondary consumers expose one real-entity page and direct full-list commands', () => {
   assert.match(nodeView, /useReviewPage\('issues', query, 1/)
   assert.match(nodeView, /useReviewPage\('evals', query, 1, \{ pollMs: 0, view: 'timeline' \}\)/)
   assert.match(nodeView, /summary=\{\{ shown: issues\.length, total: page\.data\.total \}\}/)
@@ -107,7 +107,12 @@ test('bounded secondary consumers expose one real-entity page; embedded panes al
 
   assert.match(palette, /useReviewPage\('issues', issueQuery, 1/)
   assert.match(palette, /useReviewPage\('evals', evalQuery, 1/)
-  assert.doesNotMatch(palette, /(?:see-all|reviewListAddress|reviewList\.showing)/)
+  assert.match(palette, /className="search-review-links"/)
+  assert.match(palette, /addressHash\(reviewListAddress\('issues', issueQuery\)\)/)
+  assert.match(palette, /addressHash\(reviewListAddress\('evals', evalQuery\)\)/)
+  assert.match(palette, /issuePage\.data\?\.total/)
+  assert.match(palette, /evalPage\.data\?\.total/)
+  assert.doesNotMatch(palette, /reviewList\.showing/)
   assert.match(palette, /const SERVER_MATCHED_PLANES = new Set\(\['issue', 'scenario'\]\)/)
   assert.match(palette, /SERVER_MATCHED_PLANES\.has\(k\)[\s\S]*\? docs\.slice\(0, 15\)[\s\S]*: rankDocs\(query/)
   assert.match(reviewPage, /const inflightPages = new Map\(\)/)

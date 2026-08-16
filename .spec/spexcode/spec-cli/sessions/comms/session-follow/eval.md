@@ -4,15 +4,17 @@ scenarios:
     tags: [cli]
     description: >-
       From a real governed parent session, create a real child, then read `spex session watch list` in the
-      parent's terminal. Have the child declare a state change and inspect the parent's terminal/timeline;
-      finally run `spex session watch cancel <child>` and make one more child declaration.
+      parent's terminal and inspect its received child-state snapshot. Have the child declare review, then
+      return to working, and inspect the parent's terminal/timeline. Add an independent manual watch, repeat
+      the working transition, then cancel that manual source.
     expected: >-
       Creation performs one successful, one-shot watch registration: list names the child and the command
-      does not remain running. The first child declaration arrives at the parent as an ordinary send-backed
-      terminal message, including the child identity and authored state; a temporarily unavailable parent
-      keeps that message in its normal delivery queue. After cancel, no later child declaration is delivered.
-      A shell with no governed parent records no subscription and is instead given the background
-      `spex session wait <child>` fallback.
+      does not remain running, and the parent receives exactly one ordinary send-backed current-state snapshot,
+      including an initial working state. The later review declaration is delivered, but the parent-only return
+      to working is not. The independent manual source makes that working transition arrive exactly once;
+      cancelling it restores the parent-only suppression. A temporarily unavailable parent keeps every accepted
+      message in its normal delivery queue. A shell with no governed parent records no subscription and is
+      instead given the background `spex session wait <child>` fallback.
   - name: wait-edge-triggered-return
     tags: [backend-api]
     description: >-

@@ -211,10 +211,10 @@ const reapChild = () => { unregisterBackendInstance(instanceId); try { current?.
 if (publicCfg) {
   // public mode: the raw proxy stays on loopback; the password-gated gateway owns the public port.
   const distDir = resolveDistDir()
-  listenOrExit(proxy, proxyPort, { host: '127.0.0.1', label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: () => { recordEndpoint(childApiBase); console.log(`spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})`) } })
+  listenOrExit(proxy, proxyPort, { host: '127.0.0.1', label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: () => recordEndpoint(childApiBase), ready: `spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})` })
   startGateway({ publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir, onBindFail: reapChild })
 } else {
-  listenOrExit(proxy, publicPort, { label: 'supervisor', cleanup: reapChild, onListen: () => { recordEndpoint(childApiBase); console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`) } })
+  listenOrExit(proxy, publicPort, { label: 'supervisor', cleanup: reapChild, onListen: () => recordEndpoint(childApiBase), ready: `spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})` })
 }
 startResourceMonitor()
 

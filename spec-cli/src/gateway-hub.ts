@@ -326,11 +326,13 @@ export function startHubGateway(opts: HubOpts): http.Server {
     upstream.once('close', () => socket.destroy())
   })
 
-  const onListen = () => {
-    const scheme = secure ? 'https' : 'http'
-    console.log(`[hub] multi-project gateway on ${scheme}://${opts.host ?? '0.0.0.0'}:${port} — /projects + /p/:projectId/*`)
-  }
-  listenOrExit(server, port, { host: opts.host, label: opts.label ?? 'hub gateway', cleanup: opts.onBindFail, onListen })
+  const scheme = secure ? 'https' : 'http'
+  listenOrExit(server, port, {
+    host: opts.host,
+    label: opts.label ?? 'hub gateway',
+    cleanup: opts.onBindFail,
+    ready: `[hub] multi-project gateway on ${scheme}://${opts.host ?? '0.0.0.0'}:${port} — /projects + /p/:projectId/*`,
+  })
   return server
 }
 

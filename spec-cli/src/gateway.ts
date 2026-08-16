@@ -103,7 +103,18 @@ export function resolveDistDir(): string {
   return ensureDashboardArtifact('dist')
 }
 
-export type GatewayOpts = { publicPort: number; upstreamPort: number; password: string; tls: { cert: string; key: string } | null; distDir: string; host?: string; label?: string; onBindFail?: () => void; projectRoot?: string }
+export type GatewayOpts = {
+  publicPort: number
+  upstreamPort: number
+  password: string
+  tls: { cert: string; key: string } | null
+  distDir: string
+  host?: string
+  label?: string
+  onBindFail?: () => void
+  projectRoot?: string
+  readyLines?: string[]
+}
 
 export function startGateway(opts: GatewayOpts): void {
   // gated ONLY when a password is set; otherwise the login layer doesn't exist and the dashboard is served open.
@@ -162,16 +173,14 @@ export function startGateway(opts: GatewayOpts): void {
   // narrows the public gateway's reach. The gate note keys on LOOPBACK, not on host-being-explicit:
   // an ungated loopback bind is normal, an ungated wide bind is announced — never silent.
   const isLoopback = opts.host === '127.0.0.1' || opts.host === 'localhost' || opts.host === '::1'
-  const onListen = () => {
-    const scheme = secure ? 'https' : 'http'
-    const label = opts.label ?? 'public mode'
-    const gate = isLoopback ? '' : ` — ${gated ? 'password-gated' : 'OPEN (no password)'}`
-    console.log(`[gateway] ${label} on ${scheme}://${isLoopback ? 'localhost' : (opts.host ?? '0.0.0.0')}:${opts.publicPort}${gate}, proxying /api to :${opts.upstreamPort}`)
-    if (!secure && !isLoopback && !opts.host) console.log('[gateway] (TLS off — --http)')
-  }
+  const scheme = secure ? 'https' : 'http'
+  const label = opts.label ?? 'public mode'
+  const gate = isLoopback ? '' : ` — ${gated ? 'password-gated' : 'OPEN (no password)'}`
+  const ready = [...(opts.readyLines ?? []), `[gateway] ${label} on ${scheme}://${isLoopback ? 'localhost' : (opts.host ?? '0.0.0.0')}:${opts.publicPort}${gate}, proxying /api to :${opts.upstreamPort}`]
+  if (!secure && !isLoopback && !opts.host) ready.push('[gateway] (TLS off — --http)')
   // a busy public port is a hard, loud, non-zero exit — the SAME contract as the supervisor's proxy
   // (see [[spec-cli]] / listen.ts), so `spex serve` and `spex serve ui` fail a port clash identically.
-  listenOrExit(server, opts.publicPort, { host: opts.host, label: opts.label ?? 'gateway', cleanup: opts.onBindFail, onListen })
+  listenOrExit(server, opts.publicPort, { host: opts.host, label: opts.label ?? 'gateway', cleanup: opts.onBindFail, ready })
 }
 
 // re-serialize an upgrade request's headers for replay against the upstream (exported for the host
@@ -436,6 +445,15 @@ function sendHtml(res: http.ServerResponse, status: number, html: string) {
 // installed user has no source tree for). See [[packaging]].
 export function serveDashboardLocal(opts: { port: number; apiPort: number; host?: string; projectRoot?: string }): void {
   const distDir = resolveDistDir()
-  console.log(`[dashboard] serving ${distDir}, /api → backend :${opts.apiPort}`)
-  startGateway({ host: opts.host ?? '127.0.0.1', publicPort: opts.port, upstreamPort: opts.apiPort, password: '', tls: null, distDir, label: 'dashboard', projectRoot: opts.projectRoot })
+  startGateway({
+    host: opts.host ?? '127.0.0.1',
+    publicPort: opts.port,
+    upstreamPort: opts.apiPort,
+    password: '',
+    tls: null,
+    distDir,
+    label: 'dashboard',
+    projectRoot: opts.projectRoot,
+    readyLines: [`[dashboard] serving ${distDir}, /api → backend :${opts.apiPort}`],
+  })
 }

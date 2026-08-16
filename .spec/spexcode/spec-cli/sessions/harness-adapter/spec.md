@@ -290,8 +290,10 @@ surface:
   claim to pass into cold archive. It receives one exact native thread id plus the exact unreadable record id
   excluded from the owner census; that exclusion leaves the incident record opaque without blindfolding the census,
   so any other unreadable governed record remains an unknown-control refusal. Before archiving, the adapter proves
-  the stable generation, zero other governed owners, an exact one-thread closure, no descendants, and an idle known
-  turn. It may accept an already-archived target only after proving that exact target is unloaded. Otherwise it
+  the one materialized target occurrence across every non-reclaimed generation; no occurrence, a duplicate occurrence,
+  or an unproven generation refuses rather than falling back to current or legacy. It then proves that exact stable
+  generation, zero other governed owners, an exact one-thread closure, no descendants, and an idle known turn. It may
+  accept an already-archived target only after proving that exact target is unloaded. Otherwise it
   archives only that target, then re-censuses the same generation and target while preserving every loaded sibling
   reference. It returns public audit facts and an in-memory compensation closure; if the outer opaque-byte move
   does not commit, compensation can restore only the thread it just archived and only on the original generation.

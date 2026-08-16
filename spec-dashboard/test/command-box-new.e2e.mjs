@@ -21,9 +21,12 @@ const fakeLauncher = join(cliRoot, 'test', 'fixtures', 'fake-claude')
 const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
 const out = resolve(process.env.OUT || '/tmp/command-box-new-e2e')
-const started = Date.now()
 const events = []
-const step = (name) => events.push({ at: Date.now() - started, step: name })
+let recordingStartedAt = null
+const step = (name) => {
+  assert.notEqual(recordingStartedAt, null, 'timeline steps require a recording start')
+  events.push({ at: Date.now() - recordingStartedAt, step: name })
+}
 
 const freePort = () => new Promise((resolvePort, reject) => {
   const server = net.createServer()
@@ -135,6 +138,7 @@ try {
     recordVideo: { dir: out, size: { width: 1280, height: 800 } },
   })
   const page = await context.newPage()
+  recordingStartedAt = Date.now()
   await page.goto(`http://127.0.0.1:${uiPort}/#/sessions/${source}`, { waitUntil: 'domcontentloaded' })
   await page.locator('.si-tool.command').waitFor({ state: 'visible', timeout: 30_000 })
   await page.locator('.si-tool.command').click()
@@ -172,6 +176,8 @@ try {
   assert.equal(child.launcher, 'fake')
 
   const video = page.video()
+  const recordingSpanMs = Date.now() - recordingStartedAt
+  assert.ok(events.every(({ at }) => at >= 0 && at <= recordingSpanMs), 'timeline steps stay on the recorded video axis')
   await context.close()
   await video.saveAs(join(out, 'command-box-new.webm'))
   await browser.close()

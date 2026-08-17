@@ -98,10 +98,14 @@ test('an external runtime registers a root and child, then publishes through the
     await registerRuntimeSession({
       sessionId: 'z-child', runtimeOwner: 'zcode', worktreePath: process.cwd(), branch: 'zcode/child',
       parentSessionId: 'z-root', title: 'child',
+      runtimeMetadata: { agentId: 'agent-1', childToolCallId: 'tool-1' },
     })
 
     assert.equal(readRuntimeSession('z-root')?.runtimeState, 'registered')
     assert.deepEqual(runtimeSessionChildren('z-root', 'zcode').map((record) => record.sessionId), ['z-child'])
+    assert.deepEqual(readRuntimeSession('z-child')?.runtimeMetadata, {
+      agentId: 'agent-1', childToolCallId: 'tool-1',
+    })
     assert.equal(readRuntimeSession('z-child')?.lifecycle, 'active')
 
     assert.deepEqual(await publishRuntimeSessionState({
@@ -115,6 +119,28 @@ test('an external runtime registers a root and child, then publishes through the
     })
     assert.deepEqual(handed, ['[spex watch] z-child is running'])
     assert.deepEqual(timelineTail('z-child').map((event) => event.kind), ['status'])
+  })
+})
+
+test('runtime registration replay binds opaque metadata without depending on key order', async () => {
+  await withHome(async () => {
+    await registerRuntimeSession({
+      sessionId: 'root', runtimeOwner: 'zcode', worktreePath: process.cwd(), branch: 'main',
+    })
+    const registration = {
+      sessionId: 'child', runtimeOwner: 'zcode', worktreePath: process.cwd(), branch: 'child',
+      parentSessionId: 'root', runtimeMetadata: { agentId: 'agent-1', agentType: 'worker' },
+    }
+    assert.deepEqual(await registerRuntimeSession(registration), { replayed: false })
+    assert.deepEqual(await registerRuntimeSession({
+      ...registration, runtimeMetadata: { agentType: 'worker', agentId: 'agent-1' },
+    }), { replayed: true })
+    await assert.rejects(
+      registerRuntimeSession({
+        ...registration, runtimeMetadata: { agentId: 'agent-2', agentType: 'worker' },
+      }),
+      /different runtime coordinates/,
+    )
   })
 })
 

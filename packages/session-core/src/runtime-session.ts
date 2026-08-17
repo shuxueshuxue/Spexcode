@@ -25,6 +25,7 @@ export type RuntimeSessionRegistration = {
   parentSessionId?: string | null
   title?: string | null
   node?: string | null
+  runtimeMetadata?: Record<string, string>
   createdAt?: number
 }
 
@@ -48,6 +49,7 @@ export type RuntimeSessionRecord = {
   parentSessionId: string | null
   title: string | null
   node: string | null
+  runtimeMetadata: Record<string, string>
   lifecycle: SessionLifecycle
   proposal: SessionProposal | null
   note: string | null
@@ -78,6 +80,23 @@ function scalar(value: string, field: string): string {
   return normalized
 }
 
+function metadata(value: Record<string, string> | undefined): Record<string, string> {
+  if (!value) return {}
+  const entries = Object.entries(value).map(([rawKey, rawValue]) => {
+    const key = scalar(rawKey, 'runtimeMetadata key')
+    if (typeof rawValue !== 'string')
+      throw new RuntimeSessionConflict(`runtimeMetadata.${key} must be a string`)
+    return [key, rawValue] as const
+  }).sort(([left], [right]) => left.localeCompare(right))
+  if (new Set(entries.map(([key]) => key)).size !== entries.length)
+    throw new RuntimeSessionConflict('runtimeMetadata keys must be unique after normalization')
+  return Object.fromEntries(entries)
+}
+
+function metadataKey(value: Record<string, string> | undefined): string {
+  return JSON.stringify(metadata(value))
+}
+
 function readRaw(id: string): RawRecord | null {
   const entry = readRecordEntry(id)
   if (entry.kind === 'absent') return null
@@ -101,6 +120,7 @@ function runtimeRecord(raw: RawRecord): RuntimeSessionRecord {
     parentSessionId: raw.parent || null,
     title: raw.title || null,
     node: raw.node || null,
+    runtimeMetadata: metadata(raw.runtime_metadata),
     lifecycle: raw.status,
     proposal: isSessionProposal(raw.proposal) ? raw.proposal : null,
     note: raw.note || null,
@@ -176,6 +196,7 @@ function registrationRaw(input: RuntimeSessionRegistration): RawRecord {
     runtime_owner: runtimeOwner,
     runtime_state: 'registered',
     runtime_revision: '',
+    runtime_metadata: metadata(input.runtimeMetadata),
     launch_readiness_pending: '',
   }
 }
@@ -185,6 +206,7 @@ function sameRegistration(raw: RawRecord, input: RuntimeSessionRegistration): bo
     && raw.worktree_path === input.worktreePath.trim()
     && (raw.branch || null) === (input.branch || null)
     && (raw.parent || null) === (input.parentSessionId?.trim() || null)
+    && metadataKey(raw.runtime_metadata) === metadataKey(input.runtimeMetadata)
 }
 
 export async function registerRuntimeSession(input: RuntimeSessionRegistration): Promise<{ replayed: boolean }> {

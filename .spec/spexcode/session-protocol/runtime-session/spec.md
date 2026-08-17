@@ -17,6 +17,10 @@ harness. `registerRuntimeSession` writes the canonical `session.json` address an
 `parent` watch relation. Such a record is `governed:false`: the runtime owns launch, liveness, stop, and cleanup,
 while the package owns only the compatible file protocol and its locks.
 
+Registration may carry an opaque string metadata map for the external runtime's own durable address fields. The
+package validates and returns those bytes, includes them in registration replay identity, and never interprets them
+as lifecycle, delivery, process, or authorization policy.
+
 Registration defers a child's initial snapshot. `publishRuntimeSessionState` publishes one caller-owned revision
 across the current record, Spex-compatible lifecycle timeline, parent watch, and parent's ordinary pending queue.
 The richer runtime state remains opaque in the record; its Spex lifecycle/proposal is a projection for shared

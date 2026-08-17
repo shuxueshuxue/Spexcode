@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/session-core",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "type": "module",
   "description": "SpexCode's durable file-based session communication protocol.",
   "files": [
@@ -23,7 +23,7 @@
     "test": "npm run build && tsx --import ../../scripts/test-home.mjs --test src/*.test.ts && node --test scripts/public-boundary.test.mjs"
   },
   "dependencies": {
-    "@spexcode/spec-core": "0.6.5"
+    "@spexcode/spec-core": "0.6.6"
   },
   "devDependencies": {
     "@types/node": "^20.16.0",

@@ -49,9 +49,9 @@ scenarios:
   - name: self-launch-queue-needs-no-backend
     tags: [cli]
     description: >
-      In a fresh installed consumer, initialize a native self-launch session address without session.json or a
-      running Spex backend. Enqueue from a separate process, leave it offline, then start an explicit listener
-      that uses only the public protocol entry.
+      In a fresh installed consumer, initialize a native self-launch session address without a governed lifecycle
+      record or a running Spex backend. Verify the universal session.json, enqueue from a separate process, leave
+      it offline, then start an explicit listener that uses only the public protocol entry.
     expected: >
       The exact message remains pending while no runtime exists, the listener dequeues it once in FIFO order,
       the address never appears as a governed board row, and correctness uses no filesystem notification.
@@ -84,7 +84,7 @@ scenarios:
   - name: corrupt-protocol-state-fails-loud
     tags: [cli]
     description: >
-      Replace each of protocol.json, pending.json, the delivery journal, and cursors.json with structurally invalid
+      Replace each of session.json, pending.json, the delivery journal, and cursors.json with structurally invalid
       bytes before calling the relevant public read and mutation operations.
     expected: >
       The package distinguishes absent, empty, and corrupt state; corrupt bytes are preserved and every operation

@@ -28,7 +28,11 @@ open. A remove decision names the retained mechanism that replaces it. An open d
 missing. Human review may accept or replace each disposition; accepted decisions are then written into their
 owning current-state specs and removed from the unresolved list.
 
-The worksheet must pressure-test the same protocol through Z-Storm, recordless self-launch, and Spex-governed
+The worksheet must pressure-test the same protocol through Z-Storm, ungoverned self-launch, and Spex-governed
 adopters. It must also keep physical state placement outside the protocol language: the protocol owns a fixed
 relative filesystem layout below an injected absolute session root, while each adopter owns global configuration,
 project namespacing, OS defaults, and migration from legacy directories.
+
+Every initialized session has one universal immutable `session.json` identity record. The current SpexCode
+monolith with the same filename is migration input, not the target schema: governed lifecycle, topology, worktree,
+and runtime facts leave that file for their owning adopter modules.

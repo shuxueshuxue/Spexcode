@@ -29,7 +29,7 @@ Adopter-resolved absolute session root
   |
   +-- openSessionProtocol(sessionRoot) --> SessionProtocol instance
   |       |
-  |       +-- initialize(sessionId) -----> protocol.json
+  |       +-- initialize(sessionId) -----> session.json
   |       +-- enqueue(request) ----------> protocol lock -> events.ndjson -> pending.json
   |       +-- dequeue(sessionId) --------> protocol lock -> events.ndjson -> pending.json
   |       +-- listPending / hasPending --> pending.json
@@ -56,20 +56,20 @@ the runtime always reads durable protocol state after waking.
 | Review | ID | Element | Decision | Independent usefulness proof |
 |---|---|---|---|---|
 | [ ] | F01 | Explicit absolute session root | **KEEP** | All processes need one deterministic namespace for exact session addresses. The adopter resolves and passes the root; the protocol neither assumes `.spexcode` nor derives placement from `cwd`, Git, or a product config file. |
-| [ ] | F02 | Per-session protocol directory | **KEEP** | It scopes the marker, queue projection, and log to one exact target and permits a recordless self-launched session. |
-| [ ] | F03 | `protocol.json` participation marker | **KEEP** | Directory existence is already used by unrelated Spex sentinels. A versioned marker distinguishes a valid protocol address from a typo or unrelated directory and provides a schema-version check. |
+| [ ] | F02 | Per-session protocol directory | **KEEP** | It scopes identity, queue projection, and log to one exact target and permits an ungoverned self-launched session. |
+| [x] | F03 | Universal `session.json` identity record | **KEEP** | Directory existence is already used by unrelated Spex sentinels. One versioned, immutable identity record distinguishes a real session address from a typo or unrelated directory and works for governed and self-launched sessions alike. It contains only schema version, session id, and creation time. |
 | [ ] | F04 | `events.ndjson` append-only operation log | **KEEP** | `message-enqueued` and `message-dequeued` records are the write-ahead authority for recovery and idempotency. Without an append-only authority, a crash between whole-file rewrites is ambiguous. |
 | [ ] | F05 | `pending.json` FIFO materialized view | **KEEP** | Dequeue and `hasPending` remain proportional to current backlog rather than total history. It is reconstructible from F04 but avoids an O(history) scan on every operation. |
 | [ ] | F06 | Separate protocol `timeline.ndjson` | **REMOVE** | F04 already contains every immutable message and timestamp needed for communication history. A second append-only message history duplicates authority. Product lifecycle history remains a separate Spex concern. |
 | [ ] | F07 | Protocol-owned `cursors.json` | **REMOVE** | A log read can return an opaque cursor. Persisting which reader follows which target is consumer or topology state; it is not required to enqueue, dequeue, recover, or read the log. |
 | [ ] | F08 | External per-session protocol lock file | **KEEP** | Independent processes must serialize marker, journal, and queue mutations. Keeping the lock outside the removable session directory fences stale writers during deletion. |
 | [ ] | F09 | Separate record lock and delivery lock inside protocol | **REMOVE** | The second lock existed because legacy drain held a lock across an adapter callback. Pure dequeue has no callback, so one protocol lock per address is simpler and sufficient. Spex lifecycle keeps its own governance lock outside this package. |
-| [ ] | F10 | Atomic-replace temporary file | **KEEP** | `pending.json` and `protocol.json` must change from one valid version to another without exposing partial JSON. The temporary file is ephemeral and removed or overwritten after recovery. |
+| [ ] | F10 | Atomic-replace temporary file | **KEEP** | `pending.json` rewrites and the initial `session.json` publication must never expose partial JSON. The temporary file is ephemeral and removed or overwritten after recovery. |
 | [ ] | F11 | Per-message receipt files | **REMOVE** | Event-log entries already bind message id, idempotency key, payload digest, and transition. Separate receipts create a second recovery authority. |
 | [ ] | F12 | Journal segment directory and mutable segment manifest | **REMOVE for v1** | No measured scale currently requires segmentation. A manifest adds crash and ordering states. Add immutable numbered segments only after journal size is measured; never add a mutable manifest. |
 | [ ] | F13 | Journal checkpoint or compaction file | **OPEN** | It may bound recovery time after long operation, but F05 already makes ordinary operations cheap. Add only after recovery cost is measured against journal length. |
 | [ ] | F14 | Sender-revocation marker | **MOVE to Spex governance** | Revoking a closed coordinator's unhandled commands is Spex lifecycle policy. Z-Storm and self-launch need not share it, so it cannot be protocol truth. |
-| [ ] | F15 | `session.json` | **MOVE to adopter governance** | It remains useful for Spex board lifecycle and external runtime projection, but a recordless self-launch address proves it is not protocol participation. |
+| [x] | F15 | Current monolithic Spex governed `session.json` schema | **REMOVE after migration** | The filename becomes the universal identity record in F03. Existing lifecycle, proposal, worktree, branch, topology, harness, and native-runtime fields move to their owning adopter modules. Keeping optional extension fields in one shared JSON file would preserve shared writers, shared locks, and cross-module coupling. |
 | [ ] | F16 | `watchers.json` | **MOVE to Spex topology policy** | Manual/parent watch sources and initial-state suppression are real Spex relationships. They are neither queue state nor a universal parent/child format. |
 | [ ] | F17 | Transactional topology outbox | **KEEP, adopter-owned** | A relation or state revision may commit before its recipient messages. The outbox closes that crash boundary and prevents a short-lived hook process from losing a fire-and-forget notification. It must share the adopter's topology/state transaction, so it has no universal protocol file format. |
 | [ ] | F18 | Z-Storm `unread/*.json` and `read/*.json` mailboxes | **REMOVE after migration** | They implement the same ownership transfer as protocol dequeue. Retaining both would create two queues and two recovery languages. |
@@ -80,7 +80,7 @@ the runtime always reads durable protocol state after waking.
 | [ ] | F23 | Generated `AGENTS.md` / `CLAUDE.md` contract block | **MOVE to HarnessMaterializeAdapter** | It gives self-launched and governed agents the same project contract without requiring a backend. It is setup, not runtime delivery state. |
 | [ ] | F24 | Generated hook shim files (`.codex/hooks.json`, `.claude/settings.json`, OpenCode plugin, Pi extension) | **MOVE to HarnessMaterializeAdapter** | Harnesses discover different files, so an adapter must own placement and bytes. The protocol only receives the session id produced by those hooks. |
 | [ ] | F25 | Materialization manifest, selection allowlist, trust block, skills, commands, and agent definitions | **MOVE to HarnessMaterializeAdapter** | They are required to make hooks and capabilities discoverable, but none participates in queue transactions. |
-| [ ] | F26 | Spec-discipline sentinels such as `spec-checked` and `spec-of-file-seen` | **OUT OF SCOPE** | They share a session directory but are unrelated one-shot product state. Their coexistence is the reason F03 cannot be replaced by directory existence. |
+| [ ] | F26 | Spec-discipline sentinels such as `spec-checked` and `spec-of-file-seen` | **OUT OF SCOPE** | They share a session directory but are unrelated one-shot product state. Their coexistence is the reason the universal `session.json` cannot be replaced by directory existence. |
 | [ ] | F27 | Session files/web/evidence manifests | **OUT OF SCOPE** | They are user artifacts and review surfaces, not communication queue state. |
 | [ ] | F28 | SpexCode global config file | **KEEP, adopter-owned** | Persistent user preference such as `stateRoot` needs one machine-level source that is independent of any repository and readable before a project or session exists. It is not a protocol file. |
 | [ ] | F29 | Explicit global config-file locator | **KEEP** | A user must be able to relocate the config file itself. A CLI/API option and `SPEXCODE_CONFIG_FILE` solve this bootstrap problem without asking the config file to locate itself. |
@@ -178,7 +178,7 @@ object identity buys behavior.
 
 | Review | ID | Element | Decision | Independent usefulness proof |
 |---|---|---|---|---|
-| [ ] | X01 | Marker publication by atomic rename | **KEEP** | It gives initialize one linearization point; enqueue before it fails not-initialized and enqueue after it may proceed. |
+| [ ] | X01 | Identity-record publication by atomic rename | **KEEP** | It gives initialize one linearization point; enqueue before it fails not-initialized and enqueue after it may proceed. |
 | [ ] | X02 | Enqueue event-first, pending-second | **KEEP** | A crash after authority but before projection is repairable by replaying the full Message from the event log. The opposite order could expose an unauthoritative queue row. |
 | [ ] | X03 | Dequeue event-first, pending-second | **KEEP** | A crash after the dequeued event leaves a removable pending residue and never duplicates ownership transfer. |
 | [ ] | X04 | At-most-once ownership transfer | **KEEP** | It makes the protocol closed: after dequeue commits, adapter behavior cannot mutate queue truth. Stronger native-delivery guarantees are adopter-local. |
@@ -265,7 +265,7 @@ reconcile requirement, parent relation, lifecycle enum, or native identity.
 
 ```text
 <session-root>/<session-id>/
-  protocol.json
+  session.json          # immutable universal identity, not governed lifecycle state
   events.ndjson
   pending.json          # absent when empty
 
@@ -359,6 +359,24 @@ A general `StorageProvider` or configurable path for every file would reduce int
 lock-in: two adopters could claim the same protocol while using incompatible storage semantics and layouts. Root
 injection is the smaller boundary. It permits any filesystem location while keeping atomic replace, locking,
 event ordering, recovery, and relative filenames fixed and testable.
+
+### Universal identity versus governed state
+
+The target `session.json` is not the current SpexCode governed record with more optional fields. It is the common
+identity record every session gets, including self-launched sessions:
+
+```json
+{
+  "version": 1,
+  "sessionId": "exact-session-id",
+  "createdAt": "2026-08-17T00:00:00.000Z"
+}
+```
+
+`initialize` publishes it once and later operations only validate it. Governance, topology, runtime identity,
+worktree, branch, lifecycle, proposal, and display state must not update this file. During migration, SpexCode
+reads its deployed monolithic `session.json`, creates the universal identity record plus adopter-owned state under
+the relevant locks, and never leaves two writable authorities for the same field.
 
 ## J. Decisions that need explicit human review
 

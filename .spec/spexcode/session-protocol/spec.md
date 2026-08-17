@@ -45,9 +45,9 @@ protocol.
 The public operations are:
 
 - `initialize(sessionId)` establishes an exact protocol address below the instance's explicit `sessionRoot`. It is
-  valid without `session.json`, a board row, a backend, or a running harness. It atomically publishes a versioned
-  `protocol.json` participation marker. Enqueue never silently initializes an unknown target, so a misspelled id
-  cannot create a plausible inbox.
+  valid without a governed lifecycle record, a board row, a backend, or a running harness. It atomically publishes
+  the universal versioned `session.json` identity record. Enqueue never silently initializes an unknown target, so
+  a misspelled id cannot create a plausible inbox.
 - `enqueue(sessionId, message)` durably records one immutable message and appends it to that session's FIFO
   queue. An `idempotencyKey`, when present, binds to the complete immutable message bytes; exact replay returns
   the first result and changed reuse fails loudly.
@@ -74,7 +74,8 @@ the protocol stores and compares them but never interprets them.
 Each initialized session address owns five logical durable artifacts below the protocol instance's explicit
 `sessionRoot`:
 
-- `protocol.json`, the versioned participation marker and exact address identity;
+- `session.json`, the immutable universal identity record containing only schema version, exact session id, and
+  creation time;
 - the immutable `timeline`, which says what was recorded;
 - `pending.json`, the small FIFO work list;
 - the private delivery `journal`, which is the crash authority for enqueue and dequeue;
@@ -82,7 +83,7 @@ Each initialized session address owns five logical durable artifacts below the p
 
 Cross-process locks live outside the removable session directory, so a stale writer remains fenced while an
 address is retired. Every queue mutation, including ordinary unkeyed enqueue, uses the same queue lock; cursor
-writes use their own lock. Every whole-file mutation uses atomic replace. A malformed participation marker,
+writes use their own lock. Every whole-file mutation uses atomic replace. A malformed identity record,
 queue, journal, or cursor is an error, not an empty state: treating corrupt bytes as no work is silent message
 loss.
 
@@ -103,8 +104,10 @@ does the same.
 
 ## Boundaries
 
-`session.json`, lifecycle, governance, parent/child edges, watch policy, sender revocation policy, launch, stop,
-liveness, tmux, sockets, native RPC, prompt composition, and materialized harness files are outside this package.
+Governed lifecycle fields currently stored in SpexCode's monolithic `session.json`, governance, parent/child edges,
+watch policy, sender revocation policy, launch, stop, liveness, tmux, sockets, native RPC, prompt composition, and
+materialized harness files are outside this package. The target `session.json` is not an extension container for
+those fields: it is the immutable universal identity record, while each adopter state module owns its own writes.
 The package must not import a harness adapter or a topology implementation. `session-protocol` and
 [[session-topology]] are sibling foundations; [[session-runtime]] is the composition layer that may import both.
 

@@ -185,9 +185,13 @@ receipt retains the ordinary descendant refusal before shared-runtime mutation a
 
 ### Record integrity — one writer, three readings, no revival
 
-**Every field of `session.json` is produced by ONE writer here**, by serializing the typed record and landing
-it by atomic replace, and NOTHING else may compose or edit that file's text — not a hook, not a shell, not a
-route. The reason is the `note`: it is arbitrary human/agent prose, so any writer that substitutes it into
+**Every SpexCode-managed field of `session.json` is produced by ONE writer here**, by serializing the typed
+record and landing it by atomic replace, and NOTHING else may compose or edit that file's text — not a hook,
+not a shell, not a route. A record whose `runtime_owner` names an external controller is instead written by
+[[runtime-session]] under the same record lock and is `governed:false`; this module may read it but never launch,
+stop, or rewrite it. Its opaque `runtime_state` and idempotency `runtime_revision` extend the canonical disk
+format without turning ZCode state into SpexCode lifecycle policy. The reason for a single typed writer per
+ownership mode is the `note`: it is arbitrary human/agent prose, so any writer that substitutes it into
 existing JSON eventually meets a quote, a backslash, or a newline and leaves a record nothing can parse. Both
 note-carrying entries — the agent's typed declaration and the hook's capture of an asked question — therefore
 land through the same call, and a note round-trips byte-for-byte on every surface. The shell hooks keep the

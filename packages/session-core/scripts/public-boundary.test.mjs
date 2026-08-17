@@ -13,6 +13,10 @@ test('the public package entry resolves compiled artifacts and exposes the durab
   assert.equal(typeof sessionCore.drain, 'function')
   assert.equal(typeof sessionCore.timelineTail, 'function')
   assert.equal(typeof sessionCore.advanceFollow, 'function')
+  assert.equal(typeof sessionCore.registerRuntimeSession, 'function')
+  assert.equal(typeof sessionCore.publishRuntimeSessionState, 'function')
+  assert.equal(typeof sessionCore.readRuntimeSession, 'function')
+  assert.equal(typeof sessionCore.runtimeSessionChildren, 'function')
 })
 
 test('the package source has no CLI, HTTP, dashboard, or harness dependency', () => {

@@ -1,5 +1,15 @@
 export { acceptMessage, MessageKeyConflict, type AcceptMessageOptions, type MessageIdempotency, type PreparedMessage } from './message.js'
 export { drain, owesDelivery, pendingMessages, type PendingMessage } from './delivery-queue.js'
+export {
+  publishRuntimeSessionState,
+  readRuntimeSession,
+  registerRuntimeSession,
+  runtimeSessionChildren,
+  RuntimeSessionConflict,
+  type RuntimeSessionRecord,
+  type RuntimeSessionRegistration,
+  type RuntimeSessionState,
+} from './runtime-session.js'
 export { advanceFollow, followedSessions, followCursor, readCursors, unreadSince, type Cursors } from './session-cursors.js'
 export {
   currentHumanTurn,

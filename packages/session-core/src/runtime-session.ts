@@ -268,34 +268,48 @@ export async function publishRuntimeSessionState(input: RuntimeSessionState): Pr
     const sameState = raw.runtime_state === runtimeState && raw.status === input.lifecycle
       && (raw.proposal || null) === proposal && (raw.note || null) === note
     if (sameRevision && !sameState) throw new RuntimeSessionConflict(`runtime revision ${revision} for session ${id} is already bound to another state`)
-    const replayed = sameRevision
-    if (!sameRevision) {
-      writeRaw({
-        ...raw,
-        status: input.lifecycle,
-        proposal: proposal ?? '',
-        note: note ?? '',
-        runtime_state: runtimeState,
-        runtime_revision: revision,
-      })
-      recordStatus(id, input.lifecycle, proposal, note)
-    }
-    const current = runtimeRecord(readRaw(id)!)
-    const message = stateMessage(current)
-    const notified: string[] = []
-    for (const watcher of watchers) {
+    const candidate = runtimeRecord({
+      ...raw,
+      status: input.lifecycle,
+      proposal: proposal ?? '',
+      note: note ?? '',
+      runtime_state: runtimeState,
+      runtime_revision: revision,
+    })
+    const message = stateMessage(candidate)
+    const historical = watchers.map((watcher) => {
       const operation = `runtime-state:${id}`
       const requestDigest = digest(`${id}\0${watcher}\0${revision}`)
       const payloadHash = digest(`${operation}\0${requestDigest}\0${message}`)
+      const prior = sentDispatchReceipt(watcher, operation, requestDigest)
+      if (prior && prior.payloadHash !== payloadHash)
+        throw new RuntimeSessionConflict(`runtime revision ${revision} notification is already bound to different bytes`)
+      return { watcher, operation, requestDigest, payloadHash, prior }
+    })
+    const historicalReplay = !sameRevision && historical.length > 0 && historical.every(({ prior }) => prior)
+    const replayed = sameRevision || historicalReplay
+    if (!sameRevision) {
+      if (!historicalReplay) {
+        writeRaw({
+          ...raw,
+          status: input.lifecycle,
+          proposal: proposal ?? '',
+          note: note ?? '',
+          runtime_state: runtimeState,
+          runtime_revision: revision,
+        })
+        recordStatus(id, input.lifecycle, proposal, note)
+      }
+    }
+    const notified: string[] = []
+    for (const { watcher, operation, requestDigest, payloadHash, prior } of historical) {
       const receipt: SentDispatchReceipt = {
         operation,
         requestDigest,
         payloadHash,
         delivery: { text: message, from: id },
       }
-      const prior = sentDispatchReceipt(watcher, operation, requestDigest)
       if (prior) {
-        if (prior.payloadHash !== payloadHash) throw new RuntimeSessionConflict(`runtime revision ${revision} notification is already bound to different bytes`)
         if (!prior.delivered) ensurePendingWhileLocked(watcher, pendingFor(receipt, prior.mid))
       } else {
         const { mid } = appendSent(watcher, message, id, undefined, receipt)

@@ -160,5 +160,16 @@ test('runtime state revision replay restores lost parent debt and a changed reus
     assert.deepEqual(await publishRuntimeSessionState(state), { notified: ['root'], replayed: true })
     assert.equal(pendingMessages('root').length, 1)
     await assert.rejects(() => publishRuntimeSessionState({ ...state, runtimeState: 'failed', lifecycle: 'error' }), /already bound to another state/)
+
+    await publishRuntimeSessionState({
+      ...state, revision: 'terminal:2', runtimeState: 'merged', proposal: 'close', note: 'branch collected',
+    })
+    assert.deepEqual(await publishRuntimeSessionState(state), { notified: ['root'], replayed: true })
+    assert.equal(readRuntimeSession('child')?.runtimeState, 'merged', 'an exact historical replay repairs debt without rolling current state back')
+    await assert.rejects(
+      publishRuntimeSessionState({ ...state, runtimeState: 'failed', lifecycle: 'error' }),
+      /already bound to different bytes/,
+    )
+    assert.equal(readRuntimeSession('child')?.runtimeState, 'merged', 'a conflicting old revision fails before changing the record')
   })
 })

@@ -25,7 +25,8 @@ Registration defers a child's initial snapshot. `publishRuntimeSessionState` pub
 across the current record, Spex-compatible lifecycle timeline, parent watch, and parent's ordinary pending queue.
 The richer runtime state remains opaque in the record; its Spex lifecycle/proposal is a projection for shared
 readers. Replaying the same revision restores a receipt whose queue write was lost without duplicating settled
-delivery, while binding one revision to different bytes fails loudly. The consumer drains the parent queue and
+delivery. Replaying an older exact revision repairs only that revision's debt and never rolls the current record
+back; binding any historical revision to different bytes fails before changing the record. The consumer drains the parent queue and
 inserts the message into its own model/runtime channel; this package never starts or steers that runtime.
 
 Parentlessness carries no generic declaration meaning here. A consumer may use its root only as a receiving

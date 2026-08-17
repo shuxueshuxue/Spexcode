@@ -1,6 +1,6 @@
 {
   "name": "spexcode",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "type": "module",
   "description": "SpexCode — a spec-driven, self-developing dev tool. The `spex` CLI + spec server reads the .spec tree and its git history, and serves the dashboard.",
   "license": "MIT",
@@ -38,7 +38,7 @@
     "prepack": "node scripts/sync-init-plugins.mjs --check && node scripts/prepack.mjs"
   },
   "dependencies": {
-    "@spexcode/spec-cli": "0.6.6"
+    "@spexcode/spec-cli": "0.6.7"
   },
   "publishConfig": {
     "access": "public"

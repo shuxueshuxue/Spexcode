@@ -2,7 +2,7 @@
 title: session-protocol
 status: active
 hue: 280
-desc: The reusable durable session protocol: file-backed timelines, cursors, pending delivery debt, and their locks, while runtime control stays with the consumer.
+desc: The published, adapter-neutral file protocol for durable session messages, timelines, cursors, and cross-process exclusion.
 code:
   - packages/session-core/src/index.ts
 related:
@@ -23,45 +23,106 @@ related:
 ---
 # session-protocol
 
-`@spexcode/session-core` is the reusable boundary for SpexCode's file-based session communication protocol.
-It owns the durable session-record format used by external runtimes, timeline format, parent-watch relation,
-follow cursors, pending delivery queue, sender revocation, and their locks. SpexCode CLI and external runtimes
-import the same implementation; neither rewrites these files or reimplements their ordering and crash rules.
+`@spexcode/session-protocol` is the published package for one closed, file-backed communication language. The
+current `@spexcode/session-core` package is its compatibility predecessor; during migration it may re-export the
+new public entry, but it must not remain a second protocol or gain new vocabulary.
 
-The package owns durable facts in the canonical SpexCode per-project session store and accepts runtime effects
-as callbacks. In particular, `drain(sessionId, insert)` owns claim/order/remove around a debt, while the
-consumer owns the harness delivery callback. Launching, stopping, liveness, tmux, sockets, Codex RPC, ZCode
-app-server control, prompt composition, and watch policy remain outside this package. `governed` is a
-SpexCode product projection and lifecycle policy, not permission to read a timeline or drain a queue.
+The package answers only this question: **what messages exist for one exact session address, and which of them
+have been removed from its queue?** It does not know why that session exists, whether it is governed, who its
+parent is, which harness runs it, or what a consumer does after receiving a message.
 
-An external runtime registers its root and child addresses with `registerRuntimeSession`, then publishes each
-durable state revision with `publishRuntimeSessionState`. Registration writes the canonical `session.json` with
-`governed:false`: the record is an address and state fact, not permission for SpexCode to launch, stop, or apply
-its Stop hook to a process owned elsewhere. A child registration also installs the same `parent` source in
-`watchers.json` that SpexCode nesting uses, but defers the initial snapshot until the runtime publishes a
-readiness-backed state. Publication writes the current record, appends the Spex lifecycle projection to the
-timeline, and places a keyed ordinary message in every parent watcher's pending queue. Replaying the same
-runtime revision restores a receipt whose queue write was lost and never duplicates a settled delivery;
-reusing a revision for different state fails loudly. Each debt carries a receipt-bound immutable state snapshot;
-`runtimeSessionNotification` validates and returns that historical snapshot with the child's opaque registration
-metadata, so a consumer never substitutes the latest record for older queued transitions. The opaque `runtimeState` remains in the record so the
-consumer does not have to collapse its richer task vocabulary into Spex display words.
+## Fixed language
 
-This does not make parentlessness a shared declaration exemption. An ordinary governed SpexCode session,
-including a top-level one, still follows SpexCode's declaration gate. A consumer such as ZCode decides which
-of its own runtime roles must declare: its root may be only the receiving address, while its workers publish
-review/error/close facts. That policy stays at the consumer boundary instead of being inferred from a null
-`parent` in this package or in SpexCode's Stop hook.
+The public nouns are `session`, `message`, `queue`, `timeline`, `journal`, `cursor`, `producer`, and `consumer`.
+Every operation belongs to a protocol instance opened with an explicit canonical `projectRoot`. The package
+resolves that project into SpexCode's standard global store; it does not accept an arbitrary storage directory.
+This prevents a multi-workspace runtime from routing all sessions through its process `cwd`, while preserving one
+wire layout. A single-project CLI may offer a current-project convenience wrapper.
 
-`acceptMessage` is the public write boundary: it owns the sorted record fences, timeline receipt, queue
-publication, keyed replay, and recovery of a receipt whose queue write was lost. Product validation and prompt
-composition are callbacks run inside that boundary. `drain` validates a keyed head against its frozen receipt,
-settles an accepted insert, and consumes a crash-left settled head without reinserting it. The public entry
-exposes these complete operations and read models; `./internal` exists only for SpexCode CLI's larger
-close/reparent/lifecycle transactions and does not ask external runtimes to reconstruct half a send.
+The public operations are:
 
-The first dependency direction is `session-core -> spec-core`: it reuses the current canonical global-store
-paths and lifecycle value types. `spec-core` does not import `session-core`, and no harness adapter is reachable
-from the package. Moving the remaining session-record path/schema out of `spec-core/layout.ts` requires the
-graph to consume an injected session projection first; that later migration must not introduce a cycle merely
-to make the directory name look cleaner.
+- `initialize(sessionId)` establishes an exact protocol address in the canonical SpexCode session store. It is
+  valid without `session.json`, a board row, a backend, or a running harness. It atomically publishes a versioned
+  `protocol.json` participation marker. Enqueue never silently initializes an unknown target, so a misspelled id
+  cannot create a plausible inbox.
+- `enqueue(sessionId, message)` durably records one immutable message and appends it to that session's FIFO
+  queue. An `idempotencyKey`, when present, binds to the complete immutable message bytes; exact replay returns
+  the first result and changed reuse fails loudly.
+- `dequeue(sessionId)` atomically removes and returns the FIFO head, or returns `null` when the queue is empty.
+  `drain` is only the ordinary repeated-dequeue convenience; it has no harness callback.
+- `listPending(sessionId)` returns the current ordered messages without changing them. `hasPending` is the cheap
+  boolean form.
+- `readTimeline(sessionId, cursor?)` reads immutable history without changing queue state. Cursor operations are
+  monotonic reader state, never delivery state.
+- `reconcile(sessionId)` repairs interrupted protocol writes from the journal and fails loudly on bytes whose
+  authority cannot be proved.
+
+Do not expose overlapping words for the same state. In particular, `take`, `claim`, `accept`, `owed`, `taken`,
+`settled`, and `delivered` are not protocol operations. A product may use those words above this boundary, but
+the file language remains `enqueue` and `dequeue` everywhere.
+
+A message has a protocol version, `messageId`, `targetSessionId`, optional `senderSessionId`, body, optional string
+headers, and an optional `idempotencyKey`. Product-specific facts such as lifecycle, proposal, reply transport,
+native thread id, or Z-Storm task state may be encoded by the producer in a versioned message kind and headers;
+the protocol stores and compares them but never interprets them.
+
+## Closed file system
+
+Each initialized session address owns five logical durable artifacts in the canonical per-project store:
+
+- `protocol.json`, the versioned participation marker and exact address identity;
+- the immutable `timeline`, which says what was recorded;
+- `pending.json`, the small FIFO work list;
+- the private delivery `journal`, which is the crash authority for enqueue and dequeue;
+- `cursors.json`, which records independent timeline readers.
+
+Cross-process locks live outside the removable session directory, so a stale writer remains fenced while an
+address is retired. Every queue mutation, including ordinary unkeyed enqueue, uses the same queue lock; cursor
+writes use their own lock. Every whole-file mutation uses atomic replace. A malformed participation marker,
+queue, journal, or cursor is an error, not an empty state: treating corrupt bytes as no work is silent message
+loss.
+
+The journal makes the two queue transitions deterministic. Enqueue first records immutable authority and then
+publishes the pending row; reconcile restores a missing row from that authority. Dequeue records the message as
+removed before deleting the pending head; reconcile deletes any crash-left copy. A process that dies after the
+dequeue commit but before its caller handles the returned value does not cause requeue. That is the deliberate
+protocol boundary: **successful dequeue is protocol delivery**, while rendering a prompt, steering a native
+thread, awaiting a model, and obtaining a reply are consumer behavior. A consumer needing a stronger downstream
+guarantee keeps its own handler journal keyed by `messageId`; it does not extend this queue with adapter-aware
+acknowledgment states.
+
+No filesystem notification is correctness authority. A producer may issue an in-process wake hint, a runtime may
+poll, and a UI may use an observer to reduce latency, but every wake path re-reads durable state. Missing,
+coalesced, duplicated, or delayed `fs.watch` events therefore affect only latency. A backend that was absent for
+hours simply finds the same pending rows when it starts; a self-launched agent may run an explicit listener that
+does the same.
+
+## Boundaries
+
+`session.json`, lifecycle, governance, parent/child edges, watch policy, sender revocation policy, launch, stop,
+liveness, tmux, sockets, native RPC, prompt composition, and materialized harness files are outside this package.
+The package must not import a harness adapter or a topology implementation. `session-protocol` and
+[[session-topology]] are sibling foundations; [[session-runtime]] is the composition layer that may import both.
+
+The package depends on `spec-core` only to resolve an explicit project root into the canonical SpexCode store
+layout while that layout remains there. `spec-core` never imports this package. The public package entry exposes
+complete protocol operations and read models. Raw locks, journal codecs, queue replacement, revocation, and
+partial transaction helpers remain private; an external adopter must never reconstruct an enqueue or dequeue
+from half-operations.
+
+## Adoption pressure
+
+The contract is accepted only if all three reference adopters compose without a special protocol mode:
+
+- **Z-Storm** owns its task topology and native runtime loop. It initializes addresses, resolves recipients in
+  its topology, enqueues fixed messages, and dequeues them from its own runtime process.
+- **self-launch** has no governed record or resident Spex backend. Materialized hooks initialize the native
+  session id; any producer may enqueue while the harness is offline; an explicit listener/monitor command later
+  dequeues and hands messages to that harness's ordinary input seam.
+- **Spex governed sessions** add the Spex topology, board lifecycle, and harness runtime adapter. Hook/CLI writers
+  enqueue directly in their own process; the backend drains immediately or on a durable-state sweep. It may use a
+  wake hint, but never needs a file observer to make a committed message discoverable.
+
+If an adopter requires the protocol to inspect parentage, `governed`, lifecycle words, native identity, or an
+adapter result, the composition is wrong. If all three need the same file transaction or recovery rule, that rule
+belongs here.

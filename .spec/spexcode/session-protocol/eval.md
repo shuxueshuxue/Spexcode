@@ -3,23 +3,23 @@ scenarios:
   - name: installed-package-roundtrip
     tags: [cli]
     description: >
-      Pack spec-core and session-core, install those tarballs in a fresh Git consumer outside the source
-      repository, isolate SPEXCODE_HOME, and use only the public package entry to accept, drain, and read one
-      message.
+      Pack spec-core and session-protocol, install those tarballs in a fresh Git consumer outside the source
+      repository, isolate SPEXCODE_HOME, and use only the public package entry to open an explicit project,
+      initialize an address, enqueue, dequeue, and read one message.
     expected: >
-      The installed package resolves without source or TypeScript, the delivery callback receives the frozen
-      transport text exactly once, and timelineTail returns the raw conversational text from the canonical
+      The installed package resolves without source or TypeScript, dequeue returns the frozen message exactly
+      once without invoking a harness callback, and readTimeline returns its immutable history from the canonical
       SpexCode project store.
     code: packages/session-core/src/index.ts
     related: packages/session-core/package.json
   - name: keyed-accept-recovers-crash-boundaries
     tags: [cli]
     description: >
-      Exercise a keyed acceptance whose queue file disappears after its timeline receipt, then exercise a
-      settled receipt whose queue head remains after delivery.
+      Exercise an idempotent enqueue whose queue projection disappears after its journal entry, then exercise a
+      dequeue journal entry whose queue head remains after the process exits.
     expected: >
-      Retrying restores the exact frozen debt without recomposing; a settled leftover head is removed without
-      a second insert; a settled replay creates no new debt.
+      Reconcile restores the exact frozen pending message without recomposing; a dequeued leftover head is
+      removed without returning it again; exact enqueue replay creates no duplicate.
     test:
       path: packages/session-core/src/session-protocol.test.ts
       name: a keyed retry restores debt lost after the receipt append, then settles exactly once
@@ -34,7 +34,7 @@ scenarios:
       SESSION_CORE_PACKAGE_OK. Observe it through installed session wait and session show, then close that exact
       child through the installed CLI.
     expected: >
-      The installed root resolves its bundled session-core without source or TypeScript fallback; the real child
+      The installed root resolves its bundled session-protocol without source or TypeScript fallback; the real child
       receives its complete originating prompt, reaches close-pending exactly once, and exposes only the exact
       terminal marker through the narrow session record. The named worktree and branch exist before close and are
       both retired afterward, proving installed create, record persistence, timeline wake, delivery, lifecycle,
@@ -44,8 +44,51 @@ scenarios:
       - spec-cli/src/sessions.ts
       - spec-cli/src/session-follow.ts
       - spec-cli/package.json
+  - name: self-launch-queue-needs-no-backend
+    tags: [cli]
+    description: >
+      In a fresh installed consumer, initialize a native self-launch session address without session.json or a
+      running Spex backend. Enqueue from a separate process, leave it offline, then start an explicit listener
+      that uses only the public protocol entry.
+    expected: >
+      The exact message remains pending while no runtime exists, the listener dequeues it once in FIFO order,
+      the address never appears as a governed board row, and correctness uses no filesystem notification.
+  - name: dequeue-is-the-protocol-delivery-boundary
+    tags: [cli]
+    description: >
+      Enqueue one message, dequeue it in a process that exits before invoking any harness adapter, then reconcile
+      and start a second consumer.
+    expected: >
+      Pending remains empty and the second consumer receives nothing: the journal proves the dequeue committed.
+      Adapter retry or acknowledgment is not silently reintroduced into the protocol.
+  - name: three-adopters-share-one-file-language
+    tags: [cli]
+    description: >
+      Exercise Z-Storm-style, self-launch, and Spex-governed consumer fixtures through the installed public
+      package. Give each a different topology/runtime/materialization composition while using the same initialized
+      address, message codec, enqueue, dequeue, timeline, and reconciliation operations.
+    expected: >
+      No adopter id, parent/watch field, governed field, lifecycle enum, harness callback, or native runtime
+      dependency enters the protocol package. Each adopter can be removed without changing another's durable
+      queue bytes.
+  - name: concurrent-enqueue-and-dequeue-preserve-the-tail
+    tags: [cli]
+    description: >
+      In independent processes, repeatedly enqueue ordinary unkeyed messages while another consumer dequeues the
+      same address. Force the enqueue to overlap the dequeue read-modify-write boundary.
+    expected: >
+      Every message id appears exactly once in either the returned dequeue sequence or current pending projection,
+      FIFO order is preserved, and no stale whole-file rewrite drops or resurrects the tail.
+  - name: corrupt-protocol-state-fails-loud
+    tags: [cli]
+    description: >
+      Replace each of protocol.json, pending.json, the delivery journal, and cursors.json with structurally invalid
+      bytes before calling the relevant public read and mutation operations.
+    expected: >
+      The package distinguishes absent, empty, and corrupt state; corrupt bytes are preserved and every operation
+      refuses with an actionable error until explicit reconciliation or repair proves authority.
 ---
-# session-core loss
+# session-protocol loss
 
 The package boundary is real only when an installed consumer can use the durable protocol and when the
 receipt/queue crash boundaries remain one implementation rather than knowledge every runtime must reproduce.

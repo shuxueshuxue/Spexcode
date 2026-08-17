@@ -3,13 +3,14 @@ scenarios:
   - name: installed-package-roundtrip
     tags: [cli]
     description: >
-      Pack spec-core and session-protocol, install those tarballs in a fresh Git consumer outside the source
-      repository, isolate SPEXCODE_HOME, and use only the public package entry to open an explicit project,
+      Pack session-protocol and its declared dependencies, install the tarballs in a fresh consumer outside the source
+      repository, choose an isolated absolute sessionRoot outside the repository, and use only the public package
+      entry to open that exact root,
       initialize an address, enqueue, dequeue, and read one message.
     expected: >
       The installed package resolves without source or TypeScript, dequeue returns the frozen message exactly
-      once without invoking a harness callback, and readTimeline returns its immutable history from the canonical
-      SpexCode project store.
+      once without invoking a harness callback, and readTimeline returns its immutable history from the exact
+      caller-provided sessionRoot.
     code: packages/session-core/src/index.ts
     related: packages/session-core/package.json
   - name: keyed-accept-recovers-crash-boundaries
@@ -28,7 +29,8 @@ scenarios:
   - name: installed-session-lifecycle-dogfood
     tags: [cli, backend-api]
     description: >
-      Pack the root package, install it in a fresh consumer outside the source checkout, isolate SPEXCODE_HOME,
+      Pack the root package, install it in a fresh consumer outside the source checkout, pass an isolated absolute
+      sessionRoot,
       initialize a fresh Git project, and use only the installed CLI to start the backend and dispatch a real
       Codex child. The child must finish by declaring close-pending with the exact terminal note
       SESSION_CORE_PACKAGE_OK. Observe it through installed session wait and session show, then close that exact
@@ -87,6 +89,14 @@ scenarios:
     expected: >
       The package distinguishes absent, empty, and corrupt state; corrupt bytes are preserved and every operation
       refuses with an actionable error until explicit reconciliation or repair proves authority.
+  - name: caller-controls-the-session-root
+    tags: [cli]
+    description: >
+      Run an installed public-package roundtrip from a process whose HOME, XDG directories, SPEXCODE_HOME,
+      current project, and explicit absolute sessionRoot all name distinct empty locations.
+    expected: >
+      Every protocol byte and lock appears only below the explicit sessionRoot; the package neither reads nor
+      creates .spexcode, a Git-derived project namespace, an XDG directory, or a SpexCode global config file.
 ---
 # session-protocol loss
 

@@ -6,6 +6,7 @@ desc: The published, adapter-neutral file protocol for durable session messages,
 code:
   - packages/session-core/src/index.ts
 related:
+  - docs/session-architecture-concept-map.md
   - packages/session-core/src/runtime-session.ts
   - packages/session-core/src/internal.ts
   - packages/session-core/src/message.ts
@@ -34,14 +35,16 @@ parent is, which harness runs it, or what a consumer does after receiving a mess
 ## Fixed language
 
 The public nouns are `session`, `message`, `queue`, `timeline`, `journal`, `cursor`, `producer`, and `consumer`.
-Every operation belongs to a protocol instance opened with an explicit canonical `projectRoot`. The package
-resolves that project into SpexCode's standard global store; it does not accept an arbitrary storage directory.
-This prevents a multi-workspace runtime from routing all sessions through its process `cwd`, while preserving one
-wire layout. A single-project CLI may offer a current-project convenience wrapper.
+Every operation belongs to a protocol instance opened with an explicit absolute `sessionRoot`. The directory below
+that root has one fixed, versioned wire layout; the package does not know Git, a project root, `.spexcode`, or any
+product-global configuration file. This prevents a multi-workspace runtime from routing sessions through its
+process `cwd` and lets every adopter choose where protocol state lives without forking the protocol. A product may
+offer a current-project convenience wrapper, but that wrapper resolves and passes the exact root before opening the
+protocol.
 
 The public operations are:
 
-- `initialize(sessionId)` establishes an exact protocol address in the canonical SpexCode session store. It is
+- `initialize(sessionId)` establishes an exact protocol address below the instance's explicit `sessionRoot`. It is
   valid without `session.json`, a board row, a backend, or a running harness. It atomically publishes a versioned
   `protocol.json` participation marker. Enqueue never silently initializes an unknown target, so a misspelled id
   cannot create a plausible inbox.
@@ -68,7 +71,8 @@ the protocol stores and compares them but never interprets them.
 
 ## Closed file system
 
-Each initialized session address owns five logical durable artifacts in the canonical per-project store:
+Each initialized session address owns five logical durable artifacts below the protocol instance's explicit
+`sessionRoot`:
 
 - `protocol.json`, the versioned participation marker and exact address identity;
 - the immutable `timeline`, which says what was recorded;
@@ -104,11 +108,12 @@ liveness, tmux, sockets, native RPC, prompt composition, and materialized harnes
 The package must not import a harness adapter or a topology implementation. `session-protocol` and
 [[session-topology]] are sibling foundations; [[session-runtime]] is the composition layer that may import both.
 
-The package depends on `spec-core` only to resolve an explicit project root into the canonical SpexCode store
-layout while that layout remains there. `spec-core` never imports this package. The public package entry exposes
-complete protocol operations and read models. Raw locks, journal codecs, queue replacement, revocation, and
-partial transaction helpers remain private; an external adopter must never reconstruct an enqueue or dequeue
-from half-operations.
+The package does not depend on `spec-core` for storage placement. SpexCode's adopter resolves its global state
+root and project namespace, then passes the resulting session directory to this package. Another adopter may use
+a different configuration system and directory without changing any protocol operation or file below that root.
+The public package entry exposes complete protocol operations and read models. Raw locks, journal codecs, queue
+replacement, revocation, and partial transaction helpers remain private; an external adopter must never
+reconstruct an enqueue or dequeue from half-operations.
 
 ## Adoption pressure
 

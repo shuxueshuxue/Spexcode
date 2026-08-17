@@ -56,6 +56,17 @@ export type RuntimeSessionRecord = {
   createdAt: number
 }
 
+export type RuntimeSessionNotification = {
+  childSessionId: string
+  runtimeOwner: string
+  runtimeState: string
+  revision: string
+  lifecycle: SessionLifecycle
+  proposal: SessionProposal | null
+  note: string | null
+  runtimeMetadata: Record<string, string>
+}
+
 type WatchEntry = {
   watcher: string
   createdAt: string
@@ -73,6 +84,7 @@ export class RuntimeSessionConflict extends Error {
 
 const digest = (value: string): string => createHash('sha256').update(value).digest('hex')
 const watchPath = (target: string): string => sessionArtifactPath(target, 'watchers.json')
+const RUNTIME_NOTIFICATION_KIND = 'spex.runtime-state.v1'
 
 function scalar(value: string, field: string): string {
   const normalized = value.trim()
@@ -241,12 +253,48 @@ function stateMessage(record: RuntimeSessionRecord): string {
   return `[spex watch] ${record.sessionId} is ${record.runtimeState ?? record.lifecycle}${proposal}${note}`
 }
 
+function notificationAttributes(record: RuntimeSessionRecord): Record<string, string> {
+  if (!record.revision || !record.runtimeState)
+    throw new RuntimeSessionConflict(`runtime session ${record.sessionId} has no publishable state revision`)
+  return {
+    kind: RUNTIME_NOTIFICATION_KIND,
+    runtimeOwner: record.runtimeOwner,
+    runtimeState: record.runtimeState,
+    revision: record.revision,
+    lifecycle: record.lifecycle,
+    proposal: record.proposal ?? '',
+    note: record.note ?? '',
+  }
+}
+
 function pendingFor(receipt: SentDispatchReceipt, mid: string): PendingMessage {
   return {
     mid,
     text: receipt.delivery!.text,
     from: receipt.delivery!.from,
+    ...(receipt.delivery!.attributes ? { attributes: receipt.delivery!.attributes } : {}),
     dispatch: { operation: receipt.operation, requestDigest: receipt.requestDigest },
+  }
+}
+
+export function runtimeSessionNotification(parentSessionId: string, message: PendingMessage): RuntimeSessionNotification | null {
+  const parent = scalar(parentSessionId, 'parentSessionId')
+  const child = message.from?.trim()
+  const attributes = message.attributes
+  if (!child || !attributes || attributes.kind !== RUNTIME_NOTIFICATION_KIND) return null
+  const record = readRuntimeSession(child)
+  if (!record || record.parentSessionId !== parent || record.runtimeOwner !== attributes.runtimeOwner) return null
+  if (!attributes.revision || !attributes.runtimeState || !isSessionLifecycle(attributes.lifecycle)) return null
+  if (attributes.proposal && !isSessionProposal(attributes.proposal)) return null
+  return {
+    childSessionId: child,
+    runtimeOwner: attributes.runtimeOwner,
+    runtimeState: attributes.runtimeState,
+    revision: attributes.revision,
+    lifecycle: attributes.lifecycle,
+    proposal: isSessionProposal(attributes.proposal) ? attributes.proposal : null,
+    note: attributes.note || null,
+    runtimeMetadata: record.runtimeMetadata,
   }
 }
 
@@ -277,10 +325,11 @@ export async function publishRuntimeSessionState(input: RuntimeSessionState): Pr
       runtime_revision: revision,
     })
     const message = stateMessage(candidate)
+    const attributes = notificationAttributes(candidate)
     const historical = watchers.map((watcher) => {
       const operation = `runtime-state:${id}`
       const requestDigest = digest(`${id}\0${watcher}\0${revision}`)
-      const payloadHash = digest(`${operation}\0${requestDigest}\0${message}`)
+      const payloadHash = digest(`${operation}\0${requestDigest}\0${message}\0${JSON.stringify(attributes)}`)
       const prior = sentDispatchReceipt(watcher, operation, requestDigest)
       if (prior && prior.payloadHash !== payloadHash)
         throw new RuntimeSessionConflict(`runtime revision ${revision} notification is already bound to different bytes`)
@@ -307,7 +356,7 @@ export async function publishRuntimeSessionState(input: RuntimeSessionState): Pr
         operation,
         requestDigest,
         payloadHash,
-        delivery: { text: message, from: id },
+        delivery: { text: message, from: id, attributes },
       }
       if (prior) {
         if (!prior.delivered) ensurePendingWhileLocked(watcher, pendingFor(receipt, prior.mid))

@@ -4,9 +4,11 @@ export {
   publishRuntimeSessionState,
   readRuntimeSession,
   registerRuntimeSession,
+  runtimeSessionNotification,
   runtimeSessionChildren,
   RuntimeSessionConflict,
   type RuntimeSessionRecord,
+  type RuntimeSessionNotification,
   type RuntimeSessionRegistration,
   type RuntimeSessionState,
 } from './runtime-session.js'

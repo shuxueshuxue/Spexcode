@@ -42,7 +42,9 @@ its Stop hook to a process owned elsewhere. A child registration also installs t
 readiness-backed state. Publication writes the current record, appends the Spex lifecycle projection to the
 timeline, and places a keyed ordinary message in every parent watcher's pending queue. Replaying the same
 runtime revision restores a receipt whose queue write was lost and never duplicates a settled delivery;
-reusing a revision for different state fails loudly. The opaque `runtimeState` remains in the record so the
+reusing a revision for different state fails loudly. Each debt carries a receipt-bound immutable state snapshot;
+`runtimeSessionNotification` validates and returns that historical snapshot with the child's opaque registration
+metadata, so a consumer never substitutes the latest record for older queued transitions. The opaque `runtimeState` remains in the record so the
 consumer does not have to collapse its richer task vocabulary into Spex display words.
 
 This does not make parentlessness a shared declaration exemption. An ordinary governed SpexCode session,

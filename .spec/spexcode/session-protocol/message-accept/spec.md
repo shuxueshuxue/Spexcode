@@ -18,5 +18,6 @@ the target and optional sender record fences in sorted order, runs consumer vali
 preparation inside that fence, appends the raw conversation event, and publishes the prepared delivery debt.
 
 A keyed retry reads the private receipt before recomposing. The same payload restores an exact missing queue
-entry from the frozen delivery bytes; a different payload under the same key fails loudly. Runtime preflight,
+entry from the frozen delivery bytes, including any producer-owned immutable string attributes; a different payload
+under the same key fails loudly. Runtime preflight,
 prompt composition, and immediate adapter delivery remain callbacks or later consumer work, never imports.

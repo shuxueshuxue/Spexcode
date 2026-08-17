@@ -22,7 +22,7 @@ export type SentDispatchReceipt = {
   operation: string
   requestDigest: string
   payloadHash: string
-  delivery?: { text: string; from: string | null }
+  delivery?: { text: string; from: string | null; attributes?: Record<string, string> }
 }
 type DispatchSettlement = { ts: string; kind: 'dispatch-settled'; operation: string; requestDigest: string; mid: string }
 type StoredTimelineEvent =

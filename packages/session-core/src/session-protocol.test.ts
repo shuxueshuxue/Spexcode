@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { acceptMessage, drain, publishRuntimeSessionState, readRuntimeSession, registerRuntimeSession, runtimeSessionChildren, timelineTail } from './index.js'
+import { acceptMessage, drain, publishRuntimeSessionState, readRuntimeSession, registerRuntimeSession, runtimeSessionChildren, runtimeSessionNotification, timelineTail } from './index.js'
 import { pendingMessages } from './delivery-queue.js'
 import { sessionArtifactPath } from '@spexcode/spec-core'
 import { settleSentDispatch } from './session-timeline.js'
@@ -171,5 +171,38 @@ test('runtime state revision replay restores lost parent debt and a changed reus
       /already bound to different bytes/,
     )
     assert.equal(readRuntimeSession('child')?.runtimeState, 'merged', 'a conflicting old revision fails before changing the record')
+  })
+})
+
+test('runtime pending debt preserves each historical state instead of projecting the latest record', async () => {
+  await withHome(async () => {
+    await registerRuntimeSession({ sessionId: 'root', runtimeOwner: 'zcode', worktreePath: process.cwd(), branch: 'main' })
+    await registerRuntimeSession({
+      sessionId: 'child', runtimeOwner: 'zcode', worktreePath: process.cwd(), branch: 'zcode/child',
+      parentSessionId: 'root', runtimeMetadata: { agentId: 'agent-1' },
+    })
+    await publishRuntimeSessionState({
+      sessionId: 'child', runtimeOwner: 'zcode', revision: 'turn:1', runtimeState: 'running', lifecycle: 'active',
+    })
+    await publishRuntimeSessionState({
+      sessionId: 'child', runtimeOwner: 'zcode', revision: 'terminal:1', runtimeState: 'need_review',
+      lifecycle: 'awaiting', proposal: 'merge', note: 'branch ready',
+    })
+
+    const notifications: Array<{ state: string; revision: string; note: string | null }> = []
+    assert.deepEqual(await drain('root', async (message) => {
+      const notification = runtimeSessionNotification('root', message)
+      assert.ok(notification)
+      notifications.push({
+        state: notification.runtimeState,
+        revision: notification.revision,
+        note: notification.note,
+      })
+      return true
+    }), { delivered: 2, remaining: 0 })
+    assert.deepEqual(notifications, [
+      { state: 'running', revision: 'turn:1', note: null },
+      { state: 'need_review', revision: 'terminal:1', note: 'branch ready' },
+    ])
   })
 })

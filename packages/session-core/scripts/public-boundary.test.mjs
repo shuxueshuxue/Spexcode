@@ -16,6 +16,7 @@ test('the public package entry resolves compiled artifacts and exposes the durab
   assert.equal(typeof sessionCore.registerRuntimeSession, 'function')
   assert.equal(typeof sessionCore.publishRuntimeSessionState, 'function')
   assert.equal(typeof sessionCore.readRuntimeSession, 'function')
+  assert.equal(typeof sessionCore.runtimeSessionNotification, 'function')
   assert.equal(typeof sessionCore.runtimeSessionChildren, 'function')
 })
 

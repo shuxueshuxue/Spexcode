@@ -13,6 +13,7 @@ export type PendingMessage = {
   mid: string
   text: string
   from: string | null
+  attributes?: Record<string, string>
   dispatch?: { operation: string; requestDigest: string }
 }
 
@@ -62,10 +63,21 @@ function read(id: string): PendingMessage[] {
       !!m && typeof m === 'object'
       && typeof (m as PendingMessage).mid === 'string'
       && typeof (m as PendingMessage).text === 'string'
+      && ((m as PendingMessage).attributes === undefined
+        || (!!(m as PendingMessage).attributes
+          && typeof (m as PendingMessage).attributes === 'object'
+          && !Array.isArray((m as PendingMessage).attributes)
+          && Object.values((m as PendingMessage).attributes!).every((value) => typeof value === 'string')))
       && ((m as PendingMessage).dispatch === undefined
         || (typeof (m as PendingMessage).dispatch?.operation === 'string'
           && typeof (m as PendingMessage).dispatch?.requestDigest === 'string')))
   } catch { return [] }   // absent, empty, or unparseable all mean the honest thing: nothing owed
+}
+
+function sameAttributes(left: Record<string, string> | undefined, right: Record<string, string> | undefined): boolean {
+  const leftEntries = Object.entries(left ?? {}).sort(([a], [b]) => a.localeCompare(b))
+  const rightEntries = Object.entries(right ?? {}).sort(([a], [b]) => a.localeCompare(b))
+  return JSON.stringify(leftEntries) === JSON.stringify(rightEntries)
 }
 
 // Written whole and atomically; an empty queue is REMOVED rather than left as `[]`, so "is anything owed?" is
@@ -160,7 +172,8 @@ export async function drain(
         if (head.dispatch) {
           const receipt = sentDispatchReceipt(id, head.dispatch.operation, head.dispatch.requestDigest)
           if (!receipt || receipt.mid !== head.mid || !receipt.delivery
-            || receipt.delivery.text !== head.text || receipt.delivery.from !== head.from) return { delivered, remaining: queued.length }
+            || receipt.delivery.text !== head.text || receipt.delivery.from !== head.from
+            || !sameAttributes(receipt.delivery.attributes, head.attributes)) return { delivered, remaining: queued.length }
           if (receipt.delivered) ok = true
           else {
             ok = await insert(head)

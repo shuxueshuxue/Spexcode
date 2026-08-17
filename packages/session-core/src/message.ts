@@ -25,6 +25,7 @@ const keyedPending = (receipt: SentDispatchReceipt, mid: string, delivery: NonNu
   mid,
   text: delivery.text,
   from: delivery.from,
+  ...(delivery.attributes ? { attributes: delivery.attributes } : {}),
   dispatch: { operation: receipt.operation, requestDigest: receipt.requestDigest },
 })
 

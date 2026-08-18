@@ -1460,6 +1460,10 @@ export function launchPreflight(rec: SessRec): LaunchBlock | null {
 
 // @@@ launch quoting - single-quote a string for a POSIX shell, `'` → `'\''`. Used to nest the whole agent
 // invocation inside the birth-registration `sh -c '…'` wrapper without any segment double-expanding.
+// 后端把这条命令输入交互式 shell，脚本路径必须作为一个 shell 参数传递。
+export function launchShellCommand(file: string): string {
+  return `bash ${shQuote(file)}`
+}
 export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
   const file = join(storeDir(id), 'launch.sh')
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
@@ -1541,7 +1545,8 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
   // reachable only from the world it belongs to ([[harness-adapter]] rendezvous socket).
   if (harness.ownsRendezvous) stampRvSock(id)
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail, harness, cmd)}`])
+  const file = launchScript(id, tail, harness, cmd)
+  await tmux(['send-keys', '-t', id, '-l', '--', launchShellCommand(file)])
   await tmux(['send-keys', '-t', id, 'Enter'])
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }

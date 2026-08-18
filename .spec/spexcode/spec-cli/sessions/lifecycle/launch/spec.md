@@ -118,7 +118,8 @@ launch — and status stays agent-authored ([[state]]): the server stamps the no
 state. Only the launch line
 itself (rendezvous env + harness command + the human
 prompt + spec pointer) is written to the **launch script file** in the global store, so a long prompt never
-hits the ~2KB tmux send-keys limit. Every path that file and its hooks reference resolves from the CLI
+hits the ~2KB tmux send-keys limit. The backend enters `bash` with the script path as one shell-quoted
+argument, so whitespace or single quotes in the global store/project path never split the command. Every path that file and its hooks reference resolves from the CLI
 package's **own** on-disk location, never a hardcoded `<repoRoot>/spec-cli`, so relocating it can't break launch.
 
 **The backend is the single launch owner.** `spex new` / `spex session new` **POST to the running backend**,

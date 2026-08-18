@@ -1780,7 +1780,8 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   // design C: the BACKEND owns the thread — codex-launch does thread/start { cwd } + first turn, prints the id,
   // and the visible TUI resumes THAT thread on the same project socket.
   assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"/)
-  assert.match(cmd, /exec codex --yolo [^\n]*--remote unix:\/\/"\$sock" resume "\$tid"/)
+  assert.match(cmd, /exec codex --yolo [^\n]*--cd "\$PWD" --remote unix:\/\/"\$sock" resume "\$tid"/)
+  assert.ok(cmd.indexOf('--cd "$PWD"') < cmd.indexOf('--remote unix://"$sock"'), 'remote TUI receives its workspace root')
   // Endpoint paths are emitted by the ledger only after detached identity and socket proof; the static launch
   // script therefore carries no stale singleton socket/PID path.
   assert.doesNotMatch(cmd, /codex-app-server\.sock/)
@@ -1806,7 +1807,7 @@ test('codex launch puts --dangerously-bypass-hook-trust on the RESUME TUI, not o
   process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST = '1'
   try {
     const cmd = codexLaunchCommand('s', 'codex --yolo', 'codex', '/tmp/spex-project')
-    assert.match(cmd, /exec codex --yolo --dangerously-bypass-hook-trust [^\n]*--remote/)  // on the resume TUI (forwarded to thread config)
+    assert.match(cmd, /exec codex --yolo --dangerously-bypass-hook-trust [^\n]*--cd "\$PWD" --remote/)  // on the resume TUI (forwarded to thread config)
     assert.match(cmd, /internal codex-generation-current "\$dir"/)                  // ledger starts the app-server separately
     assert.doesNotMatch(cmd, /--dangerously-bypass-hook-trust app-server/)           // never on the inert app-server invocation
   } finally { delete process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST }
@@ -2582,5 +2583,5 @@ test('a codex thread is created carrying its session identity, and the visible T
   assert.deepEqual(codexStartThreadParams('/wt', false), { cwd: '/wt' })
   // the TUI is the other entry point that creates a context for this session — same rule, same knob
   const cmd = codexLaunchCommand('rec-42', 'codex --yolo', 'codex', '/tmp/spex-project')
-  assert.match(cmd, /-c '\\''shell_environment_policy\.set\.SPEXCODE_SESSION_ID=rec-42'\\'' --remote unix:\/\/"\$sock" resume "\$tid"/)
+  assert.match(cmd, /-c '\\''shell_environment_policy\.set\.SPEXCODE_SESSION_ID=rec-42'\\'' --cd "\$PWD" --remote unix:\/\/"\$sock" resume "\$tid"/)
 })

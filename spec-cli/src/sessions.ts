@@ -2856,6 +2856,31 @@ function sameHarnessLaunchProof(left: StagedHarnessLaunchProof, right: StagedHar
     && left.generationId === right.generationId
 }
 
+// A native launch can be proven just before its visible TUI exits. A shell-level retry must be able to ask
+// for that exact target without replaying the first prompt. This read-only resolver accepts either side of the
+// proof-consumption boundary: the durable record after identity binding, or the staged receipt while the record
+// lock has not consumed it yet. Any mismatch remains a loud resource conflict; returning null means no proof has
+// been established and a fresh first-turn attempt is still allowed.
+export function existingHarnessLaunchTarget(id: string): string | null {
+  const rec = readLiveRecord(id)
+  if (!rec) return null
+  const harness = harnessById(rec.harness || defaultHarness.id)
+  if (!harness.launchPayloadProof) return null
+  const proofPath = sessionArtifactPath(id, 'launch.proof')
+  if (existsSync(proofPath)) {
+    const proof = readHarnessLaunchProof(id)
+    if (proof.sessionId !== id || proof.harnessId !== harness.id)
+      throw new ResourceConflict(`native launch proof for ${id} does not match the governed adapter identity`)
+    const pending = readLaunchFile(id)
+    if (pending != null && proof.launchPayloadHash !== createHash('sha256').update(pending).digest('hex'))
+      throw new ResourceConflict(`native launch proof for ${id} does not match the authoritative resolved launch payload`)
+    if (rec.harnessSessionId && rec.harnessSessionId !== proof.harnessSessionId)
+      throw new ResourceConflict(`refusing to replace exact harness thread identity for ${id}; staged launch proof differs from the record`)
+    return proof.harnessSessionId
+  }
+  return rec.harnessSessionId || null
+}
+
 export function stageHarnessLaunchProof(sessionId: string | undefined, harnessSessionId: string | undefined, launchPayload: string): boolean {
   const id = sessionId || ownSessionId()
   if (!id || !harnessSessionId) return false

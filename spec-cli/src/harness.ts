@@ -893,7 +893,11 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     // launch attaches to the thread codex-launch just made; a reopen resumes an existing one), so it injects
     // the same per-thread identity through codex's own `-c` override. Same rule, both entry points: whoever
     // creates a context stamps that context's record id, and nothing downstream re-derives it.
-    ...(attachTui ? [`exec ${codexCmd}${tuiBypass} -c ${shQuote(`shell_environment_policy.set.SPEXCODE_SESSION_ID=${id}`)} --remote unix://"$sock" resume "$tid"`] : []),
+    // A remote Codex TUI cannot inherit the launch shell's cwd: when `tui.resume_cwd = "current"` is
+    // configured, Codex requires an explicit workspace root for every `--remote` invocation. Keep the
+    // directory tied to the generated script's actual pane cwd so linked worktrees with spaces remain one
+    // argument and the resumed thread loads the same project context as thread/start above.
+    ...(attachTui ? [`exec ${codexCmd}${tuiBypass} -c ${shQuote(`shell_environment_policy.set.SPEXCODE_SESSION_ID=${id}`)} --cd "$PWD" --remote unix://"$sock" resume "$tid"`] : []),
   ].join('\n')
   return `bash -lc ${shQuote(script)} spexcode-codex`
 }

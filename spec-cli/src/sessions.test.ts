@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, drainQueue, drainSession, findSessionClosure, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, findSessionClosure, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -159,6 +159,46 @@ test('Codex registration does not persist an unbound thread when exact generatio
     assert.throws(() => stageHarnessLaunchProof(id, 'native-thread', 'resolved task'), /absent or reclaimed/)
     assert.equal(readFileSync(sessionRecordPath(id), 'utf8'), before)
     assert.equal(readCodexGenerationLedger(root).bindings[id], undefined)
+  } finally {
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousGeneration === undefined) delete process.env.SPEXCODE_CODEX_GENERATION
+    else process.env.SPEXCODE_CODEX_GENERATION = previousGeneration
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('Codex launch retry reuses a staged native target after the first payload is consumed', serial, () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousGeneration = process.env.SPEXCODE_CODEX_GENERATION
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-retry-target-'))
+  const id = `codex-retry-target-${process.pid}`
+  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  const payload = 'authoritative first turn'
+  process.env.SPEXCODE_HOME = home
+  delete process.env.SPEXCODE_CODEX_GENERATION
+  try {
+    mkdirSync(sessionStoreDir(id), { recursive: true })
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+      session_id: id, governed: true, worktree_path: worktree, branch: 'main', node: '', title: '', name: '', parent: '',
+      status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex',
+      harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex',
+      launch_cmd: 'codex', launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
+    }, null, 2)}\n`)
+    writeFileSync(sessionArtifactPath(id, 'launch'), payload)
+    assert.equal(stageHarnessLaunchProof(id, 'thread-retry', payload), true)
+    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'a retry can use the staged proof before its record commit')
+
+    // This is the exact failure window from the report: the lifecycle owner consumed `launch`, but the retry
+    // entered codex-launch before (or while) it bound the staged receipt.
+    rmSync(sessionArtifactPath(id, 'launch'))
+    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'a consumed payload still leaves the staged target reusable')
+
+    const record = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    record.harness_session_id = 'thread-retry'
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify(record, null, 2)}\n`)
+    rmSync(sessionArtifactPath(id, 'launch.proof'))
+    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'after proof consumption the durable identity remains authoritative')
   } finally {
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome

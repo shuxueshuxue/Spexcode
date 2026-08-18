@@ -686,6 +686,9 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   own app-server. Each SpexCode project has ONE project-scoped `codex app-server --listen unix://<project sock>`
   (started once, reused). The app-server and the visible `codex --remote unix://<sock> resume <tid>` TUI **share
   that one socket, so they MUST be the SAME codex install** — a version split across the socket breaks the
+  handoff. The remote TUI also receives `--cd <worktree-cwd>` explicitly: with `tui.resume_cwd = "current"`,
+  Codex refuses a remote workspace that has no `--cd`, so the generated command must quote the pane's `$PWD`
+  as one argument (including worktree paths containing spaces).
   `thread/start`→resume handoff (the app-server on one version creates a thread a differently-versioned resume
   can't find, and an old-enough app-server can't serve `--remote unix://` at all). So the app-server command is
   **DERIVED from the in-effect launcher `codexCmd`'s binary** (its first shell token, dropping args like

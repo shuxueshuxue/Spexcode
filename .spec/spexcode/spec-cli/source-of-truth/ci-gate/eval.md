@@ -17,6 +17,19 @@ scenarios:
       the root workspace links resolve each internal package to an emitted dist entry before the lint
       command loads the CLI. CI must not report a missing internal dist module or a dependency-resolution
       failure caused by one installation step replacing another.
+  - name: spec-cli-typecheck-is-clean
+    tags: [cli]
+    code: .github/workflows/ci.yml
+    related:
+      - spec-cli/tsconfig.json
+      - spec-cli/src/anchors.test.ts
+      - spec-cli/src/reviews.test.ts
+    description: >-
+      In a clean checkout after the workflow installation sequence and workspace build, run
+      npx tsc --noEmit from spec-cli. Capture the compiler transcript and exit status.
+    expected: >-
+      TypeScript exits 0 with no diagnostics. Dynamic module-test helpers describe only the exports they
+      consume, and every @ts-expect-error still suppresses a real error rather than becoming stale debt.
 ---
 
 Measured through the same clean-checkout package-manager commands that the GitHub Actions workflow runs.

@@ -120,9 +120,13 @@ test('concurrent consumers of one queue split it without a double dequeue', asyn
   setup.close()
 
   const startAt = Date.now() + 300
-  const deadline = startAt + 3000
+  const deadline = startAt + 60000
   const results = await runWorkers(Array.from({ length: 4 }, () => [path, 'drain', startAt, 'shared', deadline]))
   for (const r of results) assert.equal(r.parsed?.ok, true, `${r.out}${r.err}`)
+  for (const r of results) {
+    assert.equal(r.parsed.drained, true,
+      'every consumer must have reached an empty queue, or this vector proves nothing about duplication')
+  }
   const taken = results.flatMap(r => r.parsed.taken)
   assert.equal(taken.length, new Set(taken).size, 'no message was dequeued twice')
   assert.deepEqual(taken.slice().sort(), expected.slice().sort(), 'every message was delivered exactly once')
@@ -148,6 +152,72 @@ const killAfterSignal = (args, signalText) => new Promise((resolve, reject) => {
   })
   child.stderr.on('data', d => { err += d })
   child.on('close', () => reject(new Error(`worker exited before "${signalText}": ${out}${err}`)))
+})
+
+// Starts a worker and resolves once it prints its own readiness line, WITHOUT killing it. The
+// caller gets the child so it can be reaped after the window it owns.
+const startAndWait = (args, signalText) => new Promise((resolve, reject) => {
+  const engine = process.env.M2_ENGINE ? { M2_ENGINE: process.env.M2_ENGINE.replace(/^\.\./, '.') } : {}
+  const child = spawn(process.execPath, [WORKER, ...args.map(String)], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, ...engine },
+  })
+  let out = ''
+  let err = ''
+  child.stdout.on('data', d => { out += d; if (out.includes(signalText)) resolve(child) })
+  child.stderr.on('data', d => { err += d })
+  child.on('close', () => reject(new Error(`worker exited before "${signalText}": ${out}${err}`)))
+})
+
+test('busy_timeout must be the connection\'s first statement, or the version probe has no budget', async () => {
+  // The ordering claim used to be gated only by a cold-open race between eight processes, which is
+  // inherently probabilistic: it caught a wrong-ordered engine sometimes and not others, so it was
+  // not a gate. This holds the lock deterministically instead, and separates the two orderings by
+  // pass/fail rather than by luck.
+  //
+  //   lock holder     a second OS process, PRAGMA locking_mode=EXCLUSIVE, holds after COMMIT
+  //   hold window     1500 ms, released by the holder itself, not by a kill
+  //   short budget    200 ms  -> expect PROTOCOL_DATABASE_BUSY even when correctly ordered
+  //   long budget     8000 ms -> expect success, after waiting out the holder
+  //
+  // Correct order sets busy_timeout before the first database-touching statement, so the probe
+  // blocks and then succeeds. Wrong order runs the probe while busy_timeout is still its default 0,
+  // so it is refused immediately and open fails.
+  const HOLD_MS = 1500
+  const SHORT_BUDGET_MS = 200
+  const LONG_BUDGET_MS = 8000
+
+  const path = freshDb()
+  const setup = openProtocol(path)
+  setup.initialize('gate')
+  setup.close()
+
+  const holder = await startAndWait([path, 'lock-holder', 0, HOLD_MS], 'held')
+  try {
+    // Control: proves the lock is genuinely held, so a later success cannot be a false pass.
+    const shortStart = Date.now()
+    let shortCode = null
+    try { openProtocol(path, { busyTimeoutMs: SHORT_BUDGET_MS }).close() } catch (error) { shortCode = error.code }
+    const shortElapsed = Date.now() - shortStart
+    assert.equal(shortCode, 'PROTOCOL_DATABASE_BUSY',
+      `a budget shorter than the hold must be refused; if this passes the holder is not holding (${shortElapsed}ms)`)
+
+    // The discriminating assertion. A wrong-ordered engine fails here with PROTOCOL_DATABASE_BUSY,
+    // because its probe ran with no busy handler at all.
+    const longStart = Date.now()
+    let handle = null
+    let longCode = null
+    try { handle = openProtocol(path, { busyTimeoutMs: LONG_BUDGET_MS }) } catch (error) { longCode = error.code }
+    const longElapsed = Date.now() - longStart
+    assert.equal(longCode, null,
+      `open with a ${LONG_BUDGET_MS}ms budget must wait out a ${HOLD_MS}ms hold, got ${longCode} after ${longElapsed}ms`)
+    assert.ok(longElapsed >= HOLD_MS * 0.4,
+      `open returned in ${longElapsed}ms, too fast to have waited for the holder — the budget was not in effect`)
+    assert.equal(handle.listPending('gate').length, 0)
+    handle.close()
+  } finally {
+    holder.kill('SIGKILL')
+  }
 })
 
 test('SIGKILL before commit leaves the message pending and the rollback journal is recovered', async () => {

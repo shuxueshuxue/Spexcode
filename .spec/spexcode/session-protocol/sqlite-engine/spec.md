@@ -143,7 +143,20 @@ it is what the ruling was decided on, and the contract labels which era each fig
 Each frozen decision carries an executable counter-example: a deliberately wrong implementation, a minimal
 edit away from the reference, that makes a named vector fail with its own assertion. A failure that would
 look identical whether the implementation is right or wrong — a missing module, a mistyped path — proves
-nothing about a decision and does not count. The counter-example runner refuses to score a stub that fails
+nothing about a decision and does not count.
+
+A counter-example must also be repeatable. One that fires most of the time is not a gate, and recording it
+as though it were is how a hard invariant can sit unguarded while looking guarded: two honest runs of the
+same code then disagree, and whichever ran first becomes the record. A decision is gated only when the
+wrong implementation is caught every time and the right one passes every time, which means a vector whose
+outcome depends on a race has to be rebuilt around a condition the test controls rather than observes. When
+no repeatable counter-example can be built, the invariant is demoted to a measured recommendation and says
+so; an unguarded assertion presented as a gate is the one outcome not permitted.
+
+The same rule applies to a vector that has always passed. A test whose pass depends on timing it does not
+control is reporting the timing, not the property, and it will keep reporting success until something
+unrelated slows down. Two such vectors were found here only because an unrelated change made writes slower;
+both terminated on a wall clock and were rebuilt to terminate on the condition they actually assert. The counter-example runner refuses to score a stub that fails
 to load, so a measurement that did not happen can never be mistaken for a measurement that found nothing.
 
 Claims that only appear across processes are proved across processes: the first-open race, delivery

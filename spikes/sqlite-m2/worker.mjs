@@ -51,15 +51,36 @@ try {
     handle.close()
     emit({ ok: true, op, seen, complete: seen.length >= expected })
   } else if (op === 'drain') {
+    // Stop when the queue is drained, not when a clock runs out. Nothing enqueues during this
+    // vector, so the first null is definitive; a wall-clock deadline would instead make the vector
+    // depend on how fast writes happen to be, which is how it silently flaked before.
     const [sessionId, deadlineMs] = [rest[0], Number(rest[1])]
     const handle = openProtocol(databasePath, { busyTimeoutMs: 10000 })
     const taken = []
-    while (Date.now() < deadlineMs) {
+    let drained = false
+    while (!drained && Date.now() < deadlineMs) {
       const message = handle.dequeue(sessionId)
       if (message) taken.push(message.messageId)
+      else drained = true
     }
     handle.close()
-    emit({ ok: true, op, taken })
+    emit({ ok: true, op, taken, drained })
+  } else if (op === 'lock-holder') {
+    // Deterministic lock holder for the busy_timeout ordering gate. locking_mode=EXCLUSIVE keeps the
+    // file lock after COMMIT, so the lock is held for a known window instead of a raced instant.
+    // This is a fixture, not protocol behaviour: the protocol never sets locking_mode.
+    const holdMs = Number(rest[0])
+    const engine = await import(process.env.M2_ENGINE ?? './engine.mjs')
+    const db = engine.nodeSqliteDriver.open(databasePath, { readOnly: false })
+    db.exec('PRAGMA locking_mode=EXCLUSIVE')
+    db.exec('BEGIN IMMEDIATE')
+    db.prepare("INSERT INTO protocol_sessions(session_id, created_at_ms) VALUES('lockholder', 1)").run()
+    db.exec('COMMIT')
+    process.stdout.write('held\n')
+    const until = Date.now() + holdMs
+    while (Date.now() < until) { /* hold the lock for a known window */ }
+    db.close()
+    emit({ ok: true, op, heldMs: holdMs })
   } else if (op === 'crash-precommit') {
     // Stage a write inside a real protocol transaction, announce it, then spin until the parent
     // SIGKILLs us. Spinning inside a transaction is exactly what the contract forbids in production;

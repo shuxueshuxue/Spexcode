@@ -177,9 +177,36 @@ lost the race in **11 of 20 rounds** (WAL era), with `SQLITE_BUSY` raised by `SE
 sqlite_version()`, the one statement nobody suspects. The scenario is ordinary on this fleet: several
 shell hooks firing at once against a cold database.
 
-The finding survives the move to a rollback journal. Under DELETE the same flip still loses the
-cold-open race, and the counter-example is a standing vector rather than a one-off shell loop
-(`evidence/v1-delete/counterexamples.txt`, flip `busy-timeout-after-version-probe`).
+#### The gate, and why the first one did not count
+
+That evidence is real, but for two rounds the *gate* on it was not. The decision was pinned only by
+`repeated cold opens by eight processes never lose the first-open race`, which is a probabilistic
+race: measured across 12 runs, it caught a wrong-ordered engine **8 times out of 12**. Two honest
+runs of identical code disagreed about whether the flip was gated, because sometimes it was and
+sometimes it was not. **An intermittent catch is not a gate**, and reporting one as gated is how an
+ungated hard invariant survived two review rounds.
+
+The replacement holds the lock deterministically instead of racing for it
+(`evidence/v1-delete/busy-timeout-gate-stability.txt`):
+
+| | |
+|---|---|
+| Vector | `busy_timeout must be the connection's first statement, or the version probe has no budget` |
+| Lock holder | a second OS process, `PRAGMA locking_mode=EXCLUSIVE`, which retains the file lock after `COMMIT` |
+| Hold window | 1500 ms, released by the holder itself — not by a kill — and entered only after it prints its own readiness line |
+| Control | open with a **200 ms** budget must fail `PROTOCOL_DATABASE_BUSY`, proving the lock is genuinely held so a later success cannot be a false pass |
+| Assertion | open with an **8000 ms** budget must succeed, and must have taken ≥ 40% of the hold, proving it waited rather than slipping past an unlocked database |
+
+Correct order sets `busy_timeout` before the first database-touching statement, so the probe blocks
+and then succeeds. Wrong order runs that probe while `busy_timeout` is still its default `0`, so it
+is refused immediately and open fails.
+
+The mechanism rests on a measured detail: **setting `busy_timeout` does not itself need the lock**
+(`evidence/v1-delete/probe-lock-holder.txt`). If it did, both orderings would fail and the vector
+could not separate them at all.
+
+Stability, 20 repeats each: **canonical passes 20/20; the wrong-order stub is caught 20/20, missed
+0.**
 
 ### 4.2 The journal mode is asserted, never set
 
@@ -866,7 +893,8 @@ Named, with what is missing. None may be treated as an implementation requiremen
 cd spikes/sqlite-m2
 
 node --test test/engine.test.mjs test/concurrency.test.mjs   # v1 vectors, incl. crash + multi-process
-node stubs/build.mjs && node stubs/run.mjs                   # every frozen decision has a counter-example
+node stubs/build.mjs && node stubs/run.mjs                   # every frozen decision has a counter-example (10/10 gated)
+node --test --test-name-pattern 'busy_timeout must be' test/concurrency.test.mjs   # the ordering gate alone
 node probe-delete-mode.mjs                                   # journal mode, concurrency, sidecar files
 node probe-journal-recovery.mjs                              # when the hot journal is consumed
 node probe-index.mjs                                         # index plans and timings at 100k rows
@@ -883,7 +911,9 @@ node probe-bs3-semantics.mjs                                 # two SQLite builds
 
 Evidence layout:
 
-- `evidence/v1-delete/` — every figure this contract states as current.
+- `evidence/v1-delete/` — every figure this contract states as current. Two files there are a
+  matched pair: `counterexamples.txt` is the superseded `9/9` record whose gate turned out to be a
+  race, and `counterexamples-gated.txt` is the current `10/10` one. Both are kept.
 - `evidence/` (top level) — WAL-era measurements, kept verbatim as the record the ruling was made on.
 - `fail-first.log`, `fail-first-note.md` — the original first failure and an honest account of what
   each log does and does not prove.

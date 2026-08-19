@@ -1,0 +1,1 @@
+{"ok":true,"produced":{"projectId":"project-a","parentSessionId":"parent-a","enqueued":"child-ready-1"},"consumed":{"messageId":"child-ready-1","adapterInput":"child is ready","journaled":true}}

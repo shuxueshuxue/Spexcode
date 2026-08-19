@@ -14,6 +14,8 @@
 
 spike 证据：原始 `fail-first-self-launch.log` 与 `fail-first-spex-governed.log` 保持原字节，记录的是最初把 `file://` URL 当文件路径的 harness bug，不是契约失败证据；它们对应的原始命令分别是 `node spikes/adopter-api/self-launch-contract.mjs` 与 `node spikes/adopter-api/spex-governed-contract.mjs`。修好的 harness 通过显式 stub 开关重新运行后，`fail-first-assert-self-launch.log` 记录 `initialize stdout contract` 断言失败，`fail-first-assert-spex-governed.log` 记录 `producer contract` 断言失败；两次命令分别是 `ADOPTER_API_SELF_LAUNCH_STUB=1 node spikes/adopter-api/self-launch-contract.mjs` 与 `ADOPTER_API_SPEX_GOVERNED_STUB=1 node spikes/adopter-api/spex-governed-contract.mjs`。`pass-self-launch.log` 与 `pass-spex-governed.log` 是 canonical 真实 shim 的通过输出。ZSwarm fixture 只以退出码 77 报告 `no executable proof available at this base`。
 
+本次 spike 未实测真实 NFS 或其它网络 filesystem，也没有把 Linux/macOS/Windows 的 locality detector 伪装成已实现；因此没有可宣称的 locality fail-closed vector。实现 OPEN 的 detector 缺失本身必须拒绝，不能把“无法判定”当作本地。
+
 反例的最小改动和 source-backed 位置：self-launch 只把 canonical CLI 换成 `stubs/self-launch-cli-wrong-shape.mjs:2` 的 `{}`，因此 `self-launch-contract.mjs:26` 必然抛 `initialize stdout contract`；Spex governed 只把 producer/consumer 子进程换成 `stubs/spex-governed-sequence-wrong-shape.mjs:2` 的 `{}`，因此 `spex-governed-contract.mjs:22` 必然抛 `producer contract`。两个 fixture 的 canonical 路径解析分别在 `self-launch-contract.mjs:9-13` 与 `spex-governed-contract.mjs:9-13`，现在均使用 `fileURLToPath`；canonical 文件名下仍是真实实现，未被 stub 覆盖。
 
 ## ZSwarm
@@ -59,7 +61,7 @@ ZSwarm 必须拥有 config/path resolver、自己的 topology 表、ZSwarm runti
 ### 2. 最小调用序列
 
 1. materialize 进程写 harness 可发现的 hook/command；shell hook 进程只执行 CLI，不 import Node library。
-2. hook/CLI 进程按路径优先级解析 DB（显式参数 → 环境变量 → adopter 全局 config → OS 默认），调 `initialize(nativeSessionId)`。
+2. hook/CLI 进程按路径优先级解析 DB（显式参数 → 环境变量 → adopter 全局 config → OS 默认）；得到绝对路径后、调用 `openProtocol` 之前，adopter resolver 必须确认该路径位于本地且 filesystem 支持可靠 advisory locking，再调 `initialize(nativeSessionId)`。
 3. 任意 producer 进程（可以没有 backend）打开同一绝对 DB，调 `enqueue(target, message)` 并在进程退出前等待 commit。
 4. 用户显式 listener/monitor CLI 进程调 `dequeue(target)`；空队列是成功的 `null`。
 5. listener 的 stdout 被 harness configuration seam 交给 harness runtime adapter；adapter 负责 native input 和自己的 journal。没有常驻 backend，也没有 wake correctness 依赖。
@@ -76,11 +78,15 @@ self-launch-cli.mjs enqueue --database-path ABS --session-id ID --message-id MID
 self-launch-cli.mjs dequeue --database-path ABS --session-id ID
 ```
 
+#### Storage locality precondition
+
+路径 resolver 得到绝对 `databasePath` 后、调用 `openProtocol` 之前，必须确认 database 所在 filesystem 是本地的，并支持可靠 advisory locking。非本地或 locality 无法判定时必须 fail closed（默认拒绝），退出 1，stderr 沿用 `self-launch-cli: STORAGE_LOCALITY_UNVERIFIED: message`。协议核心不做、也不假装做这个判定；它只接收已由 adopter 判定合格的绝对路径。v1 使用 rollback journal DELETE、禁用 WAL；WAL 在网络 filesystem 上会因共享内存要求 fail loud，但 DELETE 不会替 resolver 自动提供这道闸门。macOS/Windows detector 仍是实现 OPEN，detector 缺失同样拒绝；真实 NFS 本 spike 未实测。
+
 每个命令 stdout 为单行 JSON（`initialize` 是 `{sessionId,state}`；`enqueue` 是 message；`dequeue` 是 message 或 `null`），成功退出 0。usage/argv 错误退出 2；protocol/storage 错误退出 1，stderr 为 `self-launch-cli: CODE: message`。路径优先级是显式 `--database-path`、`SPEX_SESSION_DATABASE_PATH`、`SPEX_SESSION_CONFIG` JSON 的 `databasePath`、OS 默认。spike CLI 选择 `$HOME/.spexcode/sessions.sqlite` 作为最后兜底，但这是 adopter policy 示例，不是冻结的产品默认；产品仍应保持可重定位。CLI 只做解析和调用，不是 daemon。
 
 ### 4. 最薄切入包
 
-文件清单：`spikes/adopter-api/self-launch-contract.mjs`、`self-launch-cli.mjs`、`stubs/self-launch-cli-wrong-shape.mjs`、`protocol.mjs`（一次性复制的 spike protocol）、`fail-first-self-launch.log`、`fail-first-assert-self-launch.log`、`pass-self-launch.log`。原始日志保留路径 bug；新日志由 `ADOPTER_API_SELF_LAUNCH_STUB=1 node spikes/adopter-api/self-launch-contract.mjs` 产生并证明 `initialize stdout contract` 有判别力；canonical pass 日志证明无 backend 时 initialize、offline enqueue、显式 dequeue、空队列 `null`、绝对路径和环境变量解析；不触碰任何 production adopter。
+文件清单：`spikes/adopter-api/self-launch-contract.mjs`、`self-launch-cli.mjs`、`stubs/self-launch-cli-wrong-shape.mjs`、`protocol.mjs`（一次性复制的 spike protocol）、`fail-first-self-launch.log`、`fail-first-assert-self-launch.log`、`pass-self-launch.log`。原始日志保留路径 bug；新日志由 `ADOPTER_API_SELF_LAUNCH_STUB=1 node spikes/adopter-api/self-launch-contract.mjs` 产生并证明 `initialize stdout contract` 有判别力；canonical pass 日志证明无 backend 时 initialize、offline enqueue、显式 dequeue、空队列 `null`、绝对路径和环境变量解析。locality detector/NFS vector 在本 spike 未实测，不能把 pass 日志解释为 locality 覆盖；不触碰任何 production adopter。
 
 ### 5. 推回协议的压力判定
 
@@ -105,7 +111,7 @@ producer 入口是 `spec-cli/src/client.ts:253-260` 的 `clientSend`，其后端
 
 ### 3. adopter 必须自己拥有
 
-Spex adopter 拥有 config/path resolver、`spex_governed_sessions` 与 topology edge 表、lifecycle/governance policy、harness runtime adapter、`messageId`-keyed consumer journal 和 wake hint/sweep。materialization adapter 继续独立拥有 hooks/commands/trust；protocol 只存 opaque session/message。
+Spex adopter 拥有 config/path resolver、`spex_governed_sessions` 与 topology edge 表、lifecycle/governance policy、harness runtime adapter、`messageId`-keyed consumer journal 和 wake hint/sweep。它的 resolver 与 self-launch 相同：绝对 `databasePath` 解析后、调用 `openProtocol` 前，必须判定本地 filesystem 和可靠 advisory locking；非本地或 locality 不可判定时默认 fail closed，不能把探测责任下放给 protocol。materialization adapter 继续独立拥有 hooks/commands/trust；protocol 只存 opaque session/message。
 
 #### Global session identity seam
 

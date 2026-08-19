@@ -26,9 +26,12 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   immutable guidance bundle remains reproducible), the **[[release-publish]] producer test** (the complete
   public package set remains version-locked, ordered, and guarded against direct publication), the
   **`tsc --noEmit`** type check on the CLI package, the session-core protocol suite, the CLI package's complete **unit/integration suite**, and
-  one data-driven **production clean-init matrix**. The suite runs from the package directory after both root
-  and package installs, so subprocess fixtures resolve the same local `tsx`/TypeScript that production-facing
-  tests invoke; a green workflow cannot coexist with a known main-branch unit failure.
+  one data-driven **production clean-init matrix**. CI first installs each package-local lockfile, then applies
+  the canonical root workspace install and builds the internal packages before lint. That order keeps each
+  package's dependency plan valid while making the root workspace links resolve to emitted internal `dist`
+  entries. The suite runs from the package directory after both root and package installs, so subprocess
+  fixtures resolve the same local `tsx`/TypeScript that production-facing tests invoke; a green workflow cannot
+  coexist with a known main-branch unit failure.
   The matrix builds and installs the npm tarball, proves the installed `spex` starts, then crosses Python and
   TypeScript projects with Claude-only and Codex-only delivery in disposable real git repositories. Every row
   goes through the actual `spex init` and `spex materialize` CLI surfaces and checks the whole deterministic

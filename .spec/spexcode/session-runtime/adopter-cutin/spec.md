@@ -18,8 +18,11 @@ ZSwarm has no production importer in this repository and therefore has no execut
 
 The plan freezes the following adopter-facing consequences: protocol `session_id` is globally unique within one
 adopter database, `project_id` remains Spex-owned metadata rather than protocol scope, `dequeue` is at-most-once, and
-post-dequeue retry belongs to a consumer journal keyed by `messageId`. Sender revocation, cursor restart semantics,
-native identity, lifecycle, and adapter results remain adopter-owned decisions; they are not protocol operations.
+post-dequeue retry belongs to a consumer journal keyed by `messageId`. Storage locality is an adopter precondition:
+the path resolver establishes that the resolved absolute database sits on a local filesystem with reliable advisory
+locking before opening the protocol, and fails closed when locality is non-local or undetermined. The protocol core
+neither performs nor simulates that judgement. Sender revocation, cursor restart semantics, native identity,
+lifecycle, and adapter results remain adopter-owned decisions; they are not protocol operations.
 
 The spike fixtures under `spikes/adopter-api/` are temporary absolute-database experiments. Their fail-first logs are
 retained alongside passing outputs. They do not import production adopters or authorize changes to the legacy files;

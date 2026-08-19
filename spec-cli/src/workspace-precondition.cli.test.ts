@@ -24,19 +24,24 @@ test('graph rejects a non-Git workspace with one actionable message and no runti
   }
 })
 
-test('the cached graph entrance rejects the same non-Git workspace before layout reads', async () => {
+test('the cached graph entrance rejects the same non-Git workspace before layout reads', () => {
   const workspace = realpathSync(mkdtempSync(join(tmpdir(), 'spex-nongit-cache-')))
-  const cwd = process.cwd()
   try {
-    process.chdir(workspace)
-    const { readBoard } = await import('./graphCache.js')
-    await assert.rejects(readBoard(), (error: unknown) => {
-      assert.equal((error as Error).name, 'GitWorkspaceError')
-      assert.equal((error as Error).message, `workspace is not a Git repository: ${workspace}. Run \`git init\` in that directory, then retry.`)
-      return true
+    const program = [
+      `import { readBoard } from ${JSON.stringify(join(SRC, 'graphCache.ts'))}`,
+      'readBoard().then(',
+      '  () => { console.log("unexpected success"); process.exitCode = 2 },',
+      '  (error) => { console.log(JSON.stringify({ name: error?.name, message: error?.message })) },',
+      ')',
+    ].join('\n')
+    const result = spawnSync(process.execPath, [TSX, '-e', program], { cwd: workspace, encoding: 'utf8' })
+    assert.equal(result.status, 0)
+    assert.notEqual(result.stdout, '', 'a direct read must settle before its process exits')
+    assert.deepEqual(JSON.parse(result.stdout), {
+      name: 'GitWorkspaceError',
+      message: `workspace is not a Git repository: ${workspace}. Run \`git init\` in that directory, then retry.`,
     })
   } finally {
-    process.chdir(cwd)
     rmSync(workspace, { recursive: true, force: true })
   }
 })

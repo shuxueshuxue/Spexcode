@@ -27,11 +27,27 @@ regardless of what the engine details say.
 
 ## What the contract fixes
 
-A minimum SQLite version, stated as an exact number with its primary source rather than a range. The
-protocol's own deployment shape — several processes writing one WAL database concurrently — is the exact
-trigger condition for the WAL-reset corruption bug, so the version gate is a startup refusal, not advice.
-The gate compares version components numerically; a string comparison would accept builds sixteen years too
-old.
+A journal mode, and a minimum SQLite version derived from it. V1 uses a rollback journal and never enters
+write-ahead logging. The mode is asserted on every connection and never set: a fresh database already
+reports it, so there is nothing to change, and a database left in write-ahead logging is refused rather than
+converted, because a runtime dual path is exactly what this refactor removes. Never issuing a journal-mode
+change also removes a whole hazard class, since a mode change is not covered by the busy handler in either
+direction.
+
+Declining write-ahead logging is what makes the version floor small. The corruption bug that would otherwise
+force a floor above what the deployed interpreters ship affects only that mode, so the floor is instead
+derived from the SQL features the schema actually contains, each traced to the release that introduced it.
+The binding constraint is the release that made the JSON functions built-ins, because depending on an
+earlier one would mean depending on how somebody compiled their SQLite, and a compile-time flag is not a
+version floor. The gate compares version components numerically; a string comparison would accept builds
+years too old. A vector exercises every feature the floor is derived from, so the floor is tested rather
+than asserted.
+
+The mode is not free, and the contract accounts for its cost rather than presenting it as a pure
+simplification. A rollback journal serialises more: a reader no longer blocks nothing, and an adopter
+holding a long read transaction stalls every writer on that database. Write throughput drops severalfold.
+Both are measured, and the milestone's throughput bar is confirmed against the mode actually shipped rather
+than the one measured first.
 
 A mandatory per-connection PRAGMA set, **and its order**. Each PRAGMA is asserted by reading the value back,
 because setting one and not checking it is how a database silently ends up in the wrong mode. The busy
@@ -73,6 +89,23 @@ on the inode and two paths to one file already observe one committed state. The 
 its parent directory is not. That is the protocol's own rule about misspelled addresses applied to paths: a
 misspelled directory must not produce a plausible empty protocol at the wrong location.
 
+Storage locality is a stated safety precondition rather than a protocol capability. The database must sit on
+local storage with reliable advisory locking, and the adopter's path resolver establishes that before the
+protocol is opened, failing closed whenever locality cannot be positively determined — an unrecognised
+filesystem, a platform with no detector, or a probe that cannot answer all mean refusal, never optimistic
+acceptance. The protocol core does not probe the filesystem, and must not appear to: choosing a rollback
+journal removed the automatic refusal that write-ahead logging provided for free by requiring shared memory
+between processes. A rollback journal works over a network filesystem without complaint while advisory
+locking there is unreliable, which converts a loud failure into silent corruption. Nothing in this contract
+may be read as evidence that the journal choice makes network storage safe; the opposite is true, and that
+is why the guarantee is made explicitly and upstream.
+
+Crash recovery is a property of the journal, so it is measured against the journal actually used. A process
+killed before its commit leaves work invisible to every later reader; a process killed after its commit
+keeps the message and never requeues it. The recovery record left on disk is consumed by the next write
+rather than by an open or a read, so its presence is not corruption, not danger, and not data — it belongs
+to the database engine exactly as the write-ahead files did.
+
 Migrations are component-scoped and forward-only, and each checksums only its own bytes, so appending one
 never reports false drift on every existing database. All pending migrations for a component commit in one
 transaction, and the existence check happens inside that same transaction, so concurrent first-openers
@@ -97,6 +130,11 @@ version number without a citable primary source is recorded as evidence-needed r
 guard that could not be exercised against real conditions is named as an evidence gap rather than presented
 as coverage.
 
+Measurements are bound to the design that produced them. When a ruling changed the journal mode, every
+concurrency, throughput, and crash figure taken under the previous mode became historical rather than
+current, and was re-measured rather than carried across. The superseded evidence is kept verbatim, because
+it is what the ruling was decided on, and the contract labels which era each figure belongs to.
+
 Each frozen decision carries an executable counter-example: a deliberately wrong implementation, a minimal
 edit away from the reference, that makes a named vector fail with its own assertion. A failure that would
 look identical whether the implementation is right or wrong — a missing module, a mistyped path — proves
@@ -108,18 +146,23 @@ exclusivity under concurrent consumers, and a cursor never skipping a committed 
 
 ## Boundaries
 
-The choice of SQLite binding is not fixed here. The contract is the schema, the migration registry, the
-canonical encoding, the error codes, and the version gate; a binding is a replaceable implementation of it,
-and any candidate must pass the identical vectors without changing a byte of the schema. Which binding ships
-moves the fleet's interpreter floor, which is a decision above this node; the contract carries complete
-comparative measurements for both candidates and marks the choice as pending.
+The binding is fixed, but fixing it does not make it the contract. The contract is the schema, the
+migration registry, the canonical encoding, the error codes, and the version gate; a binding is a
+replaceable implementation of them, and any candidate must pass the identical vectors without changing a
+byte of the schema. That replaceability is measured rather than asserted, by running the same vectors
+through a second binding and confirming the migration text hashes identically under both.
 
-One constraint on bindings does belong here: a binding is a process-global commitment. Two different SQLite
-builds linked into one process against one database cannot see each other's locks, because advisory locks
-are per-process, and single-writer is silently lost. Across processes the same builds interoperate exactly
-as SQLite promises.
+One constraint on bindings does belong here: a binding is a process-global commitment. Two different
+database builds linked into one process against one file cannot see each other's locks, because advisory
+locks are per-process, and single-writer is silently lost. Across processes the same builds interoperate
+correctly.
 
-Sweep cadence, retention and purge, backup operational policy, planner-statistics maintenance, write-ahead
-log growth under sustained load, network-filesystem detection on platforms that report no usable filesystem
-identity, and whether the shared transaction seam admits dequeue all remain open, each with the missing
-evidence named.
+Write-ahead logging is deferred, not forbidden forever. It stays outside this contract with its own stated
+preconditions — a version floor high enough to clear the corruption bug on every participating process, a
+locality guarantee at least as strong as the one above, and a migration path for databases this contract
+refuses to convert. It must never arrive as a configuration flag or a runtime branch on this contract.
+
+Sweep cadence, retention and purge, backup operational policy, planner-statistics maintenance, the effect of
+reader-blocks-writer under realistic adopter load, locality detection on platforms that report no usable
+filesystem identity, verification of the network-filesystem verdicts against a real mount, and whether the
+shared transaction seam admits dequeue all remain open, each with the missing evidence named.

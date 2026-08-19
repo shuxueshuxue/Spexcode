@@ -4,13 +4,16 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 
 const { openProtocol } = await import(process.env.M2_ENGINE || '../engine.mjs')
+
+const body = t => Buffer.from(t, 'utf8')
+const msg = (over = {}) => ({ kind: 'test.v1', body: body('hello'), ...over })
 
 const WORKER = join(dirname(dirname(fileURLToPath(import.meta.url))), 'worker.mjs')
 const roots = []
@@ -86,12 +89,15 @@ test('a cursor following concurrent writers never skips a committed message', as
   const WRITERS = 6
   const PER_WRITER = 120
   const startAt = Date.now() + 500
-  const deadline = startAt + 4000
+  const deadline = startAt + 60000
   const results = await runWorkers([
     ...Array.from({ length: WRITERS }, (_, i) => [path, 'enqueue', startAt, 'load', PER_WRITER, 'w' + i]),
-    [path, 'follow', startAt, 'load', deadline],
+    [path, 'follow', startAt, 'load', WRITERS * PER_WRITER, deadline],
   ])
   for (const r of results) assert.equal(r.parsed?.ok, true, `${r.out}${r.err}`)
+  const follower = results.find(r => r.parsed.op === 'follow')
+  assert.equal(follower.parsed.complete, true,
+    'the follower must reach the expected count, or this vector proves nothing about skipping')
 
   const written = results.filter(r => r.parsed.op === 'enqueue').flatMap(r => r.parsed.ids)
   const followed = results.find(r => r.parsed.op === 'follow').parsed.seen
@@ -124,6 +130,76 @@ test('concurrent consumers of one queue split it without a double dequeue', asyn
   const handle = openProtocol(path)
   assert.deepEqual(handle.listPending('shared'), [])
   handle.close()
+})
+
+// Spawns a worker, waits for its own readiness line, then SIGKILLs it. Waiting on the worker's
+// signal rather than a sleep is what makes this a crash test and not a race with process startup.
+const killAfterSignal = (args, signalText) => new Promise((resolve, reject) => {
+  const engine = process.env.M2_ENGINE ? { M2_ENGINE: process.env.M2_ENGINE.replace(/^\.\./, '.') } : {}
+  const child = spawn(process.execPath, [WORKER, ...args.map(String)], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, ...engine },
+  })
+  let out = ''
+  let err = ''
+  child.stdout.on('data', d => {
+    out += d
+    if (out.includes(signalText)) { child.kill('SIGKILL'); resolve(out.trim()) }
+  })
+  child.stderr.on('data', d => { err += d })
+  child.on('close', () => reject(new Error(`worker exited before "${signalText}": ${out}${err}`)))
+})
+
+test('SIGKILL before commit leaves the message pending and the rollback journal is recovered', async () => {
+  const path = freshDb()
+  const setup = openProtocol(path)
+  setup.initialize('crash')
+  setup.close()
+
+  await killAfterSignal([path, 'crash-precommit', 0, 'crash'], 'staged')
+  const dir = dirname(path)
+  const sidecarsAfterKill = readdirSync(dir).filter(f => f !== 'protocol.sqlite').sort()
+  assert.deepEqual(sidecarsAfterKill, ['protocol.sqlite-journal'],
+    'a killed writer leaves its rollback journal behind — that is the recovery record')
+
+  // Correctness first: the uncommitted enqueue must be invisible to every later reader, whether or
+  // not the journal file has been cleaned up yet.
+  const readOnly = openProtocol(path, { readOnly: true })
+  assert.deepEqual(readOnly.listPending('crash'), [], 'a read-only reader never sees the staged write')
+  readOnly.close()
+
+  const after = openProtocol(path)
+  assert.deepEqual(after.listPending('crash'), [], 'the uncommitted enqueue was rolled back')
+  assert.equal(after.counts().messages, 0)
+
+  // Measured: the hot journal is consumed by the next WRITE, not by an open or a read. A lingering
+  // -journal is therefore not an error state and must never be read as data or as pending recovery.
+  assert.deepEqual(readdirSync(dir).filter(f => f !== 'protocol.sqlite'), ['protocol.sqlite-journal'],
+    'reads leave the journal in place')
+  after.enqueue('crash', msg({ body: body('after-recovery') }))
+  assert.deepEqual(readdirSync(dir).filter(f => f !== 'protocol.sqlite'), [],
+    'the first write consumes the rollback journal')
+  assert.equal(after.counts().messages, 1, 'only the post-recovery message exists')
+  after.close()
+})
+
+test('SIGKILL after commit keeps the message and never requeues it', async () => {
+  const path = freshDb()
+  const setup = openProtocol(path)
+  setup.initialize('crash')
+  setup.close()
+
+  const out = await killAfterSignal([path, 'crash-postcommit', 0, 'crash'], 'committed')
+  const committedId = out.split(/\s+/).pop()
+
+  const after = openProtocol(path)
+  const pending = after.listPending('crash')
+  assert.equal(pending.length, 1, 'the committed message survived the kill')
+  assert.equal(pending[0].messageId, committedId)
+  const taken = after.dequeue('crash')
+  assert.equal(taken.messageId, committedId)
+  assert.equal(after.dequeue('crash'), null, 'a post-commit kill does not duplicate the message')
+  after.close()
 })
 
 test('short writes stay bounded: the write lock holds only SQL', () => {

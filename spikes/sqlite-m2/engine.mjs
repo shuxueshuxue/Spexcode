@@ -2,7 +2,7 @@
 // docs/session-protocol-sqlite-engine.md. It is not the production protocol implementation and is
 // wired to no adopter: no ORM, no daemon, no outbox, no file observer, no harness callback.
 import { createHash, randomBytes } from 'node:crypto'
-import { statSync, statfsSync } from 'node:fs'
+import { statSync } from 'node:fs'
 import { dirname, isAbsolute } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -18,7 +18,13 @@ let defaultDriver = nodeSqliteDriver
 export const setDefaultDriver = driver => { defaultDriver = driver }
 
 export const COMPONENT = 'session-protocol'
-export const MIN_SQLITE_VERSION = '3.51.3'
+// Derived from the SQL features this schema actually uses, each with its introducing release:
+//   3.8.0  partial indexes            3.37.0  STRICT tables
+//   3.38.0 JSON functions as built-ins (json_valid / json_type without -DSQLITE_ENABLE_JSON1)
+// 3.38.0 is the binding constraint. The WAL-reset bug fixed in 3.51.3 does not apply: v1 uses a
+// rollback journal and never enters WAL mode. See the contract's WAL-experiment section.
+export const MIN_SQLITE_VERSION = '3.38.0'
+export const JOURNAL_MODE = 'delete'
 export const PROTOCOL_VERSION = 1
 
 export const LIMITS = {
@@ -31,22 +37,6 @@ export const LIMITS = {
   headersJsonBytes: 65536,
   bodyBytes: 1048576,
 }
-
-// Values read verbatim from /usr/include/linux/magic.h (package linux-libc-dev). FUSE is absent on
-// purpose: its magic identifies the driver, not whether the backing store is local.
-export const NETWORK_FILESYSTEM_TYPES = [
-  { name: 'NFS', type: 0x6969 },
-  { name: 'SMB', type: 0x517b },
-  { name: 'CIFS', type: 0xff534d42 },
-  { name: 'SMB2', type: 0xfe534d42 },
-  { name: '9P', type: 0x01021997 },
-  { name: 'CEPH', type: 0x00c36400 },
-  { name: 'AFS', type: 0x5346414f },
-  { name: 'AFS_FS', type: 0x6b414653 },
-  { name: 'CODA', type: 0x73757245 },
-  { name: 'OCFS2', type: 0x7461636f },
-  { name: 'NCP', type: 0x564c },
-]
 
 export class ProtocolError extends Error {
   constructor(code, message, cause) {
@@ -136,10 +126,6 @@ export function isSupportedSqliteVersion(version) {
   if (a !== x) return a > x
   if (b !== y) return b > y
   return c >= z
-}
-
-export function isRejectedFilesystemType(type) {
-  return NETWORK_FILESYSTEM_TYPES.some(entry => entry.type === type)
 }
 
 // ------------------------------------------------------------------ canonical bytes
@@ -285,6 +271,12 @@ function validateDatabasePath(databasePath) {
   if (databasePath.endsWith('/')) fail('PROTOCOL_PATH_INVALID', 'databasePath must name a file, not a directory')
 }
 
+// Storage LOCALITY is an explicit safety precondition the adopter's path resolver establishes
+// BEFORE calling openProtocol, and it fails closed when locality cannot be determined. The protocol
+// core deliberately does not probe the filesystem: it neither makes that determination nor pretends
+// to. A rollback journal, unlike WAL, works over a network filesystem without complaint, so nothing
+// here would fail loud -- which is exactly why the guarantee has to be made upstream and explicitly.
+// See drivers/../adopter-path-resolver.mjs for a reference fail-closed resolver.
 function checkParentDirectory(databasePath) {
   const parent = dirname(databasePath)
   let stat
@@ -294,22 +286,12 @@ function checkParentDirectory(databasePath) {
     fail('PROTOCOL_PATH_PARENT_MISSING', `database parent directory does not exist: ${parent}`, error)
   }
   if (!stat.isDirectory()) fail('PROTOCOL_PATH_PARENT_MISSING', `database parent is not a directory: ${parent}`)
-  try {
-    const fsType = statfsSync(parent).type
-    if (isRejectedFilesystemType(fsType)) {
-      const name = NETWORK_FILESYSTEM_TYPES.find(e => e.type === fsType).name
-      fail('PROTOCOL_PATH_UNSUPPORTED_FILESYSTEM', `WAL requires a same-host filesystem; ${parent} is ${name}`)
-    }
-  } catch (error) {
-    if (error instanceof ProtocolError) throw error
-    // statfs is unavailable on this platform: the journal_mode assertion below is the only guard.
-  }
 }
 
-// Measured: `PRAGMA journal_mode=WAL` takes an exclusive lock and is the one statement that does
-// NOT honour busy_timeout, so processes opening a brand-new database together lose the race with a
-// bare `database is locked`. Two rules together remove it: read the mode first so a database that is
-// already WAL never contends at all, and bound-retry only the genuine first-open collision.
+// Measured: busy_timeout defaults to 0, so a statement issued before it is set has no busy handler
+// at all and loses a contended lock immediately. Opening is not lock-free either -- concurrent
+// first-openers contend over creating the schema -- so the open-time inspection retries within the
+// caller's budget. Runtime operations are never retried; only startup is transient this way.
 const sleepSync = ms => {
   const buffer = new Int32Array(new SharedArrayBuffer(4))
   Atomics.wait(buffer, 0, 0, ms)
@@ -326,22 +308,6 @@ function retryWhileBusy(budgetMs, fn) {
         : classify(error) === 'PROTOCOL_DATABASE_BUSY'
       if (!busy || Date.now() >= deadline) throw error
       sleepSync(20)
-    }
-  }
-}
-
-function ensureWalMode(db, busyTimeoutMs) {
-  const current = db.prepare('PRAGMA journal_mode').get().journal_mode
-  if (current === 'wal') return current
-  const deadline = Date.now() + Math.max(busyTimeoutMs, 1)
-  for (;;) {
-    try {
-      return db.prepare('PRAGMA journal_mode=WAL').get().journal_mode
-    } catch (error) {
-      if (classify(error) !== 'PROTOCOL_DATABASE_BUSY' || Date.now() >= deadline) throw error
-      sleepSync(25)
-      const settled = db.prepare('PRAGMA journal_mode').get().journal_mode
-      if (settled === 'wal') return settled
     }
   }
 }
@@ -367,22 +333,24 @@ export function openProtocol(databasePath, options = {}) {
     const version = db.prepare('SELECT sqlite_version() AS v').get().v
     if (!isSupportedSqliteVersion(version)) {
       fail('PROTOCOL_SQLITE_VERSION_UNSUPPORTED',
-        `SQLite ${version} carries the WAL-reset corruption bug; ${MIN_SQLITE_VERSION} or later is required`)
+        `SQLite ${version} is below ${MIN_SQLITE_VERSION}, which STRICT tables and built-in JSON functions require`)
     }
     db.exec('PRAGMA foreign_keys=ON')
     if (db.prepare('PRAGMA foreign_keys').get().foreign_keys !== 1) {
       fail('PROTOCOL_PRAGMA_UNSUPPORTED', 'foreign_keys could not be enabled')
     }
-    // Opening is not lock-free. The first connection after the WAL was reset rebuilds the -shm
-    // wal-index under a brief exclusive lock, and concurrent openers see SQLITE_BUSY from an
-    // ordinary read. Bound the retry to the same budget the caller gave for write contention;
-    // runtime operations keep surfacing busy loudly, because only startup is transient this way.
+    // The journal mode is ASSERTED, never set. A fresh database is already `delete` (measured), so
+    // v1 never issues a mode change -- which also removes a whole hazard class, because a
+    // journal-mode change is not protected by busy_timeout in EITHER direction (measured: DELETE
+    // refused at 0ms with a 1500ms budget). A database somebody left in WAL is refused rather than
+    // converted: there is no runtime dual path.
+    const mode = db.prepare('PRAGMA journal_mode').get().journal_mode
+    if (mode !== JOURNAL_MODE) {
+      fail('PROTOCOL_JOURNAL_MODE_UNSUPPORTED',
+        `journal_mode is ${mode}, not ${JOURNAL_MODE}; v1 is rollback-journal only and does not convert a database`)
+    }
     retryWhileBusy(busyTimeoutMs, () => {
       if (!readOnly) {
-        const mode = ensureWalMode(db, busyTimeoutMs)
-        if (mode !== 'wal') {
-          fail('PROTOCOL_JOURNAL_MODE_UNSUPPORTED', `journal_mode is ${mode}, not wal; this filesystem cannot host the protocol`)
-        }
         db.exec('PRAGMA synchronous=FULL')
         if (db.prepare('PRAGMA synchronous').get().synchronous !== 2) {
           fail('PROTOCOL_PRAGMA_UNSUPPORTED', 'synchronous could not be set to FULL')

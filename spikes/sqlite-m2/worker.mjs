@@ -36,19 +36,20 @@ try {
   } else if (op === 'follow') {
     // Advance a cursor while other processes are still committing. A skipped message here would
     // mean enqueue_seq can become visible out of commit order.
-    const [sessionId, deadlineMs] = [rest[0], Number(rest[1])]
+    // Terminate on the expected COUNT, not on a wall clock. A deadline makes the vector depend on
+    // how fast writers happen to be, which silently turns a correctness claim into a timing race.
+    const [sessionId, expected, deadlineMs] = [rest[0], Number(rest[1]), Number(rest[2])]
     const handle = openProtocol(databasePath, { busyTimeoutMs: 10000 })
     const seen = []
     let cursor = 0
-    while (Date.now() < deadlineMs) {
+    while (seen.length < expected && Date.now() < deadlineMs) {
       for (const message of handle.readMessages(sessionId, cursor)) {
         seen.push(message.messageId)
         cursor = message.enqueueSeq
       }
     }
-    for (const message of handle.readMessages(sessionId, cursor)) seen.push(message.messageId)
     handle.close()
-    emit({ ok: true, op, seen })
+    emit({ ok: true, op, seen, complete: seen.length >= expected })
   } else if (op === 'drain') {
     const [sessionId, deadlineMs] = [rest[0], Number(rest[1])]
     const handle = openProtocol(databasePath, { busyTimeoutMs: 10000 })
@@ -59,6 +60,21 @@ try {
     }
     handle.close()
     emit({ ok: true, op, taken })
+  } else if (op === 'crash-precommit') {
+    // Stage a write inside a real protocol transaction, announce it, then spin until the parent
+    // SIGKILLs us. Spinning inside a transaction is exactly what the contract forbids in production;
+    // it is the only way to catch a process mid-transaction, and this is a crash fixture.
+    const handle = openProtocol(databasePath, { busyTimeoutMs: 10000 })
+    handle.withTransaction(tx => {
+      tx.enqueue(rest[0], { kind: 'crash.v1', body: Buffer.from('precommit') })
+      process.stdout.write('staged\n')
+      for (;;) { /* wait to be killed */ }
+    })
+  } else if (op === 'crash-postcommit') {
+    const handle = openProtocol(databasePath, { busyTimeoutMs: 10000 })
+    const message = handle.enqueue(rest[0], { kind: 'crash.v1', body: Buffer.from('postcommit') })
+    process.stdout.write(`committed ${message.messageId}\n`)
+    for (;;) { /* wait to be killed */ }
   } else {
     throw new Error(`unknown op: ${op}`)
   }

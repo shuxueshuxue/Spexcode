@@ -3,9 +3,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 // M2_ENGINE lets the identical vectors be driven against the deliberately-naive stub in stubs/,
@@ -17,8 +17,6 @@ const {
   MIN_SQLITE_VERSION,
   canonicalPreimage,
   isSupportedSqliteVersion,
-  isRejectedFilesystemType,
-  NETWORK_FILESYSTEM_TYPES,
 } = await import(process.env.M2_ENGINE || '../engine.mjs')
 
 // M2_DRIVER drives the identical vectors through the second candidate binding. The contract is the
@@ -107,17 +105,32 @@ test('open path: two symlinked paths to one database observe one committed state
 
 // ---------------------------------------------------------------- version gate
 
-test('sqlite version gate compares numerically, not lexicographically', () => {
-  assert.equal(MIN_SQLITE_VERSION, '3.51.3')
+test('sqlite version gate is derived from the features used, and compares numerically', () => {
+  // 3.38.0 = JSON functions as built-ins; it subsumes STRICT tables (3.37.0) and partial indexes
+  // (3.8.0). The WAL-reset fix at 3.51.3 is NOT the floor: v1 never enters WAL mode.
+  assert.equal(MIN_SQLITE_VERSION, '3.38.0')
+  assert.equal(isSupportedSqliteVersion('3.38.0'), true)
+  assert.equal(isSupportedSqliteVersion('3.50.4'), true, 'the SQLite bundled by Node 22, which the fleet pins')
   assert.equal(isSupportedSqliteVersion('3.51.3'), true)
-  assert.equal(isSupportedSqliteVersion('3.51.4'), true)
-  assert.equal(isSupportedSqliteVersion('3.53.4'), true)
   assert.equal(isSupportedSqliteVersion('4.0.0'), true)
-  assert.equal(isSupportedSqliteVersion('3.51.2'), false)
-  assert.equal(isSupportedSqliteVersion('3.50.4'), false)
-  // The lexicographic trap: "3.9.0" > "3.51.3" as strings but is far older.
+  assert.equal(isSupportedSqliteVersion('3.37.0'), false, 'STRICT exists but JSON is not a built-in')
+  assert.equal(isSupportedSqliteVersion('3.36.0'), false)
+  // The lexicographic trap: "3.9.0" > "3.38.0" as strings but is seven years older.
   assert.equal(isSupportedSqliteVersion('3.9.0'), false)
   assert.equal(isSupportedSqliteVersion('3.7.0'), false)
+})
+
+test('every SQL feature the floor is derived from actually works at the floor', () => {
+  // The floor is only honest if the schema really runs on it. This exercises each named feature.
+  const handle = openProtocol(freshDb())
+  handle.initialize('s1')
+  handle.enqueue('s1', msg({ headers: { a: 'b' }, idempotencyKey: 'k' }))   // json_valid/json_type CHECK
+  const plans = handle.queryPlans()
+  assert.match(plans.dequeueHead, /protocol_messages_pending_fifo/)          // partial index + INDEXED BY
+  const first = handle.enqueue('s1', msg({ body: body('second') }))
+  assert.ok(first.enqueueSeq > 0)                                            // AUTOINCREMENT
+  assert.equal(codeOf(() => handle.initialize('bad/id')), 'PROTOCOL_SESSION_ID_INVALID')  // GLOB class
+  handle.close()
 })
 
 test('the live driver satisfies the gate the engine enforces', () => {
@@ -132,12 +145,42 @@ test('the live driver satisfies the gate the engine enforces', () => {
 test('every connection asserts its mandatory pragmas by reading them back', () => {
   const handle = openProtocol(freshDb(), { busyTimeoutMs: 7000 })
   assert.deepEqual(handle.pragmas(), {
-    journal_mode: 'wal',
+    journal_mode: 'delete',
     foreign_keys: 1,
     synchronous: 2,
     busy_timeout: 7000,
   })
   handle.close()
+})
+
+test('a database left in WAL is refused, not converted', () => {
+  const path = freshDb()
+  const raw = rawOpen(path)
+  raw.prepare('PRAGMA journal_mode=WAL').get()
+  raw.exec('CREATE TABLE placeholder(a INTEGER PRIMARY KEY) STRICT')
+  raw.close()
+  assert.equal(codeOf(() => openProtocol(path)), 'PROTOCOL_JOURNAL_MODE_UNSUPPORTED')
+  // Refusing must not have silently rewritten the mode: no runtime dual path.
+  const check = rawOpen(path)
+  assert.equal(check.prepare('PRAGMA journal_mode').get().journal_mode, 'wal')
+  check.close()
+})
+
+test('the protocol depends on no -wal or -shm sidecar, at rest or mid-transaction', () => {
+  const path = freshDb()
+  const dir = dirname(path)
+  const sidecars = () => readdirSync(dir).filter(f => f !== 'protocol.sqlite').sort()
+  const handle = openProtocol(path)
+  handle.initialize('s1')
+  handle.enqueue('s1', msg())
+  assert.deepEqual(sidecars(), [], 'no sidecar survives a committed write')
+  handle.withTransaction(tx => {
+    tx.enqueue('s1', msg({ body: body('mid') }))
+    assert.deepEqual(sidecars(), ['protocol.sqlite-journal'], 'a rollback journal, never -wal/-shm')
+  })
+  assert.deepEqual(sidecars(), [], 'the rollback journal is removed on commit')
+  handle.close()
+  assert.deepEqual(sidecars(), [])
 })
 
 // ---------------------------------------------------------------- session ids
@@ -556,17 +599,54 @@ test('every declared index is the one the planner actually uses', () => {
 
 // ---------------------------------------------------------------- filesystem gate
 
-test('the network-filesystem deny list is a table, not a guess', () => {
-  assert.equal(isRejectedFilesystemType(0xef53), false, 'ext4 is a local filesystem')
-  assert.equal(isRejectedFilesystemType(0x6969), true, 'NFS')
-  assert.equal(isRejectedFilesystemType(0xff534d42), true, 'CIFS')
-  assert.equal(isRejectedFilesystemType(0xfe534d42), true, 'SMB2')
-  assert.equal(isRejectedFilesystemType(0x01021997), true, '9P')
-  assert.equal(isRejectedFilesystemType(0x65735546), false, 'FUSE is unclassifiable, so it is not denied on identity')
-  assert.ok(NETWORK_FILESYSTEM_TYPES.every(e => typeof e.name === 'string' && Number.isInteger(e.type)))
+test('protocol core neither performs nor claims a storage-locality determination', async () => {
+  const engine = await import(process.env.M2_ENGINE || '../engine.mjs')
+  for (const name of ['isRejectedFilesystemType', 'NETWORK_FILESYSTEM_TYPES']) {
+    assert.equal(engine[name], undefined, `${name} must not be part of protocol core`)
+  }
+  assert.doesNotMatch(readFileSync(new URL('../engine.mjs', import.meta.url), 'utf8'), /statfs/,
+    'core must not probe the filesystem; locality is the adopter resolver\'s precondition')
+})
+
+test('the adopter path resolver fails closed, not open', async () => {
+  const { resolveProtocolDatabasePath, classifyFilesystemType, PathLocalityError } =
+    await import('../adopter-path-resolver.mjs')
+
+  assert.equal(classifyFilesystemType(0xef53).locality, 'local', 'ext4')
+  assert.equal(classifyFilesystemType(0x6969).locality, 'network', 'NFS')
+  assert.equal(classifyFilesystemType(0xff534d42).locality, 'network', 'CIFS')
+  // The whole point: anything not positively identified is refused, never admitted.
+  assert.equal(classifyFilesystemType(0x65735546).locality, 'undetermined', 'FUSE cannot be classified by magic')
+  assert.equal(classifyFilesystemType(0x12345678).locality, 'undetermined', 'an unknown filesystem')
+
+  const path = freshDb()
+  assert.equal(resolveProtocolDatabasePath(path), path, 'this host is on an audited local filesystem')
+  const thrown = (fn) => { try { fn(); return null } catch (e) {
+    assert.ok(e instanceof PathLocalityError, String(e)); return e.code } }
+  assert.equal(thrown(() => resolveProtocolDatabasePath('/nonexistent-mount-point-xyz/db.sqlite')),
+    'LOCALITY_PROBE_FAILED', 'a probe that cannot answer refuses')
 })
 
 // ---------------------------------------------------------------- busy
+
+test('a reader is not blocked by an open write, and sees only committed state', () => {
+  // Rollback-journal concurrency differs from WAL and is measured here rather than assumed.
+  const path = freshDb()
+  const handle = openProtocol(path)
+  handle.initialize('s1')
+  handle.enqueue('s1', msg({ body: body('committed') }))
+  const reader = openProtocol(path, { readOnly: true, busyTimeoutMs: 100 })
+  const holder = rawOpen(path)
+  holder.exec('PRAGMA busy_timeout=100')
+  holder.exec('BEGIN IMMEDIATE')
+  holder.prepare("INSERT INTO protocol_sessions(session_id,created_at_ms) VALUES('mid',1)").run()
+  try {
+    assert.equal(reader.listPending('s1').length, 1, 'the reader still reads')
+    assert.equal(codeOf(() => reader.initialize('mid')), 'PROTOCOL_DATABASE_READONLY')
+  } finally {
+    holder.exec('ROLLBACK'); holder.close(); reader.close(); handle.close()
+  }
+})
 
 test('write contention surfaces as a loud busy error, never as an empty result', () => {
   const path = freshDb()

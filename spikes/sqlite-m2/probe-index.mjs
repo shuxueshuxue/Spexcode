@@ -1,3 +1,4 @@
+// v1 is rollback-journal mode, so these are measured under DELETE.
 // Does the history index earn its place, and does its presence steal the hot pending path?
 // Decided by measured plans and timings at realistic shape, not by reading the DDL.
 import { DatabaseSync } from 'node:sqlite'
@@ -11,7 +12,7 @@ const PENDING_PER_SESSION = 3    // realistic: almost everything is already deli
 
 const build = (path, withHistoryIndex) => {
   const db = new DatabaseSync(path)
-  db.exec('PRAGMA journal_mode=WAL')
+  db.exec('PRAGMA journal_mode=DELETE')
   db.exec('PRAGMA synchronous=OFF')
   db.exec(`CREATE TABLE protocol_messages (
     enqueue_seq INTEGER PRIMARY KEY AUTOINCREMENT,

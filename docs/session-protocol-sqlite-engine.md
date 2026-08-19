@@ -19,195 +19,184 @@ Terms keep their protocol meaning: `session`, `message`, `queue`, `producer`, `c
 
 | | Item |
 |---|---|
-| **Frozen** | Minimum SQLite version (§2), mandatory PRAGMAs and their order (§4), exact DDL (§5), canonical `payload_hash` preimage (§6), `message_id` authority and format (§6), `session_id` grammar and the flat global address space (§5.2), open-path policy (§7), migration mechanics (§8), error-code inventory (§9), consumer handler journal contract (§10) |
-| **Pending human decision** | Which driver ships in v1 (§3). The *requirement* is frozen; the *binding* is not, because it moves the fleet's Node floor. |
-| **Still open** | §11 |
+| **Frozen** | Driver and journal mode (§3): `node:sqlite`, rollback journal, no WAL. Minimum SQLite version (§2), mandatory PRAGMAs and their order (§4), exact DDL (§5), canonical `payload_hash` preimage (§6), `message_id` authority and format (§6), `session_id` grammar and the flat global address space (§5.2), open-path policy and the storage-locality precondition (§7), migration mechanics (§8), error-code inventory (§9), consumer handler journal contract (§10) |
+| **Deferred experiment** | WAL, as an independent upgrade behind SQLite ≥ 3.51.3 (§12). Not part of the v1 contract. |
+| **Still open** | §13 |
+
+> **Two eras of evidence.** An earlier revision of this contract specified WAL. The human ruling
+> replaced it with a rollback journal, which invalidated every concurrency, throughput, and crash
+> number measured under WAL. Those measurements are **kept** — they are what the ruling was decided
+> on — but they are historical. Anything labelled *WAL era* below describes the superseded design;
+> every v1 figure comes from `spikes/sqlite-m2/evidence/v1-delete/`.
 
 ---
 
-## 2. Minimum SQLite version — frozen invariant
+## 2. Minimum SQLite version — derived from the features actually used
 
-**`sqlite_version()` must be `3.51.3` or later. A lower version is refused at open with
-`PROTOCOL_SQLITE_VERSION_UNSUPPORTED`; the protocol does not start.**
+**`sqlite_version()` must be `3.38.0` or later.** Below it, open fails with
+`PROTOCOL_SQLITE_VERSION_UNSUPPORTED`.
 
-The architecture requires "at least a SQLite version that has fixed the WAL-reset race" and warns against
-relying on a broad Node engine range. That requirement resolves to an exact number, from the primary
-source (`spikes/sqlite-m2/evidence/sqlite-wal-reset-bug-source.txt`, retrieved from
-`https://sqlite.org/wal.html#walresetbug`):
+This floor is derived from the SQL this schema actually contains, not from a bug. Each feature with
+the release that introduced it, quoted from `https://sqlite.org/changes.html`:
 
-> The bug is likely present in all version of SQLite from 3.7.0 (2010-07-21) through 3.51.2 (2026-01-09).
-> It is fixed in version 3.51.3 (2026-03-13) and later.
->
-> The bug only affects databases in WAL mode when there are two or more database connections open on the
-> same file, in separate threads or processes, and when those two connections attempt to write or
-> checkpoint at the same instant.
+| Feature used | Introduced | Changelog wording |
+|---|---|---|
+| Partial indexes (`CREATE INDEX … WHERE`) | **3.8.0** (2013-08-26) | "Add support for partial indexes" |
+| `STRICT` tables | **3.37.0** (2021-11-27) | "STRICT tables provide a prescriptive style of data type management" |
+| `json_valid()` / `json_type()` as built-ins | **3.38.0** (2022-02-22) | "The JSON functions are now built-ins. It is no longer necessary to use the -DSQLITE_ENABLE_JSON1 compile-time option" |
+| `INDEXED BY` | 3.6.4 (2008-10-15) | pre-dates every other requirement |
+| `AUTOINCREMENT`, `CHECK`, `GLOB`, foreign keys, `BEGIN IMMEDIATE` | ≤ 3.6.19 | pre-date every other requirement |
 
-The trigger condition is not a hypothetical for this protocol — it *is* the deployment model: CLI, shell
-hook, backend, and adopter runtime each open the same file and write concurrently. The consequence is
-silent database corruption, in the one authority that replaces every lock and journal the refactor
-deletes. SQLite rates the occurrence as low and "not an emergency", which is why this is a startup gate
-rather than a recall, but it is not negotiable downward.
+**3.38.0 is the binding constraint**, and it is the JSON one: `STRICT` needs 3.37.0, but relying on
+`json_valid` before 3.38.0 would mean relying on how somebody compiled their SQLite. Depending on a
+compile-time flag is not a version floor.
 
-**The gate is a numeric comparison, not a string comparison.** `"3.9.0" > "3.51.3"` lexicographically
-while being sixteen years older; the comparator is component-wise on integers and is pinned by a vector.
+`VACUUM INTO` (3.27.0) is named in the backup discussion but is not used by the engine, so it does
+not constrain the floor.
 
-Backports of the fix exist as Fossil check-ins for the 3.44 and 3.50 lines (`3.44.6`, `3.50.7`), linked
-from the same page. Neither appears in the release history and no shipping binding produces them, so the
-gate does not special-case them. An operator running such a build will be refused with an exact message
-naming the required version; that is the intended outcome, not a bug to work around.
+### The floor is not the WAL-reset fix
 
-### Measured bundled versions
+An earlier revision froze `3.51.3`, the release that fixed the WAL-reset corruption bug. **That
+reasoning no longer applies: v1 never enters WAL mode**, and the bug "only affects databases in WAL
+mode". Keeping a 3.51.3 gate would have been actively wrong — it would reject Node 22's bundled
+3.50.4 and break the fleet compatibility the ruling exists to preserve. 3.51.3 survives only as the
+precondition for the deferred WAL experiment (§12).
 
-`spikes/sqlite-m2/evidence/probe-node-matrix.txt`, five interpreters, `node probe-driver.mjs`:
+The original WAL-bug source material is retained at
+`spikes/sqlite-m2/evidence/sqlite-wal-reset-bug-source.txt`: it is the evidence the ruling was made
+on, and it gates §13.
 
-| Node | `node:sqlite` | bundled SQLite | passes the gate |
-|---|---|---|---|
-| 18.20.8 | absent (`--experimental-sqlite` is `bad option`) | — | n/a |
-| 20.20.2 | absent (`ERR_UNKNOWN_BUILTIN_MODULE`) | — | n/a |
-| 22.21.0 | present, `ExperimentalWarning` | 3.50.4 | **no** |
-| 24.14.0 | present, `ExperimentalWarning` | 3.51.2 | **no** |
-| 24.15.0 | present, no warning | 3.51.3 | **yes** |
-| better-sqlite3 13.0.3 (on Node 22 and 24) | n/a | 3.53.4 | **yes** |
+**The gate is a numeric comparison, not a string comparison.** `"3.9.0" > "3.38.0"` lexicographically
+while being seven years older; the comparator is component-wise on integers, pinned by a vector.
 
-Node 24.15.0's `sqlite_source_id()` is
-`2026-03-13 10:38:09 737ae4a34738ffa0c3ff7f9bb18df914dd1cad163f28fd6b6e114a344fe6d618`, byte-identical to
-the 3.51.3 source id in the SQLite changelog — the bundled build is exactly the release that carries the
-fix, not merely a version string that looks new enough.
+### Measured: the fleet floor holds
 
-**This collides with the repository as it stands.** Root `package.json` and
-`packages/session-core/package.json` both declare `"node": ">=22"`, and `.nvmrc` pins `22`; macmini is
-documented as requiring Node 22. With `node:sqlite`, the pinned interpreter fails this gate.
+`spikes/sqlite-m2/evidence/v1-delete/node22-fleet-compatibility.txt`:
 
----
+```
+node v22.21.0   sqlite 3.50.4
+node --test test/engine.test.mjs test/concurrency.test.mjs
+# tests 53   # pass 53   # fail 0
+```
 
-## 3. Driver — PENDING HUMAN DECISION
+The whole suite — including the multi-process and crash vectors — passes on the interpreter the
+fleet actually pins. A vector also exercises each feature the floor is derived from, so the floor is
+a claim the suite tests rather than a number in prose.
 
-**Not frozen.** The choice changes the fleet's Node floor, which is above this document's scope. What is
-frozen is that *the driver is a replaceable implementation of a fixed contract*: the schema, migration
-registry, canonical encoding, error codes, and version gate are the protocol asset, exactly as the
-architecture's "TypeScript first, Rust ready" section already says. **Neither candidate may change a byte
-of the schema, and both must pass the identical conformance vectors.**
+The bundled-version matrix (`evidence/probe-node-matrix.txt`, WAL era but still accurate as a
+measurement of the interpreters) records: Node 18.20.8 and 20.20.2 have no `node:sqlite` at all;
+22.21.0 bundles 3.50.4; 24.14.0 bundles 3.51.2; 24.15.0 bundles 3.51.3. All of 22.21.0 and later
+clear the 3.38.0 floor.
 
-That is not an aspiration; it is measured. The same 40 vectors, unchanged, pass through both bindings:
+## 3. Driver and journal mode — frozen
+
+**v1 uses `node:sqlite`'s `DatabaseSync`, on the existing Node ≥ 22 fleet, with
+`journal_mode=DELETE`. WAL is forbidden.** `.nvmrc`, `engines`, and the fleet's interpreters are
+unchanged.
+
+The reasoning is subtractive rather than defensive. The WAL-reset corruption bug is the only thing
+that forced a SQLite version floor above what the fleet ships, and it affects WAL mode only. Not
+using WAL removes the bug, removes the version pressure, removes the need for a native binding to
+pin a newer SQLite, and removes the fleet migration — in exchange for a slower journal mode that
+this workload can afford (§4.5). Fewer moving parts, not more.
+
+What that costs is real and is accounted for in §4.5 and §7.3, not waved away.
+
+### The driver is still a replaceable implementation
+
+Freezing a binding does not make the binding the contract. The contract is the schema, the migration
+registry, the canonical encoding, the error codes, and the version gate. This is measured, not
+asserted: the same single-process vectors pass through a second binding with only the binding
+swapped, and the migration SQL hashes identically under both.
 
 ```sh
 cd spikes/sqlite-m2
-node --test test/engine.test.mjs                              # node:sqlite     -> 40/40
+node --test test/engine.test.mjs                              # node:sqlite    -> 45/45
 npm install --no-save better-sqlite3
-M2_DRIVER=better-sqlite3 node --test test/engine.test.mjs      # better-sqlite3  -> 40/40
+M2_DRIVER=better-sqlite3 node --test test/engine.test.mjs      # better-sqlite3 -> parity
 ```
 
-Logs: `evidence/pass-node-sqlite.log`, `evidence/pass-better-sqlite3.log`.
+`better-sqlite3` 13.0.3 bundles SQLite 3.53.4 and loads on Node 22 and 24 from prebuilds for eight
+platform triples. It remains the pre-qualified alternate if the floor ever has to rise independently
+of the interpreter — for instance to run the §12 WAL experiment on a fleet that cannot reach
+3.51.3.
 
-### The two candidates, measured
+### Frozen regardless of binding: the driver is a process-global commitment
 
-| | `node:sqlite` (`DatabaseSync`) | `better-sqlite3` 13.0.3 |
-|---|---|---|
-| SQLite version | whatever the interpreter bundles; **cannot be pinned** | pinned by the dependency: 3.53.4 |
-| Lowest interpreter passing §2 | Node **24.15.0** | Node 22 and 24 both work |
-| Install | nothing; it is a builtin | 27 MB, 2.35 s, prebuilds for 8 platform triples |
-| Native/ABI surface | none | N-API prebuilds; `node-gyp` fallback (python3 + C++ toolchain) off the 8 triples |
-| API stability | `ExperimentalWarning` through 24.14.0; gone at 24.15.0 | stable |
+**One process must never link two different SQLite builds against the same database file.** Measured
+(`evidence/probe-bs3-semantics.txt`):
 
-### Thin-CLI cost, whole process
+- Same process, `node:sqlite` holding `BEGIN IMMEDIATE`: better-sqlite3 **acquired the write lock in
+  0 ms**. Single-writer is broken. POSIX advisory locks are per-process, so two builds cannot see
+  each other's locks.
+- Two processes, same pair of builds, holder confirmed holding before the attempt: better-sqlite3 was
+  **correctly refused after 52 ms with `SQLITE_BUSY`**. Across processes they interoperate exactly as
+  SQLite promises.
+- Data written by either build is read correctly by the other. The hazard is locking, not format.
 
-The shell-hook path spawns an interpreter per event, so the driver's open cost only matters relative to
-interpreter startup. `evidence/probe-thin-cli.txt`, 20 runs each, whole process including startup, open,
-WAL pragma, DDL, one insert, close:
+This finding is independent of both the driver decision and the journal mode, and it survives the
+ruling unchanged. An adopter that already depends on a different SQLite binding must not load both in
+one process against one database.
+
+### Thin-CLI cost (WAL era, still indicative)
+
+Whole-process cost of one hook invocation, 20 runs each, measured under the WAL design. The startup
+baseline and the relative shape carry over; the absolute open cost under DELETE is slightly higher.
 
 | Node | bare startup | `node:sqlite` | `better-sqlite3` |
 |---|---|---|---|
 | 22.21.0 | 42.5 ms | 65.9 ms (+23.4, +55%) | 78.3 ms (+35.8, +84%) |
 | 24.15.0 | 52.6 ms | 61.8 ms (+9.2, +18%) | 79.0 ms (+26.5, +50%) |
 
-**Read this table before quoting the isolated open cost.** In isolation `node:sqlite` opens in ~1.4 ms
-and `better-sqlite3` in ~13–21 ms, a 10× ratio that overstates the impact: measured end to end, the
-difference is ~17 ms on a ~60 ms invocation, roughly 28%. Real, worth knowing, not an order of magnitude.
-`better-sqlite3`'s heavier costs are the 27 MB install footprint and the native ABI dependency, which are
-an adoption tax on exactly the external adopters (ZSwarm, self-launch) the protocol package exists to
-serve.
-
-### Frozen regardless of the outcome: the driver is a process-global commitment
-
-**One process must never link two different SQLite builds against the same database file.** Measured
-(`evidence/probe-bs3-semantics.txt`, `node probe-bs3-semantics.mjs`):
-
-- Same process, `node:sqlite` holding `BEGIN IMMEDIATE`: better-sqlite3 **acquired the write lock in
-  0 ms**. Single-writer is broken. POSIX advisory locks are per-process, so two builds cannot see each
-  other's locks.
-- Two processes, same pair of builds, holder confirmed holding before the attempt: better-sqlite3 was
-  **correctly refused after 52 ms with `SQLITE_BUSY`**. Across processes they interoperate exactly as
-  SQLite promises.
-- Data written by either build is read correctly by the other. The hazard is locking, not format.
-
-A published protocol package therefore cannot let a caller pass a binding per call, and an adopter that
-already depends on a different SQLite binding must not load both in one process against one database.
-
-### What would change the decision
-
-- A required adopter cannot move off an interpreter whose bundled SQLite is below 3.51.3 → `better-sqlite3`.
-- `node:sqlite` reintroduces an `ExperimentalWarning` or a breaking API change on the supported line → `better-sqlite3`.
-- A non-Node adopter appears → a second implementation, at which point §5–§9 are the portable contract and
-  the driver question is moot.
-
----
+Read this before quoting an isolated open cost: in isolation the two bindings differ ~10×, but end
+to end the difference is ~17 ms on a ~60 ms invocation. The decisive costs for `better-sqlite3` were
+always the 27 MB install footprint and the native ABI dependency, which are an adoption tax on the
+external adopters the protocol package exists to serve.
 
 ## 4. Connection gates
 
-Every connection runs this sequence and **asserts each result by reading it back**. Setting a PRAGMA and
-not checking it is how a database silently ends up in the wrong mode.
+Every connection runs this sequence and **asserts each result by reading it back**. Setting a PRAGMA
+and not checking it is how a database silently ends up in the wrong mode.
 
 | Step | Statement | Required result | On failure |
 |---|---|---|---|
 | 1 | `PRAGMA busy_timeout=<n>` (default 5000) | read-back equals `n` | `PROTOCOL_PRAGMA_UNSUPPORTED` |
-| 2 | `SELECT sqlite_version()` | ≥ `3.51.3` (§2) | `PROTOCOL_SQLITE_VERSION_UNSUPPORTED` |
+| 2 | `SELECT sqlite_version()` | ≥ `3.38.0` (§2) | `PROTOCOL_SQLITE_VERSION_UNSUPPORTED` |
 | 3 | `PRAGMA foreign_keys=ON` | read-back is `1` | `PROTOCOL_PRAGMA_UNSUPPORTED` |
-| 4 | `PRAGMA journal_mode=WAL` (writable only) | returned value is exactly `wal` | `PROTOCOL_JOURNAL_MODE_UNSUPPORTED` |
+| 4 | `PRAGMA journal_mode` — **read, never set** | exactly `delete` | `PROTOCOL_JOURNAL_MODE_UNSUPPORTED` |
 | 5 | `PRAGMA synchronous=FULL` (writable only) | read-back is `2` | `PROTOCOL_PRAGMA_UNSUPPORTED` |
 
 ### 4.1 The order is part of the contract
 
-**`busy_timeout` must be the first statement on the connection.** It defaults to `0`, so any statement
-issued before it runs with no busy handler at all and loses a contended lock immediately.
+**`busy_timeout` must be the first statement on the connection.** It defaults to `0`, so any
+statement issued before it runs with no busy handler at all and loses a contended lock immediately.
 
-This is not theoretical. With the version probe placed first — the obvious ordering, since a version gate
-"should" come before anything else — eight processes opening one fresh database concurrently lost the
-race in **11 of 20 rounds**, with `SQLITE_BUSY` raised by `SELECT sqlite_version()`, the one statement
-nobody suspects. Moving `busy_timeout` to the front: **0 failures in 25 rounds**. The scenario is
-ordinary on this fleet — several shell hooks firing at once against a cold database.
+This is not theoretical. With the version probe placed first — the obvious ordering, since a version
+gate "should" come before anything else — eight processes opening one fresh database concurrently
+lost the race in **11 of 20 rounds** (WAL era), with `SQLITE_BUSY` raised by `SELECT
+sqlite_version()`, the one statement nobody suspects. The scenario is ordinary on this fleet: several
+shell hooks firing at once against a cold database.
 
-- Counter-example: `spikes/sqlite-m2/stubs/busy-timeout-after-version-probe.mjs`, one edit, generated by
-  `stubs/build.mjs`. It moves `db.exec('PRAGMA busy_timeout=...')` from before to after
-  `db.prepare('SELECT sqlite_version() AS v')` in `spikes/sqlite-m2/engine.mjs:363-367`.
-- Vectors it breaks: `repeated cold opens by eight processes never lose the first-open race`,
-  `eight processes racing initialize on one address converge without duplication`,
-  `concurrent consumers of one queue split it without a double dequeue`.
-- Reproduce:
-  ```sh
-  cd spikes/sqlite-m2 && node stubs/build.mjs
-  M2_ENGINE=../stubs/busy-timeout-after-version-probe.mjs \
-    node --test test/engine.test.mjs test/concurrency.test.mjs   # fails
-  node --test test/engine.test.mjs test/concurrency.test.mjs      # 46/46
-  ```
+The finding survives the move to a rollback journal. Under DELETE the same flip still loses the
+cold-open race, and the counter-example is a standing vector rather than a one-off shell loop
+(`evidence/v1-delete/counterexamples.txt`, flip `busy-timeout-after-version-probe`).
 
-### 4.2 `journal_mode=WAL` does not honour `busy_timeout`
+### 4.2 The journal mode is asserted, never set
 
-Changing journal mode takes an exclusive lock and is the one statement the busy handler does not cover.
-Measured: with `busy_timeout` already read back as `5000`, concurrent first-openers still got a bare
-`database is locked` from `PRAGMA journal_mode=WAL`.
+**v1 reads `PRAGMA journal_mode` and requires exactly `delete`. It never issues a mode change, and
+it never converts a database.**
 
-Two rules remove it, in this order:
+Three measurements make this the simplest correct rule
+(`evidence/v1-delete/probe-delete-mode.txt`):
 
-1. **Read `PRAGMA journal_mode` first.** A database already in WAL never contends at all, which is the
-   steady state for every open after the first.
-2. **Bound-retry only the genuine first-open collision**, within the caller's `busy_timeout` budget.
-   Measured convergence: 2 attempts, 21–40 ms, across eight racing processes.
-
-Opening is not otherwise lock-free either: the first connection after the WAL is reset rebuilds the
-`-shm` wal-index under a brief exclusive lock, and a concurrent opener can see `SQLITE_BUSY` from an
-ordinary read. The whole open-time inspection is therefore retried within the same budget. **Runtime
-operations are not retried** — `enqueue` and `dequeue` surface `PROTOCOL_DATABASE_BUSY` to the caller,
-because only startup is transient in this way.
+- A brand-new database already reports `delete` — before any write, after DDL, and on reopen. There
+  is nothing to set.
+- A database somebody left in WAL reports `wal`, so the assertion catches it. It is **refused**, not
+  converted: there is no runtime dual path, and no silent rewrite of somebody else's database.
+- **A journal-mode change is not protected by `busy_timeout` in either direction.** Measured:
+  `PRAGMA journal_mode=DELETE` under contention was refused after **0 ms with a 1500 ms budget** —
+  the same behaviour previously measured for `journal_mode=WAL`. Never issuing a mode change deletes
+  that entire hazard class from the open path.
 
 ### 4.3 No integrity check on open
 
@@ -232,6 +221,35 @@ full query. It is **adopter latency policy, not protocol state**, and no correct
 it.
 
 ---
+
+### 4.5 What a rollback journal costs, measured
+
+WAL gave readers and writers concurrency for free. DELETE does not, and the difference is measured
+rather than assumed (`evidence/v1-delete/probe-delete-mode.txt`):
+
+| Behaviour | Result under DELETE |
+|---|---|
+| Read during an open write transaction | **allowed**, and sees only committed state |
+| Write while a read transaction is open | **blocked** — `database is locked` |
+| Sidecar files at rest | none |
+| Sidecar during a write transaction | `<db>-journal`, removed on commit |
+| Sidecar `-wal` / `-shm` | **never created** |
+
+The regression that matters is the second row: **a reader blocks a writer.** The protocol's own reads
+are single-statement and therefore brief, but an adopter that holds a long read transaction open will
+stall every writer on that database. That is a real constraint on adopter code, not a footnote.
+
+Throughput, same host, same vector, both eras:
+
+| | writes / 10 s | p50 | p99 |
+|---|---|---|---|
+| WAL (historical) | 3556 | 2.93 ms | 6.14 ms |
+| **DELETE (v1)** | **1266** | **7.09 ms** | **14.01 ms** |
+| Node 22 / SQLite 3.50.4, DELETE | 1246 | 7.25 ms | 13.74 ms |
+
+Roughly 2.8× slower, as expected from the extra fsyncs. The roadmap's M2 exit bar is 500 short writes
+in 10 seconds; **v1 clears it with 2.5× headroom**, on both interpreters. The bar is met by the mode
+we actually ship, not by the mode we measured first.
 
 ## 5. Exact DDL
 
@@ -426,10 +444,14 @@ Measured at realistic shape — 200 sessions × 500 messages = 100 000 rows, 3 p
 
 | configuration | dequeue head | `readMessages` |
 |---|---|---|
-| pending index only | **0.0043 ms** | 11.59 ms (rowid scan across all sessions) |
-| + history index, no `ANALYZE` | **0.0414 ms** ← 10× worse | 0.90 ms |
-| + history index, after `ANALYZE` | 0.0043 ms | 0.87 ms |
-| + history index, `INDEXED BY` pins, no `ANALYZE` | **0.0040 ms** | 1.02 ms |
+| pending index only | **0.0064 ms** | 11.13 ms (rowid scan across all sessions) |
+| + history index, no `ANALYZE` | **0.0448 ms** ← 7× worse | 0.79 ms |
+| + history index, after `ANALYZE` | 0.0062 ms | 0.76 ms |
+| + history index, `INDEXED BY` pins, no `ANALYZE` | **0.0064 ms** | 0.87 ms |
+
+Measured under DELETE (`evidence/v1-delete/probe-index.txt`). The conclusion is unchanged from the
+WAL-era run, which is itself worth knowing: index selection is a planner question, not a journal-mode
+question.
 
 The history index earns its place: without it, history reads cost 11.6 ms and grow with the *whole
 table*, not with the session. But adding it **degrades the hottest protocol operation tenfold** unless
@@ -561,6 +583,7 @@ meaningful. Every ceiling is enforced in memory before the transaction opens.
 | The database file itself is created if absent | that is SQLite's job and is expected |
 | `-wal` / `-shm` belong to SQLite | never created, deleted, copied, or inspected |
 | Read-only open is supported | writes fail with `PROTOCOL_DATABASE_READONLY` |
+| **Storage locality is the caller's precondition** | protocol core does not probe the filesystem — §7.3 |
 
 ### 7.1 No `realpath`
 
@@ -581,32 +604,56 @@ turns a typo into a working-looking empty protocol at the wrong location.
 - Counter-example: `stubs/recursive-parent-mkdir.mjs` (2 edits, restoring the M1 behaviour).
 - Vector it breaks: `open path: a missing parent directory fails loudly and creates nothing`.
 
-### 7.3 Network filesystem rejection
+### 7.3 Storage locality is an explicit precondition, established upstream
 
-WAL requires shared memory between processes and does not work over a network filesystem. Two guards, in
-this order:
+**`databasePath` must be on a local filesystem with reliable advisory locking. The adopter's path
+resolver establishes that before calling `openProtocol`, and fails closed when it cannot.** Protocol
+core does not probe the filesystem: it neither makes that determination nor pretends to.
 
-1. **The `journal_mode` assertion (§4), on every platform.** A filesystem that cannot host WAL cannot
-   return `wal`. This is the portable guard.
-2. **A `statfs` type deny-list, where the platform reports a recognisable filesystem identity.** Measured
-   on Linux: `fs.statfsSync()` returns `{ type: 61267, ... }` for this host's ext4, and `61267 = 0xEF53 =
-   EXT4_SUPER_MAGIC` in `/usr/include/linux/magic.h`. The mechanism is verified end to end; the values
-   are copied from that header, not recalled (`evidence/filesystem-magic-source.txt`):
-   NFS `0x6969`, SMB `0x517B`, CIFS `0xFF534D42`, SMB2 `0xFE534D42`, 9P `0x01021997`, CEPH `0x00C36400`,
-   AFS `0x5346414F` and `0x6B414653`, CODA `0x73757245`, OCFS2 `0x7461636F`, NCP `0x564C`. A match is
-   `PROTOCOL_PATH_UNSUPPORTED_FILESYSTEM`.
+This is a safety regression the ruling introduced knowingly, and it must be read as one rather than
+buried:
 
-**FUSE (`0x65735546`) is deliberately not on the deny-list**: the magic identifies the driver, not
-whether the backing store is local, so `sshfs` and a local overlay are indistinguishable by identity.
-Guard 1 is the only protection there.
+- **WAL used to fail loud on a network filesystem for free.** From `https://sqlite.org/wal.html`:
+  "All processes using a database must be on the same host computer; WAL does not work over a network
+  filesystem", because "WAL requires all processes to share a small amount of memory". A database on
+  NFS simply could not enter WAL mode, so the journal-mode assertion doubled as a portable locality
+  probe.
+- **A rollback journal has no such property.** DELETE works over a network filesystem without
+  complaint, while POSIX advisory locking there is unreliable. The failure mode therefore changes
+  from *loud refusal* to *silent corruption under concurrency*.
 
-**Evidence gap, stated rather than papered over:** the deny-list values were verified against a real
-mount for ext4 only, because no network mount exists on this host. The mechanism and the ext4 value are
-measured; the network magic numbers are transcribed from the kernel header and are unexercised. macOS and
-Windows report `statfs` types with different, unregistered meanings, so guard 2 is Linux-only. This
-remains OPEN (§11).
+**Nothing in this document may be read as evidence that DELETE makes network filesystems safe. The
+opposite is true**, and that is precisely why the guarantee has to be made explicitly, upstream, and
+fail-closed.
 
----
+#### What the adopter resolver must do
+
+1. Determine the filesystem hosting the database's parent directory.
+2. Proceed **only** on a positively identified local filesystem.
+3. **Refuse** on a network filesystem, on an unidentified filesystem, on a platform with no usable
+   detector, and when the probe itself fails. Refusal is the default; optimistic acceptance is not an
+   option.
+
+`spikes/sqlite-m2/adopter-path-resolver.mjs` is a reference implementation of that shape, not a
+protocol asset. It uses an **allow-list**, which is what makes it fail closed: an unrecognised
+filesystem is refused rather than admitted. FUSE (`0x65735546`) lands in the undetermined bucket on
+purpose — its magic identifies the driver, not whether the backing store is local, so `sshfs` and a
+local overlay are indistinguishable by identity. Its distinct refusal codes are
+`LOCALITY_NETWORK_FILESYSTEM`, `LOCALITY_UNDETERMINED`, `LOCALITY_DETECTOR_UNAVAILABLE`, and
+`LOCALITY_PROBE_FAILED`.
+
+#### What is measured, and what is not
+
+Measured: the mechanism end to end on this host — `fs.statfsSync()` reports `type: 61267`, which is
+`0xEF53 = EXT4_SUPER_MAGIC` in `/usr/include/linux/magic.h`
+(`evidence/filesystem-magic-source.txt`); the classifier's local, network, and undetermined verdicts;
+and that a probe which cannot answer refuses.
+
+**Not measured, and not claimed:** the network filesystem magic numbers are transcribed from the
+kernel header and have **never been executed against a real network mount**, because no such mount
+exists on this host. macOS and Windows report `statfs` types with different, unregistered meanings,
+so there is **no detector for them at all** — and per the rule above, a missing detector means
+refusal, never admission. Both gaps are OPEN (§13).
 
 ## 8. Migration mechanics
 
@@ -658,9 +705,8 @@ must carry these code strings.
 | `PROTOCOL_PATH_NOT_ABSOLUTE` | not a non-empty absolute path string; `file:` prefix |
 | `PROTOCOL_PATH_INVALID` | NUL byte, trailing separator |
 | `PROTOCOL_PATH_PARENT_MISSING` | parent directory absent or not a directory |
-| `PROTOCOL_PATH_UNSUPPORTED_FILESYSTEM` | deny-listed network filesystem |
 | `PROTOCOL_SQLITE_VERSION_UNSUPPORTED` | `sqlite_version()` below §2 |
-| `PROTOCOL_JOURNAL_MODE_UNSUPPORTED` | `journal_mode` is not `wal` |
+| `PROTOCOL_JOURNAL_MODE_UNSUPPORTED` | `journal_mode` is not `delete` — including a database left in WAL |
 | `PROTOCOL_PRAGMA_UNSUPPORTED` | a mandatory PRAGMA did not read back its required value |
 | `PROTOCOL_SCHEMA_CHECKSUM_MISMATCH` | an applied migration was rewritten |
 | `PROTOCOL_SCHEMA_GENERATION_UNSUPPORTED` | future generation, gap, or unmigrated read-only database |
@@ -678,6 +724,9 @@ must carry these code strings.
 | `PROTOCOL_DATABASE_UNAVAILABLE` | `SQLITE_CANTOPEN` — permissions, or the file cannot be opened |
 | `PROTOCOL_DATABASE_CORRUPT` | `SQLITE_CORRUPT` / `SQLITE_NOTADB` |
 | `PROTOCOL_SQLITE_ERROR` | an unclassified SQLite failure, never swallowed |
+
+Storage locality has **no protocol-core code**, by design (§7.3). The adopter resolver raises its own
+`LOCALITY_*` refusals before `openProtocol` is ever called.
 
 ### 9.1 What may never be degraded
 
@@ -744,51 +793,93 @@ any write. Awaiting inside a write lock is the single failure mode that would in
 lock-hold claim in this document, so it is a runtime check rather than a review convention. A vector
 asserts both forms are refused and that no state changed.
 
-Measured lock-hold behaviour (`test/concurrency.test.mjs`): **3611 enqueues in 10.00 s = 361/s, p50
-2.756 ms, p99 6.991 ms** with `synchronous=FULL` on this host — comfortably past the roadmap's M2 exit bar
-of 500 short writes in 10 s, with a bounded p99.
+Measured lock-hold behaviour under v1's rollback journal (`test/concurrency.test.mjs`): **1266
+enqueues in 10.00 s, p50 7.09 ms, p99 14.01 ms** with `synchronous=FULL`, and **1246 on Node 22 /
+SQLite 3.50.4** — past the roadmap's M2 exit bar of 500 short writes in 10 s with 2.5× headroom, with
+a bounded tail. (The WAL-era figure was 3611 at p99 6.99 ms; see §4.5 for the comparison.)
 
 ---
 
-## 11. Still OPEN
+## 11. Crash and recovery under a rollback journal
+
+WAL's crash story does not transfer, so it is re-measured
+(`evidence/v1-delete/probe-journal-recovery.txt`, and two standing vectors).
+
+- **SIGKILL before commit**: the staged enqueue is never visible to any later reader, read-only or
+  writable. The killed process leaves a `<db>-journal` behind; that file *is* the recovery record.
+- **SIGKILL after commit**: the message survives, is dequeued exactly once, and never requeues.
+- **When the hot journal is consumed**: measured step by step — an open does not consume it, and
+  neither does a read; **the first write does.** Every read in between returns correct, rolled-back
+  state.
+
+The operational consequence is worth stating plainly, because the opposite assumption is natural: **a
+lingering `<db>-journal` is not an error, not corruption, and not pending danger.** Correctness is
+already restored for readers; the file is cleaned up by the next write. Nothing may treat it as data,
+and no adopter may delete it manually — it belongs to SQLite exactly as `-wal`/`-shm` did.
+
+---
+
+## 12. Deferred: WAL as an independent experiment
+
+WAL is **not part of the v1 contract** and must not be enabled by configuration, environment, or a
+runtime branch. It is a separate future upgrade with its own preconditions:
+
+1. `sqlite_version()` ≥ **3.51.3** on every process that will touch the database — the release that
+   fixed the WAL-reset corruption bug, whose trigger condition ("two or more database connections
+   open on the same file, in separate threads or processes, and … attempt to write or checkpoint at
+   the same instant") is exactly this protocol's deployment shape. Source material retained at
+   `evidence/sqlite-wal-reset-bug-source.txt`.
+2. A locality guarantee at least as strong as §7.3's. WAL would restore the automatic network-
+   filesystem refusal, but the explicit precondition should stay regardless.
+3. A migration story for existing DELETE-mode databases, since v1 refuses rather than converts.
+
+What WAL would buy is visible in §4.5: roughly 2.8× write throughput and, more importantly, readers
+that no longer block writers. What it costs is a fleet-wide SQLite floor the current interpreters do
+not all meet. That trade is a separate decision with its own evidence, not a flag on this one.
+
+---
+
+## 13. Still OPEN
 
 Named, with what is missing. None may be treated as an implementation requirement.
 
 | Item | What is missing |
 |---|---|
-| **Driver** (§3) | A human decision on the fleet's Node floor. Both candidates' data is complete. |
-| **Network-FS detection on macOS / Windows** (§7.3) | `fs.statfs` types there have different, unregistered meanings. Only the `journal_mode` guard applies. |
-| **Network-FS magic numbers exercised** (§7.3) | Verified against a real mount for ext4 only; no network mount on this host. |
+| **Network-FS locality verified against a real mount** (§7.3) | The magic numbers are transcribed from `/usr/include/linux/magic.h` and have never been executed against a real NFS/SMB mount; this host has none. The mechanism and the local (ext4) verdict are measured; the network verdicts are not. |
+| **A locality detector for macOS and Windows** (§7.3) | `fs.statfs` reports types with different, unregistered meanings there. Until a detector exists, those platforms must be refused — which is the fail-closed default, not a silent gap. |
+| **Reader-blocks-writer under real adopter load** (§4.5) | Measured as a property; not measured against a realistic adopter that holds read transactions across a dashboard query or a long history read. |
 | **Sweep cadence** | An adopter runtime concern. `PRAGMA data_version` is available as a cheap change detector; nothing else is measured. |
-| **Retention and purge** | Explicit maintenance policy, never in a hot transaction. No measurement of history growth or `VACUUM` cost over a real lifetime. |
-| **Backup operational policy** | `VACUUM INTO` and the binding's backup API both work (measured). Cadence, retention, restore drill, and whether Litestream is warranted are unmeasured. |
+| **Retention and purge** | Explicit maintenance policy, never in a hot transaction. History growth and `VACUUM` cost over a real lifetime are unmeasured. |
+| **Backup operational policy** | `VACUUM INTO` and the binding's backup API both work (measured). Cadence, retention, restore drill, and whether Litestream is warranted are unmeasured. A rollback journal makes a plain file copy safer than WAL did, but that is not a measured claim here. |
 | **`ANALYZE` / `PRAGMA optimize` maintenance** | The `INDEXED BY` pins remove it from correctness. Whether it is still worth running for other queries is unmeasured. |
-| **WAL growth under sustained load** | `wal_autocheckpoint` is left at its default. Checkpoint starvation under a long-lived reader is not measured here. |
 | **Same-DB seam and `dequeue`** (§10.1) | An M3 decision. |
+| **WAL experiment** (§12) | Deferred by ruling; its preconditions are stated but none are met or measured. |
 | **Rust second implementation** | §5–§9 are the portable contract, but no second implementation exists to prove it. |
 
----
-
-## 12. Reproducing everything
+## 14. Reproducing everything
 
 ```sh
 cd spikes/sqlite-m2
 
-node --test test/engine.test.mjs test/concurrency.test.mjs   # 46/46, node:sqlite
-node probe-driver.mjs                                        # driver/feature matrix for this Node
-node probe-ddl.mjs                                           # STRICT, GLOB, statfs, symlink, plans, costs
-node probe-index.mjs                                         # index plans and timings at 100k rows
-node probe-thin-cli.mjs                                      # whole-process hook cost per driver
+node --test test/engine.test.mjs test/concurrency.test.mjs   # v1 vectors, incl. crash + multi-process
 node stubs/build.mjs && node stubs/run.mjs                   # every frozen decision has a counter-example
+node probe-delete-mode.mjs                                   # journal mode, concurrency, sidecar files
+node probe-journal-recovery.mjs                              # when the hot journal is consumed
+node probe-index.mjs                                         # index plans and timings at 100k rows
+node probe-ddl.mjs                                           # STRICT, GLOB, symlink, plans, costs
+node probe-driver.mjs                                        # driver/feature matrix for this interpreter
+
+# the fleet floor the ruling depends on
+~/.nvm/versions/node/v22.21.0/bin/node --test test/engine.test.mjs test/concurrency.test.mjs
 
 npm install --no-save better-sqlite3                         # for the parity and semantics runs
-M2_DRIVER=better-sqlite3 node --test test/engine.test.mjs     # 40/40, identical vectors
+M2_DRIVER=better-sqlite3 node --test test/engine.test.mjs
 node probe-bs3-semantics.mjs                                 # two SQLite builds, one process vs two
 ```
 
-The full Node matrix in `evidence/probe-node-matrix.txt` was produced by invoking `probe-driver.mjs`
-under each interpreter in `~/.nvm/versions/node/` plus the one on `PATH`, with and without
-`--experimental-sqlite`.
+Evidence layout:
 
-`spikes/sqlite-m2/fail-first-note.md` explains what each failure log does and does not prove; both logs
-are kept verbatim.
+- `evidence/v1-delete/` — every figure this contract states as current.
+- `evidence/` (top level) — WAL-era measurements, kept verbatim as the record the ruling was made on.
+- `fail-first.log`, `fail-first-note.md` — the original first failure and an honest account of what
+  each log does and does not prove.

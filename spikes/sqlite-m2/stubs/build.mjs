@@ -116,7 +116,41 @@ export const FLIPS = [
   }
   if (!stat.isDirectory()) fail('PROTOCOL_PATH_PARENT_MISSING', \`database parent is not a directory: \${parent}\`)`,
         `  mkdirSync(parent, { recursive: true })`],
-      [`import { statSync, statfsSync } from 'node:fs'`, `import { mkdirSync, statfsSync } from 'node:fs'`],
+      [`import { statSync } from 'node:fs'`, `import { mkdirSync } from 'node:fs'`],
+    ],
+  },
+  {
+    name: 'converts-wal-instead-of-refusing',
+    claim: 'a database left in WAL is refused; v1 has no runtime dual path and never converts',
+    edits: [[
+      `    const mode = db.prepare('PRAGMA journal_mode').get().journal_mode
+    if (mode !== JOURNAL_MODE) {
+      fail('PROTOCOL_JOURNAL_MODE_UNSUPPORTED',
+        \`journal_mode is \${mode}, not \${JOURNAL_MODE}; v1 is rollback-journal only and does not convert a database\`)
+    }`,
+      `    let mode = db.prepare('PRAGMA journal_mode').get().journal_mode
+    if (mode !== JOURNAL_MODE && !readOnly) {
+      mode = db.prepare(\`PRAGMA journal_mode=\${JOURNAL_MODE}\`).get().journal_mode
+    }`,
+    ]],
+  },
+  {
+    name: 'locality-detection-in-protocol-core',
+    claim: 'storage locality is the adopter resolver\'s fail-closed precondition, not protocol core\'s job',
+    edits: [
+      [`import { statSync } from 'node:fs'`, `import { statSync, statfsSync } from 'node:fs'`],
+      [`  if (!stat.isDirectory()) fail('PROTOCOL_PATH_PARENT_MISSING', \`database parent is not a directory: \${parent}\`)`,
+        `  if (!stat.isDirectory()) fail('PROTOCOL_PATH_PARENT_MISSING', \`database parent is not a directory: \${parent}\`)
+  try {
+    if (isRejectedFilesystemType(statfsSync(parent).type)) {
+      fail('PROTOCOL_PATH_UNSUPPORTED_FILESYSTEM', \`network filesystem: \${parent}\`)
+    }
+  } catch (error) { if (error instanceof ProtocolError) throw error }`],
+      [`export function isSupportedSqliteVersion(version) {`,
+        `export const NETWORK_FILESYSTEM_TYPES = [{ name: 'NFS', type: 0x6969 }]
+export const isRejectedFilesystemType = type => NETWORK_FILESYSTEM_TYPES.some(e => e.type === type)
+
+export function isSupportedSqliteVersion(version) {`],
     ],
   },
 ]

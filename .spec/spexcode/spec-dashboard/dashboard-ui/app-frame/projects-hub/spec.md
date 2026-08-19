@@ -103,9 +103,10 @@ card's locked variant is a dead end by design, naming the loopback repair path. 
 401 strikes in-app; an admin session bypasses project prompts because the admin cookie authorizes every
 `/p/*` route server-side. A direct-project guest never sees the catalog or any global management control:
 the probe is denied, so the switcher menu is absent and the project shell exposes only its current-project
-identity and project-owned pages — absence of data, not a hidden element. A denied catalog is an answered
-state: its five-second refresh pauses until the credential card reports an unlock, so an unauthenticated
-browser does not hammer an already-denied route.
+identity and project-owned pages — absence of data, not a hidden element. The current-project chip remains
+an explicit `/projects` login door when that catalog is denied, but never opens a fleet menu or leaks rows.
+A denied catalog is an answered state: its five-second refresh pauses until the credential card reports an
+unlock, so an unauthenticated browser does not hammer an already-denied route.
 
 **The contract lives in one module.** `projects.js` is the only place the hub routes are spelled — the
 catalog read, the password writes, the raw portable-config read/write, the credential posts, and the

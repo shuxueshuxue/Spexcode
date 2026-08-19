@@ -1,0 +1,12 @@
+legacy deletion gate
+repo=/tmp/spex-legacy-gate-self-test.LkXALN/runtime
+trace_command=env LEGACY_FIXTURE_PATH=/tmp/spex-legacy-gate-self-test.LkXALN/runtime/store/sessions/self/session.json /home/jeffry/.local/node-dist/node-v24.15.0-linux-x64/bin/node /home/jeffry/spexcode/.worktrees/concept-map-bbb9/spikes/legacy-sabotage/fixtures/runtime-legacy-read.mjs /tmp/spex-legacy-gate-self-test.LkXALN/runtime/store/sessions/self/session.json 
+trace_exit=0
+test_only_legacy_evidence=0 (reported, excluded from static_legacy_imports)
+--- runtime legacy file accesses ---
+runtime: 2685589 execve("/usr/bin/env", ["env", "LEGACY_FIXTURE_PATH=/tmp/spex-legacy-gate-self-test.LkXALN/runtime/store/sessions/self/session.json", "/home/jeffry/.local/node-dist/node-v24.15.0-linux-x64/bin/node", "/home/jeffry/spexcode/.worktrees/concept-map-bbb9/spikes/legacy-sabotage/fixtures/runtime-legacy-read.mjs", "/tmp/spex-legacy-gate-self-test.LkXALN/runtime/store/sessions/self/session.json"], 0x7ffeb79740a8 /* 85 vars */) = 0
+runtime: 2685589 execve("/home/jeffry/.local/node-dist/node-v24.15.0-linux-x64/bin/node", ["/home/jeffry/.local/node-dist/node-v24.15.0-linux-x64/bin/node", "/home/jeffry/spexcode/.worktrees/concept-map-bbb9/spikes/legacy-sabotage/fixtures/runtime-legacy-read.mjs", "/tmp/spex-legacy-gate-self-test.LkXALN/runtime/store/sessions/self/session.json"], 0x635783cb21c0 /* 86 vars */) = 0
+runtime: 2685589 openat(AT_FDCWD, "/tmp/spex-legacy-gate-self-test.LkXALN/runtime/store/sessions/self/session.json", O_RDONLY|O_CLOEXEC) = 20
+static_legacy_imports=0
+legacy_generated_files=0
+runtime_legacy_reads=3

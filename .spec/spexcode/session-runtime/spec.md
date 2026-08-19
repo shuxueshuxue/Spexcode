@@ -7,7 +7,7 @@ desc: The adopter-owned composition loop that combines protocol, optional topolo
 # session-runtime
 
 A session runtime is a consumer composition, not a daemon required by [[session-protocol]]. It may be a long-lived
-Spex backend, a Z-Storm worker loop, or a short-lived self-launch listener. Its minimal loop is always the same:
+Spex backend, a ZSwarm worker loop, or a short-lived self-launch listener. Its minimal loop is always the same:
 
 1. open the protocol for one explicit canonical project root, obtain one exact session id, and initialize its
    protocol address;
@@ -23,12 +23,12 @@ exactly-once handling. The protocol does not call the adapter and the adapter do
 Harness configuration is a separate materialization adapter. It owns discovered contract files, hook bindings,
 trust, skills, commands, and other setup artifacts. One harness registry row may implement both runtime and
 materialization facets, but neither facet calls or imports the other. A self-launched harness may therefore use
-materialization plus a small protocol listener without importing the Spex managed runtime; Z-Storm may use its
+materialization plus a small protocol listener without importing the Spex managed runtime; ZSwarm may use its
 runtime facet without adopting Spex materialization; Spex governed launch composes both.
 
 The three reference compositions are:
 
-- **Z-Storm:** `session-protocol + Z-Storm topology + Z-Storm runtime adapter`. Z-Storm state remains a versioned
+- **ZSwarm:** `session-protocol + ZSwarm topology + ZSwarm runtime adapter`. ZSwarm state remains a versioned
   message body or its own record, never a Spex lifecycle field required by the protocol. Its existing injected
   mailbox port can implement dequeue directly; a multi-workspace app-server opens one protocol instance per
   project instead of mutating process cwd.
@@ -51,7 +51,7 @@ topology, or adapter boundary is incomplete. It is not a reason to add an adopte
 
 1. Publish the pure protocol operations and journal under `@spexcode/session-protocol`; turn
    `@spexcode/session-core` into a temporary compatibility re-export.
-2. Prove self-launch and Z-Storm adopters against the installed package. They exercise recordless/offline and
+2. Prove self-launch and ZSwarm adopters against the installed package. They exercise recordless/offline and
    multi-workspace/runtime-injected shapes without Spex governance.
 3. Extract the relation model and migrate Spex governed notification publication to a durable topology outbox plus
    protocol enqueue. Replace callback drain with the Spex runtime's own dequeue/handler loop.

@@ -68,11 +68,11 @@ the runtime always reads durable protocol state after waking.
 | [ ] | F11 | Per-message receipt files | **REMOVE** | Event-log entries already bind message id, idempotency key, payload digest, and transition. Separate receipts create a second recovery authority. |
 | [ ] | F12 | Journal segment directory and mutable segment manifest | **REMOVE for v1** | No measured scale currently requires segmentation. A manifest adds crash and ordering states. Add immutable numbered segments only after journal size is measured; never add a mutable manifest. |
 | [ ] | F13 | Journal checkpoint or compaction file | **OPEN** | It may bound recovery time after long operation, but F05 already makes ordinary operations cheap. Add only after recovery cost is measured against journal length. |
-| [ ] | F14 | Sender-revocation marker | **MOVE to Spex governance** | Revoking a closed coordinator's unhandled commands is Spex lifecycle policy. Z-Storm and self-launch need not share it, so it cannot be protocol truth. |
+| [ ] | F14 | Sender-revocation marker | **MOVE to Spex governance** | Revoking a closed coordinator's unhandled commands is Spex lifecycle policy. ZSwarm and self-launch need not share it, so it cannot be protocol truth. |
 | [x] | F15 | Current monolithic Spex governed `session.json` schema | **REMOVE after migration** | The filename becomes the universal identity record in F03. Existing lifecycle, proposal, worktree, branch, topology, harness, and native-runtime fields move to their owning adopter modules. Keeping optional extension fields in one shared JSON file would preserve shared writers, shared locks, and cross-module coupling. |
 | [ ] | F16 | `watchers.json` | **MOVE to Spex topology policy** | Manual/parent watch sources and initial-state suppression are real Spex relationships. They are neither queue state nor a universal parent/child format. |
 | [ ] | F17 | Transactional topology outbox | **KEEP, adopter-owned** | A relation or state revision may commit before its recipient messages. The outbox closes that crash boundary and prevents a short-lived hook process from losing a fire-and-forget notification. It must share the adopter's topology/state transaction, so it has no universal protocol file format. |
-| [ ] | F18 | Z-Storm `unread/*.json` and `read/*.json` mailboxes | **REMOVE after migration** | They implement the same ownership transfer as protocol dequeue. Retaining both would create two queues and two recovery languages. |
+| [ ] | F18 | ZSwarm `unread/*.json` and `read/*.json` mailboxes | **REMOVE after migration** | They implement the same ownership transfer as protocol dequeue. Retaining both would create two queues and two recovery languages. |
 | [ ] | F19 | Spex legacy `timeline.ndjson` and `timeline/*.ndjson` | **MOVE to compatibility reader** | Existing bytes are durable user history and cannot be discarded. New protocol messages should use F04; Spex lifecycle events may keep their product event log. |
 | [ ] | F20 | `launch`, `launch.proof`, and `launch.sh` | **MOVE to Spex runtime/governance** | They preserve first-turn payload and launch recovery. They are necessary for managed launch but have no role in generic message enqueue or dequeue. |
 | [ ] | F21 | `agent.pid`, `agent.identity.json`, and `rv.path` | **MOVE to HarnessRuntimeAdapter** | They prove an exact operating-system process or native input channel. Protocol delivery must not interpret process identity. |
@@ -98,17 +98,17 @@ the runtime always reads durable protocol state after waking.
 | [ ] | P02 | `@spexcode/spec-core` layout dependency | **REMOVE from protocol** | Storage placement is adopter configuration, not wire semantics. Requiring spec-core would make every adopter inherit SpexCode's `.spexcode/projects/...` layout and reintroduce vendor lock-in. SpexCode may call spec-core before constructing the protocol. |
 | [ ] | P03 | `@spexcode/session-core` package | **KEEP temporarily, then REMOVE** | A compatibility re-export avoids an immediate breaking release. It has no permanent independent responsibility once consumers import P01. |
 | [ ] | P04 | `session-topology` architectural module | **KEEP** | Recipient resolution and relationship invariants must live outside both queue mechanics and harness effects. Without this boundary, parent/watch policy leaks into protocol. |
-| [ ] | P05 | Published `@spexcode/session-topology` package | **OPEN; do not publish yet** | Spex and Z-Storm currently persist and interpret different relationships. Publish only after two adopters demonstrate identical semantics and wire needs. |
+| [ ] | P05 | Published `@spexcode/session-topology` package | **OPEN; do not publish yet** | Spex and ZSwarm currently persist and interpret different relationships. Publish only after two adopters demonstrate identical semantics and wire needs. |
 | [ ] | P06 | Shared `session-runtime` package or class | **REMOVE** | The three adopters have different triggers, liveness, topology, and input transports. A universal runtime would contain policy switches. Keep `session-runtime` as an architectural composition, implemented by each adopter. |
 | [ ] | P07 | Spex governed runtime | **KEEP, adopter-owned** | It owns board lifecycle, topology policy, managed processes, immediate dequeue attempts, and bounded durable-state sweeps. |
-| [ ] | P08 | Z-Storm runtime | **KEEP, adopter-owned** | It already owns the model loop, steering, deferred input, subagent registry, and multi-workspace process. The protocol is one injected port. |
+| [ ] | P08 | ZSwarm runtime | **KEEP, adopter-owned** | It already owns the model loop, steering, deferred input, subagent registry, and multi-workspace process. The protocol is one injected port. |
 | [ ] | P09 | Self-launch listener command | **KEEP, adopter-owned surface** | With no resident backend, an explicit foreground/background command is the only process that can dequeue and hand messages to the native harness. |
 | [ ] | P10 | `runtime-session.ts` public bridge | **REMOVE after migration** | It combines Spex record fields, topology, lifecycle projection, notification text, and enqueue. Each responsibility has a retained owner elsewhere. |
 | [ ] | P11 | `@spexcode/session-core/internal` public subpath | **REMOVE from published contract** | External callers should never compose partial queue transactions. Spex may use private workspace modules during migration, but a published internal entry makes unsupported half-operations look stable. |
 | [ ] | P12 | Filesystem observer service | **REMOVE as shared architecture** | `fs.watch` cannot guarantee one event per write and scales with observers x subjects. Adopters may use one as a latency hint, but no shared observer owns truth. |
-| [ ] | P13 | Bounded polling or event-loop wake strategy | **MOVE to adopter runtime** | It affects latency and resource cost, not file semantics. Spex, self-launch, and Z-Storm have different process lifetimes. |
+| [ ] | P13 | Bounded polling or event-loop wake strategy | **MOVE to adopter runtime** | It affects latency and resource cost, not file semantics. Spex, self-launch, and ZSwarm have different process lifetimes. |
 | [ ] | P14 | SpexCode path/config resolver module | **KEEP, adopter-owned** | It resolves config location, state root, project namespace, and the exact session root once. Centralizing precedence prevents the CLI, backend, hooks, and dashboard from disagreeing. |
-| [ ] | P15 | Generic configuration package inside `session-protocol` | **REMOVE** | Z-Storm, embedded consumers, and SpexCode need different configuration sources. The protocol needs an absolute path, not a global configuration framework. |
+| [ ] | P15 | Generic configuration package inside `session-protocol` | **REMOVE** | ZSwarm, embedded consumers, and SpexCode need different configuration sources. The protocol needs an absolute path, not a global configuration framework. |
 
 ## C. Public data types and interfaces
 
@@ -119,7 +119,7 @@ object identity buys behavior.
 |---|---|---|---|---|
 | [ ] | T01 | `SessionProtocol` interface | **KEEP** | It binds one explicit session root and exposes the coherent operation set without global cwd or environment mutation. |
 | [ ] | T02 | `openSessionProtocol({ sessionRoot })` factory | **KEEP** | It validates and freezes one absolute filesystem root, so a multi-workspace process can hold independent protocol instances. A class constructor adds no value. |
-| [ ] | T03 | `SessionId` | **KEEP as validated string** | It is the address key and pathname component. Validation prevents traversal but must not require a Spex- or Z-Storm-specific prefix. A branded class is unnecessary. |
+| [ ] | T03 | `SessionId` | **KEEP as validated string** | It is the address key and pathname component. Validation prevents traversal but must not require a Spex- or ZSwarm-specific prefix. A branded class is unnecessary. |
 | [ ] | T04 | `EnqueueRequest` | **KEEP** | Producer input does not yet have protocol-generated `messageId` and `enqueuedAt`; separating it from the stored Message prevents callers from forging authority fields. |
 | [ ] | T05 | `Message` | **KEEP** | One immutable envelope is the common language: version, messageId, optional senderSessionId, content, enqueuedAt, optional headers. The queue address already supplies the target. |
 | [ ] | T05a | Stored `targetSessionId` in every Message | **REMOVE** | `enqueue` already receives the exact target and the per-session directory is authoritative. Repeating it creates two target truths; multi-session consumers already know which address they dequeued. |
@@ -131,14 +131,14 @@ object identity buys behavior.
 | [ ] | T11 | `SessionProtocolError` with stable error-code union | **KEEP** | Adopters must distinguish not-initialized, corrupt-state, idempotency-conflict, lock-timeout, and non-empty-delete without parsing prose. One error class is sufficient. |
 | [ ] | T12 | One error subclass per failure | **REMOVE** | Stable codes on T11 provide machine handling. Multiple classes add exports without different recovery behavior. |
 | [ ] | T13 | `MessageHandler = (message) => Promise<void>` | **KEEP, adopter runtime** | It is the narrow ownership handoff from protocol message to native runtime. It does not belong in protocol or run under the protocol lock. |
-| [ ] | T14 | Optional handler journal keyed by `messageId` | **KEEP only where required** | An adopter needing retry after dequeue must own that stronger guarantee. Self-launch or Z-Storm may accept at-most-once and omit it. |
+| [ ] | T14 | Optional handler journal keyed by `messageId` | **KEEP only where required** | An adopter needing retry after dequeue must own that stronger guarantee. Self-launch or ZSwarm may accept at-most-once and omit it. |
 | [ ] | T15 | `HarnessRuntimeAdapter` | **KEEP** | It owns launch, native input, interrupt, stop, liveness, and native identity without exposing harness differences to product policy. |
 | [ ] | T16 | `HarnessMaterializeAdapter` | **KEEP** | It owns contract, hook, trust, skills, commands, and file placement. It allows self-launch setup without importing a managed runtime. |
 | [ ] | T17 | One combined `HarnessAdapter` interface | **REMOVE after split** | The current interface mixes setup, runtime, transcript, lifecycle, and cleanup capabilities. Consumers are forced to depend on methods they never call. |
 | [ ] | T18 | `TopologyEdge` and `TopologyRevision` | **KEEP inside topology** | Attach/reparent and recipient replay require stable relation identity independent of message ids. |
 | [ ] | T19 | `RecipientSet` | **KEEP as return value, not stored class** | A topology query must return exact addresses to enqueue. A plain immutable set is sufficient. |
 | [ ] | T20 | `OutboxEntry` | **KEEP, adopter-private** | It binds one committed topology/state revision to intended recipient messages until all idempotent enqueues complete. |
-| [ ] | T21 | `RuntimeSessionRegistration`, `RuntimeSessionState`, `RuntimeSessionRecord`, `RuntimeSessionNotification` | **MOVE to Z-Storm/Spex compatibility adapter, then reduce** | They currently encode adopter projection. None is required by self-launch or generic queue operations. |
+| [ ] | T21 | `RuntimeSessionRegistration`, `RuntimeSessionState`, `RuntimeSessionRecord`, `RuntimeSessionNotification` | **MOVE to ZSwarm/Spex compatibility adapter, then reduce** | They currently encode adopter projection. None is required by self-launch or generic queue operations. |
 | [ ] | T22 | `PendingMessage`, `PreparedMessage`, `AcceptMessageOptions`, `MessageIdempotency` | **REMOVE after protocol migration** | T04/T05/T07 replace them without product callbacks or receipt internals in the public wire language. |
 | [ ] | T23 | Protocol-persisted `Cursors` follow map | **REMOVE** | T09 supplies incremental reads; parent/manual follow registration is topology/product policy. |
 | [ ] | T24 | Product `TimelineEvent` containing lifecycle/proposal/note | **MOVE to Spex lifecycle log** | It is useful for the dashboard and declarations but cannot be the adapter-neutral message journal. |
@@ -164,9 +164,9 @@ object identity buys behavior.
 | [ ] | O13 | Public raw lock helpers | **REMOVE** | Exposing locks lets callers mutate files without journal rules. Cross-module work uses idempotency and outboxes rather than a shared half-transaction API. |
 | [ ] | O14 | `enqueueMany` atomic batch | **REMOVE** | Atomic writes across recipient directories are not available. Topology outbox plus idempotent individual enqueue gives explicit partial-progress recovery. |
 | [ ] | O15 | `attach`, `detach`, `reparent`, `parents`, `children` | **KEEP in topology** | They are the shared relation vocabulary and can be exercised without sending a message. |
-| [ ] | O15a | `subscribe`, `unsubscribe` | **OPEN; adopter policy for now** | Spex has proved manual subscriptions, but Z-Storm has not proved identical semantics. Keep them outside a shared topology contract until a second adopter needs them. |
+| [ ] | O15a | `subscribe`, `unsubscribe` | **OPEN; adopter policy for now** | Spex has proved manual subscriptions, but ZSwarm has not proved identical semantics. Keep them outside a shared topology contract until a second adopter needs them. |
 | [ ] | O15b | `recipients()` in neutral topology | **REMOVE** | Relations are topology facts; deciding which relation receives which state transition is runtime/governance policy. The adopter queries relations and constructs the recipient set. |
-| [ ] | O16 | `notifyParent` or `publishWorking` | **REMOVE as shared operations** | They combine product state, topology, message composition, and enqueue. Spex/Z-Storm runtime composition performs those steps explicitly. |
+| [ ] | O16 | `notifyParent` or `publishWorking` | **REMOVE as shared operations** | They combine product state, topology, message composition, and enqueue. Spex/ZSwarm runtime composition performs those steps explicitly. |
 | [ ] | O17 | Immediate wake hint after enqueue | **MOVE to adopter runtime** | It reduces latency when producer and runtime can communicate, but the message remains correct without it. |
 | [ ] | O18 | Bounded durable-state sweep | **KEEP in long-lived runtimes** | It recovers from missed hints and backend replacement. It reads `hasPending`/dequeue; it does not infer writes from timestamps. |
 | [ ] | O19 | Filesystem event as delivery signal | **REMOVE** | Filesystem events may be delayed, coalesced, duplicated, or lost. They cannot prove a queue transition. |
@@ -222,16 +222,16 @@ This table ensures migration does not hide old public concepts.
 
 ## G. Adopter composition proof
 
-| Element | Z-Storm | Self-launch | Spex governed |
+| Element | ZSwarm | Self-launch | Spex governed |
 |---|---|---|---|
-| Explicit session-root protocol instance | Resolved by the Z-Storm host | Resolved by the listener/bootstrap command | Resolved by SpexCode config plus project namespace |
+| Explicit session-root protocol instance | Resolved by the ZSwarm host | Resolved by the listener/bootstrap command | Resolved by SpexCode config plus project namespace |
 | `initialize` | At root/child id creation | SessionStart hook | Governed create before publication |
-| `enqueue` producer | Z-Storm topology/command layer | Any process with exact initialized id | CLI, hook, API, topology outbox |
+| `enqueue` producer | ZSwarm topology/command layer | Any process with exact initialized id | CLI, hook, API, topology outbox |
 | `dequeue` consumer | Existing injected mailbox port | Explicit listen/monitor/background command | Spex runtime loop/backend |
-| Topology | Z-Storm session/subagent store | None required | Spex parent/manual watch policy |
+| Topology | ZSwarm session/subagent store | None required | Spex parent/manual watch policy |
 | Runtime adapter | steer/deferred-input/model loop | Harness-specific command/input seam | Spex harness runtime registry |
-| Materialization adapter | Z-Storm config if adopted | Required for zero-friction hooks/listener | Same setup plus governed launch |
-| Resident backend | Z-Storm app-server | Not required | Optional for correctness, useful for latency/resources |
+| Materialization adapter | ZSwarm config if adopted | Required for zero-friction hooks/listener | Same setup plus governed launch |
+| Resident backend | ZSwarm app-server | Not required | Optional for correctness, useful for latency/resources |
 | Filesystem observer | Optional hint only | Optional hint or bounded poll | Optional hint; bounded sweep repairs missed hints |
 
 All three use the same marker, Message codec, journal, pending view, lock, enqueue, and dequeue. No row in the
@@ -289,7 +289,7 @@ The protocol package receives one absolute `sessionRoot` and owns only the versi
 It does not read `SPEXCODE_HOME`, XDG variables, a repository config, Git metadata, or a global config file.
 
 SpexCode has a separate path resolver. It maps machine-level configuration plus a project identity to the exact
-session root, then injects that root into `openSessionProtocol`. Z-Storm and an embedded adopter can use their own
+session root, then injects that root into `openSessionProtocol`. ZSwarm and an embedded adopter can use their own
 resolvers. This keeps one file language while allowing different physical locations.
 
 ### Current SpexCode state
@@ -386,7 +386,7 @@ the relevant locks, and never leaves two writable authorities for the same field
 3. Should recovery be automatic and private, removing public `reconcile`?
 4. Should the first public API omit batch drain/dequeue and expose only singular `dequeue`?
 5. Should `deleteAddress` be part of the package, with non-empty deletion refused by default?
-6. Should topology remain unpublished until Spex and Z-Storm prove identical relation semantics?
+6. Should topology remain unpublished until Spex and ZSwarm prove identical relation semantics?
 7. Should the current combined Harness interface split into runtime and materialization facets before the Spex
    adopter migrates?
 8. Should SpexCode retain `SPEXCODE_HOME` as the compatibility override while adding an explicit config-file

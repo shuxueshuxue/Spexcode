@@ -66,7 +66,7 @@ the file language remains `enqueue` and `dequeue` everywhere.
 
 A message has a protocol version, `messageId`, `targetSessionId`, optional `senderSessionId`, body, optional string
 headers, and an optional `idempotencyKey`. Product-specific facts such as lifecycle, proposal, reply transport,
-native thread id, or Z-Storm task state may be encoded by the producer in a versioned message kind and headers;
+native thread id, or ZSwarm task state may be encoded by the producer in a versioned message kind and headers;
 the protocol stores and compares them but never interprets them.
 
 ## Closed file system
@@ -122,7 +122,7 @@ reconstruct an enqueue or dequeue from half-operations.
 
 The contract is accepted only if all three reference adopters compose without a special protocol mode:
 
-- **Z-Storm** owns its task topology and native runtime loop. It initializes addresses, resolves recipients in
+- **ZSwarm** owns its task topology and native runtime loop. It initializes addresses, resolves recipients in
   its topology, enqueues fixed messages, and dequeues them from its own runtime process.
 - **self-launch** has no governed record or resident Spex backend. Materialized hooks initialize the native
   session id; any producer may enqueue while the harness is offline; an explicit listener/monitor command later

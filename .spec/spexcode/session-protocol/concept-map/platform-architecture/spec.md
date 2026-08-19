@@ -16,7 +16,7 @@ related:
 
 This node owns the linked HTML review view that presents the proposed session platform as one self-contained
 architecture: a fixed communication protocol, adopter-owned topology and runtime composition, separate harness
-runtime and configuration adapters, explicit storage placement, and the Z-Storm, self-launch, and Spex-governed
+runtime and configuration adapters, explicit storage placement, and the ZSwarm, self-launch, and Spex-governed
 adoption paths.
 
 The document is a decision surface, not an accepted runtime contract. It must label the proposal as a review draft,

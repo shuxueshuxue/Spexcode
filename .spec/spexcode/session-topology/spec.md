@@ -20,11 +20,11 @@ topology module supplies stable relation/revision identity; [[session-runtime]] 
 through protocol enqueue. A file observer is never the missing transaction between a relation write and a message
 write.
 
-The first implementation stays internal until at least Spex governed sessions and Z-Storm demonstrate that they
+The first implementation stays internal until at least Spex governed sessions and ZSwarm demonstrate that they
 share the same relationship semantics rather than merely similar field names. Only then should it become a
 published `@spexcode/session-topology` package. Self-launch proves the opposite boundary: it may use the protocol
 with no topology at all.
 
 Spex-specific parent watch sources (`manual`/`parent`), initial-working suppression, proposal/actionable policy,
-board scope, and manager handoff are product topology policy above this neutral relation model. Z-Storm task roles,
-root/worker declaration rules, and swarm status projection are likewise Z-Storm policy.
+board scope, and manager handoff are product topology policy above this neutral relation model. ZSwarm task roles,
+root/worker declaration rules, and swarm status projection are likewise ZSwarm policy.

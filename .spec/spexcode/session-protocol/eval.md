@@ -66,7 +66,7 @@ scenarios:
   - name: three-adopters-share-one-file-language
     tags: [cli]
     description: >
-      Exercise Z-Storm-style, self-launch, and Spex-governed consumer fixtures through the installed public
+      Exercise ZSwarm-style, self-launch, and Spex-governed consumer fixtures through the installed public
       package. Give each a different topology/runtime/materialization composition while using the same initialized
       address, message codec, enqueue, dequeue, timeline, and reconciliation operations.
     expected: >

@@ -26,6 +26,6 @@ The bridge remains compatible while adopters move:
 - launch, liveness, stop, sockets, and native steering remain in its harness runtime adapter.
 
 No new consumer should call `registerRuntimeSession` or `publishRuntimeSessionState` as a universal session API.
-Once Z-Storm and Spex governed composition use the split contracts, this module leaves the public entry and may
+Once ZSwarm and Spex governed composition use the split contracts, this module leaves the public entry and may
 remain only as a versioned compatibility adapter. Its revision-keyed crash recovery must be preserved by the
 adopter's topology outbox plus protocol idempotency; migration must not trade a mixed boundary for lost state.

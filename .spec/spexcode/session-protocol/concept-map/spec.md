@@ -35,7 +35,7 @@ proposed SQLite-backed target. They summarize the worksheet and make the propose
 to inspect; they do not supersede the current runtime specs until human review accepts the decisions and those
 decisions are written into their owning nodes.
 
-The worksheet must pressure-test the same protocol through Z-Storm, ungoverned self-launch, and Spex-governed
+The worksheet must pressure-test the same protocol through ZSwarm, ungoverned self-launch, and Spex-governed
 adopters. It must also keep physical state placement outside the protocol language: the protocol owns a fixed
 relative filesystem layout below an injected absolute session root, while each adopter owns global configuration,
 project namespacing, OS defaults, and migration from legacy directories.

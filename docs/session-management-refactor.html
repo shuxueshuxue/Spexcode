@@ -214,13 +214,13 @@ project/              harness-required
         <pre>CLI process ─────────┐
 Hook wrapper ───────┼── SQLite connection ── application.db
 Spex backend ───────┤                       application.db-wal
-Z-Storm runtime ────┘                       application.db-shm</pre>
+ZSwarm runtime ────┘                       application.db-shm</pre>
         <h3>数据库路径</h3>
         <p><code>openSessionDatabase({ databasePath })</code> 只接收显式绝对路径。文件名与全局配置属于 adopter：</p>
         <ul>
           <li>Standalone session manager 可以默认 <code>&lt;stateRoot&gt;/sessions.db</code>。</li>
           <li>SpexCode 可以把 session 表扩展进自己的 <code>&lt;stateRoot&gt;/spexcode.db</code>。</li>
-          <li>Z-Storm 可以使用自己的 application database。</li>
+          <li>ZSwarm 可以使用自己的 application database。</li>
         </ul>
         <h3>每个连接的强制设置</h3>
         <span class="sql-label">Connection bootstrap</span>
@@ -458,7 +458,7 @@ CREATE UNIQUE INDEX topology_active_edge
         </div>
         <div class="phase">
           <div class="phase-id">M5</div>
-          <div><h3>三 adopter YATU</h3><p>Self-launch offline enqueue/listen、Spex governed dashboard/hook/backend、Z-Storm runtime loop 全部通过，且 lost wake/restart 仅靠数据库恢复。</p></div>
+          <div><h3>三 adopter YATU</h3><p>Self-launch offline enqueue/listen、Spex governed dashboard/hook/backend、ZSwarm runtime loop 全部通过，且 lost wake/restart 仅靠数据库恢复。</p></div>
         </div>
         <div class="phase">
           <div class="phase-id">M6</div>
@@ -479,7 +479,7 @@ CREATE UNIQUE INDEX topology_active_edge
           <div class="matrix-item"><b>Backup</b><span>online backup/VACUUM INTO、restore、integrity_check、foreign_key_check</span></div>
           <div class="matrix-item"><b>Self-launch YATU</b><span>无 backend initialize、offline enqueue、稍后 listen/dequeue</span></div>
           <div class="matrix-item"><b>Governed YATU</b><span>CLI/hook/dashboard send、backend restart、native adapter input</span></div>
-          <div class="matrix-item"><b>Z-Storm YATU</b><span>multi-workspace exact DB、topology route、worker loop</span></div>
+          <div class="matrix-item"><b>ZSwarm YATU</b><span>multi-workspace exact DB、topology route、worker loop</span></div>
           <div class="matrix-item"><b>Lost wake</b><span>完全丢弃 wake hint，bounded sweep 仍发现所有 pending</span></div>
           <div class="matrix-item"><b>Migration</b><span>legacy count/order/hash equality、rollback、old client refusal</span></div>
         </div>

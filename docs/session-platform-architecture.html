@@ -233,7 +233,7 @@
         <div class="decision-grid">
           <div class="decision"><b>Self-launch 是主路径</b><p>没有 dashboard、没有 backend、用户直接启动 Claude/Codex 时，协议地址、离线排队和显式监听仍然成立。</p></div>
           <div class="decision"><b>协议不认识产品</b><p>它不知道 Spec、Git、parent、lifecycle、tmux、native thread、input box 或 dashboard。</p></div>
-          <div class="decision"><b>一个机制覆盖三种采用方式</b><p>Z-Storm、self-launch、Spex governed 使用相同 enqueue/dequeue 和数据库约束，不存在 protocol mode。</p></div>
+          <div class="decision"><b>一个机制覆盖三种采用方式</b><p>ZSwarm、self-launch、Spex governed 使用相同 enqueue/dequeue 和数据库约束，不存在 protocol mode。</p></div>
           <div class="decision"><b>物理位置由 adopter 决定</b><p>协议只接收显式绝对 database path，不要求 <code>~/.spexcode</code>、项目 cwd 或固定文件名。</p></div>
         </div>
         <h3>明确非目标</h3>
@@ -252,7 +252,7 @@
             <div class="stack-row">
               <div class="stack-label">Product surfaces</div>
               <div class="stack-content">
-                <div class="block"><strong>Z-Storm</strong><small>task loop、workspace、自己的状态投影</small></div>
+                <div class="block"><strong>ZSwarm</strong><small>task loop、workspace、自己的状态投影</small></div>
                 <div class="block"><strong>Self-launch</strong><small>materialized hook、listen command、无常驻 backend</small></div>
                 <div class="block"><strong>Spex governed</strong><small>dashboard、board lifecycle、managed worker</small></div>
               </div>
@@ -290,7 +290,7 @@
 
       <section id="protocol">
         <h2>3. 固定的 Session Communication Protocol</h2>
-        <p>协议是一个封闭系统。无论外部 adapter 是 Codex、Claude、OpenCode、Pi、Z-Storm 还是未来实现，内部语言保持不变。</p>
+        <p>协议是一个封闭系统。无论外部 adapter 是 Codex、Claude、OpenCode、Pi、ZSwarm 还是未来实现，内部语言保持不变。</p>
         <table>
           <thead><tr><th>操作</th><th>固定语义</th><th>不包含</th></tr></thead>
           <tbody>
@@ -336,10 +336,10 @@
 
       <section id="adopters">
         <h2>6. 三个 reference adopter</h2>
-        <h3>Z-Storm</h3>
+        <h3>ZSwarm</h3>
         <div class="flow">
           <div class="flow-step"><b>初始化</b><span>runtime 创建 worker 地址</span></div>
-          <div class="flow-step"><b>解析关系</b><span>Z-Storm topology 找到 recipient</span></div>
+          <div class="flow-step"><b>解析关系</b><span>ZSwarm topology 找到 recipient</span></div>
           <div class="flow-step"><b>Enqueue</b><span>同一 transaction 写任务关系和消息</span></div>
           <div class="flow-step"><b>Wake</b><span>进程内 signal，仅减少延迟</span></div>
           <div class="flow-step"><b>Dequeue</b><span>worker loop 注入自己的 input</span></div>
@@ -368,7 +368,7 @@
         <p>协议不规定数据库文件名。Host 传入显式绝对 <code>databasePath</code>，因此不会出现 <code>spexcode.db</code> 或 <code>session-protocol.sqlite</code> 被误当成跨产品标准的情况。</p>
         <pre>Standalone session manager  -> &lt;stateRoot&gt;/sessions.db
 SpexCode adopter            -> &lt;spexStateRoot&gt;/spexcode.db
-Z-Storm adopter             -> &lt;zstormStateRoot&gt;/zstorm.db
+ZSwarm adopter             -> &lt;zswarmStateRoot&gt;/zswarm.db
 
 openSessionDatabase({ databasePath: absolutePath })</pre>
         <p>默认作用域是<strong>一个 application state instance 一个数据库</strong>。SpexCode 的同一 state root 下，所有 backend 共享一个数据库，用 <code>project_id</code> 区分项目；不是每个 session 一个数据库，也不是强迫整台机器上的所有应用共享一个数据库。</p>
@@ -437,7 +437,7 @@ harness runtime/configuration adapters            adopter-owned</pre>
         <ol>
           <li>Self-launch 在没有 backend 时可 initialize、被 enqueue，并在之后显式 listen/dequeue。</li>
           <li>Spex governed 的 CLI、hook 和 dashboard producer 共享同一 protocol implementation。</li>
-          <li>Z-Storm adopter 不 import Spex lifecycle、Git layout 或 harness adapter。</li>
+          <li>ZSwarm adopter 不 import Spex lifecycle、Git layout 或 harness adapter。</li>
           <li>任何 topology mutation 与必要 notification enqueue 在一个 SQLite transaction 内完成，无 outbox。</li>
           <li>丢失、重复或延迟 wake 不改变正确性；runtime 重启后仅查询数据库即可恢复。</li>
           <li>协议 package 不读取 cwd、<code>.spexcode</code> 或 product config，只接收显式 database path。</li>

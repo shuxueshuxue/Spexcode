@@ -1,0 +1,8 @@
+node_modules/
+package-lock.json
+.thin-cli-probe.mjs
+
+# The root .gitignore excludes *.log. Failure and pass logs are the evidence chain for this spike,
+# not build noise: they must be committed verbatim and must stay committable.
+!*.log
+!evidence/*.log

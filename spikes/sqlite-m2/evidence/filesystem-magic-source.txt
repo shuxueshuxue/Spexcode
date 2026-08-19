@@ -1,0 +1,17 @@
+Filesystem magic numbers, verbatim from /usr/include/linux/magic.h (package linux-libc-dev)
+Cross-checked: fs.statfsSync() reported type 61267 = 0xEF53 = EXT4_SUPER_MAGIC on this host.
+
+#define AFS_SUPER_MAGIC                0x5346414F
+#define CEPH_SUPER_MAGIC	0x00c36400
+#define CODA_SUPER_MAGIC	0x73757245
+#define XENFS_SUPER_MAGIC	0xabba1974
+#define EXT4_SUPER_MAGIC	0xEF53
+#define FUSE_SUPER_MAGIC	0x65735546
+#define NCP_SUPER_MAGIC		0x564c		/* Guess, what 0x564c is :-) */
+#define NFS_SUPER_MAGIC		0x6969
+#define OCFS2_SUPER_MAGIC	0x7461636f
+#define AFS_FS_MAGIC		0x6B414653
+#define SMB_SUPER_MAGIC		0x517B
+#define CIFS_SUPER_MAGIC	0xFF534D42      /* the first four bytes of SMB PDUs */
+#define SMB2_SUPER_MAGIC	0xFE534D42
+#define V9FS_MAGIC		0x01021997

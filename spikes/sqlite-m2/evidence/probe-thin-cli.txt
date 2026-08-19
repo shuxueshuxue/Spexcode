@@ -1,0 +1,12 @@
+whole-process cost of one thin-CLI invocation, 20 runs each
+
+### node v22.21.0
+    bare interpreter startup : 42.5 ms mean (p50 40.2)
+    node:sqlite              : 65.9 ms mean (p50 66.7), +23.4 ms over bare = +55%
+    better-sqlite3           : 78.3 ms mean (p50 78.7), +35.8 ms over bare = +84%
+
+### node v24.15.0
+    bare interpreter startup : 52.6 ms mean (p50 49.3)
+    node:sqlite              : 61.8 ms mean (p50 61.2), +9.2 ms over bare = +18%
+    better-sqlite3           : 79.0 ms mean (p50 79.7), +26.5 ms over bare = +50%
+

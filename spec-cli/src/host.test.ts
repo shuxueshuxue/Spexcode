@@ -6,10 +6,10 @@ import assert from 'node:assert/strict'
 import http from 'node:http'
 import https from 'node:https'
 import net from 'node:net'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, realpathSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import {
   publishEndpoint, dropOwnEndpoint, endpointRecordPath, readCatalog, addKnownProject,
@@ -56,6 +56,29 @@ function fakeBackend(identity: { instanceId: string; root: string; identity?: { 
 }
 const getJson = (url: string): Promise<{ status: number; body: any }> =>
   fetch(url).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }))
+
+async function withGitIdentity<T>(run: () => Promise<T>): Promise<T> {
+  const values = {
+    GIT_AUTHOR_NAME: 'Spex Host Fixture',
+    GIT_AUTHOR_EMAIL: 'spex-host-fixture@example.invalid',
+    GIT_COMMITTER_NAME: 'Spex Host Fixture',
+    GIT_COMMITTER_EMAIL: 'spex-host-fixture@example.invalid',
+  }
+  const saved = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]))
+  Object.assign(process.env, values)
+  try { return await run() }
+  finally {
+    for (const key of Object.keys(values)) {
+      if (saved[key] === undefined) delete process.env[key]
+      else process.env[key] = saved[key]
+    }
+  }
+}
+
+const gitHead = (root: string): string | null => {
+  const result = spawnSync('git', ['-C', root, 'rev-parse', '--verify', 'HEAD^{commit}'], { encoding: 'utf8' })
+  return result.status === 0 ? result.stdout.trim() : null
+}
 
 test('publishEndpoint writes atomically; dropOwnEndpoint removes only its own record', () => {
   freshHome('record')
@@ -156,21 +179,73 @@ test('directory browse reports folder state; explicit setup initializes Git then
   const added = await addKnownProjectWithSetup(plain, { initGit: true, init: { harness: 'codex' } })
   assert.equal(added.ok, true)
   assert.equal(added.gitInitialized, true)
+  assert.equal(added.initialCommitCreated, false)
   assert.equal(added.init?.code, 0)
   assert.equal(existsSync(join(plain, '.git')), true)
   assert.equal(existsSync(join(plain, '.spec')), true)
+  assert.equal(gitHead(plain), null, 'an existing folder is never auto-committed')
   assert.deepEqual(JSON.parse(readFileSync(join(plain, 'spexcode.json'), 'utf8')).harnesses, ['codex'])
-  assert.deepEqual(readCatalog().map((entry) => entry.root), [plain])
+  assert.deepEqual(readCatalog().map((entry) => entry.root), [realpathSync(plain)])
 
   const unborn = join(parent, 'new-project')
   const candidate = browseProjectDirectories(unborn)
   assert.equal(candidate.exists, false)
   assert.equal(candidate.path, unborn)
-  const created = await addKnownProjectWithSetup(unborn, { createDir: true, initGit: true })
+  const created = await withGitIdentity(() => addKnownProjectWithSetup(unborn, { createDir: true, initGit: true }))
   assert.equal(created.ok, true)
   assert.equal(created.directoryCreated, true)
+  assert.equal(created.initialCommitCreated, true)
   assert.equal(existsSync(join(unborn, '.git')), true)
-  assert.equal(readCatalog().some((entry) => entry.root === unborn), true)
+  assert.equal(existsSync(join(unborn, 'README.md')), true)
+  assert.match(execFileSync('git', ['-C', unborn, 'log', '-1', '--format=%s'], { encoding: 'utf8' }), /^chore: 初始化项目\n$/)
+  assert.match(gitHead(unborn) ?? '', /^[0-9a-f]{40,64}$/)
+  assert.equal(readCatalog().some((entry) => entry.root === realpathSync(unborn)), true)
+
+  const initializedNew = join(parent, 'new-spex-project')
+  const initialized = await withGitIdentity(() => addKnownProjectWithSetup(initializedNew, {
+    createDir: true, initGit: true, init: { harness: 'codex' },
+  }))
+  assert.equal(initialized.ok, true)
+  assert.equal(initialized.initialCommitCreated, true)
+  assert.equal(initialized.init?.code, 0)
+  assert.match(gitHead(initializedNew) ?? '', /^[0-9a-f]{40,64}$/)
+  assert.equal(existsSync(join(initializedNew, '.spec')), true)
+
+  const enclosingRepo = join(parent, 'enclosing-repo')
+  mkdirSync(enclosingRepo)
+  const enclosingHead = await withGitIdentity(async () => {
+    execFileSync('git', ['init', '-q'], { cwd: enclosingRepo })
+    writeFileSync(join(enclosingRepo, 'parent.txt'), 'parent\n')
+    execFileSync('git', ['add', '--', 'parent.txt'], { cwd: enclosingRepo })
+    execFileSync('git', ['commit', '-qm', 'parent seed'], { cwd: enclosingRepo })
+    return gitHead(enclosingRepo)
+  })
+  const nestedNew = join(enclosingRepo, 'nested-new')
+  const nested = await withGitIdentity(() => addKnownProjectWithSetup(nestedNew, { createDir: true, initGit: true }))
+  assert.equal(nested.root, realpathSync(nestedNew), 'a new path inside a repo is its own project root')
+  assert.equal(existsSync(join(nestedNew, '.git')), true)
+  assert.match(gitHead(nestedNew) ?? '', /^[0-9a-f]{40,64}$/)
+  assert.equal(gitHead(enclosingRepo), enclosingHead, 'the parent repository was not touched')
+  assert.equal(readCatalog().some((entry) => entry.root === realpathSync(nestedNew)), true)
+
+  const commitFailure = join(parent, 'commit-failure')
+  const template = mkdtempSync(join(parent, 'git-template-'))
+  mkdirSync(join(template, 'hooks'))
+  writeFileSync(join(template, 'hooks', 'pre-commit'), '#!/bin/sh\necho seed-hook-refused >&2\nexit 1\n', { mode: 0o755 })
+  const savedTemplate = process.env.GIT_TEMPLATE_DIR
+  process.env.GIT_TEMPLATE_DIR = template
+  try {
+    await assert.rejects(
+      addKnownProjectWithSetup(commitFailure, { createDir: true, initGit: true }),
+      /cannot create the initial Git commit.*seed-hook-refused/,
+    )
+  } finally {
+    if (savedTemplate === undefined) delete process.env.GIT_TEMPLATE_DIR
+    else process.env.GIT_TEMPLATE_DIR = savedTemplate
+    rmSync(template, { recursive: true, force: true })
+  }
+  assert.equal(existsSync(join(commitFailure, '.git')), true, 'the failed transaction leaves the explicit Git setup visible')
+  assert.equal(readCatalog().some((entry) => entry.root === realpathSync(commitFailure)), false, 'a refused seed commit never claims catalog success')
 
   const notCreated = join(parent, 'not-created')
   await assert.rejects(addKnownProjectWithSetup(notCreated, { createDir: true }), /requires Git initialization/)
@@ -307,10 +382,11 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     // an op on an unknown project 404s with the repair.
     const repo = mkdtempSync(join(tmpdir(), 'spex-host-addrepo-'))
     execFileSync('git', ['init', '-q'], { cwd: repo })
+    const canonicalRepo = realpathSync(repo)
     const browse = await getJson(`${base}/projects/browse?path=${encodeURIComponent(repo)}`)
     assert.equal(browse.status, 200)
-    assert.equal(browse.body.path, repo)
-    assert.equal(browse.body.gitRoot, repo)
+    assert.equal(browse.body.path, canonicalRepo)
+    assert.equal(browse.body.gitRoot, canonicalRepo)
     assert.equal(Array.isArray(browse.body.entries), true)
     assert.equal(browse.body.exists, true)
     const added = await fetch(`${base}/projects`, { method: 'POST', body: JSON.stringify({ root: repo }) })
@@ -322,13 +398,17 @@ test('host dashboard on the hub: admin list + stream, /p proxy, registration, co
     assert.equal(unbornBrowse.status, 200)
     assert.equal(unbornBrowse.body.exists, false)
     assert.equal(unbornBrowse.body.path, unborn)
-    const created = await fetch(`${base}/projects`, {
+    const created = await withGitIdentity(() => fetch(`${base}/projects`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ root: unborn, createDir: true, initGit: true }),
-    })
+    }))
     assert.equal(created.status, 200)
+    const createdBody = await created.json()
+    assert.equal(createdBody.setup.initialCommitCreated, true)
     assert.equal(existsSync(join(unborn, '.git')), true)
-    const repoId = encodeProject(repo)
+    assert.equal(existsSync(join(unborn, 'README.md')), true)
+    assert.match(gitHead(unborn) ?? '', /^[0-9a-f]{40,64}$/)
+    const repoId = encodeProject(canonicalRepo)
 
     // Raw portable config rides the same admin surface and works while the repo is offline. Missing is
     // an editable {}, saves are atomic + normalized, malformed content and a stale revision lose nothing.

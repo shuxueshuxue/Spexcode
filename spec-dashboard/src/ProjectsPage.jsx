@@ -60,7 +60,7 @@ function PasswordForm({ onSet, onClear, placeholder, busy, t }) {
 }
 
 // One modal over the host add transaction: browse a real directory, or make an absent typed path an
-// explicit new Git project, then let the host run real spex init → catalog in that order.
+// explicit new Git project (the host seeds its first commit), then let the host run real spex init → catalog.
 function AddProjectModal({ onAdded, onClose, t }) {
   const [path, setPath] = useState('')
   const [listing, setListing] = useState(null)

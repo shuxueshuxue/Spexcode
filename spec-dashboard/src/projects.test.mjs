@@ -223,13 +223,14 @@ test('browseProjectDirectories carries host errors and rejects malformed answers
 
 test('addProject posts explicit initialization choices and normalizes the returned row', async () => {
   const calls = []
-  const impl = async (url, init) => { calls.push({ url, method: init?.method, body: init?.body }); return jsonRes(200, { id: 'r', projectId: 'r', root: '/home/me/r', name: 'r', online: false, url: null, setup: { gitInitialized: true } }) }
+  const impl = async (url, init) => { calls.push({ url, method: init?.method, body: init?.body }); return jsonRes(200, { id: 'r', projectId: 'r', root: '/home/me/r', name: 'r', online: false, url: null, setup: { gitInitialized: true, initialCommitCreated: true } }) }
   const r = await withFetch(impl, () => addProject('/home/me/r', { initGit: true, init: { harness: 'claude,codex' } }))
   assert.deepEqual(calls[0], { url: '/projects', method: 'POST', body: '{"root":"/home/me/r","initGit":true,"init":{"harness":"claude,codex"}}' })
   assert.equal(r.ok, true)
   assert.equal(r.project.id, 'r')
   assert.equal(r.project.online, false)
   assert.equal(r.setup.gitInitialized, true)
+  assert.equal(r.setup.initialCommitCreated, true)
 })
 
 test('addProject carries the explicit new-directory transaction', async () => {

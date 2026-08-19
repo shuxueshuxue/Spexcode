@@ -4,7 +4,8 @@
 //   PUT|DELETE /projects/admin-password  set/clear the admin password (PUT answers with a fresh session)
 //   PUT|DELETE /projects/:id/password    set/clear one project's password
 //   GET  /projects/browse?path=…          browse host directories or read an absent-path candidate
-//   POST /projects {root, createDir?, initGit?, init?} explicitly create/initialize as requested, then register
+//   POST /projects {root, createDir?, initGit?, init?} explicitly create/initialize as requested, seed a first
+//   commit for a newly created directory, then register
 //   PUT  /projects/icon                   write the host gateway icon choice
 //   PUT  /projects/:id/icon               write one project's dashboard.icon choice
 //   GET|PUT /projects/:id/config          read/write the raw portable spexcode.json source

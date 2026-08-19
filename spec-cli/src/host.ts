@@ -289,11 +289,39 @@ export type AddProjectSetup = {
 }
 export type AddProjectSetupResult = {
   ok: boolean; root: string; directoryCreated: boolean; gitInitialized: boolean
+  initialCommitCreated: boolean
   init?: { code: number | null; output: string }
 }
 
-// One ordered add transaction: select an existing directory or explicitly create one with Git, run the
-// real CLI initializer when requested, and only then claim catalog success.
+const INITIAL_PROJECT_COMMIT_MESSAGE = 'chore: 初始化项目'
+
+function hasGitCommit(root: string): boolean {
+  try {
+    return !!git(['-C', root, 'rev-parse', '--verify', 'HEAD^{commit}']).trim()
+  } catch {
+    return false
+  }
+}
+
+function createInitialProjectCommit(root: string): void {
+  const readme = join(root, 'README.md')
+  // 新目录通常为空；若 mkdir 与此步骤之间已有进程写入文件，保留现有内容，但必须留下可提交的树。
+  if (!existsSync(readme)) writeFileSync(readme, '')
+  try {
+    git(['-C', root, 'add', '--', '.'])
+    git(['-C', root, 'commit', '--quiet', '-m', INITIAL_PROJECT_COMMIT_MESSAGE])
+  } catch (error) {
+    const rawStderr = (error as { stderr?: unknown })?.stderr
+    const stderr = Buffer.isBuffer(rawStderr)
+      ? rawStderr.toString('utf8').trim()
+      : typeof rawStderr === 'string' ? rawStderr.trim() : ''
+    const detail = stderr || (error instanceof Error ? error.message : String(error))
+    throw new Error(`cannot create the initial Git commit in ${root}: ${detail}`)
+  }
+}
+
+// 加项目事务按固定顺序执行：选择已有目录，或显式创建并初始化 Git；新目录先产生首个 commit，再按请求
+// 运行真实 CLI 初始化，全部成功后才登记 catalog。已有目录和仓库绝不自动提交。
 export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSetup = {}): Promise<AddProjectSetupResult> {
   if (setup.createDir && !setup.initGit) throw new Error('creating a project directory requires Git initialization')
   let directoryCreated = false
@@ -301,18 +329,28 @@ export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSet
   try { path = existingDirectory(dir) }
   catch (e) {
     if (!setup.createDir) throw e
-    mkdirSync(resolve(dir), { recursive: true })
-    directoryCreated = true
+    const requested = resolve(dir)
+    const wasAbsent = !existsSync(requested)
+    mkdirSync(requested, { recursive: true })
+    directoryCreated = wasAbsent
     path = existingDirectory(dir)
   }
   let root = gitProjectRoot(path)
   let gitInitialized = false
-  if (!root) {
+  let initialCommitCreated = false
+  // A newly created path is an explicit project boundary even when its parent happens to be a Git repo.
+  // Initialize the target itself so the seed commit can never land in that parent repository.
+  if (!root || directoryCreated) {
     if (!setup.initGit) throw new Error(`${dir} is not a git repository — enable Git initialization to add it`)
     git(['init', '--quiet', '--', path])
     gitInitialized = true
     root = gitProjectRoot(path)
     if (!root) throw new Error(`git init completed but ${path} is still not a Git repository`)
+  }
+
+  if (directoryCreated && gitInitialized && !hasGitCommit(root)) {
+    createInitialProjectCommit(root)
+    initialCommitCreated = true
   }
 
   let init: AddProjectSetupResult['init']
@@ -322,11 +360,11 @@ export async function addKnownProjectWithSetup(dir: string, setup: AddProjectSet
     const preset = typeof setup.init.preset === 'string' ? setup.init.preset.trim() : ''
     const result = await runSpex(root, ['init', '--harness', harness, ...(preset ? ['--preset', preset] : [])])
     init = result
-    if (result.code !== 0) return { ok: false, root, directoryCreated, gitInitialized, init }
+    if (result.code !== 0) return { ok: false, root, directoryCreated, gitInitialized, initialCommitCreated, init }
   }
 
   catalogAdd(root)
-  return { ok: true, root, directoryCreated, gitInitialized, ...(init ? { init } : {}) }
+  return { ok: true, root, directoryCreated, gitInitialized, initialCommitCreated, ...(init ? { init } : {}) }
 }
 
 // The dashboard edits the committed, portable source file verbatim. The host fixes the filename (there

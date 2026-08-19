@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import net from 'node:net'
 import { once } from 'node:events'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -33,6 +34,13 @@ test('Projects creates a cataloged Git project from an absent folder path', asyn
   const project = join(parent, 'new-project')
   const port = await freePort()
   const savedHome = process.env.SPEXCODE_HOME
+  const savedGitEnv = Object.fromEntries(['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL'].map((key) => [key, process.env[key]]))
+  Object.assign(process.env, {
+    GIT_AUTHOR_NAME: 'Spex Projects Fixture',
+    GIT_AUTHOR_EMAIL: 'spex-projects-fixture@example.invalid',
+    GIT_COMMITTER_NAME: 'Spex Projects Fixture',
+    GIT_COMMITTER_EMAIL: 'spex-projects-fixture@example.invalid',
+  })
   process.env.SPEXCODE_HOME = home
   const gateway = startHostDashboard({ port, host: '127.0.0.1', distDir: join(root, 'spec-dashboard', 'dist') })
   await once(gateway.server, 'listening')
@@ -60,6 +68,9 @@ test('Projects creates a cataloged Git project from an absent folder path', asyn
     await page.locator('.proj-row .proj-name', { hasText: 'new-project' }).waitFor({ state: 'visible' })
     assert.equal(existsSync(project), true)
     assert.equal(existsSync(join(project, '.git')), true)
+    assert.equal(existsSync(join(project, 'README.md')), true)
+    assert.equal(execFileSync('git', ['-C', project, 'rev-parse', '--verify', 'HEAD^{commit}'], { encoding: 'utf8' }).trim().length > 0, true)
+    assert.equal(execFileSync('git', ['-C', project, 'log', '-1', '--format=%s'], { encoding: 'utf8' }).trim(), 'chore: 初始化项目')
     const catalog = await page.evaluate(() => fetch('/projects', { headers: { Accept: 'application/json' } }).then((r) => r.json()))
     assert.equal(catalog.projects.some((entry) => entry.root === project), true)
   } finally {
@@ -67,6 +78,10 @@ test('Projects creates a cataloged Git project from an absent folder path', asyn
     await close(gateway.server)
     if (savedHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = savedHome
+    for (const key of Object.keys(savedGitEnv)) {
+      if (savedGitEnv[key] === undefined) delete process.env[key]
+      else process.env[key] = savedGitEnv[key]
+    }
     rmSync(home, { recursive: true, force: true })
     rmSync(parent, { recursive: true, force: true })
   }

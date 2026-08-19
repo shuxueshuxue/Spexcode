@@ -52,8 +52,9 @@ scenarios:
       enter an absent absolute path, and use the path-bar New project command.
     expected: >
       The absent path is reported as a candidate instead of a browse error, its path-bar action reads New
-      project, and clicking it creates the directory and Git repository through the host add transaction.
-      The modal closes only after the new root is registered, and the resulting offline project row is
+      project, and clicking it creates the directory, a minimal `README.md` initial commit, and Git repository
+      through the host add transaction (including an independent nested root when the path is inside another
+      repository). The modal closes only after the new root is registered, and the resulting offline project row is
       visible in both the rendered catalog and `GET /projects`.
   - name: hub-project-lifecycle
     tags: [frontend-e2e, desktop, mobile]
@@ -76,8 +77,8 @@ scenarios:
       parent/home controls, and bounded child-directory list browse the real host filesystem. The selected
       plain folder is not silently mutated: submit remains unavailable until Git initialization is explicitly
       checked; SpexCode initialization independently requires at least one harness target. A missing typed
-      path is a clear New project action that creates a Git-initialized, cataloged project without making the
-      user locate an existing folder. Submitting runs
+      path is a clear New project action that creates a Git-initialized project with a minimal initial commit,
+      catalogs it without making the user locate an existing folder. Submitting runs
       the real init chain, keeps a failure and its full transcript in place for retry, and closes only on
       catalog success. The resulting row appears with a calm 'stopped' dot and Start as the primary action,
       never a dead Open. The gear opens a monospace editor containing the project's actual portable

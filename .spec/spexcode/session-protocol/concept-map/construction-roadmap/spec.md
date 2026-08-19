@@ -30,3 +30,18 @@ review handoffs, YATU evidence, merge gates, rollback points, and the exact fina
 data conversion is a bounded one-way migration with explicit preconditions and verification; it is never imported
 by the normal runtime. The roadmap remains a review proposal until its milestone contracts are accepted into their
 owning protocol, topology, runtime, packaging, and adopter specs.
+
+Its milestone numbering is the scheduling authority for this campaign. The implementation-order numbering on the
+refactor view is local to that page, the two were once read as a single scheme, and the plan must therefore point at
+the crosswalk between them and win wherever they disagree. The engine milestone additionally carries the storage
+decisions that are now settled rather than open — the built-in synchronous driver, the rollback journal with its
+asserted mode and ordered connection settings, the minimum SQLite version derived from the features actually used,
+the interpreter floor the fleet already runs, and the adopter's fail-closed locality precondition — and it states its
+throughput exit against measurements taken under the journal this version actually uses, keeping the earlier
+write-ahead figures only as labelled history.
+
+One correction is structural rather than cosmetic: the importer must exist and be proven before the cutover that
+removes the legacy readers it reads through, so the plan may not order a demolition ahead of the conversion that
+depends on it. Every frozen decision the plan records is expected to carry a counter-example that fires when the
+decision is reversed; a decision supported only by measurement, with nothing that fails when it is flipped, is an
+assertion rather than a gate and must be recorded as such.

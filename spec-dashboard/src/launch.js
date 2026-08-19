@@ -10,7 +10,7 @@ import { apiUrl } from './project.js'
 // launch a session: the one POST /api/sessions. A launcher SUBSUMES the harness ([[launcher-select]]):
 // send only the chosen launcher name; the backend derives harness from that profile. No launcher yet
 // (picker not loaded) means the backend uses its default. The per-attempt idempotency key makes a lost response
-// recoverable without changing the prompt body contract. Returns { ok, error? }.
+// recoverable without changing the prompt body contract. Returns { ok, error?, code?, phase? }.
 export async function createSession(prompt, launcher) {
   try {
     const requestKey = globalThis.crypto?.randomUUID?.() || `session-create-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -19,9 +19,20 @@ export async function createSession(prompt, launcher) {
       body: JSON.stringify({ prompt, ...(launcher ? { launcher } : {}) }),
     })
     const body = await res.json().catch(() => null)
-    return { ok: res.ok, error: body?.error }
-  } catch {
-    return { ok: false }
+    if (res.ok) return { ok: true, error: body?.error }
+    return {
+      ok: false,
+      error: body?.error || `session creation refused (HTTP ${res.status})`,
+      ...(body?.code ? { code: body.code } : {}),
+      ...(body?.phase ? { phase: body.phase } : {}),
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      code: 'session_create_failed',
+      phase: 'request',
+    }
   }
 }
 

@@ -173,6 +173,16 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.doesNotMatch(source, /si-action-error|setActErr|<aside[^>]*>[\s\S]{0,400}ActionOutcome/)
 })
 
+test('New Session keeps a failed launch draft and exposes structured backend context', () => {
+  assert.match(source, /const \[launchOutcome, setLaunchOutcome\] = useState\(null\)/)
+  assert.match(source, /const launchRequestRef = useRef\(0\)/)
+  assert.match(source, /const unchanged = promptRevisionRef\.current === revision && promptRef\.current === ''/)
+  assert.match(source, /updatePrompt\(draft, false\)/)
+  assert.match(source, /requestAnimationFrame\(\(\) => taRef\.current\?\.focus\(\)\)/)
+  assert.match(source, /onChange=\{\(e\) => \{ updatePrompt\(e\.target\.value\); syncMenu\(e\.target\) \}\}/)
+  assert.match(source, /<div className="si-new-launch-outcome">[\s\S]*<ActionOutcome outcome=\{\{ phase: 'failed', message: launchOutcome\.message \}\}/)
+})
+
 test('bulk archive and close return every refusal to the shared action outcome', () => {
   assert.match(selectBar, /const body = await response\.json\(\)\.catch\(\(\) => null\)/)
   assert.match(selectBar, /!response\.ok \|\| body\?\.ok === false/)

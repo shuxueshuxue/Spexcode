@@ -1859,6 +1859,8 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   100% { opacity: 0; transform: translateY(-2px); pointer-events: none; }
 }
 .si-inputwrap.dragover { border-color: var(--green); }
+.si-new-launch-outcome { width: 100%; }
+.si-new-launch-outcome .si-action-outcome { max-width: none; }
 .si-attach-queue { display: grid; gap: 4px; min-width: 0; }
 .si-attach-queue.new { width: 100%; margin-top: 6px; }
 .si-attach-queue.command { padding: 5px 0 1px; border-top: 1px solid color-mix(in srgb, var(--line) 65%, transparent); }

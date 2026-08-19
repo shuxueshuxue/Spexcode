@@ -148,6 +148,10 @@ consumes that budget.
 resolve. Absent, the session forks from the auto-detected source-of-truth branch, i.e. from whatever that branch
 has drifted to at the moment the worktree is made; that is right for ordinary work but leaves a run against a
 frozen commit inexpressible, so an evaluation, a bisect, or a replay could not name the code it actually ran on.
+A source-of-truth branch with no commit is not a valid fork point: target resolution refuses the create with a
+structured 400 before any branch, worktree, session record, or launcher resource is created, and tells the caller
+to create an initial Git commit. This check applies to the implicit branch as well as an explicitly supplied
+`base`, so an empty repository never leaks Git's lower-level worktree error into the public creation surface.
 A supplied `base` is resolved during target resolution, BEFORE any Git mutation: one that names no commit fails
 the request with a 400 and leaves no half-made worktree, branch, store, or private candidate receipt behind. A
 resolved pin becomes the `git worktree add` start point and is stored on the record, so a later reader can tell

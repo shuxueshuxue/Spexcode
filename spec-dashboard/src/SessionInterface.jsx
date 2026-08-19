@@ -346,6 +346,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const t = useT()
   const { notify } = useTransientNotice()
   const [prompt, setPrompt] = useState('')    // the New Session tab's own draft (its boarding-switch cache)
+  const [launchOutcome, setLaunchOutcome] = useState(null)
   const [menu, setMenu] = useState(null)      // completion dropdown: { kind:'mention'|'config'|'slash', items, index, start, end, query }
   const [ctxMenu, setCtxMenu] = useState(null) // session-row right-click menu { x, y, session } — row-level actions live here
   const [selecting, setSelecting] = useState(false)  // multi-select mode ([[session-multi-select]]): rows become checkboxes, not tabs
@@ -370,6 +371,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const [surfaceVersion, setSurfaceVersion] = useState(0)
   const [resourceMenu, setResourceMenu] = useState(false)
   const taRef = useRef(null)
+  const promptRef = useRef('')
+  const promptRevisionRef = useRef(0)
+  const launchRequestRef = useRef(0)
   const msgRef = useRef(null)
   const panelRef = useRef(null)
   const fileRef = useRef(null)         // the one hidden <input type=file>; the attach buttons trigger it
@@ -384,6 +388,21 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   const attachmentsRef = useRef([])
   const uploadControllersRef = useRef(new Map())
   const uploadQueueBusyRef = useRef(false)
+
+  // 新建会话失败只属于启动编辑框，不应混入选中会话的生命周期提示。用草稿版本号防止迟到响应覆盖 Enter 后新输入的内容。
+  const updatePrompt = (value, edited = true) => {
+    promptRef.current = value
+    if (edited) {
+      promptRevisionRef.current += 1
+      setLaunchOutcome(null)
+    }
+    setPrompt(value)
+  }
+  const launchFailureMessage = (result) => {
+    const details = [result?.code && `code=${result.code}`, result?.phase && `phase=${result.phase}`].filter(Boolean).join(', ')
+    const message = result?.error || t('mobile.launchFailed')
+    return details ? `${message} (${details})` : message
+  }
 
   useEffect(() => {
     if (!actionOutcome || actionOutcome.phase === 'pending' || actionOutcome.phase === 'sending') return
@@ -700,8 +719,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useEffect(() => {
     if (outcomeTimerRef.current) window.clearTimeout(outcomeTimerRef.current)
     outcomeTimerRef.current = null
+    launchRequestRef.current += 1
     setCommandOpen(false)
     setActionOutcome(null)
+    setLaunchOutcome(null)
     setMenu(null)
   }, [active])
   useEffect(() => { if (!commandAvailable) closeCommandBox() }, [commandAvailable])
@@ -742,7 +763,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   useEffect(() => {
     if (seed == null) return
     setSel('new')
-    setPrompt(seed)
+    updatePrompt(seed, false)
+    setLaunchOutcome(null)
     setMenu(null)
     onSeedConsumed?.()
     requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(seed.length, seed.length) } })
@@ -788,10 +810,26 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   // (both seconds of real work — worktree, branch, tmux) left the whole pane greyed and unfocused until they
   // returned; keeping it live makes the next launch type-ready at once. The empty-draft check guards double-fire.
   const submit = () => {
-    const raw = prompt.trim()
+    const draft = prompt
+    const raw = draft.trim()
     if (!raw) return
-    setPrompt('')
-    createSession(raw, launcher).then(() => reload?.())
+    const requestId = ++launchRequestRef.current
+    const revision = promptRevisionRef.current
+    updatePrompt('', false)
+    setLaunchOutcome(null)
+    void createSession(raw, launcher).then((result) => {
+      // 只有最新的一次启动请求可以修改编辑框。较早请求可能在下一条提示提交后才返回，不能用它恢复旧文本或错误。
+      if (requestId !== launchRequestRef.current) return
+      if (result?.ok) {
+        reload?.()
+        return
+      }
+      const unchanged = promptRevisionRef.current === revision && promptRef.current === ''
+      if (!unchanged) return
+      updatePrompt(draft, false)
+      setLaunchOutcome({ message: launchFailureMessage(result) })
+      requestAnimationFrame(() => taRef.current?.focus())
+    })
   }
 
   // build the completion dropdown for the active surface: `[[`-mention (spec nodes) and `@` session references
@@ -844,7 +882,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       // createSession, and the backend remains the sole plugin-body interpreter.
       const rest = [prompt.slice(0, menu.start).trim(), prompt.slice(menu.end).trim()].filter(Boolean).join(' ')
       const next = `/${item.name}${rest ? ` ${rest}` : ''} `
-      setPrompt(next)
+      updatePrompt(next)
       setMenu(null)
       requestAnimationFrame(() => { const el = taRef.current; if (el) { el.focus(); el.setSelectionRange(next.length, next.length) } })
       return
@@ -852,7 +890,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     const onMsg = (menu.kind === 'mention' || menu.kind === 'session' || menu.kind === 'launcher') && active !== 'new'
     const ref = onMsg ? msgRef : taRef
     const cur = onMsg ? msg : prompt
-    const setCur = onMsg ? setMsg : setPrompt
+    const setCur = onMsg ? setMsg : updatePrompt
     const before = cur.slice(0, menu.start)
     if (menu.kind === 'session' && item.id === 'new') {
       const next = before + '@new:' + cur.slice(menu.end)
@@ -1471,7 +1509,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                   data-focus-sink
                   rows={1}
                   value={prompt}
-                  onChange={(e) => { setPrompt(e.target.value); syncMenu(e.target) }}
+                  onChange={(e) => { updatePrompt(e.target.value); syncMenu(e.target) }}
                   onSelect={(e) => syncMenu(e.target)}
                   onPaste={(e) => onPasteFiles(e, 'new')}
                   onBlur={() => setMenu(null)}
@@ -1489,6 +1527,11 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 {/* config-preset palette — same `/` dropdown, opening downward under the centered box. */}
                 {menu && menu.kind === 'config' && slashMenu(false, menu.query ? `/${menu.query}` : t('session.menuPresets'))}
               </div>
+              {launchOutcome && (
+                <div className="si-new-launch-outcome">
+                  <ActionOutcome outcome={{ phase: 'failed', message: launchOutcome.message }} />
+                </div>
+              )}
               {attachmentQueue('new')}
               {/* launcher picker — the only launch choice ([[launcher-select]]): the pop-out button picker
                   (LauncherPicker above) with per-launcher harness marks and read-only cmd details. */}

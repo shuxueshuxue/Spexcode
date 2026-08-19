@@ -502,3 +502,50 @@ dns.lookup = function (hostname, options, callback) {
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('session new explains an unborn main branch before creating Git resources', { timeout: 15_000 }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-create-unborn-'))
+  const project = join(root, 'project')
+  const home = join(root, 'home')
+  mkdirSync(project, { recursive: true })
+  writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+    mainBranch: 'master',
+    harnesses: ['codex'],
+    sessions: {
+      launchers: { codex: { harness: 'codex', cmd: 'true' } },
+      defaultLauncher: 'codex',
+    },
+  }, null, 2))
+  execFileSync('git', ['init', '-q', '-b', 'master'], { cwd: project })
+
+  const absent = createServer()
+  absent.listen(0, '127.0.0.1')
+  await once(absent, 'listening')
+  const address = absent.address()
+  assert.ok(address && typeof address === 'object')
+  const refusedPort = address.port
+  absent.close()
+  await once(absent, 'close')
+
+  try {
+    const result = await runCreate(project, {
+      ...process.env,
+      SPEXCODE_HOME: home,
+      SPEXCODE_API_URL: '',
+    }, `http://127.0.0.1:${refusedPort}`)
+    assert.equal(result.code, 1, result.stdout)
+    assert.match(result.stderr, /project main branch does not name a commit: master/)
+    assert.match(result.stderr, /create an initial Git commit before starting a session/)
+    assert.match(result.stderr, /session_create_failed/)
+    assert.match(result.stderr, /target-resolution/)
+    assert.equal(execFileSync('git', ['-C', project, 'worktree', 'list', '--porcelain'], { encoding: 'utf8' }).split('\n').filter((line) => line.startsWith('worktree ')).length, 1)
+    assert.equal(execFileSync('git', ['-C', project, 'for-each-ref', 'refs/heads/node', '--format=%(refname)'], { encoding: 'utf8' }).trim(), '')
+    const projectRuntime = join(home, 'projects', project.replace(/[/.]/g, '-'))
+    const sessions = join(projectRuntime, 'sessions')
+    assert.equal(existsSync(sessions) ? readdirSync(sessions).length : 0, 0, 'the rejected create leaves no session record')
+    const candidates = join(projectRuntime, '.session-create-candidates')
+    assert.equal(existsSync(candidates) ? readdirSync(candidates).length : 0, 0, 'the rejected create leaves no candidate receipt')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

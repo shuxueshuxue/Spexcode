@@ -109,6 +109,11 @@ greyed and unfocused until the POST *and* a board re-read returned. You stay on 
 appears in the list below (the immediate board refresh, else the next poll, surfaces it). The old
 auto-jump-to-the-new-session is gone; only a tab's *removal* (below) ever moves your selection for you.
 
+If the public create request returns a structured failure, the New composer keeps the complete unsent draft and
+remains focused, while exposing the backend's error together with its `code` and `phase` when present. Editing the
+draft clears that stale failure. A failed request never masquerades as a successful launch, never overwrites a newer
+draft with a late response, and does not change the session list.
+
 Beneath the box a launcher **pop-out picker** is the ONLY launch choice ([[launcher-select]]). A
 launcher names both the harness ([[harness-adapter]] — Claude vs Codex) and the command/auth profile, so the
 launch `POST /api/sessions` carries only `launcher`; the backend derives `harness` from that selected profile.

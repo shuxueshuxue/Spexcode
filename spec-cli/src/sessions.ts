@@ -2412,13 +2412,15 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
       const root = mainRoot()
       // An explicit base pins the fork point so a run is reproducible against a frozen commit instead of
       // whatever the source-of-truth branch has drifted to. Resolve it here, before any git mutation: an
-      // unknown ref must fail the create request outright, never leave a half-made worktree behind.
+      // 未知引用（包括尚无提交的项目分支）必须在创建请求中直接失败，不能留下半成品 worktree。空仓库没有
+      // 可用的 Git worktree 基点，应该告诉调用方如何修复，而不是泄漏 `git worktree add` 的底层错误。
       const startPoint = base ?? mainBranch()
-      if (base) {
-        const resolved = await withGitAbortSignal(signal, () => gitTry(['-C', root, 'rev-parse', '--verify', '--quiet', `${base}^{commit}`]))
-        if (!resolved.ok || !resolved.stdout.trim()) {
-          throw new SessionCreateError('session_create_failed', phase, `session-create base does not name a commit: ${base}`, 400)
-        }
+      const resolved = await withGitAbortSignal(signal, () => gitTry(['-C', root, 'rev-parse', '--verify', '--quiet', `${startPoint}^{commit}`]))
+      if (!resolved.ok || !resolved.stdout.trim()) {
+        const message = base
+          ? `session-create base does not name a commit: ${base}`
+          : `project main branch does not name a commit: ${startPoint}; create an initial Git commit before starting a session`
+        throw new SessionCreateError('session_create_failed', phase, message, 400)
       }
       const branch = `${readConfig(dirname(gitCommonDir())).branchPrefix ?? 'node/'}${slug}`
       const path = join(root, '.worktrees', slug)

@@ -24,3 +24,45 @@ test('ordinary interactive launch posts only the prompt and named launcher', asy
     globalThis.fetch = originalFetch
   }
 })
+
+test('failed launch preserves the backend error code and phase', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 400,
+    json: async () => ({
+      error: 'project main branch does not name a commit: master; create an initial Git commit before starting a session',
+      code: 'session_create_failed',
+      phase: 'target-resolution',
+    }),
+  })
+
+  try {
+    const result = await createSession('start the game', 'codex-local')
+    assert.deepEqual(result, {
+      ok: false,
+      error: 'project main branch does not name a commit: master; create an initial Git commit before starting a session',
+      code: 'session_create_failed',
+      phase: 'target-resolution',
+    })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('unreachable launch reports a request failure instead of dropping the reason', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => { throw new Error('connection refused') }
+
+  try {
+    const result = await createSession('start the game', 'codex-local')
+    assert.deepEqual(result, {
+      ok: false,
+      error: 'connection refused',
+      code: 'session_create_failed',
+      phase: 'request',
+    })
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})

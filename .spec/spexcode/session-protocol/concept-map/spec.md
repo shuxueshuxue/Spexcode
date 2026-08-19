@@ -9,6 +9,8 @@ related:
   - .spec/spexcode/session-protocol/spec.md
   - .spec/spexcode/session-topology/spec.md
   - .spec/spexcode/session-runtime/spec.md
+  - .spec/spexcode/session-protocol/concept-map/platform-architecture/spec.md
+  - .spec/spexcode/session-protocol/concept-map/session-management-refactor/spec.md
   - packages/spec-core/src/project-store.ts
   - packages/spec-core/src/layout.ts
   - packages/session-core/src/index.ts
@@ -27,6 +29,11 @@ Every candidate has one independent usefulness argument and one explicit disposi
 open. A remove decision names the retained mechanism that replaces it. An open decision states what evidence is
 missing. Human review may accept or replace each disposition; accepted decisions are then written into their
 owning current-state specs and removed from the unresolved list.
+
+The linked platform-architecture and session-management-refactor child nodes are the review views for the
+proposed SQLite-backed target. They summarize the worksheet and make the proposed composition and migration easy
+to inspect; they do not supersede the current runtime specs until human review accepts the decisions and those
+decisions are written into their owning nodes.
 
 The worksheet must pressure-test the same protocol through Z-Storm, ungoverned self-launch, and Spex-governed
 adopters. It must also keep physical state placement outside the protocol language: the protocol owns a fixed

@@ -1,8 +1,9 @@
 # Session communication architecture concept map
 
-Status: review worksheet for the SQLite-backed target. This document records usefulness proofs and subtraction
-decisions; it does not silently change a current implementation. A decision becomes an implementation contract only
-when its owning spec is updated and the corresponding cutover proof lands.
+Status: v1 architecture decision frozen; implementation review remains open for the SQLite-backed target. This
+document records the human-frozen usefulness proofs and subtraction decisions without changing production code.
+Driver, exact DDL, SQLite minimum version/PRAGMAs, migration mechanics, stable error-code inventory, and adapter
+registry field details remain implementation-level OPEN items.
 
 ## Review method
 
@@ -14,6 +15,28 @@ when its owning spec is updated and the corresponding cutover proof lands.
 The key review question is adversarial: can the adopter still work when the candidate legacy facility is absent,
 corrupt, read-only, or stopped? If yes, the legacy facility has no runtime usefulness and must be deleted in the same
 cutover. A compatibility layer is not a neutral resting place; it is a second source of truth.
+
+## Human-frozen v1 contract
+
+The following decisions are accepted for v1 and are no longer OPEN:
+
+- Each adopter owns one SQLite database for one application state instance and passes an explicit absolute
+  `databasePath` to the protocol.
+- A topology mutation and every required protocol enqueue run in one bounded synchronous transaction on that same
+  database. The transaction seam is adopter-owned and exposes only complete protocol/topology operations, not raw
+  SQL or half-transactions.
+- `dequeue` commits the message's at-most-once protocol delivery before downstream harness or adapter work. A
+  consumer that needs downstream retry owns its own `messageId`-keyed handling state.
+- V1 has no transactional outbox, keyed replay, dispatcher, observer correctness, cross-DB fallback, or permanent
+  compatibility adapter.
+- Every adopter cutover first proves the new path while the legacy path is missing, corrupt, read-only, or stopped,
+  then physically deletes the old readers, writers, locks, observers, generated files, config aliases, and
+  compatibility branches. Dual-read and dual-write are forbidden.
+
+The following are deliberately still OPEN implementation details: SQLite driver/binding, exact DDL and migration
+checksums, minimum SQLite version and required PRAGMAs, path canonicalization and database creation policy, stable
+error-code inventory, sweep cadence, backup/restore procedure, and the concrete ordered runtime/config adapter row
+shape. None may widen the frozen protocol vocabulary or transaction semantics.
 
 ## Concept map
 
@@ -72,8 +95,8 @@ reconciliation own correctness.
 | F12 | Journal / WAL written by application code | **REMOVE** | SQLite already supplies transaction recovery; a second journal recreates the failure modes being removed. |
 | F13 | Application lock files | **REMOVE** | SQLite transaction locking replaces protocol locks; native process ownership locks stay in harness adapters. |
 | F14 | Filesystem observer as correctness source | **REMOVE** | `fs.watch` can coalesce, duplicate, delay, or lose events; it can only be a wake hint. |
-| F15 | Adopter topology tables | **MOVE / KEEP** | Relations are real, but topology owns them. Same-database topology mutation plus enqueue can be one short transaction. |
-| F16 | Transactional protocol outbox | **REMOVE** | No second queue is needed when relation mutation and protocol enqueue share one adopter database transaction. |
+| F15 | Adopter topology tables | **MOVE / KEEP (FROZEN SAME-DB SEAM)** | Relations remain adopter-owned; required notification enqueue shares the same bounded synchronous transaction and database. |
+| F16 | Transactional protocol outbox | **REMOVE (FROZEN)** | V1 forbids an outbox, keyed replay, dispatcher, or cross-database fallback. |
 | F17 | Artifacts and materialized harness files | **KEEP outside DB** | Large evidence and harness-discovered files are not relational protocol state. |
 | F18 | Launch proof, PID, socket, endpoint | **MOVE** | Native runtime identity and liveness belong to `HarnessRuntimeAdapter`, never to protocol tables. |
 | F19 | Spex lifecycle/worktree/branch/proposal facts | **MOVE** | They remain durable adopter state, not protocol vocabulary. |
@@ -101,11 +124,11 @@ reconciliation own correctness.
 | ID | Element | Decision | Usefulness proof / deletion proof |
 |---|---|---|---|
 | T01 | `SessionProtocol` interface | **KEEP** | One coherent operation set prevents callers from reconstructing half-transactions. |
-| T02 | `openSessionDatabase({ databasePath })` | **KEEP** | It validates one fixed storage instance without global cwd/environment mutation. |
+| T02 | `openSessionDatabase({ databasePath })` | **KEEP (PATH SHAPE FROZEN)** | One explicit absolute path is required; canonicalization, creation, driver, and filesystem checks remain OPEN. |
 | T03 | `SessionId` validated string | **KEEP** | It is the address key; validation prevents traversal without product-specific prefixes. |
 | T04 | `Message` immutable envelope | **KEEP** | It is the fixed cross-adopter language; product facts remain opaque kind/headers. |
 | T05 | `idempotencyKey` | **KEEP** | Producer uncertainty can be replayed without duplicate messages or changed payload reuse. |
-| T06 | `SessionProtocolError` stable code union | **KEEP** | Consumers need machine-readable recovery without parsing prose or maintaining subclasses. |
+| T06 | `SessionProtocolError` stable code union | **KEEP (API NEED FROZEN)** | Machine-readable errors are required; the exact code inventory remains OPEN implementation detail. |
 | T07 | `enqueue` | **KEEP** | It commits a pending message; it does not initialize unknown targets or call an adapter. |
 | T08 | `dequeue` | **KEEP** | Its transaction commit is the protocol delivery boundary; downstream native effects are consumer policy. |
 | T09 | `listPending` / `readMessages` | **KEEP** | They separate work-list inspection from immutable history reads. |
@@ -120,12 +143,12 @@ reconciliation own correctness.
 
 | ID | Rule | Decision | Usefulness proof / deletion proof |
 |---|---|---|---|
-| X01 | Short synchronous SQLite transaction | **KEEP** | A write lock contains only SQL; no network, filesystem walk, harness call or user callback. |
+| X01 | Short synchronous SQLite transaction | **KEEP (FROZEN)** | A write lock contains only bounded SQL and pure validation; no network, filesystem walk, harness call or user callback. |
 | X02 | `dequeue` at-most-once ownership transfer | **KEEP** | It makes the protocol closed and prevents downstream adapter behavior from changing queue truth. |
 | X03 | Idempotent enqueue | **KEEP** | Retries after uncertain completion are safe and changed-key reuse fails loudly. |
 | X04 | Strict corruption errors | **KEEP** | Corrupt-as-empty is silent message loss; malformed state must fail loud. |
-| X05 | Startup and bounded reconciliation | **KEEP in long-lived adopters** | Lost wake hints cannot hide pending rows; correctness comes from querying durable state. |
-| X06 | Cross-component same-DB transaction | **KEEP where needed** | Topology mutation and its notification can commit atomically without an outbox. |
+| X05 | Startup and bounded reconciliation | **KEEP in long-lived adopters** | Lost wake hints cannot hide pending rows; exact sweep cadence remains an adopter implementation detail. |
+| X06 | Cross-component same-DB transaction | **KEEP (FROZEN)** | Required topology mutation and enqueue commit atomically on one adopter-owned database; no outbox or cross-DB fallback. |
 | X07 | Multi-address public transaction/lock API | **REMOVE** | No shared operation needs it; individual idempotent enqueue avoids deadlock and policy leakage. |
 | X08 | Automatic journal compaction | **OPEN** | Add only after measured recovery cost justifies a new mechanism. |
 | X09 | One-way offline migration | **KEEP as tooling only** | User data may need conversion, but normal runtime must never recognize the legacy format. |
@@ -134,9 +157,9 @@ reconciliation own correctness.
 
 | Adopter | Positive proof | Legacy sabotage | Physical deletion |
 |---|---|---|---|
-| ZSwarm | External clean consumer initializes, enqueues, dequeues and routes topology using its own DB/config. | No Spex backend, hooks, `.spexcode`, governed records or Spex package available. | Remove ZSwarm's old mailbox/projection and compatibility imports in the same milestone. |
-| self-launch | Backend absent; producer enqueues; explicit listener later dequeues through harness input. | Old pending files missing/read-only and observer stopped. | Remove file queue, fixed-root lookup and observer correctness path. |
-| Spex governed | CLI/hook/dashboard/backend share protocol; restart/lost wake still recovers pending. | Old JSON queue/timeline/cursors/locks poisoned or absent; observer disabled. | Remove old readers/writers, bridge, locks and duplicate relation authority. |
+| ZSwarm | External clean consumer initializes, enqueues, dequeues and routes topology using its own DB/config; required topology notification uses the frozen same-DB transaction. | No Spex backend, hooks, `.spexcode`, governed records, Spex package, old mailbox, or old projection available. | Remove ZSwarm's old mailbox/projection and compatibility imports in the same milestone. |
+| self-launch | Backend absent; producer enqueues; explicit listener later dequeues through harness input; lost wake is irrelevant to durable pending state. | Old pending files missing/read-only, fixed-root/config aliases unavailable, observer stopped, and no backend/socket exists. | Remove file queue, fixed-root lookup, observer correctness path, and compatibility fallback. |
+| Spex governed | CLI/hook/dashboard/backend share protocol; same-DB topology+enqueue is atomic; restart/lost wake still recovers pending. | Old JSON queue/timeline/cursors/locks poisoned or absent; observer disabled; old package/bridge unavailable. | Remove old readers/writers, bridge, locks, duplicate relation authority, and all compatibility branches. |
 
 ## F. Final subtraction test
 
@@ -148,10 +171,13 @@ The refactor is complete only when all of the following are true:
 4. There is one protocol database authority and no protocol compatibility branch.
 5. A required data upgrade is a bounded one-way migration, not a normal runtime fallback.
 6. The net count of authorities, locks, observers, processes and configuration aliases decreases.
+7. Every required topology notification is proven same-database atomic; no outbox, replay, dispatcher, or cross-DB fallback exists.
+8. The exact driver/DDL/min-version/open-path details are separately frozen before implementation begins.
 
 The construction roadmap is the control view for assigning writers, adversaries, evaluators and integrators against
-these decisions. The two linked HTML review views explain the target architecture and SQLite refactor details; none
-of the three documents authorizes production migration before the owning specs and cutover gates are accepted.
+these frozen decisions. The two linked HTML review views explain the target architecture and SQLite refactor details;
+they remain implementation review surfaces until the OPEN details are frozen in their owning specs. This report does
+not authorize production migration by itself.
 
 ## G. M0 legacy inventory at `2572f66c26fc612f93dc36bc586be5b05cc2933e`
 

@@ -48,6 +48,7 @@ export default function App() {
   // a gated scope's 401 ([[projects-hub]]): the reason string when the board is behind a credential —
   // renders the shared CredentialGate instead of the load-error panel; cleared the moment a board lands.
   const [authNeeded, setAuthNeeded] = useState(null)
+  const [catalogRetry, setCatalogRetry] = useState(0)
   // the shared catalog projection ([[projects-hub]]): null before the first read, then refreshed on the
   // same cadence as ProjectsPage. It picks the global face and feeds scoped rail/title/favicon identity,
   // so an admin edit in another tab arrives live without an icon-specific cache.
@@ -60,12 +61,31 @@ export default function App() {
     // anonymous default and re-teach the browser a default favicon ([[side-nav]]); ok/denied always
     // apply — denied is an answer, a mid-session lock must re-gate.
     const refresh = () => loadProjects()
-      .then((result) => { if (live) setProjAccess((prev) => applyCatalogResult(prev, result)) })
-      .catch(() => { if (live) setProjAccess((prev) => applyCatalogResult(prev, { state: 'absent' })) })
-    refresh()
-    const id = setInterval(refresh, CATALOG_POLL_MS)
-    return () => { live = false; clearInterval(id) }
-  }, [])
+      .then((result) => {
+        if (live) setProjAccess((prev) => applyCatalogResult(prev, result))
+        return result
+      })
+      .catch(() => {
+        const result = { state: 'absent' }
+        if (live) setProjAccess((prev) => applyCatalogResult(prev, result))
+        return result
+      })
+    let id
+    const poll = async () => {
+      const result = await refresh()
+      if (result?.state === 'denied') {
+        if (id) { clearInterval(id); id = undefined }
+      }
+      return result
+    }
+    const start = async () => {
+      const result = await poll()
+      // A denial is an answer. Stop the noisy retry loop until the credential gate explicitly retries.
+      if (live && result?.state !== 'denied') id = setInterval(poll, CATALOG_POLL_MS)
+    }
+    start()
+    return () => { live = false; if (id) clearInterval(id) }
+  }, [catalogRetry])
   // freshest-issued wins: stamp each load with a monotonic seq and apply only the latest, so a stale in-flight poll can't resurrect removed state.
   // seal() only after the body actually paints — a superseded response's ETag must never become the poll's conditional key (issue #70).
   const reqSeq = useRef(0)
@@ -147,13 +167,16 @@ export default function App() {
   // face; a mid-session lock (an admin just set a password) also re-gates — a 401 means every surface
   // (poll, stream, terminal socket) is dead until the unlock, so keeping a stale board up would lie.
   if (authNeeded && PROJECT_ID) {
-    return <CredentialGate scope={{ projectId: PROJECT_ID }} projectLabel={identity?.title || PROJECT_ID} onUnlocked={() => { setAuthNeeded(null); reload() }} />
+    return <CredentialGate scope={{ projectId: PROJECT_ID }} projectLabel={identity?.title || PROJECT_ID} onUnlocked={() => { setAuthNeeded(null); setCatalogRetry((n) => n + 1); reload() }} />
   }
   if (!board) {
     // the hub face: the catalog page IS the app (see the `hub` pick above). A single-project serve /
     // vite dev answers no catalog (its SPA fallback is not JSON), keeps state 'absent', and boots
     // exactly as before.
     if (hub) {
+      if (projAccess.state === 'denied') {
+        return <CredentialGate scope="admin" locked={projAccess.reason === 'locked'} onUnlocked={() => { setCatalogRetry((n) => n + 1); reload() }} />
+      }
       return (
         <Suspense fallback={<div className="loading">{t('hud.loading')}</div>}>
           <ProjectsPage />
@@ -162,7 +185,7 @@ export default function App() {
     }
     if (authNeeded) {
       // 401 at the root address (a gateway gating everything behind the admin scope) — same card, admin face.
-      return <CredentialGate scope="admin" locked={authNeeded === 'locked'} onUnlocked={() => { setAuthNeeded(null); reload() }} />
+      return <CredentialGate scope="admin" locked={authNeeded === 'locked'} onUnlocked={() => { setAuthNeeded(null); setCatalogRetry((n) => n + 1); reload() }} />
     }
     // fail loudly only once both probes have had their say — while the catalog probe is still in flight a
     // failed board fetch may yet resolve into the hub face, so hold the spinner instead of flashing the panel.

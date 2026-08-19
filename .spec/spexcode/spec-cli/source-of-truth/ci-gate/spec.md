@@ -52,8 +52,9 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   A bare tarball install cannot honestly rely on those artifacts alone: dependency ranges make npm request
   registry packuments even when every selected tarball is cached. The lock-driven `npm ci --offline` proves the
   packed package and its exact production graph install with no registry access instead of depending on warm,
-  machine-local metadata. When the packed manifest contains a `file:` workspace dependency, the smoke harness
-  rewrites that lock entry to the dependency's path inside the packed root before the offline install; it must never
+  machine-local metadata. When the source lock represents a bundled root dependency through a `file:` path or
+  workspace link, the smoke harness replaces that source-checkout boundary with the packed-root artifact before the
+  offline install; it must never
   ask the consumer for a sibling from the source checkout. The adoption leg also runs a negative control: the
   installed managed hook rejects a direct commit on `main`, preserves the staged source tree, and only the explicit
   adoption allowance may create the seed commit containing `.spec` and `spexcode.json`.

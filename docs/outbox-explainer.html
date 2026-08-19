@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数据库基础与 Outbox</title>
+  <style>
+    :root{color-scheme:light;--ink:#18212b;--muted:#647384;--line:#d7e0e8;--bg:#f3f6f8;--panel:#fff;--blue:#1769aa;--bluebg:#e8f3fb;--amber:#9b6000;--amberbg:#fff3d9;--green:#187246;--greenbg:#e5f5ec;--red:#a33535;--redbg:#fff0f0;--shadow:0 8px 24px rgba(24,33,43,.07)}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    main{max-width:1180px;margin:auto;padding:34px 20px 60px}h1,h2,h3,p{margin:0}h1{font-size:clamp(27px,4vw,42px);letter-spacing:-.02em}h2{font-size:19px;margin-bottom:8px}h3{font-size:15px;margin-bottom:4px}.intro{max-width:800px;margin-top:8px;color:var(--muted);font-size:16px}
+    .tabs{display:flex;gap:8px;margin:24px 0 14px;flex-wrap:wrap}.tabs button,.toolbar button{appearance:none;border:1px solid #b9c6d2;background:var(--panel);color:var(--ink);border-radius:6px;padding:8px 12px;font:inherit;cursor:pointer}.tabs button:hover,.toolbar button:hover{border-color:var(--blue);color:var(--blue)}.tabs button.active,.toolbar button.primary{background:var(--blue);border-color:var(--blue);color:#fff}.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}.toolbar .danger{border-color:#dfaaaa;color:var(--red)}.toolbar .status{margin-left:auto;color:var(--muted);font-size:13px}
+    .view{display:none}.view.active{display:block}.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:19px}.panel+.panel{margin-top:16px}.muted{color:var(--muted)}
+    .concepts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.concept{border:1px solid var(--line);border-radius:6px;padding:13px;background:#fbfcfd}.concept strong{display:block}.concept p{color:var(--muted);font-size:13px;margin-top:4px}.concept code,.glossary code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:#f0f4f7;border:1px solid #d9e1e7;border-radius:4px;padding:1px 4px}
+    .lanes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel);box-shadow:var(--shadow)}.lane{min-height:290px;border-right:1px solid var(--line)}.lane:last-child{border-right:0}.lane-head{padding:13px 15px;border-bottom:1px solid var(--line);background:#fbfcfd}.lane-head strong{display:block;font-size:14px}.lane-head span{font-size:12px;color:var(--muted)}.lane-body{padding:15px;display:grid;align-content:start;gap:9px}.node{min-height:78px;border:1px solid var(--line);border-radius:6px;padding:11px;background:#fff;transition:.2s}.node strong{display:block;font-size:14px}.node small{display:block;color:var(--muted);margin-top:4px}.node.active{border-color:var(--blue);background:var(--bluebg)}.node.pending{border-color:#e2ad4e;background:var(--amberbg)}.node.done{border-color:#83c59e;background:var(--greenbg)}.node.error{border-color:#db9a9a;background:var(--redbg)}.arrow{text-align:center;color:var(--muted);font-size:21px;line-height:1.1}.timeline{border:1px solid var(--line);border-top:0;border-radius:0 0 8px 8px;padding:14px;background:var(--panel)}.timeline ol{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;list-style:none;margin:0;padding:0}.timeline li{min-height:57px;border-left:3px solid var(--line);padding:7px 9px;color:var(--muted);font-size:13px}.timeline li.current{border-left-color:var(--blue);color:var(--ink);background:#f7fbfe}.timeline strong{display:block}
+    .lower{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.lower ul{margin:9px 0 0;padding-left:20px}.lower li+li{margin-top:4px}.log{margin-top:16px;min-height:76px;border-radius:6px;background:#121b24;color:#dce8f1;padding:11px;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace}.log div{white-space:pre-wrap}
+    .matrix{width:100%;border-collapse:collapse;margin-top:10px}.matrix th,.matrix td{border-bottom:1px solid var(--line);padding:9px;text-align:left;vertical-align:top}.matrix th{color:var(--muted);font-size:13px;font-weight:600}.matrix td:first-child{white-space:nowrap;font-weight:600}.callout{border-left:4px solid var(--blue);background:var(--bluebg);padding:12px 14px;margin-top:14px}.callout strong{display:block}.glossary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}.term{border:1px solid var(--line);border-radius:6px;padding:11px}.term strong{display:block}.term p{font-size:13px;color:var(--muted);margin-top:3px}
+    @media(max-width:800px){main{padding:24px 12px 40px}.concepts{grid-template-columns:1fr 1fr}.lanes{grid-template-columns:1fr 1fr}.lane:nth-child(2){border-right:0}.lane:nth-child(-n+2){border-bottom:1px solid var(--line)}.lower{grid-template-columns:1fr}.toolbar .status{width:100%;margin-left:0}}@media(max-width:520px){.concepts,.lanes,.glossary{grid-template-columns:1fr}.lane,.lane:nth-child(2){border-right:0;border-bottom:1px solid var(--line)}.lane:last-child{border-bottom:0}.timeline ol{grid-template-columns:1fr 1fr}.matrix{font-size:13px}}
+  </style>
+</head>
+<body>
+<main>
+  <h1>数据库基础与 Outbox</h1>
+  <p class="intro">先建立数据库的基本模型，再观察“状态变更”和“发送消息”为什么需要一个事务发件箱。所有演示都在浏览器内运行，不依赖服务端。</p>
+  <nav class="tabs" aria-label="教学章节">
+    <button class="active" data-view="basics">数据库基础</button>
+    <button data-view="outbox">Outbox 演示</button>
+    <button data-view="glossary">术语表</button>
+  </nav>
+
+  <section class="view active" id="basics">
+    <div class="panel">
+      <h2>先把数据库想成四层</h2>
+      <p class="muted">数据库不是“一个神秘文件”，而是对持久化状态、并发和恢复做出明确承诺的一组机制。</p>
+      <div class="concepts" style="margin-top:14px">
+        <div class="concept"><strong>表 Table</strong><p>同一种对象的集合，例如 messages 表。</p></div>
+        <div class="concept"><strong>行 Row</strong><p>表中的一条记录，例如一个 message。</p></div>
+        <div class="concept"><strong>列 Column</strong><p>记录的字段，例如 session_id、body。</p></div>
+        <div class="concept"><strong>事务 Transaction</strong><p>一组操作作为一个整体提交或回滚。</p></div>
+        <div class="concept"><strong>提交 Commit</strong><p>数据库对外宣布：这次事务已经成为事实。</p></div>
+        <div class="concept"><strong>索引 Index</strong><p>为查询建立的辅助结构，换空间买读取速度。</p></div>
+      </div>
+      <div class="callout"><strong>关键直觉</strong>程序崩溃只能发生在“事务提交前”或“事务提交后”。数据库要保证不会出现半个事务。</div>
+    </div>
+    <div class="panel">
+      <h2>WAL、锁和并发</h2>
+      <table class="matrix">
+        <thead><tr><th>概念</th><th>它解决什么</th><th>它不承诺什么</th></tr></thead>
+        <tbody>
+          <tr><td>WAL</td><td>先记录变更，再把变更合并到主数据库；读者可以继续读取旧快照。</td><td>不让多个写事务同时提交。写事务仍需排队。</td></tr>
+          <tr><td>写锁</td><td>确保两个 writer 不会同时破坏同一份状态。</td><td>不保证永不等待。磁盘暂停或长事务仍会造成延迟。</td></tr>
+          <tr><td>busy timeout</td><td>让短暂的写冲突等待一小段时间。</td><td>不应该掩盖长期持锁；超时必须报错。</td></tr>
+          <tr><td>索引</td><td>让按 session_id 查 pending 变快。</td><td>不改变事务的正确性，也不是消息历史本身。</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="margin-top:11px">我们的原则：事务内不调用 harness、网络、Git、模型或用户 callback。数据库只做短暂的本地状态变更。</p>
+    </div>
+  </section>
+
+  <section class="view" id="outbox">
+    <div class="toolbar" aria-label="Outbox 演示控制">
+      <button class="primary" id="step">下一步</button>
+      <button id="reset">重置</button>
+      <button class="danger" id="crashCommit">提交后崩溃</button>
+      <button class="danger" id="crashEnqueue">入队后崩溃</button>
+      <button id="resume" disabled>恢复 dispatcher</button>
+      <span class="status" id="status" aria-live="polite">阶段 0：尚未发生状态变更</span>
+    </div>
+    <div class="lanes">
+      <section class="lane"><header class="lane-head"><strong>发送方状态</strong><span>adopter 自己的事务</span></header><div class="lane-body"><div class="node" id="stateNode"><strong>没有变更</strong><small>例如：创建 child、建立关系</small></div><div class="arrow">→</div><div class="node" id="txNode"><strong>同一事务</strong><small>状态 + outbox 一起提交</small></div></div></section>
+      <section class="lane"><header class="lane-head"><strong>Outbox</strong><span>发送方的待发送意图</span></header><div class="lane-body"><div class="node" id="outboxNode"><strong>空</strong><small>没有待发送记录</small></div><div class="arrow">→</div><div class="node" id="retryNode"><strong>幂等重试</strong><small>同一 idempotency key</small></div></div></section>
+      <section class="lane"><header class="lane-head"><strong>Protocol queue</strong><span>接收方的 pending 消息</span></header><div class="lane-body"><div class="node" id="queueNode"><strong>空</strong><small>还没有进入 target session</small></div><div class="arrow">→</div><div class="node" id="dequeueNode"><strong>等待 dequeue</strong><small>queue 的语义在这里结束</small></div></div></section>
+      <section class="lane"><header class="lane-head"><strong>接收方 runtime</strong><span>adapter 自己的行为</span></header><div class="lane-body"><div class="node" id="receiverNode"><strong>未收到</strong><small>不会在 protocol 事务内调用 harness</small></div><div class="arrow">→</div><div class="node" id="handledNode"><strong>处理消息</strong><small>dequeue 之后才发生</small></div></div></section>
+    </div>
+    <div class="timeline"><ol><li id="t1"><strong>1. 状态事务</strong>写状态和 outbox</li><li id="t2"><strong>2. dispatcher</strong>调用 enqueue</li><li id="t3"><strong>3. dequeue</strong>转移 queue 所有权</li><li id="t4"><strong>4. adapter</strong>在事务外处理</li></ol></div>
+    <div class="lower"><div class="panel"><h2>它解决什么问题？</h2><p class="muted">状态提交成功后，发送方进程可能马上崩溃。outbox 保留“还要发什么”的事实，dispatcher 重启后可以继续。</p><ul><li>状态和发送意图在同一事务提交。</li><li>发送成功但标记失败时，用 idempotency key 重试。</li><li>接收方不需要知道发送方是否崩溃。</li></ul></div><div class="panel"><h2>它不是什么？</h2><p class="muted">outbox 不是第二个 inbox，也不是 queue 的确认状态。</p><ul><li><strong>outbox：</strong>发送方待发送意图。</li><li><strong>queue：</strong>接收方 pending 消息。</li><li><strong>WAL：</strong>数据库内部的恢复机制。</li><li><strong>adapter：</strong>dequeue 后才调用 harness。</li></ul></div></div>
+    <div class="log" id="log" aria-live="polite"></div>
+  </section>
+
+  <section class="view" id="glossary">
+    <div class="panel"><h2>术语表</h2><p class="muted">这些词在整个 session communication architecture 中保持固定含义。</p><div class="glossary">
+      <div class="term"><strong>Transaction</strong><p>一组数据库操作的原子单位，要么全部提交，要么全部回滚。</p></div>
+      <div class="term"><strong>Commit</strong><p>事务成为可见事实的线性化点。</p></div>
+      <div class="term"><strong>Rollback</strong><p>事务没有提交时，撤销本次事务的所有修改。</p></div>
+      <div class="term"><strong>WAL</strong><p>Write-Ahead Logging。数据库先记录变更，再更新主数据。</p></div>
+      <div class="term"><strong>Writer</strong><p>请求修改数据库的进程或连接；多个 writer 仍会争用一个写提交序列。</p></div>
+      <div class="term"><strong>Reader</strong><p>读取数据库快照的进程或连接；WAL 允许读写并行。</p></div>
+      <div class="term"><strong>Outbox</strong><p>发送方事务中的待发送意图，属于 adopter，不属于通用 queue。</p></div>
+      <div class="term"><strong>Idempotency</strong><p>同一个操作重复执行，结果仍等价；重试不会产生重复消息。</p></div>
+      <div class="term"><strong>Dequeue</strong><p>从接收方 FIFO queue 原子移除一条消息；协议层在此完成 delivery。</p></div>
+      <div class="term"><strong>Index</strong><p>服务查询的辅助结构，例如按 target session 查 pending。</p></div>
+    </div></div>
+  </section>
+</main>
+<script>
+  (function(){
+    var buttons=document.querySelectorAll('.tabs button');
+    var views=document.querySelectorAll('.view');
+    buttons.forEach(function(button){button.addEventListener('click',function(){
+      buttons.forEach(function(item){item.classList.remove('active')});button.classList.add('active');
+      views.forEach(function(view){view.classList.toggle('active',view.id===button.dataset.view)});
+    })});
+    var phase=0,crashed=false,queueCount=0,attempts=0,logs=[];
+    function id(name){return document.getElementById(name)}
+    function node(name,title,detail,kind){var el=id(name);el.className='node '+(kind||'');el.innerHTML='<strong>'+title+'</strong><small>'+detail+'</small>'}
+    function log(message){logs.unshift(new Date().toLocaleTimeString()+'  '+message);id('log').innerHTML=logs.slice(0,6).map(function(item){return '<div>'+item+'</div>'}).join('')}
+    function render(){
+      id('resume').disabled=!crashed;
+      id('status').textContent=crashed?'进程已崩溃：durable 数据仍在，等待恢复':'阶段 '+phase+'：'+(['尚未发生状态变更','状态和 outbox 已提交','消息已进入 protocol queue','消息已 dequeue','发送流程完成'][phase]);
+      node('stateNode',phase>=1?'状态已提交':'没有变更',phase>=1?'child relation = parent':'例如：创建 child、建立关系',phase>=1?'done':'');
+      node('txNode',phase>=1?'事务已 COMMIT':'同一事务',phase>=1?'状态 + outbox 一起持久化':'状态和发送意图一起提交',phase>=1?'done':'');
+      node('outboxNode',phase>=1&&phase<4?'待发送记录':phase>=4?'已完成':'空',phase>=1&&phase<4?'kind=child-created':phase>=4?'dispatcher 已确认':'没有待发送记录',phase>=4?'done':phase>=1?'pending':'');
+      node('retryNode',attempts?'尝试 '+attempts+' 次':'幂等重试',attempts?'同一 idempotency key，不重复':'同一 idempotency key',attempts>1?'active':'');
+      node('queueNode',queueCount?'pending = '+queueCount:'空',queueCount?'已经进入 target session':'还没有进入 target session',queueCount?'active':'');
+      node('dequeueNode',phase>=3?'已 dequeue':'等待 dequeue',phase>=3?'protocol delivery 完成':'queue 的语义在这里结束',phase>=3?'done':'');
+      node('receiverNode',phase>=3?'收到 Message':'未收到',phase>=3?'runtime 在事务外取得消息':'不会在 protocol 事务内调用 harness',phase>=3?'active':'');
+      node('handledNode',phase>=4?'adapter 处理完成':'处理消息',phase>=4?'可以调用 harness / 网络 / 模型':'dequeue 之后才发生',phase>=4?'done':'');
+      ['t1','t2','t3','t4'].forEach(function(name,index){id(name).classList.toggle('current',phase===index+1)});
+    }
+    function step(){
+      if(crashed)return;
+      if(phase===0){phase=1;log('COMMIT: state change + outbox record')}
+      else if(phase===1){attempts++;queueCount=1;phase=2;log('DISPATCH: enqueue succeeded (attempt '+attempts+', same key)')}
+      else if(phase===2){phase=3;queueCount=0;log('DEQUEUE: receiver owns the Message now')}
+      else if(phase===3){phase=4;log('HANDLER: adapter runs outside the protocol transaction')}
+      render();
+    }
+    function reset(){phase=0;crashed=false;queueCount=0;attempts=0;logs=[];log('RESET');render()}
+    function crashAt(target){if(target===1&&phase<1)step();if(target===2&&phase<2){step();step()}crashed=true;log(target===1?'CRASH: after COMMIT, before enqueue; outbox remains':'CRASH: after enqueue, before completion; queue remains');render()}
+    id('step').addEventListener('click',step);id('reset').addEventListener('click',reset);id('crashCommit').addEventListener('click',function(){crashAt(1)});id('crashEnqueue').addEventListener('click',function(){crashAt(2)});id('resume').addEventListener('click',function(){crashed=false;log('RESUME: dispatcher reads durable outbox');render()});
+    render();log('READY: 选择一个章节或开始演示');
+  })();
+</script>
+</body>
+</html>

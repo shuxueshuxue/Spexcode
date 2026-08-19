@@ -12,7 +12,9 @@
 - Spex producer 是 `spec-cli/src/client.ts:253-260` 的 `clientSend`，后端 producer/consumer 是 `spec-cli/src/sessions.ts:4191-4259` 的 `sendText`/`drainSession`，重启恢复 sweep 是 `spec-cli/src/sessions.ts:1772-1792` 的 `superviseDelivery`。
 - G.1 L09 的真实结论仍成立：`packages/session-core/src/runtime-session.ts` 的 public export 只有 session-core tests/public-boundary 消费；本仓库没有 production importer，外部 ZSwarm 使用未经证实。
 
-spike 证据：`spikes/adopter-api/fail-first-self-launch.log`、`fail-first-spex-governed.log`、`fail-first-zswarm.log` 保留第一次失败；`pass-self-launch.log` 与 `pass-spex-governed.log` 是一次性 in-spike shim 通过输出。ZSwarm fixture 只以退出码 77 报告 `no executable proof available at this base`。
+spike 证据：原始 `fail-first-self-launch.log` 与 `fail-first-spex-governed.log` 保持原字节，记录的是最初把 `file://` URL 当文件路径的 harness bug，不是契约失败证据；它们对应的原始命令分别是 `node spikes/adopter-api/self-launch-contract.mjs` 与 `node spikes/adopter-api/spex-governed-contract.mjs`。修好的 harness 通过显式 stub 开关重新运行后，`fail-first-assert-self-launch.log` 记录 `initialize stdout contract` 断言失败，`fail-first-assert-spex-governed.log` 记录 `producer contract` 断言失败；两次命令分别是 `ADOPTER_API_SELF_LAUNCH_STUB=1 node spikes/adopter-api/self-launch-contract.mjs` 与 `ADOPTER_API_SPEX_GOVERNED_STUB=1 node spikes/adopter-api/spex-governed-contract.mjs`。`pass-self-launch.log` 与 `pass-spex-governed.log` 是 canonical 真实 shim 的通过输出。ZSwarm fixture 只以退出码 77 报告 `no executable proof available at this base`。
+
+反例的最小改动和 source-backed 位置：self-launch 只把 canonical CLI 换成 `stubs/self-launch-cli-wrong-shape.mjs:2` 的 `{}`，因此 `self-launch-contract.mjs:26` 必然抛 `initialize stdout contract`；Spex governed 只把 producer/consumer 子进程换成 `stubs/spex-governed-sequence-wrong-shape.mjs:2` 的 `{}`，因此 `spex-governed-contract.mjs:22` 必然抛 `producer contract`。两个 fixture 的 canonical 路径解析分别在 `self-launch-contract.mjs:9-13` 与 `spex-governed-contract.mjs:9-13`，现在均使用 `fileURLToPath`；canonical 文件名下仍是真实实现，未被 stub 覆盖。
 
 ## ZSwarm
 
@@ -74,11 +76,11 @@ self-launch-cli.mjs enqueue --database-path ABS --session-id ID --message-id MID
 self-launch-cli.mjs dequeue --database-path ABS --session-id ID
 ```
 
-每个命令 stdout 为单行 JSON（`initialize` 是 `{sessionId,state}`；`enqueue` 是 message；`dequeue` 是 message 或 `null`），成功退出 0。usage/argv 错误退出 2；protocol/storage 错误退出 1，stderr 为 `self-launch-cli: CODE: message`。路径优先级是显式 `--database-path`、`SPEX_SESSION_DATABASE_PATH`、`SPEX_SESSION_CONFIG` JSON 的 `databasePath`、`$HOME/.spexcode/sessions.sqlite`。CLI 只做解析和调用，不是 daemon。
+每个命令 stdout 为单行 JSON（`initialize` 是 `{sessionId,state}`；`enqueue` 是 message；`dequeue` 是 message 或 `null`），成功退出 0。usage/argv 错误退出 2；protocol/storage 错误退出 1，stderr 为 `self-launch-cli: CODE: message`。路径优先级是显式 `--database-path`、`SPEX_SESSION_DATABASE_PATH`、`SPEX_SESSION_CONFIG` JSON 的 `databasePath`、OS 默认。spike CLI 选择 `$HOME/.spexcode/sessions.sqlite` 作为最后兜底，但这是 adopter policy 示例，不是冻结的产品默认；产品仍应保持可重定位。CLI 只做解析和调用，不是 daemon。
 
 ### 4. 最薄切入包
 
-文件清单：`spikes/adopter-api/self-launch-contract.mjs`、`self-launch-cli.mjs`、`protocol.mjs`（一次性复制的 spike protocol）、`fail-first-self-launch.log`、`pass-self-launch.log`。它证明无 backend 时 initialize、offline enqueue、显式 dequeue、空队列 `null`、绝对路径和环境变量解析都能通过公开调用序列；不触碰任何 production adopter。
+文件清单：`spikes/adopter-api/self-launch-contract.mjs`、`self-launch-cli.mjs`、`stubs/self-launch-cli-wrong-shape.mjs`、`protocol.mjs`（一次性复制的 spike protocol）、`fail-first-self-launch.log`、`fail-first-assert-self-launch.log`、`pass-self-launch.log`。原始日志保留路径 bug；新日志由 `ADOPTER_API_SELF_LAUNCH_STUB=1 node spikes/adopter-api/self-launch-contract.mjs` 产生并证明 `initialize stdout contract` 有判别力；canonical pass 日志证明无 backend 时 initialize、offline enqueue、显式 dequeue、空队列 `null`、绝对路径和环境变量解析；不触碰任何 production adopter。
 
 ### 5. 推回协议的压力判定
 
@@ -109,7 +111,7 @@ Spex adopter 拥有 config/path resolver、`spex_governed_sessions` 与 topology
 
 ### 4. 最薄切入包
 
-文件清单：`spikes/adopter-api/spex-governed-contract.mjs`、`spex-governed-sequence.mjs`、`protocol.mjs`、`fail-first-spex-governed.log`、`pass-spex-governed.log`。producer 子进程证明 governed rows、topology edge 和 `enqueue` 在一个 `withTransaction` 中提交；consumer 子进程证明 `dequeue` 后 adapter input 与 `messageId` journal。fixture 的 `project_id` 明确只存在 adopter 表，不进入 protocol row。
+文件清单：`spikes/adopter-api/spex-governed-contract.mjs`、`spex-governed-sequence.mjs`、`stubs/spex-governed-sequence-wrong-shape.mjs`、`protocol.mjs`、`fail-first-spex-governed.log`、`fail-first-assert-spex-governed.log`、`pass-spex-governed.log`。原始日志保留路径 bug；新日志由 `ADOPTER_API_SPEX_GOVERNED_STUB=1 node spikes/adopter-api/spex-governed-contract.mjs` 产生并证明 `producer contract` 有判别力；canonical pass 日志证明 producer 子进程把 governed rows、topology edge 和 `enqueue` 在一个 `withTransaction` 中提交，consumer 子进程证明 `dequeue` 后 adapter input 与 `messageId` journal。fixture 的 `project_id` 明确只存在 adopter 表，不进入 protocol row。
 
 ### 5. G.1 L01-L11 的最小 API 后果
 

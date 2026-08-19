@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url'
 
 const root = mkdtempSync(join(tmpdir(), 'adopter-spex-governed-'))
 const db = join(root, 'spexcode.sqlite')
-const script = fileURLToPath(new URL('./spex-governed-sequence.mjs', import.meta.url))
+const script = process.env.ADOPTER_API_SPEX_GOVERNED_STUB === '1'
+  ? fileURLToPath(new URL('./stubs/spex-governed-sequence-wrong-shape.mjs', import.meta.url))
+  : fileURLToPath(new URL('./spex-governed-sequence.mjs', import.meta.url))
 
 function child(mode) {
   const result = spawnSync(process.execPath, [script, mode, db], { encoding: 'utf8' })

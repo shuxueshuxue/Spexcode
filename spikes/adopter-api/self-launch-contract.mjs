@@ -6,7 +6,9 @@ import { tmpdir } from 'node:os'
 
 const root = mkdtempSync(join(tmpdir(), 'adopter-self-launch-'))
 const db = join(root, 'sessions.sqlite')
-const cli = fileURLToPath(new URL('./self-launch-cli.mjs', import.meta.url))
+const cli = process.env.ADOPTER_API_SELF_LAUNCH_STUB === '1'
+  ? fileURLToPath(new URL('./stubs/self-launch-cli-wrong-shape.mjs', import.meta.url))
+  : fileURLToPath(new URL('./self-launch-cli.mjs', import.meta.url))
 
 function run(args, env = {}) {
   return execFileSync(process.execPath, [cli, ...args], {

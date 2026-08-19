@@ -453,6 +453,8 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
   })
   // Give a stale HTTP response a turn to flush before the producer's synchronous setup occupies the event
   // loop. Fresh callers simply absorb this small scheduling window while waiting on the same flight.
+  // A direct cold reader may be the only live work in a short-lived CLI process. Keep this one-shot
+  // scheduler referenced until it starts the producer, otherwise Node can exit with its fresh read pending.
   setTimeout(() => {
     if (controller.signal.aborted) {
       rejectBuild(Object.assign(new Error('graph build aborted before start'), { name: 'AbortError' }))
@@ -552,7 +554,7 @@ function startBuild(mode: FlightMode = 'dirty'): Flight | null {
     } catch (error) {
       rejectBuild(error)
     }
-  }, mode === 'patrol' ? 0 : BACKGROUND_START_DELAY_MS).unref?.()
+  }, mode === 'patrol' ? 0 : BACKGROUND_START_DELAY_MS)
   const timeoutError = () => new Error(`graph build did not settle within ${BUILD_TIMEOUT_MS}ms`)
 
   // `settle` owns the real builder. The watchdog only rejects `wait`; the slot remains occupied until this

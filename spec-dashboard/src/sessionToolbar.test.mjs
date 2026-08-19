@@ -87,9 +87,10 @@ test('file rows keep host paths off the label and reserve that detail for the co
   assert.match(css, /\.si-files-name\s*\{[^}]*max-width:\s*min\(280px, calc\(100vw - 130px\)\);/s)
 })
 
-test('file previews use the one selectable resource tab, render Markdown safely, and menus stay quiet', () => {
+test('file previews use one selectable resource tab, keep Markdown restricted, execute HTML fully, and leave menus quiet', () => {
   assert.match(source, /function FileTextPreview\(\{ path, text \}\) \{[\s\S]*?<RichText className="si-file-markdown">\{text\}<\/RichText>/)
-  assert.match(source, /function FileHtmlPreview\(\{ path, html \}\) \{[\s\S]*?className="si-file-html"[\s\S]*?sandbox=""[\s\S]*?srcDoc=\{html\}/)
+  assert.match(source, /return <iframe className="si-file-html" srcDoc=\{html\} title=\{fileName\(path\)\} \/>/)
+  assert.doesNotMatch(source, /className="si-file-html"[^>]*(?:sandbox|referrerPolicy)=/)
   assert.match(source, /const previewKind = response\.headers\.get\('X-Spexcode-Preview-Kind'\)/)
   assert.match(source, /previewKind === 'html' \? 'html' : 'text'/)
   assert.match(source, /preview\.phase === 'html'[\s\S]*?<FileHtmlPreview path=\{tab\.value\} html=\{preview\.text\} \/>/)

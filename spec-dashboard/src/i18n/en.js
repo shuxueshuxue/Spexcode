@@ -49,6 +49,7 @@ export default {
     issues: 'Issues (⌥4)',
     settings: 'Settings (⌥5)',
     projectChip: 'project: {name} — switch project',
+    projectChipLogin: 'project: {name} — sign in to manage projects',
     projectOnline: 'online',
     projectOffline: 'offline',
     allProjects: 'All projects',

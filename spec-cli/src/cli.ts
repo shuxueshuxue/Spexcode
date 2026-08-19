@@ -1367,37 +1367,46 @@ if (cmd === 'serve') {
     // materializing the rollout — then stage the id + exact-payload proof for the session lifecycle owner and
     // print the thread id. The launch script then `resume`s it in the visible TUI.
     const { codexStartThread, codexTurn, waitForCodexRollout, codexBinary, codexSupportsBypassHookTrust, codexLauncherThreadPolicy } = await import('./harness.js')
-    const { stageHarnessLaunchProof } = await import('./sessions.js')
+    const { existingHarnessLaunchTarget, stageHarnessLaunchProof } = await import('./sessions.js')
     const sock = process.argv[4], cwd = process.argv[5]
     const prompt = process.argv.slice(6).join(' ')
     if (!sock || !cwd) { console.error('usage: spex internal codex-launch <sock> <cwd> [prompt...]'); process.exit(2) }
-    // On the bypass-trust path (the codex install supports the flag → materialize skipped writeCodexTrust's hash),
-    // the thread the BACKEND owns must carry `bypass_hook_trust` in thread/start's config so the app-server fires
-    // the worktree's local hooks — mirror materialize's capability decision so the two stay in lockstep.
-    const launcherCmd = process.env.SPEXCODE_CODEX_CMD || 'codex'
-    const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(launcherCmd))
-    // The governed record id rides into the thread's own shell environment (shell_environment_policy.set), so
-    // every command this thread spawns knows which session it is — the codex equivalent of the launch-injected
-    // id claude gets. codex-launch is exactly where both ids are known ([[harness-adapter]]).
-    const ownId = process.env.SPEXCODE_SESSION_ID?.trim()
-    const r = await codexStartThread(sock, cwd, bypassHookTrust, ownId ? { SPEXCODE_SESSION_ID: ownId } : undefined, codexLauncherThreadPolicy(launcherCmd))
-    if (!r.ok) { console.error(r.error); process.exit(1) }
-    if (prompt) {
-      const t = await codexTurn(sock, r.threadId, prompt, cwd)
-      if (!t.ok) { console.error(t.error); process.exit(1) }
-      // The visible TUI resumes this thread from its ON-DISK rollout; a freshly-spawned app-server acks the turn
-      // but persists the rollout a few seconds LATE (verified live: the SAME thread's file lands at ~2-4s, not
-      // lost). WAIT for it to land BEFORE storing the id / printing it, else FAIL LOUD — never store a
-      // non-resumable harness_session_id (that permanently wedges every reopen). The 15s budget exceeds launch.sh's
-      // fast-fail threshold, so a real failure exits past it and the retry loop won't spray duplicate-prompt threads.
-      if (!await waitForCodexRollout(r.threadId, 20000)) {
-        console.error(`codex thread ${r.threadId} started but persisted no rollout within 20s — app-server not ready; not storing a non-resumable id`)
-        process.exit(1)
-      }
-    }
     const sid = process.env.SPEXCODE_SESSION_ID
-    if (sid) stageHarnessLaunchProof(sid, r.threadId, prompt)
-    console.log(r.threadId)
+    // The visible TUI can fail after codex-launch has already staged the native id and first-turn proof
+    // (for example, a remote-workspace validation error). The bounded shell retry re-enters this command;
+    // reuse the proven target instead of minting a second thread or asking stageHarnessLaunchProof to consume
+    // a payload that the lifecycle owner may already have committed.
+    const existingTarget = sid ? existingHarnessLaunchTarget(sid) : null
+    if (existingTarget) {
+      console.log(existingTarget)
+    } else {
+      // On the bypass-trust path (the codex install supports the flag → materialize skipped writeCodexTrust's hash),
+      // the thread the BACKEND owns must carry `bypass_hook_trust` in thread/start's config so the app-server fires
+      // the worktree's local hooks — mirror materialize's capability decision so the two stay in lockstep.
+      const launcherCmd = process.env.SPEXCODE_CODEX_CMD || 'codex'
+      const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(launcherCmd))
+      // The governed record id rides into the thread's own shell environment (shell_environment_policy.set), so
+      // every command this thread spawns knows which session it is — the codex equivalent of the launch-injected
+      // id claude gets. codex-launch is exactly where both ids are known ([[harness-adapter]]).
+      const ownId = process.env.SPEXCODE_SESSION_ID?.trim()
+      const r = await codexStartThread(sock, cwd, bypassHookTrust, ownId ? { SPEXCODE_SESSION_ID: ownId } : undefined, codexLauncherThreadPolicy(launcherCmd))
+      if (!r.ok) { console.error(r.error); process.exit(1) }
+      if (prompt) {
+        const t = await codexTurn(sock, r.threadId, prompt, cwd)
+        if (!t.ok) { console.error(t.error); process.exit(1) }
+        // The visible TUI resumes this thread from its ON-DISK rollout; a freshly-spawned app-server acks the turn
+        // but persists the rollout a few seconds LATE (verified live: the SAME thread's file lands at ~2-4s, not
+        // lost). WAIT for it to land BEFORE storing the id / printing it, else FAIL LOUD — never store a
+        // non-resumable harness_session_id (that permanently wedges every reopen). The 15s budget exceeds launch.sh's
+        // fast-fail threshold, so a real failure exits past it and the retry loop won't spray duplicate-prompt threads.
+        if (!await waitForCodexRollout(r.threadId, 20000)) {
+          console.error(`codex thread ${r.threadId} started but persisted no rollout within 20s — app-server not ready; not storing a non-resumable id`)
+          process.exit(1)
+        }
+      }
+      if (sid) stageHarnessLaunchProof(sid, r.threadId, prompt)
+      console.log(r.threadId)
+    }
   } else if (sub === 'opencode-capture') {
     // opencode MINTS its own session id (no launch flag pins it), so the generated plugin's FIRST event calls
     // this to store that id as harness_session_id on the governed record (SPEXCODE_SESSION_ID from the launch

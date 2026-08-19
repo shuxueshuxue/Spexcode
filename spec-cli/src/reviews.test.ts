@@ -2,8 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { boundedEvalNeighbors, focusNodes, measuredSequence, paginateReview, projectEvalDetail, reviewPageNumber, scopedEvalReviewItems, timelineEvalReviewItems, trunkEvalReviewItems } from './reviews.js'
 import { orderRowsOf } from '../../spec-eval/src/sessioneval.js'
-// @ts-expect-error The shared browser/server engine is deliberately plain JS — the same module the server
-// folds counts with, so this test measures the real canonical path rather than a re-implementation.
+// The shared browser/server engine is deliberately plain JS — the same module the server folds counts with,
+// so this test measures the real canonical path rather than a re-implementation.
 import { evalFilterModel, tokenFilterState } from '@spexcode/spec-core/review'
 
 const model = {

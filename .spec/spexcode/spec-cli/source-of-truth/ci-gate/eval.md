@@ -45,6 +45,22 @@ scenarios:
       The suite exits 0. Its isolated fixtures resolve project launcher configuration from their own
       repository, do not remove a temporary runtime while a mocked launch is still writing into it, and
       compare canonical workspace paths on platforms where a temporary-directory alias is resolved.
+  - name: production-clean-init-offline-tarball
+    tags: [cli]
+    code: scripts/clean-init-smoke.mjs
+    test: scripts/clean-init-smoke.mjs
+    related:
+      - package.json
+      - package-lock.json
+      - .github/workflows/ci.yml
+    description: >-
+      Build the root npm tarball, create a disposable consumer with a lock-derived offline installation
+      plan, and run npm ci --offline --omit=dev followed by the real clean-init matrix.
+    expected: >-
+      The consumer installs the packed root and every bundled runtime dependency without consulting a
+      source-checkout sibling. In particular, a workspace-linked @spexcode/spec-cli dependency resolves
+      to the copy bundled inside the root tarball, then the installed spex executable completes all
+      Python/TypeScript and Claude/Codex clean-init rows.
 ---
 
 Measured through the same clean-checkout package-manager commands that the GitHub Actions workflow runs.

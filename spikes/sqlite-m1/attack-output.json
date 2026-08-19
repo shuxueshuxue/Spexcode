@@ -1,0 +1,75 @@
+{
+  "driver": {
+    "name": "node:sqlite",
+    "version": "24.15.0",
+    "api": "DatabaseSync"
+  },
+  "databasePath": "/tmp/sqlite-m1-attack-OAKF0k/protocol.sqlite",
+  "results": [
+    {
+      "name": "driver/version",
+      "observed": "node:sqlite DatabaseSync on Node 24.15.0",
+      "detail": ""
+    },
+    {
+      "name": "explicit databasePath",
+      "observed": "/tmp/sqlite-m1-attack-OAKF0k/protocol.sqlite",
+      "detail": ""
+    },
+    {
+      "name": "multiprocess enqueue",
+      "observed": "proc-b,proc-a",
+      "detail": "both independent writers committed"
+    },
+    {
+      "name": "concurrent dequeue",
+      "observed": "one winner",
+      "detail": "[\"race-head\",null]"
+    },
+    {
+      "name": "SIGKILL before dequeue commit",
+      "observed": "pending after rollback",
+      "detail": "signal=SIGKILL"
+    },
+    {
+      "name": "SIGKILL after dequeue commit",
+      "observed": "dequeued/no-requeue",
+      "detail": "signal=SIGKILL; returned=precommit"
+    },
+    {
+      "name": "WAL/SHM recovery",
+      "observed": "wal; wal=true shm=true",
+      "detail": "reopen/list after child kills succeeded"
+    },
+    {
+      "name": "busy timeout",
+      "observed": "BUSY (loud)",
+      "detail": "50ms timeout"
+    },
+    {
+      "name": "lost wake/backend absent",
+      "observed": "discovered by query",
+      "detail": ""
+    },
+    {
+      "name": "readonly",
+      "observed": "READONLY",
+      "detail": ""
+    },
+    {
+      "name": "backup restore",
+      "observed": "history restored",
+      "detail": ""
+    },
+    {
+      "name": "corrupt storage",
+      "observed": "CORRUPT",
+      "detail": ""
+    },
+    {
+      "name": "retire race",
+      "observed": "serialized; no resurrection",
+      "detail": "[{\"sessionId\":\"retire-race\",\"state\":\"retired\"},{\"error\":\"RETIRED\"}]"
+    }
+  ]
+}

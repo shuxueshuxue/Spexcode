@@ -121,7 +121,12 @@ exception to retirement being terminal, because the tombstone and history stay a
 A consumer that needs a stronger downstream guarantee than at-most-once delivery owns a handler journal
 keyed by message identifier, in its own tables, outside the protocol schema and outside any protocol lock.
 The contract is fixed here; the implementation is not, and the journal never becomes an acknowledgment state
-on the queue.
+on the queue. The same-database transaction seam does not admit a dequeue: it spans a topology mutation and
+the enqueues that mutation requires, and nothing more. A consumer therefore cannot make its journal write
+atomic with taking a message, so dying between the two loses the record that handling was owed. That cost is
+chosen rather than overlooked, and no adopter may present its own journal as protocol-level at-least-once. A
+crash fixture holds the line: a handler killed after its dequeue commits never sees the message offered
+again, and a counter-example whose dequeue skips the state transition makes that fixture fire.
 
 ## Evidence standard
 

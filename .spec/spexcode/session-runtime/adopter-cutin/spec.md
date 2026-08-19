@@ -21,8 +21,10 @@ adopter database, `project_id` remains Spex-owned metadata rather than protocol 
 post-dequeue retry belongs to a consumer journal keyed by `messageId`. Storage locality is an adopter precondition:
 the path resolver establishes that the resolved absolute database sits on a local filesystem with reliable advisory
 locking before opening the protocol, and fails closed when locality is non-local or undetermined. The protocol core
-neither performs nor simulates that judgement. Sender revocation, cursor restart semantics, native identity,
-lifecycle, and adapter results remain adopter-owned decisions; they are not protocol operations.
+neither performs nor simulates that judgement. The consumer handler journal stays outside the protocol and outside the dequeue
+transaction, so an adapter that keeps one may not present it as protocol-level at-least-once and owns its own
+crash and retry proof. Sender revocation, cursor restart semantics, native identity, lifecycle, and adapter
+results remain adopter-owned decisions; they are not protocol operations.
 
 The spike fixtures under `spikes/adopter-api/` are temporary absolute-database experiments. Their fail-first logs are
 retained alongside passing outputs. They do not import production adopters or authorize changes to the legacy files;

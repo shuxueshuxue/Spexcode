@@ -483,13 +483,13 @@ already interrupted, while a generation change, unreadable turn, or still-active
   fed to `codex-launch` (which would mint a NEW thread whose first message is the marker text).
   An adapter that mints native identity during launch declares `launchPayloadProof`. Product lifecycle then
   retains the authoritative `launch` artifact after transport submission and gates later delivery behind it.
-  The adapter stages a narrow shared proof receipt only after it has proven the native id plus first prompt
+  The adapter stages a narrow shared launch receipt only after it has established the native id plus first prompt
   durability. Codex does so after `thread/start`, confirmed `turn/start`, and rollout discovery; the session
   lifecycle owner validates the exact payload receipt, binds the id, and consumes both artifacts under the
   record lock. Adapter
   rows without this capability keep their existing transport-accepted consumption rule. This is one capability
   seam, not a Codex branch in session or queue policy.
-  This receipt is the final identity-plus-first-rollout proof. The generic adapter `launchReady` fence that
+  This receipt is the final identity-plus-first-rollout commit. The generic adapter `launchReady` fence that
   follows it measures post-commit runtime liveness; its failure records a retryable liveness error but never
   restores the first-turn payload or clears the proven identity, so recovery addresses the same native thread.
   The adapter also declares its own **settled launch failures** — the patterns of ITS output for a launch that

@@ -1600,8 +1600,8 @@ function observeQueuedLaunchReadiness(id: string, harness: Harness): void {
         const committed = !!readRecord(id)?.harnessSessionId
         throw new ResourceConflict(harness.launchPayloadProof
           ? committed
-            ? 'post-proof adapter liveness did not become ready before launch readiness timed out'
-            : 'native identity and first-turn rollout proof did not arrive before launch readiness timed out'
+            ? 'post-receipt adapter liveness did not become ready before launch readiness timed out'
+            : 'native identity and first-turn rollout receipt did not arrive before launch readiness timed out'
           : 'adapter liveness did not become ready before launch readiness timed out')
       }
       let readyToPublish = false
@@ -1643,7 +1643,7 @@ async function startQueuedUnlocked(id: string): Promise<QueuedStartResult> {
   if (wt.rec.archived) return 'blocked'
   if (!canDrainQueued(wt.rec)) return 'retryable'
   const h = harnessById(wt.rec.harness || defaultHarness.id)
-  if (h.launchPayloadProof && existsSync(sessionArtifactPath(id, 'launch.proof'))) {
+  if (h.launchPayloadProof && hasReadableLaunchReceipt(id)) {
     launching.add(id)
     let readinessOwnsSlot = false
     try {
@@ -2603,7 +2603,7 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
   const deadline = Date.now() + timeoutMs
   if (harness.launchPayloadProof && !current()?.harnessSessionId) {
     for (;;) {
-      if (existsSync(sessionArtifactPath(id, 'launch.proof'))) {
+      if (hasReadableLaunchReceipt(id)) {
         if (recordLockHeld) consumeHarnessLaunchProofUnlocked(id)
         else await withRecordLock(id, async () => consumeHarnessLaunchProofUnlocked(id))
         break
@@ -2663,10 +2663,10 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   // A prior adapter process may have proven identity + first-turn durability just before its session owner
   // died. Consume that receipt before choosing a recovery tail, so retry resumes the proven thread instead of
   // creating another one with the same first prompt.
-  if (h.launchPayloadProof && existsSync(sessionArtifactPath(id, 'launch.proof'))) {
+  if (h.launchPayloadProof && hasReadableLaunchReceipt(id)) {
     consumeHarnessLaunchProofUnlocked(id)
     wt = await findWorktree(id)
-    if (!wt) return { ok: false, error: `session ${id} disappeared while recovering native launch proof` }
+    if (!wt) return { ok: false, error: `session ${id} disappeared while recovering native launch receipt` }
   }
   // An archived record is expected to be stopped, but the guard must still inspect physical liveness in case
   // it is a legacy/invariant-violating row. Ignore filing and stale stop metadata for this one safety probe so
@@ -2837,16 +2837,35 @@ type StagedHarnessLaunchProof = {
   generationId: string | null
 }
 
-function readHarnessLaunchProof(id: string): StagedHarnessLaunchProof {
+const NATIVE_LAUNCH_RECEIPT_FILE = 'launch.receipt'
+const LEGACY_NATIVE_LAUNCH_RECEIPT_FILE = 'launch.proof' // dead-words-ok: one-release reader preserves staged receipts created before the protocol rename
+
+function launchReceiptPath(id: string): string {
+  return sessionArtifactPath(id, NATIVE_LAUNCH_RECEIPT_FILE)
+}
+
+function readableLaunchReceiptPath(id: string): string | null {
+  const current = launchReceiptPath(id)
+  if (existsSync(current)) return current
+  const legacy = sessionArtifactPath(id, LEGACY_NATIVE_LAUNCH_RECEIPT_FILE)
+  return existsSync(legacy) ? legacy : null
+}
+
+function hasReadableLaunchReceipt(id: string): boolean {
+  return readableLaunchReceiptPath(id) !== null
+}
+
+function readHarnessLaunchProof(id: string, path = readableLaunchReceiptPath(id)): StagedHarnessLaunchProof {
+  if (!path) throw new ResourceConflict(`native launch receipt for ${id} is missing`)
   try {
-    const proof = JSON.parse(readFileSync(sessionArtifactPath(id, 'launch.proof'), 'utf8')) as Partial<StagedHarnessLaunchProof> | null
+    const proof = JSON.parse(readFileSync(path, 'utf8')) as Partial<StagedHarnessLaunchProof> | null
     if (!proof || proof.version !== 1 || typeof proof.sessionId !== 'string'
       || typeof proof.harnessId !== 'string' || typeof proof.harnessSessionId !== 'string' || !proof.harnessSessionId
       || typeof proof.launchPayloadHash !== 'string'
       || (proof.generationId !== null && typeof proof.generationId !== 'string')) throw new Error('invalid receipt shape')
     return proof as StagedHarnessLaunchProof
   } catch (error) {
-    throw new ResourceConflict(`native launch proof for ${id} is unreadable: ${error instanceof Error ? error.message : String(error)}`)
+    throw new ResourceConflict(`native launch receipt for ${id} is unreadable: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -2866,16 +2885,16 @@ export function existingHarnessLaunchTarget(id: string): string | null {
   if (!rec) return null
   const harness = harnessById(rec.harness || defaultHarness.id)
   if (!harness.launchPayloadProof) return null
-  const proofPath = sessionArtifactPath(id, 'launch.proof')
-  if (existsSync(proofPath)) {
-    const proof = readHarnessLaunchProof(id)
+  const receiptPath = readableLaunchReceiptPath(id)
+  if (receiptPath) {
+    const proof = readHarnessLaunchProof(id, receiptPath)
     if (proof.sessionId !== id || proof.harnessId !== harness.id)
-      throw new ResourceConflict(`native launch proof for ${id} does not match the governed adapter identity`)
+      throw new ResourceConflict(`native launch receipt for ${id} does not match the governed adapter identity`)
     const pending = readLaunchFile(id)
     if (pending != null && proof.launchPayloadHash !== createHash('sha256').update(pending).digest('hex'))
-      throw new ResourceConflict(`native launch proof for ${id} does not match the authoritative resolved launch payload`)
+      throw new ResourceConflict(`native launch receipt for ${id} does not match the authoritative resolved launch payload`)
     if (rec.harnessSessionId && rec.harnessSessionId !== proof.harnessSessionId)
-      throw new ResourceConflict(`refusing to replace exact harness thread identity for ${id}; staged launch proof differs from the record`)
+      throw new ResourceConflict(`refusing to replace exact harness thread identity for ${id}; staged launch receipt differs from the record`)
     return proof.harnessSessionId
   }
   return rec.harnessSessionId || null
@@ -2888,17 +2907,17 @@ export function stageHarnessLaunchProof(sessionId: string | undefined, harnessSe
   if (!rec) return false
   const harness = harnessById(rec.harness || defaultHarness.id)
   if (!harness.launchPayloadProof)
-    throw new ResourceConflict(`harness ${harness.id} does not use native launch-payload proof`)
+    throw new ResourceConflict(`harness ${harness.id} does not use native launch-payload receipts`)
   const pending = readLaunchFile(id)
   if (pending == null)
-    throw new ResourceConflict(`refusing native launch proof for ${id}: authoritative resolved launch payload is missing`)
+    throw new ResourceConflict(`refusing native launch receipt for ${id}: authoritative resolved launch payload is missing`)
   if (pending !== launchPayload)
-    throw new ResourceConflict(`refusing native launch proof for ${id}: first-turn payload differs from the authoritative resolved launch payload`)
+    throw new ResourceConflict(`refusing native launch receipt for ${id}: first-turn payload differs from the authoritative resolved launch payload`)
   const generationId = process.env.SPEXCODE_CODEX_GENERATION?.trim() || null
   if (rec.harness === 'codex' || rec.harness === 'codex-headless') {
     const ledger = readCodexGenerationLedger(runtimeRoot())
     if (ledger.revision > 0 && !generationId)
-      throw new ResourceConflict(`refusing native launch proof for ${id}: launch did not provide an exact Codex generation id`)
+      throw new ResourceConflict(`refusing native launch receipt for ${id}: launch did not provide an exact Codex generation id`)
     if (generationId && (!ledger.generations[generationId] || ledger.generations[generationId].state === 'reclaimed'))
       throw new ResourceConflict(`refusing to bind Codex thread ${harnessSessionId}: generation ${generationId} is absent or reclaimed`)
   }
@@ -2910,7 +2929,13 @@ export function stageHarnessLaunchProof(sessionId: string | undefined, harnessSe
     launchPayloadHash: createHash('sha256').update(launchPayload).digest('hex'),
     generationId,
   }
-  const path = sessionArtifactPath(id, 'launch.proof')
+  const existingPath = readableLaunchReceiptPath(id)
+  if (existingPath) {
+    const staged = readHarnessLaunchProof(id, existingPath)
+    if (sameHarnessLaunchProof(staged, proof)) return true
+    throw new ResourceConflict(`refusing to replace native launch receipt for ${id}: the staged session, thread, payload, or generation differs`)
+  }
+  const path = launchReceiptPath(id)
   const temp = `${path}.${process.pid}.${randomUUID()}.tmp`
   writeFileSync(temp, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 })
   try {
@@ -2918,9 +2943,9 @@ export function stageHarnessLaunchProof(sessionId: string | undefined, harnessSe
     return true
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-    const staged = readHarnessLaunchProof(id)
+    const staged = readHarnessLaunchProof(id, path)
     if (sameHarnessLaunchProof(staged, proof)) return true
-    throw new ResourceConflict(`refusing to replace native launch proof for ${id}: the staged session, thread, payload, or generation differs`)
+    throw new ResourceConflict(`refusing to replace native launch receipt for ${id}: the staged session, thread, payload, or generation differs`)
   } finally {
     rmSync(temp, { force: true })
   }
@@ -2930,28 +2955,29 @@ function consumeHarnessLaunchProofUnlocked(id: string): boolean {
   const rec = readLiveRecord(id)
   if (!rec) return false
   const harness = harnessById(rec.harness || defaultHarness.id)
-  const proof = readHarnessLaunchProof(id)
+  const receiptPath = readableLaunchReceiptPath(id)
+  const proof = readHarnessLaunchProof(id, receiptPath)
   if (proof.sessionId !== id || proof.harnessId !== harness.id)
-    throw new ResourceConflict(`native launch proof for ${id} does not match the governed adapter identity`)
+    throw new ResourceConflict(`native launch receipt for ${id} does not match the governed adapter identity`)
   const pending = readLaunchFile(id)
   if (pending == null && rec.harnessSessionId !== proof.harnessSessionId)
-    throw new ResourceConflict(`refusing native launch proof for ${id}: authoritative resolved launch payload is missing`)
+    throw new ResourceConflict(`refusing native launch receipt for ${id}: authoritative resolved launch payload is missing`)
   if (pending != null && proof.launchPayloadHash !== createHash('sha256').update(pending).digest('hex'))
-    throw new ResourceConflict(`native launch proof for ${id} does not match the authoritative resolved launch payload`)
+    throw new ResourceConflict(`native launch receipt for ${id} does not match the authoritative resolved launch payload`)
   bindHarnessSessionIdUnlocked(rec, proof.harnessSessionId, proof.generationId || undefined)
   if (pending != null) {
     try { rmSync(sessionArtifactPath(id, 'launch')) }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.error(`spex: native launch proof committed for ${id}, but launch could not be consumed: ${error instanceof Error ? error.message : String(error)}`)
+        console.error(`spex: native launch receipt committed for ${id}, but launch could not be consumed: ${error instanceof Error ? error.message : String(error)}`)
         return true
       }
     }
   }
-  try { rmSync(sessionArtifactPath(id, 'launch.proof')) }
+  try { if (receiptPath) rmSync(receiptPath) }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-      console.error(`spex: native launch proof committed for ${id}, but launch.proof could not be consumed: ${error instanceof Error ? error.message : String(error)}`)
+      console.error(`spex: native launch receipt committed for ${id}, but the receipt could not be consumed: ${error instanceof Error ? error.message : String(error)}`)
   }
   return true
 }
@@ -2964,7 +2990,7 @@ export function markHarnessSessionId(sessionId: string | undefined, harnessSessi
     if (!rec) return false
     const harness = harnessById(rec.harness || defaultHarness.id)
     if (harness.launchPayloadProof)
-      throw new ResourceConflict(`harness ${harness.id} must stage native identity together with authoritative first-turn payload proof`)
+      throw new ResourceConflict(`harness ${harness.id} must stage native identity together with an authoritative first-turn payload receipt`)
     bindHarnessSessionIdUnlocked(rec, harnessSessionId)
     return true
   })
@@ -3403,7 +3429,7 @@ async function inspectSessionLeafIdentity(id: string, rec: SessRec): Promise<Lea
   try { procs = await procSnapshot() } catch { /* fail closed below */ }
   const startAfter = sessionLeafStartToken(pid)
   const candidate = sessionLeafReceiptCandidate(id, pid, panePid, procs, startBefore, startAfter)
-  if (!candidate.ok || !candidate.receipt) return { state: 'unknown', pid, reason: candidate.reason || 'leaf birth receipt proof failed' }
+  if (!candidate.ok || !candidate.receipt) return { state: 'unknown', pid, reason: candidate.reason || 'leaf birth receipt validation failed' }
   if (readAgentPid(path) !== pid || sessionLeafStartToken(pid) !== candidate.receipt.startToken)
     return { state: 'unknown', pid, reason: `leaf PID ${pid} identity changed before receipt commit` }
   writeSessionLeafReceipt(id, candidate.receipt)

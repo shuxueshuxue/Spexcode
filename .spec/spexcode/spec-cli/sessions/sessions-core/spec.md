@@ -103,10 +103,10 @@ id and close time; a malformed or ambiguous ledger is unknown, never a plausible
 The sibling `launch` artifact is the authoritative resolved first-turn payload, not a best-effort prompt cache.
 The shared layer preserves it across queue drain and failed launch, blocks later delivery debt behind it, and
 hands it back only through the resolved adapter's no-native-identity recovery seam. The adapter completes launch
-with one proof call carrying the exact payload and native id; under the record lock the shared layer rejects a
+with one receipt call carrying the exact payload and native id; under the record lock the shared layer rejects a
 missing/changed artifact or changed identity, persists the identity, and only then consumes the artifact. Raw
 originating `prompt` bytes remain a separate display/audit artifact and never participate in recovery.
-The proof receipt is atomically no-replace and consumption is record-first, payload-second, receipt-last: every
+The receipt is atomically no-replace and consumption is record-first, payload-second, receipt-last: every
 crash boundary is retryable without forgetting or replaying the first turn, while malformed or cross-bound
 receipts fail rather than repairing themselves from weaker input.
 Cross-feature defaults that must be read by the backend at runtime live here as the

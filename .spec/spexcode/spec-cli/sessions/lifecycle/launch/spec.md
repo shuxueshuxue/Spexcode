@@ -53,37 +53,38 @@ Codex's app-server launch is project-idempotent: simultaneous `spexcode serve` p
 share the runtime socket and take a per-project launch lock before starting the server, so they do not fan out
 one app-server per session or cross into another project's socket.
 
-**The resolved launch payload is authoritative until the adapter proves its first native turn.** Resolution
+**The resolved launch payload is authoritative until the adapter records its first native-turn receipt.** Resolution
 happens once, before publication, and the exact resulting bytes are stored in `launch`; the raw originating
 prompt is display/audit input and can never reconstruct or replace them. Opening a tmux window is only transport
 submission, so it does not consume this payload. An adapter whose native identity is minted during launch keeps
-the payload pending until its own launch path proves both the exact native identity and that these same bytes
-were accepted as the first prompt and made durable enough to resume (for Codex, the rollout exists). That proof
-binds the native id and consumes `launch` under the session record lock. A crash or timeout before proof leaves
+the payload pending until its own launch path records both the exact native identity and that these same bytes
+were accepted as the first prompt and made durable enough to resume (for Codex, the rollout exists). That receipt
+binds the native id and consumes `launch` under the session record lock. A crash or timeout before the receipt leaves
 the payload intact. Resume with no native id asks the adapter to replay those exact bytes through the same launch
 path; a missing payload is a loud refusal, never an empty fresh conversation and never a fallback to `prompt`.
 Once the native id exists, resume addresses it and never replays the first prompt.
 
 While `launch` is pending, ordinary durable sends may be accepted and queued, but queue draining stops before
 adapter delivery. Consumption of the launch payload is the ordering fence: only after the first native prompt
-is proven may later durable sends be handed over, preserving the conversation order across process failure and
-resume. The proof operation is idempotent for the same session, native id, and payload, and refuses a changed id
+is confirmed by its receipt may later durable sends be handed over, preserving the conversation order across process failure and
+resume. The receipt operation is idempotent for the same session, native id, and payload, and refuses a changed id
 or changed payload; concurrent writers publish the complete receipt atomically without replacement. Consumption
-persists the native identity first, removes `launch` second, and removes `launch.proof` last. Thus a crash before
+persists the native identity first, removes `launch` second, and removes `launch.receipt` last. Thus a crash before
 the record write leaves the payload replayable; a crash after that write leaves the same identity plus one or
 both artifacts and reentry only finishes consumption; after both removals, repeated drain/resume can address
 only the stored native identity. A missing, unreadable, or session/adapter/thread/payload/generation-misbound
-receipt refuses loudly. The per-session transition and record locks serialize resume, proof consumption, and
-delivery, so retrying proof or draining cannot create or replay a second first turn.
-`launch.proof` is the final identity-plus-first-rollout commit, not an intermediate readiness hint. The adapter's
-ordinary `launchReady` check runs after that commit only to prove current runtime liveness. If this post-proof
+receipt refuses loudly. The per-session transition and record locks serialize resume, receipt consumption, and
+delivery, so retrying a receipt or draining cannot create or replay a second first turn. During the one-release
+rename window, readers also accept a pre-existing `launch.proof` artifact but never write it again.
+`launch.receipt` is the final identity-plus-first-rollout commit, not an intermediate readiness hint. The adapter's
+ordinary `launchReady` check runs after that commit only to confirm current runtime liveness. If this post-receipt
 check rejects, the record keeps its bound identity and the consumed artifacts stay consumed; the visible note
 names the liveness failure and retry resumes that exact identity instead of replaying the first turn.
 Queued launch capacity is held only while a launch/readiness owner exists. A synchronous malformed or misbound
-proof refusal records the narrow failure and releases the boot slot before returning the error; once transport
-has started, the asynchronous readiness observer catches and records any proof/readiness rejection and releases
+receipt refusal records the narrow failure and releases the boot slot before returning the error; once transport
+has started, the asynchronous readiness observer catches and records any receipt/readiness rejection and releases
 that slot in all outcomes. Correcting the receipt therefore makes the same queued record retryable, and no
-rejected proof can permanently consume capacity or escape as an unhandled background rejection.
+rejected receipt can permanently consume capacity or escape as an unhandled background rejection.
 
 **A queued launch carries a stable public-backend authority lease.** Its identity is the normalized
 `SPEXCODE_API_URL` the supervisor injects — the stable loopback proxy URL agents use, stripped of credentials,

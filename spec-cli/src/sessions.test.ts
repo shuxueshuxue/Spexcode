@@ -187,18 +187,25 @@ test('Codex launch retry reuses a staged native target after the first payload i
     }, null, 2)}\n`)
     writeFileSync(sessionArtifactPath(id, 'launch'), payload)
     assert.equal(stageHarnessLaunchProof(id, 'thread-retry', payload), true)
-    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'a retry can use the staged proof before its record commit')
+    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'a retry can use the staged receipt before its record commit')
 
     // This is the exact failure window from the report: the lifecycle owner consumed `launch`, but the retry
     // entered codex-launch before (or while) it bound the staged receipt.
     rmSync(sessionArtifactPath(id, 'launch'))
-    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'a consumed payload still leaves the staged target reusable')
+    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'a consumed payload still leaves the staged receipt reusable')
+
+    const currentReceipt = sessionArtifactPath(id, 'launch.receipt')
+    const legacyReceipt = sessionArtifactPath(id, 'launch.proof')
+    copyFileSync(currentReceipt, legacyReceipt)
+    rmSync(currentReceipt)
+    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'a one-release legacy receipt remains reusable after upgrade')
+    assert.equal(existsSync(currentReceipt), false, 'compatibility reads the legacy receipt instead of writing a second artifact')
 
     const record = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
     record.harness_session_id = 'thread-retry'
     writeFileSync(sessionRecordPath(id), `${JSON.stringify(record, null, 2)}\n`)
-    rmSync(sessionArtifactPath(id, 'launch.proof'))
-    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'after proof consumption the durable identity remains authoritative')
+    rmSync(legacyReceipt)
+    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'after receipt consumption the durable identity remains authoritative')
   } finally {
     if (previousHome === undefined) delete process.env.SPEXCODE_HOME
     else process.env.SPEXCODE_HOME = previousHome
@@ -385,7 +392,7 @@ exec sleep 30
     assert.equal(existsSync(commandPath), false, 'missing authoritative payload refuses before any launch transport')
     writeFileSync(sessionArtifactPath(id, 'launch'), resolvedLaunch)
 
-    const proofPath = sessionArtifactPath(id, 'launch.proof')
+    const proofPath = sessionArtifactPath(id, 'launch.receipt')
 
     codexHarness.launchCmd = () => helper
     codexHarness.deliver = async (_rec, text) => { handedOver.push(text); return { ok: true } }
@@ -416,7 +423,7 @@ exec sleep 30
     assert.equal(stageHarnessLaunchProof(id, 'thread-recovered', resolvedLaunch), true,
       'the adapter may retry the exact same durable proof')
     assert.throws(() => stageHarnessLaunchProof(id, 'another-thread', resolvedLaunch),
-      /refusing to replace native launch proof/)
+      /refusing to replace native launch receipt/)
     const postProofFailure = await pending
     pending = null
     assert.equal(postProofFailure.ok, false)
@@ -514,7 +521,7 @@ exec sleep 30
     launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
   }, null, 2)}\n`)
 
-  const proofPath = sessionArtifactPath(id, 'launch.proof')
+  const proofPath = sessionArtifactPath(id, 'launch.receipt')
   const proof = (overrides: Record<string, unknown> = {}) => ({
     version: 1, sessionId: id, harnessId: 'codex', harnessSessionId: 'thread-queued',
     launchPayloadHash: createHash('sha256').update(launchPayload).digest('hex'), generationId: null,
@@ -543,7 +550,7 @@ exec sleep 30
       rmSync(proofPath)
     }
 
-    await rejectProof('{broken', /native launch proof .* unreadable/)
+    await rejectProof('{broken', /native launch receipt .* unreadable/)
     await rejectProof(`${JSON.stringify(proof({ sessionId: 'wrong-session' }))}\n`, /governed adapter identity/)
     await rejectProof(`${JSON.stringify(proof({ harnessId: 'codex-headless' }))}\n`, /governed adapter identity/)
     await rejectProof(`${JSON.stringify(proof({ launchPayloadHash: 'wrong-payload' }))}\n`, /authoritative resolved launch payload/)
@@ -557,7 +564,7 @@ exec sleep 30
     assert.deepEqual(await sendText(id, 'later durable task'), { ok: true })
     assert.deepEqual(handedOver, [])
     assert.equal(stageHarnessLaunchProof(id, 'thread-queued', launchPayload), true)
-    assert.throws(() => stageHarnessLaunchProof(id, 'wrong-thread', launchPayload), /refusing to replace native launch proof/)
+    assert.throws(() => stageHarnessLaunchProof(id, 'wrong-thread', launchPayload), /refusing to replace native launch receipt/)
     await waitUntil(() => /forced post-proof queued liveness rejection/.test(
       JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).note || ''), 'post-proof queued liveness note')
     await sleep(0)

@@ -30,6 +30,21 @@ scenarios:
     expected: >-
       TypeScript exits 0 with no diagnostics. Dynamic module-test helpers describe only the exports they
       consume, and every @ts-expect-error still suppresses a real error rather than becoming stale debt.
+  - name: spec-cli-unit-integration-suite-is-clean
+    tags: [cli]
+    code: .github/workflows/ci.yml
+    related:
+      - spec-cli/package.json
+      - spec-cli/src/runtime-rotate.cli.test.ts
+      - spec-cli/src/sessions.test.ts
+      - spec-cli/src/workspace-precondition.cli.test.ts
+    description: >-
+      After the workflow installation and build sequence, run the complete spec-cli npm test suite under
+      the same Node test runner configuration used by CI. Capture the command transcript and exit status.
+    expected: >-
+      The suite exits 0. Its isolated fixtures resolve project launcher configuration from their own
+      repository, do not remove a temporary runtime while a mocked launch is still writing into it, and
+      compare canonical workspace paths on platforms where a temporary-directory alias is resolved.
 ---
 
 Measured through the same clean-checkout package-manager commands that the GitHub Actions workflow runs.

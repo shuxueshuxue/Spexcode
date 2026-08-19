@@ -10,7 +10,7 @@
 
 | Lane | Session | 交付 | 分支 head |
 |---|---|---|---|
-| M2 SQLite engine 细节冻结 | `de57398c` | `docs/session-protocol-sqlite-engine.md`、`.spec/…/session-protocol/sqlite-engine/`、`spikes/sqlite-m2/` | `8d4a80b7a` |
+| M2 SQLite engine 细节冻结 | `de57398c` | `docs/session-protocol-sqlite-engine.md`、`.spec/…/session-protocol/sqlite-engine/`、`spikes/sqlite-m2/` | `e3b6e84d9` |
 | 三 adopter 最小 API 反推 | `189f7b4f` | `docs/session-adopter-cutin-plan.md`、`.spec/…/session-runtime/adopter-cutin/`、`spikes/adopter-api/` | `3f3fc3129` |
 | legacy sabotage 与删除门禁 | `bbb98193` | `docs/session-legacy-deletion-gate.md`、`.spec/…/concept-map/legacy-deletion-gate/`、`spikes/legacy-sabotage/` | `10dbf1736` |
 
@@ -25,7 +25,8 @@
 | 窄 diff（各 lane 改动是否越出其独占文件面） | PASS |
 | `spex spec lint`（合并树） | 0 error |
 | immutable 证据锚点（合并树上逐字节复比） | 4/4 未变 |
-| Node 22.21.0 / SQLite 3.50.4 引擎全套（合并树） | tests 53 / pass 53 / fail 0 |
+| Node 22.21.0 / SQLite 3.50.4 引擎全套（合并树） | tests 55 / pass 55 / fail 0 |
+| 反例矩阵（合并树，集成方独立重跑） | **gated 10/10 · ungated 0 · not measured 0** |
 | adopter 契约（合并树） | self-launch PASS · Spex governed PASS · ZSwarm exit 77（诚实无证据绊线） |
 
 immutable 锚点（原始失败证据，任何时候不得编辑、删除或被重试结果覆盖）：
@@ -86,7 +87,36 @@ c339db23cca67622…  spikes/legacy-sabotage/fail-first.log
   缺的是"翻转它会让我们自己的断言炸"这一层门禁。按本轮确立的标准，这条目前是**断言，不是门禁**。
 - 其余 9 条（含集成期新增的 `at-least-once-redelivery`，触发 5 条 vector）均被至少一条 vector 拦住。
 
-处置：如实记录，不在被审分支上代为修复；是否重开该 lane 补一条能稳定复现冷开竞态的 vector，由人类裁决。
+处置：如实记录，不在被审分支上代为修复；重开该 lane 补 vector。
+
+**已解决（lane 重开后）。** 根因不是谁看错：**旧 gate 本身是飘的**——重复 12 次，旧 cold-open vector 只抓到
+wrong-order stub **8/12**。所以「9/9」与「9/10」两次都是真实观测，它从来就不是一道门。
+新 gate 用另一个真实 OS 进程以 `PRAGMA locking_mode=EXCLUSIVE` **按窗口持有**锁（1500ms，到点自行释放而非被 kill），
+并在 vector 里写死两条断言：control 用 200ms 预算**必须** `PROTOCOL_DATABASE_BUSY`（证明锁真的被持有，否则后面的成功
+可能是假通过），assertion 用 8000ms 预算**必须成功且耗时 ≥ 持有窗口的 40%**（证明是「等到了」而不是从没上锁的库旁边溜过去）。
+设计前先单独验证了「设 `busy_timeout` 本身不需要锁」，否则两种顺序都会失败、vector 分辨不出任何东西。
+稳定性各 20 次：canonical **pass 20/20**，wrong-order stub **caught 20/20**。
+runner 也改成三态：**GATED / UNGATED / NOT MEASURED**，且**间歇抓到（0<N<M）一律判 NOT MEASURED**，
+所以 8/12 那种情况不会再被记成 gated。集成方独立重跑确认：**gated 10/10 · ungated 0 · not measured 0**。
+「busy_timeout 必须是第一条语句」因此保持 hard invariant，未走降级路线。
+
+被取代的证据保留而非覆盖：`evidence/v1-delete/counterexamples.txt` 仍是记着错误 9/9 的原件，新矩阵另存
+`counterexamples-gated.txt`，`fail-first-note.md` 说明哪份是当前、哪份被取代、错在哪。
+
+## 4.3 一类比 bug 本身更值钱的缺陷：一直在通过，但通过的理由是错的
+
+本轮抓到三例，形状相同，都不是「测试失败」而是「测试通过得没有道理」：
+
+1. `busy-timeout-after-version-probe` 的旧 gate —— 12 次只抓到 8 次，却被当成「它能抓」。
+2. `follow` worker 按墙钟 deadline 退出 —— WAL 快所以一直碰巧通过，换成 DELETE 变慢后才在 Node 22 上暴露成 missing。
+3. `concurrent consumers of one queue split it without a double dequeue` —— 同样按墙钟 deadline 退出的 drain worker，
+   在合并头上原样单独跑 5 次即有 **1/5 失败**（先 stash 自己的改动验证归属，确认是既有 flake 而非新引入）。
+
+共同点：**只有当无关的东西变慢时才暴露**，因此在快路径上可以长期伪装成绿色。共同修法也一样——
+终止条件必须绑在**期望的语义**上（收到 N 条、抽到队列为空）并断言该条件达成，而不是绑在墙钟上。
+一个绑墙钟的断言证明的是时序，不是正确性。
+
+证据标准由此加一条：**新增或修改任何 vector 时，先问它在实现正确时会不会同样通过；如果会，它就还不是门禁。**
 
 ## 4.2 施工教训：parked lane 的文件由 lane owner 自己写
 

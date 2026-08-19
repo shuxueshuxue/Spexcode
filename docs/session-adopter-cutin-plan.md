@@ -78,6 +78,21 @@ self-launch-cli.mjs enqueue --database-path ABS --session-id ID --message-id MID
 self-launch-cli.mjs dequeue --database-path ABS --session-id ID
 ```
 
+#### Consumer handler journal（M3 已裁决）
+
+v1 **不要求** consumer journal 与 `dequeue` 同一事务，**也不把 handler journal 纳入 session protocol**。
+同库原子 seam 只覆盖 *topology mutation + required enqueue*；`dequeue` 不在其中，仍是 at-most-once 的协议交付边界。
+
+因此：需要下游重试的 adapter 可以自建 `messageId`-keyed journal（可以放在同一个 adopter 数据库里），但那是
+**adopter 的财产**——任何 adopter **不得**把它描述成协议级 at-least-once，其 crash/retry 语义由 adopter 自己证明。
+dequeue 提交与 journal 写入之间崩溃会丢掉「欠处理」这一事实，这是 v1 **明码标价的代价**，不是疏漏。
+
+这条不是散文承诺，有反例守着：`spikes/sqlite-m2/test/concurrency.test.mjs` 的
+*a handler that dies after dequeue never makes the message reappear* 在 dequeue 提交之后、任何下游动作之前
+SIGKILL 消费者，然后断言 `listPending` 为空、下一次 `dequeue` 返回 `null`、history 仍记录该消息已出队。
+配套 stub `at-least-once-redelivery`（其 `dequeue` 跳过状态转换）会让该 vector 触发，所以「没有 at-least-once」
+是被测量出来的，不是假设出来的。
+
 #### Storage locality precondition
 
 路径 resolver 得到绝对 `databasePath` 后、调用 `openProtocol` 之前，必须确认 database 所在 filesystem 是本地的，并支持可靠 advisory locking。非本地或 locality 无法判定时必须 fail closed（默认拒绝），退出 1，stderr 沿用 `self-launch-cli: STORAGE_LOCALITY_UNVERIFIED: message`。协议核心不做、也不假装做这个判定；它只接收已由 adopter 判定合格的绝对路径。v1 使用 rollback journal DELETE、禁用 WAL；WAL 在网络 filesystem 上会因共享内存要求 fail loud，但 DELETE 不会替 resolver 自动提供这道闸门。macOS/Windows detector 仍是实现 OPEN，detector 缺失同样拒绝；真实 NFS 本 spike 未实测。

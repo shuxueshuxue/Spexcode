@@ -135,6 +135,16 @@ export const FLIPS = [
     ]],
   },
   {
+    name: 'at-least-once-redelivery',
+    claim: 'dequeue commits at-most-once delivery; a dead handler never gets the message re-handed',
+    edits: [[
+      `        const result = db.prepare(
+          'UPDATE protocol_messages SET dequeued_at_ms=? WHERE enqueue_seq=? AND dequeued_at_ms IS NULL',
+        ).run(stamped, row.enqueue_seq)`,
+      `        const result = { changes: 1 }`,
+    ]],
+  },
+  {
     name: 'locality-detection-in-protocol-core',
     claim: 'storage locality is the adopter resolver\'s fail-closed precondition, not protocol core\'s job',
     edits: [

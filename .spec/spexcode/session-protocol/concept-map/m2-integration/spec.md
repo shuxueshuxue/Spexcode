@@ -30,6 +30,14 @@ assertion, since an environment error such as a missing module fails identically
 and therefore proves nothing about the contract. A counting gate must distinguish a measured zero from an
 unmeasured surface and must refuse rather than render absence as zero.
 
+The consumer handler journal sits outside the protocol and outside the `dequeue` transaction. The same-database
+atomic seam covers topology mutation plus required enqueue only, so `dequeue` remains the at-most-once delivery
+boundary. An adapter that needs downstream retry keeps its own `messageId`-keyed journal, which may share the
+adopter database but is adopter property: it may never be described as protocol-level at-least-once, and its crash
+and retry semantics are the adopter's to prove. Losing the record that handling was owed, when a consumer dies
+between the dequeue commit and its own journal write, is a named cost of this version rather than an oversight, and
+a crash fixture holds that boundary in place so the absent guarantee stays measured rather than assumed.
+
 The ledger also carries the decisions this checkpoint froze, the two eras of measurement that the rollback-journal
 ruling created, the document defects deliberately left unrepaired, and the open items with the evidence each still
 needs. A superseded instruction is marked as superseded rather than silently dropped, so a later reader cannot

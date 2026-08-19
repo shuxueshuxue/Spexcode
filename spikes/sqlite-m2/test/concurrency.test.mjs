@@ -183,6 +183,29 @@ test('SIGKILL before commit leaves the message pending and the rollback journal 
   after.close()
 })
 
+test('a handler that dies after dequeue never makes the message reappear', async () => {
+  // The M3 decision, as a fixture: v1 does NOT put the consumer handler journal inside the protocol and
+  // does NOT bind it to the dequeue transaction. So a consumer that commits a dequeue and then dies
+  // before its downstream effect loses that effect -- the protocol will not hand the message out again.
+  // Anything claiming protocol-level at-least-once would have to make this vector fail.
+  const path = freshDb()
+  const setup = openProtocol(path)
+  setup.initialize('handler')
+  const staged = setup.enqueue('handler', { kind: 'handler.v1', body: Buffer.from('exactly once') })
+  setup.close()
+
+  const out = await killAfterSignal([path, 'crash-handler', 0, 'handler'], 'dequeued')
+  assert.equal(out.split(/\s+/).pop(), staged.messageId, 'the handler really did take this message')
+
+  const after = openProtocol(path)
+  assert.deepEqual(after.listPending('handler'), [], 'a dead handler does not requeue committed delivery')
+  assert.equal(after.dequeue('handler'), null, 'there is no protocol-level at-least-once to fall back on')
+  const history = after.readMessages('handler')
+  assert.equal(history.length, 1, 'history keeps the message')
+  assert.ok(history[0].dequeuedAtMs !== null, 'and still records it as dequeued')
+  after.close()
+})
+
 test('SIGKILL after commit keeps the message and never requeues it', async () => {
   const path = freshDb()
   const setup = openProtocol(path)

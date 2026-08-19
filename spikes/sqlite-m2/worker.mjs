@@ -70,6 +70,14 @@ try {
       process.stdout.write('staged\n')
       for (;;) { /* wait to be killed */ }
     })
+  } else if (op === 'crash-handler') {
+    // Dequeue commits protocol delivery; then the CONSUMER's handler dies before doing any downstream
+    // work. v1 keeps no handler journal inside the protocol, so the message must NOT come back to the
+    // queue. That absence is the at-most-once boundary, stated as a running fixture rather than prose.
+    const handle = openProtocol(databasePath, { busyTimeoutMs: 10000 })
+    const message = handle.dequeue(rest[0])
+    process.stdout.write(`dequeued ${message.messageId}\n`)
+    for (;;) { /* die here, before any handler effect */ }
   } else if (op === 'crash-postcommit') {
     const handle = openProtocol(databasePath, { busyTimeoutMs: 10000 })
     const message = handle.enqueue(rest[0], { kind: 'crash.v1', body: Buffer.from('postcommit') })

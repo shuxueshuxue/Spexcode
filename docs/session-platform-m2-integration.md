@@ -53,6 +53,14 @@ c339db23cca67622…  spikes/legacy-sabotage/fail-first.log
 - **global session identity seam**：一个 `databasePath` 内 `session_id` 全局唯一、单列主键；协议不接受
   `(project_id, session_id)`；`project_id` 是纯 adopter metadata；多项目共库由 adopter 自行保证全库唯一；
   人类短 id 由 adopter 维护 project-local alias。
+- **consumer handler journal 不进协议，且不与 `dequeue` 同事务**（M3 裁决）。同库原子 seam 只覆盖
+  *topology mutation + required enqueue*；`dequeue` 不在其中，仍是 at-most-once 的协议交付边界。需要下游重试的
+  adapter 可自建 `messageId`-keyed journal（可放在同一 adopter 数据库），但那是 adopter 财产，
+  **不得被描述为协议级 at-least-once**，其 crash/retry 语义由 adopter 自证。dequeue 提交与 journal 写入之间崩溃
+  会丢掉「欠处理」这一事实，是 v1 明码标价的代价。反例守着这条：
+  *a handler that dies after dequeue never makes the message reappear*（`spikes/sqlite-m2/test/concurrency.test.mjs`）
+  在 dequeue 提交后、任何下游动作前 SIGKILL 消费者，断言 `listPending` 为空、下一次 `dequeue` 为 `null`、
+  history 仍记录已出队；stub `at-least-once-redelivery` 会让它触发。
 - **G.5 #11 删除门禁**：生成物是四个独立面（TS source / dist / npm-pack tarball / materialized），各自带前置条件；
   任一前提不满足即 `NOT-MEASURED` 并非零退出，**不得渲染为 0**，也不得用 source=0 代替其它三面。
 
@@ -64,6 +72,21 @@ c339db23cca67622…  spikes/legacy-sabotage/fail-first.log
 3. 每个反例三件套写进文档：source-backed `file:line`、完整可复制的 before/after 命令、最小反例（改动点与其足以致炸的理由）。
 4. 收尾时工作树必须可复现：canonical 文件名下是真实实现，故意做坏的 stub 单独存放并由显式开关选择。
 5. 计数类门禁必须区分「测得 0」与「没测」，后者不得渲染为前者。
+
+## 4.1 集成期发现：一条冻结决定目前是断言而非门禁
+
+集成方重跑 `spikes/sqlite-m2/stubs/run.mjs` 后，结果是 **flips gated by at least one vector: 9/10**。
+未被任何 vector 拦住的是 **`busy-timeout-after-version-probe`**（claim：`busy_timeout` 必须是连接上的第一条语句）。
+
+- 该 stub 触发的 vector 数为 **0**。runner 确实同时跑了 `test/engine.test.mjs` 与 `test/concurrency.test.mjs`
+  （`stubs/run.mjs:14`），所以这不是"没跑到"造成的。
+- lane 自述为「9/9 反例」，与实际 runner 输出不一致。lane 本身已如实记录过该条只能跨进程复现、单进程 vector 拦不住，
+  并称已把冷开竞态做成正式 vector；但按当前 runner 输出，那条 vector 在此次运行中并未因该翻转而失败。
+- 该决定本身有实测支撑（错误顺序 20 轮输 11 轮、正确顺序 25 轮 0 失败），**证据是真的**；
+  缺的是"翻转它会让我们自己的断言炸"这一层门禁。按本轮确立的标准，这条目前是**断言，不是门禁**。
+- 其余 9 条（含集成期新增的 `at-least-once-redelivery`，触发 5 条 vector）均被至少一条 vector 拦住。
+
+处置：如实记录，不在被审分支上代为修复；是否重开该 lane 补一条能稳定复现冷开竞态的 vector，由人类裁决。
 
 ## 5. 两个时代的数字
 
@@ -114,8 +137,8 @@ DELETE 的已知代价（实测，未写软）：reader 不挡 writer，但 **wr
 driver 已按裁决冻结为 `node:sqlite`（better-sqlite3 的 45/45 parity 数据保留，作为「driver 可替换、schema 才是契约」的证据）。
 其余未决项：macOS/Windows 的 locality detector（缺失时必须拒绝，不得乐观放行）；网络魔数从内核头转录、
 **从未在真实网络挂载上执行**（本机无网络挂载）；sweep cadence；retention/purge；backup 运维节奏与恢复演练；
-`ANALYZE`/`PRAGMA optimize` 维护（`INDEXED BY` 已将其移出正确性）；同库事务缝是否接纳 `dequeue`（留待 M3，
-因为加宽已冻结措辞超出 M2 scope）；Rust 第二实现。
+`ANALYZE`/`PRAGMA optimize` 维护（`INDEXED BY` 已将其移出正确性）；Rust 第二实现。
+（「同库事务缝是否接纳 `dequeue`」已由 M3 裁决收口为**不接纳**，见 §3，不再是 OPEN。）
 
 `session-protocol` 的 6 条 missing scenario 与 `runtime-session` 的 stale 属 M1/M6 lane 的刻意留白，
 测它们需触碰 `packages/session-core/**`，不在本轮任何 lane 的授权范围内。

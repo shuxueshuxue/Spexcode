@@ -768,23 +768,27 @@ downstream guarantee owns a handler journal. This defines its contract; it is no
 - **It never becomes an adapter-aware acknowledgment state on the queue**, and it is not an outbox: it
   records handling, never pending delivery.
 
-### 10.1 Unresolved: does the same-database transaction seam admit `dequeue`?
+### 10.1 Settled: the seam does not admit `dequeue`
 
-For at-least-once *handling*, the journal row must be written **in the same transaction as the dequeue**.
-Otherwise a crash between the dequeue commit and the journal write loses the record that handling was
-owed, and the adopter gets at-most-once handling — the very thing the journal exists to avoid.
+**M3 ruling.** v1 does **not** require the journal row and the `dequeue` to share a transaction, and the
+handler journal is **not** part of the session protocol. The same-database atomic seam covers exactly
+*topology mutation + required enqueue*; `dequeue` stays outside it and remains the at-most-once protocol
+delivery boundary.
 
-The frozen same-database seam is described as *topology mutation + required enqueue*. Whether it also
-admits `dequeue` is **not settled**, and widening it is outside this document's scope. Recorded for M3
-with both consequences stated:
+The consequence is stated rather than softened: an adapter needing downstream retry keeps its own
+`messageId`-keyed journal — it may live in the same adopter database — but that journal is adopter
+property, and **no adopter may describe it as protocol-level at-least-once**. Its crash and retry
+semantics are the adopter's to prove, not the protocol's to guarantee. A crash between the dequeue commit
+and the journal write loses the record that handling was owed; that is an accepted, named cost of v1, not
+an oversight.
 
-- **Seam admits `dequeue`:** the adopter writes its journal row atomically with the dequeue and gets
-  at-least-once handling with no outbox. This is the only shape that delivers the guarantee.
-- **Seam does not admit `dequeue`:** the journal write is a separate transaction after the dequeue
-  commits, and the adopter has at-most-once handling. That may be acceptable, but it must be a stated
-  decision rather than an accident of the seam's shape.
+This is enforced by a vector rather than left to prose: *a handler that dies after dequeue never makes the
+message reappear* (`test/concurrency.test.mjs`) SIGKILLs a consumer after its dequeue commits and before
+any downstream effect, then asserts `listPending` is empty, the next `dequeue` returns `null`, and history
+still records the message as dequeued. The `at-least-once-redelivery` stub — whose `dequeue` skips the
+state transition — makes that vector fire, so the guarantee's absence is measured, not assumed.
 
-The spike's transaction seam currently exposes `exec` and `enqueue` only, matching the frozen wording.
+The spike's transaction seam exposes `exec` and `enqueue` only, matching the frozen wording.
 
 ### 10.2 Transaction body purity is enforced, not documented
 

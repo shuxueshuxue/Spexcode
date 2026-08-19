@@ -38,6 +38,13 @@ and retry semantics are the adopter's to prove. Losing the record that handling 
 between the dequeue commit and its own journal write, is a named cost of this version rather than an oversight, and
 a crash fixture holds that boundary in place so the absent guarantee stays measured rather than assumed.
 
+File ownership survives a lane going quiet. When a ruling requires a change inside a parked lane's files, that lane
+is reopened and its owner writes the change; the integrating session does not write it for them. Integration's job is
+running gates, returning precise evidence, and merging atomically, and writing into a reviewed lane breaks both the
+ownership boundary and the review rule that a reviewer never repairs the branch under review. Where that has already
+happened, the repair is an ordinary merge of the integration head into the lane's own branch with the merge commit
+kept, conflicts resolved in the lane's worktree, and the existing proof re-accepted before anything new is added.
+
 The ledger also carries the decisions this checkpoint froze, the two eras of measurement that the rollback-journal
 ruling created, the document defects deliberately left unrepaired, and the open items with the evidence each still
 needs. A superseded instruction is marked as superseded rather than silently dropped, so a later reader cannot

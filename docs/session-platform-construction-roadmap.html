@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Session Platform Construction Roadmap</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18201c;
+      --muted: #59635e;
+      --line: #ccd4cf;
+      --paper: #f7f8f5;
+      --surface: #ffffff;
+      --green: #166534;
+      --green-bg: #eaf5ed;
+      --blue: #155e75;
+      --blue-bg: #e9f4f7;
+      --amber: #92400e;
+      --amber-bg: #fff4db;
+      --red: #991b1b;
+      --red-bg: #fcecec;
+      --violet: #6b21a8;
+      --violet-bg: #f4ecfb;
+      --code: #202722;
+      --code-ink: #edf5ef;
+      --max: 1220px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+      letter-spacing: 0;
+    }
+    a { color: var(--blue); text-underline-offset: 3px; }
+    a:hover { color: #0e7490; }
+    code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    code { font-size: .91em; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid var(--line);
+      background: rgba(247, 248, 245, .96);
+      backdrop-filter: blur(10px);
+    }
+    .topbar-inner {
+      width: min(var(--max), calc(100% - 32px));
+      min-height: 56px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .brand { font-weight: 760; color: var(--ink); text-decoration: none; white-space: nowrap; }
+    .docnav { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+    .docnav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+    .docnav a[aria-current="page"] { color: var(--ink); font-weight: 700; }
+    header { border-bottom: 1px solid var(--line); background: var(--surface); }
+    .hero { width: min(var(--max), calc(100% - 32px)); margin: 0 auto; padding: 64px 0 48px; }
+    .eyebrow { margin: 0 0 10px; color: var(--amber); font-weight: 750; font-size: 13px; text-transform: uppercase; }
+    h1, h2, h3, h4 { letter-spacing: 0; line-height: 1.2; }
+    h1 { margin: 0; max-width: 980px; font-size: 56px; font-weight: 780; }
+    .lede { max-width: 930px; margin: 22px 0 0; color: var(--muted); font-size: 20px; }
+    .verdict { margin-top: 30px; max-width: 1000px; padding: 18px 20px; border-left: 4px solid var(--red); background: var(--red-bg); font-weight: 650; }
+    .layout { width: min(var(--max), calc(100% - 32px)); margin: 0 auto; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 48px; padding: 48px 0 90px; }
+    aside { align-self: start; position: sticky; top: 84px; }
+    aside strong { display: block; margin-bottom: 10px; font-size: 13px; text-transform: uppercase; color: var(--muted); }
+    aside a { display: block; padding: 5px 0; color: var(--muted); text-decoration: none; font-size: 14px; }
+    aside a:hover { color: var(--ink); }
+    main { min-width: 0; }
+    section { scroll-margin-top: 76px; margin-bottom: 64px; }
+    section > h2 { margin: 0 0 18px; font-size: 30px; }
+    h3 { margin: 30px 0 12px; font-size: 21px; }
+    h4 { margin: 22px 0 8px; font-size: 16px; }
+    p { margin: 12px 0; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 6px 0; }
+    .muted { color: var(--muted); }
+    .callout { margin: 20px 0; padding: 17px 20px; border: 1px solid var(--line); border-left-width: 4px; background: var(--surface); }
+    .callout.green { border-left-color: var(--green); background: var(--green-bg); }
+    .callout.amber { border-left-color: var(--amber); background: var(--amber-bg); }
+    .callout.red { border-left-color: var(--red); background: var(--red-bg); }
+    .callout.blue { border-left-color: var(--blue); background: var(--blue-bg); }
+    .diagram { margin: 24px 0; padding: 24px; border: 1px solid var(--line); background: var(--surface); overflow-x: auto; }
+    .cutover { min-width: 760px; display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 22px; }
+    .cutover-step { position: relative; min-height: 146px; padding: 16px; border-top: 4px solid var(--blue); background: #fbfcfa; }
+    .cutover-step:nth-child(2) { border-color: var(--amber); }
+    .cutover-step:nth-child(3) { border-color: var(--red); }
+    .cutover-step:nth-child(4) { border-color: var(--green); }
+    .cutover-step:not(:last-child)::after { content: "→"; position: absolute; right: -18px; top: 52px; color: var(--muted); font-weight: 800; }
+    .cutover-step b { display: block; margin-bottom: 6px; }
+    .cutover-step span { color: var(--muted); font-size: 14px; }
+    .dag { min-width: 870px; display: grid; gap: 12px; }
+    .dag-row { display: grid; grid-template-columns: 110px repeat(4, minmax(150px, 1fr)); gap: 10px; align-items: stretch; }
+    .dag-label { display: flex; align-items: center; color: var(--muted); font-size: 12px; font-weight: 750; text-transform: uppercase; border-right: 1px solid var(--line); }
+    .node { min-height: 74px; padding: 12px 14px; border: 1px solid var(--line); background: #fbfcfa; }
+    .node b { display: block; margin-bottom: 3px; }
+    .node small { display: block; color: var(--muted); line-height: 1.4; }
+    .node.foundation { background: var(--blue-bg); border-color: #79a7b6; }
+    .node.adopter { background: var(--green-bg); border-color: #76a98a; }
+    .node.delete { background: var(--red-bg); border-color: #d18b8b; }
+    .node.review { background: var(--violet-bg); border-color: #b99ad0; }
+    .node.empty { visibility: hidden; }
+    .connector { min-width: 870px; margin: 10px 0; text-align: center; color: var(--muted); font-weight: 750; }
+    .review-flow { min-width: 850px; display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 20px; }
+    .review-step { position: relative; min-height: 132px; padding: 15px; border: 1px solid var(--line); background: #fbfcfa; }
+    .review-step:not(:last-child)::after { content: "→"; position: absolute; right: -17px; top: 43px; color: var(--muted); font-weight: 800; }
+    .review-step b { display: block; margin-bottom: 5px; }
+    .review-step span { color: var(--muted); font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; background: var(--surface); font-size: 14px; }
+    th, td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); background: #f0f3f0; font-size: 12px; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    .table-wrap { width: 100%; overflow-x: auto; }
+    .table-wrap table { min-width: 820px; }
+    .badge { display: inline-block; padding: 2px 7px; border: 1px solid currentColor; border-radius: 3px; font-size: 11px; font-weight: 750; white-space: nowrap; }
+    .badge.writer { color: var(--blue); }
+    .badge.reviewer { color: var(--violet); }
+    .badge.yatu { color: var(--green); }
+    .badge.delete { color: var(--red); }
+    .status-pass, .status-stop, .status-later { font-weight: 750; white-space: nowrap; }
+    .status-pass { color: var(--green); }
+    .status-stop { color: var(--red); }
+    .status-later { color: var(--amber); }
+    pre { margin: 20px 0; padding: 20px; overflow: auto; border-radius: 4px; background: var(--code); color: var(--code-ink); font-size: 13px; line-height: 1.55; }
+    .phase { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 16px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .phase:last-child { border-bottom: 0; }
+    .phase-id { color: var(--amber); font-weight: 800; }
+    .phase h3 { margin: 0 0 7px; }
+    .phase p { margin: 0; }
+    .phase-meta { margin-top: 9px; color: var(--muted); font-size: 14px; }
+    .checklist { margin: 22px 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+    .checklist li { margin: 0; padding: 12px 0 12px 30px; border-bottom: 1px solid var(--line); position: relative; }
+    .checklist li::before { content: "□"; position: absolute; left: 2px; color: var(--green); font-weight: 800; }
+    .doc-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 26px; }
+    .doc-link { padding: 20px; border: 1px solid #79a7b6; background: var(--blue-bg); }
+    .doc-link b { display: block; margin-bottom: 6px; }
+    footer { border-top: 1px solid var(--line); background: var(--surface); }
+    footer div { width: min(var(--max), calc(100% - 32px)); margin: 0 auto; padding: 24px 0; color: var(--muted); font-size: 13px; }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; gap: 20px; }
+      aside { position: static; display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 18px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+      aside strong { grid-column: 1 / -1; }
+      .review-flow { grid-template-columns: 1fr; min-width: 0; gap: 10px; }
+      .review-step:not(:last-child)::after { content: "↓"; right: auto; left: 24px; top: auto; bottom: -16px; z-index: 2; }
+    }
+    @media (max-width: 620px) {
+      .topbar-inner { align-items: flex-start; padding: 12px 0; flex-direction: column; gap: 4px; }
+      .docnav { gap: 12px; }
+      .hero { padding: 44px 0 36px; }
+      h1 { font-size: 38px; }
+      .lede { font-size: 18px; }
+      .phase { grid-template-columns: 1fr; gap: 4px; }
+      .doc-links { grid-template-columns: 1fr; }
+    }
+    @media print {
+      .topbar, aside { display: none; }
+      body { background: white; }
+      .layout { display: block; width: 100%; padding-top: 24px; }
+      .hero { width: 100%; }
+      section { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="文档导航">
+    <div class="topbar-inner">
+      <a class="brand" href="session-platform-architecture.html">Session Platform</a>
+      <div class="docnav">
+        <a href="session-platform-architecture.html">总体设计</a>
+        <a href="session-management-refactor.html">Session 管理重构</a>
+        <a href="session-platform-construction-roadmap.html" aria-current="page">施工与检阅</a>
+      </div>
+    </div>
+  </nav>
+
+  <header>
+    <div class="hero">
+      <p class="eyebrow">Construction control · review draft</p>
+      <h1>Session Platform 施工路线、Session 分配与检阅图</h1>
+      <p class="lede">把总体设计变成可合并、可反证、可拆除、可回滚的施工序列。这里管理的不是任务数量，而是每个 semantic milestone 的唯一 writer、独立 reviewer、真实 adopter proof 和 legacy deletion gate。</p>
+      <div class="verdict">硬规则：任何 adopter milestone 都必须同时完成新路径接入、旧设施对抗式失效和物理删除。只增加新实现、不减少旧设施，不算重构完成。</div>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside aria-label="本页目录">
+      <strong>本页目录</strong>
+      <a href="#unit">施工单元</a>
+      <a href="#dependencies">依赖图</a>
+      <a href="#allocation">Session 分配</a>
+      <a href="#milestones">里程碑</a>
+      <a href="#legacy">Legacy 删除表</a>
+      <a href="#attacks">对抗式攻击</a>
+      <a href="#review">检阅图</a>
+      <a href="#evidence">证据与门禁</a>
+      <a href="#migration">迁移与回滚</a>
+      <a href="#launch">开工清单</a>
+    </aside>
+
+    <main>
+      <section id="unit">
+        <h2>1. 施工单元不是 feature，而是 cutover</h2>
+        <p>Foundation milestone 可以建立独立能力；adopter milestone 不允许只把新能力接到旧系统旁边。它的最小闭环固定为四步：</p>
+        <div class="diagram" role="img" aria-label="Adopter cutover 的四步验收">
+          <div class="cutover">
+            <div class="cutover-step"><b>1. Adopt</b><span>通过公开 surface 使用新 protocol、topology 与 runtime adapter，完成真实端到端行为。</span></div>
+            <div class="cutover-step"><b>2. Inventory</b><span>列出被替代的 reader、writer、锁、observer、文件、配置、CLI 与 spec ownership。</span></div>
+            <div class="cutover-step"><b>3. Sabotage</b><span>让旧目录缺失、旧文件损坏、旧 observer 停止，证明新路径仍然完整且没有访问旧设施。</span></div>
+            <div class="cutover-step"><b>4. Delete</b><span>物理删除旧实现和生成物；静态边界、文件访问轨迹和 YATU 一起证明不可达。</span></div>
+          </div>
+        </div>
+        <div class="callout red"><strong>零兼容容忍：</strong>normal runtime 禁止 dual-read、dual-write、fallback、永久 translation adapter、旧环境变量 alias 和“临时” compatibility re-export。若必须保留用户数据，只能通过显式、一次性、单向 migration 转换；转换完成后 runtime 不再识别旧格式。</div>
+        <p>每个 milestone 的净结果必须是机制更少，而不只是代码更多。删除数量不以 LOC 为目标，而以<strong>权威数据源、写入路径、锁、观察器、进程角色和配置入口</strong>的数量为目标。</p>
+      </section>
+
+      <section id="dependencies">
+        <h2>2. 施工依赖图</h2>
+        <p>图中的 foundation 节点只创建被多个 adopter 共同需要的能力；绿色节点才是完整 cutover。红色节点在所有 consumer 离开旧设施后执行最后拆除。</p>
+        <div class="diagram" role="img" aria-label="Session platform 施工依赖 DAG">
+          <div class="dag">
+            <div class="dag-row">
+              <div class="dag-label">Baseline</div>
+              <div class="node foundation"><b>M0 · Clean base</b><small>唯一 integration head、设施台账、冻结 measurement</small></div>
+              <div class="node empty"></div><div class="node empty"></div><div class="node empty"></div>
+            </div>
+            <div class="connector">↓</div>
+            <div class="dag-row">
+              <div class="dag-label">Foundation</div>
+              <div class="node foundation"><b>M1 · Protocol contract</b><small>schema、API、errors、conformance fixtures</small></div>
+              <div class="node foundation"><b>M2 · SQLite engine</b><small>transactions、migration、crash/concurrency proof</small></div>
+              <div class="node foundation"><b>M3 · Topology core</b><small>neutral edge schema、transaction capability</small></div>
+              <div class="node review"><b>R0 · Boundary review</b><small>fresh-context API and schema attack</small></div>
+            </div>
+            <div class="connector">↓ three independent adopter cutovers, serialized where ownership overlaps ↓</div>
+            <div class="dag-row">
+              <div class="dag-label">Adopters</div>
+              <div class="node adopter"><b>M4 · Self-launch</b><small>offline enqueue + explicit listen; no backend</small></div>
+              <div class="node adopter"><b>M5 · ZSwarm</b><small>external runtime + topology; no Spex dependency</small></div>
+              <div class="node adopter"><b>M6 · Spex governed</b><small>CLI/hook/dashboard/backend on one DB authority</small></div>
+              <div class="node review"><b>R1–R3 · Adversaries</b><small>sabotage old paths, run exact adopter YATU</small></div>
+            </div>
+            <div class="connector">↓</div>
+            <div class="dag-row">
+              <div class="dag-label">Removal</div>
+              <div class="node delete"><b>M7 · One-way import</b><small>offline conversion, equality proof, no runtime reader</small></div>
+              <div class="node delete"><b>M8 · Final demolition</b><small>remove files, locks, observers, bridges, aliases</small></div>
+              <div class="node foundation"><b>M9 · Publish</b><small>clean install, package release, optional repo extraction</small></div>
+              <div class="node review"><b>R4 · Final audit</b><small>legacy references zero, post-merge CI, rollback proof</small></div>
+            </div>
+          </div>
+        </div>
+        <div class="callout amber"><strong>并行边界：</strong>M1、legacy inventory 和 experiment design 可以并行；M2 与 M3 在 schema capability 上串行；三个 adopter 的业务代码可分 session，但任何共享 protocol/topology 文件同一时刻只允许一个 writer。M8 在所有 adopter cutover 落地前绝不启动。</div>
+      </section>
+
+      <section id="allocation">
+        <h2>3. Session 分配与所有权</h2>
+        <p>最多同时运行四个 session：一个 integration coordinator 加三个互不重叠的 worker/reviewer。Session 在依赖满足时才创建，不提前维持空闲 writer。名称是角色，不是永久团队。</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Session 名称</th><th>角色</th><th>唯一写入范围</th><th>禁止事项</th><th>交付</th></tr></thead>
+            <tbody>
+              <tr><td><code>session-platform/integration</code></td><td><span class="badge writer">Integrator</span></td><td>checkpoint ledger、原子 landing、post-merge gates</td><td>不替 writer 修代码；不替 evaluator filing</td><td>唯一 integration head</td></tr>
+              <tr><td><code>session-platform/protocol-contract</code></td><td><span class="badge writer">Writer</span></td><td>protocol spec、SQL schema、public types、conformance fixtures</td><td>不写 adopter policy，不写 compatibility layer</td><td>M1 semantic commits</td></tr>
+              <tr><td><code>session-platform/sqlite-engine</code></td><td><span class="badge writer">Writer</span></td><td>TypeScript package、migrations、transaction implementation</td><td>不接产品，不引入 ORM/daemon/outbox</td><td>M2 semantic commits</td></tr>
+              <tr><td><code>session-platform/topology</code></td><td><span class="badge writer">Writer</span></td><td>neutral relation schema/API、atomic topology+enqueue capability</td><td>不编码 parent/manager/ZSwarm role policy</td><td>M3 semantic commits</td></tr>
+              <tr><td><code>session-platform/adopter-self-launch</code></td><td><span class="badge writer">Writer</span></td><td>materialized listener、explicit listen/dequeue、对应 legacy removal</td><td>不依赖 resident backend</td><td>M4 cutover</td></tr>
+              <tr><td><code>session-platform/adopter-zswarm</code></td><td><span class="badge writer">Writer</span></td><td>ZSwarm DB/config/runtime/topology adapter、对应 legacy removal</td><td>不 import Spex lifecycle、layout、harness code</td><td>M5 cutover</td></tr>
+              <tr><td><code>session-platform/adopter-spex</code></td><td><span class="badge writer">Writer</span></td><td>Spex producer/runtime composition、governed tables、对应 legacy removal</td><td>不向 protocol 注入 product branches</td><td>M6 cutover</td></tr>
+              <tr><td><code>session-platform/legacy-inventory</code></td><td><span class="badge delete">Auditor</span></td><td>reader/writer/file/process/config inventory；只改 ledger/spec</td><td>不实现替代设施，不替 writer 宣称删除</td><td>每阶段 kill list</td></tr>
+              <tr><td><code>session-platform/adversary-N</code></td><td><span class="badge reviewer">Reviewer</span></td><td>同步候选 commit，故障注入、file-access trace、boundary review</td><td>不在被审 branch 修复，不降低 expected</td><td>pass/fail report</td></tr>
+              <tr><td><code>session-platform/yatu-N</code></td><td><span class="badge yatu">Evaluator</span></td><td>真实三 adopter surface、installed package、reading sidecars</td><td>不调用内部 helper 代替产品证明</td><td>fresh evidence/readings</td></tr>
+              <tr><td><code>session-platform/migration</code></td><td><span class="badge writer">Writer</span></td><td>一次性 importer、backup/restore、equality verifier</td><td>normal runtime 不得 import 此模块</td><td>M7 tool and proof</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout blue"><strong>Handoff 规则：</strong>发出任务不等于转移 ownership。Writer 明确确认后才拥有范围；提交并进入 review 后停止写入。Reviewer 发现问题时把精确证据退回原 writer，不能在审阅分支顺手修复。</div>
+      </section>
+
+      <section id="milestones">
+        <h2>4. 里程碑与 merge exit</h2>
+        <div class="phase">
+          <div class="phase-id">M0</div>
+          <div><h3>Clean baseline 与设施台账</h3><p>合并已验收设计，关闭仅属于本 campaign 且已落地的旧 worktree，运行全局 build/spec/eval，记录当前所有 session persistence reader、writer、lock、observer、process 和 config entry。</p><div class="phase-meta"><strong>Exit：</strong>唯一 integration head；每个 legacy element 有 owner、last consumer、deletion milestone。<br><strong>Rollback：</strong>无生产变化。</div></div>
+        </div>
+        <div class="phase">
+          <div class="phase-id">M1</div>
+          <div><h3>固定 protocol contract</h3><p>冻结 initialize/enqueue/dequeue/listPending/readMessages/retire、错误类型、transaction semantics、schema migrations 和 language-neutral conformance vectors。</p><div class="phase-meta"><strong>Exit：</strong>fresh-context agent 可只读 spec 实现同样行为；API 中没有 topology、harness 或 product 名称。<br><strong>删除：</strong>未落地的旧术语、callback drain contract 和第二套 schema 描述。</div></div>
+        </div>
+        <div class="phase">
+          <div class="phase-id">M2</div>
+          <div><h3>SQLite engine 与反证实验</h3><p>实现显式 databasePath、短同步 transaction、migration registry、FIFO/idempotency；用多进程、SIGKILL、busy、checkpoint、backup 与 corrupt fixture 攻击。</p><div class="phase-meta"><strong>Exit：</strong>500 short writes / 10s 与更高 burst 无丢失或重复 dequeue；transaction 内没有外部等待。<br><strong>禁止：</strong>产品接线、ORM、daemon、outbox、file observer。</div></div>
+        </div>
+        <div class="phase">
+          <div class="phase-id">M3</div>
+          <div><h3>Internal topology foundation</h3><p>建立 neutral edge schema 与同 transaction topology mutation + enqueue capability。只证明关系模型，不发布 package。</p><div class="phase-meta"><strong>Exit：</strong>Spex 与 ZSwarm 的关系 fixture 都可表达，core 不出现 adopter role。<br><strong>删除：</strong>重复 parent/watcher 概念只能在 M6 最终 cutover 后物理移除。</div></div>
+        </div>
+        <div class="phase">
+          <div class="phase-id">M4</div>
+          <div><h3>Self-launch adopter cutover</h3><p>没有 backend 时 initialize/enqueue；稍后显式 listen/dequeue。将旧 listener/queue 路径置为缺失和损坏再跑同一 YATU。</p><div class="phase-meta"><strong>Exit：</strong>公开 self-launch loop PASS；file observer 完全停止仍正确。<br><strong>删除：</strong>self-launch 对旧 queue、固定 Spex root 和 governed record 的所有依赖。</div></div>
+        </div>
+        <div class="phase">
+          <div class="phase-id">M5</div>
+          <div><h3>ZSwarm adopter cutover</h3><p>使用自己的 DB path、topology 与 runtime loop；在仓库外 clean consumer 中安装 protocol package，不提供任何 Spex runtime。</p><div class="phase-meta"><strong>Exit：</strong>ZSwarm workflow PASS；依赖图中没有 Spex package。<br><strong>删除：</strong>ZSwarm 侧旧消息持久化、关系投影和兼容 adapter。</div></div>
+        </div>
+        <div class="phase">
+          <div class="phase-id">M6</div>
+          <div><h3>Spex governed adopter cutover</h3><p>CLI、hook、dashboard producer 直接使用同一 package；backend 只负责 wake/drain，restart reconciliation 查询数据库。Lifecycle 与 native runtime proof 留在 adopter-owned tables/adapters。</p><div class="phase-meta"><strong>Exit：</strong>真实 governed parent/child、离线 pending、restart/lost-wake YATU PASS。<br><strong>删除：</strong>pending/timeline/cursor JSON authority、delivery/record locks、watchers/parent 双 authority、runtime-session bridge 和 observer correctness。</div></div>
+        </div>
+        <div class="phase">
+          <div class="phase-id">M7</div>
+          <div><h3>一次性 legacy data migration</h3><p>停止旧 writer，备份旧 store，显式运行 importer，在一个受控 cutover 中验证 identity、FIFO、history、topology、tombstone 的 count/order/hash，再把旧 root 移出 runtime path。</p><div class="phase-meta"><strong>Exit：</strong>新 runtime 在旧 root 不可读时完整启动；normal package dependency graph 不包含 importer。<br><strong>Rollback：</strong>只允许恢复 pre-cutover backup 与旧 release，不允许 live fallback。</div></div>
+        </div>
+        <div class="phase">
+          <div class="phase-id">M8</div>
+          <div><h3>Final demolition</h3><p>删除所有旧 reader/writer、compatibility package/re-export、lock/reconcile、old generation config 和过渡 specs。运行 static reference、generated file 与 file-access trace 三重审计。</p><div class="phase-meta"><strong>Exit：</strong>legacy references=0，legacy generated files=0，runtime legacy reads=0，设施台账净减少。<br><strong>停止条件：</strong>任何 last consumer 尚未 cutover。</div></div>
+        </div>
+        <div class="phase">
+          <div class="phase-id">M9</div>
+          <div><h3>Package release 与 repository decision</h3><p>clean install 三 adopter，发布完整名称的 package。只有公开 API、migration ownership 和两个非 Spex adopter 已稳定时才决定是否拆独立 repository。</p><div class="phase-meta"><strong>Exit：</strong>registry consumer 无 monorepo/source fallback；post-release YATU 与 backup restore PASS。</div></div>
+        </div>
+      </section>
+
+      <section id="legacy">
+        <h2>5. Legacy 删除责任表</h2>
+        <p>这张表是施工控制面，不是愿望清单。M0 必须把“当前 owner”和“最后 consumer”补成精确文件与调用点；删除 milestone 只能提前，不能无限后移。</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Legacy 设施</th><th>替代 authority</th><th>最后 consumer</th><th>删除 milestone</th><th>负向证明</th></tr></thead>
+            <tbody>
+              <tr><td>monolithic <code>session.json</code></td><td>protocol identity + adopter-owned governed tables</td><td>Spex governed</td><td>M7–M8</td><td>旧 record root 不可读仍可 read/send/lifecycle</td></tr>
+              <tr><td><code>pending.json</code> / delivery queue files</td><td><code>protocol_messages</code> pending index</td><td>Spex governed</td><td>M6</td><td>missing/corrupt old queue，enqueue/dequeue once</td></tr>
+              <tr><td>timeline segments / dispatch receipts</td><td>message history + adopter lifecycle history</td><td>Spex governed</td><td>M6</td><td>old timeline poisoned，public history unchanged</td></tr>
+              <tr><td><code>cursors.json</code></td><td>consumer-owned cursor or direct message query</td><td>Spex follow UI</td><td>M6</td><td>cursor absent，restart resumes from DB contract</td></tr>
+              <tr><td><code>watchers.json</code> + parent field</td><td>topology edges</td><td>Spex managed watch</td><td>M6</td><td>conflicting old relation cannot change routing</td></tr>
+              <tr><td>delivery/record lock files</td><td>SQLite transaction locks</td><td>Spex file store</td><td>M6</td><td>lock directory absent/read-only under concurrency</td></tr>
+              <tr><td>file observer as correctness</td><td>DB pending query + startup/periodic reconciliation</td><td>Spex backend</td><td>M4/M6</td><td>observer disabled and wake dropped</td></tr>
+              <tr><td>public <code>runtime-session</code> bridge</td><td>topology + adopter runtime composition</td><td>ZSwarm/Spex</td><td>M6</td><td>package exports and source imports are zero</td></tr>
+              <tr><td><code>@spexcode/session-core</code> compatibility re-export</td><td>full-name protocol package</td><td>Spex CLI</td><td>M8</td><td>clean install has no old package or subpath</td></tr>
+              <tr><td>old storage generation aliases</td><td>explicit absolute databasePath</td><td>migration tool</td><td>M8</td><td>old env/config is rejected, never silently used</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>明确保留，不属于 legacy</h3>
+        <ul>
+          <li>Artifacts、files/web evidence 和大文件引用。</li>
+          <li>Harness 必须发现的 materialized hooks、contracts、skills 和 commands。</li>
+          <li>Native launch proof、PID、socket、endpoint 与 unload proof；它们由 harness runtime adapter 拥有。</li>
+          <li>Spex lifecycle、worktree、branch、proposal 等产品事实；它们迁到 adopter-owned schema，而不是进入 protocol。</li>
+        </ul>
+      </section>
+
+      <section id="attacks">
+        <h2>6. Legacy/compatibility 对抗式攻击</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>攻击</th><th>要排除的偷偷依赖</th><th>通过条件</th></tr></thead>
+            <tbody>
+              <tr><td>把 legacy root 改名为不可发现路径</td><td>隐藏 fallback、cwd/global-root assumption</td><td>新 adopter 从显式 DB path 完整运行</td></tr>
+              <tr><td>旧 JSON 写入合法但冲突的数据</td><td>dual-read、旧 projection 仍参与决策</td><td>产品输出只反映数据库</td></tr>
+              <tr><td>旧目录只读或拒绝访问</td><td>dual-write、旧 lock/generated file 仍创建</td><td>正常操作不访问旧目录</td></tr>
+              <tr><td>停掉 observer 并丢弃所有 wake hint</td><td>把 notification 当 correctness</td><td>startup/periodic reconciliation 发现 pending</td></tr>
+              <tr><td>注入旧 env/config alias</td><td>silent compatibility resolution</td><td>明确拒绝；不切换数据库</td></tr>
+              <tr><td>两个 producer + 多个 consumer 并发</td><td>应用锁残留、非原子 dequeue</td><td>FIFO contract 与 no-duplicate 成立</td></tr>
+              <tr><td>SIGKILL before/after commit</td><td>应用 journal/recovery 仍被需要</td><td>SQLite recovery 后状态只可能在事务两侧</td></tr>
+              <tr><td>file-access trace / import graph</td><td>测试没覆盖到的死角</td><td>旧路径 open/read/write 与旧 package import 均为零</td></tr>
+              <tr><td>clean consumer 只安装发布 tarball</td><td>monorepo source fallback、未声明 dependency</td><td>三 adopter 只从 public exports 解析</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout amber"><strong>攻击不是 destructive cleanup：</strong>所有 sabotage 都在 disposable state root 或可恢复 fixture 上执行。真实用户数据先备份，migration 验证完成前不删除。零兼容针对 runtime 机制，不等于丢弃用户数据责任。</div>
+      </section>
+
+      <section id="review">
+        <h2>7. 独立检阅图</h2>
+        <p>同一个 session 不得同时扮演 author、adversarial reviewer 和 evaluator。每个节点只接受前一个节点的固定 commit；任何修复都返回 writer，产生新 commit 后重新走完整后半段。</p>
+        <div class="diagram" role="img" aria-label="每个里程碑的独立检阅流程">
+          <div class="review-flow">
+            <div class="review-step"><b>Writer</b><span>spec first、fail-first、semantic commits、clean branch、proposal merge</span></div>
+            <div class="review-step"><b>Boundary reviewer</b><span>新上下文检查责任、依赖方向、API 泄漏和 kill list</span></div>
+            <div class="review-step"><b>Adversarial reviewer</b><span>同步 exact commit，执行 crash、sabotage、no-legacy trace</span></div>
+            <div class="review-step"><b>YATU evaluator</b><span>真实 adopter surface，提交 fresh reading 与窄证据</span></div>
+            <div class="review-step"><b>Integrator</b><span>ancestor、diff、gates、atomic landing、post-merge CI</span></div>
+          </div>
+        </div>
+        <h3>审阅关系</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>被审范围</th><th>必须独立的 reviewer</th><th>必须回答的问题</th></tr></thead>
+            <tbody>
+              <tr><td>Protocol schema/API</td><td>未参与 M1/M2 的 fresh-context session</td><td>能否不看 Spex 源码理解？是否混入 adopter policy？</td></tr>
+              <tr><td>SQLite engine</td><td>concurrency/crash adversary</td><td>事务是否只含 SQL？是否存在丢失、重复、锁饥饿或隐式 daemon？</td></tr>
+              <tr><td>Topology</td><td>同时理解 ZSwarm 与 Spex 的 boundary reviewer</td><td>关系模型是否 neutral？是否需要 outbox 或第二 authority？</td></tr>
+              <tr><td>Each adopter cutover</td><td>legacy adversary + product evaluator</td><td>旧路径完全失效时是否仍通过？旧设施是否真的删除？</td></tr>
+              <tr><td>Migration</td><td>independent data verifier</td><td>count/order/hash/tombstone 是否相等？rollback 是否不依赖 live fallback？</td></tr>
+              <tr><td>Final demolition</td><td>全新 session，不继承实施上下文</td><td>它能否找到任何 legacy reader/writer/config/generated file？</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="evidence">
+        <h2>8. 每个 merge 必须携带的证据</h2>
+        <ul class="checklist">
+          <li>Owning spec 已更新，且本次 proof 针对最终 spec wording。</li>
+          <li>Writer branch 已同步 exact integration head，ancestor gate 与 diff check 通过。</li>
+          <li>Positive conformance/YATU 通过；不是内部 helper 替代真实 surface。</li>
+          <li>Legacy kill list 有精确 owner、last consumer 与删除 diff。</li>
+          <li>Sabotage run 在旧设施缺失、损坏或不可写时通过。</li>
+          <li>Static import/export/reference audit 为零；runtime file-access trace 无旧路径。</li>
+          <li>Crash、restart、lost-wake、busy 和 backup/restore 中与本 milestone 相关的矩阵通过。</li>
+          <li>新设施数量与删除设施数量已记录；本 milestone 没有增加第二 source of truth。</li>
+          <li>Evaluator reading 的 codeSha 指向已验证 product commit，evidence 窄而可人工检查。</li>
+          <li>Integrator landing 后重新运行 CI，并记录 rollback commit/data checkpoint。</li>
+        </ul>
+        <div class="callout green"><strong>合并公式：</strong>positive adopter PASS + legacy sabotage PASS + physical deletion PASS + independent review PASS + synced YATU PASS。缺任何一项，状态只能是 working/parked/asking，不能 proposal merge。</div>
+      </section>
+
+      <section id="migration">
+        <h2>9. 数据迁移与回滚，不建立兼容运行时</h2>
+        <ol>
+          <li>停止目标 state root 的所有旧 writer，并验证 process census。</li>
+          <li>用 SQLite backup API、旧 store archive 和 manifest 建立同一 checkpoint。</li>
+          <li>显式执行独立 migration command；normal runtime package 不 import 它。</li>
+          <li>在单一 migration transaction 中写入新 schema；验证 identity、FIFO、history、topology、tombstone。</li>
+          <li>把 legacy root 改名为 quarantine，使新 runtime 无法通过旧 canonical path 读取。</li>
+          <li>只启动新 release，执行三 adopter smoke 与 legacy file-access trace。</li>
+          <li>失败时停止新 writer，恢复 checkpoint 和旧 release；禁止运行时自动 fallback。</li>
+          <li>超过明确 rollback window 后删除 quarantine；删除动作单独记录。</li>
+        </ol>
+        <p>这条路径承担用户数据责任，但不会把兼容性带进日常代码。Importer 只存在于 migration milestone 和对应 release tooling；它没有长期 public runtime API。</p>
+      </section>
+
+      <section id="launch">
+        <h2>10. 真正开工前的清单</h2>
+        <ul class="checklist">
+          <li>三份设计已合并到唯一 integration head，并打 <code>session-platform-pre-refactor</code> checkpoint。</li>
+          <li>M0 legacy ledger 已包含所有真实 reader、writer、lock、observer、process 与 config source。</li>
+          <li>每个 element 都有 last consumer 和 deletion milestone；没有“以后再看”。</li>
+          <li>M1 conformance vectors 可以在没有 SpexCode context 时独立理解和运行。</li>
+          <li>M2 spike 已用真实多进程 SQLite 证明并发、crash 和 restart，而不是只靠设计推理。</li>
+          <li>三个 adopter 的正向 YATU 与负向 sabotage fixture 已在实现前写清 expected。</li>
+          <li>每个 writer/reviewer 的 scope 无文件重叠；最多四个 active session。</li>
+          <li>最终 demolition reviewer 与 evaluator 尚未参与实现，保持 fresh context。</li>
+        </ul>
+        <div class="callout red"><strong>Go / no-go：</strong>只有 M0 ledger、M1 executable contract、M2 adversarial spike 和三个 adopter 的 cutover+deletion expected 同时存在，才开始 production integration。否则继续补证明，不用更多代码掩盖未知。</div>
+
+        <div class="doc-links">
+          <div class="doc-link"><b>总体设计</b><span>回看 package、topology、adapter、三 adopter 与存储边界。</span><br><a href="session-platform-architecture.html">打开总体设计 →</a></div>
+          <div class="doc-link"><b>Session 管理重构</b><span>回看 SQLite schema、transaction、跨进程投递与物理迁移。</span><br><a href="session-management-refactor.html">打开重构方案 →</a></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer><div>Review draft. Session 名称是计划角色；实际 UUID 在依赖满足后按需创建并登记到 checkpoint ledger。本文不授权提前启动 writer。</div></footer>
+</body>
+</html>

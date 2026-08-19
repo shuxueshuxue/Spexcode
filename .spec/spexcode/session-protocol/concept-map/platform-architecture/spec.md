@@ -8,6 +8,7 @@ code:
 related:
   - .spec/spexcode/session-protocol/concept-map/spec.md
   - .spec/spexcode/session-protocol/concept-map/session-management-refactor/spec.md
+  - .spec/spexcode/session-protocol/concept-map/construction-roadmap/spec.md
   - .spec/spexcode/session-protocol/spec.md
   - .spec/spexcode/session-topology/spec.md
   - .spec/spexcode/session-runtime/spec.md
@@ -20,5 +21,6 @@ runtime and configuration adapters, explicit storage placement, and the ZSwarm, 
 adoption paths.
 
 The document is a decision surface, not an accepted runtime contract. It must label the proposal as a review draft,
-distinguish current behavior from target behavior, and link to the implementation-level refactor view. Accepted
-decisions move into the specs that own the corresponding protocol, topology, runtime, or adapter behavior.
+distinguish current behavior from target behavior, and link to both the implementation-level refactor view and the
+governed construction plan. Accepted decisions move into the specs that own the corresponding protocol, topology,
+runtime, or adapter behavior.

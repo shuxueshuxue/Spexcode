@@ -11,6 +11,7 @@ related:
   - .spec/spexcode/session-runtime/spec.md
   - .spec/spexcode/session-protocol/concept-map/platform-architecture/spec.md
   - .spec/spexcode/session-protocol/concept-map/session-management-refactor/spec.md
+  - .spec/spexcode/session-protocol/concept-map/construction-roadmap/spec.md
   - packages/spec-core/src/project-store.ts
   - packages/spec-core/src/layout.ts
   - packages/session-core/src/index.ts
@@ -30,16 +31,18 @@ open. A remove decision names the retained mechanism that replaces it. An open d
 missing. Human review may accept or replace each disposition; accepted decisions are then written into their
 owning current-state specs and removed from the unresolved list.
 
-The linked platform-architecture and session-management-refactor child nodes are the review views for the
-proposed SQLite-backed target. They summarize the worksheet and make the proposed composition and migration easy
-to inspect; they do not supersede the current runtime specs until human review accepts the decisions and those
+The linked platform-architecture, session-management-refactor, and construction-roadmap child nodes are the review
+views for the proposed SQLite-backed target. They summarize the worksheet, implementation shape, and governed
+cutover plan; they do not supersede the current runtime specs until human review accepts the decisions and those
 decisions are written into their owning nodes.
 
 The worksheet must pressure-test the same protocol through ZSwarm, ungoverned self-launch, and Spex-governed
-adopters. It must also keep physical state placement outside the protocol language: the protocol owns a fixed
-relative filesystem layout below an injected absolute session root, while each adopter owns global configuration,
-project namespacing, OS defaults, and migration from legacy directories.
+adopters. Physical state placement stays outside the protocol language: the protocol receives an explicit absolute
+database path, while each adopter owns global configuration, project namespacing, OS defaults, and migration from
+legacy directories. Protocol identity lives in the adopter database, not in a universal `session.json` file.
 
-Every initialized session has one universal immutable `session.json` identity record. The current SpexCode
-monolith with the same filename is migration input, not the target schema: governed lifecycle, topology, worktree,
-and runtime facts leave that file for their owning adopter modules.
+Each adopter proof is a cutover proof, not merely a new integration. It must pair positive adoption with an exact
+legacy inventory, sabotage tests that make every old path unavailable, and physical deletion of the old reader,
+writer, lock, observer, generated file, configuration alias, and compatibility branch. Runtime dual-read,
+dual-write, fallback, and permanent translation adapters are forbidden. Necessary user-data upgrades are explicit,
+bounded, one-way migrations that leave the normal runtime unable to recognize the legacy format.

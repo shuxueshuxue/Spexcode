@@ -38,10 +38,11 @@ The three reference compositions are:
   + materialize`. Its backend improves latency and owns runtime resources, but durable delivery remains correct
   across backend absence or replacement.
 
-A short-lived hook/CLI writer must await its durable topology outbox or enqueue before exiting. A fire-and-forget
-microtask after a state write is not publication: it can lose the notification or reorder two committed states.
-The runtime reconciles keyed topology revisions and protocol journals on startup and bounded sweeps; no observer
-bridges that transaction.
+A short-lived hook/CLI writer must commit the protocol enqueue before exiting. A fire-and-forget microtask after a
+state write is not publication: it can lose the notification or reorder two committed states. If topology mutation
+and enqueue are one adopter transaction, they commit together; otherwise the adopter must define the ordering
+explicitly. The runtime reconciles keyed topology revisions and protocol messages on startup and bounded sweeps; no
+observer bridges that transaction.
 
 An adopter that cannot be expressed by this list exposes one of two design defects. A shared file/lock/recovery
 need means the protocol is incomplete. A need for product state or a native effect means that adopter's runtime,
@@ -49,11 +50,11 @@ topology, or adapter boundary is incomplete. It is not a reason to add an adopte
 
 ## Migration order
 
-1. Publish the pure protocol operations and journal under `@spexcode/session-protocol`; turn
-   `@spexcode/session-core` into a temporary compatibility re-export.
+1. Publish the pure protocol operations and message history under `@spexcode/session-protocol`; switch callers in
+   one cutover and delete the old `@spexcode/session-core` package instead of adding a compatibility re-export.
 2. Prove self-launch and ZSwarm adopters against the installed package. They exercise recordless/offline and
    multi-workspace/runtime-injected shapes without Spex governance.
-3. Extract the relation model and migrate Spex governed notification publication to a durable topology outbox plus
+3. Extract the relation model and migrate Spex governed notification publication to one adopter transaction plus
    protocol enqueue. Replace callback drain with the Spex runtime's own dequeue/handler loop.
-4. Remove the public `runtime-session` bridge and compatibility package only after installed adopter and Spex
-   lifecycle proofs pass on the same wire format.
+4. Remove the public `runtime-session` bridge once installed adopter and Spex lifecycle proofs pass on the same
+   fixed protocol; no compatibility package remains.

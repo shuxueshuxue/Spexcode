@@ -8,6 +8,7 @@ code:
 related:
   - .spec/spexcode/session-protocol/concept-map/spec.md
   - .spec/spexcode/session-protocol/concept-map/platform-architecture/spec.md
+  - .spec/spexcode/session-protocol/concept-map/construction-roadmap/spec.md
   - .spec/spexcode/session-protocol/spec.md
   - packages/session-core/src/index.ts
   - spec-cli/src/sessions.ts
@@ -20,4 +21,6 @@ extension rules, legacy mapping, migration milestones, verification matrix, and 
 enough to review independently.
 
 The document is not an implementation claim. Its schema and milestones remain a proposal until human review accepts
-them and the owning protocol, topology, and runtime specs are updated before code migration begins.
+them and the owning protocol, topology, and runtime specs are updated before code migration begins. It must not
+propose runtime compatibility as a migration strategy: every adopter cutover pairs a positive path with legacy
+sabotage and deletion, while any required data conversion remains a bounded one-way operation outside normal runtime.

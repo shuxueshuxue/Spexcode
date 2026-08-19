@@ -136,6 +136,7 @@
       <div class="docnav">
         <a href="session-platform-architecture.html">总体设计</a>
         <a href="session-management-refactor.html" aria-current="page">Session 管理重构</a>
+        <a href="session-platform-construction-roadmap.html">施工与检阅</a>
       </div>
     </div>
   </nav>
@@ -418,7 +419,7 @@ CREATE UNIQUE INDEX topology_active_edge
         <table>
           <thead><tr><th>当前元素</th><th>目标</th><th>处理</th></tr></thead>
           <tbody>
-            <tr><td><code>@spexcode/session-core</code></td><td><code>session-communication-protocol</code></td><td class="status-move">兼容 re-export 后退役旧名</td></tr>
+            <tr><td><code>@spexcode/session-core</code></td><td><code>session-communication-protocol</code></td><td class="status-remove">切换调用者后物理删除旧包名；不保留 re-export</td></tr>
             <tr><td><code>acceptMessage</code></td><td><code>enqueue</code></td><td class="status-move">移除 record callback 与产品状态解释</td></tr>
             <tr><td>callback-based <code>drain</code></td><td>runtime-owned dequeue loop</td><td class="status-remove">不再持 DB lock 调 adapter</td></tr>
             <tr><td><code>pending.json</code></td><td>partial pending index</td><td class="status-remove">导入 message rows 后删除</td></tr>
@@ -450,7 +451,7 @@ CREATE UNIQUE INDEX topology_active_edge
         </div>
         <div class="phase">
           <div class="phase-id">M3</div>
-          <div><h3>兼容 release</h3><p>所有新版本 CLI/hook/backend 先学会识别 storage generation 与拒绝跨 generation 写入，为离线 cutover 建立统一门禁。禁止长期 dual-write。</p></div>
+          <div><h3>Cutover gate</h3><p>新 CLI/hook/backend 只接受目标 storage generation；旧 generation 由一次性离线 importer 处理后拒绝运行。没有兼容 release、dual-write 或 fallback。</p></div>
         </div>
         <div class="phase">
           <div class="phase-id">M4</div>
@@ -462,7 +463,7 @@ CREATE UNIQUE INDEX topology_active_edge
         </div>
         <div class="phase">
           <div class="phase-id">M6</div>
-          <div><h3>退役 legacy</h3><p>旧文件改为只读 compatibility evidence，经过一个明确 release window 后删除 writer、lock、reconcile 和 internal exports；再评估独立 repository。</p></div>
+          <div><h3>物理删除 legacy</h3><p>完成 adopter sabotage 与 migration equality proof 后，直接删除旧 writer、lock、reconcile 和 internal exports；旧文件只存在于可恢复的 migration archive。</p></div>
         </div>
         <div class="callout amber"><strong>为什么不 dual-write：</strong>两个 writer path 会产生两个 authority，最危险的失败恰好是“一边成功、一边失败”。迁移应是可回滚的离线 cutover，不是无限期镜像。</div>
       </section>
@@ -507,7 +508,7 @@ CREATE UNIQUE INDEX topology_active_edge
             <tr><td>写事务包含外部等待</td><td>同步 transaction callback；lint/review 禁止 Promise</td><td>故障注入确保 lock hold 只含 SQL</td></tr>
             <tr><td>Node 绑定旧 SQLite</td><td>runtime version gate；选择可固定安全版本的 driver</td><td>CI 输出并断言 <code>sqlite_version()</code></td></tr>
             <tr><td>网络文件系统锁不可靠</td><td>只支持 same-host local filesystem</td><td>启动探针和部署文档</td></tr>
-            <tr><td>旧 client 继续写 files</td><td>兼容 release + storage generation refusal</td><td>old/new client 并存 YATU</td></tr>
+            <tr><td>旧 client 继续写 files</td><td>目标 generation refusal；一次性 importer 在 runtime 外运行</td><td>old client 被拒绝且新 client 不读旧 files</td></tr>
             <tr><td>Message dequeue 后 adapter crash</td><td>协议明确 at-most-once；强保证由 consumer inbox 提供</td><td>commit 后 SIGKILL test</td></tr>
             <tr><td>Adopter 乱改 protocol tables</td><td>public API + owned migrations；raw handle 不作为普通 consumer surface</td><td>package boundary tests</td></tr>
             <tr><td>数据库无限膨胀</td><td>retention/purge 是显式 maintenance policy，不在 hot transaction</td><td>历史规模与 VACUUM/backup test</td></tr>
@@ -520,6 +521,7 @@ CREATE UNIQUE INDEX topology_active_edge
         <h2 id="back-title">返回总体设计</h2>
         <p>总体页解释 package 边界、三类 adopter、路径策略、TypeScript/Rust 选择和架构验收标准。</p>
         <a href="session-platform-architecture.html">← 打开 Session Platform 总体设计</a>
+        <p><a href="session-platform-construction-roadmap.html">打开施工路线与检阅图 →</a></p>
       </section>
     </main>
   </div>

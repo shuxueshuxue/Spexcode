@@ -88,6 +88,20 @@ c339db23cca67622…  spikes/legacy-sabotage/fail-first.log
 
 处置：如实记录，不在被审分支上代为修复；是否重开该 lane 补一条能稳定复现冷开竞态的 vector，由人类裁决。
 
+## 4.2 施工教训：parked lane 的文件由 lane owner 自己写
+
+M3 裁决要求补一个反例，而反例的自然位置在 `spikes/sqlite-m2/`——一条**已经 parked、已通过复核**的 lane 的文件面。
+集成方当时直接代写了（`worker.mjs` 的 `crash-handler` op、`test/concurrency.test.mjs` 的 handler-crash vector、
+`stubs/build.mjs` 的 `at-least-once-redelivery` flip）。反例本身是对的、也证明了判别力，但这个**动作顺序是错的**：
+它让那条 lane 的 worktree 与集成头在同一批文件上各写一半，于是该 lane 再次开工前被迫先做一次合并。
+
+规则：**需要改动一条 parked lane 的文件时，先 reopen 该 lane，由 owner 自己写，集成方不代写。**
+集成方的职责是跑门禁、退回精确证据、做原子合并；代写会同时破坏两件事——lane 的所有权边界，
+以及「reviewer 不在被审分支上顺手修复」这条检阅规则。
+
+若不可避免地已经代写，补救是明确的：让 lane 用普通 `git merge` 把集成头并进自己的分支并保留 merge commit，
+在自己的 worktree 里解冲突，**先验收既有证明再新增**，不 rebase、不 amend。
+
 ## 5. 两个时代的数字
 
 DELETE 裁决使此前全部并发/吞吐/crash 测量作废重测。文档中并排保留两代数字，**不得混用**：

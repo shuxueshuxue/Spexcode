@@ -45,6 +45,14 @@ ownership boundary and the review rule that a reviewer never repairs the branch 
 happened, the repair is an ordinary merge of the integration head into the lane's own branch with the merge commit
 kept, conflicts resolved in the lane's worktree, and the existing proof re-accepted before anything new is added.
 
+A test that passes is not yet a gate. The most expensive defects this checkpoint found were vectors that had been
+green for the wrong reason: one counter-example caught its flip only eight times in twelve, and two workers ended on a
+wall clock, so they passed while the fast path stayed fast and only failed once something unrelated slowed down. A
+termination condition belongs on the expected semantics — this many messages seen, this queue drained — and the vector
+must assert that condition was reached; bound to elapsed time it measures timing and reports correctness. So every new
+or changed vector answers one question first: would this pass just as readily against a correct implementation? While
+the answer is yes, it is decoration, not a gate.
+
 The ledger also carries the decisions this checkpoint froze, the two eras of measurement that the rollback-journal
 ruling created, the document defects deliberately left unrepaired, and the open items with the evidence each still
 needs. A superseded instruction is marked as superseded rather than silently dropped, so a later reader cannot

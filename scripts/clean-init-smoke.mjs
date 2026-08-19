@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, dirname, isAbsolute, join, relative } from 'node:path'
+import { delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { parseFrontmatter } from '@spexcode/spec-core'
 import { buildProjection, projectionDiff } from './sync-init-plugins.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -121,14 +122,30 @@ function writeOfflineConsumerPlan(consumer, tarball) {
     },
   }
 
-  // `file:` dependencies in the packed root live inside that tarball, whereas the source
-  // lock's equivalent entries are workspace links. Rewrite that one boundary for the
-  // consumer plan so `npm ci --offline` never asks for a source-checkout sibling.
+  // A source lock can describe a packed local dependency either with a `file:` manifest
+  // spec or with a workspace link behind a release-version manifest spec. Neither source
+  // boundary can survive in the consumer plan: bundled dependencies are unpacked from the
+  // root tarball itself, not from a sibling of the consumer project.
+  const bundledDependencies = new Set(Array.isArray(manifest.bundleDependencies)
+    ? manifest.bundleDependencies
+    : Array.isArray(manifest.bundledDependencies) ? manifest.bundledDependencies : [])
   for (const [name, spec] of Object.entries(manifest.dependencies ?? {})) {
-    if (!spec.startsWith('file:')) continue
-    const sourcePath = spec.slice('file:'.length).replace(/\/+$/, '')
+    const sourceEntry = sourceLock.packages[`node_modules/${name}`]
+    const fileDependency = spec.startsWith('file:')
+    const workspaceLink = bundledDependencies.has(name)
+      && sourceEntry?.link === true
+      && typeof sourceEntry.resolved === 'string'
+    if (!fileDependency && !workspaceLink) continue
+
+    const sourcePath = fileDependency
+      ? spec.slice('file:'.length).replace(/\/+$/, '')
+      : sourceEntry.resolved.replace(/\/+$/, '')
     delete consumerLock.packages[`node_modules/${name}`]
     delete consumerLock.packages[sourcePath]
+
+    // Plain `file:` dependencies retain their explicit tarball-internal link. Bundled
+    // workspace links instead rely on npm's bundle metadata while extracting the root.
+    if (!fileDependency) continue
     const packedPath = `node_modules/${manifest.name}/${sourcePath}`
     consumerLock.packages[`node_modules/${name}`] = { resolved: packedPath, link: true }
     consumerLock.packages[packedPath] = {}
@@ -209,6 +226,27 @@ function assertNoProjectLeak(project, caseName) {
   const sourceLeak = outputs.find((file) => file.content.includes(ROOT.toLowerCase()))
   assert.ok(sourceLeak === undefined,
     `[${caseName}] adopter output does not reference the source checkout${sourceLeak ? ` in ${sourceLeak.path}` : ''}`)
+}
+
+function frontmatterValues(source, key) {
+  const value = parseFrontmatter(source).fm[key]
+  return Array.isArray(value) ? value : value ? [value] : []
+}
+
+function projectedPluginsForEvents(events) {
+  const excludedDirectories = []
+  for (const [path, file] of CANONICAL_PLUGINS) {
+    if (path !== 'spec.md' && !path.endsWith(`${sep}spec.md`)) continue
+    const source = file.content.toString('utf8')
+    if (!frontmatterValues(source, 'surface').includes('hook')) continue
+    const requiredEvents = frontmatterValues(source, 'events')
+    if (requiredEvents.length && !requiredEvents.some((event) => events.has(event))) {
+      excludedDirectories.push(dirname(path))
+    }
+  }
+
+  return new Map([...CANONICAL_PLUGINS].filter(([path]) =>
+    !excludedDirectories.some((dir) => path === dir || path.startsWith(`${dir}${sep}`))))
 }
 
 function runCase({ language, harness, name }, spex, suiteRoot) {
@@ -340,10 +378,11 @@ function runCase({ language, harness, name }, spex, suiteRoot) {
     assert.ok(!existsSync(join(codexHome, 'config.toml')), `[${name}] Claude-only materialize writes no Codex trust`)
   }
 
+  const hookEvents = new Set(Object.keys(JSON.parse(readFileSync(join(project, harness.shim), 'utf8')).hooks ?? {}))
   assert.deepEqual(
-    projectionDiff(CANONICAL_PLUGINS, join(project, '.spec', 'project', '.plugins')),
+    projectionDiff(projectedPluginsForEvents(hookEvents), join(project, '.spec', 'project', '.plugins')),
     [],
-    `[${name}] initialized plugins equal the canonical projection byte-for-byte and mode-for-mode`,
+    `[${name}] initialized plugins equal the selected harness event-reachable canonical projection byte-for-byte and mode-for-mode`,
   )
   assertNoProjectLeak(project, name)
 

@@ -43,7 +43,10 @@ The exemption mechanism is deliberately in-place, not a central list: a line car
 the occurrence. The legitimate classes are narrow: **archive readers** (the freshness walk's dual
 pathspec, the retired cache-dir recognizer — immutable history is read under its archived names),
 **git plumbing** (`cat-file blob` is git's noun, not ours), and **one-version signposts** (the
-unknown-command tombstones that teach the renamed spelling until 0.4.0 deletes them).
+unknown-command tombstones that teach the renamed spelling until 0.4.0 deletes them), plus a
+**one-release persisted-artifact migration reader**. The latter must read a pre-existing old name only,
+use the current name for all new writes, and name its removal window in the inline reason; it is never a license to emit
+the retired term in a new product protocol.
 
 The scanner distrusts itself: every run starts with a self-check that plants a dead word in a string,
 one in a comment, and one in a regex, and refuses to report a clean tree (exit 2) unless exactly the

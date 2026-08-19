@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 
@@ -10,16 +11,30 @@ const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
 
 test('doctor repair app-server reads launcher configuration from the project, not its runtime store', () => {
   const home = mkdtempSync(`${tmpdir()}/spex-runtime-rotate-`)
+  const project = mkdtempSync(`${tmpdir()}/spex-runtime-rotate-project-`)
   try {
+    writeFileSync(join(project, 'spexcode.json'), JSON.stringify({
+      sessions: {
+        launchers: { codex: { harness: 'codex', cmd: 'codex' } },
+        defaultLauncher: 'codex',
+      },
+    }, null, 2) + '\n')
+    writeFileSync(join(project, 'README.md'), 'fixture\n')
+    execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: project })
+    execFileSync('git', ['-c', 'user.name=runtime-fixture', '-c', 'user.email=runtime@example.test', 'add', '.'], { cwd: project })
+    execFileSync('git', ['-c', 'user.name=runtime-fixture', '-c', 'user.email=runtime@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
     const result = spawnSync('tsx', [cli, 'doctor', 'repair', 'app-server'], {
-      cwd: pkgRoot,
+      cwd: project,
       encoding: 'utf8',
       env: { ...process.env, SPEXCODE_HOME: home },
     })
     assert.equal(result.status, 1)
     assert.match(result.stderr, /there is no proven canonical app-server generation to switch/)
     assert.doesNotMatch(result.stderr, /sessions\.defaultLauncher is required/)
-  } finally { rmSync(home, { recursive: true, force: true }) }
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+    rmSync(project, { recursive: true, force: true })
+  }
 })
 
 test('doctor repair app-server has a precise non-mutating help probe', () => {

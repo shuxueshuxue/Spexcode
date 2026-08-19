@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,7 +12,7 @@ const CLI = join(SRC, 'cli.ts')
 const TSX = tsxBin(join(SRC, '..'))
 
 test('graph rejects a non-Git workspace with one actionable message and no runtime stack', () => {
-  const workspace = mkdtempSync(join(tmpdir(), 'spex-nongit-graph-'))
+  const workspace = realpathSync(mkdtempSync(join(tmpdir(), 'spex-nongit-graph-')))
   try {
     const result = spawnSync(process.execPath, [TSX, CLI, 'graph', '--json'], { cwd: workspace, encoding: 'utf8' })
     assert.equal(result.status, 1)
@@ -25,7 +25,7 @@ test('graph rejects a non-Git workspace with one actionable message and no runti
 })
 
 test('the cached graph entrance rejects the same non-Git workspace before layout reads', async () => {
-  const workspace = mkdtempSync(join(tmpdir(), 'spex-nongit-cache-'))
+  const workspace = realpathSync(mkdtempSync(join(tmpdir(), 'spex-nongit-cache-')))
   const cwd = process.cwd()
   try {
     process.chdir(workspace)

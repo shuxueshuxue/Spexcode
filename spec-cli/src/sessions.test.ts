@@ -328,6 +328,20 @@ exit 0
   chmodSync(tmux, 0o755)
 }
 
+async function waitForFixtureLaunchExit(launchPidPath: string): Promise<void> {
+  if (!existsSync(launchPidPath)) return
+  const pid = Number(readFileSync(launchPidPath, 'utf8').trim())
+  if (!Number.isInteger(pid) || pid <= 0) return
+  await waitUntil(() => {
+    try {
+      process.kill(pid, 0)
+      return false
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === 'ESRCH'
+    }
+  }, `fixture launch ${pid} to exit`, 2_000)
+}
+
 test('no-thread resume replays the authoritative launch payload before later durable sends', { timeout: 20_000, concurrency: false }, async () => {
   const liveBefore = liveSessionsCensus()
   const previousHome = process.env.SPEXCODE_HOME
@@ -859,7 +873,9 @@ test('resume missing, failed, or invalidated readiness preserves the stopped off
     execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'add', '.'], { cwd: project })
     execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
     process.env.SPEXCODE_HOME = home
-    const bin = join(home, 'bin'); writeResumeTmuxFixture(bin, join(home, 'tmux-command'), join(home, 'launch.pid'))
+    const bin = join(home, 'bin')
+    const launchPidPath = join(home, 'launch.pid')
+    writeResumeTmuxFixture(bin, join(home, 'tmux-command'), launchPidPath)
     process.env.PATH = `${bin}:${previousPath}`
     const id = `resume-ready-${outcome}-${process.pid}`
     assertIsolatedResumeStore(home, id)
@@ -898,6 +914,7 @@ test('resume missing, failed, or invalidated readiness preserves the stopped off
       if (previousHome === undefined) delete process.env.SPEXCODE_HOME
       else process.env.SPEXCODE_HOME = previousHome
       process.env.PATH = previousPath
+      await waitForFixtureLaunchExit(launchPidPath)
       rmSync(home, { recursive: true, force: true })
       assert.equal(existsSync(home), false, `${outcome} resume fixture root is removed exactly`)
       assertLiveSessionsUnchanged(liveBefore, `${outcome} resume fixture`)

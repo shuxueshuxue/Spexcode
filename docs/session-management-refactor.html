@@ -214,8 +214,9 @@ project/              harness-required
         <p>一个 application state instance 使用一个 SQLite 数据库。每个 CLI、hook、backend 或 runtime 进程各自加载 SQLite library、打开同一路径；不存在中央 SQLite daemon。</p>
         <pre>CLI process ─────────┐
 Hook wrapper ───────┼── SQLite connection ── application.db
-Spex backend ───────┤                       application.db-wal
-ZSwarm runtime ────┘                       application.db-shm</pre>
+Spex backend ───────┤                       application.db-journal   (仅在写事务期间存在)
+ZSwarm runtime ────┘</pre>
+        <div class="callout amber"><strong>v1 使用 rollback journal，不产生 <code>-wal</code>/<code>-shm</code>。</strong>实测 sidecar 生命周期：静止时只有 <code>application.db</code>；写事务期间出现 <code>application.db-journal</code>；提交与关闭后又只剩 db 文件。</div>
         <h3>数据库路径</h3>
         <p><code>openSessionDatabase({ databasePath })</code> 只接收显式绝对路径。文件名与全局配置属于 adopter：</p>
         <ul>
@@ -225,13 +226,24 @@ ZSwarm runtime ────┘                       application.db-shm</pre>
         </ul>
         <h3>每个连接的强制设置</h3>
         <span class="sql-label">Connection bootstrap</span>
-        <pre><code>PRAGMA foreign_keys = ON;
-PRAGMA journal_mode = WAL;       -- 必须验证返回值为 wal
-PRAGMA synchronous = FULL;       -- 当前低写频率优先 durability
-PRAGMA busy_timeout = 5000;
-
-SELECT sqlite_version();         -- 拒绝已知不安全的 WAL 版本</code></pre>
-        <p>WAL 仅允许同一主机上的进程共享。数据库路径若位于不可靠的 network filesystem，启动应 fail loud。不要把 <code>-wal</code> 和 <code>-shm</code> 当应用文件管理。</p>
+        <pre><code>PRAGMA busy_timeout = 5000;      -- 必须是连接上的第一条语句（见下）
+SELECT sqlite_version();         -- 版本门禁：低于 3.38.0 拒绝启动
+PRAGMA foreign_keys = ON;
+PRAGMA synchronous = FULL;       -- 低写频率下优先 durability
+PRAGMA journal_mode;             -- 只读断言，必须回 delete；绝不设置</code></pre>
+        <p><strong>顺序本身是契约，不是风格。</strong><code>busy_timeout</code> 默认为 <code>0</code>，任何排在它之前的语句都在完全没有 busy handler 的情况下运行。
+        实测：把它放在 version probe 之后，八进程冷开同一个新库 <strong>20 轮里输 11 轮</strong>，而 <code>SQLITE_BUSY</code> 来自最不像嫌疑人的
+        <code>SELECT sqlite_version()</code>；挪到最前则 <strong>25 轮 0 失败</strong>。这条决定由一个确定性 gate 守着（另一个真实进程按窗口持锁，
+        canonical 20/20 通过、wrong-order stub 20/20 被抓）。</p>
+        <p><strong><code>journal_mode</code> 只断言、不设置。</strong>v1 固定为 rollback journal <code>DELETE</code> 并禁用 WAL；启动时读回的值必须是
+        <code>delete</code>，否则 fail loud。运行期没有双路径，也永远不把一个 WAL 库自动转换过来——那正是本次重构要删掉的东西。</p>
+        <p><strong>网络 filesystem：保护是显式做出来的，不是 journal 模式白送的。</strong>WAL 因为要求进程间共享内存，在网络 filesystem 上会自动
+        fail loud；<code>DELETE</code> 不会——它会「正常工作」，而 POSIX advisory lock 在 NFS 上并不可靠。因此
+        <strong>storage locality 是 adopter path resolver 的前置安全条件</strong>：解析出绝对 <code>databasePath</code> 之后、调用
+        <code>openSessionDatabase</code> 之前，必须确认该路径位于本地且支持可靠 advisory locking；<strong>非本地、或 locality 无法判定，一律 fail closed</strong>
+        （allow-list 而非 deny-list，认不出来就拒）。协议核心不做、也不假装做这个判定。macOS/Windows 的 detector 仍是实现 OPEN，
+        detector 缺失时同样拒绝而不是乐观放行；真实网络挂载至今未实测，不宣称覆盖。本页任何内容都不得被读作
+        「<code>DELETE</code> 使网络 FS 安全」——事实相反。</p>
       </section>
 
       <section id="schema">
@@ -338,6 +350,12 @@ WHERE enqueue_seq = ?
 
 COMMIT;</code></pre>
         <p>SQLite 的 single writer 保证两个 consumer 不会成功 dequeue 同一个 head。Crash 在 commit 前，消息仍 pending；crash 在 commit 后，消息已交付，不自动回队。</p>
+        <div class="callout red"><strong>M3 已裁决：consumer handler journal 不进协议，也不与 <code>dequeue</code> 同事务。</strong>
+        同库原子 seam 只覆盖 <em>topology mutation + required enqueue</em>；<code>dequeue</code> 不在其中，仍是 at-most-once 的协议交付边界。
+        需要下游重试的 adapter 可自建 <code>messageId</code>-keyed journal（可放在同一个 adopter 数据库），但那是 adopter 财产，
+        <strong>不得被描述为协议级 at-least-once</strong>，其 crash/retry 语义由 adopter 自证。dequeue 提交与 journal 写入之间崩溃会丢掉
+        「欠处理」这一事实，这是 v1 明码标价的代价。该边界由一条 crash fixture 守着：消费者在 dequeue 提交后、任何下游动作前被 SIGKILL，
+        消息不会重新出现在队列里。</div>
 
         <h3>4.4 Retire</h3>
         <p>协议的 <code>retire</code> 要求 queue 已空，然后原子写入 <code>retired_at_ms</code>。如何处理尚未消费的消息属于 adopter policy：adopter 可以在 transaction 外决定拒绝关闭，或明确 dequeue 并丢弃；protocol 不增加隐式 cancellation 模式。</p>
@@ -351,6 +369,8 @@ INSERT INTO protocol_messages ...;  -- zero or more deterministic notifications
 
 COMMIT;</code></pre>
         <p>这是“不需要 outbox”的原因：关系事实与要发送的消息同属一个 SQLite transaction。若未来跨数据库或发往外部 broker，才引入标准 transactional outbox。</p>
+        <p><strong>这条 seam 的范围是封闭的：topology mutation 加它所要求的 enqueue，仅此而已。</strong>它不接纳 <code>dequeue</code>（见 4.3），
+        因此 consumer 无法把自己的 journal 写入与「取走一条消息」做成原子。</p>
       </section>
 
       <section id="delivery">
@@ -437,6 +457,25 @@ CREATE UNIQUE INDEX topology_active_edge
 
       <section id="migration">
         <h2>8. 分阶段迁移，不做 big bang</h2>
+        <div class="callout red"><strong>编号警告：本节的 M0–M6 是这一页的局部阶段编号，与
+        <a href="session-platform-construction-roadmap.html">施工路线</a>的 M0–M9 不是同一套。</strong>
+        两者曾被混读（例如本页 M4「一次性离线导入」其实是施工路线的 M7），下面的 crosswalk 是唯一权威对照。
+        <strong>调度、分工与门禁一律以施工路线的 M0–M9 为准</strong>；本页编号只描述实现推进顺序。</div>
+        <table class="crosswalk">
+          <thead><tr><th>本页（实现顺序）</th><th>施工路线（调度权威）</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>M0 冻结协议语言</td><td>M1 Protocol contract</td><td>操作集、错误语义、at-most-once 边界、conformance fixtures</td></tr>
+            <tr><td>M1 先收缩 API</td><td>M1 尾段</td><td>移除 adapter callback、runtime 自己循环；不换 storage</td></tr>
+            <tr><td>M2 SQLite implementation</td><td>M2 SQLite engine</td><td>唯一编号一致的一段：driver/DDL/migration/多进程与 crash 证明</td></tr>
+            <tr><td>M3 Cutover gate</td><td>M6 Spex governed cutover</td><td>只接受目标 storage generation，旧 generation 拒绝运行</td></tr>
+            <tr><td>M4 一次性离线导入</td><td>M7 One-way import</td><td>停旧 writer、备份、单次 migration transaction、等值校验</td></tr>
+            <tr><td>M5 三 adopter YATU</td><td>M4 / M5 / M6 的 YATU 部分</td><td>self-launch、ZSwarm、Spex governed 各自的正向证明</td></tr>
+            <tr><td>M6 物理删除 legacy</td><td>M8 Final demolition</td><td>删 writer/lock/reconcile/internal exports；旧文件只留在可恢复归档</td></tr>
+            <tr><td>（本页无）</td><td>M0 Clean base · M3 Topology core · M9 Publish</td><td>基线台账、中立关系模型、发布与仓库决策</td></tr>
+          </tbody>
+        </table>
+        <p><strong>顺序修正（施工路线 §9 与 G.5 #3）：</strong>importer 必须在 M6 之前造好并证明，因为 M6 删掉 legacy reader 就会毁掉
+        M7 的输入 codec；M7 只负责调用它一次，M8 才删除 importer 与旧 codec。本页 M3→M4 的先后不改变这条约束。</p>
         <div class="phase">
           <div class="phase-id">M0</div>
           <div><h3>冻结协议语言</h3><p>确认 initialize/enqueue/dequeue/read/retire、at-most-once 边界、error codes 和 database scope；建立 SQL schema 与语言无关 conformance fixtures。</p></div>

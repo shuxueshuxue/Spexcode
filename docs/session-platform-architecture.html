@@ -381,6 +381,15 @@ openSessionDatabase({ databasePath: absolutePath })</pre>
           <li><strong>Materialized harness files</strong> 位于 harness 规定的项目路径，因为它们必须被发现，不属于全局数据库。</li>
         </ul>
         <p>解析优先级固定为：显式 API/CLI 参数 → 环境变量 → adopter 全局 config → OS 标准默认。Config 文件自身的位置也可通过显式参数或环境变量重定位，避免固定依赖 <code>~/.spexcode</code>。</p>
+        <div class="callout red"><strong>解析出路径还不够，还要判定 locality，且默认拒绝。</strong>
+        绝对 <code>databasePath</code> 解析完成之后、调用 <code>openSessionDatabase</code> 之前，adopter path resolver 必须确认该路径位于
+        <strong>本地且支持可靠 advisory locking 的 filesystem</strong>；<strong>非本地、或 locality 无法判定，一律 fail closed</strong>（allow-list 而非 deny-list）。
+        协议核心不做、也不假装做这个判定，它只接收已判定合格的绝对路径。原因：v1 用 <code>DELETE</code> 而非 WAL，而 WAL 因要求共享内存会在网络
+        filesystem 上自动 fail loud、<code>DELETE</code> 不会——那道白送的闸门没有了，必须显式补上。macOS/Windows detector 仍是实现 OPEN，
+        缺失时同样拒绝；真实网络挂载未实测，不宣称覆盖。</div>
+        <p><strong>地址空间在一个 <code>databasePath</code> 内是扁平且全局的：</strong><code>session_id</code> 全局唯一、单列主键，协议不接受
+        <code>(project_id, session_id)</code>。<code>project_id</code> 只是 adopter metadata（存在 <code>spex_governed_sessions</code> 这类 adopter 表里），
+        多项目共库时由 adopter 自己保证 id 全库唯一；人类可读的短 id 是 adopter 维护的 project-local alias，传给协议的仍是全局 id。</p>
       </section>
 
       <section id="language">
@@ -389,12 +398,23 @@ openSessionDatabase({ databasePath: absolutePath })</pre>
         <table>
           <thead><tr><th>选择</th><th>现在的判断</th><th>触发改变的事实</th></tr></thead>
           <tbody>
-            <tr><td>TypeScript</td><td class="keep">采用</td><td>当前三个 adopter 都从 Node/SpexCode 生态进入；可直接 import；不增加 daemon 或 N-API 发布面</td></tr>
+            <tr><td>TypeScript</td><td class="keep">采用</td><td>当前三个 adopter 都从 Node/SpexCode 生态进入；可直接 import；不增加 daemon 或 N-API 发布面。<strong>代价（须一并记账）</strong>：<code>node:sqlite</code> 把 SQLite 版本与 Node 构建绑死，无法独立钉版</td></tr>
+            <tr><td>Driver：<code>node:sqlite</code> <code>DatabaseSync</code></td><td class="keep">v1 冻结</td><td>零安装、无 native ABI、外部 adopter 接入税最低。<code>better-sqlite3</code> 作为可替换实现被验证过（同一套 vector 45/45 通过），但 27MB 与 native prebuild 是真实接入成本</td></tr>
             <tr><td>Rust</td><td class="later">保留第二实现位置</td><td>真实非 Node adopter、需要独立跨语言 runtime、必须捆绑同一 SQLite、或测得 JS boundary 是瓶颈</td></tr>
             <tr><td>ORM</td><td class="remove">不采用</td><td>表少且 SQL 是协议资产；ORM 会建立第二套 schema 语言</td></tr>
           </tbody>
         </table>
-        <p>Runtime 必须在启动与 CI 查询 <code>sqlite_version()</code>。多进程 WAL 至少使用已修复 WAL-reset race 的 SQLite 版本；不能只依赖宽泛的 Node engine range。</p>
+        <p>Runtime 必须在启动与 CI 查询 <code>sqlite_version()</code>，并且是<strong>数值比较而不是字符串比较</strong>（<code>"3.9.0"</code> 字符串大于 <code>"3.38.0"</code>，却老十六年）。</p>
+        <div class="callout amber"><strong>最低版本 = SQLite 3.38.0，由引擎实际用到的 SQL 特性推导，不是从某个 bug 反推。</strong>
+        逐条出处：partial index 3.8.0 · STRICT tables 3.37.0 · <strong>JSON 函数成为内置 3.38.0</strong>（changelog 原文：<em>“The JSON functions are now built-ins.
+        It is no longer necessary to use the -DSQLITE_ENABLE_JSON1 compile-time option”</em>）。卡点是 JSON 这条而不是 STRICT——在 3.38.0 之前使用
+        <code>json_valid</code> 等于依赖对方编译时开没开 <code>SQLITE_ENABLE_JSON1</code>，而<strong>依赖编译开关不构成版本下限</strong>。
+        该下限有专门 vector 逐特性验证。</div>
+        <p><strong>Fleet 结论（实测）：</strong>Node 22.21.0 自带 SQLite 3.50.4，高于 3.38.0，整套引擎与并发/crash vector 在其上
+        <strong>55/55 通过</strong>。因此 <code>engines: node &gt;= 22</code> 与 <code>.nvmrc</code> 维持不变。（参考：Node 24.14.0 = 3.51.2，24.15.0 = 3.51.3。）</p>
+        <div class="callout red"><strong>WAL 不在 v1 内。</strong>SQLite 的 WAL-reset bug 存在于 3.7.0 至 3.51.2、修复于 3.51.3，而其触发条件正是本架构的形态：
+        <em>WAL 模式下两个以上连接同时写或 checkpoint</em>。v1 因此固定使用 rollback journal <code>DELETE</code> 并禁用 WAL——绕开该 bug，同时保住 Node 22。
+        启用 WAL 是<strong>未来一次独立升级实验</strong>，前置条件是 <code>SQLite &gt;= 3.51.3</code>，不属于 v1 合同。</div>
       </section>
 
       <section id="subtraction">
@@ -402,7 +422,7 @@ openSessionDatabase({ databasePath: absolutePath })</pre>
         <table>
           <thead><tr><th>元素</th><th>决定</th><th>理由</th></tr></thead>
           <tbody>
-            <tr><td>SQLite database + WAL/SHM</td><td class="keep">保留</td><td>唯一结构化持久状态与跨进程 transaction authority</td></tr>
+            <tr><td>SQLite database + rollback journal</td><td class="keep">保留</td><td>唯一结构化持久状态与跨进程 transaction authority。v1 是 <code>DELETE</code> 模式，写事务期间出现 <code>-journal</code>、提交后消失；不产生 <code>-wal</code>/<code>-shm</code></td></tr>
             <tr><td>Protocol session/message tables</td><td class="keep">保留</td><td>地址、FIFO、历史、幂等与 retire 的最小事实</td></tr>
             <tr><td>Topology edge tables</td><td class="keep">内部保留</td><td>消除 parent/watcher 双重真相</td></tr>
             <tr><td>每 session 的 pending/timeline/journal/cursor JSON</td><td class="remove">删除</td><td>数据库 transaction 与查询已提供同一能力</td></tr>
@@ -444,6 +464,10 @@ harness runtime/configuration adapters            adopter-owned</pre>
           <li>协议 package 不读取 cwd、<code>.spexcode</code> 或 product config，只接收显式 database path。</li>
           <li>所有写 transaction 都是同步短事务，内部不执行网络、文件、harness 或用户 callback。</li>
           <li>多进程、SIGKILL、busy、checkpoint starvation、migration replay 与 backup restore 测试通过。</li>
+          <li>启动时 <code>sqlite_version()</code> 低于 3.38.0 一律拒绝；<code>journal_mode</code> 回读必须是 <code>delete</code>，绝不自动转换一个 WAL 库。</li>
+          <li><strong>storage locality 由 adopter path resolver 在 <code>openSessionDatabase</code> 之前判定并 fail closed</strong>；非本地或无法判定即拒绝。协议核心不做也不假装做该判定。</li>
+          <li>一个进程内不得链接两份 SQLite build 打开同一个库：POSIX advisory lock 是 per-process 的，两份 build 互相看不见，single-writer 会静默失效（实测：持锁方仍在持锁时，另一份 build 0ms 就拿到了写锁）。</li>
+          <li><code>dequeue</code> 是 at-most-once 协议交付边界；consumer handler journal 属 adopter，且不与 <code>dequeue</code> 同事务，任何实现都不得宣称协议级 at-least-once。</li>
         </ol>
       </section>
 

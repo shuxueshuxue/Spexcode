@@ -235,7 +235,7 @@
             <div class="dag-row">
               <div class="dag-label">Foundation</div>
               <div class="node foundation"><b>M1 · Protocol contract</b><small>schema、API、errors、conformance fixtures</small></div>
-              <div class="node foundation"><b>M2 · SQLite engine</b><small>transactions、migration、crash/concurrency proof</small></div>
+              <div class="node foundation"><b>M2 · SQLite engine</b><small>rollback journal、migration、crash/concurrency proof</small></div>
               <div class="node foundation"><b>M3 · Topology core</b><small>neutral edge schema、transaction capability</small></div>
               <div class="node review"><b>R0 · Boundary review</b><small>fresh-context API and schema attack</small></div>
             </div>
@@ -257,6 +257,9 @@
             </div>
           </div>
         </div>
+        <div class="callout amber"><strong>里程碑编号 crosswalk：</strong>本页的 <strong>M0–M9 是调度权威</strong>——分工、门禁与 review 一律以它为准。
+        <a href="session-management-refactor.html#migration">Session 管理重构</a> §8 另有一套局部的 M0–M6，只描述实现推进顺序，两者不是同一套编号
+        （例如那页的 M4「一次性离线导入」= 本页 M7）。完整对照表见该页 §8；遇到分歧以本页 M0–M9 为准。</div>
         <div class="callout amber"><strong>并行边界：</strong>M1、legacy inventory 和 experiment design 可以并行；M2 与 M3 在 schema capability 上串行；三个 adopter 的业务代码可分 session，但任何共享 protocol/topology 文件同一时刻只允许一个 writer。M8 在所有 adopter cutover 落地前绝不启动。</div>
       </section>
 
@@ -296,7 +299,7 @@
         </div>
         <div class="phase">
           <div class="phase-id">M2</div>
-          <div><h3>SQLite engine 与反证实验</h3><p>实现显式 databasePath、短同步 transaction、migration registry、FIFO/idempotency；用多进程、SIGKILL、busy、checkpoint、backup 与 corrupt fixture 攻击。</p><div class="phase-meta"><strong>Exit：</strong>500 short writes / 10s 与更高 burst 无丢失或重复 dequeue；transaction 内没有外部等待。<br><strong>禁止：</strong>产品接线、ORM、daemon、outbox、file observer。</div></div>
+          <div><h3>SQLite engine 与反证实验</h3><p>实现显式 databasePath、短同步 transaction、migration registry、FIFO/idempotency；用多进程、SIGKILL、busy、checkpoint、backup 与 corrupt fixture 攻击。</p><div class="phase-meta"><strong>Exit：</strong>500 short writes / 10s 与更高 burst 无丢失或重复 dequeue；transaction 内没有外部等待。<br><strong>禁止：</strong>产品接线、ORM、daemon、outbox、file observer。<br><strong>已冻结（v1）：</strong>driver <code>node:sqlite</code> <code>DatabaseSync</code>；<code>journal_mode=DELETE</code>（禁用 WAL，只断言不设置）+ <code>synchronous=FULL</code> + <code>foreign_keys=ON</code> + 有界 <code>busy_timeout</code>（必须是连接第一条语句）；SQLite 下限 <strong>3.38.0</strong>，实测 Node 22.21.0 / SQLite 3.50.4 上 55/55 通过；<code>databasePath</code> 的 locality 由 adopter resolver 前置判定且未知/非本地一律 fail closed。<br><strong>实测 Exit 达成：</strong>DELETE 下 1266–1313 次短写/10s（p50 7.0ms、p99 12.6–14.0ms），过线约 2.5 倍。WAL 时代的 3556 只作历史对照，不是 v1 数值。</div></div>
         </div>
         <div class="phase">
           <div class="phase-id">M3</div>

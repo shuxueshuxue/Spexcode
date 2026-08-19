@@ -244,6 +244,17 @@ scenarios:
     expected: >-
       Launch clears immediately, stays focused on New, and never waits or auto-switches. Removing the active
       session falls back to New; removing a background session preserves the current valid selection.
+  - name: launch-failure-keeps-draft-and-explains
+    tags: [frontend-e2e, desktop, backend-api]
+    description: >-
+      Open New Session against a real project whose public POST /api/sessions returns a structured non-2xx
+      creation failure, press Enter once, and inspect the request, draft, visible failure state, and session
+      list.
+    expected: >-
+      Enter issues exactly one create request. When the backend refuses creation, the New composer keeps the
+      complete draft and remains focused, exposes the backend error together with its phase/code when present,
+      and leaves the session list unchanged; editing the draft clears the stale failure so the same composer can
+      be retried.
   - name: launcher-picker-is-config-shaped
     tags: [frontend-e2e, desktop]
     description: >-

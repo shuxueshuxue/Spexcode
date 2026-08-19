@@ -107,7 +107,13 @@ producer 入口是 `spec-cli/src/client.ts:253-260` 的 `clientSend`，其后端
 
 Spex adopter 拥有 config/path resolver、`spex_governed_sessions` 与 topology edge 表、lifecycle/governance policy、harness runtime adapter、`messageId`-keyed consumer journal 和 wake hint/sweep。materialization adapter 继续独立拥有 hooks/commands/trust；protocol 只存 opaque session/message。
 
-同库多项目的作用域结论：`protocol_sessions.session_id` 在一个 `spexcode.db` 内是全局主键；`spex_governed_sessions.session_id` 也是主键，`project_id` 只是 adopter metadata/index，不能把同一个 `session_id` 在两个项目中复用。证据是架构文档第 7 节明确“同一 state root 共享一个数据库，用 `project_id` 区分项目”，而协议 spec 要求 one exact session address、未知 id 不隐式创建；refactor 第 6 节却展示 `session_id TEXT PRIMARY KEY` 加 `project_id`。因此最小 API 后果是：Spex 在调用 `initialize` 前必须生成跨整个 DB 唯一的 opaque id（或把 project namespace 编入 id）；不能要求 protocol 接受 `(project_id, session_id)` 双键，也不能让 protocol 读取 project config。若产品要保留人类短 id，必须由 adopter 维护 project-local alias，传给 protocol 的仍是全局 id。
+#### Global session identity seam
+
+这是 adopter 与 protocol 之间唯一的地址/身份缝：一个 `databasePath` 内的 `session_id` 全局唯一，是单列主键；协议不接受 `(project_id, session_id)`，也不把 project 维度拼进自己的地址 API。`project_id` 是纯 adopter metadata，只存在于 `spex_governed_sessions` 这类 Spex-owned 表，不参与 protocol address。多项目共库时，adopter 在生成 id 时自己保证全库唯一，可以把 namespace 编进 id，也可以直接使用全局 opaque id；协议不读取 project config 来替 adopter 解析。
+
+这条 seam 收束 G.5 #1：唯一 identity authority 落在 adopter DB 的 global opaque id；`initialize(sessionId)` 不读 `session.json`，也不接受 project 维度。Spex 的 lifecycle/native identity 仍是 adopter 表字段，不能回流到 protocol session row。self-launch 使用 native session id 时同样受一个 databasePath 内全局唯一约束；ZSwarm 也应遵守这一点，但该 adopter 结论目前只是 spec-derived 推定，因为本仓库没有 production importer 证据。
+
+证据与 schema 空洞保持可见：架构文档第 7 节说同一 state root 共享一个数据库、用 `project_id` 区分项目；协议 spec 要求 one exact session address、未知 id 不隐式创建；refactor 第 6 节展示 `session_id TEXT PRIMARY KEY` 加 `project_id`。因此 Spex 最小 API 不能要求复合键，若产品保留人类短 id，必须由 adopter 维护 project-local alias，传给 protocol 的仍是全局 id。
 
 ### 4. 最薄切入包
 

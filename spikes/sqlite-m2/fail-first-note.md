@@ -35,7 +35,19 @@ node stubs/run.mjs
 unchanged, against an engine that converts a WAL database instead of refusing it. It fails on
 `a database left in WAL is refused, not converted` — our own assertion, naming the violated claim.
 
-`evidence/v1-delete/counterexamples.txt` is the same treatment for every stub. `stubs/run.mjs`
-refuses to count a stub that fails to load: a module error is reported as
-`HARNESS FAILURE, not a counter-example` and the run exits non-zero, so "did not measure" can never
-be mistaken for "measured and fine".
+### The two counter-example matrices
+
+`evidence/v1-delete/counterexamples.txt` is the **superseded** record. It reports `9/9 gated`, and
+that claim did not hold: the `busy-timeout-after-version-probe` flip was gated only by a
+probabilistic cold-open race that caught it in 8 of 12 runs, so two honest runs of identical code
+could and did disagree. Kept verbatim, because the mistake is part of the record.
+
+`evidence/v1-delete/counterexamples-gated.txt` is the **current** record: `gated 10/10, ungated 0,
+not measured 0`, after the ordering decision got a deterministic gate
+(`busy-timeout-gate-stability.txt`).
+
+`stubs/run.mjs` now reports three states rather than two — GATED, UNGATED, NOT MEASURED — because
+`vectors that fired: 0` used to mean either "nothing caught it" or "we never got a verdict", and
+those demand opposite responses. A stub that fails to load, a run that times out, and a flip caught
+only intermittently are all NOT MEASURED, and none of them counts as evidence that a decision is
+fine. `evidence/v1-delete/tri-state-demo.txt` exercises all three states against one vector.

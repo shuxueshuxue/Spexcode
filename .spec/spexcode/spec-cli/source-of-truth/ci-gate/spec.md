@@ -42,7 +42,8 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   while untracked source is not; init's receipt
   names only artifacts it actually planted for the selected harness; the starter launcher is that harness's
   plain command with no automatic-permission flags; the seeded plugin tree is the canonical [[init-preset]]
-  projection byte-for-byte and mode-for-mode; no held-back, private-machine, or SpexCode-project text leaks into
+  projection byte-for-byte and mode-for-mode after omitting only hook subtrees whose declared events are
+  unavailable from every selected native adapter; no held-back, private-machine, or SpexCode-project text leaks into
   the adopter; and `spex spec lint` finishes with zero errors. It never starts a harness, attempts login, or
   reaches a harness/network service — session launch is beyond this gate. Every failed child command is
   reported with its captured stdout and stderr as separate, labelled sections; the production install itself

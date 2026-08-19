@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, dirname, isAbsolute, join, relative } from 'node:path'
+import { delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { parseFrontmatter } from '@spexcode/spec-core'
 import { buildProjection, projectionDiff } from './sync-init-plugins.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -227,6 +228,27 @@ function assertNoProjectLeak(project, caseName) {
     `[${caseName}] adopter output does not reference the source checkout${sourceLeak ? ` in ${sourceLeak.path}` : ''}`)
 }
 
+function frontmatterValues(source, key) {
+  const value = parseFrontmatter(source).fm[key]
+  return Array.isArray(value) ? value : value ? [value] : []
+}
+
+function projectedPluginsForEvents(events) {
+  const excludedDirectories = []
+  for (const [path, file] of CANONICAL_PLUGINS) {
+    if (path !== 'spec.md' && !path.endsWith(`${sep}spec.md`)) continue
+    const source = file.content.toString('utf8')
+    if (!frontmatterValues(source, 'surface').includes('hook')) continue
+    const requiredEvents = frontmatterValues(source, 'events')
+    if (requiredEvents.length && !requiredEvents.some((event) => events.has(event))) {
+      excludedDirectories.push(dirname(path))
+    }
+  }
+
+  return new Map([...CANONICAL_PLUGINS].filter(([path]) =>
+    !excludedDirectories.some((dir) => path === dir || path.startsWith(`${dir}${sep}`))))
+}
+
 function runCase({ language, harness, name }, spex, suiteRoot) {
   const caseRoot = join(suiteRoot, name.replace('/', '-'))
   const project = join(caseRoot, 'project')
@@ -356,10 +378,11 @@ function runCase({ language, harness, name }, spex, suiteRoot) {
     assert.ok(!existsSync(join(codexHome, 'config.toml')), `[${name}] Claude-only materialize writes no Codex trust`)
   }
 
+  const hookEvents = new Set(Object.keys(JSON.parse(readFileSync(join(project, harness.shim), 'utf8')).hooks ?? {}))
   assert.deepEqual(
-    projectionDiff(CANONICAL_PLUGINS, join(project, '.spec', 'project', '.plugins')),
+    projectionDiff(projectedPluginsForEvents(hookEvents), join(project, '.spec', 'project', '.plugins')),
     [],
-    `[${name}] initialized plugins equal the canonical projection byte-for-byte and mode-for-mode`,
+    `[${name}] initialized plugins equal the selected harness event-reachable canonical projection byte-for-byte and mode-for-mode`,
   )
   assertNoProjectLeak(project, name)
 

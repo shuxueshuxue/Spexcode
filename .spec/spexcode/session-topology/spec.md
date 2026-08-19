@@ -15,10 +15,11 @@ The topology vocabulary is `attach`, `detach`, `reparent`, `parents`, `children`
 builds a fixed message, then calls protocol `enqueue` for each exact address. The same topology operation may be
 used without sending anything.
 
-Relationship revision and notification publication require an adopter-owned durable outbox or keyed replay. The
-topology module supplies stable relation/revision identity; [[session-runtime]] reconciles each intended recipient
-through protocol enqueue. A file observer is never the missing transaction between a relation write and a message
-write.
+V1 topology and protocol state share one adopter-owned SQLite database. When adopter policy requires notifications,
+the relation mutation and all deterministic protocol enqueues commit in one bounded synchronous transaction or all
+roll back. There is no transactional outbox, relation-revision replay, dispatcher, or observer bridging the two
+writes. Cross-database publication, an external broker, and network delivery are outside v1; adding one would
+require a new contract rather than a fallback inside this topology.
 
 The first implementation stays internal until at least Spex governed sessions and ZSwarm demonstrate that they
 share the same relationship semantics rather than merely similar field names. Only then should it become a

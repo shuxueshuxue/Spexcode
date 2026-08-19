@@ -1,104 +1,73 @@
 ---
 scenarios:
-  - name: installed-package-roundtrip
+  - name: installed-sqlite-package-contract
     tags: [cli]
     description: >
-      Pack session-protocol and its declared dependencies, install the tarballs in a fresh consumer outside the source
-      repository, choose an isolated absolute sessionRoot outside the repository, and use only the public package
-      entry to open that exact root,
-      initialize an address, enqueue, dequeue, and read one message.
+      Pack the protocol and its declared dependencies, install the tarballs in a fresh consumer outside the source
+      repository, and use only the public entry with a fresh explicit absolute databasePath. Open the database from
+      two processes, initialize one address, enqueue two messages, list, dequeue, read history, and retire it.
     expected: >
-      The installed package resolves without source or TypeScript, dequeue returns the frozen message exactly
-      once without invoking a harness callback, and readTimeline returns its immutable history from the exact
-      caller-provided sessionRoot.
+      The package resolves without source or TypeScript fallback; both processes observe one SQLite authority;
+      initialize, FIFO, stable history, dequeue-at-most-once, empty-queue retirement, and the retained tombstone
+      match the M1 contract without a daemon, product config, or harness callback.
     code: packages/session-core/src/index.ts
     related: packages/session-core/package.json
-  - name: keyed-accept-recovers-crash-boundaries
+  - name: schema-migration-is-one-portable-authority
     tags: [cli]
     description: >
-      Exercise an idempotent enqueue whose queue projection disappears after its journal entry, then exercise a
-      dequeue journal entry whose queue head remains after the process exits.
+      Through the installed public open operation, exercise a fresh database, exact migration replay, a fixture with
+      one applied migration checksum changed, and a fixture from a future unsupported schema generation.
     expected: >
-      Reconcile restores the exact frozen pending message without recomposing; a dequeued leftover head is
-      removed without returning it again; exact enqueue replay creates no duplicate.
-    test:
-      path: packages/session-core/src/session-protocol.test.ts
-      name: a keyed retry restores debt lost after the receipt append, then settles exactly once
-    code: packages/session-core/src/message.ts
-    related: packages/session-core/src/delivery-queue.ts
-  - name: installed-session-lifecycle-dogfood
-    tags: [cli, backend-api]
-    description: >
-      Pack the root package, install it in a fresh consumer outside the source checkout, pass an isolated absolute
-      sessionRoot,
-      initialize a fresh Git project, and use only the installed CLI to start the backend and dispatch a real
-      Codex child. The child must finish by declaring close-pending with the exact terminal note
-      SESSION_CORE_PACKAGE_OK. Observe it through installed session wait and session show, then close that exact
-      child through the installed CLI.
-    expected: >
-      The installed root resolves its bundled session-protocol without source or TypeScript fallback; the real child
-      receives its complete originating prompt, reaches close-pending exactly once, and exposes only the exact
-      terminal marker through the narrow session record. The named worktree and branch exist before close and are
-      both retired afterward, proving installed create, record persistence, timeline wake, delivery, lifecycle,
-      and close use the extracted durable protocol end to end.
+      Fresh and replayed databases converge on the declared protocol schema. Checksum drift and future schema both
+      fail before any protocol read or write; neither is treated as an empty database or silently rewritten.
     code: packages/session-core/src/index.ts
-    related:
-      - spec-cli/src/sessions.ts
-      - spec-cli/src/session-follow.ts
-      - spec-cli/package.json
-  - name: self-launch-queue-needs-no-backend
+    related: packages/session-core/package.json
+  - name: fifo-idempotency-and-retirement
     tags: [cli]
     description: >
-      In a fresh installed consumer, initialize a native self-launch session address without a governed lifecycle
-      record or a running Spex backend. Verify the universal session.json, enqueue from a separate process, leave
-      it offline, then start an explicit listener that uses only the public protocol entry.
+      Initialize one address, enqueue A then B, replay A with the same idempotency key and exact bytes, reuse that
+      key with one changed byte, attempt retirement while work remains, drain through repeated dequeue, then retire
+      and attempt initialize and enqueue again.
     expected: >
-      The exact message remains pending while no runtime exists, the listener dequeues it once in FIFO order,
-      the address never appears as a governed board row, and correctness uses no filesystem notification.
-  - name: dequeue-is-the-protocol-delivery-boundary
+      Exact replay returns the original row, changed reuse fails without mutation, pending and dequeue order remain
+      A then B, non-empty retirement is atomic failure, and the retired tombstone and full history remain readable
+      while resurrection and later enqueue fail.
+    code: packages/session-core/src/index.ts
+    related: packages/session-core/src/session-protocol.test.ts
+  - name: concurrent-dequeue-has-one-commit-winner
     tags: [cli]
     description: >
-      Enqueue one message, dequeue it in a process that exits before invoking any harness adapter, then reconcile
-      and start a second consumer.
+      Start independent installed-package consumers against one pending message and force their dequeue transactions
+      to overlap. Repeat with one process terminated before commit and once immediately after commit.
     expected: >
-      Pending remains empty and the second consumer receives nothing: the journal proves the dequeue committed.
-      Adapter retry or acknowledgment is not silently reintroduced into the protocol.
-  - name: three-adopters-share-one-file-language
+      Exactly one committed consumer receives the head. A pre-commit rollback leaves it pending; a post-commit exit
+      leaves it dequeued and never requeues it. Busy exhaustion is a loud distinct failure, not null or empty state.
+    code: packages/session-core/src/index.ts
+  - name: same-database-composition-needs-no-outbox
     tags: [cli]
     description: >
-      Exercise ZSwarm-style, self-launch, and Spex-governed consumer fixtures through the installed public
-      package. Give each a different topology/runtime/materialization composition while using the same initialized
-      address, message codec, enqueue, dequeue, timeline, and reconciliation operations.
+      In a fixture-owned extension table within the same database, use the protocol's controlled synchronous
+      transaction capability to mutate one extension row and enqueue zero, one, then several notifications. Force
+      one transaction to roll back after the extension mutation and before commit.
     expected: >
-      No adopter id, parent/watch field, governed field, lifecycle enum, harness callback, or native runtime
-      dependency enters the protocol package. Each adopter can be removed without changing another's durable
-      queue bytes.
-  - name: concurrent-enqueue-and-dequeue-preserve-the-tail
+      Extension state and all protocol messages become visible together or not at all. No outbox, relation-revision
+      replay, dispatcher, raw public connection, or partial protocol operation is required or exposed.
+    code: packages/session-core/src/index.ts
+  - name: explicit-path-opaque-data-and-lost-wake
     tags: [cli]
     description: >
-      In independent processes, repeatedly enqueue ordinary unkeyed messages while another consumer dequeues the
-      same address. Force the enqueue to overlap the dequeue read-modify-write boundary.
+      Run from a process whose cwd, HOME, adopter config, and explicit databasePath are distinct. Enqueue unknown
+      message kinds with opaque body bytes and headers while discarding every wake hint, then open a new process at
+      the exact databasePath and query pending state.
     expected: >
-      Every message id appears exactly once in either the returned dequeue sequence or current pending projection,
-      FIFO order is preserved, and no stale whole-file rewrite drops or resurrects the tail.
-  - name: corrupt-protocol-state-fails-loud
-    tags: [cli]
-    description: >
-      Replace each of session.json, pending.json, the delivery journal, and cursors.json with structurally invalid
-      bytes before calling the relevant public read and mutation operations.
-    expected: >
-      The package distinguishes absent, empty, and corrupt state; corrupt bytes are preserved and every operation
-      refuses with an actionable error until explicit reconciliation or repair proves authority.
-  - name: caller-controls-the-session-root
-    tags: [cli]
-    description: >
-      Run an installed public-package roundtrip from a process whose HOME, XDG directories, SPEXCODE_HOME,
-      current project, and explicit absolute sessionRoot all name distinct empty locations.
-    expected: >
-      Every protocol byte and lock appears only below the explicit sessionRoot; the package neither reads nor
-      creates .spexcode, a Git-derived project namespace, an XDG directory, or a SpexCode global config file.
+      Relative paths are refused; no cwd or product config selects storage; bytes and headers round-trip exactly;
+      unknown kinds receive no product interpretation; and the new process discovers every pending row solely from
+      SQLite state despite all wake hints being lost.
+    code: packages/session-core/src/index.ts
 ---
 # session-protocol loss
 
-The package boundary is real only when an installed consumer can use the durable protocol and when the
-receipt/queue crash boundaries remain one implementation rather than knowledge every runtime must reproduce.
+Measure the contract through a fresh installed package and its public operations. The fixtures are portable protocol
+assets: they assert SQLite schema and transaction results, never source layout, a legacy file, or an internal helper.
+Until the SQLite implementation exists these scenarios are intentionally missing; old file-protocol readings do not
+prove them.

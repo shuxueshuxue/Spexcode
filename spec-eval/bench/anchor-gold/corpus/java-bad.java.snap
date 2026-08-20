@@ -1,0 +1,5 @@
+class Broken {
+    int broken(int value {
+        return value;
+    }
+}

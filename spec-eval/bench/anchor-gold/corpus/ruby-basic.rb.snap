@@ -1,0 +1,17 @@
+module Sample
+  VERSION = 1
+
+  class Calculator
+    def initialize(limit)
+      @limit = limit
+    end
+
+    def add(left, right)
+      left + right + @limit
+    end
+  end
+end
+
+def normalize(value)
+  value.to_s.strip
+end

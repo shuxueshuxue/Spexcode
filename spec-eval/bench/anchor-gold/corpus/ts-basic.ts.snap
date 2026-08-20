@@ -1,0 +1,23 @@
+export interface Config {
+  retries: number
+}
+
+export const answer = 42
+
+export const transform = (value: number) => {
+  return value * 2
+}
+
+export function compute(value: number): number {
+  return transform(value) + answer
+}
+
+export class Box {
+  constructor(readonly value: number) {}
+
+  double(): number {
+    return this.value * 2
+  }
+}
+
+export type Alias = string

@@ -887,7 +887,7 @@ test('scenario code axis: a dead selector is LOUD and leaves the reading conserv
   const anchors = anchorProbeFor(root, idx)
   const sc: any = scOf(['m.ts#gone'])
   const axis = scenarioCodeAxis(sc.code, [])
-  const problems = anchorProblems(root, axis.entries)
+  const problems = await anchorProblems(root, axis.entries)
   assert.equal(problems.length, 1)
   assert.match(problems[0], /m\.ts#gone.*names no unit/)
   await anchors.prime?.([{ sinceSha: base, entries: axis.entries }])

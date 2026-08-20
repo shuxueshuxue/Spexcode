@@ -117,21 +117,35 @@ scenarios:
       Miss: NO related-drift line for the scoped row — silent. Hit: a soft `related-drift` warn naming
       the selector and the node; exit stays 0 both times (related never blocks, needs no ack, feeds no
       eval freshness).
-  - name: no-typescript-errors
+  - name: bundled-typescript-free
     tags: [cli]
+    test:
+      path: spec-cli/src/lint-scoped.test.ts
+      name: a Tree-sitter anchor does not require TypeScript in the governed repository
     description: >
-      Same fixture with an anchored .ts entry, but the governed host repo does not provide a usable
-      typescript. Run the production-installed `spex spec lint`.
+      A fixture has an anchored .ts entry but no project-local TypeScript/compiler dependency. Run the
+      production-installed `spex spec lint`.
     expected: >
-      Lint completes without throwing and emits an explicit extractor-unavailable `integrity` ERROR
-      naming the ts-ast repair — install typescript in the host repo or remove the #anchor; exit 1.
-      JS-family anchors are reported unverified and skipped (the error is not an anchor pass); there is
-      no regex downgrade, and the remaining lint rules still run.
+      The bundled Tree-sitter runtime validates the anchor normally: no extractor-unavailable finding and
+      no project-local compiler installation. Other independent lint findings still appear, proving this
+      is neither a skipped anchor nor a fallback parser.
+  - name: seven-language-cli-anchors
+    tags: [cli]
+    test:
+      path: spec-cli/src/lint-scoped.test.ts
+      name: the real CLI resolves shipped Tree-sitter anchors across every supported language
+    description: >
+      In one compiler-free fixture repository, add selector-scoped nodes for TypeScript, TSX, Python, Go,
+      Rust, Java, and Ruby, then run the real `spex spec lint` command.
+    expected: >
+      Every selector resolves through its grammar row and lint exits 0. The output has neither an
+      unavailable extractor nor an unverifiable anchor, demonstrating the installed CLI rather than an
+      in-process extractor helper owns the complete cross-language path.
   - name: python-qualified-anchors
     tags: [cli]
     test:
       path: spec-cli/src/lint-scoped.test.ts
-      name: Python LangSpec resolves module/async/method/nested names and their drift through the real CLI
+      name: Tree-sitter Python resolves module/async/method/nested names and their drift through the real CLI
     description: >
       In a fixture repo, pin a Python module function, async function, class method, nested function,
       and nested-class method in one code: entry. Run `spex spec lint`, then change each unit (including

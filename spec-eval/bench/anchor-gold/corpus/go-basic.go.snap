@@ -1,0 +1,17 @@
+package sample
+
+const Version = 1
+
+type Config struct {
+	Retries int
+}
+
+func Add(left int, right int) int {
+	return left + right
+}
+
+type Service struct{}
+
+func (Service) Run(value string) string {
+	return value
+}

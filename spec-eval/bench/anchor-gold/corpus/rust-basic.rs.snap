@@ -1,0 +1,22 @@
+pub const LIMIT: usize = 8;
+
+pub struct Config {
+    pub retries: usize,
+}
+
+pub enum Mode {
+    Fast,
+    Safe,
+}
+
+pub fn add(left: i32, right: i32) -> i32 {
+    left + right
+}
+
+pub struct Service;
+
+impl Service {
+    pub fn run(&self, value: i32) -> i32 {
+        value + LIMIT as i32
+    }
+}

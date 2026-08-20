@@ -42,6 +42,13 @@ writes only the shared configuration, this ledger, and the merge itself. The int
 the merged tree and never accepts a lane's own report of it, because a result that cannot be reproduced after the
 merge has not landed.
 
+The ledger also records what construction discovered about the measuring apparatus, separately from what it
+discovered about the product. A gate whose verdict depends on the interpreter's default test reporter, or a
+launcher whose binary is missing, changes what a reported number means without changing a line of the code under
+test; recording those facts is what keeps a later reader from trusting a zero that was never actually measured.
+Such an observation is reported precisely and left to the lane that owns the file, because a reviewer who repairs
+the branch under review destroys both the ownership boundary and the review.
+
 The evidence standard is inherited unchanged: a first failure must be the vector's own assertion rather than an
 environment error that would fail identically against a correct implementation, original failure output is
 immutable, and a counting gate distinguishes a measured zero from a surface that was never measured.

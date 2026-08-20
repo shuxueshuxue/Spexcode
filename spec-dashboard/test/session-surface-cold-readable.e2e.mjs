@@ -172,7 +172,7 @@ try {
   offlineId = await create('offline session timeline marker')
   await post(`/api/sessions/${archivedId}/input`, { kind: 'text', text: 'archived authored history entry' })
   await post(`/api/sessions/${offlineId}/input`, { kind: 'text', text: 'offline authored history entry' })
-  await post(`/api/sessions/${archivedId}/archive`)
+  await post(`/api/sessions/${archivedId}/close`)
   await post(`/api/sessions/${offlineId}/stop`)
   const cold = await waitFor(async () => {
     const rows = await json('/api/sessions?all=1')
@@ -182,9 +182,8 @@ try {
       && !offline?.archived && offline?.liveness === 'offline' ? { archived, offline } : null
   }, 'real archived and offline records')
   await seedTranscript(archivedId)
-  execFileSync('git', ['worktree', 'remove', '--force', cold.archived.path], { cwd: project })
   assert.equal(existsSync(cold.archived.path), false, 'archived fixture worktree still exists')
-  step('real sessions prepared through create, input, archive, and stop APIs')
+  step('real sessions prepared through create, input, close, and stop APIs')
 
   const { chromium } = await import(pathToFileURL(playwrightPath).href)
   browser = await chromium.launch({ executablePath: chromiumPath, headless: true, args: ['--no-sandbox'] })
@@ -284,7 +283,6 @@ try {
   await page.waitForTimeout(8_750)
   assert.equal(timelineRequests.get(archivedId), 1, 'archived selection polled immutable timeline history')
   step('archived timeline remained at one request beyond a polling interval')
-  execFileSync('git', ['worktree', 'add', cold.archived.path, cold.archived.branch], { cwd: project })
   const archivedResume = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/sessions/${archivedId}/resume`
     && response.request().method() === 'POST')
   await archivedSurface.restore.click()

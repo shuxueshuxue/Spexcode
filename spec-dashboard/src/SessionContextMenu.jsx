@@ -36,7 +36,6 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
   // press closes the topmost one, never the session panel behind it (the old bespoke window listener raced it).
   useEscLayer(!!menu, onClose)
   useEscLayer(!!renaming, () => setRenaming(null))
-  useEscLayer(!!archiving, () => setArchiving(null))
   useEscLayer(!!closing, () => setClosing(null))
   useEscLayer(!!quarantining, () => setQuarantining(null))
   // attach's own Esc layer lives inside SessionAttach (it owns the modal); nothing to peel here.

@@ -1,0 +1,7 @@
+def duplicate(value)
+  value
+end
+
+def duplicate(value, suffix = '')
+  value + suffix
+end

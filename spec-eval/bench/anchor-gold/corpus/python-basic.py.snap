@@ -1,0 +1,19 @@
+from dataclasses import dataclass
+
+def load(path):
+    return path.strip()
+
+@dataclass
+class Service:
+    name: str
+
+    def __init__(self, name):
+        self.name = name
+
+    async def run(self, value):
+        return value + self.name
+
+def outer(value):
+    def inner():
+        return value
+    return inner

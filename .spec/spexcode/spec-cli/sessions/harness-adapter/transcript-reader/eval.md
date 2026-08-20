@@ -13,7 +13,7 @@ scenarios:
     description: Ask for unsupported, missing, malformed, and timestamp-less native transcript sources.
     expected: Each case returns an explicit unsupported, missing, invalid, or unreadable reason; no failure is represented as an empty successful transcript.
   - name: lazy-status-disclosure
-    tags: [browser, e2e]
+    tags: [frontend-e2e, desktop, backend-api]
     test: spec-dashboard/test/session-surface-cold-readable.e2e.mjs
     code: spec-dashboard/src/TimelineChat.jsx
     description: Expand status rows through a prebuilt dashboard and isolated backend after the real archived session worktree has been removed.

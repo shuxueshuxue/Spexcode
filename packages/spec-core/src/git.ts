@@ -219,12 +219,12 @@ export async function batchRevisionOids(root: string, revisions: string[], optio
   })
 }
 export async function batchBlobTexts(root: string, oids: string[]): Promise<Map<string, string>> {
-  const unique = [...new Set(oids.filter(Boolean))]
+  const objectIds = [...new Set(oids.filter(Boolean))]
   const files = new Map<string, string>()
-  if (!unique.length) return files
-  for (const oid of unique) if (!isGitObjectId(root, oid)) throw new Error(`invalid object id '${oid}'`)
-  for (let cursor = 0; cursor < unique.length; cursor += BATCH_BLOB_CHUNK) {
-    const chunk = unique.slice(cursor, cursor + BATCH_BLOB_CHUNK)
+  if (!objectIds.length) return files
+  for (const oid of objectIds) if (!isGitObjectId(root, oid)) throw new Error(`invalid object id '${oid}'`)
+  for (let cursor = 0; cursor < objectIds.length; cursor += BATCH_BLOB_CHUNK) {
+    const chunk = objectIds.slice(cursor, cursor + BATCH_BLOB_CHUNK)
     const out = await batchBuffer(['-C', root, 'cat-file', '--batch'], chunk.join('\n') + '\n', BATCH_BLOB_MAX_BUFFER)
     let offset = 0
     for (const oid of chunk) {
@@ -1473,11 +1473,11 @@ function canonicalPathProjector(
       const candidate = pending.pop()!
       if (seen.has(candidate)) { resolved.add(candidate); continue }
       seen.add(candidate)
-      const unique = new Map<string, RenameProjectionEvent>()
+      const applicableByIdentity = new Map<string, RenameProjectionEvent>()
       for (const rename of renamesByFrom.get(candidate) ?? []) {
-        if (!precedes(rename.hash, event)) unique.set(`${rename.hash}\0${rename.to}`, rename)
+        if (!precedes(rename.hash, event)) applicableByIdentity.set(`${rename.hash}\0${rename.to}`, rename)
       }
-      const applicable = [...unique.values()]
+      const applicable = [...applicableByIdentity.values()]
       if (!applicable.length) { resolved.add(candidate); continue }
       // The earliest applicable rename starts this path's next lineage epoch. Later renames from the same
       // path belong to a recreated path, not to an event that predates the first boundary. Incomparable

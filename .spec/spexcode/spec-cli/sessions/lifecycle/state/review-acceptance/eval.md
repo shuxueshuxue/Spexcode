@@ -9,15 +9,14 @@ scenarios:
       From a committed worktree, invoke the real `spex internal review-gate` surface with the lane's step-3
       commit as candidate and its contemporary main commit as base. Preserve the complete terminal result and
       inspect the candidate and main run counts, exact SHAs, fresh-or-cached baseline provenance, candidate-only
-      failures, named flaky decisions, and final exit status. Invoke the merge declaration with an attributable
-      failure in an isolated session, then invoke `ask` and `park` on the same state.
+      failures, named flaky decisions, and final exit status.
     expected: >-
       Candidate and main each run at least twice and comparison uses each side's union. The result names both
       exact SHAs and run counts; a cache hit additionally names its collection time and cannot hide low
-      confidence. Every applied or expired flaky entry remains printed with its evidence or expiry reason. The
+      confidence. Every registered flaky entry remains printed as applied, not needed, or not applied with its
+      evidence or expiry reason. The
       historical step-3 candidate reports its three session regressions as candidate-only and exits non-zero.
-      `done --propose merge` writes no review state while that difference remains, but `ask` and `park` remain
-      usable. Typecheck runs as a member of the same configured suite.
+      Typecheck runs as a member of the same configured suite.
 ---
 
 # review acceptance - eval

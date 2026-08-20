@@ -50,6 +50,14 @@ process.exitCode = 1
           ],
           expiresAfterDays: 30,
           expiresAfterBaselineCollections: 10,
+        }, {
+          test: 'probe::baseline noise',
+          observations: [
+            { sha: evidenceSha, observedAt: '2026-08-20T00:00:00.000Z', outcome: 'pass', source: 'fixture pass log' },
+            { sha: evidenceSha, observedAt: '2026-08-20T00:01:00.000Z', outcome: 'fail', source: 'fixture fail log' },
+          ],
+          expiresAfterDays: 30,
+          expiresAfterBaselineCollections: 10,
         }],
       },
     }, null, 2)}\n`)
@@ -69,7 +77,9 @@ process.exitCode = 1
     assert.deepEqual(first.candidateOnly, ['probe::candidate regression', 'probe::known unstable'])
     assert.deepEqual(first.exempted, ['probe::known unstable'])
     assert.match(first.report, /main [0-9a-f]{40} — 2 run\(s\), freshly collected at/)
+    assert.match(first.report, /flaky registry \(2\)/)
     assert.match(first.report, /APPLIED probe::known unstable .*pass@.*fail@/)
+    assert.match(first.report, /NOT NEEDED probe::baseline noise .*pass@.*fail@/)
     assert.match(first.report, /attributable failures after exemptions \(1\): probe::candidate regression/)
 
     const projectStores = readdirSync(join(home, 'projects'))

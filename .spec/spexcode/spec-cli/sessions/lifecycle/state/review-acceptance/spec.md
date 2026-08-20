@@ -65,11 +65,11 @@ timestamps, and a durable source reference; missing evidence makes configuration
 exemption. An exemption expires at the earlier of its configured wall-clock age or number of subsequent main
 baseline collections without another observed pass/fail flip. A later multi-run baseline flip is itself recorded
 with SHA, collection time, run count, and hashed logs, and resets both expiry clocks. While active it subtracts that test only from the candidate-only failure set. The report
-still prints every subtracted name, its evidence, and its expiry state. An expired or invalid entry subtracts
-nothing and is printed as requiring renewed evidence. Thus the list can explain noise but cannot silently erase
-it.
+prints the entire committed registry on every declaration: an entry is visibly `APPLIED`, `NOT NEEDED`, or
+`NOT APPLIED`, with its evidence and expiry state. An expired or invalid entry subtracts nothing and is printed
+as requiring renewed evidence. Thus the list can explain noise but cannot silently erase it.
 
 The declaration note contains the complete acceptance summary: candidate SHA and runs, main SHA and runs, fresh
-versus cached provenance, candidate-only failures, and every applied or expired flaky entry. If attributable
+versus cached provenance, candidate-only failures, and every registered flaky entry. If attributable
 failures remain, no `awaiting/merge` state is written and the output directs the worker to fix them or use `ask`
 to hand the finding upward. Other lifecycle declarations never invoke this gate.

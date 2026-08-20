@@ -323,9 +323,11 @@ function renderReport(input: {
     `main ${input.baseSha} — ${input.baseline.runs.length} run(s), ${input.cached ? 'CACHED' : 'freshly collected'} at ${input.baseline.collectedAt}${low}`,
     `candidate-only failures (${input.candidateOnly.length}): ${input.candidateOnly.length ? input.candidateOnly.join(' | ') : 'none'}`,
   ]
-  const relevant = input.decisions.filter((decision) => input.candidateOnly.includes(decision.test) || !decision.active)
-  lines.push(`flaky exemptions (${relevant.length}): ${relevant.length ? '' : 'none'}`)
-  for (const decision of relevant) lines.push(`  ${decision.active ? 'APPLIED' : 'NOT APPLIED'} ${decision.test} — ${decision.reason}`)
+  lines.push(`flaky registry (${input.decisions.length}): ${input.decisions.length ? '' : 'none'}`)
+  for (const decision of input.decisions) {
+    const status = !decision.active ? 'NOT APPLIED' : input.candidateOnly.includes(decision.test) ? 'APPLIED' : 'NOT NEEDED'
+    lines.push(`  ${status} ${decision.test} — ${decision.reason}`)
+  }
   lines.push(`attributable failures after exemptions (${input.remaining.length}): ${input.remaining.length ? input.remaining.join(' | ') : 'none'}`)
   return lines.join('\n')
 }

@@ -9,9 +9,9 @@ import { fileURLToPath } from 'node:url'
 import { claudeSlashCommands, codexSlashCommands, opencodeSlashCommands, piSlashCommands, type SlashCommand } from './slash-commands.js'
 import { OPENCODE_EVENTS, opencodePluginSource } from './opencode.js'
 import { piExtensionSource, writePiTrust, removePiTrust } from './pi-harness.js'
-import { claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
+import { claudeHeadlessColdRuntime, claudeHeadlessLaunchCommand, claudeHeadlessSock, deliverViaClaudeHeadless, interruptClaudeHeadless } from './claude-headless.js'
 import { codexHeadlessLaunchCommand } from './codex-headless.js'
-import { opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
+import { opencodeHeadlessColdRuntime, opencodeHeadlessLaunchCommand, spawnOpenCodeHeadlessTurn } from './opencode-headless.js'
 import { piHeadlessLaunchCommand, piHeadlessSock, deliverViaPiHeadless, piHeadlessColdRuntime } from './pi-headless.js'
 import { runtimeRoot, mainCheckout, readConfig, sessionArtifactPath, spexcodeHome } from '@spexcode/spec-core'
 import { git } from '@spexcode/spec-core'
@@ -297,10 +297,13 @@ export interface Harness {
   // commit. Null at the deadline is a launch failure; adapters without this seam retain the generic bounded
   // liveness fence.
   launchReady?(current: () => HarnessLaunchReadyRecord | null, deadline: number): Promise<HarnessLaunchReadinessFence | null>
-  // Exact leaf ownership evidence consumed by lifecycle teardown. The adapter returns the one argv identity
-  // token it registered for this record (session id, harness thread/generation, or null when unprovable);
-  // product lifecycle code never branches on harness names to invent this identity.
-  leafOwnerNeedle?(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): string | null
+  // Native identity and the first durable turn are established asynchronously by this adapter. Session
+  // lifecycle retains its authoritative launch payload until the adapter completes that proof.
+  launchPayloadProof?: true
+  // The exact native conversation target derivable from this record. Pinned-id adapters return the governed
+  // session id; native-assigned adapters return only a captured id; adapters with no native conversation return
+  // null. This is deliberately unrelated to OS leaf ownership and runtime liveness.
+  exactNativeTargetId(rec: HarnessLivenessRecord & { harnessSessionId?: string | null }): string | null
   // Poke a live session and report whether this immediate channel accepted the attempt. Claude-family adapters
   // write one idempotent rendezvous reply; Codex uses JSON-RPC on the same app-server WebSocket the
   // visible TUI uses — it reads the thread live and either `turn/steer`s the message INTO an in-progress turn
@@ -365,9 +368,9 @@ export interface Harness {
   // conversation (`--resume <id>`, the id we pinned at launch). codex's own thread id is un-pinnable on the
   // launch flag, so the BACKEND owns it: it `thread/start`s the thread and stores the id at launch, so reopen
   // resumes the SAME conversation via codex's own `resume <thread-id>` subcommand (the stored harnessSessionId,
-  // its rollout persisted on disk). Only a session whose thread id was never stored relaunches FRESH (empty
-  // tail) in the same worktree/record — there is nothing to resume.
-  resumeArg(rec: { session: string; harnessSessionId?: string | null }): string
+  // its rollout persisted on disk). An adapter may use the authoritative pending launch payload to recover a
+  // pre-identity launch; absence remains a loud adapter decision rather than an implicit empty tail.
+  resumeArg(rec: { session: string; harnessSessionId?: string | null }, pendingLaunchPayload?: string | null): string
 }
 
 // `ok` describes only this round's immediate adapter poke: the socket write, native controller request, or
@@ -377,6 +380,8 @@ export interface Harness {
 export type DispatchResult = { ok: boolean; error?: string }
 export type HarnessDeliveryRecord = {
   session: string
+  stopped?: boolean
+  archived?: boolean
   worktreePath?: string
   harnessSessionId?: string | null
   runtimeDir?: string
@@ -862,8 +867,8 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     // TWO launch modes, on ONE tail channel ("$@"). reopen() hands a `--resume <thread-id>` tail (see
     // codexHarness.resumeArg) to bring the SAME conversation back: resume that OWNED thread DIRECTLY — no new
     // thread, no first-turn prompt. ANY other tail is a NEW launch: BACKEND owns the thread — `codex-launch`
-    // does thread/start { cwd = this worktree } on the shared per-project app-server, stores the new id on the
-    // governed record (SPEXCODE_SESSION_ID), and fires the tail as the FIRST turn, materializing the rollout.
+    // does thread/start { cwd = this worktree } on the shared per-project app-server, fires the tail as the
+    // FIRST turn, materializes the rollout, and stages the new id + payload proof for the lifecycle owner.
     // Either way it ends with a thread id, which the visible TUI then RESUMES (the rollout persists on disk),
     // rendering it natively. A new launch's tail is always ONE single-quoted prompt arg, so it can never be the
     // literal "--resume" marker — the discriminator is unambiguous. codex-launch only prints an id once its
@@ -888,7 +893,11 @@ export function codexLaunchCommand(id: string, codexCmd = 'codex', serverCmd?: s
     // launch attaches to the thread codex-launch just made; a reopen resumes an existing one), so it injects
     // the same per-thread identity through codex's own `-c` override. Same rule, both entry points: whoever
     // creates a context stamps that context's record id, and nothing downstream re-derives it.
-    ...(attachTui ? [`exec ${codexCmd}${tuiBypass} -c ${shQuote(`shell_environment_policy.set.SPEXCODE_SESSION_ID=${id}`)} --remote unix://"$sock" resume "$tid"`] : []),
+    // A remote Codex TUI cannot inherit the launch shell's cwd: when `tui.resume_cwd = "current"` is
+    // configured, Codex requires an explicit workspace root for every `--remote` invocation. Keep the
+    // directory tied to the generated script's actual pane cwd so linked worktrees with spaces remain one
+    // argument and the resumed thread loads the same project context as thread/start above.
+    ...(attachTui ? [`exec ${codexCmd}${tuiBypass} -c ${shQuote(`shell_environment_policy.set.SPEXCODE_SESSION_ID=${id}`)} --cd "$PWD" --remote unix://"$sock" resume "$tid"`] : []),
   ].join('\n')
   return `bash -lc ${shQuote(script)} spexcode-codex`
 }
@@ -1637,14 +1646,52 @@ async function codexColdPreflight(threadId: string, dir = runtimeRoot(), expecte
   throw new Error('unreachable Codex cold preflight retry state')
 }
 
+type CodexOrphanEndpointScan =
+  | { endpoint: CodexGenerationEndpoint; generation: string; containsTarget: boolean }
+  | { endpoint: CodexGenerationEndpoint; reason: string }
+
+type CodexOrphanEndpointResolution =
+  | { ok: true; endpoint: CodexGenerationEndpoint; generation: string }
+  | { ok: false; reason: string }
+
+// A corrupt record has no binding we can trust. Locate its one materialized native thread before cold proof;
+// choosing current or legacy would redirect a destructive operation across a generation boundary.
+async function codexEndpointForOrphanThread(threadId: string, dir = runtimeRoot()): Promise<CodexOrphanEndpointResolution> {
+  const tracked = codexGenerationEndpoints(dir)
+  const endpoints = tracked.length ? tracked : [legacyCodexGenerationEndpoint(dir)]
+  const scans: CodexOrphanEndpointScan[] = await Promise.all(endpoints.map(async (endpoint) => {
+    const generation = codexMutationGeneration(dir, endpoint)
+    if (!generation) return { endpoint, reason: 'Codex shared app-server generation is unproven' }
+    const [active, archived] = await Promise.all([
+      codexThreadList(endpoint.socketPath, { archived: false, sourceKinds: [] }),
+      codexThreadList(endpoint.socketPath, { archived: true, sourceKinds: [] }),
+    ])
+    if (codexRuntimeGeneration(dir, endpoint) !== generation)
+      return { endpoint, reason: 'Codex shared app-server generation changed during orphan location' }
+    if (!active.ok) return { endpoint, reason: active.error }
+    if (!archived.ok) return { endpoint, reason: archived.error }
+    return { endpoint, generation, containsTarget: active.ids.includes(threadId) || archived.ids.includes(threadId) }
+  }))
+  const failed = scans.find((scan): scan is Extract<CodexOrphanEndpointScan, { reason: string }> => 'reason' in scan)
+  if (failed) return { ok: false, reason: `${failed.reason} while locating orphan Codex thread ${threadId} on generation ${failed.endpoint.id}` }
+  const matches = scans.filter((scan): scan is Extract<CodexOrphanEndpointScan, { containsTarget: boolean }> =>
+    'containsTarget' in scan && scan.containsTarget)
+  if (matches.length !== 1) {
+    const detail = matches.length ? matches.map((scan) => scan.endpoint.id).join(', ') : 'none'
+    return { ok: false, reason: `Codex orphan thread ${threadId} has ${matches.length === 0 ? 'no materialized' : 'ambiguous'} generation location (${detail})` }
+  }
+  return { ok: true, endpoint: matches[0].endpoint, generation: matches[0].generation }
+}
+
 async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSessionId: string }): Promise<HarnessOrphanThreadQuarantine> {
   const dir = runtimeRoot()
-  const generation = codexMutationGeneration(dir)
-  if (!generation) return { ok: false, reason: 'Codex shared app-server generation is unproven' }
   const owners = governedSharedRuntimeOwners(dir, 'codex-app-server', threadId, opts.excludingSessionId)
   if (owners === null) return { ok: false, reason: 'governed Codex thread-owner census is unreadable' }
   if (owners.length) return { ok: false, reason: `Codex native thread ${threadId} has governed owner(s) ${owners.join(', ')}` }
-  const before = await codexColdPreflight(threadId, dir, generation)
+  const location = await codexEndpointForOrphanThread(threadId, dir)
+  if (!location.ok) return location
+  const { endpoint, generation } = location
+  const before = await codexColdPreflight(threadId, dir, generation, endpoint)
   if (!before.ok) return before
   const plan = before.receipt
   if (plan.descendantIds.length || plan.guard.descendantIds.length)
@@ -1665,7 +1712,6 @@ async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSe
   if (plan.activeIds.length !== 1 || plan.activeIds[0] !== threadId || plan.archivedIds.length)
     return { ok: false, reason: `Codex native thread ${threadId} is not one exact active orphan` }
   const siblingIds = plan.guard.referenceIds.filter((id) => id !== threadId)
-  const legacy = legacyCodexGenerationEndpoint(dir)
   // Quarantine archives one exact orphan, so it pays the same flush a subtree member does when that orphan is
   // loaded; the budget is derived the same way rather than being a second, differently-wrong constant.
   let orphanBudgetMs = CODEX_MUTATION_BASE_MS
@@ -1674,9 +1720,9 @@ async function codexQuarantineOrphanThread(threadId: string, opts: { excludingSe
     if ('unreadable' in rollout) return { ok: false, reason: `Codex native thread ${threadId} is loaded and its rollout exists but cannot be measured, so the archive flush budget is unknown` }
     orphanBudgetMs = codexArchiveBudgetMs(rollout.bytes)
   }
-  const archived = await codexThreadMutation(legacy.socketPath, 'thread/archive', threadId, { dir, endpoint: legacy, generation }, undefined, orphanBudgetMs)
+  const archived = await codexThreadMutation(endpoint.socketPath, 'thread/archive', threadId, { dir, endpoint, generation }, undefined, orphanBudgetMs)
   if (!archived.ok) return { ok: false, reason: `${archived.error} while archiving orphan Codex thread ${threadId}${archived.commit === 'unknown' ? '; commit state is unknown' : ''}` }
-  const after = await codexColdPreflight(threadId, dir, generation)
+  const after = await codexColdPreflight(threadId, dir, generation, endpoint)
   const failed = (reason: string): HarnessOrphanThreadQuarantine => ({ ok: false, reason })
   if (!after.ok) {
     const restored = await rollback()
@@ -2474,6 +2520,7 @@ const panePidLiveness: Harness['liveness'] = (_rec, tmuxAlive, _runtimeDir, pane
   (tmuxAlive && pane?.pidAlive === true ? 'online' : 'offline')
 
 const recordOnline: Harness['liveness'] = (rec) => rec.stopped ? 'offline' : 'online'
+const sessionHomeLiveness: Harness['liveness'] = (_rec, tmuxAlive) => tmuxAlive ? 'online' : 'offline'
 
 // @@@ unlinkSocks - remove ONLY the transport this teardown PROVED dead. `cleanupRuntime` unlinks *their*
 // socket, and the honest test of "theirs" is that the agent it just killed is GONE. It used to unlink on
@@ -2544,7 +2591,7 @@ export const claudeHarness: Harness = {
   // the caller) — NOT the mere existence of a stale socket FILE a crashed claude leaves behind (the 30-min
   // dead-pane-reads-working bug). See rendezvousListening.
   liveness: socketListenerLiveness,
-  leafOwnerNeedle: (rec) => rec.session,
+  exactNativeTargetId: (rec) => rec.session,
   deliveryTransport: claudeDeliveryTransport,
   deliver: (rec, text) => deliverViaClaudeRendezvous(rec.session, text, rec.mid, rec.runtimeDir),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
@@ -2573,19 +2620,20 @@ export const claudeHeadlessHarness: Harness = {
   id: 'claude-headless',
   sessionEnvVar: harnessIdentity('claude-headless').sessionEnvVar,
   headless: true,
-  runtimeOwnership: 'adapter',
+  runtimeOwnership: 'leaf',
   ownsRendezvous: false,
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => claudeHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), claudeBaseCmd(cmd)),
   launchEnv: noLaunchEnv,
-  // Liveness is the intact, non-stopped record's property. A missing controller/child fails loudly at control
-  // time rather than turning an idle (no child) session into a speculative offline row.
-  liveness: recordOnline,
+  liveness: sessionHomeLiveness,
   deliveryTransport: unprovenDeliveryTransport,
   deliver: deliverViaClaudeHeadless,
   interrupt: interruptClaudeHeadless,
   cleanupRuntime: (rec) => unlinkSocks(claudeHeadlessSock(rec.session)),
-  coldRuntime: async () => ({ ok: false, reason: 'claude-headless has no exact resident unload verification' }),
+  coldRuntime: async (rec) => {
+    const result = await claudeHeadlessColdRuntime(rec)
+    return result.ok ? { ok: true } : { ok: false, reason: result.error || 'claude-headless runtime remains unproven' }
+  },
   deliveryBlockedBy: undefined,
 }
 
@@ -2619,8 +2667,16 @@ function codexRuntimeDescriptors(runtimeDir: string): SharedRuntimeDescriptor[] 
     .map((endpoint) => codexRuntimeDescriptor(endpoint, runtimeDir))
 }
 
+function codexResumeArg(rec: { session: string; harnessSessionId?: string | null }, pendingLaunchPayload?: string | null): string {
+  if (rec.harnessSessionId) return `--resume ${rec.harnessSessionId}`
+  if (pendingLaunchPayload == null)
+    throw new Error(`session ${rec.session}: native identity is absent and the authoritative resolved launch payload is missing; refusing to create an empty thread`)
+  return shQuote(pendingLaunchPayload)
+}
+
 export const codexHarness: Harness = {
   id: 'codex',
+  launchPayloadProof: true,
   dispatchId: 'codex',
   headless: false,
   sharedRuntimeSpawn: true,
@@ -2690,7 +2746,7 @@ export const codexHarness: Harness = {
     if (pane?.pidAlive !== undefined) return pane.pidAlive ? 'online' : 'offline'
     return paneTreeRunsCodex(pane) ? 'online' : 'offline'
   },
-  leafOwnerNeedle: (rec) => rec.harnessSessionId ?? null,
+  exactNativeTargetId: (rec) => rec.harnessSessionId || null,
   deliver: (rec, text) => deliverViaCodexAppServer(rec, text),
   observeTurnFailures: codexTurnFailureObserver,
   interrupt: interruptCodexTurn,
@@ -2832,8 +2888,8 @@ export const codexHarness: Harness = {
   sharedRuntimes: codexRuntimeDescriptors,
   // owned thread id → `--resume <id>` MARKER the codex launch script reads to resume that thread DIRECTLY (NOT
   // a tail handed to a bare `codex` — the script's final `codex … resume "$tid"` performs codex's own resume on
-  // the owned id, the SAME conversation); none → empty tail → relaunch a FRESH thread on the same worktree/record.
-  resumeArg: (rec) => (rec.harnessSessionId ? `--resume ${rec.harnessSessionId}` : ''),
+  // the owned id, the SAME conversation); no identity → replay the authoritative resolved launch payload.
+  resumeArg: codexResumeArg,
   // codex's own settled failure: a thread id whose rollout is not on disk can never be resumed, so the launch
   // that says so has already decided. (Its transient sibling — the rollout still being written — is handled
   // BEFORE launch by waitForCodexRollout, so what reaches here is the permanent case.)
@@ -2936,6 +2992,7 @@ async function codexHeadlessReadinessProof(current: () => HarnessLaunchReadyReco
 export const codexHeadlessHarness: Harness = {
   ...codexHarness,
   id: 'codex-headless',
+  launchPayloadProof: true,
   sessionEnvVar: harnessIdentity('codex-headless').sessionEnvVar,
   headless: true,
   runtimeOwnership: 'adapter',
@@ -2959,9 +3016,9 @@ export const codexHeadlessHarness: Harness = {
       await new Promise((resolve) => setTimeout(resolve, Math.min(200, remaining)))
     }
   },
-  // There is no TUI to restart and the project app-server keeps the thread addressable. A forced reopen therefore
-  // runs the headless launch's empty-tail no-op; normal resume remains guarded by record-backed online liveness.
-  resumeArg: () => '',
+  // There is no TUI to restart and the project app-server keeps an identified thread addressable. A pre-identity
+  // recovery still replays the authoritative resolved launch payload through codex-launch.
+  resumeArg: codexResumeArg,
 }
 
 // @@@ piHarness - the pi adapter (@earendil-works/pi-coding-agent). pi is the CLOSEST to claude of the four:
@@ -3005,7 +3062,7 @@ export const piHarness: Harness = {
   // claude's exact liveness: the window is up AND a live LISTENER answers on the rendezvous socket — the
   // socket the generated extension binds. socketLive is already probed for every windowed session.
   liveness: socketListenerLiveness,
-  leafOwnerNeedle: (rec) => rec.session,
+  exactNativeTargetId: (rec) => rec.session,
   deliveryTransport: rendezvousDeliveryTransport,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text, rec.mid),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
@@ -3018,7 +3075,7 @@ export const piHarness: Harness = {
 // pi-headless is an independent harness: its materialization surface is literally pi's, while a resident
 // controller owns non-interactive text-mode turns. Active turns steer through pi's rendezvous extension;
 // idle delivery cold-wakes the exact saved session with `--session` (never `--session-id`, which would create a
-// new conversation). The controller deliberately reports record-backed liveness, matching Claude headless.
+// new conversation). The exact tmux home is its public addressability and physical-cold boundary.
 export const piHeadlessHarness: Harness = {
   ...piHarness,
   id: 'pi-headless',
@@ -3026,11 +3083,11 @@ export const piHeadlessHarness: Harness = {
   headless: true,
   deliveryTransport: unprovenDeliveryTransport,
   // The controller is a per-session process launched in the target tmux pane. Its launch-registered PID
-  // and argv session id are exact leaf ownership evidence; record-backed liveness does not make it shared.
+  // and argv session id are exact leaf ownership evidence.
   runtimeOwnership: 'leaf',
   paneTitleIsSelfSummary: false,
   launchCmd: (id, runtimeDir, cmd) => piHeadlessLaunchCommand(id, runtimeDir ?? runtimeRoot(), piBaseCmd(cmd)),
-  liveness: recordOnline,
+  liveness: sessionHomeLiveness,
   deliver: deliverViaPiHeadless,
   cleanupRuntime: (rec) => unlinkSocks(piHeadlessSock(rec.session), rvSock(rec.session)),
   coldRuntime: async (rec) => {
@@ -3075,7 +3132,7 @@ export const zcodeHarness: Harness = {
   clean(proj, arts, preserveProject) { cleanHarness(this, proj, arts, preserveProject) },
   slashCommands: () => [],
   liveness: panePidLiveness,
-  leafOwnerNeedle: (rec) => rec.session,
+  exactNativeTargetId: () => null,
   deliver: async () => { throw new Error(ZCODE_CONTROL_UNAVAILABLE) },
   cleanupRuntime: async () => { /* one-shot z-code owns no SpexCode transport to remove */ },
   coldRuntime: async () => ({ ok: true }),
@@ -3123,7 +3180,7 @@ export const opencodeHarness: Harness = {
   // (the plugin is alive), FALL BACK to the launch-registered agent.pid (kill-0) so a plugin that failed to
   // load still reads honestly from the process signal instead of a false offline.
   liveness: socketListenerOrPidAliveLiveness,
-  leafOwnerNeedle: (rec) => rec.session,
+  exactNativeTargetId: (rec) => rec.harnessSessionId || null,
   deliveryTransport: rendezvousDeliveryTransport,
   deliver: (rec, text) => deliverViaRendezvous(rec.session, text, rec.mid),
   cleanupRuntime: (rec) => unlinkSocks(rvSock(rec.session)),
@@ -3142,13 +3199,14 @@ export const opencodeHeadlessHarness: Harness = {
   id: 'opencode-headless',
   sessionEnvVar: harnessIdentity('opencode-headless').sessionEnvVar,
   headless: true,
-  runtimeOwnership: 'adapter',
+  runtimeOwnership: 'leaf',
   deliveryTransport: unprovenDeliveryTransport,
   launchCmd: (_id, _runtimeDir, cmd) => opencodeHeadlessLaunchCommand(opencodeBaseCmd(cmd)),
-  // A sleeping native conversation is still addressable by its non-stopped record. Transport breakage belongs
-  // to the next delivery, where the live rendezvous or pane wake reports it loudly.
-  liveness: recordOnline,
-  coldRuntime: async () => ({ ok: false, reason: 'opencode-headless has no exact resident unload verification' }),
+  liveness: sessionHomeLiveness,
+  coldRuntime: async (rec) => {
+    const result = await opencodeHeadlessColdRuntime(rec)
+    return result.ok ? { ok: true } : { ok: false, reason: result.error || 'opencode-headless runtime remains unproven' }
+  },
   deliver: async (rec, text) => {
     return deliverViaSocketOrWake(
       rec.session,

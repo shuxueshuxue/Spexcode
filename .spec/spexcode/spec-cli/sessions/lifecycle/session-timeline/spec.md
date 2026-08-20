@@ -5,8 +5,9 @@ session: 29e0d645-6173-4e13-bbaf-f008e25af769
 hue: 280
 desc: The session's append-only log — every authored transition and every message — is the DELIVERY itself, and the one thing about a session any process may observe without owning anything.
 code:
-  - spec-cli/src/session-timeline.ts
+  - packages/session-core/src/session-timeline.ts
 related:
+  - spec-cli/src/session-timeline.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/index.ts
   - packages/spec-core/src/layout.ts
@@ -48,7 +49,9 @@ The public event sequence has two kinds, one JSON line per event:
   text is the message BEFORE mechanism inserts — hints are transport, not conversation. A caller-authorized
   merge may also store a private `dispatchReceipt` on that SAME sent line: operation plus SHA-256 request and
   payload digests, never the raw key, together with the exact already-composed transport bytes needed to
-  recover a queue write lost after acceptance. It makes a lost-response replay find the acceptance that
+  recover a queue write lost after acceptance. Those frozen delivery bytes may include immutable string attributes
+  for a structured protocol consumer; they remain private control metadata and are receipt-bound just like text and
+  sender. It makes a lost-response replay find the acceptance that
   already exists.
 
 The stored log has one private control event: **dispatch-settled** `{ts, operation, requestDigest, mid}`. A
@@ -60,7 +63,7 @@ file sequence, not a second operation ledger.
 
 The settlement is also the restart fence for that removal gap. While holding the existing queue lock, drain
 matches a keyed pending entry back to its receipt by operation, request digest, message id, and frozen transport
-bytes before contacting the adapter. If that exact receipt is already settled, the queue entry is merely consumed;
+bytes (text, sender, and optional attributes) before contacting the adapter. If that exact receipt is already settled, the queue entry is merely consumed;
 if receipt identity is absent or differs, it remains owed and delivery stops fail-closed.
 
 **One logical log may span immutable files.** Existing sessions keep their legacy `timeline.ndjson` as the

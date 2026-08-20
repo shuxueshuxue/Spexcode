@@ -59,6 +59,12 @@ background wait (leave it alone) versus a dead stop that won't move until a huma
 They carry distinct faces, so the board never reads "stuck, needs me" as "fine, self-resuming," or the
 reverse — and a still-going `parked` agent is never mistaken for one with something to act on.
 
+For adapters whose native id is minted at launch, absence of `harness_session_id` while the authoritative
+resolved `launch` payload remains is a recoverable pre-identity launch, not permission to create an empty
+conversation. Resume replays that payload through the adapter; only the adapter's proof that identity and the
+first durable turn both landed may bind `harness_session_id` and consume it. A missing payload leaves the record
+unchanged and refuses loudly.
+
 **Lifecycle and liveness are two orthogonal axes; neither overrides the other.** A session carries two
 independent facts, computed independently (a third, the human's `archived` filing decision, is orthogonal to
 BOTH and owned by [[archive]] — it never reads as a status and never rewrites one):
@@ -128,14 +134,17 @@ Offline is reachable on purpose, not only by a crash. **`stop`** is the human-on
 of `resume`: it kills only the adapter-registered **session-owned leaf** plus that session's tmux + rendezvous
 socket, but **leaves every project-shared control plane untouched** ([[host-resource-budget]]) and leaves the
 worktree, branch, transcript, and global record, then writes only that record's `stopped` liveness marker, so the session reads `offline`
-and the relaunch panel offers to `--resume` the same conversation. The lifecycle fields the agent last authored
+and the relaunch panel offers to `--resume` the same conversation. That durable marker also fences launch
+admission: no automatic queue drain, supervisor restart, or idempotent replay may launch a stopped row, including
+a prepared row whose lifecycle is still `queued`. The lifecycle fields the agent last authored
 survive the stop untouched — whereas a proven-owner `close` removes the worktree AND sweeps the global record dir. **`resume`**
 is the inverse
 of `stop`, and it is symmetric: it brings the agent back up (relaunching it `--resume`d into the same
 conversation only when it is genuinely offline; both frontend relaunch entries invoke this same action) and
 clears `stopped` as it restores the runtime and settles the **resting** lifecycle under the SAME active-only
-guard `idle` uses — a resumed agent that was
-`active` (working) is now just sitting at its prompt → `idle`, while every deliberate declaration survives the
+guard `idle` uses — a resumed agent that was `active` (working), or was prepared as `queued` before this explicit
+launch, is now just sitting at its prompt → `idle`; a successful readiness publication can never retain `queued`
+alongside a live runtime. Every deliberate declaration survives the
 resume untouched (`awaiting` and **its proposal**, `asking`, `parked`, `error`). resume deliberately does NOT
 touch the proposal: resuming a session that is proposing a merge must not silently withdraw it — proposals are
 reversible only by MESSAGING the session (mark-active clears them), never as a hidden side-effect of a relaunch.
@@ -199,8 +208,8 @@ declared state (measured: a park erased within seconds, the session reading `wor
 hooks run inside the shared per-project app-server, whose env can carry another session's
 `SPEXCODE_SESSION_ID`, so Codex hook state starts from the payload `session_id` (the acting thread id) and aliases
 that through `harness_session_id` to the governed SpexCode record. That alias is created by the backend launch
-path: `spex internal codex-launch` asks the shared app-server to `thread/start { cwd }`, stores the returned thread id on
-the governed record, then fires the first prompt. The global record path is project key from the git common dir →
+path: `spex internal codex-launch` asks the shared app-server to `thread/start { cwd }`, fires and persists the
+first prompt, then stages the returned thread id for the lifecycle owner to bind on the governed record. The global record path is project key from the git common dir →
 `<store>/projects/<enc>/sessions/<id>/session.json`.
 The hooks split on the `governed` flag. The **board-lifecycle** hooks below (mark-active, the Stop gate,
 StopFailure→error, idle) act ONLY when that record reads `governed: true`; on a non-governed (user-self-launched)

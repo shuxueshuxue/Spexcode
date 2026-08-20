@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/spec-dashboard",
-  "version": "0.6.5",
+  "version": "0.6.7",
   "type": "module",
   "exports": {
     ".": "./dist/index.html",
@@ -23,8 +23,8 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@spexcode/spec-cli": "0.6.5",
-    "@spexcode/spec-core": "0.6.5",
+    "@spexcode/spec-cli": "0.6.7",
+    "@spexcode/spec-core": "0.6.7",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "6.0.0",
     "@xyflow/react": "^12.3.5",

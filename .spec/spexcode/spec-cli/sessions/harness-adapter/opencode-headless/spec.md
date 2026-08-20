@@ -2,7 +2,7 @@
 title: opencode-headless
 status: active
 hue: 155
-desc: OpenCode's one-turn `run` form as an independent headless harness: OpenCode-identical materialization, record-backed liveness, rendezvous steering during a live turn, and tmux-homed cold wake while idle.
+desc: OpenCode's one-turn `run` form as an independent headless harness: OpenCode-identical materialization, a session-owned tmux home, rendezvous steering, and cold wake while idle.
 code:
   - spec-cli/src/opencode-headless.ts
 related:
@@ -66,10 +66,11 @@ in that same delivery error rather than swallowed. A still-running turn is accep
 window. Probe/spawn failures are likewise returned loudly and no PTY prompt typing or stdin controller is
 introduced. An inconclusive socket probe never starts a possibly duplicate turn.
 
-Liveness is record-backed: while the governed record exists and is not explicitly stopped, the adapter reports
-`online` regardless of tmux, process, or socket probes. This describes a durable addressable sleeping
-conversation, not a resident process; the next delivery is where a missing pane, native conversation, or plugin
-fails loudly. Human `stop` tears down the runtime and marks the retained record stopped, so it reads `offline`
-until `resume` clears the marker and relaunches the same conversation. The adapter declares `headless: true`;
-the note conversation is the console trunk, so OpenCode stdout needs no parallel collector. Closing remains the
-terminal operation that removes the record, worktree, tmux home, and rendezvous residue.
+The tmux home is the session-owned leaf; OpenCode has no controller or shared resident behind it. Launch binds that
+home through the ordinary pane-ancestry PID/start receipt. While the home exists the non-stopped sleeping
+conversation remains addressable. Physical cold proof requires the receipt-bound leaf and exact home to be gone and
+the rendezvous listener to reject a connect probe. A successful human `stop` records that teardown, so later archive
+or close consumes the cold state without inventing a resident unload or a second leaf. The stopped bit alone is not
+proof: a live, unreadable, malformed, or reappeared leaf/home/listener refuses. `resume` clears the marker and
+relaunches the same conversation. The adapter declares `headless: true`; the note conversation is the console trunk,
+so OpenCode stdout needs no parallel collector. Closing removes the record, worktree, tmux home, and rendezvous residue.

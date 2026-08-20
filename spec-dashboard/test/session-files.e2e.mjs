@@ -55,13 +55,18 @@ try {
   if (HTML_FILE) {
     const frame = page.locator('.si-file-html')
     await frame.waitFor({ state: 'visible' })
-    if ((await frame.getAttribute('sandbox')) !== '') throw new Error('HTML previews must use a script-free sandbox')
+    if (await frame.getAttribute('sandbox') !== null) throw new Error('HTML previews must not restrict browser capabilities with a sandbox')
+    if (await frame.getAttribute('referrerpolicy') !== null) throw new Error('HTML previews must not restrict the document referrer policy')
     if (await page.locator('.si-file-text').count()) throw new Error('HTML previews must not render source in a preformatted text block')
     const renderedHeading = page.frameLocator('.si-file-html').locator('#proof')
     await renderedHeading.waitFor({ state: 'visible' })
     if (await renderedHeading.textContent() !== 'Rendered HTML') throw new Error('the posted HTML must render its document content')
-    if (await page.frameLocator('.si-file-html').locator('body').getAttribute('data-script-ran'))
-      throw new Error('sandboxed HTML previews must not execute scripts')
+    if (await page.frameLocator('.si-file-html').locator('body').getAttribute('data-script-ran') !== 'yes')
+      throw new Error('HTML previews must execute scripts')
+    const parentAccessible = await page.frameLocator('.si-file-html').locator('body').evaluate(() => {
+      try { return Boolean(window.parent.document.querySelector('#root')) } catch { return false }
+    })
+    if (!parentAccessible) throw new Error('HTML previews must retain same-origin access to the dashboard document')
   }
   if (await page.locator('.si-file-preview-backdrop').count())
     throw new Error('a files-menu preview must not create a second pop-out surface')

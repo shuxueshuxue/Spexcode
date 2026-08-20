@@ -804,7 +804,6 @@ superviseBridges()   // restore visible helpers after failure; their viewer subs
 superviseQueue()     // launch queued sessions as slots free (catches agent-authored proposals/crashes the server never sees directly)
 superviseTurnFailures() // reconcile adapter-owned native failure subscriptions across backend replacement
 superviseDelivery()  // hand over messages an earlier pass could not ([[delivery-queue]]): the retry half of dispatch
-console.log(`spec-cli serving .spec (from git) on http://localhost:${port}`)
 
 let graphWatchersClosed = false
 const closeGraphWatchers = (): void => {

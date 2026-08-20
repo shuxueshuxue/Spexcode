@@ -1,18 +1,29 @@
 ---
 scenarios:
   - name: managed-watch-delivers-child-transition
-    tags: [cli]
+    tags: [cli, backend-api]
     description: >-
-      From a real governed parent session, create a real child, then read `spex session watch list` in the
-      parent's terminal. Have the child declare a state change and inspect the parent's terminal/timeline;
-      finally run `spex session watch cancel <child>` and make one more child declaration.
+      From a real governed parent session, create a child through the real queued launch path while holding
+      adapter readiness after the parent relation is installed. Inspect the parent's timeline before readiness,
+      after an early active hook, and after readiness succeeds. Repeat with the active cap already full, with
+      deterministic and retryable launch failures, and with restart/replay at both durable receipt boundaries.
+      Then have the child declare review and return to working. Add an independent manual watch, repeat the
+      working transition, then cancel or reparent that source combination.
     expected: >-
-      Creation performs one successful, one-shot watch registration: list names the child and the command
-      does not remain running. The first child declaration arrives at the parent as an ordinary send-backed
-      terminal message, including the child identity and authored state; a temporarily unavailable parent
-      keeps that message in its normal delivery queue. After cancel, no later child declaration is delivered.
-      A shell with no governed parent records no subscription and is instead given the background
-      `spex session wait <child>` fallback.
+      The relation exists immediately but neither queued nor an early active hook reaches the parent before the
+      readiness fence. A successful admitted launch yields exactly one initial working snapshot; a proven-full
+      capacity decision yields exactly one queued snapshot. Deterministic or readiness failure never fabricates
+      either outcome, while a retryable failure keeps the same debt until success. Restart reclaims readiness
+      without relaunching or replaying the prompt. Re-entry after the initial receipt, or after a raced asking,
+      review, or error receipt, produces exactly one of each accepted state and clears the debt only after the
+      latest state is accepted; a later parent-only working state remains suppressed. Removing the parent source
+      removes its debt without silencing a retained manual source. A temporarily unavailable parent keeps every
+      accepted message in its normal delivery queue. A shell with no governed parent records no subscription and
+      is instead given the background `spex session wait <child>` fallback.
+    code: spec-cli/src/sessions.ts
+    test:
+      path: spec-cli/src/session-timeline.test.ts
+      name: creation parent watch publishes its initial snapshot only after active readiness publication
   - name: wait-edge-triggered-return
     tags: [backend-api]
     description: >-
@@ -76,13 +87,15 @@ scenarios:
     description: >-
       Make the target's adapter poke impossible to land (unlink its rendezvous socket, or stop the agent so
       no listener exists), then `spex session send <id> "<text>"` and read the command's exit and output.
-      Afterwards bring the agent back to a turn boundary and read what reaches its context.
+      Afterwards bring the agent back and let the owning backend's delivery sweep retry, then read what reaches
+      its context.
     expected: >-
       The send SUCCEEDS — delivery is the append, so the bytes are durable regardless of the poke — and the
       line is present in the target's timeline. Nothing reports a false failure and nothing reports a
-      delivery that did not happen. At the target's next turn boundary the unread line is injected into its
-      context exactly once and the cursor advances, so a message can be late but never lost and never
-      doubled. The pre-rewrite failure this replaces: a kicked socket write was the message's only copy.
+      delivery that did not happen. The pending queue retains the debt while the adapter is down; after the
+      runtime returns, a sweep delivers it as an ordinary prompt exactly once and removes the debt, so a message
+      can be late but never lost and never doubled. No follow cursor participates in delivery. The pre-rewrite
+      failure this replaces: a kicked socket write was the message's only copy.
   - name: one-move-appends-one-line
     tags: [backend-api]
     description: >-

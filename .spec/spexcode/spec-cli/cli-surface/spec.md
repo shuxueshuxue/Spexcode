@@ -8,6 +8,7 @@ code:
 related:
   - spec-cli/src/guide.ts
   - spec-cli/src/help.ts
+  - spec-cli/src/runtime-rotate.ts
   - spec-cli/src/session-declarations.ts
   - spec-cli/src/session-send-cli.test.ts
   - spec-cli/src/session-create-cli.test.ts
@@ -77,6 +78,14 @@ dispatched, versus a worker proposing its own end for the human to perform. Any 
 reclaim what it started — the propose-close cleanup nudge included — scopes its sweep to what the agent
 spawned and excludes the running session by name, because `.` and a bare own id are valid selectors here.
 
+`spex doctor repair app-server [--launcher <name>]` is the explicit app-server continuity repair: it starts a
+fresh, proven generation and switches only NEW traffic to it. The previous root enters the runtime ledger's
+draining state and remains addressable for its exact bound work; this CLI has no kill or migration verb.
+Its launcher is an adapter/auth choice, not a positional source of truth: the configured default applies only
+when it is a Codex launcher, and a non-Codex default requires an explicit configured Codex `--launcher` rather
+than guessing a command or credential. It is never an automatic rotation policy. The retired `runtime` drawer
+is a non-executing signpost to this command; it is absent from the public map and has no compatibility alias.
+
 Objects and payloads are parsed by role after recognized flags and their values are removed, never by a fixed
 `process.argv` slot. Thus a routing flag may follow a selector before or after a write payload without becoming
 that payload. Each valued flag occurs at most once with exactly one non-empty value; alternate routing flags are
@@ -133,7 +142,7 @@ so a stranded native transport cannot look like a successful command in scripts 
 **Signposts, one version only.** Every spelling v0.3.0 removed (the bare promoted verbs, the bare
 session subs, `yatsu`/`blob`/`issues`/`forge`/`tree`/`board`, top-level
 `search`/`owner`/`lint`/`ack`, `resolve`/`retract`, `session rawkey`, `session exit|reopen` (respelled
-`stop`/`resume`), `session capture|prompt` (folded into `show`), the hook verbs
+`stop`/`resume`), `session capture|prompt` (folded into `show`), the retired `runtime` drawer, the hook verbs
 `session state|fail|idle|commit-gate`, positional `doctor contract|conflicts`, `review proof`) maps
 to a signpost: one stderr line naming the new spelling, exit non-zero, and the old verb NEVER
 executes — a signpost is a tombstone, not an alias. Signposts are term-limited compatibility, removed
@@ -168,6 +177,8 @@ has a move:
    `spex session wait --help` answers with that VERB's exact usage, projected from the same definition
    the bare `spex session` drawer assembles; exact help never carries a copied second manual. Shared
    selector grammar and project-bound write warnings follow the relevant verb into that projection.
+   The project-bound warning applies to `session new` just as it does to project-bound writes that change
+   existing rows; creating a row does not create a second warning policy.
 3. `spex guide [topic]` — the skill layer ([[guide]]): workflows, file formats, settings. **help
    answers "what do I type", guide answers "how do I work".**
 

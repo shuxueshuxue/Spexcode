@@ -18,14 +18,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-      - name: Install packed root
-        run: npm ci
       - name: Install spec-cli
         working-directory: spec-cli
         run: npm ci
       - name: Install dashboard
         working-directory: spec-dashboard
         run: npm ci
+      - name: Install packed root
+        run: npm ci
+      - name: Build internal workspace packages
+        run: npm run build
       - name: init-plugin parity + spec-lint (blocks on errors; coverage/drift are advisory warnings)
         run: npm run lint
       - name: Docs release producer
@@ -37,6 +39,9 @@ jobs:
       - name: typecheck
         working-directory: spec-cli
         run: npx tsc --noEmit
+      - name: Session protocol unit suite
+        working-directory: packages/session-core
+        run: npm test
       - name: Unit and integration suite
         working-directory: spec-cli
         run: npm test

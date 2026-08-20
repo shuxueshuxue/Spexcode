@@ -103,7 +103,18 @@ export function resolveDistDir(): string {
   return ensureDashboardArtifact('dist')
 }
 
-export type GatewayOpts = { publicPort: number; upstreamPort: number; password: string; tls: { cert: string; key: string } | null; distDir: string; host?: string; label?: string; onBindFail?: () => void; projectRoot?: string }
+export type GatewayOpts = {
+  publicPort: number
+  upstreamPort: number
+  password: string
+  tls: { cert: string; key: string } | null
+  distDir: string
+  host?: string
+  label?: string
+  onBindFail?: () => void
+  projectRoot?: string
+  readyLines?: string[]
+}
 
 export function startGateway(opts: GatewayOpts): void {
   // gated ONLY when a password is set; otherwise the login layer doesn't exist and the dashboard is served open.
@@ -162,16 +173,14 @@ export function startGateway(opts: GatewayOpts): void {
   // narrows the public gateway's reach. The gate note keys on LOOPBACK, not on host-being-explicit:
   // an ungated loopback bind is normal, an ungated wide bind is announced — never silent.
   const isLoopback = opts.host === '127.0.0.1' || opts.host === 'localhost' || opts.host === '::1'
-  const onListen = () => {
-    const scheme = secure ? 'https' : 'http'
-    const label = opts.label ?? 'public mode'
-    const gate = isLoopback ? '' : ` — ${gated ? 'password-gated' : 'OPEN (no password)'}`
-    console.log(`[gateway] ${label} on ${scheme}://${isLoopback ? 'localhost' : (opts.host ?? '0.0.0.0')}:${opts.publicPort}${gate}, proxying /api to :${opts.upstreamPort}`)
-    if (!secure && !isLoopback && !opts.host) console.log('[gateway] (TLS off — --http)')
-  }
+  const scheme = secure ? 'https' : 'http'
+  const label = opts.label ?? 'public mode'
+  const gate = isLoopback ? '' : ` — ${gated ? 'password-gated' : 'OPEN (no password)'}`
+  const ready = [...(opts.readyLines ?? []), `[gateway] ${label} on ${scheme}://${isLoopback ? 'localhost' : (opts.host ?? '0.0.0.0')}:${opts.publicPort}${gate}, proxying /api to :${opts.upstreamPort}`]
+  if (!secure && !isLoopback && !opts.host) ready.push('[gateway] (TLS off — --http)')
   // a busy public port is a hard, loud, non-zero exit — the SAME contract as the supervisor's proxy
   // (see [[spec-cli]] / listen.ts), so `spex serve` and `spex serve ui` fail a port clash identically.
-  listenOrExit(server, opts.publicPort, { host: opts.host, label: opts.label ?? 'gateway', cleanup: opts.onBindFail, onListen })
+  listenOrExit(server, opts.publicPort, { host: opts.host, label: opts.label ?? 'gateway', cleanup: opts.onBindFail, ready })
 }
 
 // re-serialize an upgrade request's headers for replay against the upstream (exported for the host
@@ -200,6 +209,16 @@ function doLogin(req: http.IncomingMessage, res: http.ServerResponse, password: 
 // and would fight Range requests.
 const COMPRESSIBLE = /^(text\/|application\/(json|javascript|xml)|image\/svg)/
 const wantsGzip = (req: http.IncomingMessage) => /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))
+// zlib's larger default table can be counterproductive for minified text: memLevel 5 both compresses it
+// further and lowers each stream's working memory. One policy drives buffered and streamed gzip.
+const GZIP_OPTIONS = { level: 9, memLevel: 5 } as const
+
+function appendVary(current: string | string[] | undefined, token: string): string {
+  const values = (Array.isArray(current) ? current : [current ?? ''])
+    .flatMap((value) => value.split(',')).map((value) => value.trim()).filter(Boolean)
+  if (!values.some((value) => value === '*' || value.toLowerCase() === token.toLowerCase())) values.push(token)
+  return values.join(', ')
+}
 
 // reverse-proxy an /api request to the loopback supervisor (which forwards to the live child) —
 // stream-gzipping compressible bodies (measured: the board JSON rides down at under a third).
@@ -280,16 +299,19 @@ export function proxyHttp(req: http.IncomingMessage, res: http.ServerResponse, u
     received.once('close', () => { if (!received.complete) failFromUpstream() })
 
     const type = String(received.headers['content-type'] || '')
-    const skip = !wantsGzip(req) || received.headers['content-encoding'] || !COMPRESSIBLE.test(type) || type.startsWith('text/event-stream')
-    if (skip) {
-      res.writeHead(received.statusCode || 502, received.headers)
+    const eligible = !received.headers['content-encoding'] && COMPRESSIBLE.test(type) && !type.startsWith('text/event-stream')
+    const responseHeaders: http.OutgoingHttpHeaders = eligible
+      ? { ...received.headers, vary: appendVary(received.headers.vary, 'Accept-Encoding') }
+      : received.headers
+    if (!eligible || !wantsGzip(req)) {
+      res.writeHead(received.statusCode || 502, responseHeaders)
       received.pipe(res)
       return
     }
-    const headers = { ...received.headers, 'content-encoding': 'gzip', vary: 'Accept-Encoding' }
+    const headers = { ...responseHeaders, 'content-encoding': 'gzip' }
     delete headers['content-length']   // streamed; the encoded length isn't knowable up front
     res.writeHead(received.statusCode || 502, headers)
-    transform = createGzip()
+    transform = createGzip(GZIP_OPTIONS)
     transform.once('error', failFromUpstream)
     received.pipe(transform).pipe(res)
   })
@@ -412,14 +434,17 @@ export function serveStatic(req: http.IncomingMessage, res: http.ServerResponse,
   const type = MIME[extname(file)] || 'application/octet-stream'
   const cacheControl = /[\\/]assets[\\/]/.test(file) ? 'public, max-age=31536000, immutable' : 'no-cache'
   const raw = readFileSync(file)
-  if (wantsGzip(req) && COMPRESSIBLE.test(type)) {
+  const compressible = COMPRESSIBLE.test(type)
+  const headers: http.OutgoingHttpHeaders = { 'Content-Type': type, 'Cache-Control': cacheControl }
+  if (compressible) headers.Vary = appendVary(undefined, 'Accept-Encoding')
+  if (wantsGzip(req) && compressible) {
     const mtime = statSync(file).mtimeMs
     let hit = gzMemo.get(file)
-    if (!hit || hit.mtime !== mtime) { hit = { mtime, gz: gzipSync(raw) }; gzMemo.set(file, hit) }
-    res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding', 'Cache-Control': cacheControl })
+    if (!hit || hit.mtime !== mtime) { hit = { mtime, gz: gzipSync(raw, GZIP_OPTIONS) }; gzMemo.set(file, hit) }
+    res.writeHead(200, { ...headers, 'Content-Encoding': 'gzip' })
     return res.end(hit.gz)
   }
-  res.writeHead(200, { 'Content-Type': type, 'Cache-Control': cacheControl })
+  res.writeHead(200, headers)
   res.end(raw)
 }
 
@@ -436,6 +461,15 @@ function sendHtml(res: http.ServerResponse, status: number, html: string) {
 // installed user has no source tree for). See [[packaging]].
 export function serveDashboardLocal(opts: { port: number; apiPort: number; host?: string; projectRoot?: string }): void {
   const distDir = resolveDistDir()
-  console.log(`[dashboard] serving ${distDir}, /api → backend :${opts.apiPort}`)
-  startGateway({ host: opts.host ?? '127.0.0.1', publicPort: opts.port, upstreamPort: opts.apiPort, password: '', tls: null, distDir, label: 'dashboard', projectRoot: opts.projectRoot })
+  startGateway({
+    host: opts.host ?? '127.0.0.1',
+    publicPort: opts.port,
+    upstreamPort: opts.apiPort,
+    password: '',
+    tls: null,
+    distDir,
+    label: 'dashboard',
+    projectRoot: opts.projectRoot,
+    readyLines: [`[dashboard] serving ${distDir}, /api → backend :${opts.apiPort}`],
+  })
 }

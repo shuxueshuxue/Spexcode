@@ -1,7 +1,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, openSync, closeSync, unlinkSync, writeSync } from 'node:fs'
+import { readFileSync, writeFileSync, appendFileSync, existsSync, renameSync, linkSync, mkdirSync, rmSync, readdirSync, realpathSync, statSync, unlinkSync } from 'node:fs'
 import { join, dirname, relative, isAbsolute, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { seedWorktreeHostState } from './worktree-sources.js'
@@ -12,8 +12,8 @@ import { materialize } from './materialize.js'
 import { mainBranch, mainRoot, gitCommonDir, readConfig, runtimeRoot, treeSlotDir, sessionStoreDir, sessionRecordPath, sessionArtifactPath, listSessionIds, rawLaunchReadinessOriginal, readAliasedRawRecord, readRecordEntry, readAliasedRecordEntry, readPublicRecordEntry, envSessionId, isSessionLifecycle, isSessionProposal, type PublicRecordEntry, type RawRecord, type SessionLifecycle, type SessionProposal } from '@spexcode/spec-core'
 import { readSessionFiles } from './session-files.js'
 import { readSessionWebs, type SessionWeb } from './session-web.js'
-import { appendSent, recordStatus, lastHumanSendVia, sentDispatchReceipt, settleSentDispatch, type SentDispatchReceipt, type SentDispatchState } from './session-timeline.js'
-import { drain, enqueue, ensurePendingWhileLocked, owesDelivery, pendingMessages, pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, senderDeliveryRevoked, withDeliveryLocks, type PendingMessage } from './delivery-queue.js'
+import { acceptMessage, drain, recordStatus, lastHumanSendVia, owesDelivery, pendingMessages, type MessageIdempotency } from '@spexcode/session-core'
+import { pendingSnapshot, replacePendingWhileLocked, revokePendingFromWhileLocked, revokeSenderDelivery, withDeliveryLocks, trySessionRecordLockSync, withSessionRecordLock, withSessionRecordLockSync as coreWithSessionRecordLockSync } from '@spexcode/session-core/internal'
 import { stripRefSigil } from './mentions.js'
 import { shQuote } from './sh.js'
 import { assertSessionOwnerSafe, assertSessionStopSafe, ResourceConflict } from './host-resources.js'
@@ -167,9 +167,10 @@ function readPromptFile(id: string): string | null {
     return s.trim() ? s : null
   } catch { return null }
 }
-// Persist queued launch input across restarts; consume it once the launch begins.
+// The resolved first-turn payload is authoritative across queue drain and recovery. Adapters that mint native
+// identity keep it until they prove identity + first-turn durability; other adapters consume on submission.
 function writeLaunchFile(id: string, prompt: string): void {
-  try { writeFileSync(join(storeDir(id), 'launch'), prompt) } catch { /* best-effort; the drainer treats a missing file as nothing-to-launch */ }
+  writeFileSync(join(storeDir(id), 'launch'), prompt)
 }
 function readLaunchFile(id: string): string | null {
   try { const p = sessionArtifactPath(id, 'launch'); return existsSync(p) ? readFileSync(p, 'utf8') : null } catch { return null }
@@ -267,8 +268,8 @@ export function rawLifecycleStatus(rec: Pick<SessRec, 'status' | 'launchOwner'>)
   return rec.status === 'queued' && rec.launchOwner ? OWNED_QUEUE_RAW_STATUS : rec.status
 }
 
-export function canDrainQueued(rec: Pick<SessRec, 'status' | 'launchOwner'>, authority = backendLaunchAuthority()): boolean {
-  return rec.status === 'queued' && (rec.launchOwner === null || rec.launchOwner === authority)
+export function canDrainQueued(rec: Pick<SessRec, 'status' | 'launchOwner' | 'stopped'>, authority = backendLaunchAuthority()): boolean {
+  return rec.status === 'queued' && !rec.stopped && (rec.launchOwner === null || rec.launchOwner === authority)
 }
 
 // typed read of a session's record from the global store (null if it has none — a self-launched session that
@@ -305,99 +306,18 @@ function readLiveRecord(id: string): SessRec | null {
   return rec
 }
 
-// Cross-process lifecycle serialization. Hooks and operator commands are separate CLI processes, so the
-// in-memory transition tail is only an optimization. This lock covers each read/modify/write or destructive
-// transition across archive/resume/stop/close and hook writers. It lives outside the record directory so close
-// may remove the record while its lock is held. A dead writer's lock is reclaimed; a live writer is waited for
-// with a bounded wall and then fails loudly rather than allowing a stale write to win.
-const recordLockRoot = () => join(runtimeRoot(), '.session-locks')
-const recordLockPath = (id: string) => join(recordLockRoot(), `${id}.lock`)
-const syncPause = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
-function acquireRecordLockSync(id: string, timeoutMs = 30_000): () => void {
-  mkdirSync(recordLockRoot(), { recursive: true })
-  const path = recordLockPath(id), deadline = Date.now() + timeoutMs
-  for (;;) {
-    try {
-      const fd = openSync(path, 'wx')
-      writeSync(fd, String(process.pid))
-      closeSync(fd)
-      return () => { try { unlinkSync(path) } catch { /* another recovery already removed it */ } }
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
-      let owner = 0
-      try { owner = Number(readFileSync(path, 'utf8').trim()) || 0 } catch { /* race with creator/releaser */ }
-      if (owner && owner !== process.pid) {
-        try { process.kill(owner, 0) } catch { try { unlinkSync(path) } catch { /* race */ }; continue }
-      }
-      if (Date.now() >= deadline) throw new ResourceConflict(`session ${id}: lifecycle transition lock timed out; refusing a stale write`)
-      syncPause(10)
-    }
-  }
-}
-const abortedOperation = (signal: AbortSignal): Error => signal.reason instanceof Error
-  ? signal.reason
-  : Object.assign(new Error('The operation was aborted'), { name: 'AbortError', code: 'ABORT_ERR' })
-async function recordLockPause(signal?: AbortSignal): Promise<void> {
-  if (!signal) { await new Promise((resolve) => setTimeout(resolve, 10)); return }
-  if (signal.aborted) throw abortedOperation(signal)
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(done, 10)
-    const abort = () => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(abortedOperation(signal)) }
-    function done() { signal!.removeEventListener('abort', abort); resolve() }
-    signal.addEventListener('abort', abort, { once: true })
-  })
-}
-async function acquireRecordLock(id: string, timeoutMs = 30_000, signal?: AbortSignal): Promise<() => void> {
-  mkdirSync(recordLockRoot(), { recursive: true })
-  const path = recordLockPath(id), deadline = Date.now() + timeoutMs
-  for (;;) {
-    if (signal?.aborted) throw abortedOperation(signal)
-    try {
-      const fd = openSync(path, 'wx')
-      writeSync(fd, String(process.pid))
-      closeSync(fd)
-      return () => { try { unlinkSync(path) } catch { /* another recovery already removed it */ } }
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
-      let owner = 0
-      try { owner = Number(readFileSync(path, 'utf8').trim()) || 0 } catch { /* race with creator/releaser */ }
-      if (owner && owner !== process.pid) {
-        try { process.kill(owner, 0) } catch { try { unlinkSync(path) } catch { /* race */ }; continue }
-      }
-      if (Date.now() >= deadline) throw new ResourceConflict(`session ${id}: lifecycle transition lock timed out; refusing a stale write`)
-      await recordLockPause(signal)
-    }
-  }
-}
-async function withRecordLock<T>(id: string, body: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-  const release = await acquireRecordLock(id, 30_000, signal)
-  try { return await body() } finally { release() }
-}
+const withRecordLock = withSessionRecordLock
 export function withSessionRecordLockSync<T>(id: string, body: () => T): T {
-  const release = acquireRecordLockSync(id)
-  try { return body() } finally { release() }
+  return coreWithSessionRecordLockSync(id, body)
 }
 const withRecordLockSync = withSessionRecordLockSync
-function tryRecordLockSync(id: string): (() => void) | null {
-  mkdirSync(recordLockRoot(), { recursive: true })
-  const path = recordLockPath(id)
-  try {
-    const fd = openSync(path, 'wx')
-    writeSync(fd, String(process.pid))
-    closeSync(fd)
-    return () => { try { unlinkSync(path) } catch { /* another recovery already removed it */ } }
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'EEXIST') return null
-    throw e
-  }
-}
 // Synchronous terminal input is another product turn-entry path. The PTY bridge uses this narrow seam to
 // enqueue input while holding the same durable record lock as archive, so an archive preflight cannot pass idle
 // and then race a just-queued TUI turn.
 export function withSessionInputLock<T>(id: string, body: () => T): T | null {
   // PTY input is synchronous. A single non-blocking open is the only safe barrier: EEXIST rejects this input
   // regardless of owner PID, so a same-process async archive can never be frozen behind Atomics.wait.
-  const release = tryRecordLockSync(id)
+  const release = trySessionRecordLockSync(id)
   if (!release) return null
   try { return body() } finally { release() }
 }
@@ -550,7 +470,7 @@ function writeRecord(rec: SessRec): void {
 }
 
 export type WatchSource = 'manual' | 'parent'
-type WatchEntry = { watcher: string; createdAt: string; sources: WatchSource[] }
+type WatchEntry = { watcher: string; createdAt: string; sources: WatchSource[]; snapshotPending?: string }
 export type SessionWatch = { target: string; createdAt: string }
 const watchPath = (target: string) => sessionArtifactPath(target, 'watchers.json')
 
@@ -572,7 +492,10 @@ function readWatchEntries(target: string): WatchEntry[] {
         // The former one-source format cannot name an origin. Its child pointer is the only durable witness
         // that this watcher was installed for parent supervision; every other legacy row is a manual watch.
         : [watcher === parent ? 'parent' : 'manual']
-      return sources.length ? [{ watcher, createdAt, sources }] : []
+      const snapshotPending = (entry as { snapshotPending?: unknown }).snapshotPending
+      return sources.length ? [{ watcher, createdAt, sources,
+        ...(sources.includes('parent') && typeof snapshotPending === 'string' && snapshotPending ? { snapshotPending } : {}),
+      }] : []
     })
   } catch { return [] }
 }
@@ -587,12 +510,17 @@ function writeWatchEntries(target: string, entries: WatchEntry[]): void {
   renameSync(tmp, path)
 }
 
-function addWatchSource(entries: WatchEntry[], watcher: string, source: WatchSource): { entries: WatchEntry[]; added: boolean } {
+function addWatchSource(entries: WatchEntry[], watcher: string, source: WatchSource, deferInitialSnapshot = false): { entries: WatchEntry[]; added: boolean } {
   const existing = entries.find((entry) => entry.watcher === watcher)
-  if (!existing) return { entries: [...entries, { watcher, createdAt: new Date().toISOString(), sources: [source] }], added: true }
+  const snapshotPending = deferInitialSnapshot && !existing?.sources.includes('manual') ? randomUUID() : undefined
+  if (!existing) return { entries: [...entries, {
+    watcher, createdAt: new Date().toISOString(), sources: [source], ...(snapshotPending ? { snapshotPending } : {}),
+  }], added: true }
   if (existing.sources.includes(source)) return { entries, added: false }
   return {
-    entries: entries.map((entry) => entry === existing ? { ...entry, sources: [...entry.sources, source] } : entry),
+    entries: entries.map((entry) => entry === existing ? {
+      ...entry, sources: [...entry.sources, source], ...(snapshotPending ? { snapshotPending } : {}),
+    } : entry),
     added: true,
   }
 }
@@ -603,7 +531,10 @@ function removeWatchSource(entries: WatchEntry[], watcher: string, source: Watch
     if (entry.watcher !== watcher || !entry.sources.includes(source)) return [entry]
     removed = true
     const sources = entry.sources.filter((candidate) => candidate !== source)
-    return sources.length ? [{ ...entry, sources }] : []
+    if (!sources.length) return []
+    if (source !== 'parent') return [{ ...entry, sources }]
+    const { snapshotPending: _pending, ...withoutParentDebt } = entry
+    return [{ ...withoutParentDebt, sources }]
   })
   return { entries: next, removed }
 }
@@ -622,8 +553,15 @@ function watchMessage(target: SessRec): string {
   return `[spex watch] ${target.session} is ${status}${note}`
 }
 
+function shouldDeliverWatchTransition(target: SessRec, sources: readonly WatchSource[]): boolean {
+  // @@@watch-delivery-policy - Relationship setup sends current state; manual opts into working changes.
+  return target.status !== 'active' || sources.includes('manual')
+}
+
 function scheduleWatchNotifications(target: SessRec): void {
-  const watchers = readWatchEntries(target.session).map((entry) => entry.watcher)
+  const watchers = readWatchEntries(target.session)
+    .filter((entry) => !entry.snapshotPending && shouldDeliverWatchTransition(target, entry.sources))
+    .map((entry) => entry.watcher)
   if (!watchers.length) return
   queueMicrotask(() => {
     for (const watcher of watchers) {
@@ -634,19 +572,117 @@ function scheduleWatchNotifications(target: SessRec): void {
   })
 }
 
+const watchSnapshotState = (target: SessRec): string => JSON.stringify([target.status, target.proposal, target.note])
+
+async function deliverPendingWatchSnapshots(targetId: string, forceCurrent = true): Promise<void> {
+  const pending = readWatchEntries(targetId).filter((entry) => entry.snapshotPending)
+  for (const original of pending) {
+    const token = original.snapshotPending!
+    let force = forceCurrent
+    for (;;) {
+      const target = readRecord(targetId)
+      const entry = readWatchEntries(targetId)
+        .find((candidate) => candidate.watcher === original.watcher && candidate.snapshotPending === token)
+      if (!target || !entry) break
+      const state = watchSnapshotState(target)
+      const shouldDeliver = force || shouldDeliverWatchTransition(target, entry.sources)
+      if (!shouldDeliver) {
+        let settled = false
+        await withRecordLock(targetId, async () => {
+          const current = readRecord(targetId)
+          const entries = readWatchEntries(targetId)
+          const pendingEntry = entries.find((candidate) => candidate.watcher === original.watcher && candidate.snapshotPending === token)
+          if (!current || !pendingEntry || watchSnapshotState(current) !== state) return
+          const next = entries.map((candidate) => {
+            if (candidate !== pendingEntry) return candidate
+            const { snapshotPending: _pending, ...cleared } = candidate
+            return cleared
+          })
+          writeWatchEntries(targetId, next)
+          settled = true
+        })
+        if (settled) break
+        force = false
+        continue
+      }
+
+      const identity = `${targetId}\0${entry.watcher}\0${token}\0${state}`
+      const delivered = await sendText(entry.watcher, watchMessage(target), targetId, {
+        idempotency: {
+          operation: 'watch-initial-snapshot',
+          requestDigest: digest(identity),
+          payloadHash: digest(`watch-initial-snapshot\0${identity}\0${watchMessage(target)}`),
+        },
+        acceptGuard: async () => {
+          const current = readRecord(targetId)
+          const stillPending = readWatchEntries(targetId)
+            .some((candidate) => candidate.watcher === entry.watcher && candidate.snapshotPending === token)
+          if (!current || !stillPending || watchSnapshotState(current) !== state)
+            throw new ResourceConflict('watch initial snapshot changed before acceptance')
+        },
+      })
+      if (!delivered.ok) {
+        if (delivered.error?.includes('watch initial snapshot changed before acceptance')) continue
+        console.error(`spex session watch: could not deliver initial ${targetId} state to ${entry.watcher}: ${delivered.error}`)
+        break
+      }
+      force = false
+
+      let settled = false
+      await withRecordLock(targetId, async () => {
+        const current = readRecord(targetId)
+        const entries = readWatchEntries(targetId)
+        const pendingEntry = entries.find((candidate) => candidate.watcher === entry.watcher && candidate.snapshotPending === token)
+        if (!current || !pendingEntry) { settled = true; return }
+        const currentState = watchSnapshotState(current)
+        if (currentState !== state && shouldDeliverWatchTransition(current, pendingEntry.sources)) return
+        const next = entries.map((candidate) => {
+          if (candidate !== pendingEntry) return candidate
+          const { snapshotPending: _pending, ...cleared } = candidate
+          return cleared
+        })
+        writeWatchEntries(targetId, next)
+        settled = true
+      })
+      if (settled) break
+    }
+  }
+}
+
+async function clearPendingWatchSnapshots(targetId: string): Promise<void> {
+  await withRecordLock(targetId, async () => {
+    const entries = readWatchEntries(targetId)
+    const next = entries.map((entry) => {
+      if (!entry.snapshotPending) return entry
+      const { snapshotPending: _pending, ...settled } = entry
+      return settled
+    })
+    if (next.some((entry, index) => entry !== entries[index])) writeWatchEntries(targetId, next)
+  })
+}
+
 export async function subscribeSessionWatch(watcher: string, targets: string[], source: WatchSource = 'manual'): Promise<{ watched: string[] }> {
   managedWatchRecord(watcher)
   const watched: string[] = []
   for (const target of [...new Set(targets)]) {
     if (target === watcher) throw new ResourceConflict('a session cannot watch itself')
-    const targetRecord = managedWatchRecord(target)
+    let targetRecord: SessRec | null = null
+    let added = false
+    let pending = false
     withRecordLockSync(target, () => {
+      targetRecord = managedWatchRecord(target)
       const entries = readWatchEntries(target)
-      const next = addWatchSource(entries, watcher, source)
+      const next = addWatchSource(entries, watcher, source, source === 'parent' && targetRecord!.status === 'queued')
       if (next.added) writeWatchEntries(target, next.entries)
+      added = next.added
+      pending = next.entries.some((entry) => entry.watcher === watcher && !!entry.snapshotPending)
     })
-    const delivered = await sendText(watcher, watchMessage(targetRecord), target)
-    if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
+    if (pending) {
+      if (source === 'manual') await deliverPendingWatchSnapshots(target)
+    } else if (source === 'manual' || added) {
+      const delivered = await sendText(watcher, watchMessage(targetRecord!), target)
+      if (!delivered.ok) throw new ResourceConflict(`watch established but could not queue ${target}'s current state for ${watcher}: ${delivered.error}`)
+    }
     watched.push(target)
   }
   return { watched }
@@ -753,11 +789,13 @@ export async function reparentSessionRecords(rawChildren: string[], parent: stri
       }
     }))
   })
+  const notified: string[] = []
   if (parent) for (const child of notify) {
     const delivered = await sendText(parent, watchMessage(child), child.session)
     if (!delivered.ok) throw new ResourceConflict(`reparent committed but could not queue ${child.session}'s current state for ${parent}: ${delivered.error}`)
+    notified.push(child.session)
   }
-  return { children, parent, notified: notify.map((child) => child.session) }
+  return { children, parent, notified }
 }
 
 // Share one liveness snapshot rather than spawning tmux for every displayed session.
@@ -1422,6 +1460,10 @@ export function launchPreflight(rec: SessRec): LaunchBlock | null {
 
 // @@@ launch quoting - single-quote a string for a POSIX shell, `'` → `'\''`. Used to nest the whole agent
 // invocation inside the birth-registration `sh -c '…'` wrapper without any segment double-expanding.
+// 后端把这条命令输入交互式 shell，脚本路径必须作为一个 shell 参数传递。
+export function launchShellCommand(file: string): string {
+  return `bash ${shQuote(file)}`
+}
 export function launchScript(id: string, tail: string, harness: Harness = HARNESS, cmd?: string): string {
   const file = join(storeDir(id), 'launch.sh')
   // NO --append-system-prompt / --settings: the contract + hooks are materialized into the worktree at
@@ -1439,7 +1481,8 @@ export function launchScript(id: string, tail: string, harness: Harness = HARNES
   // invocation's own single-quoted segments — the codex `$@`/`$tid` script, the prompt — reach sh verbatim,
   // parsed exactly ONCE, never double-expanded. Each retry attempt rewrites agent.pid with a fresh `$$`.
   const pidPath = join(storeDir(id), 'agent.pid')
-  const born = `sh -c ${shQuote(`printf %s "$$" > ${shQuote(pidPath)}; exec env ${invocation}`)}`
+  const receiptPath = join(storeDir(id), 'agent.identity.json')
+  const born = `sh -c ${shQuote(`rm -f ${shQuote(receiptPath)}; printf %s "$$" > ${shQuote(pidPath)}; exec env ${invocation}`)}`
   // Bounded relaunch on a FAST exit: the agent launcher can exit within seconds before the rendezvous socket
   // ever appears. That is enough evidence to retry, but not enough evidence to name the cause. Once the agent
   // has run past LAUNCH_FAST_FAIL_S it has genuinely started; its eventual (much later) exit is a normal
@@ -1502,7 +1545,8 @@ async function launch(id: string, path: string, tail: string, harness: Harness =
   // reachable only from the world it belongs to ([[harness-adapter]] rendezvous socket).
   if (harness.ownsRendezvous) stampRvSock(id)
   await tmux(['new-session', '-d', '-s', id, '-x', String(COLS), '-y', String(ROWS), '-c', path])
-  await tmux(['send-keys', '-t', id, '-l', '--', `bash ${launchScript(id, tail, harness, cmd)}`])
+  const file = launchScript(id, tail, harness, cmd)
+  await tmux(['send-keys', '-t', id, '-l', '--', launchShellCommand(file)])
   await tmux(['send-keys', '-t', id, 'Enter'])
   launchedAt.set(id, Date.now())   // stamp the boot window so reconcile reads 'starting', not 'offline', until the socket is up
 }
@@ -1541,16 +1585,91 @@ async function withSessionTransition<T>(id: string, body: () => Promise<T>): Pro
 }
 let draining = false   // re-entrancy guard: only one drain pass runs at a time (no double-launch)
 
-// launch a prepared `queued` worktree: feed it its parked launch prompt, flip it to active. Returns false
-// (leaving it queued, to be retried next drain) if the worktree/prompt is gone or the tmux launch threw.
-async function startQueuedUnlocked(id: string): Promise<boolean> {
-  if (archiving.has(id)) return false
+function noteQueuedLaunchFailureUnlocked(id: string, error: unknown): void {
+  const reason = error instanceof Error ? error.message : String(error)
+  const note = `queued launch readiness failed: ${reason}`
+  console.error(`spex: session ${id}: ${note}`)
+  const rec = readRecord(id)
+  if (rec && rec.note !== note) writeRecord({ ...rec, note })
+}
+
+function observeQueuedLaunchReadiness(id: string, harness: Harness): void {
+  void waitForReady(id, harness)
+    .then(async (readiness) => {
+      if (!readiness) {
+        const committed = !!readRecord(id)?.harnessSessionId
+        throw new ResourceConflict(harness.launchPayloadProof
+          ? committed
+            ? 'post-receipt adapter liveness did not become ready before launch readiness timed out'
+            : 'native identity and first-turn rollout receipt did not arrive before launch readiness timed out'
+          : 'adapter liveness did not become ready before launch readiness timed out')
+      }
+      let readyToPublish = false
+      await withRecordLock(id, async () => {
+        const candidate = readRecord(id)
+        if (!candidate) return
+        const stillReady = await readiness.validate(() => {
+          const current = readRecord(id)
+          return current ? { ...current, runtimeDir: runtimeRoot() } : null
+        })
+        if (!stillReady) throw new ResourceConflict('launch readiness changed before queued publication')
+        const current = readRecord(id)
+        if (!current) return
+        if (current.status === 'queued') writeRecord({ ...current, status: 'active', proposal: null, note: null, launchOwner: null })
+        readyToPublish = true
+      })
+      if (!readyToPublish) return
+      await deliverPendingWatchSnapshots(id)
+      await drainSession(id)
+    })
+    .catch(async (error) => {
+      try { await withRecordLock(id, async () => noteQueuedLaunchFailureUnlocked(id, error)) }
+      catch (recordError) {
+        console.error(`spex: session ${id}: queued launch failure could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}; original failure: ${error instanceof Error ? error.message : String(error)}`)
+      }
+      await clearPendingWatchSnapshots(id)
+    })
+    .finally(() => launching.delete(id))
+}
+
+type QueuedStartResult = 'started' | 'blocked' | 'retryable'
+// Launch a prepared `queued` worktree. Deterministic blockers retire its creation snapshot debt; a transport
+// attempt that may succeed on the next drain keeps that durable debt for the eventual real outcome.
+async function startQueuedUnlocked(id: string): Promise<QueuedStartResult> {
+  if (archiving.has(id)) return 'retryable'
   const wt = await findWorktree(id)
-  if (!wt) return false
-  if (archiving.has(id) || wt.rec.archived) return false
-  if (!canDrainQueued(wt.rec)) return false
+  if (!wt) return 'blocked'
+  if (archiving.has(id)) return 'retryable'
+  if (wt.rec.archived) return 'blocked'
+  if (!canDrainQueued(wt.rec)) return 'retryable'
+  const h = harnessById(wt.rec.harness || defaultHarness.id)
+  if (h.launchPayloadProof && hasReadableLaunchReceipt(id)) {
+    launching.add(id)
+    let readinessOwnsSlot = false
+    try {
+      try { consumeHarnessLaunchProofUnlocked(id) }
+      catch (error) {
+        noteQueuedLaunchFailureUnlocked(id, error)
+        throw error
+      }
+      const recovered = readRecord(id) || wt.rec
+      writeRecord({ ...recovered, status: 'active', proposal: null, note: null, launchOwner: null })
+      observeQueuedLaunchReadiness(id, h)
+      readinessOwnsSlot = true
+      return 'started'
+    } finally {
+      if (!readinessOwnsSlot) launching.delete(id)
+    }
+  }
   const launchPrompt = readLaunchFile(id)
-  if (launchPrompt == null) return false   // a queued session always has one; if it's gone, don't spin on it
+  if (launchPrompt == null) {
+    const message = `authoritative resolved launch payload is missing for queued session ${id}; refusing to create an empty thread`
+    if (wt.rec.note !== message) {
+      console.error(`spex: ${message}`)
+      writeRecord({ ...wt.rec, note: message })
+    }
+    return 'blocked'
+  }
   // a queued worktree can go missing while it waits (a human cleaned up, a disk moved). Draining it would open
   // a window that fast-exits and burn the retry budget every tick, so refuse ONCE, loudly, and stamp the reason
   // on the record — the drainer then leaves it alone instead of spinning on a launch that cannot work.
@@ -1560,29 +1679,34 @@ async function startQueuedUnlocked(id: string): Promise<boolean> {
       console.error(`spex: not launching queued session ${id}: ${blocked.message}`)
       writeRecord({ ...wt.rec, note: blocked.message })
     }
-    return false
+    return 'blocked'
   }
   launching.add(id)   // hold the slot across the boot window BEFORE we launch, so a concurrent count can't race us
-  const h = harnessById(wt.rec.harness || defaultHarness.id)   // launch THIS session's chosen harness (also drives waitForReady below)
+  let readinessOwnsSlot = false
   try {
-    const sq = shQuote(launchPrompt)
-    await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
-  } catch {
-    launching.delete(id)
-    return false   // launch failed → stays `queued`, retried on the next drain tick
+    try {
+      const sq = shQuote(launchPrompt)
+      await launch(id, wt.path, `${h.sessionIdArg(id)} ${sq}`.trim(), h, launcherCmd(wt.rec))
+    } catch {
+      return 'retryable'   // launch failed → stays `queued`, with its initial debt, for the next drain tick
+    }
+    // the note this record may carry is the QUEUED state's word (a launch-blocker message stamped above); the
+    // launch just succeeded, so it is spent. Clearing it with the transition is what keeps "a stored note
+    // belongs to the state currently declared" true for every writer — the invariant [[session-label]]'s
+    // headline precedence stands on.
+    const launched = readRecord(id) || wt.rec
+    writeRecord({ ...launched, status: 'active', proposal: null, note: null, launchOwner: null })
+    if (!h.launchPayloadProof) removeLaunchFile(id)
+    // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
+    // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.
+    observeQueuedLaunchReadiness(id, h)
+    readinessOwnsSlot = true
+    return 'started'
+  } finally {
+    if (!readinessOwnsSlot) launching.delete(id)
   }
-  // the note this record may carry is the QUEUED state's word (a launch-blocker message stamped above); the
-  // launch just succeeded, so it is spent. Clearing it with the transition is what keeps "a stored note
-  // belongs to the state currently declared" true for every writer — the invariant [[session-label]]'s
-  // headline precedence stands on.
-  writeRecord({ ...wt.rec, status: 'active', proposal: null, note: null, launchOwner: null })
-  removeLaunchFile(id)   // consumed
-  // release the boot-window hold once the socket is up (then isOccupying takes over) or after the bounded
-  // wait — so a launch that never booted reads offline and the drainer reclaims the slot instead of pinning it.
-  void waitForReady(id, h).finally(() => launching.delete(id))
-  return true
 }
-const startQueued = (id: string): Promise<boolean> => withSessionTransition(id, () => withRecordLock(id, () => startQueuedUnlocked(id)))
+const startQueued = (id: string): Promise<QueuedStartResult> => withSessionTransition(id, () => withRecordLock(id, () => startQueuedUnlocked(id)))
 
 async function drainQueueUnlocked(): Promise<void> {
   if (draining) return
@@ -1591,13 +1715,32 @@ async function drainQueueUnlocked(): Promise<void> {
     const cap = maxActive()   // read once per drain pass (spexcode.json → env → default); won't shift mid-burst
     for (;;) {
       const [sessions, snap] = await Promise.all([listSessions(), liveSnapshot()])
+      for (const session of sessions) {
+        const rec = readRecord(session.id)
+        if (!rec || launching.has(session.id) || !readWatchEntries(session.id).some((entry) => entry.snapshotPending)) continue
+        if (rec.status === 'queued') continue
+        if (rec.status === 'active' && !rec.stopped && !rec.archived) {
+          launching.add(session.id)
+          observeQueuedLaunchReadiness(session.id, harnessById(rec.harness || defaultHarness.id))
+          continue
+        }
+        await deliverPendingWatchSnapshots(session.id, false)
+      }
       // if the liveness probe FAILED (tmux timing out — the overload condition), occupancy is UNKNOWABLE: every
       // session would read window-less and isOccupying would undercount, so the drainer would OVER-launch and pile
       // MORE compute onto an already-thrashing box. Under load, do the safe thing — launch nothing this pass and
       // let the next tick re-drain once the probe recovers ([[state]] board honesty applied to the cap).
       if (snap.probeFailed) break
       const occupied = sessions.reduce((n, s) => n + (launching.has(s.id) || isOccupying(s, snap) ? 1 : 0), 0)
-      if (occupied >= cap) break
+      if (occupied >= cap) {
+        const authority = backendLaunchAuthority()
+        await Promise.all(sessions.filter((session) => {
+          if (session.status !== 'queued') return false
+          const rec = readRecord(session.id)
+          return !!rec && canDrainQueued(rec, authority)
+        }).map((session) => deliverPendingWatchSnapshots(session.id)))
+        break
+      }
       const authority = backendLaunchAuthority()
       const next = sessions.find((s) => {
         if (s.status !== 'queued' || launching.has(s.id)) return false
@@ -1605,7 +1748,11 @@ async function drainQueueUnlocked(): Promise<void> {
         return !!rec && canDrainQueued(rec, authority)
       })
       if (!next) break
-      if (!(await startQueued(next.id))) break   // launch failed → stop this pass; a later tick retries
+      const started = await startQueued(next.id)
+      if (started !== 'started') {
+        if (started === 'blocked') await clearPendingWatchSnapshots(next.id)
+        break   // launch failed → stop this pass; a later tick retries
+      }
     }
   } finally { draining = false }
 }
@@ -2372,6 +2519,11 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
           if (gitMismatch) throw new SessionCreateError('session_create_failed', phase, `refusing session publication: ${gitMismatch}`, 500)
           throwIfCreateAborted(signal, phase)
           writeRecord(rec)
+          if (rec.parent && readRecord(rec.parent)?.governed) {
+            const watchers = readWatchEntries(id)
+            const next = addWatchSource(watchers, rec.parent, 'parent', true)
+            if (next.added) writeWatchEntries(id, next.entries)
+          }
           published = true
           const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(rec, root)
           if (receiptFailure) console.error(`spex: published session ${id.slice(0, 8)} remains the fence for its candidate receipt: ${receiptFailure}`)
@@ -2440,7 +2592,7 @@ const SOCKET_READY_TIMEOUT_MS = 30000   // spans launchScript's bounded fast-fai
                                         // waitForReady (slot-hold + resume) waits through a daemon-race retry
                                         // instead of returning before a recovering socket
 const SOCKET_POLL_MS = 200
-async function waitForReady(id: string, harness: Harness, pending?: SessRec, timeoutMs = SOCKET_READY_TIMEOUT_MS): Promise<HarnessLaunchReadinessFence | null> {
+async function waitForReady(id: string, harness: Harness, pending?: SessRec, timeoutMs = SOCKET_READY_TIMEOUT_MS, recordLockHeld = false): Promise<HarnessLaunchReadinessFence | null> {
   const current = () => {
     const stored = readRecord(id)
     const rec = stored && pending
@@ -2449,6 +2601,17 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
     return rec ? { ...rec, runtimeDir: runtimeRoot() } : null
   }
   const deadline = Date.now() + timeoutMs
+  if (harness.launchPayloadProof && !current()?.harnessSessionId) {
+    for (;;) {
+      if (hasReadableLaunchReceipt(id)) {
+        if (recordLockHeld) consumeHarnessLaunchProofUnlocked(id)
+        else await withRecordLock(id, async () => consumeHarnessLaunchProofUnlocked(id))
+        break
+      }
+      if (Date.now() >= deadline) return null
+      await new Promise((r) => setTimeout(r, SOCKET_POLL_MS))
+    }
+  }
   if (harness.launchReady) return harness.launchReady(current, deadline)
   const genericFence = (): HarnessLaunchReadinessFence => ({
     proof: Object.freeze({ kind: 'adapter-liveness', harnessId: harness.id, sessionId: id }),
@@ -2468,6 +2631,7 @@ async function waitForReady(id: string, harness: Harness, pending?: SessRec, tim
 }
 
 type ResumeOptions = { force?: boolean; guard?: boolean }
+const restingLifecycle = (status: Lifecycle): Lifecycle => status === 'active' || status === 'queued' ? 'idle' : status
 
 async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Promise<{ ok: boolean; error?: string; refused?: boolean; info?: string }> {
   const { force = false, guard = true } = opts
@@ -2496,6 +2660,14 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   const blocked = launchPreflight(wt.rec)
   if (blocked) return { ok: false, refused: true, error: blocked.message }
   const h = harnessById(wt.rec.harness || defaultHarness.id)
+  // A prior adapter process may have proven identity + first-turn durability just before its session owner
+  // died. Consume that receipt before choosing a recovery tail, so retry resumes the proven thread instead of
+  // creating another one with the same first prompt.
+  if (h.launchPayloadProof && hasReadableLaunchReceipt(id)) {
+    consumeHarnessLaunchProofUnlocked(id)
+    wt = await findWorktree(id)
+    if (!wt) return { ok: false, error: `session ${id} disappeared while recovering native launch receipt` }
+  }
   // An archived record is expected to be stopped, but the guard must still inspect physical liveness in case
   // it is a legacy/invariant-violating row. Ignore filing and stale stop metadata for this one safety probe so
   // resume can never kill a live leaf merely because the record was hidden.
@@ -2533,17 +2705,22 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   // Archived sessions have no runtime by invariant. Resume first leaves cold storage, then the normal
   // starting -> online launch path recreates the same conversation.
   const current = wasArchived ? (readRecord(id) || { ...wt.rec, archived: false, stopped: true, coldProof: null }) : wt.rec
-  const resumed: SessRec = { ...current, archived: false, coldProof: null, status: current.status === 'active' ? 'idle' : current.status, stopped: false }
+  const resumed: SessRec = { ...current, archived: false, coldProof: null, status: restingLifecycle(current.status), stopped: false }
   if (force || lv === 'offline') {
+    let resumeTail: string
+    try { resumeTail = h.resumeArg(wt.rec, readLaunchFile(id)).trim() }
+    catch (error) {
+      return { ok: false, refused: true, error: error instanceof Error ? error.message : String(error) }
+    }
     await tmuxOk(['kill-session', '-t', id])   // drop a dead/offline pane (or a force-killed live one)
-    await launch(id, wt.path, h.resumeArg(wt.rec).trim(), h, launcherCmd(wt.rec))
+    await launch(id, wt.path, resumeTail, h, launcherCmd(wt.rec))
     let readiness: HarnessLaunchReadinessFence | null = null
     let readinessError = ''
-    try { readiness = await waitForReady(id, h, resumed) }
+    try { readiness = await waitForReady(id, h, resumed, SOCKET_READY_TIMEOUT_MS, true) }
     catch (error) { readinessError = error instanceof Error ? error.message : String(error) }
     if (!readiness) {
       const failed = readRecord(id) || current
-      writeRecord({ ...failed, ...preResume, launchReadinessPending: null })
+      writeRecord({ ...failed, ...preResume, harnessSessionId: failed.harnessSessionId, launchReadinessPending: null })
       return {
         ok: false,
         refused: true,
@@ -2555,7 +2732,7 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
       ...latest,
       archived: false,
       coldProof: null,
-      status: latest.status === 'active' ? 'idle' : latest.status,
+      status: restingLifecycle(latest.status),
       stopped: false,
       launchReadinessPending: launchReadinessPending(preResume),
     }
@@ -2581,7 +2758,11 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   return { ok: true }
 }
 export const resumeSession = (id: string, opts: ResumeOptions = {}) =>
-  withSessionTransition(id, () => withRecordLock(id, () => resumeSessionUnlocked(id, opts)))
+  withSessionTransition(id, async () => {
+    const result = await withRecordLock(id, () => resumeSessionUnlocked(id, opts))
+    if (result.ok) await drainSession(id)
+    return result
+  })
 
 export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?: string; sessionId?: string } = {}): boolean {
   const id = opts.sessionId || ownSessionId()
@@ -2614,44 +2795,203 @@ export function markHeadlessTurnFailure(sessionId: string, harness: string, exit
   const outcome = /^\d+$/.test(exitCode) ? `exit code ${exitCode}` : `signal ${exitCode}`
   return markTurnFailure(sessionId, `${harness} turn exited with ${outcome}`)
 }
+function bindHarnessSessionIdUnlocked(rec: SessRec, harnessSessionId: string, generationId = process.env.SPEXCODE_CODEX_GENERATION?.trim()): void {
+  const id = rec.session
+  if (rec.harnessSessionId && rec.harnessSessionId !== harnessSessionId)
+    throw new ResourceConflict(`refusing to replace exact harness thread identity for ${id}; create a new governed session instead`)
+  const codex = rec.harness === 'codex' || rec.harness === 'codex-headless'
+  const root = runtimeRoot()
+  let priorBinding: ReturnType<typeof codexGenerationBindingForSession> = null
+  let registrationPrepared = false
+  if (codex) {
+    const ledger = readCodexGenerationLedger(root)
+    if (ledger.revision > 0 && !generationId) throw new ResourceConflict(`refusing to bind Codex thread ${harnessSessionId}: launch did not provide an exact generation id`)
+    priorBinding = codexGenerationBindingForSession(root, id)
+    if (priorBinding && (!generationId || priorBinding.generationId !== generationId || priorBinding.threadId !== harnessSessionId))
+      throw new ResourceConflict(`refusing to replace exact Codex generation binding for ${id}`)
+    if (generationId && !priorBinding) {
+      prepareCodexGenerationRegistration(root, id, harnessSessionId, generationId)
+      registrationPrepared = true
+    }
+  }
+  try {
+    writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
+  } catch (error) {
+    if (codex && generationId && registrationPrepared) {
+      try { bindCodexGeneration(root, id, harnessSessionId, null) }
+      catch (rollback) {
+        throw new ResourceConflict(`Codex generation binding persisted but session ${id} record write failed and rollback failed: ${rollback instanceof Error ? rollback.message : String(rollback)}`)
+      }
+    }
+    throw error
+  }
+  if (codex && generationId) commitCodexGenerationRegistration(root, id, harnessSessionId, generationId)
+}
+
+type StagedHarnessLaunchProof = {
+  version: 1
+  sessionId: string
+  harnessId: string
+  harnessSessionId: string
+  launchPayloadHash: string
+  generationId: string | null
+}
+
+const NATIVE_LAUNCH_RECEIPT_FILE = 'launch.receipt'
+const LEGACY_NATIVE_LAUNCH_RECEIPT_FILE = 'launch.proof' // dead-words-ok: one-release reader preserves staged receipts created before the protocol rename
+
+function launchReceiptPath(id: string): string {
+  return sessionArtifactPath(id, NATIVE_LAUNCH_RECEIPT_FILE)
+}
+
+function readableLaunchReceiptPath(id: string): string | null {
+  const current = launchReceiptPath(id)
+  if (existsSync(current)) return current
+  const legacy = sessionArtifactPath(id, LEGACY_NATIVE_LAUNCH_RECEIPT_FILE)
+  return existsSync(legacy) ? legacy : null
+}
+
+function hasReadableLaunchReceipt(id: string): boolean {
+  return readableLaunchReceiptPath(id) !== null
+}
+
+function readHarnessLaunchProof(id: string, path = readableLaunchReceiptPath(id)): StagedHarnessLaunchProof {
+  if (!path) throw new ResourceConflict(`native launch receipt for ${id} is missing`)
+  try {
+    const proof = JSON.parse(readFileSync(path, 'utf8')) as Partial<StagedHarnessLaunchProof> | null
+    if (!proof || proof.version !== 1 || typeof proof.sessionId !== 'string'
+      || typeof proof.harnessId !== 'string' || typeof proof.harnessSessionId !== 'string' || !proof.harnessSessionId
+      || typeof proof.launchPayloadHash !== 'string'
+      || (proof.generationId !== null && typeof proof.generationId !== 'string')) throw new Error('invalid receipt shape')
+    return proof as StagedHarnessLaunchProof
+  } catch (error) {
+    throw new ResourceConflict(`native launch receipt for ${id} is unreadable: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+function sameHarnessLaunchProof(left: StagedHarnessLaunchProof, right: StagedHarnessLaunchProof): boolean {
+  return left.version === right.version && left.sessionId === right.sessionId && left.harnessId === right.harnessId
+    && left.harnessSessionId === right.harnessSessionId && left.launchPayloadHash === right.launchPayloadHash
+    && left.generationId === right.generationId
+}
+
+// A native launch can be proven just before its visible TUI exits. A shell-level retry must be able to ask
+// for that exact target without replaying the first prompt. This read-only resolver accepts either side of the
+// proof-consumption boundary: the durable record after identity binding, or the staged receipt while the record
+// lock has not consumed it yet. Any mismatch remains a loud resource conflict; returning null means no proof has
+// been established and a fresh first-turn attempt is still allowed.
+export function existingHarnessLaunchTarget(id: string): string | null {
+  const rec = readLiveRecord(id)
+  if (!rec) return null
+  const harness = harnessById(rec.harness || defaultHarness.id)
+  if (!harness.launchPayloadProof) return null
+  const receiptPath = readableLaunchReceiptPath(id)
+  if (receiptPath) {
+    const proof = readHarnessLaunchProof(id, receiptPath)
+    if (proof.sessionId !== id || proof.harnessId !== harness.id)
+      throw new ResourceConflict(`native launch receipt for ${id} does not match the governed adapter identity`)
+    const pending = readLaunchFile(id)
+    if (pending != null && proof.launchPayloadHash !== createHash('sha256').update(pending).digest('hex'))
+      throw new ResourceConflict(`native launch receipt for ${id} does not match the authoritative resolved launch payload`)
+    if (rec.harnessSessionId && rec.harnessSessionId !== proof.harnessSessionId)
+      throw new ResourceConflict(`refusing to replace exact harness thread identity for ${id}; staged launch receipt differs from the record`)
+    return proof.harnessSessionId
+  }
+  return rec.harnessSessionId || null
+}
+
+export function stageHarnessLaunchProof(sessionId: string | undefined, harnessSessionId: string | undefined, launchPayload: string): boolean {
+  const id = sessionId || ownSessionId()
+  if (!id || !harnessSessionId) return false
+  const rec = readLiveRecord(id)
+  if (!rec) return false
+  const harness = harnessById(rec.harness || defaultHarness.id)
+  if (!harness.launchPayloadProof)
+    throw new ResourceConflict(`harness ${harness.id} does not use native launch-payload receipts`)
+  const pending = readLaunchFile(id)
+  if (pending == null)
+    throw new ResourceConflict(`refusing native launch receipt for ${id}: authoritative resolved launch payload is missing`)
+  if (pending !== launchPayload)
+    throw new ResourceConflict(`refusing native launch receipt for ${id}: first-turn payload differs from the authoritative resolved launch payload`)
+  const generationId = process.env.SPEXCODE_CODEX_GENERATION?.trim() || null
+  if (rec.harness === 'codex' || rec.harness === 'codex-headless') {
+    const ledger = readCodexGenerationLedger(runtimeRoot())
+    if (ledger.revision > 0 && !generationId)
+      throw new ResourceConflict(`refusing native launch receipt for ${id}: launch did not provide an exact Codex generation id`)
+    if (generationId && (!ledger.generations[generationId] || ledger.generations[generationId].state === 'reclaimed'))
+      throw new ResourceConflict(`refusing to bind Codex thread ${harnessSessionId}: generation ${generationId} is absent or reclaimed`)
+  }
+  const proof: StagedHarnessLaunchProof = {
+    version: 1,
+    sessionId: id,
+    harnessId: harness.id,
+    harnessSessionId,
+    launchPayloadHash: createHash('sha256').update(launchPayload).digest('hex'),
+    generationId,
+  }
+  const existingPath = readableLaunchReceiptPath(id)
+  if (existingPath) {
+    const staged = readHarnessLaunchProof(id, existingPath)
+    if (sameHarnessLaunchProof(staged, proof)) return true
+    throw new ResourceConflict(`refusing to replace native launch receipt for ${id}: the staged session, thread, payload, or generation differs`)
+  }
+  const path = launchReceiptPath(id)
+  const temp = `${path}.${process.pid}.${randomUUID()}.tmp`
+  writeFileSync(temp, `${JSON.stringify(proof, null, 2)}\n`, { mode: 0o600 })
+  try {
+    linkSync(temp, path)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    const staged = readHarnessLaunchProof(id, path)
+    if (sameHarnessLaunchProof(staged, proof)) return true
+    throw new ResourceConflict(`refusing to replace native launch receipt for ${id}: the staged session, thread, payload, or generation differs`)
+  } finally {
+    rmSync(temp, { force: true })
+  }
+}
+
+function consumeHarnessLaunchProofUnlocked(id: string): boolean {
+  const rec = readLiveRecord(id)
+  if (!rec) return false
+  const harness = harnessById(rec.harness || defaultHarness.id)
+  const receiptPath = readableLaunchReceiptPath(id)
+  const proof = readHarnessLaunchProof(id, receiptPath)
+  if (proof.sessionId !== id || proof.harnessId !== harness.id)
+    throw new ResourceConflict(`native launch receipt for ${id} does not match the governed adapter identity`)
+  const pending = readLaunchFile(id)
+  if (pending == null && rec.harnessSessionId !== proof.harnessSessionId)
+    throw new ResourceConflict(`refusing native launch receipt for ${id}: authoritative resolved launch payload is missing`)
+  if (pending != null && proof.launchPayloadHash !== createHash('sha256').update(pending).digest('hex'))
+    throw new ResourceConflict(`native launch receipt for ${id} does not match the authoritative resolved launch payload`)
+  bindHarnessSessionIdUnlocked(rec, proof.harnessSessionId, proof.generationId || undefined)
+  if (pending != null) {
+    try { rmSync(sessionArtifactPath(id, 'launch')) }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error(`spex: native launch receipt committed for ${id}, but launch could not be consumed: ${error instanceof Error ? error.message : String(error)}`)
+        return true
+      }
+    }
+  }
+  try { if (receiptPath) rmSync(receiptPath) }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+      console.error(`spex: native launch receipt committed for ${id}, but the receipt could not be consumed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  return true
+}
+
 export function markHarnessSessionId(sessionId: string | undefined, harnessSessionId: string | undefined): boolean {
   const id = sessionId || ownSessionId()
   if (!id || !harnessSessionId) return false
   return withRecordLockSync(id, () => {
     const rec = readLiveRecord(id)
     if (!rec) return false
-    if (rec.harnessSessionId && rec.harnessSessionId !== harnessSessionId)
-      throw new ResourceConflict(`refusing to replace exact harness thread identity for ${id}; create a new governed session instead`)
-    const codex = rec.harness === 'codex' || rec.harness === 'codex-headless'
-    const root = runtimeRoot()
-    let priorBinding: ReturnType<typeof codexGenerationBindingForSession> = null
-    let generationId: string | undefined
-    let registrationPrepared = false
-    if (codex) {
-      generationId = process.env.SPEXCODE_CODEX_GENERATION?.trim()
-      const ledger = readCodexGenerationLedger(root)
-      if (ledger.revision > 0 && !generationId) throw new ResourceConflict(`refusing to bind Codex thread ${harnessSessionId}: launch did not provide an exact generation id`)
-      priorBinding = codexGenerationBindingForSession(root, id)
-      if (priorBinding && (!generationId || priorBinding.generationId !== generationId || priorBinding.threadId !== harnessSessionId))
-        throw new ResourceConflict(`refusing to replace exact Codex generation binding for ${id}`)
-      if (generationId && !priorBinding) {
-        prepareCodexGenerationRegistration(root, id, harnessSessionId, generationId)
-        registrationPrepared = true
-      }
-    }
-    try {
-      writeRecord({ ...rec, harnessSessionId, coldProof: null, adapterRecovery: null })
-    } catch (error) {
-      if (codex && generationId && registrationPrepared) {
-        try {
-          bindCodexGeneration(root, id, harnessSessionId, null)
-        } catch (rollback) {
-          throw new ResourceConflict(`Codex generation binding persisted but session ${id} record write failed and rollback failed: ${rollback instanceof Error ? rollback.message : String(rollback)}`)
-        }
-      }
-      throw error
-    }
-    if (codex && generationId) commitCodexGenerationRegistration(root, id, harnessSessionId, generationId)
+    const harness = harnessById(rec.harness || defaultHarness.id)
+    if (harness.launchPayloadProof)
+      throw new ResourceConflict(`harness ${harness.id} must stage native identity together with an authoritative first-turn payload receipt`)
+    bindHarnessSessionIdUnlocked(rec, harnessSessionId)
     return true
   })
 }
@@ -2841,28 +3181,132 @@ export async function mergeSession(id: string): Promise<MergeSessionResult> {
 // then SIGKILL, each bounded. This is also what lets the socket sweep run at all — a still-answering listener
 // is never ours to unlink, so an un-killed agent would otherwise strand its own socket forever.
 // The escalation is IDENTITY-GUARDED: a recorded pid can have been recycled by an unrelated process, so we
-// signal only a pid whose argv still names THIS session. Unidentifiable → we signal nothing and let the
-// adapter's proof-of-death rule leave the transport alone; never a blind kill on a stale number.
+// signal only the immutable pid/start instance whose ownership was witnessed in the exact tmux pane closure.
+// Unidentifiable → we signal nothing and let the adapter's proof-of-death rule leave the transport alone.
 const AGENT_EXIT_GRACE_MS = 3000
-type LeafIdentity = { pid: number; startToken: string; ownerNeedle: string }
+const SESSION_LEAF_RECEIPT_VERSION = 1
+const SESSION_LEAF_RECEIPT_KIND = 'session-leaf'
+export type SessionLeafReceipt = {
+  version: 1
+  kind: 'session-leaf'
+  sessionId: string
+  pid: number
+  startToken: string
+}
+type SessionLeafReceiptCandidate = { ok: boolean; receipt?: SessionLeafReceipt; reason?: string }
+
+export function parseSessionLeafReceipt(raw: string, sessionId: string): SessionLeafReceipt | null {
+  let value: unknown
+  try { value = JSON.parse(raw) } catch { return null }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const row = value as Record<string, unknown>
+  const keys = Object.keys(row).sort()
+  if (keys.join(',') !== 'kind,pid,sessionId,startToken,version') return null
+  if (row.version !== SESSION_LEAF_RECEIPT_VERSION || row.kind !== SESSION_LEAF_RECEIPT_KIND || row.sessionId !== sessionId) return null
+  if (!Number.isSafeInteger(row.pid) || (row.pid as number) <= 0 || typeof row.startToken !== 'string' || !row.startToken) return null
+  return row as SessionLeafReceipt
+}
+
+function pidInPaneClosure(pid: number, panePid: number, procs: ProcTable): boolean {
+  const seen = new Set<number>()
+  for (let current = pid; current > 0 && !seen.has(current);) {
+    if (current === panePid) return true
+    seen.add(current)
+    const row = procs.get(current)
+    if (!row || row.ppid === current) return false
+    current = row.ppid
+  }
+  return false
+}
+
+export function sessionLeafReceiptCandidate(
+  sessionId: string,
+  pid: number,
+  panePid: number | null,
+  procs: ProcTable | null,
+  startBefore: string | null,
+  startAfter: string | null,
+): SessionLeafReceiptCandidate {
+  if (!panePid) return { ok: false, reason: 'exact target pane PID is unavailable' }
+  if (!procs) return { ok: false, reason: 'process snapshot is unavailable' }
+  if (!startBefore || !startAfter) return { ok: false, reason: 'leaf process-start identity is unreadable' }
+  if (startBefore !== startAfter) return { ok: false, reason: 'leaf process-start identity changed during ancestry observation' }
+  if (!pidInPaneClosure(pid, panePid, procs)) return { ok: false, reason: `registered leaf PID ${pid} is not in exact target pane ${panePid} descendant closure` }
+  return {
+    ok: true,
+    receipt: { version: SESSION_LEAF_RECEIPT_VERSION, kind: SESSION_LEAF_RECEIPT_KIND, sessionId, pid, startToken: startAfter },
+  }
+}
+
+export function sessionLeafReceiptIdentityState(
+  receipt: SessionLeafReceipt,
+  registeredPid: number | null,
+  currentStartToken: string | null,
+  liveness: 'alive' | 'dead' | 'unknown',
+): 'same-live' | 'gone' | 'pid-reused' | 'unknown' | 'registration-changed' | 'registration-missing' {
+  if (registeredPid == null) return 'registration-missing'
+  if (registeredPid !== receipt.pid) return 'registration-changed'
+  if (liveness === 'unknown') return 'unknown'
+  if (liveness === 'dead') return currentStartToken ? 'unknown' : 'gone'
+  if (!currentStartToken) return 'unknown'
+  return currentStartToken === receipt.startToken ? 'same-live' : 'pid-reused'
+}
+
+const sessionLeafReceiptPath = (id: string) => sessionArtifactPath(id, 'agent.identity.json')
+function readSessionLeafReceipt(id: string): { state: 'missing' } | { state: 'invalid'; reason: string } | { state: 'valid'; receipt: SessionLeafReceipt } {
+  const path = sessionLeafReceiptPath(id)
+  let raw: string
+  try { raw = readFileSync(path, 'utf8') }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { state: 'missing' }
+    return { state: 'invalid', reason: `leaf birth receipt is unreadable (${error instanceof Error ? error.message : String(error)})` }
+  }
+  const receipt = parseSessionLeafReceipt(raw, id)
+  return receipt ? { state: 'valid', receipt } : { state: 'invalid', reason: 'leaf birth receipt is malformed or names a different session' }
+}
+
+function writeSessionLeafReceipt(id: string, receipt: SessionLeafReceipt): void {
+  const path = sessionLeafReceiptPath(id)
+  const temp = `${path}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    writeFileSync(temp, `${JSON.stringify(receipt)}\n`, { mode: 0o600 })
+    renameSync(temp, path)
+  } finally { rmSync(temp, { force: true }) }
+}
+
+function clearSessionLeafArtifacts(id: string): void {
+  rmSync(sessionArtifactPath(id, 'agent.pid'), { force: true })
+  pidRegistry.delete(id)
+  rmSync(sessionLeafReceiptPath(id), { force: true })
+}
+
+type LeafIdentity = { pid: number; startToken: string; receipt: SessionLeafReceipt }
 type LeafIdentityObservation =
   | { state: 'missing' }
   | { state: 'dead'; pid: number }
   | { state: 'owned'; identity: LeafIdentity }
-  | { state: 'unrelated'; pid: number; startToken: string }
   | { state: 'unknown'; pid?: number; reason: string }
+const sameSessionLeafReceipt = (left: SessionLeafReceipt, right: SessionLeafReceipt): boolean =>
+  left.version === right.version && left.kind === right.kind && left.sessionId === right.sessionId
+  && left.pid === right.pid && left.startToken === right.startToken
+
 async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, leaf: LeafIdentity): Promise<void> {
-  const pid = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
-  if (pid !== leaf.pid)
-    throw new ResourceConflict(`refusing to stop ${id}: session leaf identity changed before signal`)
-  if (!Number.isFinite(pid) || pid <= 0) return
+  const pid = leaf.pid
   const startToken = leaf.startToken
   const alive = (): boolean => leafAlive(pid)
   const identityState = (): 'same' | 'gone' | 'changed' => {
-    if (readAgentPid(sessionArtifactPath(id, 'agent.pid')) !== leaf.pid) return 'changed'
-    const current = processStartToken(pid)
-    if (!current) return alive() ? 'changed' : 'gone'
-    return current === startToken ? 'same' : 'changed'
+    const stored = readSessionLeafReceipt(id)
+    if (stored.state !== 'valid' || !sameSessionLeafReceipt(stored.receipt, leaf.receipt)) return 'changed'
+    const registered = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
+    const liveness = leafProcessLiveness(pid)
+    const currentStartToken = sessionLeafStartToken(pid)
+    const state = sessionLeafReceiptIdentityState(
+      stored.receipt,
+      Number.isSafeInteger(registered) ? registered : null,
+      currentStartToken,
+      liveness,
+    )
+    return state === 'same-live' ? 'same' : state === 'gone' ? 'gone' : 'changed'
   }
   const initialState = identityState()
   if (initialState === 'gone') return
@@ -2875,20 +3319,15 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, l
     return !alive()
   }
   if (await gone(AGENT_EXIT_GRACE_MS)) return                        // the pane's SIGHUP took it — the normal path
-  const sameAgentInstance = async (): Promise<boolean> => {
-    if (processStartToken(pid) !== startToken) return false
-    const argv = await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' }).then((r) => r.stdout).catch(() => '')
-    return argv.includes(leaf.ownerNeedle) && processStartToken(pid) === startToken
-  }
   for (const sig of ['SIGTERM', 'SIGKILL'] as const) {
     await beforeSignal()
     const state = identityState()
     if (state === 'gone') return
     if (state === 'changed') throw new ResourceConflict(`refusing to stop ${id}: session leaf identity changed during escalation`)
-    if (!await sameAgentInstance()) throw new ResourceConflict(`refusing to stop ${id}: leaf PID ${pid}@${startToken} no longer proves ownership`)
     try { process.kill(pid, sig) } catch { return }                  // vanished between checks
     if (await gone(sig === 'SIGTERM' ? AGENT_EXIT_GRACE_MS : 1000)) return
   }
+  throw new ResourceConflict(`refusing to stop ${id}: exact leaf PID ${pid}@${startToken} remains live after escalation`)
 }
 
 // @@@ stopAgentProcess - the shared teardown both stop and close begin with, so there is ONE kill path, not
@@ -2900,39 +3339,105 @@ async function killAgentProcess(id: string, beforeSignal: () => Promise<void>, l
 // @@@ leafAlive - does this pid name a live process? EPERM counts as alive (a process we may not signal is
 // still a process); only ESRCH is absence. Kept local: git.ts carries its own copy for lock reclamation, and
 // collapsing the two is part of the spec/eval unification lane, not of this fix.
-const leafAlive = (pid: number): boolean => {
-  try { process.kill(pid, 0); return true }
-  catch (error) { return (error as NodeJS.ErrnoException)?.code !== 'ESRCH' }
+export type SessionLeafProcessProbe = Readonly<{
+  startToken(pid: number): string | null
+  liveness(pid: number): 'alive' | 'dead' | 'unknown'
+}>
+const hostLeafProcessLiveness = (pid: number): 'alive' | 'dead' | 'unknown' => {
+  try { process.kill(pid, 0); return 'alive' }
+  catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code
+    if (code === 'ESRCH') return 'dead'
+    if (code === 'EPERM') return 'alive'
+    return 'unknown'
+  }
 }
+let sessionLeafProcessProbe: SessionLeafProcessProbe = {
+  startToken: processStartToken,
+  liveness: hostLeafProcessLiveness,
+}
+export function installSessionLeafProcessProbeForTest(probe: SessionLeafProcessProbe): () => void {
+  const previous = sessionLeafProcessProbe
+  sessionLeafProcessProbe = probe
+  return () => { sessionLeafProcessProbe = previous }
+}
+const sessionLeafStartToken = (pid: number): string | null => sessionLeafProcessProbe.startToken(pid)
+const leafProcessLiveness = (pid: number): 'alive' | 'dead' | 'unknown' => sessionLeafProcessProbe.liveness(pid)
+const leafAlive = (pid: number): boolean => leafProcessLiveness(pid) !== 'dead'
 
-// One identity seam serves both signal teardown and cold retirement. A PID is only a locator: a live process
-// becomes target-owned when its immutable start identity is readable AND its argv carries the harness-owned
-// native identity. A live PID with a proven different argv is a stale artifact, while malformed/unreadable
-// evidence remains unknown and therefore blocks every destructive path.
+// A retained leaf can mint durable ownership only while its registered PID is in the exact target pane's process
+// closure. The receipt then binds that one immutable process instance across tmux reparenting and crash retry.
 async function inspectSessionLeafIdentity(id: string, rec: SessRec): Promise<LeafIdentityObservation> {
   if (harnessById(rec.harness || defaultHarness.id).runtimeOwnership === 'adapter') return { state: 'missing' }
   const path = sessionArtifactPath(id, 'agent.pid')
   let raw: string
   try { raw = readFileSync(path, 'utf8') }
   catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return { state: 'missing' }
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      const stored = readSessionLeafReceipt(id)
+      if (stored.state === 'invalid') return { state: 'unknown', reason: stored.reason }
+      if (stored.state === 'missing') return { state: 'missing' }
+      const liveness = leafProcessLiveness(stored.receipt.pid)
+      const current = sessionLeafStartToken(stored.receipt.pid)
+      const state = sessionLeafReceiptIdentityState(stored.receipt, stored.receipt.pid, current, liveness)
+      if (state === 'same-live')
+        return { state: 'unknown', pid: stored.receipt.pid, reason: 'leaf birth receipt remains live but agent.pid registration is missing' }
+      if (state === 'unknown')
+        return { state: 'unknown', pid: stored.receipt.pid, reason: 'leaf birth receipt PID is live but its process-start identity is unreadable' }
+      if (state !== 'gone' && state !== 'pid-reused')
+        return { state: 'unknown', pid: stored.receipt.pid, reason: `leaf birth receipt cannot reconcile a missing registration (${state})` }
+      rmSync(sessionLeafReceiptPath(id), { force: true })
+      return { state: 'dead', pid: stored.receipt.pid }
+    }
     return { state: 'unknown', reason: `leaf PID artifact is unreadable (${error instanceof Error ? error.message : String(error)})` }
   }
   const pid = Number(raw.trim())
   if (!Number.isSafeInteger(pid) || pid <= 0) return { state: 'unknown', reason: 'leaf PID artifact is malformed' }
-  const startToken = processStartToken(pid)
-  if (!startToken) return leafAlive(pid) ? { state: 'unknown', pid, reason: `leaf PID ${pid} is alive but its process-start identity is unreadable` } : { state: 'dead', pid }
-  const ownerNeedle = harnessById(rec.harness || defaultHarness.id).leafOwnerNeedle?.(rec)
-  if (!ownerNeedle) return { state: 'unknown', pid, reason: `no exact harness identity is registered for leaf PID ${pid}` }
-  let argv: string
-  try { argv = (await pexec('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8' })).stdout.trim() }
-  catch { return { state: 'unknown', pid, reason: `leaf PID ${pid} argv identity is unreadable` } }
-  if (!argv) return { state: 'unknown', pid, reason: `leaf PID ${pid} argv identity is empty` }
-  const endToken = processStartToken(pid)
-  if (!endToken || endToken !== startToken)
-    return { state: 'unknown', pid, reason: `leaf PID ${pid} process-start identity changed during ownership read` }
-  if (argv.includes(ownerNeedle)) return { state: 'owned', identity: { pid, startToken, ownerNeedle } }
-  return { state: 'unrelated', pid, startToken }
+  const stored = readSessionLeafReceipt(id)
+  if (stored.state === 'invalid') return { state: 'unknown', pid, reason: stored.reason }
+  if (stored.state === 'valid') {
+    const liveness = leafProcessLiveness(pid)
+    const current = sessionLeafStartToken(pid)
+    const state = sessionLeafReceiptIdentityState(stored.receipt, pid, current, liveness)
+    if (state === 'same-live') return { state: 'owned', identity: { pid, startToken: current!, receipt: stored.receipt } }
+    if (state === 'gone') {
+      clearSessionLeafArtifacts(id)
+      return { state: 'dead', pid }
+    }
+    if (state === 'pid-reused') {
+      const snap = await liveSnapshot(id)
+      if (snap.probeFailed) return { state: 'unknown', pid, reason: 'target pane state is unreadable while reconciling a retired leaf receipt' }
+      if (snap.windows.has(id)) return { state: 'unknown', pid, reason: `leaf birth receipt no longer matches PID ${pid} while the exact target pane remains live` }
+      clearSessionLeafArtifacts(id)
+      return { state: 'dead', pid }
+    }
+    if (state === 'unknown') return { state: 'unknown', pid, reason: `leaf PID ${pid} is live but its process-start identity is unreadable` }
+    return { state: 'unknown', pid, reason: 'leaf birth receipt and agent.pid registration disagree' }
+  }
+
+  const snap = await liveSnapshot(id)
+  if (snap.probeFailed) return { state: 'unknown', pid, reason: 'exact target pane is unreadable; leaf birth receipt cannot be minted' }
+  const panePid = snap.windows.get(id)?.panePid ?? null
+  const startBefore = sessionLeafStartToken(pid)
+  if (!startBefore) {
+    const live = leafProcessLiveness(pid)
+    if (live !== 'dead') return { state: 'unknown', pid, reason: `leaf PID ${pid} process-start identity is unreadable while liveness is ${live}` }
+    clearSessionLeafArtifacts(id)
+    return { state: 'dead', pid }
+  }
+  let procs: ProcTable | null = null
+  try { procs = await procSnapshot() } catch { /* fail closed below */ }
+  const startAfter = sessionLeafStartToken(pid)
+  const candidate = sessionLeafReceiptCandidate(id, pid, panePid, procs, startBefore, startAfter)
+  if (!candidate.ok || !candidate.receipt) return { state: 'unknown', pid, reason: candidate.reason || 'leaf birth receipt validation failed' }
+  if (readAgentPid(path) !== pid || sessionLeafStartToken(pid) !== candidate.receipt.startToken)
+    return { state: 'unknown', pid, reason: `leaf PID ${pid} identity changed before receipt commit` }
+  writeSessionLeafReceipt(id, candidate.receipt)
+  const committed = readSessionLeafReceipt(id)
+  if (committed.state !== 'valid' || !sameSessionLeafReceipt(committed.receipt, candidate.receipt)
+    || readAgentPid(path) !== pid || sessionLeafStartToken(pid) !== candidate.receipt.startToken)
+    return { state: 'unknown', pid, reason: `leaf PID ${pid} identity changed while receipt committed` }
+  return { state: 'owned', identity: { pid, startToken: candidate.receipt.startToken, receipt: candidate.receipt } }
 }
 
 async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIdentity | null> {
@@ -2944,8 +3449,6 @@ async function assertSessionLeafOwned(id: string, rec: SessRec): Promise<LeafIde
   }
   if (observed.state === 'dead') return null
   if (observed.state === 'owned') return observed.identity
-  if (observed.state === 'unrelated')
-    throw new ResourceConflict(`refusing to stop ${id}: leaf PID ${observed.pid}@${observed.startToken} does not prove argv ownership`)
   throw new ResourceConflict(`refusing to stop ${id}: ${observed.reason}`)
 }
 
@@ -2959,11 +3462,25 @@ async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = f
   const harness = harnessById(rec.harness || defaultHarness.id)
   const leaf = await assertSessionLeafOwned(id, rec)
   // Adapter-owned headless sessions may have no live leaf PID, but launch still created an exact tmux session
-  // wrapper. Kill that session-id unconditionally; runtimeOwnership only changes the PID/argv proof, never the
+  // wrapper. Kill that session-id unconditionally; runtimeOwnership only changes the leaf receipt proof, never the
   // exact tmux teardown.
   await tmuxOk(['kill-session', '-t', id])
   await assertTargetTmuxAbsent(id, 'after kill')
-  if (leaf) await killAgentProcess(id, assertOwned, leaf)
+  if (leaf) {
+    await killAgentProcess(id, assertOwned, leaf)
+    const registered = readAgentPid(sessionArtifactPath(id, 'agent.pid'))
+    const liveness = leafProcessLiveness(leaf.pid)
+    const currentStartToken = sessionLeafStartToken(leaf.pid)
+    const finalState = sessionLeafReceiptIdentityState(
+      leaf.receipt,
+      Number.isSafeInteger(registered) ? registered : null,
+      currentStartToken,
+      liveness,
+    )
+    if (finalState !== 'gone' && finalState !== 'pid-reused')
+      throw new ResourceConflict(`refusing to stop ${id}: exact leaf teardown remains ${finalState}`)
+    clearSessionLeafArtifacts(id)
+  }
   launchedAt.delete(id)
   await harness.cleanupRuntime(rec)
   if (requireCold) {
@@ -2984,7 +3501,7 @@ async function stopSessionUnlocked(id: string): Promise<boolean> {
   await stopAgentProcess(id, wt.rec)
   const rec = readRecord(id)
   if (rec) writeRecord({ ...rec, stopped: true })
-  requestQueueDrain()   // a stop frees a slot — start the next queued session if any
+  if (wt.rec.status !== 'queued') requestQueueDrain()   // a live stop frees a slot; a prepared queue never held one
   return !!wt
 }
 export const stopSession = (id: string): Promise<boolean> =>
@@ -3156,6 +3673,28 @@ async function assertColdRetirementSafe(id: string, rec: SessRec): Promise<void>
   }
 }
 
+async function assertDiscardableWorktree(id: string, path: string, branch: string | null, kind: 'prepared' | 'unbound'): Promise<void> {
+  if (existsSync(path)) {
+    const status = await gitTry(['-C', path, 'status', '--porcelain', '--untracked-files=all'])
+    if (!status.ok) throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} worktree status is unreadable`)
+    if (status.stdout.trim()) throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} worktree has dirty work`)
+  }
+  if (branch) {
+    const resolved = await gitTry(['-C', mainRoot(), 'rev-parse', '--verify', `${branch}^{commit}`])
+    if (resolved.ok) {
+      const count = await gitTry(['-C', mainRoot(), 'rev-list', '--count', `${mainBranch()}..${branch}`])
+      if (!count.ok) throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} branch ancestry is unreadable`)
+      const ahead = Number(count.stdout.trim())
+      if (!Number.isFinite(ahead) || ahead !== 0)
+        throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} branch is ${Number.isFinite(ahead) ? ahead : 'an unknown number of'} commit(s) ahead`)
+    } else if (resolved.failure !== 'exit') {
+      throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} branch identity is unreadable`)
+    } else if (existsSync(path)) {
+      throw new ResourceConflict(`refusing to close ${kind} session ${id}: ${kind} worktree exists but branch ${branch} is missing`)
+    }
+  }
+}
+
 // A never-launched queue owns only prepared disk state. The transition/record locks around close serialize
 // this check with startQueued: whichever wins decides whether the record is still a queue or has become live.
 // No shared-runtime probe belongs here because a valid prepared row has no adapter thread to look up.
@@ -3175,29 +3714,31 @@ async function assertQueuedRetirementSafe(id: string, rec: SessRec, path: string
     const pid = readAgentPid(pidPath)
     throw new ResourceConflict(`refusing to close queued session ${id}: target leaf PID artifact ${Number.isFinite(pid) && pid > 0 ? pid : 'is unreadable'}; never-launched ownership is ambiguous`)
   }
-
-  if (existsSync(path)) {
-    const status = await gitTry(['-C', path, 'status', '--porcelain', '--untracked-files=all'])
-    if (!status.ok) throw new ResourceConflict(`refusing to close queued session ${id}: prepared worktree status is unreadable`)
-    if (status.stdout.trim()) throw new ResourceConflict(`refusing to close queued session ${id}: prepared worktree has dirty work`)
-  }
-  if (branch) {
-    const resolved = await gitTry(['-C', mainRoot(), 'rev-parse', '--verify', `${branch}^{commit}`])
-    if (resolved.ok) {
-      const count = await gitTry(['-C', mainRoot(), 'rev-list', '--count', `${mainBranch()}..${branch}`])
-      if (!count.ok) throw new ResourceConflict(`refusing to close queued session ${id}: prepared branch ancestry is unreadable`)
-      const ahead = Number(count.stdout.trim())
-      if (!Number.isFinite(ahead) || ahead !== 0)
-        throw new ResourceConflict(`refusing to close queued session ${id}: prepared branch is ${Number.isFinite(ahead) ? ahead : 'an unknown number of'} commit(s) ahead`)
-    } else if (resolved.failure !== 'exit') {
-      throw new ResourceConflict(`refusing to close queued session ${id}: prepared branch identity is unreadable`)
-    } else if (existsSync(path)) {
-      throw new ResourceConflict(`refusing to close queued session ${id}: prepared worktree exists but branch ${branch} is missing`)
-    }
-  }
+  await assertDiscardableWorktree(id, path, branch, 'prepared')
 }
 
-async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch: string | null; rec: SessRec }, source: CloseSource): Promise<boolean> {
+// A launch may leave its row active before Codex publishes the native thread binding. This close path owns
+// only the record's dead local launch residue; an unbound app-server peer stays unowned and untouched.
+async function assertUnboundRetirementSafe(id: string, rec: SessRec, path: string, branch: string | null): Promise<void> {
+  if (harnessById(rec.harness || defaultHarness.id).exactNativeTargetId(rec) || rec.status === 'queued' || rec.archived)
+    throw new ResourceConflict(`refusing to close unbound session ${id}: it is not an unbound live-record residue`)
+  if (rec.adapterRecovery || rec.launchReadinessPending || launching.has(id) || existsSync(sessionArtifactPath(id, 'launch')))
+    throw new ResourceConflict(`refusing to close unbound session ${id}: launch or recovery is still in progress`)
+
+  const [snap, socket] = await Promise.all([liveSnapshot(id), rendezvousListening(id)])
+  if (snap.probeFailed) throw new ResourceConflict(`refusing to close unbound session ${id}: liveness probe failed; local worker absence is unproven`)
+  const harness = harnessById(rec.harness || defaultHarness.id)
+  if (harness.liveness(rec, snap.windows.has(id), runtimeRoot(), snap.windows.get(id), snap.sockets.has(id)) === 'online')
+    throw new ResourceConflict(`refusing to close unbound session ${id}: its adapter still reports a live worker`)
+  if (socket === 'live') throw new ResourceConflict(`refusing to close unbound session ${id}: target rendezvous transport already exists`)
+  if (socket === 'unproven') throw new ResourceConflict(`refusing to close unbound session ${id}: target rendezvous state is ambiguous`)
+  const leaf = await inspectSessionLeafIdentity(id, rec)
+  if (leaf.state !== 'missing' && leaf.state !== 'dead')
+    throw new ResourceConflict(`refusing to close unbound session ${id}: ${leaf.state === 'unknown' ? leaf.reason : 'target leaf identity is live or ambiguous'}`)
+  await assertDiscardableWorktree(id, path, branch, 'unbound')
+}
+
+async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch: string | null; rec: SessRec }, source: CloseSource, unboundRetired = false): Promise<boolean> {
   const root = mainRoot()
   const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(wt.rec, root)
   if (receiptFailure) throw new ResourceConflict(`refusing destructive close for ${id}: ${receiptFailure}; public record and resources remain the authority fence`)
@@ -3207,7 +3748,7 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   if (!retired) {
     if (wt.rec.archived) await assertColdRetirementSafe(id, wt.rec)
     else if (wt.rec.status === 'queued') await assertQueuedRetirementSafe(id, wt.rec, wt.path, wt.branch)
-    else throw new ResourceConflict(`refusing to close ${id}: target runtime was not cold-retired first`)
+    else if (!unboundRetired) throw new ResourceConflict(`refusing to close ${id}: target runtime was not cold-retired first`)
   }
   // The marker protects only the destructive half. A failed cold proof must leave a normal, resumable binding.
   if (closesCodexBinding) prepareCodexGenerationClose(runtimeRoot(), id, wt.rec.harnessSessionId!)
@@ -3262,25 +3803,34 @@ async function closeSessionUnlocked(id: string, source: CloseSource): Promise<bo
       `refusing destructive close for ${id}: the unreadable record proves no adapter, leaf, worktree, or branch owner (${guard}). ${evidence}. Runtime remains at ${runtime}; worktree and branch ownership is unknown and was not touched; no process signal or deletion was attempted.`)
   }
   if (!wt) return false
+  let unboundRetired = false
   if (!retirementReason(wt.rec) && !wt.rec.archived && wt.rec.status !== 'queued') {
-    // A confirmed terminal close may end an exact native turn before cold proof. Ordinary archive deliberately
-    // remains non-destructive while a turn is active; close already means discard this session's work.
     const harness = harnessById(wt.rec.harness || defaultHarness.id)
-    assertSessionOwnerSafe(id, harness.id)
-    const interrupt = harness.interrupt
-    if (interrupt) {
-      const result = await interrupt({ ...wt.rec, runtimeDir: runtimeRoot() })
-      if (!result.ok) throw new ResourceConflict(`refusing to close ${id}: native interrupt failed (${result.error || 'unknown error'})`)
+    if (!harness.exactNativeTargetId(wt.rec)) {
+      await assertUnboundRetirementSafe(id, wt.rec, wt.path, wt.branch)
+      await tmuxOk(['kill-session', '-t', id])
+      await assertTargetTmuxAbsent(id, 'after unbound residue retirement')
+      await harness.cleanupRuntime(wt.rec)
+      unboundRetired = true
+    } else {
+      // A confirmed terminal close may end an exact native turn before cold proof. Ordinary archive deliberately
+      // remains non-destructive while a turn is active; close already means discard this session's work.
+      assertSessionOwnerSafe(id, harness.id)
+      const interrupt = harness.interrupt
+      if (interrupt) {
+        const result = await interrupt({ ...wt.rec, runtimeDir: runtimeRoot() })
+        if (!result.ok) throw new ResourceConflict(`refusing to close ${id}: native interrupt failed (${result.error || 'unknown error'})`)
+      }
+      const archived = await archiveSessionUnlocked(id)
+      if (!archived) return false
+      wt = await findWorktree(id)
+      if (!wt) return false
     }
-    const archived = await archiveSessionUnlocked(id)
-    if (!archived) return false
-    wt = await findWorktree(id)
-    if (!wt) return false
   }
   const target = wt
   return target.branch
-    ? withRecordLock(sessionCandidateLockId(target.path, target.branch), () => closeOwnedSessionUnlocked(id, target, source))
-    : closeOwnedSessionUnlocked(id, target, source)
+    ? withRecordLock(sessionCandidateLockId(target.path, target.branch), () => closeOwnedSessionUnlocked(id, target, source, unboundRetired))
+    : closeOwnedSessionUnlocked(id, target, source, unboundRetired)
 }
 export const closeSession = (id: string, rawSource?: unknown): Promise<boolean> => {
   const source = normalizeCloseSource(rawSource)
@@ -3673,18 +4223,9 @@ export function formatTable(sessions: Session[], color = true, scope: SessionTab
 // A RETIRED session (worktree gone) still receives: the record gate governs the lifecycle axis, and a message
 // that cannot reach an agent must at least leave a trace ([[session-timeline]]).
 // (The separate RAW nav-key channel keeps its own `tmux send-keys` path — see rawKey.)
-type DispatchIdempotency = SentDispatchReceipt
+type DispatchIdempotency = MessageIdempotency
 type DispatchAcceptCode = 'dispatch_key_reused' | 'session_merge_not_proposed'
 type AcceptedDispatch = DispatchResult & { replayed?: boolean; code?: DispatchAcceptCode }
-type DispatchDelivery = NonNullable<SentDispatchReceipt['delivery']>
-function keyedPendingMessage(receipt: SentDispatchReceipt, mid: string, delivery: DispatchDelivery): PendingMessage {
-  return {
-    mid,
-    text: delivery.text,
-    from: delivery.from,
-    dispatch: { operation: receipt.operation, requestDigest: receipt.requestDigest },
-  }
-}
 type SendTextOptions = {
   replyVia?: 'note'
   idempotency?: DispatchIdempotency
@@ -3711,44 +4252,28 @@ export async function sendText(id: string, text: string, from?: string, opts: Se
     // a send either appends before close obtains the fence (and close's revocation voids its debt), or sees
     // the terminal marker before it records anything. Arbitrary legacy `from` values keep working; they just
     // name an otherwise-unused lock until a matching session is closed.
-    await withRecordLocks([id, ...(from ? [from] : [])].sort(), async () => {
-      if (from && senderDeliveryRevoked(from)) throw new ResourceConflict(`sender session ${from} is closed; prompt NOT delivered`)
-      const rec = readRecord(id)
-      if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
-      const accept = async () => {
-        if (opts.idempotency) {
-          const prior = sentDispatchReceipt(id, opts.idempotency.operation, opts.idempotency.requestDigest)
-          if (prior) {
-            if (prior.payloadHash !== opts.idempotency.payloadHash) {
-              const conflict = new ResourceConflict(`idempotency key is already bound to another ${opts.idempotency.operation} payload`)
-              Object.assign(conflict, { code: 'dispatch_key_reused' })
-              throw conflict
-            }
-            if (prior.delivery && !prior.delivered) {
-              ensurePendingWhileLocked(id, keyedPendingMessage(opts.idempotency, prior.mid, prior.delivery))
-            }
-            replayed = true
-            return
-          }
-        }
-        await opts.acceptGuard?.(rec)
-        const stranded = await strandedDeliveryError(rec)
+    let rec: SessRec | null = null
+    const accepted = await acceptMessage({
+      target: id,
+      text,
+      from,
+      idempotency: opts.idempotency,
+      validate: async () => {
+        rec = readRecord(id)
+        if (!rec) throw new ResourceConflict(`no session record for ${id} — prompt NOT delivered`)
+      },
+      prepare: async () => {
+        await opts.acceptGuard?.(rec!)
+        const stranded = await strandedDeliveryError(rec!)
         if (stranded) throw stranded
         // Composed at ACCEPT time, once: the log keeps the raw conversational text plus the effective reply channel,
         // the queue keeps the transport form. Composing again at handover would let a later send change the hints on
         // a message that was already accepted.
-        const prompt = await composeSessionPrompt(text, rec, { from, replyVia: opts.replyVia })
-        const dispatchReceipt = opts.idempotency
-          ? { ...opts.idempotency, delivery: { text: prompt.text, from: from ?? null } }
-          : undefined
-        const appended = appendSent(id, text, from ?? null, prompt.replyVia, dispatchReceipt)
-        enqueue(id, opts.idempotency
-          ? keyedPendingMessage(opts.idempotency, appended.mid, dispatchReceipt!.delivery!)
-          : { mid: appended.mid, text: prompt.text, from: from ?? null })
-      }
-      if (opts.idempotency) await withDeliveryLocks([id], accept)
-      else await accept()
+        const prompt = await composeSessionPrompt(text, rec!, { from, replyVia: opts.replyVia })
+        return { text: prompt.text, ...(prompt.replyVia ? { replyVia: prompt.replyVia } : {}) }
+      },
     })
+    replayed = accepted.replayed
   } catch (error) {
     const code = (error as { code?: DispatchAcceptCode })?.code
     const detail = error instanceof StrandedDeliveryError
@@ -3775,13 +4300,8 @@ export async function drainSession(id: string): Promise<void> {
   const rec = readRecord(id)
   if (!rec) return
   const h = harnessById(rec.harness || defaultHarness.id)
+  if (h.launchPayloadProof && !rec.harnessSessionId) return
   await drain(id, async (msg) => {
-    if (msg.dispatch) {
-      const receipt = sentDispatchReceipt(id, msg.dispatch.operation, msg.dispatch.requestDigest)
-      if (!receipt || receipt.mid !== msg.mid || !receipt.delivery
-        || receipt.delivery.text !== msg.text || receipt.delivery.from !== msg.from) return false
-      if (receipt.delivered) return true
-    }
     // the pane guard ([[harness-adapter]] deliveryBlockedBy): the ONE pane state where the harness swallows a
     // prompt its channel confirms (claude's sessions panel), checkable only from the pane. Treated as a REFUSAL
     // rather than a skip — the message stays owed and the sweep hands it over once the pane leaves that state.
@@ -3791,7 +4311,6 @@ export async function drainSession(id: string): Promise<void> {
       } catch { /* no pane to consult — let the insert itself decide */ }
     }
     const delivered = await h.deliver({ ...rec, runtimeDir: runtimeRoot(), mid: msg.mid }, msg.text)
-    if (delivered.ok && msg.dispatch) settleSentDispatch(id, msg.mid)
     return delivered.ok
   })
 }

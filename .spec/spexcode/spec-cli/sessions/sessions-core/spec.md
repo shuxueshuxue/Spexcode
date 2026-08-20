@@ -6,6 +6,8 @@ desc: The shared session module every session feature builds on — the global p
 code:
   - spec-cli/src/sessions.ts
 related:
+  - packages/session-core/src/record-lock.ts
+  - packages/session-core/src/message.ts
   - spec-cli/src/sessionSlug.test.ts
   - spec-cli/src/session-create-cli.test.ts
   - spec-cli/src/sessions-hot.test.ts
@@ -38,7 +40,23 @@ loop, second transport, or bidirectional index enters the shared layer. `wait` r
 reader fallback for callers with no governed delivery address. A watcher identity owns a small independent
 source set: `manual` comes from the explicit watch command and `parent` comes from the tree relationship.
 The entry persists while either source exists, and the transition path projects the source set to one watcher
-id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Creation and
+id, so overlapping parent/manual supervision yields one delivery rather than duplicates. Source installation and
+reparenting directly dispatch the current state, except that creation installs its parent source with one durable
+initial-snapshot debt. The launch queue resolves that debt exactly once: a real capacity decision publishes the
+still-queued snapshot, while an admitted launch publishes only after its adapter readiness fence has established
+that the existing active/resource publication is observably working. A launch attempt that fails readiness keeps
+that resource contract and its loud failure note, but retires the debt without fabricating working. A synchronous
+launch/preflight failure likewise retires the debt rather than misreporting its queued record as capacity backlog;
+only the queue's proven full-capacity branch may publish queued. Only a later state write consults the source
+policy. A retryable launch error retains the same debt for the next queue attempt, and a restarted supervisor may
+reclaim readiness observation for an already-active launch without launching or replaying its prompt. Each accepted
+snapshot is keyed by the debt token and authored state; before clearing the token, delivery compares the latest state
+under the record lock and accepts any raced actionable state with its own key. A crash before that compare therefore
+replays neither an accepted initial snapshot nor an accepted catch-up, while still delivering an authored asking,
+review, or error that raced acceptance. Parent-only `active`/working is the suppressed terminal of that comparison;
+manual includes it. Thus creation ordering does not weaken routine-working suppression, and manual+parent yields the
+complete later-state feed without a duplicate or a second mechanism.
+Creation and
 [[session-reparent]] change only `parent`; watch cancellation changes only `manual`. Legacy rows with no
 source set are read compatibly: the present parent edge proves `parent`, otherwise they are manual intent.
 The manager's merge dispatch prompt owns the post-landing handoff: once the verified base branch has advanced,
@@ -48,7 +66,7 @@ The merge dispatch itself is intentionally a plain prompt: the server does not a
 epochs, or idempotency headers and never mutates `main`; the worker re-syncs and re-runs proof in its own worktree
 before the one no-ff landing.
 [[session-reparent]] uses that same target ownership: it takes the ordinary record locks while changing a
-child's parent pointer and watcher list, then delegates current-state delivery to the existing dispatch path.
+child's parent pointer and watcher list, then delegates the current-state snapshot to the existing dispatch path.
 The core never asks a former watcher to participate in its own removal. A null replacement parent is the
 same transaction's top-level detach: it removes the former relation and its pending delivery without creating
 a root record, new watcher, or notification.
@@ -82,6 +100,15 @@ board, on every poll and in the last-known-row cache, to serve a field no list r
 Terminal close removes that record by design, so its append-only audit ledger is not folded into the board or
 revived as a second session type. It may answer one id-addressed post-close diagnostic with the durable target
 id and close time; a malformed or ambiguous ledger is unknown, never a plausible absence.
+The sibling `launch` artifact is the authoritative resolved first-turn payload, not a best-effort prompt cache.
+The shared layer preserves it across queue drain and failed launch, blocks later delivery debt behind it, and
+hands it back only through the resolved adapter's no-native-identity recovery seam. The adapter completes launch
+with one receipt call carrying the exact payload and native id; under the record lock the shared layer rejects a
+missing/changed artifact or changed identity, persists the identity, and only then consumes the artifact. Raw
+originating `prompt` bytes remain a separate display/audit artifact and never participate in recovery.
+The receipt is atomically no-replace and consumption is record-first, payload-second, receipt-last: every
+crash boundary is retryable without forgetting or replaying the first turn, while malformed or cross-bound
+receipts fail rather than repairing themselves from weaker input.
 Cross-feature defaults that must be read by the backend at runtime live here as the
 shared implementation seam — for example [[launch]]'s `sessions.maxActive` fallback value — while the feature
 node still owns the user-facing policy and slot semantics. Each session feature ([[state]], [[launch]], [[dispatch]], [[session-follow]],
@@ -128,14 +155,14 @@ a pinned run from an unpinned one. It also joins the idempotency payload hash �
 a different request, not the same one — while an unpinned create keeps its exact legacy record bytes and
 receipt hash, so nothing that never pinned gains a field.
 
-**Exclusion lives in the lock, never in a privileged process.** The per-session record lock is a filesystem
-lock with a PID liveness check, held across processes, so a session operation may run in whatever process
+**Exclusion lives in the lock, never in a privileged process.** The per-session record lock implementation is
+shared from `@spexcode/session-core`: a filesystem lock with a PID liveness check, held across processes, so a session operation may run in whatever process
 takes it — a backend is the convenient owner of the launch environment and a shared cache, not the holder
 of the invariant, and a read that takes no lock needs no permission from anyone. That is what lets this
 layer be a brick an external system can drive rather than a service it must be granted access to.
 
-A text send takes the target record lock for its durable timeline append; an agent-attributed send also takes
-its named sender's lock in sorted order. Before a new append, sessions-core asks the resolved adapter's optional
+A text send delegates its record-locked append-plus-queue acceptance to `@spexcode/session-core`; an
+agent-attributed send also fences its named sender in sorted order. Before a new append, sessions-core asks the resolved adapter's optional
 transport witness. Its proven-unreachable answer becomes a stranded refusal only when this layer's independent
 registered-pid witness still proves the worker alive; an unproven transport remains queue-retryable and does not
 change liveness. Close keeps the sender lock through terminal record removal and then publishes the delivery
@@ -143,7 +170,11 @@ queue's sender-revocation marker, so a stale process cannot append after close r
 before the adapter poke: a native turn can synchronously invoke lifecycle hooks that re-enter the record writer,
 so no record lock spans the handover. The delivery queue's own lock is what makes a handover exactly-once and
 recognizes revoked unhanded debt, while normal adapter/runtime guards remain the authority for concurrent
-lifecycle operations.
+lifecycle operations. Direct close asks the resolved adapter whether the current record derives one exact native
+target identity. That adapter capability, not the presence of the storage alias `harness_session_id`, selects the
+ordinary interrupt/archive/cold-close path; no lifecycle branch names a harness or treats lifecycle status or
+liveness as identity. A record with no derivable native target remains on the narrower unbound-residue retirement
+path and fails closed while any local worker ownership is live or unproven.
 
 Archive may carry an opaque adapter cold-preflight receipt across its exact leaf/tmux stop, into the same adapter's
 cold commit, and through the final record/offline publication boundary. This shared layer forwards that one in-memory
@@ -154,9 +185,13 @@ receipt retains the ordinary descendant refusal before shared-runtime mutation a
 
 ### Record integrity — one writer, three readings, no revival
 
-**Every field of `session.json` is produced by ONE writer here**, by serializing the typed record and landing
-it by atomic replace, and NOTHING else may compose or edit that file's text — not a hook, not a shell, not a
-route. The reason is the `note`: it is arbitrary human/agent prose, so any writer that substitutes it into
+**Every SpexCode-managed field of `session.json` is produced by ONE writer here**, by serializing the typed
+record and landing it by atomic replace, and NOTHING else may compose or edit that file's text — not a hook,
+not a shell, not a route. A record whose `runtime_owner` names an external controller is instead written by
+[[runtime-session]] under the same record lock and is `governed:false`; this module may read it but never launch,
+stop, or rewrite it. Its opaque `runtime_state` and idempotency `runtime_revision` extend the canonical disk
+format without turning ZCode state into SpexCode lifecycle policy. The reason for a single typed writer per
+ownership mode is the `note`: it is arbitrary human/agent prose, so any writer that substitutes it into
 existing JSON eventually meets a quote, a backslash, or a newline and leaves a record nothing can parse. Both
 note-carrying entries — the agent's typed declaration and the hook's capture of an asked question — therefore
 land through the same call, and a note round-trips byte-for-byte on every surface. The shell hooks keep the

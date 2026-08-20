@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { followSessions, launchEvent, sessionEvent, type FollowOutcome } from './session-follow.js'
-import { advanceFollow, followCursor } from './session-cursors.js'
+import { advanceFollow, followCursor } from '@spexcode/session-core'
 import { recordStatus } from './session-timeline.js'
 import { sessionStoreDir } from '@spexcode/spec-core'
 import type { Session } from './sessions.js'
@@ -140,7 +140,7 @@ test('waking on mail leaves the follower own-log position where it was', async (
   sent(ME, 'unread')
   const r = await followSessions(() => {}, { targets: () => [T], self: ME, take: true, timeoutMs: 1000, intervalMs: 5 })
   assert.ok('mail' in r)
-  const { followCursor } = await import('./session-cursors.js')
+  const { followCursor } = await import('@spexcode/session-core')
   assert.equal(followCursor(ME, ME) ?? 0, 0, 'the event it stopped on stays unread')
 })
 

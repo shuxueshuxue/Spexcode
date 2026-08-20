@@ -274,6 +274,10 @@ export type RawRecord = {
   create_request_id?: string // SHA-256 digest of the create Idempotency-Key; the raw key is never persisted
   create_payload_hash?: string // normalized create payload bound to create_request_id
   zcode_child_session_ids?: string[] // exact ZCode child ids explicitly bound to this SpexCode session; absent means no cross-product association
+  runtime_owner?: string // external process/runtime that owns control; absent means SpexCode owns the runtime policy
+  runtime_state?: string // opaque external state; Spex lifecycle remains the board-compatible projection
+  runtime_revision?: string // caller-owned idempotency revision for runtime-state publication
+  runtime_metadata?: Record<string, string> // opaque external address fields; session-core validates bytes but assigns no meaning
   base?: string // the exact fork point pinned at creation; absent/empty → the auto-detected source-of-truth branch
   launch_readiness_pending?: '' | RawLaunchReadinessPending
 }

@@ -4,12 +4,12 @@ status: active
 hue: 280
 desc: What a session is still OWED — a small ordered queue of messages not yet handed to its agent, drained by adapter insert, empty when nothing is owed.
 code:
-  - spec-cli/src/delivery-queue.ts
+  - packages/session-core/src/delivery-queue.ts
 related:
   - spec-cli/src/sessions.ts
-  - spec-cli/src/session-timeline.ts
+  - packages/session-core/src/session-timeline.ts
   - spec-cli/src/index.ts
-  - spec-cli/src/delivery-queue.test.ts
+  - packages/session-core/src/delivery-queue.test.ts
 ---
 
 # delivery-queue
@@ -39,8 +39,10 @@ control merely because a target was temporarily unavailable.
 but not yet handed to the agent. Each entry is self-contained — the message id, the sender, and the text
 exactly as it will be handed over, mechanism inserts already composed in ([[session-timeline]] owns that seam;
 the log keeps the raw conversational text, the queue keeps the transport form). A caller-keyed entry also
-carries the operation plus request digest that its private timeline receipt names, never the raw key. The
-ordinary delivery path never reads the log. Only a retry of that keyed acceptance reconciles the two durable
+carries the operation plus request digest that its private timeline receipt names, never the raw key. A protocol
+producer may add immutable string attributes; keyed drain compares them with the same frozen receipt bytes before
+calling the consumer, so structured historical facts cannot silently drift to a newer read-model state. The ordinary
+delivery path never reads the log. Only a retry of that keyed acceptance reconciles the two durable
 sides: if its receipt exists without its exact message id in the queue, it restores the receipt's frozen
 transport bytes under this queue's lock. Transport state and record remain independent for every ordinary
 read: history could be trimmed, archived, or read by anyone without changing what is owed. An empty queue is

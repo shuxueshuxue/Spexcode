@@ -81,7 +81,8 @@ setter's cookie so they stay signed in. Freshness is a plain poll — registrati
 backend, and health flips land on their own. The complete reconciled list is shown ten rows at a time with
 plain previous/next pagination; a shrinking list clamps back to its last valid page. The page mounts only as the global hub face at `/projects`
 (the shell shows it when there is no board but `/projects` answers — [[dashboard-shell]] owns that boot
-pick). A `/p/<id>/` shell contains only project-owned views and never mounts the page or advertises its
+pick). A denied global catalog is handled by that same shell-level credential card before the management
+page mounts, so the denied probe is not repeated by a second page instance. A `/p/<id>/` shell contains only project-owned views and never mounts the page or advertises its
 management controls in the rail. The old direct `/p/<id>/#/projects` address remains a compatibility door:
 arrival performs one full-page redirect to `/projects`, leaving no duplicate in-shell admin route behind.
 The rail's current-project chip and catalog-backed switcher remain the scoped project's one project-changing
@@ -102,7 +103,10 @@ card's locked variant is a dead end by design, naming the loopback repair path. 
 401 strikes in-app; an admin session bypasses project prompts because the admin cookie authorizes every
 `/p/*` route server-side. A direct-project guest never sees the catalog or any global management control:
 the probe is denied, so the switcher menu is absent and the project shell exposes only its current-project
-identity and project-owned pages — absence of data, not a hidden element.
+identity and project-owned pages — absence of data, not a hidden element. The current-project chip remains
+an explicit `/projects` login door when that catalog is denied, but never opens a fleet menu or leaks rows.
+A denied catalog is an answered state: its five-second refresh pauses until the credential card reports an
+unlock, so an unauthenticated browser does not hammer an already-denied route.
 
 **The contract lives in one module.** `projects.js` is the only place the hub routes are spelled — the
 catalog read, the password writes, the raw portable-config read/write, the credential posts, and the

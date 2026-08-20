@@ -47,7 +47,7 @@ session to that node. --prompt-file <path>|- carries a long prompt without shell
 reproduced against a frozen commit; a base that names no commit is refused before anything is created.
 The successful receipt names what to read, monitor, and reply on. --ssh uses an existing gateway-to-gateway
 communication tunnel: its full id anchors the remote project, creation stays parentless and remote, and its
-prompt carries a runnable reply path over that same tunnel.`],
+prompt carries a runnable reply path over that same tunnel.`, ['project-bound']],
     ls: [['spex session ls [SEL…] [--children[=<PARENT-SEL>]] [--status a,b] [--all] [--json]', 'spex session ls --ssh <address> <FULL-SESSION-ID> [--children=<PARENT-SEL>] [--status a,b] [--json]'],
       'One-shot table of this project\'s live sessions, with each direct parent beside the row. --children scopes it to the caller\'s direct children; --children=<PARENT-SEL> names another parent without changing positional selector grammar. The heading summarizes the displayed scope by status. Shelved sessions ([[archive]]) are hidden; --all includes them, and naming one explicitly always shows it. An explicit id missing from the session list is diagnosed from terminal-close history: closed is a successful answer, while no live, archived, or closed history is a named miss. --ssh uses an existing gateway-to-gateway communication tunnel; its full id anchors one remote project rather than filtering the table, and archive projection stays unavailable on that peer route.', ['selector']],
     resources: ['spex session resources [--json]', 'Read-only host/process ownership, budgets, shared refs, and findings.'],
@@ -109,8 +109,8 @@ const SESSION_HELP_GROUPS = [
   { title: 'Human escape hatch', verbs: ['attach'] },
 ] as const
 
-const SESSION_WRITE_NOTE = `Manager verbs that WRITE (send/interrupt/rename/resume/stop/close/merge/reparent) are PROJECT-BOUND: a backend serving
-another project's repo refuses loudly — name the target with --api <url> to drive it on purpose.`
+const SESSION_WRITE_NOTE = `PROJECT-BOUND WRITES loudly refuse a backend serving another project's repo —
+name the target with --api <url> to drive it on purpose.`
 
 function indent(text: string, spaces: number): string {
   const prefix = ' '.repeat(spaces)
@@ -184,15 +184,22 @@ hooks yet (CI, a cloud agent): generated and excluded, the artifacts never arriv
     see: 'spex doctor (verify the materialized artifacts actually reach an agent)',
   },
   doctor: {
-    line: 'doctor                diagnose spec health and whether the workflow reaches this agent  [--contract|--conflicts]',
+    line: 'doctor                diagnose project health; repair app-server only on explicit request  [--contract|--conflicts]',
     body: `Usage: spex doctor                spec-health findings + delivery report: preconditions · git-hook floor ·
                                   contract · hooks + handler existence · backend · footprint
        spex doctor --contract     print the composed surface:system text any agent here reads
        spex doctor --conflicts    detect double-delivery (loose artifacts beside the managed ones)
+       spex doctor repair app-server [--launcher <name>]
+                                  prove a fresh app-server, then switch new sessions to it
 
 Bare doctor is the opt-in, read-only health surface: it reports altitude and breadth findings without
 putting them in the lint gate, then audits workflow delivery. Run it directly or let the tidy workflow
-consume the same visible diagnosis.`,
+consume the same visible diagnosis.
+
+Use repair app-server only when new sessions cannot be accepted and existing work must stay connected.
+It proves a fresh app-server before routing future Codex sessions there. Existing sessions stay on the
+previous server while it drains; the command does not kill or move them. --launcher selects a configured
+Codex launcher, or the configured default is used when it is one.`,
     see: 'spex spec lint (deterministic graph/contract gate) · spex materialize (repair delivery artifacts)',
   },
   flat: {
@@ -511,6 +518,14 @@ export function commandHelp(name: string, verb?: string): string | null {
   if (name === 'session' && verb) {
     const exact = sessionVerbHelp(verb)
     if (exact) return `${exact}\n\nsee also: spex session (the complete drawer)\n\nmap: spex help · skills: spex guide`
+  }
+  if (name === 'doctor' && verb === 'repair') {
+    return `Usage: spex doctor repair app-server [--launcher <name>]
+
+Use this explicit repair when new sessions cannot be accepted but existing work must stay connected.
+It proves a fresh app-server, then routes future Codex sessions there. Existing sessions stay bound to
+the prior server while it drains; this command never kills or moves them. --launcher must name a
+configured Codex launcher.\n\nsee also: spex doctor (the complete command) · spex session resources\n\nmap: spex help · skills: spex guide`
   }
   const e = ENTRIES[name]
   if (!e) return null

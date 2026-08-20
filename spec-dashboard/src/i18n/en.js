@@ -49,6 +49,7 @@ export default {
     issues: 'Issues (⌥4)',
     settings: 'Settings (⌥5)',
     projectChip: 'project: {name} — switch project',
+    projectChipLogin: 'project: {name} — sign in to manage projects',
     projectOnline: 'online',
     projectOffline: 'offline',
     allProjects: 'All projects',
@@ -703,6 +704,9 @@ export default {
     placeholder: 'search nodes, sessions, issues, scenarios…',
     empty: 'no match',
     hint: '↑↓ pick · ⏎ jump · esc close',
+    allResults: 'full review lists',
+    allIssues: ({ n }) => `all issues · ${n}`,
+    allEvals: ({ n }) => `all evals · ${n}`,
     kind: { spec: 'node', session: 'session', issue: 'issue', scenario: 'scenario' },
   },
 

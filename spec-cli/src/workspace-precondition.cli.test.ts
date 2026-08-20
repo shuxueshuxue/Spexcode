@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,7 +12,7 @@ const CLI = join(SRC, 'cli.ts')
 const TSX = tsxBin(join(SRC, '..'))
 
 test('graph rejects a non-Git workspace with one actionable message and no runtime stack', () => {
-  const workspace = mkdtempSync(join(tmpdir(), 'spex-nongit-graph-'))
+  const workspace = realpathSync(mkdtempSync(join(tmpdir(), 'spex-nongit-graph-')))
   try {
     const result = spawnSync(process.execPath, [TSX, CLI, 'graph', '--json'], { cwd: workspace, encoding: 'utf8' })
     assert.equal(result.status, 1)
@@ -24,19 +24,24 @@ test('graph rejects a non-Git workspace with one actionable message and no runti
   }
 })
 
-test('the cached graph entrance rejects the same non-Git workspace before layout reads', async () => {
-  const workspace = mkdtempSync(join(tmpdir(), 'spex-nongit-cache-'))
-  const cwd = process.cwd()
+test('the cached graph entrance rejects the same non-Git workspace before layout reads', () => {
+  const workspace = realpathSync(mkdtempSync(join(tmpdir(), 'spex-nongit-cache-')))
   try {
-    process.chdir(workspace)
-    const { readBoard } = await import('./graphCache.js')
-    await assert.rejects(readBoard(), (error: unknown) => {
-      assert.equal((error as Error).name, 'GitWorkspaceError')
-      assert.equal((error as Error).message, `workspace is not a Git repository: ${workspace}. Run \`git init\` in that directory, then retry.`)
-      return true
+    const program = [
+      `import { readBoard } from ${JSON.stringify(join(SRC, 'graphCache.ts'))}`,
+      'readBoard().then(',
+      '  () => { console.log("unexpected success"); process.exitCode = 2 },',
+      '  (error) => { console.log(JSON.stringify({ name: error?.name, message: error?.message })) },',
+      ')',
+    ].join('\n')
+    const result = spawnSync(process.execPath, [TSX, '-e', program], { cwd: workspace, encoding: 'utf8' })
+    assert.equal(result.status, 0)
+    assert.notEqual(result.stdout, '', 'a direct read must settle before its process exits')
+    assert.deepEqual(JSON.parse(result.stdout), {
+      name: 'GitWorkspaceError',
+      message: `workspace is not a Git repository: ${workspace}. Run \`git init\` in that directory, then retry.`,
     })
   } finally {
-    process.chdir(cwd)
     rmSync(workspace, { recursive: true, force: true })
   }
 })

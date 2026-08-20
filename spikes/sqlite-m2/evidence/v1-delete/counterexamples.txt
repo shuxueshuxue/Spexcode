@@ -1,0 +1,55 @@
+
+### busy-timeout-after-version-probe
+    claim: busy_timeout must be the first statement on a connection
+    vectors that fired: 1
+      - repeated cold opens by eight processes never lose the first-open race
+
+### producer-minted-message-id
+    claim: message_id is protocol-generated and is not part of the payload hash
+    vectors that fired: 5
+      - message_id is protocol-generated; a producer-supplied one is refused
+      - payload_hash preimage is reproducible from the written specification alone
+      - header order on input never changes the hash; header keys are ASCII-only
+      - exact idempotent replay returns the first row; changed bytes conflict
+      - an honest retry must not be punished for minting a fresh message id
+
+### whole-schema-checksum
+    claim: each migration checksums only its own bytes
+    vectors that fired: 1
+      - each migration checksums only its own bytes
+
+### unvalidated-session-id
+    claim: session ids are validated in memory; STRICT is not input validation
+    vectors that fired: 4
+      - every SQL feature the floor is derived from actually works at the floor
+      - session ids: accepted and rejected character sets
+      - the address space is flat and global within one database path
+      - session ids: a non-string id is rejected in memory, never coerced by SQLite affinity
+
+### unpinned-indexes
+    claim: the hot statements pin their index instead of trusting planner statistics
+    vectors that fired: 2
+      - every SQL feature the floor is derived from actually works at the floor
+      - every declared index is the one the planner actually uses
+
+### string-body-accepted
+    claim: the body is opaque bytes; the protocol never picks an encoding for the producer
+    vectors that fired: 1
+      - body must be explicit bytes; a string is not an encoding the protocol guesses
+
+### recursive-parent-mkdir
+    claim: a misspelled path must not grow a plausible database tree
+    vectors that fired: 1
+      - open path: a missing parent directory fails loudly and creates nothing
+
+### converts-wal-instead-of-refusing
+    claim: a database left in WAL is refused; v1 has no runtime dual path and never converts
+    vectors that fired: 1
+      - a database left in WAL is refused, not converted
+
+### locality-detection-in-protocol-core
+    claim: storage locality is the adopter resolver's fail-closed precondition, not protocol core's job
+    vectors that fired: 1
+      - protocol core neither performs nor claims a storage-locality determination
+
+flips gated by at least one vector: 9/9

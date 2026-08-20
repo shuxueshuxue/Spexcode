@@ -13,17 +13,20 @@ intent that started it.
 
 Everything else is a child package: **spec-dashboard** (the node-graph UI), **spec-cli** (the server,
 the git-as-database reader, and the source-of-truth guards), **spec-forge** (a read-only tracer that
-resolves a forge's open issues/PRs to the spec nodes they serve), and **spec-eval** (the
+resolves a forge's open issues/PRs to the spec nodes they serve), **spec-eval** (the
 loss-measurement system — each node's scenarios scored against their expected outcome, the signal the
-optimizer reads).
+optimizer reads), plus the legacy **session-core** implementation that will be replaced by the published,
+SQLite-backed [[session-protocol]] in one cutover with no compatibility package or re-export.
 
 Those packages implement **three stacked layers**, and keeping them distinct is what keeps the project
 from rotting into one blur. **L0 — the data asset**: the spec↔code graph, its git-derived history, and
 `spex lint`; the thing an organisation adopts and never throws away, so it is judged by generality,
 robustness, and an **install surface small enough that nothing can stop it landing** (an install-time
 dependency that can fail on a user's machine is a barrier to the asset ever starting to accumulate, and
-is refused at this altitude). **L1 — the agent-army substrate**: the session state machine that drives
-workers on top of that asset, the brick a CI, a review pipeline, or a software factory builds with, so it
+is refused at this altitude). **L1 — the agent-army substrate**: [[session-protocol]] and
+[[session-topology]] are sibling foundations; [[session-runtime]] composes them with lifecycle and harness
+control to drive workers on top of that asset. Spex CLI is one adopter, not the substrate's gatekeeper. This is
+the brick a CI, a review pipeline, or a software factory builds with, so it
 is judged by **scale and composability** — a mechanism whose cost grows with (observers × subjects) is a
 defect here even while it is fast enough today, because the growth term is what caps the army. **L2 — the
 reference workspace**: the HTTP/SSE/WS faces, the dashboard, the gateway; a **consumer** of L1 and never

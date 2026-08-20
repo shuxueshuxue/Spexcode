@@ -24,18 +24,22 @@ test('probe FAILURE reads unknown, never a false offline (board honesty under lo
   assert.equal(liveness(r, snap({ probeFailed: false })), 'offline')
 })
 
-test('claude-headless liveness is the intact record, independent of process probes', () => {
+test('claude-headless liveness follows its exact session home', () => {
   const headless = rec({ harness: 'claude-headless' })
-  assert.equal(liveness(headless, snap()), 'online')
-  assert.equal(liveness(headless, snap({ probeFailed: true })), 'online')
-  assert.equal(liveness({ ...headless, stopped: true }, snap({ probeFailed: true })), 'offline')
+  const withHome = new Map([[headless.session, {}]])
+  assert.equal(liveness(headless, snap({ windows: withHome })), 'online')
+  assert.equal(liveness(headless, snap()), 'offline')
+  assert.equal(liveness(headless, snap({ probeFailed: true })), 'unknown')
+  assert.equal(liveness({ ...headless, stopped: true }, snap({ windows: withHome, probeFailed: true })), 'offline')
 })
 
-test('opencode-headless liveness is the intact record, independent of sleeping turn processes', () => {
+test('opencode-headless liveness follows its exact session home', () => {
   const headless = rec({ harness: 'opencode-headless' })
-  assert.equal(liveness(headless, snap()), 'online')
-  assert.equal(liveness(headless, snap({ probeFailed: true })), 'online')
-  assert.equal(liveness({ ...headless, stopped: true }, snap({ probeFailed: true })), 'offline')
+  const withHome = new Map([[headless.session, {}]])
+  assert.equal(liveness(headless, snap({ windows: withHome })), 'online')
+  assert.equal(liveness(headless, snap()), 'offline')
+  assert.equal(liveness(headless, snap({ probeFailed: true })), 'unknown')
+  assert.equal(liveness({ ...headless, stopped: true }, snap({ windows: withHome, probeFailed: true })), 'offline')
 })
 
 test('codex-headless liveness is the intact record, independent of the shared app-server process', () => {
@@ -45,11 +49,13 @@ test('codex-headless liveness is the intact record, independent of the shared ap
   assert.equal(liveness({ ...headless, stopped: true }, snap({ probeFailed: true })), 'offline')
 })
 
-test('pi-headless liveness is the intact record until an explicit stop', () => {
+test('pi-headless liveness follows its exact session home until an explicit stop', () => {
   const headless = rec({ harness: 'pi-headless' })
-  assert.equal(liveness(headless, snap()), 'online')
-  assert.equal(liveness(headless, snap({ probeFailed: true })), 'online')
-  assert.equal(liveness({ ...headless, stopped: true }, snap({ probeFailed: true })), 'offline')
+  const withHome = new Map([[headless.session, {}]])
+  assert.equal(liveness(headless, snap({ windows: withHome })), 'online')
+  assert.equal(liveness(headless, snap()), 'offline')
+  assert.equal(liveness(headless, snap({ probeFailed: true })), 'unknown')
+  assert.equal(liveness({ ...headless, stopped: true }, snap({ windows: withHome, probeFailed: true })), 'offline')
 })
 
 test('claude online requires a live listener, not just a tmux window (listener-verify)', () => {

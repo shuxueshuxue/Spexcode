@@ -1,0 +1,28 @@
+
+### historyIndex=false analyze=false   (200 sessions x 500 messages)
+    plan head   : SEARCH protocol_messages USING INDEX protocol_messages_pending_fifo (target_session_id=?)
+    plan history: SEARCH protocol_messages USING INTEGER PRIMARY KEY (rowid>?)
+    dequeue head lookup: 0.0043 ms/op
+    readMessages(sess-7, 0): 11.5890 ms/op
+    page_count=5692
+
+### historyIndex=true analyze=false   (200 sessions x 500 messages)
+    plan head   : SEARCH protocol_messages USING INDEX protocol_messages_history (target_session_id=?)
+    plan history: SEARCH protocol_messages USING INDEX protocol_messages_history (target_session_id=? AND enqueue_seq>?)
+    dequeue head lookup: 0.0414 ms/op
+    readMessages(sess-7, 0): 0.9035 ms/op
+    page_count=6243
+
+### historyIndex=false analyze=true   (200 sessions x 500 messages)
+    plan head   : SEARCH protocol_messages USING INDEX protocol_messages_pending_fifo (target_session_id=?)
+    plan history: SEARCH protocol_messages USING INTEGER PRIMARY KEY (rowid>?)
+    dequeue head lookup: 0.0049 ms/op
+    readMessages(sess-7, 0): 11.9904 ms/op
+    page_count=5693
+
+### historyIndex=true analyze=true   (200 sessions x 500 messages)
+    plan head   : SEARCH protocol_messages USING INDEX protocol_messages_pending_fifo (target_session_id=?)
+    plan history: SEARCH protocol_messages USING INDEX protocol_messages_history (target_session_id=? AND enqueue_seq>?)
+    dequeue head lookup: 0.0043 ms/op
+    readMessages(sess-7, 0): 0.8741 ms/op
+    page_count=6244

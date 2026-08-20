@@ -72,7 +72,7 @@ function FileTextPreview({ path, text }) {
     : <pre className="si-file-text">{text}</pre>
 }
 function FileHtmlPreview({ path, html }) {
-  return <iframe className="si-file-html" sandbox="" srcDoc={html} title={fileName(path)} referrerPolicy="no-referrer" />
+  return <iframe className="si-file-html" srcDoc={html} title={fileName(path)} />
 }
 const webName = (url) => {
   try {

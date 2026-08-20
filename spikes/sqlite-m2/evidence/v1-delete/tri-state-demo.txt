@@ -1,0 +1,13 @@
+Runner verdict classifier, all three states shown against the SAME vector.
+
+  GATED        we measured, and one of our own assertions fired (named in brackets)
+  UNGATED      we measured, and nothing fired
+  NOT MEASURED no verdict was produced at all -- NOT evidence that anything is fine
+
+The canonical engine row is expected to read UNGATED: it is not a flip, so nothing should
+fire against it. For a STUB, UNGATED is the real finding -- the decision has no gate.
+Produced by the classifier in stubs/run.mjs, exercised via scratchpad/tri-state-demo.mjs.
+
+  canonical engine                   -> UNGATED
+  wrong-order stub                   -> GATED  [busy_timeout must be the connection's first statement, or the version probe has no budget]
+  stub that cannot load              -> NOT MEASURED (stub did not load)

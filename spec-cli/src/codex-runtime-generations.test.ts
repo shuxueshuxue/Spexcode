@@ -14,6 +14,7 @@ import {
   prepareCodexGenerationRegistration,
   readCodexGenerationLedger,
   reclaimDrainingCodexGeneration,
+  rotateCodexCurrentGeneration,
   resolveCodexGenerationForResume,
   resolveCodexGenerationForSession,
   type CodexGenerationEndpoint,
@@ -164,6 +165,47 @@ function recordSession(root: string, sessionId: string, threadId: string): void 
     session_id: sessionId, governed: true, harness: 'codex', harness_session_id: threadId,
   })}\n`)
 }
+
+test('an explicit app-server switch moves only new Codex traffic to a proved fresh root', { concurrency: false }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'spex-codex-generation-explicit-rotation-'))
+  try {
+    mkdirSync(join(root, 'sessions'), { recursive: true })
+    let starts = 0
+    const start = async (endpoint: CodexGenerationEndpoint) => { starts++; await startEndpoint(endpoint) }
+    const before = await ensureCodexCurrentGeneration(root, start)
+    recordSession(root, 'bound-before-rotation', 'thread-bound-before-rotation')
+    bindCodexGeneration(root, 'bound-before-rotation', 'thread-bound-before-rotation', before.id)
+
+    const rotation = await rotateCodexCurrentGeneration(root, start)
+    assert.equal(starts, 2, 'rotation starts exactly one fresh endpoint')
+    assert.equal(rotation.previous.id, before.id)
+    assert.notEqual(rotation.current.id, before.id)
+    const ledger = readCodexGenerationLedger(root)
+    assert.equal(ledger.current, rotation.current.id)
+    assert.equal(ledger.generations[before.id]?.state, 'draining')
+    assert.equal(ledger.generations[rotation.current.id]?.state, 'current')
+    assert.equal(ledger.bindings['bound-before-rotation']?.generationId, before.id)
+    assert.equal(resolveCodexGenerationForSession(root, 'bound-before-rotation', 'thread-bound-before-rotation')?.id, before.id,
+      'a rotation does not migrate an already bound conversation')
+    assert.equal((await ensureCodexCurrentGeneration(root, start)).id, rotation.current.id)
+    assert.equal(starts, 2, 'new launches use the published generation without starting another root')
+
+    const receipt = readFileSync(rotation.current.receiptFile, 'utf8')
+    writeFileSync(rotation.current.receiptFile, 'ambiguous replacement receipt\n')
+    await assert.rejects(rotateCodexCurrentGeneration(root, start), /canonical app-server generation is unproven/)
+    assert.equal(starts, 2, 'an ambiguous current root is never replaced behind its own back')
+    assert.equal(readCodexGenerationLedger(root).current, rotation.current.id)
+    writeFileSync(rotation.current.receiptFile, receipt)
+  } finally {
+    for (const endpoint of Object.values(readCodexGenerationLedger(root).generations).map((generation) => generation.endpoint)) {
+      const pid = Number(requirePid(endpoint.pidFile, '0'))
+      if (pid > 0 && processStartToken(pid)) {
+        try { process.kill(pid, 'SIGTERM') } catch { /* reclaimed or already gone */ }
+      }
+    }
+    rmSync(root, { recursive: true, force: true })
+  }
+})
 
 test('a host restart retires the gone root and re-pins its sessions, while an unaddressable live root stays a refusal', { concurrency: false }, async () => {
   const root = mkdtempSync(join(tmpdir(), 'spex-codex-generation-restart-'))

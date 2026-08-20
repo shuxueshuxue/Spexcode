@@ -15,6 +15,7 @@ const cli = fileURLToPath(new URL('./cli.ts', import.meta.url))
 const gateway = fileURLToPath(new URL('./gateway.ts', import.meta.url))
 const tsxCli = join(dirname(createRequire(import.meta.url).resolve('tsx/package.json')), 'dist', 'cli.mjs')
 const TARGET = 'remote-auth-target'
+const PEER_ANCHOR = '00000000-0000-4000-8000-000000000001'
 
 type Run = { code: number | null; out: string; err: string }
 
@@ -132,14 +133,25 @@ test('credentialed remote CLI logs into a password-gated self-signed gateway and
     const certificate = await runCli(['session', 'ls', '--api', api, '--password', password, '--json'], env)
     assert.equal(certificate.code, 1)
     assert.match(certificate.err, /no backend reachable/)
+    assert.doesNotMatch(certificate.err, /unknown flag/)
 
     const missing = await runCli(['session', 'ls', '--api', api, '--insecure', '--json'], env)
     assert.equal(missing.code, 1)
     assert.match(missing.err, /authentication required/)
+    assert.doesNotMatch(missing.err, /unknown flag/)
 
     const wrong = await runCli(['session', 'ls', '--api', api, '--insecure', '--password', 'wrong-pass', '--json'], env)
     assert.equal(wrong.code, 1)
     assert.match(wrong.err, /gateway login rejected credentials/)
+    assert.doesNotMatch(wrong.err, /unknown flag/)
+
+    const listed = await runCli(['session', 'ls', '--api', api, '--insecure', '--password', password, '--json'], env)
+    assert.equal(listed.code, 0, listed.err)
+    assert.match(listed.out, new RegExp(TARGET))
+
+    const resources = await runCli(['session', 'resources', '--api', api, '--insecure', '--password', password, '--json'], env)
+    assert.equal(resources.code, 0, resources.err)
+    assert.match(resources.out, /"owners"/)
 
     const sent = await runCli(['session', 'send', TARGET, 'credentialed remote message', '--api', api, '--insecure', '--password', password], env)
     assert.equal(sent.code, 0, sent.err)
@@ -149,6 +161,20 @@ test('credentialed remote CLI logs into a password-gated self-signed gateway and
     const viaEnvironment = await runCli(['session', 'ls', '--api', api, '--insecure', '--json'], { ...env, SPEXCODE_PASSWORD: password })
     assert.equal(viaEnvironment.code, 0, viaEnvironment.err)
     assert.match(viaEnvironment.out, new RegExp(TARGET))
+
+    for (const verb of ['files', 'web']) {
+      for (const routeFlag of [['--api', api], ['--port', String(upstream)], ['--password', password], ['--insecure']]) {
+        const local = await runCli(['session', verb, 'ls', ...routeFlag], env)
+        assert.equal(local.code, 2)
+        assert.match(local.err, new RegExp(`spex session ${verb}: unknown flag ${routeFlag[0]}`))
+      }
+    }
+
+    for (const credential of [['--password', password], ['--insecure']]) {
+      const peer = await runCli(['session', 'ls', '--ssh', 'fixture-peer', PEER_ANCHOR, ...credential], env)
+      assert.equal(peer.code, 2)
+      assert.match(peer.err, /--password and --insecure apply only to an explicit --api route, not --ssh/)
+    }
   } finally {
     await stop(gatewayProcess)
     await stop(backend)

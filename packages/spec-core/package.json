@@ -1,6 +1,6 @@
 {
   "name": "@spexcode/spec-core",
-  "version": "0.6.5",
+  "version": "0.6.7",
   "type": "module",
   "description": "SpexCode's dependency-minimal spec graph core.",
   "files": [

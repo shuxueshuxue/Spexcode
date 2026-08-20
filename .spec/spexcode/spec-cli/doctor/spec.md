@@ -2,11 +2,12 @@
 title: doctor
 status: active
 hue: 160
-desc: `spex doctor` — one read-only project diagnosis: spec health plus proof that the workflow reaches a self-launched agent.
+desc: `spex doctor` — read-only project diagnosis plus one explicit app-server continuity repair.
 code:
   - spec-cli/src/doctor.ts#doctor
   - spec-cli/src/doctor.ts#specHealthDiagnosis
   - spec-cli/src/doctor.ts#doubleDeliveryReport
+  - spec-cli/src/doctor.ts#runDoctor
 related:
   - spec-cli/src/doctor.test.ts
   - spec-cli/src/lint-source.test.ts
@@ -82,8 +83,11 @@ reads the same [[harness-adapter]] registry [[harness-delivery]] materializes th
   switch `harnesses` to a plugin target so materialize prunes the loose copy, OR uninstall the loose copy).
 
 Each layer gets a verdict (enforced / advisory-only / absent / conflict) plus a footprint audit of every
-materialized artifact and any slot held by something not ours. Doctor is deliberately READ-ONLY: `--contract`
-and `--conflicts` are focused representations of that diagnosis, not writes. Repairs stay on the lifecycle
-verbs that already own them — [[spex-init]] adopts a repo, `spex materialize` reasserts derived delivery,
-[[spex-uninstall]] removes it, and [[tidy]] rewrites prose. Doctor prints those repairs but never grows
-parallel install, uninstall, or release-migration actions of its own.
+materialized artifact and any slot held by something not ours. Bare doctor and its `--contract` and
+`--conflicts` representations are deliberately READ-ONLY. `spex doctor repair app-server [--launcher <name>]`
+is the one separate, explicit recovery action: it proves a fresh app-server, makes it the target for new
+Codex sessions, and leaves existing bindings on the prior draining server. It neither kills nor moves an
+existing session, and it never runs automatically. Other repairs stay on the lifecycle verbs that already own
+them — [[spex-init]] adopts a repo, `spex materialize` reasserts derived delivery, [[spex-uninstall]] removes
+it, and [[tidy]] rewrites prose. Doctor prints those repairs but never grows parallel install, uninstall, or
+release-migration actions of its own.

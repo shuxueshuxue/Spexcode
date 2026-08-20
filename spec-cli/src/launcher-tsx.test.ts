@@ -36,6 +36,7 @@ import { dirname, join } from 'node:path'
 const outputs = [
   'spec-cli/dist/cli.js',
   'packages/spec-core/dist/index.js',
+  'packages/session-core/dist/index.js',
   'spec-eval/dist/index.js',
   'spec-forge/dist/index.js',
 ]

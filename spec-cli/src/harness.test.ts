@@ -12,6 +12,25 @@ import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt }
 import { spawnDetachedRuntime } from './runtime-ownership.js'
 
 const NO_RPC_RESPONSE = Symbol('NO_RPC_RESPONSE')
+
+test('adapter native target identity distinguishes pinned, captured, and absent conversations', () => {
+  const pinned = { session: 'governed-id', harnessSessionId: null }
+  const empty = { session: 'governed-id', harnessSessionId: '' }
+  const captured = { session: 'governed-id', harnessSessionId: 'native-id' }
+  assert.equal(claudeHarness.exactNativeTargetId(pinned), 'governed-id')
+  assert.equal(piHarness.exactNativeTargetId(pinned), 'governed-id')
+  assert.equal(claudeHeadlessHarness.exactNativeTargetId(pinned), 'governed-id')
+  assert.equal(piHeadlessHarness.exactNativeTargetId(pinned), 'governed-id')
+  assert.equal(codexHarness.exactNativeTargetId(pinned), null)
+  assert.equal(codexHarness.exactNativeTargetId(empty), null)
+  assert.equal(codexHarness.exactNativeTargetId(captured), 'native-id')
+  assert.equal(codexHeadlessHarness.exactNativeTargetId(pinned), null)
+  assert.equal(opencodeHarness.exactNativeTargetId(pinned), null)
+  assert.equal(opencodeHarness.exactNativeTargetId(empty), null)
+  assert.equal(opencodeHarness.exactNativeTargetId(captured), 'native-id')
+  assert.equal(opencodeHeadlessHarness.exactNativeTargetId(pinned), null)
+  assert.equal(zcodeHarness.exactNativeTargetId(captured), null)
+})
 // The real app-server stamps every thread/list row with its live turn state, and the adapter's gates read it
 // there. A fixture that omits `status` is declaring "nothing is running on this thread", so fill that in here
 // rather than in every handler; a fixture that means the opposite says so explicitly on the row.
@@ -492,6 +511,73 @@ test('Codex corrupt-record quarantine archives only an exact orphan native threa
     assert.equal(child?.ok, false)
     if (child && !child.ok) assert.match(child.reason, /descendants/)
     assert.equal(archiveCalls, 1, 'a descendant-bearing target refuses before any archive RPC')
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await stopCodexOwner(owner)
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousSocketDir === undefined) delete process.env.SPEXCODE_CODEX_SOCKET_DIR
+    else process.env.SPEXCODE_CODEX_SOCKET_DIR = previousSocketDir
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+test('Codex corrupt-record quarantine locates an orphan on its detached generation', async () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousSocketDir = process.env.SPEXCODE_CODEX_SOCKET_DIR
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-orphan-detached-'))
+  process.env.SPEXCODE_HOME = home
+  process.env.SPEXCODE_CODEX_SOCKET_DIR = join(home, 'sockets')
+  const root = runtimeRoot()
+  const target = 'detached-orphan-native-thread'
+  const corruptId = 'detached-corrupt-record-owner'
+  const generationId = 'detached-v3-orphan'
+  const socket = join(home, 'detached-codex.sock')
+  let archived = false
+  let archiveCalls = 0
+  const server = codexRpcFixture((message) => {
+    if (message.method === 'thread/loaded/list') return { data: archived ? [] : [{ id: target }], nextCursor: null }
+    if (message.method === 'thread/turns/list') return { data: [], nextCursor: null }
+    if (message.method === 'thread/archive') { archiveCalls++; archived = true; return {} }
+    if (message.method === 'thread/list') {
+      if (message.params.ancestorThreadId) return { data: [], nextCursor: null }
+      const active = !archived && message.params.archived === false
+      return { data: active ? [{ id: target }] : message.params.archived === archived ? [{ id: target }] : [], nextCursor: null }
+    }
+    throw new Error(`unexpected RPC ${message.method}`)
+  })
+  let owner: ReturnType<typeof startCodexOwner> | null = null
+  try {
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, 'codex-app-server-generations.json'), `${JSON.stringify({
+      version: 3,
+      revision: 1,
+      current: generationId,
+      pending: null,
+      generations: {
+        [generationId]: {
+          state: 'current',
+          endpoint: {
+            id: generationId,
+            pidFile: codexAppServerPid(root),
+            receiptFile: codexAppServerReceipt(root),
+            logFile: join(root, 'detached-codex.log'),
+            socketPath: socket,
+          },
+        },
+      },
+      bindings: {},
+    }, null, 2)}\n`)
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, () => resolve()) })
+    mkdirSync(join(root, 'sessions', corruptId), { recursive: true })
+    writeFileSync(join(root, 'sessions', corruptId, 'session.json'), '{ unreadable incident bytes')
+    owner = startCodexOwner(root)
+
+    const quarantined = await codexHarness.quarantineOrphanThread?.(target, { excludingSessionId: corruptId })
+    if (!quarantined?.ok) throw new Error(`detached orphan quarantine did not return an adapter proof: ${quarantined?.reason ?? 'no result'}`)
+    assert.equal(quarantined.ok, true)
+    assert.deepEqual(quarantined.audit, { adapter: 'codex', threadId: target, action: 'archived' })
+    assert.equal(archiveCalls, 1, 'the detached generation receives the exact orphan archive')
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
     await stopCodexOwner(owner)
@@ -1694,7 +1780,8 @@ test('codex launch command starts app-server then resumes the backend-owned thre
   // design C: the BACKEND owns the thread — codex-launch does thread/start { cwd } + first turn, prints the id,
   // and the visible TUI resumes THAT thread on the same project socket.
   assert.match(cmd, /internal codex-launch "\$sock" "\$PWD" "\$@"/)
-  assert.match(cmd, /exec codex --yolo [^\n]*--remote unix:\/\/"\$sock" resume "\$tid"/)
+  assert.match(cmd, /exec codex --yolo [^\n]*--cd "\$PWD" --remote unix:\/\/"\$sock" resume "\$tid"/)
+  assert.ok(cmd.indexOf('--cd "$PWD"') < cmd.indexOf('--remote unix://"$sock"'), 'remote TUI receives its workspace root')
   // Endpoint paths are emitted by the ledger only after detached identity and socket proof; the static launch
   // script therefore carries no stale singleton socket/PID path.
   assert.doesNotMatch(cmd, /codex-app-server\.sock/)
@@ -1720,7 +1807,7 @@ test('codex launch puts --dangerously-bypass-hook-trust on the RESUME TUI, not o
   process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST = '1'
   try {
     const cmd = codexLaunchCommand('s', 'codex --yolo', 'codex', '/tmp/spex-project')
-    assert.match(cmd, /exec codex --yolo --dangerously-bypass-hook-trust [^\n]*--remote/)  // on the resume TUI (forwarded to thread config)
+    assert.match(cmd, /exec codex --yolo --dangerously-bypass-hook-trust [^\n]*--cd "\$PWD" --remote/)  // on the resume TUI (forwarded to thread config)
     assert.match(cmd, /internal codex-generation-current "\$dir"/)                  // ledger starts the app-server separately
     assert.doesNotMatch(cmd, /--dangerously-bypass-hook-trust app-server/)           // never on the inert app-server invocation
   } finally { delete process.env.SPEXCODE_CODEX_BYPASS_HOOK_TRUST }
@@ -1865,12 +1952,13 @@ test('codex app-server socket path is short (sun_path-safe), stable per project,
   }
 })
 
-test('codex resumeArg is a --resume marker for the owned thread, empty when none captured', () => {
+test('codex resumeArg resumes the owned thread or replays the authoritative payload when identity is absent', () => {
   // the tail resumeSession() hands launch(): a captured thread id → `--resume <id>` (the launch script resumes that
-  // thread directly, the SAME conversation); none → empty (relaunch a fresh thread). It is NOT `resume <id>`,
-  // which the launch script would feed to codex-launch as a literal first-turn prompt.
+  // thread directly, the SAME conversation); none → the exact pending launch payload as the recovered first turn.
+  // It is NOT `resume <id>`, which the launch script would feed to codex-launch as a literal first-turn prompt.
   assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: 'th_abc' }), '--resume th_abc')
-  assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: null }), '')
+  assert.equal(codexHarness.resumeArg({ session: 's1', harnessSessionId: null }, 'resolved first\nturn'), "'resolved first\nturn'")
+  assert.throws(() => codexHarness.resumeArg({ session: 's1', harnessSessionId: null }), /authoritative resolved launch payload is missing/)
 })
 
 test('launchCmd cmd override wins over the ambient default (claude + codex) — the launcher-select seam', () => {
@@ -2495,5 +2583,5 @@ test('a codex thread is created carrying its session identity, and the visible T
   assert.deepEqual(codexStartThreadParams('/wt', false), { cwd: '/wt' })
   // the TUI is the other entry point that creates a context for this session — same rule, same knob
   const cmd = codexLaunchCommand('rec-42', 'codex --yolo', 'codex', '/tmp/spex-project')
-  assert.match(cmd, /-c '\\''shell_environment_policy\.set\.SPEXCODE_SESSION_ID=rec-42'\\'' --remote unix:\/\/"\$sock" resume "\$tid"/)
+  assert.match(cmd, /-c '\\''shell_environment_policy\.set\.SPEXCODE_SESSION_ID=rec-42'\\'' --cd "\$PWD" --remote unix:\/\/"\$sock" resume "\$tid"/)
 })

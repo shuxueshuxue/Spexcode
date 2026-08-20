@@ -12,6 +12,7 @@ related:
   - spec-eval/package.json
   - spec-forge/package.json
   - packages/spec-core/package.json
+  - packages/session-core/package.json
   - spec-cli/src/cli.ts
   - spec-cli/bin/spex.mjs
   - spec-cli/src/node-pty-package.test.ts
@@ -47,10 +48,12 @@ that also uses `--ignore-scripts` suppresses esbuild's own platform-binary repai
 installs the matching `@esbuild/<platform>-<arch>` package with `--no-save --no-package-lock`; that is test
 scaffolding only, not an extra normal-adopter step.
 
-The repository holds five real workspace packages: `@spexcode/spec-core`, `@spexcode/spec-eval`,
-`@spexcode/spec-forge`, `@spexcode/spec-cli`, and `@spexcode/spec-dashboard`. Their manifests name their real
+The repository holds six real workspace packages: `@spexcode/spec-core`, `@spexcode/session-core`,
+`@spexcode/spec-eval`, `@spexcode/spec-forge`, `@spexcode/spec-cli`, and `@spexcode/spec-dashboard`. Their manifests name their real
 package dependencies by release version; local workspace resolution is a development convenience, not a
-published `file:` contract. `@spexcode/spec-core` has four deliberately narrow package exports. `.` is the Node-side core entry and
+published `file:` contract. `@spexcode/session-core` is the reusable Node-side durable session protocol;
+runtime controllers supply delivery and lifecycle effects rather than becoming dependencies of the package.
+`@spexcode/spec-core` has four deliberately narrow package exports. `.` is the Node-side core entry and
 owns the root-explicit `readSpecs(root)` reader. `./review` is the browser-safe review domain only: its
 filter, query, and session presentation functions have no Node, React, store, endpoint, or service
 dependency. `./identity` is the same kind of browser-safe identity registry shared by validation and
@@ -80,6 +83,10 @@ Vite/esbuild. The CLI discovers both assets by resolving the dashboard package m
 sibling directory. An absent package fails before a UI process binds, naming that exact installation command;
 an incomplete package fails with its missing artifact and a repair. It never hides commands, crashes with a
 resolution stack, or serves an empty page.
+The tarball carries each canonical built asset once, without transport-specific compressed copies. Installed
+serving applies [[public-mode]]'s single gzip policy at the HTTP gateway, so raw asset bytes remain identical
+to the package artifact while negotiated wire bytes receive the same compression and cache headers in local,
+public, and host-gateway deployments.
 
 The launcher also owns the earliest process-identity boundary for project/host control planes. Before running
 the compiled CLI for `serve` or `dashboard`, it removes the invoking session's adapter-declared identity
@@ -125,7 +132,9 @@ same gateway with no TLS and no password, on loopback unless `--host` widens it.
 
 The packaging contract is verified as the user would meet it, not by inspecting files: CI builds the root and
 dashboard tarballs, installs the root into a clean consumer project, runs `spex --help`, `spex --version`,
-and `spex graph --json`, then runs `spex init` inside a fresh git repo. It proves the L0 verbs work without the
-dashboard, proves `spex serve ui` fails with the dashboard install command in that state, then installs the
-dashboard tarball and proves `spex serve ui`, `spex dashboard`, and `spex flat site` use its own static assets.
-A tarball that contains the right files but cannot start from an npm install is a packaging failure.
+and `spex graph --json`, then runs `spex init --harness codex` inside a fresh git repo. The explicit harness
+choice is the same first-adoption requirement [[spex-init]] owns; packaging must not introduce an implicit
+default merely to make a smoke test shorter. The smoke proves the L0 verbs work without the dashboard, proves
+`spex serve ui` fails with the dashboard install command in that state, then installs the dashboard tarball and
+proves `spex serve ui`, `spex dashboard`, and `spex flat site` use its own static assets. A tarball that contains
+the right files but cannot start from an npm install is a packaging failure.

@@ -151,6 +151,7 @@ test('session send end-of-options remains authoritative to downstream routing an
       ['session', 'send', TARGET, '--port', port, '--', '--api'],
       ['session', 'send', TARGET, '--api', api, '--', '--port'],
       ['session', 'send', TARGET, '--api', api, '--', '--insecure'],
+      ['session', 'send', TARGET, '--api', api, '--', '--password'],
     ]) {
       const result = await runCli(args, env)
       assert.equal(result.code, 0, result.stderr)
@@ -161,6 +162,7 @@ test('session send end-of-options remains authoritative to downstream routing an
       { kind: 'text', text: '--api' },
       { kind: 'text', text: '--port' },
       { kind: 'text', text: '--insecure' },
+      { kind: 'text', text: '--password' },
     ])
   })
 })

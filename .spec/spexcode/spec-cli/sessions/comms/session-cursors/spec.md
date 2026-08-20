@@ -4,9 +4,9 @@ status: active
 hue: 280
 desc: A reader's durable place in a log — one `cursors.json` per session holding its own inbox position plus one entry per followed session, advanced monotonically and reclaimed at read time.
 code:
-  - spec-cli/src/session-cursors.ts
+  - packages/session-core/src/session-cursors.ts
 related:
-  - spec-cli/src/session-timeline.ts
+  - packages/session-core/src/session-timeline.ts
   - spec-cli/src/sessions.ts
   - .spec/spexcode/.plugins/core/mark-active/mark-active.sh
 ---

@@ -49,10 +49,10 @@ test('every allowed flag read as a value is declared to the positional scanner',
       if (node.expression.text === 'flag' && node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0])) {
         valueReads.add(node.arguments[0].text)
       }
-      if (node.expression.text === 'rejectUnknownFlags') {
+      if (node.expression.text === 'rejectUnknownFlags' || node.expression.text === 'rejectUnknownBackendFlags') {
         rejectUnknownCalls++
         const names = strings(node.arguments[2])
-        assert.ok(names, 'rejectUnknownFlags allowlists must be literal string arrays')
+        assert.ok(names, `${node.expression.text} allowlists must be literal string arrays`)
         for (const name of names) allowedFlags.add(name)
       }
     }
@@ -227,7 +227,7 @@ test('session new from a governed parent establishes its child watch before prin
   assert.equal(typeof watchers[0].createdAt, 'string')
   assert.deepEqual(watchers[0].sources, ['parent'])
   const messages = timelineText(parentDir)
-  assert.match(messages, new RegExp(WATCH_CHILD))
+  assert.match(messages, new RegExp(WATCH_CHILD), 'parent installation includes the child current-state snapshot')
 })
 
 test('session new uses lightweight instance authority and falls back only for explicit connection refusal', { timeout: 20_000 }, async () => {

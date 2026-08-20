@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { codexHarness } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { closeSession, sendText } from './sessions.js'
-import { drain, pendingMessages } from './delivery-queue.js'
+import { drain, pendingMessages } from '@spexcode/session-core'
 import { runtimeRoot, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
 test('close uses a target tmux probe when the global listing is busy', { concurrency: false }, async () => {
@@ -50,7 +50,7 @@ args="$*"
 case "$args" in
   *" list-panes -t ${id} "*)
     if [ -f "${tmuxState}" ]; then exit 1; fi
-    printf '${id}\\t0\\tbash\\n'
+    printf '${id}\\t${process.pid}\\tbash\\n'
     ;;
   *" list-panes "*) sleep 5; exit 1 ;;
   *" kill-session "*) touch "${tmuxState}" ;;
@@ -76,6 +76,9 @@ esac
       { mid: 'queued-before-close', text: 'stale continue', from: id },
     ]) + '\n')
     leaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', thread], { stdio: 'ignore' })
+    for (let attempt = 0; attempt < 50 && !processStartToken(leaf.pid!); attempt++)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    assert.ok(processStartToken(leaf.pid!), 'target probe fixture acquires a stable leaf start identity')
     writeFileSync(sessionArtifactPath(id, 'agent.pid'), `${leaf.pid}\n`)
     codexHarness.sharedRuntimes = () => []
     codexHarness.coldPreflight = async () => ({ ok: true, receipt: Object.freeze({ fixture: 'target-probe' }) })

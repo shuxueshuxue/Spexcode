@@ -1023,6 +1023,15 @@ a.scenario-count:hover { background: var(--panel2); }
    scrollbar; chips + kind stay fixed. */
 .search-title { color: var(--ink2); font-weight: var(--weight-semibold); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .search-path { color: var(--muted); font-size: var(--type-meta); flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.search-review-links { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-top: 1px solid var(--line); background: var(--panel); }
+.search-review-link {
+  flex: 1 1 160px; min-width: 0; min-height: 32px; display: flex; align-items: center; gap: 7px; padding: 6px 8px;
+  border-radius: 3px; color: var(--ink2); text-decoration: none;
+}
+.search-review-link span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-review-link:hover { background: var(--panel2); }
+.search-review-link:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; background: var(--panel2); }
+.search-review-link > svg { flex: none; color: var(--muted); }
 .search-foot { padding: 6px 12px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: var(--type-meta); }
 
 /* ---- session interface (#/sessions): two panes, right content morphs ---- */
@@ -2508,11 +2517,12 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 /* [[transient-notices]]: fixed feedback belongs above page content, but yields to menus and modals. */
 .tn-viewport {
   position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 50;
-  display: grid; justify-items: end; gap: 8px; width: min(400px, calc(100vw - 32px)); pointer-events: none;
+  display: flex; flex-direction: column; gap: 6px; width: min(400px, calc(100vw - 32px)); max-block-size: min(50dvh, 32rem);
+  overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; scrollbar-width: thin;
 }
 .tn-notice {
   --tn-tone: var(--blue);
-  width: 100%; box-sizing: border-box; display: grid; grid-template-columns: 16px minmax(0, 1fr) 24px; align-items: start; gap: 9px;
+  flex: 0 0 auto; min-block-size: 42px; width: 100%; box-sizing: border-box; display: grid; grid-template-columns: 16px minmax(0, 1fr) 24px; align-items: start; gap: 9px;
   position: relative; overflow: hidden; padding: 9px 8px 9px 10px; color: var(--ink2); background: color-mix(in srgb, var(--panel) 96%, transparent);
   border: 1px solid color-mix(in srgb, var(--tn-tone) 42%, var(--line)); border-left: 3px solid var(--tn-tone); border-radius: 7px;
   box-shadow: 0 10px 24px color-mix(in srgb, var(--ink) 15%, transparent); font-family: var(--mono); font-size: var(--type-control);
@@ -2539,7 +2549,7 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 @media (max-width: 640px) {
   .tn-viewport { right: max(10px, env(safe-area-inset-right)); bottom: calc(68px + env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 20px)); }
 }
-@media (prefers-reduced-motion: reduce) { .tn-notice { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .tn-notice, .tn-progress { animation: none; } .tn-progress { transform: scaleX(1); } }
 
 /* ================================================================================================
    projects hub ([[projects-hub]]) — the global `/projects` catalog page, the unified credential card,

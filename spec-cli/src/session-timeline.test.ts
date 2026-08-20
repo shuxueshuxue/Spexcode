@@ -1,17 +1,19 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { appendSent, currentHumanTurn, lastHumanSendVia, readTimeline, sentDispatchReceipt, settleSentDispatch, timelineEvents } from './session-timeline.js'
-import { enqueue, pendingMessages } from './delivery-queue.js'
-import { rvSock, stampRvSock } from './harness.js'
-import { projectPublicRecordEntry, sessionArtifactPath, sessionRecordPath, sessionStoreDir, type RawRecord } from '@spexcode/spec-core'
-import { cancelSessionWatch, composeSessionPrompt, listSessionWatches, markState, sendText, subscribeSessionWatch, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
+import { currentHumanTurn, lastHumanSendVia, readTimeline, timelineEvents } from './session-timeline.js'
+import { pendingMessages } from '@spexcode/session-core'
+import { appendSent, enqueue, sentDispatchReceipt, settleSentDispatch } from '@spexcode/session-core/internal'
+import { opencodeHarness, rvSock, stampRvSock } from './harness.js'
+import { mainRoot, projectPublicRecordEntry, readConfig, sessionArtifactPath, sessionRecordPath, sessionStoreDir, type RawRecord } from '@spexcode/spec-core'
+import { cancelSessionWatch, composeSessionPrompt, drainQueue, listSessionWatches, markState, reparentSessionRecords, sendText, subscribeSessionWatch, withNoteReplyHint, withTerminalReplyHint } from './sessions.js'
 
 // The reply-channel signal must be SYMMETRIC (the [[session-timeline]] write surface): the phone's
 // explicit note-sends and every headless target carry the note insert, and the first terminal send after
@@ -56,7 +58,7 @@ let midSeq = 0
 const sent = (from: string | null, replyVia?: 'note') =>
   ({ ts: '2026-07-16T00:00:00.000Z', kind: 'sent', mid: `mid-${++midSeq}`, text: 'msg', from, ...(replyVia ? { replyVia } : {}) })
 
-function seedSessionRecord(home: string, id = ID, parent = ''): void {
+function seedSessionRecord(home: string, id = ID, parent = '', overrides: Record<string, unknown> = {}): void {
   withHome(home, () => {
     mkdirSync(sessionStoreDir(id), { recursive: true })
     writeFileSync(sessionRecordPath(id), JSON.stringify({
@@ -79,6 +81,7 @@ function seedSessionRecord(home: string, id = ID, parent = ''): void {
       launcher: 'opencode',
       launch_cmd: 'opencode',
       launch_owner: '',
+      ...overrides,
     }, null, 2) + '\n')
   })
 }
@@ -155,26 +158,387 @@ test('a declaration note remains in the timeline after a later status replaces t
   })
 })
 
-test('a managed watch receives state through send and can be listed and cancelled', async () => {
+test('creation parent watch publishes its initial snapshot only after active readiness publication', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  const bin = join(home, 'bin')
+  const tmuxTrace = join(home, 'tmux-trace')
+  mkdirSync(bin)
+  writeFileSync(join(bin, 'tmux'), `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(tmuxTrace)}\nexit 0\n`)
+  chmodSync(join(bin, 'tmux'), 0o755)
+  seedSessionRecord(home, PARENT)
+  seedSessionRecord(home, ID, PARENT, { status: 'queued', branch: '' })
+  withHome(home, () => writeFileSync(sessionArtifactPath(ID, 'launch'), 'creation ordering task'))
+  const previousPath = process.env.PATH
+  const originalLaunchReady = opencodeHarness.launchReady
+  let entered!: () => void, release!: () => void
+  const readinessEntered = new Promise<void>((resolve) => { entered = resolve })
+  const readinessGate = new Promise<void>((resolve) => { release = resolve })
+  process.env.PATH = `${bin}:${previousPath}`
+  opencodeHarness.launchReady = async () => {
+    entered()
+    await readinessGate
+    return { proof: { kind: 'creation-ordering-fixture' }, validate: async () => true }
+  }
+  try {
+    await withHomeAsync(home, async () => {
+      assert.deepEqual(await subscribeSessionWatch(PARENT, [ID], 'parent'), { watched: [ID] })
+      assert.deepEqual(listSessionWatches(PARENT).map((watch) => watch.target), [ID], 'the parent relation commits first')
+      assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 0,
+        'a merely published queued candidate is not the creation snapshot')
+
+      await drainQueue()
+      await readinessEntered
+      assert.equal(JSON.parse(readFileSync(sessionRecordPath(ID), 'utf8')).status, 'active',
+        'launch keeps its existing active resource publication while readiness is pending')
+      assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 0,
+        'readiness pending still publishes no initial snapshot')
+      assert.equal(markState('active', { sessionId: ID }), true, 'an early harness hook may author active first')
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 0,
+        'an arbitrary active writer cannot resolve the creation snapshot')
+      const watchFile = sessionArtifactPath(ID, 'watchers.json')
+      const pendingRows = JSON.parse(readFileSync(watchFile, 'utf8')) as Array<Record<string, unknown>>
+      const pendingToken = pendingRows[0].snapshotPending
+      assert.equal(typeof pendingToken, 'string')
+      release()
+      for (let attempt = 0; attempt < 100 && timelineEvents(PARENT).filter((event) => event.kind === 'sent').length === 0; attempt++)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+
+      let messages = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
+      assert.equal(messages.length, 1, 'active publication resolves the initial snapshot exactly once')
+      assert.match(messages[0].kind === 'sent' ? messages[0].text : '', / is working$/)
+      assert.doesNotMatch(messages[0].kind === 'sent' ? messages[0].text : '', / queued/)
+
+      const settledRows = JSON.parse(readFileSync(watchFile, 'utf8')) as Array<Record<string, unknown>>
+      writeFileSync(watchFile, `${JSON.stringify(settledRows.map((row) => ({ ...row, snapshotPending: pendingToken })), null, 2)}\n`)
+      const launchesBeforeRecovery = readFileSync(tmuxTrace, 'utf8').split('\n').filter((line) => line.includes('new-session')).length
+      await drainQueue()
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const rows = JSON.parse(readFileSync(watchFile, 'utf8')) as Array<Record<string, unknown>>
+        if (rows.every((row) => row.snapshotPending === undefined)) break
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      }
+      assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 1,
+        'queue recovery after a crash replays the same durable token without a second snapshot')
+      const launchesAfterRecovery = readFileSync(tmuxTrace, 'utf8').split('\n').filter((line) => line.includes('new-session')).length
+      assert.equal(launchesAfterRecovery, launchesBeforeRecovery, 'active debt recovery validates readiness without relaunching')
+
+      assert.equal(markState('asking', { note: 'need input', sessionId: ID }), true)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      assert.equal(markState('active', { sessionId: ID }), true)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      messages = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
+      assert.equal(messages.length, 2, 'the later routine working transition remains suppressed')
+      assert.match(messages[1].kind === 'sent' ? messages[1].text : '', / is asking/)
+
+      const failed = 'timeline-readiness-failure'
+      seedSessionRecord(home, failed, PARENT, { status: 'queued', branch: '' })
+      writeFileSync(sessionArtifactPath(failed, 'launch'), 'readiness failure task')
+      let failureEntered!: () => void
+      const failureStarted = new Promise<void>((resolve) => { failureEntered = resolve })
+      opencodeHarness.launchReady = async () => {
+        failureEntered()
+        throw new Error('forced creation readiness failure')
+      }
+      await subscribeSessionWatch(PARENT, [failed], 'parent')
+      await drainQueue()
+      await failureStarted
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const note = JSON.parse(readFileSync(sessionRecordPath(failed), 'utf8')).note ?? ''
+        if (/forced creation readiness failure/.test(note)) break
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      }
+      const failedRecord = JSON.parse(readFileSync(sessionRecordPath(failed), 'utf8'))
+      assert.equal(failedRecord.status, 'active', 'readiness failure preserves the existing active resource contract')
+      assert.match(failedRecord.note, /queued launch readiness failed: forced creation readiness failure/)
+      assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 2,
+        'readiness failure does not fabricate a working snapshot')
+      const failedRows = JSON.parse(readFileSync(sessionArtifactPath(failed, 'watchers.json'), 'utf8')) as Array<Record<string, unknown>>
+      assert.equal(failedRows[0].snapshotPending, undefined, 'failure retires the creation snapshot debt')
+      assert.equal(markState('asking', { note: 'failure needs help', sessionId: failed }), true)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      const afterFailure = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
+      assert.equal(afterFailure.length, 3, 'a later actionable transition still reaches the parent')
+      assert.match(afterFailure[2].kind === 'sent' ? afterFailure[2].text : '', / is asking/)
+    })
+  } finally {
+    release()
+    opencodeHarness.launchReady = originalLaunchReady
+    process.env.PATH = previousPath
+  }
+})
+
+test('creation snapshot debt stays scoped to the parent source across cancel and reparent', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  const replacement = 'timeline-replacement-parent'
+  seedSessionRecord(home, PARENT)
+  seedSessionRecord(home, replacement)
+  seedSessionRecord(home, ID, PARENT, { status: 'queued' })
+  await withHomeAsync(home, async () => {
+    await subscribeSessionWatch(PARENT, [ID], 'parent')
+    const path = sessionArtifactPath(ID, 'watchers.json')
+    const [parentRow] = JSON.parse(readFileSync(path, 'utf8')) as Array<Record<string, unknown>>
+    assert.equal(typeof parentRow.snapshotPending, 'string')
+
+    writeFileSync(path, `${JSON.stringify([{ ...parentRow, sources: ['parent', 'manual'] }], null, 2)}\n`)
+    assert.equal(cancelSessionWatch(PARENT, [ID]), 1)
+    let [row] = JSON.parse(readFileSync(path, 'utf8')) as Array<Record<string, unknown>>
+    assert.deepEqual(row.sources, ['parent'])
+    assert.equal(row.snapshotPending, parentRow.snapshotPending, 'manual cancellation preserves the parent debt')
+
+    writeFileSync(path, `${JSON.stringify([{ ...row, sources: ['parent', 'manual'] }], null, 2)}\n`)
+    assert.deepEqual(await reparentSessionRecords([ID], replacement), { children: [ID], parent: replacement, notified: [ID] })
+    const rows = JSON.parse(readFileSync(path, 'utf8')) as Array<Record<string, unknown>>
+    const oldParent = rows.find((entry) => entry.watcher === PARENT)
+    assert.deepEqual(oldParent?.sources, ['manual'])
+    assert.equal(oldParent?.snapshotPending, undefined, 'removing parent source removes its creation debt')
+    assert.match(timelineEvents(replacement).find((event) => event.kind === 'sent')?.text ?? '', / is queued$/,
+      'reparent keeps its ordinary direct current-state snapshot')
+
+    assert.equal(markState('asking', { note: 'after reparent', sessionId: ID }), true)
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const oldReached = timelineEvents(PARENT).some((event) => event.kind === 'sent' && / is asking/.test(event.text))
+      const replacementReached = timelineEvents(replacement).some((event) => event.kind === 'sent' && / is asking/.test(event.text))
+      if (oldReached && replacementReached) break
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    assert.match(timelineEvents(PARENT).find((event) => event.kind === 'sent')?.text ?? '', / is asking/,
+      'the retained manual source is not suppressed by a stale parent token')
+    assert.match(timelineEvents(replacement).filter((event) => event.kind === 'sent').at(-1)?.text ?? '', / is asking/,
+      'the replacement parent receives the same later transition')
+  })
+})
+
+test('creation parent watch publishes one queued snapshot only after capacity is confirmed full', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home, PARENT)
+  seedSessionRecord(home, ID, PARENT, { status: 'queued' })
+  const cap = Math.max(1, Math.floor(readConfig(mainRoot()).sessions?.maxActive ?? 8))
+  for (let index = 0; index < cap; index++) {
+    seedSessionRecord(home, `capacity-${index}`, '', {
+      status: 'active', harness: 'codex-headless', harness_session_id: `thread-${index}`, stopped: false,
+    })
+  }
+  await withHomeAsync(home, async () => {
+    assert.deepEqual(await subscribeSessionWatch(PARENT, [ID], 'parent'), { watched: [ID] })
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 0,
+      'relation installation alone does not guess that queued means capacity-blocked')
+
+    await drainQueue()
+    await drainQueue()
+    const messages = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
+    assert.equal(messages.length, 1, 'capacity resolution publishes the initial snapshot exactly once')
+    assert.match(messages[0].kind === 'sent' ? messages[0].text : '', / is queued$/)
+  })
+})
+
+test('a state change between initial acceptance and debt clear is delivered after the snapshot', { concurrency: false }, async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home, PARENT)
+  seedSessionRecord(home, ID, PARENT, { status: 'queued' })
+  const cap = Math.max(1, Math.floor(readConfig(mainRoot()).sessions?.maxActive ?? 8))
+  for (let index = 0; index < cap; index++) {
+    seedSessionRecord(home, `accept-race-capacity-${index}`, '', {
+      status: 'active', harness: 'codex-headless', harness_session_id: `race-thread-${index}`, stopped: false,
+    })
+  }
+  const originalDeliver = opencodeHarness.deliver
+  let accepted!: () => void, release!: () => void, calls = 0
+  const initialAccepted = new Promise<void>((resolve) => { accepted = resolve })
+  const handoverGate = new Promise<void>((resolve) => { release = resolve })
+  opencodeHarness.deliver = async () => {
+    calls++
+    if (calls === 1) {
+      accepted()
+      await handoverGate
+    }
+    return { ok: true }
+  }
+  try {
+    await withHomeAsync(home, async () => {
+      await subscribeSessionWatch(PARENT, [ID], 'parent')
+      const watchFile = sessionArtifactPath(ID, 'watchers.json')
+      const pendingToken = (JSON.parse(readFileSync(watchFile, 'utf8')) as Array<Record<string, unknown>>)[0].snapshotPending
+      const draining = drainQueue()
+      await initialAccepted
+      let messages = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
+      assert.equal(messages.length, 1, 'the initial queued snapshot is durably accepted before handover completes')
+      assert.match(messages[0].kind === 'sent' ? messages[0].text : '', / is queued$/)
+
+      assert.equal(markState('asking', { note: 'changed during acceptance', sessionId: ID }), true)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 1,
+        'pending debt temporarily suppresses the generic transition path')
+      release()
+      await draining
+      for (let attempt = 0; attempt < 100 && timelineEvents(PARENT).filter((event) => event.kind === 'sent').length < 2; attempt++)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+
+      messages = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
+      assert.equal(messages.length, 2, 'debt clear repairs the transition that raced acceptance')
+      assert.match(messages[1].kind === 'sent' ? messages[1].text : '', / is asking/)
+
+      const settledRows = JSON.parse(readFileSync(watchFile, 'utf8')) as Array<Record<string, unknown>>
+      writeFileSync(watchFile, `${JSON.stringify(settledRows.map((row) => ({ ...row, snapshotPending: pendingToken })), null, 2)}\n`)
+      await drainQueue()
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const rows = JSON.parse(readFileSync(watchFile, 'utf8')) as Array<Record<string, unknown>>
+        if (rows.every((row) => row.snapshotPending === undefined)) break
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      }
+      assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 2,
+        'process re-entry replays both keyed receipts without duplicating queued or asking')
+    })
+  } finally {
+    release()
+    opencodeHarness.deliver = originalDeliver
+  }
+})
+
+test('keyed snapshot receipts recover both accept-before-clear crash states', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home, PARENT)
+  seedSessionRecord(home, ID, PARENT, { status: 'queued' })
+  await withHomeAsync(home, async () => {
+    await subscribeSessionWatch(PARENT, [ID], 'parent')
+    const watchFile = sessionArtifactPath(ID, 'watchers.json')
+    const pendingRows = JSON.parse(readFileSync(watchFile, 'utf8')) as Array<Record<string, unknown>>
+    const token = String(pendingRows[0].snapshotPending)
+    const queuedState = JSON.stringify(['queued', null, null])
+    const queuedText = `[spex watch] ${ID} is queued`
+    const identity = `${ID}\0${PARENT}\0${token}\0${queuedState}`
+    appendSent(PARENT, queuedText, ID, undefined, {
+      operation: 'watch-initial-snapshot',
+      requestDigest: createHash('sha256').update(identity).digest('hex'),
+      payloadHash: createHash('sha256').update(`watch-initial-snapshot\0${identity}\0${queuedText}`).digest('hex'),
+      delivery: { text: queuedText, from: ID },
+    })
+    assert.equal(markState('asking', { note: 'authored after initial accept', sessionId: ID }), true)
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 1,
+      'fixture is initial accepted plus asking authored while the token remains')
+
+    await drainQueue()
+    let messages = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
+    assert.equal(messages.length, 2)
+    assert.match(messages[0].kind === 'sent' ? messages[0].text : '', / is queued$/)
+    assert.match(messages[1].kind === 'sent' ? messages[1].text : '', / is asking/)
+
+    const settledRows = JSON.parse(readFileSync(watchFile, 'utf8')) as Array<Record<string, unknown>>
+    writeFileSync(watchFile, `${JSON.stringify(settledRows.map((row) => ({ ...row, snapshotPending: token })), null, 2)}\n`)
+    await drainQueue()
+    messages = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
+    assert.equal(messages.length, 2, 'asking accepted plus uncleared token replays without a duplicate')
+    const clearedRows = JSON.parse(readFileSync(watchFile, 'utf8')) as Array<Record<string, unknown>>
+    assert.equal(clearedRows[0].snapshotPending, undefined)
+  })
+})
+
+test('creation parent watch does not misreport a synchronous launch failure as capacity queued', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home, PARENT)
+  seedSessionRecord(home, ID, PARENT, { status: 'queued', branch: '' })
+  await withHomeAsync(home, async () => {
+    await subscribeSessionWatch(PARENT, [ID], 'parent')
+    await drainQueue()
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 0,
+      'a missing launch payload is not a capacity decision')
+    const record = JSON.parse(readFileSync(sessionRecordPath(ID), 'utf8'))
+    assert.equal(record.status, 'queued')
+    assert.match(record.note, /authoritative resolved launch payload is missing/)
+    const rows = JSON.parse(readFileSync(sessionArtifactPath(ID, 'watchers.json'), 'utf8')) as Array<Record<string, unknown>>
+    assert.equal(rows[0].snapshotPending, undefined, 'the failed attempt retires its unpublishable initial debt')
+
+    assert.equal(markState('asking', { note: 'repair launch', sessionId: ID }), true)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.match(timelineEvents(PARENT).find((event) => event.kind === 'sent')?.text ?? '', / is asking/,
+      'later actionable state remains deliverable after synchronous launch failure')
+  })
+})
+
+test('retryable queued launch failure keeps the same initial debt until one working success', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  const bin = join(home, 'bin'), firstFailure = join(home, 'first-launch-failed')
+  mkdirSync(bin)
+  writeFileSync(join(bin, 'tmux'), `#!/bin/sh
+case " $* " in
+  *" new-session "*)
+    if [ ! -e ${JSON.stringify(firstFailure)} ]; then
+      : > ${JSON.stringify(firstFailure)}
+      exit 1
+    fi ;;
+esac
+exit 0
+`)
+  chmodSync(join(bin, 'tmux'), 0o755)
+  seedSessionRecord(home, PARENT)
+  seedSessionRecord(home, ID, PARENT, { status: 'queued', branch: '' })
+  withHome(home, () => writeFileSync(sessionArtifactPath(ID, 'launch'), 'retryable launch task'))
+  const previousPath = process.env.PATH
+  const originalLaunchReady = opencodeHarness.launchReady
+  process.env.PATH = `${bin}:${previousPath}`
+  opencodeHarness.launchReady = async () => ({ proof: { kind: 'retry-success' }, validate: async () => true })
+  try {
+    await withHomeAsync(home, async () => {
+      await subscribeSessionWatch(PARENT, [ID], 'parent')
+      const path = sessionArtifactPath(ID, 'watchers.json')
+      const firstToken = (JSON.parse(readFileSync(path, 'utf8')) as Array<Record<string, unknown>>)[0].snapshotPending
+      await drainQueue()
+      assert.equal(JSON.parse(readFileSync(sessionRecordPath(ID), 'utf8')).status, 'queued')
+      assert.equal((JSON.parse(readFileSync(path, 'utf8')) as Array<Record<string, unknown>>)[0].snapshotPending, firstToken,
+        'retryable launch failure retains the same durable debt')
+      assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 0)
+
+      await drainQueue()
+      for (let attempt = 0; attempt < 100 && timelineEvents(PARENT).filter((event) => event.kind === 'sent').length === 0; attempt++)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      const messages = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
+      assert.equal(messages.length, 1)
+      assert.match(messages[0].kind === 'sent' ? messages[0].text : '', / is working$/)
+      assert.doesNotMatch(messages[0].kind === 'sent' ? messages[0].text : '', / queued/)
+      assert.equal((JSON.parse(readFileSync(path, 'utf8')) as Array<Record<string, unknown>>)[0].snapshotPending, undefined)
+    })
+  } finally {
+    opencodeHarness.launchReady = originalLaunchReady
+    process.env.PATH = previousPath
+  }
+})
+
+test('watch delivery distinguishes relation snapshots from routine working transitions', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
   seedSessionRecord(home, PARENT)
   seedSessionRecord(home, ID, PARENT)
   await withHomeAsync(home, async () => {
-    assert.deepEqual(await subscribeSessionWatch(PARENT, [ID]), { watched: [ID] })
+    assert.deepEqual(await subscribeSessionWatch(PARENT, [ID], 'parent'), { watched: [ID] })
     assert.deepEqual(listSessionWatches(PARENT).map((watch) => watch.target), [ID])
-    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 1, 'installation queues the current state')
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 1, 'parent installation includes the already-working child snapshot')
     assert.equal(markState('awaiting', { proposal: 'merge', note: 'ready for review', sessionId: ID }), true)
     await new Promise((resolve) => setTimeout(resolve, 10))
     const messages = timelineEvents(PARENT).filter((event) => event.kind === 'sent')
-    assert.equal(messages.length, 2, 'the child transition must wake its managed parent through send')
+    assert.equal(messages.length, 2, 'a non-working child transition wakes its parent through send')
     const changed = messages.at(-1)
     assert.equal(changed?.kind === 'sent' && changed.from, ID)
     assert.match(changed?.kind === 'sent' ? changed.text : '', /review/)
-    assert.equal(cancelSessionWatch(PARENT, [ID]), 1)
-    assert.deepEqual(listSessionWatches(PARENT), [])
+    assert.equal(markState('active', { sessionId: ID }), true)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 2, 'parent supervision skips a child returning to working')
+
+    assert.deepEqual(await subscribeSessionWatch(PARENT, [ID]), { watched: [ID] })
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 3, 'manual installation adds one current-state snapshot')
     assert.equal(markState('asking', { note: 'need input', sessionId: ID }), true)
     await new Promise((resolve) => setTimeout(resolve, 10))
-    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 2, 'cancel ends later delivery')
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 4, 'overlapping sources still deliver one message')
+    assert.equal(markState('active', { sessionId: ID }), true)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 5, 'manual supervision keeps working transitions')
+
+    assert.equal(cancelSessionWatch(PARENT, [ID]), 1)
+    assert.deepEqual(listSessionWatches(PARENT).map((watch) => watch.target), [ID], 'cancelling manual watch leaves parent supervision intact')
+    assert.equal(markState('asking', { note: 'need input', sessionId: ID }), true)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 6, 'parent supervision continues for non-working declarations')
+    assert.equal(markState('active', { sessionId: ID }), true)
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.equal(timelineEvents(PARENT).filter((event) => event.kind === 'sent').length, 6, 'parent supervision still skips working after manual cancellation')
   })
 })
 

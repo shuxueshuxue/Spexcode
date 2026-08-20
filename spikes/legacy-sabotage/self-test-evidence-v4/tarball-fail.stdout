@@ -1,0 +1,19 @@
+legacy deletion gate
+repo=/tmp/spex-legacy-gate-self-test.rr2aZw/tarball
+trace_command=/bin/true 
+trace_exit=0
+test_only_legacy_evidence=0 (reported, excluded from static_legacy_imports)
+static_legacy_imports_prerequisite=MEASURED(none)
+legacy_dist_files_prerequisite=MEASURED(none)
+legacy_tarball_files_prerequisite=MEASURED(none)
+legacy_materialized_files_prerequisite=MEASURED(none)
+runtime_legacy_reads_prerequisite=MEASURED(none)
+--- dist legacy files ---
+dist: dist:pack-src/dist::legacy-hook.sh
+--- tarball legacy files ---
+tarball: tarball:/tmp/spex-legacy-gate-self-test.rr2aZw/tarball/legacy-gate-clean-1.0.0.tgz::package/dist/legacy-hook.sh
+static_legacy_imports=0
+legacy_dist_files=1
+legacy_tarball_files=1
+legacy_materialized_files=0
+runtime_legacy_reads=0

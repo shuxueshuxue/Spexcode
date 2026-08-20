@@ -47,7 +47,7 @@ const childApiBase = `http://127.0.0.1:${proxyPort}`
 // observe the source closure, compile it, then make the supervisor's normal zero-downtime swap. A source edit
 // must never cause a restart that still runs the old dist.
 const watchRoots = workspaceRoot
-  ? [sourceRoot, join(workspaceRoot, 'spec-forge', 'src'), join(workspaceRoot, 'spec-eval', 'src'), join(workspaceRoot, 'packages', 'spec-core', 'src')]
+  ? [sourceRoot, join(workspaceRoot, 'spec-forge', 'src'), join(workspaceRoot, 'spec-eval', 'src'), join(workspaceRoot, 'packages', 'spec-core', 'src'), join(workspaceRoot, 'packages', 'session-core', 'src')]
   : [here]
 function buildWorkspace(): boolean {
   if (!workspaceRoot) return true
@@ -211,10 +211,10 @@ const reapChild = () => { unregisterBackendInstance(instanceId); try { current?.
 if (publicCfg) {
   // public mode: the raw proxy stays on loopback; the password-gated gateway owns the public port.
   const distDir = resolveDistDir()
-  listenOrExit(proxy, proxyPort, { host: '127.0.0.1', label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: () => { recordEndpoint(childApiBase); console.log(`spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})`) } })
+  listenOrExit(proxy, proxyPort, { host: '127.0.0.1', label: 'supervisor (loopback proxy)', cleanup: reapChild, onListen: () => recordEndpoint(childApiBase), ready: `spec-cli supervisor on loopback :${proxyPort} (zero-downtime reloads, backend :${first.port})` })
   startGateway({ publicPort, upstreamPort: proxyPort, password: publicCfg.password, tls: publicCfg.tls, distDir, onBindFail: reapChild })
 } else {
-  listenOrExit(proxy, publicPort, { label: 'supervisor', cleanup: reapChild, onListen: () => { recordEndpoint(childApiBase); console.log(`spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})`) } })
+  listenOrExit(proxy, publicPort, { label: 'supervisor', cleanup: reapChild, onListen: () => recordEndpoint(childApiBase), ready: `spec-cli supervisor serving on http://localhost:${publicPort} (zero-downtime reloads, backend :${first.port})` })
 }
 startResourceMonitor()
 

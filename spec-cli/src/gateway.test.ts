@@ -2,7 +2,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import net from 'node:net'
-import { proxyHttp } from './gateway.js'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { gunzipSync, gzipSync } from 'node:zlib'
+import { proxyHttp, serveStatic } from './gateway.js'
 
 function listen(server: http.Server): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -19,17 +23,49 @@ async function waitFor(predicate: () => boolean, label: string, timeoutMs = 1500
   }
 }
 
-function getText(port: number, path: string): Promise<{ status: number; body: string }> {
+function getBuffer(port: number, path: string, headers: http.OutgoingHttpHeaders = {}): Promise<{
+  status: number
+  headers: http.IncomingHttpHeaders
+  body: Buffer
+}> {
   return new Promise((resolve, reject) => {
-    const request = http.get({ host: '127.0.0.1', port, path, headers: { connection: 'close' } }, (response) => {
-      let body = ''
-      response.setEncoding('utf8')
-      response.on('data', (chunk) => { body += chunk })
-      response.on('end', () => resolve({ status: response.statusCode ?? 0, body }))
+    const request = http.get({ host: '127.0.0.1', port, path, headers: { connection: 'close', ...headers } }, (response) => {
+      const chunks: Buffer[] = []
+      response.on('data', (chunk) => { chunks.push(Buffer.from(chunk)) })
+      response.on('end', () => resolve({ status: response.statusCode ?? 0, headers: response.headers, body: Buffer.concat(chunks) }))
     })
     request.on('error', reject)
   })
 }
+
+test('serveStatic applies the shared gzip policy without changing asset cache semantics', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'spex-gateway-gzip-'))
+  const source = Buffer.from(`const rows=[${Array.from({ length: 4000 }, (_, i) => `{id:${i},label:"row-${i % 37}"}`).join(',')}];`)
+  writeFileSync(join(dir, 'bundle.js'), source)
+  writeFileSync(join(dir, 'pixel.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+
+  const server = http.createServer((req, res) => serveStatic(req, res, dir, req.url || '/'))
+  const port = await listen(server)
+  t.after(() => { server.close(); rmSync(dir, { recursive: true, force: true }) })
+
+  const plain = await getBuffer(port, '/bundle.js')
+  const encoded = await getBuffer(port, '/bundle.js', { 'accept-encoding': 'gzip' })
+
+  assert.equal(plain.status, 200)
+  assert.deepEqual(plain.body, source)
+  assert.equal(plain.headers.vary, 'Accept-Encoding')
+  assert.equal(encoded.status, 200)
+  assert.equal(encoded.headers['content-encoding'], 'gzip')
+  assert.equal(encoded.headers.vary, 'Accept-Encoding')
+  assert.equal(encoded.headers['cache-control'], 'no-cache')
+  assert.deepEqual(encoded.body, gzipSync(source, { level: 9, memLevel: 5 }))
+  assert.deepEqual(gunzipSync(encoded.body), source)
+  assert.ok(encoded.body.length * 3 < source.length, `${encoded.body.length}/${source.length} must be strictly below one third`)
+
+  const binary = await getBuffer(port, '/pixel.png', { 'accept-encoding': 'gzip' })
+  assert.equal(binary.headers['content-encoding'], undefined)
+  assert.equal(binary.headers.vary, undefined)
+})
 
 test('proxyHttp pairs normal and abruptly-closed downstream/upstream lifetimes', async (t) => {
   let activeSse = 0
@@ -42,15 +78,26 @@ test('proxyHttp pairs normal and abruptly-closed downstream/upstream lifetimes',
 
   const upstream = http.createServer((req, res) => {
     if (req.url === '/normal') {
-      res.writeHead(200, { 'content-type': 'application/json' })
+      res.writeHead(200, { 'content-type': 'application/json', vary: 'Origin' })
       res.end('{"ok":true}')
       return
     }
     if (req.url === '/stream') {
       activeSse++
       res.once('close', () => { activeSse-- })
-      res.writeHead(200, { 'content-type': 'text/event-stream' })
+      res.writeHead(200, { 'content-type': 'text/event-stream', vary: 'Last-Event-ID' })
       res.write('data: ready\n\n')
+      return
+    }
+    if (req.url === '/already-encoded') {
+      const body = gzipSync('{"encoded":true}')
+      res.writeHead(200, { 'content-type': 'application/json', 'content-encoding': 'gzip', vary: 'Origin', 'content-length': body.length })
+      res.end(body)
+      return
+    }
+    if (req.url === '/binary') {
+      res.writeHead(200, { 'content-type': 'image/png' })
+      res.end(Buffer.from([0x89, 0x50, 0x4e, 0x47]))
       return
     }
     if (req.url === '/upload') {
@@ -95,10 +142,31 @@ test('proxyHttp pairs normal and abruptly-closed downstream/upstream lifetimes',
     upstream.close()
   })
 
-  assert.deepEqual(await getText(proxyPort, '/normal'), { status: 200, body: '{"ok":true}' })
+  const plain = await getBuffer(proxyPort, '/normal')
+  assert.equal(plain.body.toString(), '{"ok":true}')
+  assert.equal(plain.headers['content-encoding'], undefined)
+  assert.equal(plain.headers.vary, 'Origin, Accept-Encoding')
+
+  const encoded = await getBuffer(proxyPort, '/normal', { 'accept-encoding': 'gzip' })
+  assert.equal(gunzipSync(encoded.body).toString(), '{"ok":true}')
+  assert.equal(encoded.headers['content-encoding'], 'gzip')
+  assert.equal(encoded.headers.vary, 'Origin, Accept-Encoding')
+
+  const alreadyEncoded = await getBuffer(proxyPort, '/already-encoded', { 'accept-encoding': 'gzip' })
+  assert.equal(gunzipSync(alreadyEncoded.body).toString(), '{"encoded":true}')
+  assert.equal(alreadyEncoded.headers['content-encoding'], 'gzip')
+  assert.equal(alreadyEncoded.headers.vary, 'Origin')
+
+  const binary = await getBuffer(proxyPort, '/binary', { 'accept-encoding': 'gzip' })
+  assert.equal(binary.headers['content-encoding'], undefined)
+  assert.equal(binary.headers.vary, undefined)
 
   await new Promise<void>((resolve, reject) => {
-    const request = http.get({ host: '127.0.0.1', port: proxyPort, path: '/stream' }, (response) => {
+    const request = http.get({
+      host: '127.0.0.1', port: proxyPort, path: '/stream', headers: { 'accept-encoding': 'gzip' },
+    }, (response) => {
+      assert.equal(response.headers['content-encoding'], undefined)
+      assert.equal(response.headers.vary, 'Last-Event-ID')
       response.once('data', () => {
         response.destroy()
         request.destroy()

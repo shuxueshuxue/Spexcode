@@ -100,6 +100,13 @@ function flushExit(code = 0): Promise<never> {
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
 const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--ssh', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
+const EXPLICIT_BACKEND_ROUTE_FLAGS = ['api', 'port', 'password', 'insecure'] as const
+const EXPLICIT_BACKEND_VALUE_FLAGS = EXPLICIT_BACKEND_ROUTE_FLAGS
+  .filter((name) => VALUE_FLAGS.has(`--${name}`))
+  .map((name) => `--${name}`)
+const EXPLICIT_BACKEND_BARE_FLAGS = EXPLICIT_BACKEND_ROUTE_FLAGS
+  .filter((name) => !VALUE_FLAGS.has(`--${name}`))
+  .map((name) => `--${name}`)
 function positionals(from: number): string[] {
   const out: string[] = []
   for (let i = from; i < process.argv.length; i++) {
@@ -110,7 +117,7 @@ function positionals(from: number): string[] {
   return out
 }
 
-function rejectUnknownFlags(command: string, from: number, allowed: readonly string[], attached: readonly string[] = []): void {
+function rejectFlags(command: string, from: number, allowed: readonly string[], attached: readonly string[] = []): void {
   const known = new Set(allowed.map((name) => `--${name}`))
   for (let i = from; i < process.argv.length; i++) {
     const token = process.argv[i]
@@ -122,6 +129,14 @@ function rejectUnknownFlags(command: string, from: number, allowed: readonly str
     }
     if (VALUE_FLAGS.has(token)) i++
   }
+}
+
+function rejectUnknownFlags(command: string, from: number, allowed: readonly string[], attached: readonly string[] = []): void {
+  rejectFlags(command, from, allowed, attached)
+}
+
+function rejectUnknownBackendFlags(command: string, from: number, allowed: readonly string[], attached: readonly string[] = []): void {
+  rejectFlags(command, from, [...allowed, ...EXPLICIT_BACKEND_ROUTE_FLAGS], attached)
 }
 
 // `--children` deliberately has an optional value only in its attached form. A separated following token
@@ -157,8 +172,8 @@ function sessionSendUsage(detail: string, keys = false): never {
 }
 
 function parseSessionSendArgs(args: string[]): SessionSendArgs {
-  const valueFlags = new Set(['--api', '--port', '--keys', '--password', '--ssh'])
-  const bareFlags = new Set(['--insecure'])
+  const valueFlags = new Set([...EXPLICIT_BACKEND_VALUE_FLAGS, '--keys', '--ssh'])
+  const bareFlags = new Set(EXPLICIT_BACKEND_BARE_FLAGS)
   const values = new Map<string, string>()
   const positionals: string[] = []
   let endOfOptions = false
@@ -233,8 +248,8 @@ function sessionTargetUsage(verb: 'show' | 'close', detail: string): never {
 
 function parseSessionTargetArgs(verb: 'show' | 'close', args: string[]): SessionTargetArgs {
   const values = new Map<string, string>()
-  const valueFlags = new Set(['--api', '--port', '--password', '--ssh'])
-  const bareFlags = new Set(verb === 'show' ? ['--capture', '--json', '--insecure'] : ['--insecure'])
+  const valueFlags = new Set([...EXPLICIT_BACKEND_VALUE_FLAGS, '--ssh'])
+  const bareFlags = new Set([...EXPLICIT_BACKEND_BARE_FLAGS, ...(verb === 'show' ? ['--capture', '--json'] : [])])
   const positionals: string[] = []
   for (let i = 0; i < args.length; i++) {
     const token = args[i]
@@ -268,6 +283,7 @@ const SIGNPOSTS: Record<string, string> = {
   blob: 'spex evidence put|get',
   issues: 'spex issue — ls (was: bare issues) · show · open · reply · close · promote; on|off|status → the `issues.enabled` key in spexcode.json; `issues nudge` → spex internal nudge',
   forge: 'spex issue links [--pending] [--store <host>]  (--host is now --store)',
+  runtime: 'spex doctor repair app-server',
   new: 'spex session new',
   ls: 'spex session ls',
   watch: 'spex session watch',
@@ -397,7 +413,7 @@ async function stateKit() {
 // reach here — the signpost table above already exited.)
 if (cmd && cmd !== 'help' && (has('help') || process.argv.includes('-h'))) {
   const { commandHelp, overviewHelp } = await import('./help.js')
-  console.log(commandHelp(cmd, cmd === 'session' ? process.argv[3] : undefined) ?? overviewHelp())
+  console.log(commandHelp(cmd, cmd === 'session' || cmd === 'doctor' ? process.argv[3] : undefined) ?? overviewHelp())
   process.exit(0)
 }
 
@@ -827,7 +843,7 @@ if (cmd === 'serve') {
     }
     const newPositionals = positionals(4)
     const peerAnchor = parseSessionPeerAnchor('new', newPositionals)
-    rejectUnknownFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'name', 'base', 'api', 'port', 'ssh'])
+    rejectUnknownBackendFlags('spex session new', 4, ['prompt', 'prompt-file', 'launcher', 'name', 'base', 'ssh'])
     if (peerAnchor && newPositionals.length > 2) sessionPeerAnchorUsage('new', '--ssh accepts one full-id anchor and one inline prompt at most')
     const { createSession, ownSessionId, withPeerSenderHint } = await import('./sessions.js')
     const promptFile = flag('prompt-file')
@@ -880,7 +896,7 @@ if (cmd === 'serve') {
     // The backend's default projection excludes cold archives. --all and an explicit selector request the
     // history projection so an operator can still inspect or unarchive one deliberately.
     const selectors = positionals(4)
-    rejectUnknownFlags('spex session ls', 4, ['status', 'all', 'json', 'api', 'port', 'ssh', 'children'], ['children'])
+    rejectUnknownBackendFlags('spex session ls', 4, ['status', 'all', 'json', 'ssh', 'children'], ['children'])
     const peerAnchor = parseSessionPeerAnchor('ls', selectors)
     const children = childrenScopeOption()
     if (peerAnchor && selectors.length !== 1) sessionPeerAnchorUsage('ls', '--ssh accepts exactly one full-id project anchor, not session selectors')
@@ -935,7 +951,7 @@ if (cmd === 'serve') {
       console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked, true, scope))
     }
   } else if (sub === 'resources') {
-    rejectUnknownFlags('spex session resources', 4, ['json', 'api', 'port'])
+    rejectUnknownBackendFlags('spex session resources', 4, ['json'])
     const { clientResources } = await import('./client.js')
     const report = await clientResources()
     if (has('json')) console.log(JSON.stringify(report, null, 2))
@@ -1139,7 +1155,7 @@ if (cmd === 'serve') {
       if (!closed) { console.error(`spex session close: no such session ${full} (record remains; no close was committed)`); process.exit(1) }
       console.log(`closed ${full}`)
     } else if (sub === 'quarantine') {
-      rejectUnknownFlags('spex session quarantine', 4, ['adapter', 'thread', 'tmux', 'worktree', 'branch', 'restore', 'api', 'port'])
+      rejectUnknownBackendFlags('spex session quarantine', 4, ['adapter', 'thread', 'tmux', 'worktree', 'branch', 'restore'])
       if (!id) { console.error('usage: spex session quarantine <ID> --adapter <harness> [--thread <native-id>] --tmux <session-id> --worktree <absent-path> --branch <absent-branch> (--thread is adapter-native; omit it for Claude)') ; process.exit(2) }
       if (has('restore')) {
         // Quarantine addresses an unreadable row which selector resolution intentionally excludes. Both the
@@ -1156,7 +1172,7 @@ if (cmd === 'serve') {
         console.log(`quarantined ${quarantined.id} -> ${quarantined.bundle}`)
       }
     } else if (sub === 'reparent') {
-      rejectUnknownFlags('spex session reparent', 4, ['to', 'api', 'port'])
+      rejectUnknownBackendFlags('spex session reparent', 4, ['to'])
       const children = positionals(4)
       const to = flag('to')
       if (!children.length || !to) {
@@ -1347,41 +1363,50 @@ if (cmd === 'serve') {
     console.log(`sock=${quote(endpoint.socketPath)}; pid=${quote(endpoint.pidFile)}; receipt=${quote(endpoint.receiptFile)}; log=${quote(endpoint.logFile)}; export SPEXCODE_CODEX_GENERATION=${quote(endpoint.id)}`)
   } else if (sub === 'codex-launch') {
     // BACKEND-owned codex thread. On the shared per-project app-server: thread/start { cwd = this worktree }
-    // (codex loads that worktree's config/hooks/AGENTS.md), store the new id on the governed record (keyed by
-    // SPEXCODE_SESSION_ID), fire the launch prompt as the FIRST turn — materializing the rollout — and print the
-    // thread id. The launch script then `resume`s it in the visible TUI.
+    // (codex loads that worktree's config/hooks/AGENTS.md), fire the launch prompt as the FIRST turn —
+    // materializing the rollout — then stage the id + exact-payload proof for the session lifecycle owner and
+    // print the thread id. The launch script then `resume`s it in the visible TUI.
     const { codexStartThread, codexTurn, waitForCodexRollout, codexBinary, codexSupportsBypassHookTrust, codexLauncherThreadPolicy } = await import('./harness.js')
-    const { markHarnessSessionId } = await import('./sessions.js')
+    const { existingHarnessLaunchTarget, stageHarnessLaunchProof } = await import('./sessions.js')
     const sock = process.argv[4], cwd = process.argv[5]
     const prompt = process.argv.slice(6).join(' ')
     if (!sock || !cwd) { console.error('usage: spex internal codex-launch <sock> <cwd> [prompt...]'); process.exit(2) }
-    // On the bypass-trust path (the codex install supports the flag → materialize skipped writeCodexTrust's hash),
-    // the thread the BACKEND owns must carry `bypass_hook_trust` in thread/start's config so the app-server fires
-    // the worktree's local hooks — mirror materialize's capability decision so the two stay in lockstep.
-    const launcherCmd = process.env.SPEXCODE_CODEX_CMD || 'codex'
-    const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(launcherCmd))
-    // The governed record id rides into the thread's own shell environment (shell_environment_policy.set), so
-    // every command this thread spawns knows which session it is — the codex equivalent of the launch-injected
-    // id claude gets. codex-launch is exactly where both ids are known ([[harness-adapter]]).
-    const ownId = process.env.SPEXCODE_SESSION_ID?.trim()
-    const r = await codexStartThread(sock, cwd, bypassHookTrust, ownId ? { SPEXCODE_SESSION_ID: ownId } : undefined, codexLauncherThreadPolicy(launcherCmd))
-    if (!r.ok) { console.error(r.error); process.exit(1) }
-    if (prompt) {
-      const t = await codexTurn(sock, r.threadId, prompt, cwd)
-      if (!t.ok) { console.error(t.error); process.exit(1) }
-      // The visible TUI resumes this thread from its ON-DISK rollout; a freshly-spawned app-server acks the turn
-      // but persists the rollout a few seconds LATE (verified live: the SAME thread's file lands at ~2-4s, not
-      // lost). WAIT for it to land BEFORE storing the id / printing it, else FAIL LOUD — never store a
-      // non-resumable harness_session_id (that permanently wedges every reopen). The 15s budget exceeds launch.sh's
-      // fast-fail threshold, so a real failure exits past it and the retry loop won't spray duplicate-prompt threads.
-      if (!await waitForCodexRollout(r.threadId, 20000)) {
-        console.error(`codex thread ${r.threadId} started but persisted no rollout within 20s — app-server not ready; not storing a non-resumable id`)
-        process.exit(1)
-      }
-    }
     const sid = process.env.SPEXCODE_SESSION_ID
-    if (sid) markHarnessSessionId(sid, r.threadId)
-    console.log(r.threadId)
+    // The visible TUI can fail after codex-launch has already staged the native id and first-turn proof
+    // (for example, a remote-workspace validation error). The bounded shell retry re-enters this command;
+    // reuse the proven target instead of minting a second thread or asking stageHarnessLaunchProof to consume
+    // a payload that the lifecycle owner may already have committed.
+    const existingTarget = sid ? existingHarnessLaunchTarget(sid) : null
+    if (existingTarget) {
+      console.log(existingTarget)
+    } else {
+      // On the bypass-trust path (the codex install supports the flag → materialize skipped writeCodexTrust's hash),
+      // the thread the BACKEND owns must carry `bypass_hook_trust` in thread/start's config so the app-server fires
+      // the worktree's local hooks — mirror materialize's capability decision so the two stay in lockstep.
+      const launcherCmd = process.env.SPEXCODE_CODEX_CMD || 'codex'
+      const bypassHookTrust = codexSupportsBypassHookTrust(codexBinary(launcherCmd))
+      // The governed record id rides into the thread's own shell environment (shell_environment_policy.set), so
+      // every command this thread spawns knows which session it is — the codex equivalent of the launch-injected
+      // id claude gets. codex-launch is exactly where both ids are known ([[harness-adapter]]).
+      const ownId = process.env.SPEXCODE_SESSION_ID?.trim()
+      const r = await codexStartThread(sock, cwd, bypassHookTrust, ownId ? { SPEXCODE_SESSION_ID: ownId } : undefined, codexLauncherThreadPolicy(launcherCmd))
+      if (!r.ok) { console.error(r.error); process.exit(1) }
+      if (prompt) {
+        const t = await codexTurn(sock, r.threadId, prompt, cwd)
+        if (!t.ok) { console.error(t.error); process.exit(1) }
+        // The visible TUI resumes this thread from its ON-DISK rollout; a freshly-spawned app-server acks the turn
+        // but persists the rollout a few seconds LATE (verified live: the SAME thread's file lands at ~2-4s, not
+        // lost). WAIT for it to land BEFORE storing the id / printing it, else FAIL LOUD — never store a
+        // non-resumable harness_session_id (that permanently wedges every reopen). The 15s budget exceeds launch.sh's
+        // fast-fail threshold, so a real failure exits past it and the retry loop won't spray duplicate-prompt threads.
+        if (!await waitForCodexRollout(r.threadId, 20000)) {
+          console.error(`codex thread ${r.threadId} started but persisted no rollout within 20s — app-server not ready; not storing a non-resumable id`)
+          process.exit(1)
+        }
+      }
+      if (sid) stageHarnessLaunchProof(sid, r.threadId, prompt)
+      console.log(r.threadId)
+    }
   } else if (sub === 'opencode-capture') {
     // opencode MINTS its own session id (no launch flag pins it), so the generated plugin's FIRST event calls
     // this to store that id as harness_session_id on the governed record (SPEXCODE_SESSION_ID from the launch

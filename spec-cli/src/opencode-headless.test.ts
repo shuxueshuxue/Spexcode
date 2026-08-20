@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { opencodeHeadlessLaunchCommand, opencodeHeadlessWakeCommand } from './opencode-headless.js'
+import { opencodeHeadlessColdRuntime, opencodeHeadlessLaunchCommand, opencodeHeadlessWakeCommand } from './opencode-headless.js'
 import { HARNESSES, opencodeHarness, opencodeHeadlessHarness, rvSock } from './harness.js'
 
 const waitFor = async (check: () => boolean, timeoutMs = 5_000) => {
@@ -28,10 +28,26 @@ test('opencode-headless is an independent adapter with OpenCode materialization 
   assert.equal(opencodeHeadlessHarness.resumeArg({ session: 'abc', harnessSessionId: 'oc_1' }), '--resume oc_1')
   assert.equal(opencodeHeadlessHarness.resumeArg({ session: 'abc' }), '--continue')
   assert.equal(opencodeHeadlessHarness.headless, true)
+  assert.equal(opencodeHeadlessHarness.runtimeOwnership, 'leaf')
   assert.equal(opencodeHeadlessHarness.ownsRendezvous, true)
-  assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc' }, false), 'online')
+  assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc' }, true), 'online')
+  assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc' }, false), 'offline')
   assert.equal(opencodeHeadlessHarness.liveness({ session: 'abc', stopped: true }, false), 'offline')
   assert.match(opencodeHeadlessHarness.launchCmd('abc', '/runtime', 'opencode-custom --auto'), /__spex_cmd=\(opencode-custom --auto\)/)
+})
+
+test('OpenCode headless cold proof requires the rendezvous listener to be absent', async (t) => {
+  const id = `opencode-cold-${process.pid}`
+  const socket = rvSock(id)
+  rmSync(socket, { force: true })
+  assert.deepEqual(await opencodeHeadlessColdRuntime({ session: id }), { ok: true })
+
+  const server = createServer()
+  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socket, resolve) })
+  t.after(() => { server.close(); rmSync(socket, { force: true }) })
+  assert.deepEqual(await opencodeHeadlessColdRuntime({ session: id }), {
+    ok: false, error: 'opencode-headless rendezvous is still live',
+  })
 })
 
 test('launch and wake commands preserve the native id capture/resume markers and ordinary output format', () => {
@@ -109,7 +125,7 @@ test('an idle turn respawns opencode run in the session tmux home and a missing 
   const fake = join(dir, 'fake-opencode')
   const log = join(dir, 'wake.json')
   writeFileSync(fake, `#!/usr/bin/env node
-import { writeFileSync } from 'node:fs'
+const { writeFileSync } = require('node:fs')
 writeFileSync(${JSON.stringify(log)}, JSON.stringify({ argv: process.argv.slice(2), sid: process.env.SPEXCODE_SESSION_ID, sock: process.env.CLAUDE_BG_RENDEZVOUS_SOCK }))
 `)
   chmodSync(fake, 0o755)

@@ -10,10 +10,10 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 
 const CLI = fileURLToPath(new URL('../bin/spex.mjs', import.meta.url))
 const HOOK_TEMPLATES = fileURLToPath(new URL('../templates/hooks', import.meta.url))
@@ -123,14 +123,31 @@ test('init → materialize → uninstall forgets every derived artifact for Clau
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
-    // The host predates SpexCode. All of these bytes are user-owned and tracked.
+    // The host predates SpexCode. All of these bytes are user-owned and tracked — including the harness's own
+    // config file (the shim's landing point: their permissions, env and hooks) and a skill whose name happens
+    // to collide with one SpexCode generates. Adoption must leave every byte of it alone.
+    const hostShim = {
+      permissions: { allow: ['Bash(npm run test:*)'] },
+      env: { MY_VAR: '1' },
+      hooks: {
+        PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo my-own-guard' }] }],
+        SessionEnd: [{ hooks: [{ type: 'command', command: 'echo bye' }] }],
+      },
+    }
     const userFiles = {
       'CLAUDE.md': '# Claude team notes\nkeep claude prose\n',
       'AGENTS.md': '# Agent team notes\nkeep agent prose\n',
       '.gitignore': 'node_modules/\ndist/\n',
       'README.md': `# ${row.id} host\n`,
+      // written in the writer's own 2-space shape so the round trip is byte-comparable (a merge re-serializes;
+      // it preserves every value, not hand-compacted layout).
+      [row.shim]: JSON.stringify(hostShim, null, 2) + '\n',
+      [`${row.home}/skills/house-rules/SKILL.md`]: 'my own house-rules skill: keep exactly\n',
     }
-    for (const [path, content] of Object.entries(userFiles)) writeFileSync(join(proj, path), content)
+    for (const [path, content] of Object.entries(userFiles)) {
+      mkdirSync(dirname(join(proj, path)), { recursive: true })
+      writeFileSync(join(proj, path), content)
+    }
     const excludePath = join(proj, '.git', 'info', 'exclude')
     const attributesPath = join(proj, '.git', 'info', 'attributes')
     writeFileSync(excludePath, 'user-local/\n')
@@ -158,15 +175,40 @@ tools:
 
 Read the requested change and report concrete findings.
 `)
+    const skillNode = join(proj, '.spec', 'project', '.plugins', 'skills', 'house-rules')
+    mkdirSync(skillNode, { recursive: true })
+    writeFileSync(join(skillNode, 'spec.md'), `---
+title: house-rules
+status: active
+surface: skill
+desc: The house rules for this repo.
+---
+# house-rules
+
+Follow the house rules.
+`)
     g('add', '.spec', 'spexcode.json')
     g('commit', '-qm', 'adopt tracked intent', '--no-verify')
     assert.ok(existsSync(hookTrace), `${row.id}: reference hook invoked the branch-pinned CLI shim`)
-    spex('materialize')
+    // the collision report is a WARNING (stderr, like every other materialize diagnostic), so read both streams.
+    const remat = spawnSync(process.execPath, [CLI, 'materialize'], { cwd: proj, env, encoding: 'utf8' })
+    const rematerialized = `${remat.stdout}${remat.stderr}`
 
     const specBefore = snapshotTree(join(proj, '.spec'))
     const configBefore = readFileSync(join(proj, 'spexcode.json'))
     assert.ok(readFileSync(join(proj, row.contract), 'utf8').includes('spexcode:start'), `${row.id}: contract materialized into pre-existing prose`)
     assert.ok(existsSync(join(proj, row.shim)), `${row.id}: shim materialized`)
+    const shimNow = JSON.parse(readFileSync(join(proj, row.shim), 'utf8'))
+    assert.deepEqual(shimNow.permissions, hostShim.permissions, `${row.id}: their permissions survived adoption`)
+    assert.deepEqual(shimNow.env, hostShim.env, `${row.id}: their env survived adoption`)
+    assert.deepEqual(shimNow.hooks.SessionEnd, hostShim.hooks.SessionEnd, `${row.id}: an event we never bind survived`)
+    assert.ok(shimNow.hooks.PreToolUse.some((g: any) => g.hooks.some((h: any) => String(h.command).includes('dispatch.sh'))),
+      `${row.id}: our PreToolUse entry landed beside theirs`)
+    assert.ok(shimNow.hooks.PreToolUse.some((g: any) => g.hooks.some((h: any) => h.command === 'echo my-own-guard')),
+      `${row.id}: their PreToolUse guard is still there`)
+    assert.equal(readFileSync(join(proj, `${row.home}/skills/house-rules/SKILL.md`), 'utf8'),
+      'my own house-rules skill: keep exactly\n', `${row.id}: a same-named user skill is never overwritten`)
+    assert.match(rematerialized, /left 1 file\(s\) untouched[\s\S]*house-rules/, `${row.id}: the collision is reported, not silent`)
     assert.ok(existsSync(join(proj, row.skill)), `${row.id}: skill materialized`)
     if (row.agent) assert.ok(existsSync(join(proj, row.agent)), 'claude: agent materialized from tracked plugin intent')
     else assert.ok(!existsSync(join(proj, row.home, 'agents')), 'codex: adapter declares no agent primitive')
@@ -251,12 +293,17 @@ Read the requested change and report concrete findings.
     for (const [path, content] of Object.entries(userFiles)) {
       assert.equal(readFileSync(join(proj, path), 'utf8'), content, `${row.id}: user ${path} bytes preserved`)
     }
-    assert.ok(!existsSync(join(proj, row.shim)), `${row.id}: shim removed`)
-    assert.ok(!existsSync(legacySkill) && !existsSync(staleSkill), `${row.id}: live-name legacy and stamped stale skills removed`)
+    assert.ok(existsSync(join(proj, row.shim)), `${row.id}: a shim file carrying THEIR config is never deleted`)
+    assert.deepEqual(JSON.parse(readFileSync(join(proj, row.shim), 'utf8')), hostShim, `${row.id}: uninstall restores their config exactly`)
+    // Identity stamps, not current policy, drive forgetting — in BOTH directions. A stamped artifact goes even
+    // when its node was renamed away; an UNSTAMPED file at a live name is not provably ours and stays.
+    assert.ok(existsSync(legacySkill), `${row.id}: an unstamped file at a live name is spared`)
+    assert.ok(!existsSync(staleSkill), `${row.id}: a stamped stale skill is removed`)
     assert.equal(readFileSync(userSkill, 'utf8'), 'user skill: keep exactly\n', `${row.id}: foreign skill preserved`)
     assert.equal(readFileSync(userSettings, 'utf8'), '{"keep":true}\n', `${row.id}: foreign harness config preserved`)
     if (row.agent) {
-      assert.ok(!existsSync(join(proj, row.agent)) && !existsSync(join(proj, row.home, 'agents', 'renamed-away.md')), 'claude: legacy and stamped agents removed')
+      assert.ok(existsSync(join(proj, row.agent)), 'claude: an unstamped agent at a live name is spared')
+      assert.ok(!existsSync(join(proj, row.home, 'agents', 'renamed-away.md')), 'claude: a stamped stale agent is removed')
       assert.equal(readFileSync(join(proj, row.home, 'agents', 'user-owned.md'), 'utf8'), 'user agent: keep exactly\n', 'claude: foreign agent preserved')
     }
     assert.ok(!existsSync(store), `${row.id}: whole current/legacy per-project runtime store removed`)

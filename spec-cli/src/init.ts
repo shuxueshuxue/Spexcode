@@ -129,7 +129,7 @@ export async function specInit(targetArg: string | undefined, presetArg?: string
   const flagRaw = (harnessArg ?? '').trim() ? parseHarnessFlag(harnessArg!.trim()) : null
   const chosenHarnesses = flagRaw ?? readConfig(targetDir).harnesses ?? null
   if (chosenHarnesses === null) {
-    console.error(`spex init: --harness is required — name the harness(es) this repo delivers into, e.g. \`spex init --harness claude\`. Known native ids: ${NATIVE_HARNESS_IDS.join(', ')} (comma-separate several; a plugin bundle: --harness plugin:<folder>). A pre-existing spexcode.json "harnesses" field also satisfies this.`)
+    console.error(`spex init: --harness is required — name the harness(es) this repo delivers into, e.g. \`spex init --harness claude\`. Known native ids: ${NATIVE_HARNESS_IDS.join(', ')} (comma-separate several; a plugin bundle: --harness plugin:<folder>). Use --harness none to adopt the spec tree and its lint WITHOUT writing into any agent's config. A pre-existing spexcode.json "harnesses" field also satisfies this.`)
     process.exit(1)
   }
   let selectedNativeEvents: ReadonlySet<string> | null = null

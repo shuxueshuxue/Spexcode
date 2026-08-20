@@ -81,6 +81,11 @@ reads the same [[harness-adapter]] registry [[harness-delivery]] materializes th
   shims, same-named skills, and total loose/plugin delivery sources; ANY channel >1 is a conflict. `spex doctor --conflicts`
   runs JUST this check, exits non-zero on a live double-delivery, and prints the repair (remove one bundle, OR
   switch `harnesses` to a plugin target so materialize prunes the loose copy, OR uninstall the loose copy).
+  The same report also names the OPPOSITE collision — a skill/agent path a live spec node claims that already
+  holds a file the user wrote (no `GENERATED_MARK`). [[harness-delivery]] skips those rather than overwrite
+  them, so the node quietly never reaches that harness; naming it here is where somebody asking "does this
+  clash with my skills?" finds the answer. It is a REPORT, not a conflict verdict: nothing is broken, one
+  node just is not delivered, and the remedy (rename one side) is theirs to choose.
 
 Each layer gets a verdict (enforced / advisory-only / absent / conflict) plus a footprint audit of every
 materialized artifact and any slot held by something not ours. Bare doctor and its `--contract` and

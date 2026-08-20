@@ -19,13 +19,25 @@ because [[harness-delivery]]'s `materialize` re-runs at every git-native anchor 
 the intent must live where every re-materialize re-reads it, not in a command a human has to remember.
 
 The vocabulary is small. Each member is either a NATIVE harness id (`claude`, `codex` — the ids the
-[[harness-adapter]] registers) or a PLUGIN bundle. **There is no default set**: the field is REQUIRED, an
+[[harness-adapter]] registers) or a PLUGIN bundle; the whole list may also be empty. **There is no default
+set**: the field is REQUIRED, an
 explicit adopter choice that [[spex-init]] demands up front (`spex init --harness <ids>`, the CLI spelling
-`parseHarnessFlag` translates — `plugin:<folder>` for a bundle) and stamps into `spexcode.json`. A missing
+`parseHarnessFlag` translates — `plugin:<folder>` for a bundle, `none` for the empty set) and stamps into
+`spexcode.json`. A missing
 field fails loud with that stamp as the named repair. The old zero-config "deliver to every native harness"
 was retired because it scales exactly wrong: every harness added to the registry would silently start
 littering every adopter's tree — and global tool configs (`~/.codex`, …) — with artifacts for CLIs they
 never installed.
+
+**The EMPTY set is a legal, explicit choice.** `"harnesses": []` (CLI: `spex init --harness none`) means
+deliver into NO harness: the spec tree, `spex spec lint`, the graph and the git hooks are adopted, and not one
+byte is written into any agent's config — no contract block, no shim, no skills, no trust. That is the L0-only
+posture the layer model already promises, and without it a repo whose agent SpexCode does not adapt could not
+adopt at all. It is sharply distinct from a MISSING field: `[]` is somebody saying "none", `undefined` is
+somebody who never chose, and only the second is an error. Nothing downstream is special-cased for it —
+`partitionHarnesses` simply selects nothing, so the erase phase prunes whatever a previous selection delivered
+and the published allowlist admits nothing. `none` is a whole-selection word, never a member: mixing it with a
+real target is rejected rather than quietly resolved.
 
 Three invariants are enforced fail-loud — an illegal set aborts `materialize`/`spex init` with a stated reason,
 never a silent or partial delivery. A missing field is the third: same loud abort, repair named above.

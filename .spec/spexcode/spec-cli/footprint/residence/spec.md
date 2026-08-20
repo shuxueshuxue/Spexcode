@@ -34,10 +34,18 @@ The four kinds, each with a FIXED track/transport fact (no votes anywhere):
   no configuration can untrack them ("untrack the spec" is unsayable in the schema). Wanting spec data off
   the SHARED REMOTE is a different question with a different answer: change the node's git HOME, never its
   tracking — that design is [[spec-local]] (a private overlay root that is its own git repository; pending).
-- **Machine facts** — `spexcode.local.json`, the hook shims (`.claude/settings.json`, `.codex/hooks.json`),
-  plugin bundles (they bake this install's paths): NEVER tracked; ignored by the materialized tree's working
-  `.gitignore` projection. Truly checkout-invariant residue (`spexcode.local.json`, `.worktrees/`, `.session`)
-  keeps the common per-clone exclude.
+- **Machine facts** — `spexcode.local.json`, the hook shims, plugin bundles (they bake this install's
+  paths): NEVER tracked; ignored by the materialized tree's working `.gitignore` projection. Truly
+  checkout-invariant residue (`spexcode.local.json`, `.worktrees/`, `.session`) keeps the common per-clone
+  exclude. **A shim file is a machine fact only while it is WHOLLY OURS.** Some harnesses discover their hooks
+  in a file that is also the user's project config — `.claude/settings.json`, `.codex/hooks.json`,
+  `.zcode/settings.json` carry their permissions, env, statusLine and their own hooks. There the shim is
+  co-owned, not owned ([[harness-adapter]]'s `shimOwnership`), and its residence is the SAME live content fact
+  a contract file's is: nothing of theirs in it → hidden like any machine fact; their content present, or the
+  file already tracked → left VISIBLE, because hiding a file the user owns is data-loss shaped. A visible shim
+  carries our absolute toolchain paths inside a file they may commit, so materialize says so once. The other
+  harnesses land in a spexcode-named file of our own (`.opencode/plugins/spexcode.ts`,
+  `.pi/extensions/spexcode.ts`), which is unconditionally ours.
 - **Materialized artifacts** — the contract blocks in CLAUDE.md/AGENTS.md and the materialized
   skills/agents: NEVER tracked; hidden by the same tree-local working `.gitignore` projection. That projection
   is itself managed text: a tracked host `.gitignore` keeps pristine index/history bytes through

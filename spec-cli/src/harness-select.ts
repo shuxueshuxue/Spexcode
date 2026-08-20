@@ -21,12 +21,18 @@ const KNOWN: readonly string[] = HARNESSES.map((h) => h.id)
 // the one-line repair every missing-selection error carries — the field is REQUIRED, never defaulted,
 // because with many harnesses a silent "deliver everywhere" would litter the adopter's tree with artifacts
 // for tools they never installed.
-const MISSING = `spexcode.json has no "harnesses" field — the delivery targets are an EXPLICIT choice, never a default. Declare it, e.g. "harnesses": ["claude"] — members are native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}. Fresh adoption: \`spex init --harness <ids>\` stamps it.`
+const MISSING = `spexcode.json has no "harnesses" field — the delivery targets are an EXPLICIT choice, never a default. Declare it, e.g. "harnesses": ["claude"] — members are native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}, and [] means deliver into NO harness (the L0-only posture, \`spex init --harness none\`). Fresh adoption: \`spex init --harness <ids>\` stamps it.`
+
+// the CLI spelling of the empty set. `--harness none` is a whole-selection word, not a member: mixing it with
+// a real target is a contradiction, so it only translates when it IS the entire flag (otherwise it falls
+// through as an unknown id and resolveHarnessTargets says why).
+const NO_DELIVERY = 'none'
 
 // parse `spex init --harness <spec>` into the raw JSON members the `harnesses` field carries: a comma-
 // separated list where `plugin:<folder>` means a plugin target and anything else is a native id. Pure
 // spelling translation — legality (unknown ids, plugin exclusivity) stays with resolveHarnessTargets.
 export function parseHarnessFlag(spec: string): unknown[] {
+  if (spec.trim() === NO_DELIVERY) return []
   return spec.split(',').map((s) => s.trim()).filter(Boolean)
     .map((s) => (s.startsWith('plugin:') ? { plugin: s.slice('plugin:'.length) } : s))
 }
@@ -38,15 +44,21 @@ export function resolveHarnessTargets(raw: unknown): HarnessTarget[] {
   if (raw === undefined || raw === null) throw new Error(MISSING)
   if (!Array.isArray(raw))
     throw new Error(`spexcode.json "harnesses" must be an ARRAY of targets (got ${typeof raw}). Members are native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}.`)
-  if (raw.length === 0)
-    throw new Error(`spexcode.json "harnesses" is EMPTY — list at least one target: native ids (${KNOWN.join(', ')}) or {"plugin":"<folder>"}.`)
+  // THE EMPTY SET IS A LEGAL, EXPLICIT CHOICE: deliver into no harness at all. That is the L0-only posture —
+  // the spec tree, the lint, and the git hooks, with zero artifacts written into any agent's config. It is
+  // distinct from a MISSING field (undefined/null, rejected above): [] is somebody saying "none", not
+  // somebody forgetting to choose. Everything downstream already handles it — materialize's erase phase
+  // prunes whatever a previous selection delivered, and the published allowlist admits nothing.
+  if (raw.length === 0) return []
   const targets: HarnessTarget[] = []
   for (const m of raw) {
     if (typeof m === 'string') {
       if (m === 'plugin')
         throw new Error(`spexcode.json "harnesses": a plugin target needs an EXPLICIT landing folder — write {"plugin":"<folder>"} (e.g. {"plugin":".adopter-a"}), not the bare string "plugin", because each host agent reads a different plugins dir.`)
+      if (m === NO_DELIVERY)
+        throw new Error(`spexcode.json "harnesses": "${NO_DELIVERY}" is not a member — it is the CLI spelling of the WHOLE selection being empty. Write "harnesses": [] for no delivery, or drop "${NO_DELIVERY}" and keep the real targets (\`spex init --harness none\` cannot be combined with another id).`)
       if (!KNOWN.includes(m))
-        throw new Error(`spexcode.json "harnesses": unknown harness id "${m}" — known native ids are ${KNOWN.join(', ')}, or use {"plugin":"<folder>"}.`)
+        throw new Error(`spexcode.json "harnesses": unknown harness id "${m}" — known native ids are ${KNOWN.join(', ')}, or use {"plugin":"<folder>"}; [] (\`--harness ${NO_DELIVERY}\`) delivers into no harness at all.`)
       targets.push({ kind: 'native', id: m as HarnessId })
     } else if (m && typeof m === 'object' && !Array.isArray(m) && 'plugin' in m) {
       const folder = (m as { plugin?: unknown }).plugin

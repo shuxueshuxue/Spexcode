@@ -430,6 +430,35 @@ test('harness selection chain: a codex-only repo NEVER grows .claude — init, m
   assert.ok(existsSync(join(wt, '.codex', 'hooks.json')) && readFileSync(join(wt, 'AGENTS.md'), 'utf8').includes('spexcode:start'), 'worktree: codex delivered')
 })
 
+test('the L0-only posture: `--harness none` adopts the spec tree and writes NOTHING into any agent config', { skip: !gitAvailable() && 'git not available' }, () => {
+  const { proj, g, spex } = makeBareRepo('spex-l0only-')
+  g('add', '-A'); g('commit', '-qm', 'init')
+  spex(proj, 'init', '.', '--harness', 'none')
+
+  assert.deepEqual(JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8')).harnesses, [], '`none` stamps the empty set')
+  assert.ok(existsSync(join(proj, '.spec', 'project', 'spec.md')), 'the spec tree is seeded')
+  assert.ok(existsSync(join(proj, '.git', 'hooks', 'pre-commit')), 'the git hooks — the L0 gate — are installed')
+  // not one byte into any agent's config, and no ignore file whose whole content is a rule ignoring itself.
+  for (const artifact of ['.claude', '.codex', '.opencode', '.pi', '.zcode', 'CLAUDE.md', 'AGENTS.md', '.gitignore'])
+    assert.ok(!existsSync(join(proj, artifact)), `no ${artifact}`)
+  // and the read side — the whole point of adopting L0 — works with zero materialized artifacts.
+  g('add', '.spec', 'spexcode.json'); g('commit', '-qm', 'adopt', '--no-verify')
+  assert.doesNotThrow(() => spex(proj, 'spec', 'lint'), 'lint exits clean on a repo with no harness delivery')
+  assert.ok(JSON.parse(spex(proj, 'graph', '--json')).nodes.length > 0, 'the graph reads')
+
+  // switching a harness ON later is the ordinary selection change, no re-adoption.
+  writeFileSync(join(proj, 'spexcode.json'),
+    JSON.stringify({ ...JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8')), harnesses: ['claude'] }, null, 2) + '\n')
+  spex(proj, 'materialize')
+  assert.ok(readFileSync(join(proj, 'CLAUDE.md'), 'utf8').includes('spexcode:start'), 'selecting claude later delivers it')
+  // ...and back off again prunes what it delivered.
+  writeFileSync(join(proj, 'spexcode.json'),
+    JSON.stringify({ ...JSON.parse(readFileSync(join(proj, 'spexcode.json'), 'utf8')), harnesses: [] }, null, 2) + '\n')
+  spex(proj, 'materialize')
+  assert.ok(!existsSync(join(proj, 'CLAUDE.md')), 'deselecting everything prunes the contract')
+  assert.ok(!existsSync(join(proj, '.claude', 'settings.json')), 'deselecting everything prunes the shim')
+})
+
 test('harness selection is persistent + self-healing at the git-native anchors: narrowing `harnesses` prunes on the next anchor materialize', { skip: !gitAvailable() && 'git not available' }, () => {
   const { proj, g, spex } = makeBareRepo('spex-narrow-')
   g('add', '-A'); g('commit', '-qm', 'init')

@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path'
 import { platform, tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { execFileSync } from 'node:child_process'
-import { activeTurnIdFromThread, assertRvSockPath, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
+import { activeTurnIdFromThread, assertRvSockPath, codexAppServerSock, codexAppServerPid, codexAppServerReceipt, codexSharedRuntimeProbe, codexBinary, codexHandshakeMessages, codexInjectMessage, codexLoadedReferenceIds, codexThreadList, codexTurn, codexTurnFailureObserver, CODEX_THREAD_SOURCE_KINDS, codexHarness, claudeHarness, opencodeHarness, piHarness, zcodeHarness, claudeHeadlessHarness, codexHeadlessHarness, opencodeHeadlessHarness, piHeadlessHarness, codexLaunchCommand, sessionIdentityEnvVars, codexLauncherThreadPolicy, codexStartThread, codexStartThreadParams, paneTreeRunsCodex, codexRolloutExists, writeManagedBlock, removeManagedBlock, writeManagedJsonHooks, removeManagedJsonHooks, sharedShimHasHostContent, GENERATED_MARK, launcherList, dashboardLauncherList, resolveLauncher, defaultLauncher, launcherDefault, writeCodexTrust, rendezvousListening, rvSock, legacyRvSock, scopedRvSock, stampRvSock, deliverViaRendezvous, deliverViaClaudeRendezvous } from './harness.js'
 import { shQuote } from './sh.js'
 import { runtimeRoot, sessionArtifactPath } from '@spexcode/spec-core'
 import { processStartToken, verifyDetachedRuntime, writeDetachedRuntimeReceipt } from '@spexcode/spec-core'
@@ -2059,16 +2059,20 @@ test('claude clean SURGICALLY removes only spexcode artifacts, sparing user pros
   mkdirSync(join(proj, '.claude'), { recursive: true })
   const shim = join(proj, '.claude', 'settings.json')
   writeFileSync(shim, JSON.stringify({ hooks: { Stop: [{ hooks: [{ command: 'bash /pkg/hooks/dispatch.sh claude Stop' }] }] } }))
-  // a spexcode skill + a USER skill in the same dir; a spexcode agent + a USER agent
+  // a spexcode skill (stamped) + a USER skill in the same dir; same for agents. `collides` shares its NAME
+  // with a live spec node and is still the user's — no stamp, so neither half of the pass may touch it.
   mkdirSync(join(proj, '.claude', 'skills', 'sample-agent'), { recursive: true })
-  writeFileSync(join(proj, '.claude', 'skills', 'sample-agent', 'SKILL.md'), 'generated')
+  writeFileSync(join(proj, '.claude', 'skills', 'sample-agent', 'SKILL.md'), `generated\n${GENERATED_MARK}\n`)
   mkdirSync(join(proj, '.claude', 'skills', 'my-skill'), { recursive: true })
   writeFileSync(join(proj, '.claude', 'skills', 'my-skill', 'SKILL.md'), 'mine')
+  mkdirSync(join(proj, '.claude', 'skills', 'collides'), { recursive: true })
+  writeFileSync(join(proj, '.claude', 'skills', 'collides', 'SKILL.md'), 'mine, same name as a spec node')
   mkdirSync(join(proj, '.claude', 'agents'), { recursive: true })
-  writeFileSync(join(proj, '.claude', 'agents', 'sample-agent.md'), 'generated')
+  writeFileSync(join(proj, '.claude', 'agents', 'sample-agent.md'), `generated\n${GENERATED_MARK}\n`)
   writeFileSync(join(proj, '.claude', 'agents', 'mine.md'), 'mine')
+  writeFileSync(join(proj, '.claude', 'agents', 'collides.md'), 'mine, same name as a spec node')
 
-  claudeHarness.clean(proj, { skills: ['sample-agent'], agents: ['sample-agent'] })
+  claudeHarness.clean(proj, { skills: ['sample-agent', 'collides'], agents: ['sample-agent', 'collides'] })
 
   const md = readFileSync(claudeMd, 'utf8')
   assert.ok(md.includes('USER PROSE') && !md.includes('spexcode:start'))         // prose kept, block gone
@@ -2077,6 +2081,51 @@ test('claude clean SURGICALLY removes only spexcode artifacts, sparing user pros
   assert.ok(existsSync(join(proj, '.claude', 'skills', 'my-skill')))             // user skill spared
   assert.ok(!existsSync(join(proj, '.claude', 'agents', 'sample-agent.md')))       // our agent pruned
   assert.ok(existsSync(join(proj, '.claude', 'agents', 'mine.md')))              // user agent spared
+  // the name sweep is identity-gated too: a live spec node names the PATH, never proves the file is ours.
+  assert.equal(readFileSync(join(proj, '.claude', 'skills', 'collides', 'SKILL.md'), 'utf8'), 'mine, same name as a spec node')
+  assert.equal(readFileSync(join(proj, '.claude', 'agents', 'collides.md'), 'utf8'), 'mine, same name as a spec node')
+})
+
+test('a SHARED shim file is co-owned: our hook entries merge in and out, the user\'s config is untouched', () => {
+  const proj = mkdtempSync(join(tmpdir(), 'spex-shim-'))
+  mkdirSync(join(proj, '.claude'), { recursive: true })
+  const shim = join(proj, '.claude', 'settings.json')
+  const host = {
+    permissions: { allow: ['Bash(npm run test:*)'] },
+    env: { MY_VAR: '1' },
+    statusLine: { type: 'command', command: 'my-statusline' },
+    hooks: {
+      PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo my-own-guard' }] }],
+      SessionEnd: [{ hooks: [{ type: 'command', command: 'echo bye' }] }],
+    },
+  }
+  writeFileSync(shim, JSON.stringify(host, null, 2) + '\n')
+  const ours = { PreToolUse: [{ hooks: [{ type: 'command', command: 'bash /pkg/hooks/dispatch.sh claude PreToolUse' }] }], Stop: [{ hooks: [{ type: 'command', command: 'bash /pkg/hooks/dispatch.sh claude Stop' }] }] }
+
+  writeManagedJsonHooks(shim, ours)
+  const merged = JSON.parse(readFileSync(shim, 'utf8'))
+  assert.deepEqual(merged.permissions, host.permissions, 'their permissions survive')
+  assert.deepEqual(merged.env, host.env, 'their env survives')
+  assert.deepEqual(merged.statusLine, host.statusLine, 'their statusLine survives')
+  assert.deepEqual(merged.hooks.SessionEnd, host.hooks.SessionEnd, 'an event we never bind survives')
+  assert.equal(merged.hooks.PreToolUse.length, 2, 'their group and ours coexist on a shared event')
+  assert.equal(merged.hooks.PreToolUse[0].hooks[0].command, 'echo my-own-guard', 'theirs stays first')
+  assert.ok(sharedShimHasHostContent(shim), 'the file still carries their content → it is not ours to hide')
+
+  // idempotent: re-landing replaces our entries, never accumulates them.
+  writeManagedJsonHooks(shim, ours)
+  const twice = JSON.parse(readFileSync(shim, 'utf8'))
+  assert.equal(twice.hooks.PreToolUse.filter((g: any) => g.hooks.some((h: any) => h.command.includes('dispatch.sh'))).length, 1)
+
+  removeManagedJsonHooks(shim)
+  assert.deepEqual(JSON.parse(readFileSync(shim, 'utf8')), host, 'removal restores their config exactly')
+
+  // a shim file that is WHOLLY ours has no host content, and removal takes the file with it.
+  const solo = join(proj, '.claude', 'solo.json')
+  writeManagedJsonHooks(solo, ours)
+  assert.ok(!sharedShimHasHostContent(solo), 'nothing of theirs in a file we created')
+  removeManagedJsonHooks(solo)
+  assert.ok(!existsSync(solo), 'a wholly-ours shared shim is removed, not left as an empty object')
 })
 
 test('clean leaves a foreign (non-spexcode) shim file untouched', () => {

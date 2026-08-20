@@ -567,8 +567,15 @@ behavior, decided per KIND (and, for a contract file, by its live CONTENT).
 ── THE FOUR KINDS (all fixed) ──
   spec data       .spec/ (incl .plugins/) + spexcode.json — ALWAYS tracked. Git is the database; there is
                   deliberately NO way to say "untrack the spec" in this schema.
-  machine facts   spexcode.local.json, the hook shims (.claude/settings.json, .codex/hooks.json), plugin
-                  bundles — NEVER tracked; always in the per-clone exclude.
+  (no delivery)   \`spex init --harness none\` ("harnesses": []) adopts the spec tree, the lint and the git
+                  hooks and writes NOTHING into any agent's config — the L0-only footprint.
+  machine facts   spexcode.local.json, the hook shims, plugin bundles — NEVER tracked; always in the
+                  per-clone exclude. A shim is a machine fact only while it is WHOLLY OURS: where the harness
+                  discovers its hooks in a file that is ALSO your project config (.claude/settings.json,
+                  .codex/hooks.json, .zcode/settings.json), SpexCode co-owns only its own hook entries —
+                  your permissions/env/statusLine/hooks are merged around, never replaced, and uninstall
+                  takes back exactly those entries. Such a file stays visible to git (hiding yours would be
+                  data-loss shaped), so keep our absolute toolchain paths out of your commits.
   artifacts       the CLAUDE.md/AGENTS.md contract blocks + materialized skills/agents — derived, NEVER
                   tracked; hidden via .git/info/exclude. The host's tracked .gitignore is never touched.
   run residue     .worktrees/, the global store (~/.spexcode), .git/spexcode evidence — never tracked;

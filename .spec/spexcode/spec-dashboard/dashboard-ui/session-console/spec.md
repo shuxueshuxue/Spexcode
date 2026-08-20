@@ -25,6 +25,7 @@ related:
   - spec-dashboard/test/command-box.e2e.mjs
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
+  - spec-dashboard/test/session-surface-cold-readable.e2e.mjs
 ---
 
 # session-console
@@ -131,26 +132,27 @@ including CLI and direct API use. This tab owns only the desktop chrome around i
 background fire) and never expands a plugin body itself.
 
 An existing session has one visible **base surface**. A pane-backed adapter offers two mutually exclusive
-base surfaces: its live interactive tmux **Terminal** (SessionTerm), which is the default input surface, and
-the shared `TimelineChat` **Conversation** over [[session-timeline]]. A headless adapter has no pane at any
-liveness and is always Conversation. The toolbar toggle next to the top-right files control changes a
+base surfaces while live: its interactive tmux **Terminal** (SessionTerm), which is the default input surface,
+and the shared `TimelineChat` **Conversation** over [[session-timeline]]. A headless adapter has no pane at any
+liveness and is always Conversation. The toolbar toggle next to the top-right files control changes a live
 pane-backed session between Terminal and Conversation; the icon always names the other destination, and no
-second terminal/conversation view is visible at once. The conversation stays mounted after its first visit while
-an explicit offline state puts the same relaunch panel in front, so resuming reveals the preserved history
-immediately. That conversation is the whole terminal-free console, with no [[message-stream]] native-event
-drill-down. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
-label**: a session whose process is gone reads `offline` whatever its authored lifecycle (`asking`,
-`review`, `error`, …), so it never mounts a tmux client against a dead id (which would leak tmux's bare
-"no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same
-conversation (the transcript and the session's global record survive — see [[runtime]]). `queued` is the one exception: it
-has intentionally not launched, so it shows neither a terminal nor a relaunch, and self-starts as a slot
-frees. Liveness is not the only thing that can claim the surface: an **archived** session ([[archive]]) shows
-its archive card instead, keyed on the human's filing rather than on liveness, and that card OUTRANKS both —
-opening a session you filed away should answer "want it back?" in one button, not drop you into a terminal you
-deliberately put out of sight, so relaunch stands down and folds its button into the card. Whichever panel
-owns the surface, **the pane behind it must be hidden AND pointer-inert**, never merely covered: an
-absolutely-positioned live xterm otherwise sits on top and swallows the panel's own button while the panel
-looks perfectly correct. That was found twice, independently, once per panel. The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
+second terminal/conversation view is visible at once.
+
+Lifecycle does not create another right-pane face. **Every existing session, including offline and archived
+records, renders the same Conversation DOM: the same surface tabs, the same timeline body, and one shared footer.**
+For a live session that footer is only the enabled message composer. For an offline session it contains the
+same disabled, non-focusable composer followed by `⏻ agent 已离线 · 内容只读` and the ordinary relaunch
+action. For an archived session it contains that disabled composer followed by `▤ 已归档 · 内容只读` and the
+ordinary resume action. These are data states of one footer component, not separate panels. The timeline remains
+readable without restoring the agent; an archived timeline reads once when selected and does not poll immutable
+cold history. A pane-backed offline or archived record keeps its Terminal tab visible but disabled, and activating
+that tab cannot leave Conversation. `queued` remains the one exception to offline relaunch: it has intentionally
+not launched and self-starts as a slot frees.
+
+That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. The
+terminal mount keys on **liveness, never the lifecycle label**: a session whose process is gone reads `offline`
+whatever its authored lifecycle (`asking`, `review`, `error`, …), so it never mounts a tmux client against a dead
+id (which would leak tmux's bare "no sessions" into the pane). The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
 no nested levels, and no permanently reserved second-input strip. Its own prompt and status line reach the
 pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
@@ -295,7 +297,7 @@ Lifecycle actions consume both HTTP status and the structured `{ok,error}` body 
 a refused stop/close/relaunch remains visible instead of reading as a successful background no-op. Command Box
 and lifecycle actions use one selected-session, right-pane action-outcome mechanism only while they are pending:
 Command Box owns `sending...` while open; an existing-session action owns `working...` in its selected
-action/relaunch panel. Settled delivery and failure publish once through [[transient-notices]], so neither an
+action surface. Settled delivery and failure publish once through [[transient-notices]], so neither an
 old refusal nor a success permanently spends console geometry. The left session list is navigation-only and
 renders no action alert. Bulk archive and close leave select mode immediately but aggregate every returned
 refusal into that same selected-session result, so an HTTP conflict never exists only in browser tooling.

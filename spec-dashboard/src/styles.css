@@ -1928,13 +1928,6 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
   overflow: hidden !important;
   background: var(--term-bg) !important;
 }
-/* Text command buttons remain for roomy pane actions such as the offline relaunch panel. */
-.si-act { background: var(--paper); border: 1px solid var(--line); color: var(--ink2); border-radius: 4px; padding: 1px 9px; cursor: pointer; font-family: var(--mono); font-size: var(--type-meta); }
-.si-act:hover { border-color: var(--blue); color: var(--blue); }
-.si-act.go { border-color: var(--blue); color: var(--blue); }
-.si-act.go:hover { background: var(--blue); color: var(--paper); }
-.si-act.big { padding: 8px 18px; font-size: var(--type-body); margin-top: 8px; }
-
 .sc-red    { --sc: var(--red); }
 .sc-blue   { --sc: var(--blue); }
 .sc-green  { --sc: var(--green); }
@@ -1955,17 +1948,7 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .si-tool:disabled:hover { background: color-mix(in srgb, var(--sc) 8%, transparent); border-color: color-mix(in srgb, var(--sc) 72%, var(--line)); }
 .si-tool.command.on { background: var(--sc); color: var(--paper); border-color: var(--sc); }
 
-/* offline / lifecycle placeholder body */
-.si-offline { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 24px; }
-.si-offline-msg { font-size: var(--type-title); color: var(--ink2); }
-.si-offline-sub { font-size: var(--type-control); color: var(--muted); max-width: 460px; line-height: var(--leading-body); }
-.si-offline-sub code { color: var(--blue); background: var(--panel2); padding: 0 4px; border-radius: 3px; }
 .si-offline-err { margin-top: 10px; font-size: var(--type-control); color: var(--yellow); max-width: 460px; line-height: var(--leading-relaxed); border: 1px solid var(--yellow); border-radius: 4px; padding: 8px 10px; background: var(--panel2); }
-.si-offline > .si-action-outcome { margin-top: 10px; max-width: 460px; font-size: var(--type-control); padding: 8px 10px; }
-/* the shelf card ([[archive]]) reuses the offline panel's geometry — same centred column, same type scale — so
-   the two read as one family of "this session is in a state" cards. Only the mark and the action row differ. */
-.si-shelf-card .si-shelf-mark { color: var(--yellow); display: flex; margin-bottom: 2px; }
-.si-shelf-acts { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
 
 /* ============================================================================
    MOBILE INTERFACE (MobileApp) — the touch-first face. Only mounted on a phone
@@ -2214,23 +2197,35 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .rich-text .katex-error { color: var(--red); white-space: pre-wrap; }
 
 /* the docked composer — textarea + send; replyVia:'note' is fixed in TimelineChat, with no visible toggle. */
-.m-offline, .m-senderr, .m-copy-status { flex: none; padding: 6px 14px; font-size: var(--type-control); }
-.m-offline { color: var(--muted); background: var(--panel); border-top: 1px solid var(--line); }
+.m-senderr, .m-copy-status { flex: none; padding: 6px 14px; font-size: var(--type-control); }
 .m-senderr { color: var(--red); }
 .m-copy-status { color: var(--muted); }
 .m-copy-status.failed { color: var(--red); }
 .m-composer { flex: none; padding: 8px 14px 10px; border-top: 1px solid var(--line); background: var(--panel); }
+.m-composer > .m-senderr { padding: 0 0 7px; }
 .m-composer-line { display: flex; align-items: stretch; gap: 8px; }
 .m-input {
   flex: 1; min-width: 0; min-height: 38px; max-height: min(28cqh, 240px); resize: none; padding: 9px 10px; font-family: var(--mono); font-size: var(--type-subtitle);
   color: var(--ink2); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; outline: none;
 }
 .m-input:focus { border-color: var(--blue); }
+.m-input:disabled { color: var(--muted); background: var(--panel2); cursor: default; }
 .m-send {
   flex: none; height: 38px; padding: 0 16px; font-family: var(--mono); font-size: var(--type-body); font-weight: var(--weight-bold);
   color: var(--paper); background: var(--blue); border: none; border-radius: 8px; cursor: pointer;
 }
 .m-send:disabled { opacity: .45; cursor: default; }
+.m-coldline {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; padding-top: 7px;
+  color: var(--muted); font-family: var(--mono); font-size: var(--type-control);
+}
+.m-coldline-action {
+  flex: none; padding: 4px 9px; color: var(--blue); font: inherit; background: transparent;
+  border: 1px solid var(--line); border-radius: 4px; cursor: pointer;
+}
+.m-coldline-action:hover, .m-coldline-action:focus-visible { border-color: var(--blue); outline: none; }
+.m-coldline-action:disabled { opacity: .45; cursor: default; }
+.m-composer > .si-action-outcome { margin-top: 7px; }
 
 .m-empty { padding: 18px 14px; color: var(--muted); font-size: var(--type-body); }
 .m-empty.big { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; }

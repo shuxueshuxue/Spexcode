@@ -627,6 +627,8 @@ export default {
     commandSend: '从 Command Box 发送',
     relaunch: '重新启动',
     relaunchTitle: '重新启动并恢复此会话',
+    offlineReadOnly: '⏻ agent 已离线 · 内容只读',
+    archivedReadOnly: '▤ 已归档 · 内容只读',
     merge: '合并',
     relaunchResume: '⏵ 重新启动并恢复',
     merges: ({ n }) => `已合并 ×${n}`,

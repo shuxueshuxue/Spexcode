@@ -19,6 +19,7 @@ related:
   - spec-dashboard/src/sessionToolbar.test.mjs
   - spec-dashboard/src/styles.css
   - spec-dashboard/test/archive-shelf.e2e.mjs
+  - spec-dashboard/test/session-surface-cold-readable.e2e.mjs
   - spec-cli/src/session-archive-cold-close.api.test.ts
   - spec-cli/src/session-close-probe.test.ts
 ---
@@ -266,9 +267,11 @@ session's archived state are unchanged. Automatic side selection still follows a
 change in the selected session's archived state, so deep links and external archive/resume transitions land on
 the side that actually owns the selected row without turning ordinary refreshes into navigation.
 
-Selecting an archived session shows the **archive card**, which is an offline cold-storage card with restore as
-its only lifecycle exit. There is no relaunch action while archived; `resume` first clears `archived`, then
-follows the normal `starting -> online` state machine and preserves the conversation.
+Selecting an archived session keeps the console's ordinary Conversation surface and reads its preserved timeline
+without restoring runtime. The shared footer makes that surface read-only and offers `resume` as its only lifecycle
+exit; `resume` first clears `archived`, then follows the normal `starting -> online` state machine and preserves
+the conversation. Its pane-backed Terminal tab remains visible to show that the session owns a terminal-capable
+conversation, but is disabled while cold. Immutable archived history is read once on selection and is not polled.
 
 **One vocabulary everywhere.** `/archive` is the filing command and `/resume` is the sole restore action. The
 CLI `spex session archive <SEL>` and `POST /api/sessions/:id/archive` perform cold filing; the legacy

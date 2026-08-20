@@ -549,7 +549,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }, [])
   const draggedItem = sessionDrag ? forest.find((item) => item.type === 'row' && item.s.id === sessionDrag.id) : null
   const terminalFree = isHeadlessSession(selSession)
-  const activeBaseSurface = terminalFree ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(active)
+  const noLivePane = selSession?.liveness === 'offline'
+  const shelvedSel = !!selSession?.archived
+  const readOnlyPane = noLivePane || shelvedSel
+  const activeBaseSurface = terminalFree || readOnlyPane ? SESSION_SURFACE_CONVERSATION : getSessionBaseSurface(active)
   const conversationSurface = activeBaseSurface === SESSION_SURFACE_CONVERSATION
   const surfaceTabId = conversationSurface ? 'si-conversation-tab' : 'si-terminal-tab'
   const surfacePanelId = conversationSurface ? 'si-conversation-panel' : 'si-terminal-panel'
@@ -559,12 +562,9 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
   }
   const commandAvailable = uiCommandsFor(selSession, {}).some((command) => command.name === 'command')
   const evalSummary = sessionEvalDisplay(active !== 'new' ? selSession?.evalSummary : null, boardLive)
-  // liveness, not the lifecycle label, gates terminal vs relaunch ([[state]]). showRelaunch skips `queued`
-  // (it self-starts as a slot frees, so it gets no relaunch button).
-  const noLivePane = selSession?.liveness === 'offline'
-
-  const shelvedSel = !!selSession?.archived
-  const showRelaunch = !shelvedSel && noLivePane && selSession?.status !== 'queued'
+  // `queued` has intentionally not launched and self-starts as a slot frees, so it has no restore action.
+  const footerState = shelvedSel ? 'archived'
+    : noLivePane && selSession?.status !== 'queued' ? 'offline' : 'live'
   const activeResourceId = active === 'new' ? null : resourceSurface[active] || null
   const activeResource = resourceTabs.find((tab) => tab.id === activeResourceId) || null
   const resourceOptions = selSession ? [
@@ -731,7 +731,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
       const valid = new Set(allSessions.map((s) => s.id))
       const next = new Set([...prev].filter((id) => valid.has(id)))
       const selected = active === 'new' ? null : allSessions.find((s) => s.id === active)
-      if (selected && (isHeadlessSession(selected) || getSessionBaseSurface(selected.id) === SESSION_SURFACE_CONVERSATION)) next.add(selected.id)
+      if (selected && (selected.archived || selected.liveness === 'offline' || isHeadlessSession(selected)
+        || getSessionBaseSurface(selected.id) === SESSION_SURFACE_CONVERSATION)) next.add(selected.id)
       if (next.size === prev.size && [...next].every((id) => prev.has(id))) return prev
       return next
     })
@@ -1243,7 +1244,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
     eval: () => { if (active !== 'new') navigateAddress(sessionEvalAddress(active)) },
     merge: mergeSession,
     relaunch: resumeAndReturnToWorking,
-    stop: (owner) => act('stop', undefined, owner),     // soft stop: kill tmux + socket, KEEP the worktree → session goes offline + relaunch panel
+    stop: (owner) => act('stop', undefined, owner),     // soft stop: kill tmux + socket, KEEP the worktree → read-only Conversation
     // archive is cold storage: the backend stops the exact leaf before filing, then the browser opens the
     // explicit history view so the newly archived row remains reachable without polluting the working list.
     archive: async (owner) => { if (await act('archive', { on: true }, owner)) { await refreshArchive(); setShowShelf(true) } },
@@ -1629,6 +1630,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                       data-surface-switch={conversationSurface ? 'terminal' : 'conversation'}
                       label={t(conversationSurface ? 'session.switchToTerminal' : 'session.switchToConversation')}
                       aria-pressed={conversationSurface}
+                      disabled={readOnlyPane}
                       onClick={() => showBaseSurface(active, conversationSurface ? 'terminal' : SESSION_SURFACE_CONVERSATION, true)}
                     />
                   )}
@@ -1643,12 +1645,12 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                 aria-labelledby={activeResource ? `si-resource-tab-${activeResource.id}` : surfaceTabId}
                 style={{ position: 'relative' }}
               >
-                {/* live panes remain mounted for working sessions; a cold archive has no resident pane and yields
-                    the surface to the flat shelf card, which is the only visible/clickable restore surface. */}
+                {/* Live terminals stay warm; every lifecycle state uses the same Conversation DOM. */}
                 {[...new Set([...opened, ...openedConversations])].map((id) => {
                   const session = allSessions.find((candidate) => candidate.id === id)
+                  if (!session) return null
                   const headless = isHeadlessSession(session)
-                  const baseShown = id === active && !activeResource && !showRelaunch && !shelvedSel
+                  const baseShown = id === active && !activeResource
                   const terminalShown = baseShown && activeBaseSurface === 'terminal'
                   const conversationShown = baseShown && (headless || activeBaseSurface === SESSION_SURFACE_CONVERSATION)
                   return (
@@ -1660,7 +1662,7 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           pointerEvents: terminalShown ? 'auto' : 'none',
                         }}>
                           <SessionTerm sessionId={id} active={open && terminalShown}
-                            focused={open && terminalShown && !commandOpen && !showRelaunch}
+                            focused={open && terminalShown && !commandOpen}
                             focusRequest={id === active ? terminalFocusRequest : 0} />
                         </div>
                       )}
@@ -1670,7 +1672,10 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                           visibility: conversationShown ? 'visible' : 'hidden',
                           pointerEvents: conversationShown ? 'auto' : 'none',
                         }}>
-                          <TimelineChat s={session} sessions={sessions} active={open && conversationShown} />
+                          <TimelineChat s={session} sessions={allSessions} active={open && conversationShown}
+                            footerState={session.archived ? 'archived' : session.liveness === 'offline' && session.status !== 'queued' ? 'offline' : 'live'}
+                            onRestore={id === active ? resumeAndReturnToWorking : undefined}
+                            actionOutcome={id === active && actionOutcome?.owner === 'panel' ? actionOutcome : null} />
                         </div>
                       )}
                     </div>
@@ -1690,29 +1695,8 @@ export default function SessionInterface({ sessions, specs = [], focusNode, open
                     </div>
                   )
                 })}
-                {actionOutcome?.owner === 'panel' && !showRelaunch && !shelvedSel && (
+                {actionOutcome?.owner === 'panel' && footerState === 'live' && (
                   <div className="si-action-outcome-float"><ActionOutcome outcome={actionOutcome} /></div>
-                )}
-                {showRelaunch && !activeResource && (
-                  <div className="si-offline">
-                    <div className="si-offline-msg">{t('session.offlineMsg')}</div>
-                    <div className="si-offline-sub">{t('session.offlineSubBefore')}<code>{active.slice(0, 8)}…</code>{t('session.offlineSubAfter')}</div>
-                    <button className="si-act go big" onClick={resumeAndReturnToWorking}>{t('session.relaunchResume')}</button>
-                    {actionOutcome?.owner === 'panel' && <ActionOutcome outcome={actionOutcome} />}
-                  </div>
-                )}
-                {/* the archive card ([[archive]]) is a flat offline cold-storage panel with resume as its only exit. */}
-                {shelvedSel && (
-                  <div className="si-offline si-shelf-card">
-                    <div className="si-shelf-mark" aria-hidden="true"><Icon name="star-filled" size={22} /></div>
-                    <div className="si-offline-msg">{t('session.shelfMsg')}</div>
-                    <div className="si-offline-sub">{t('session.shelfSubOffline')}</div>
-                    <div className="si-shelf-acts">
-                      {/* the same resume runner as the card/context menu, so restore semantics cannot drift. */}
-                      <button className="si-act go big" onClick={resumeAndReturnToWorking}>{t('session.shelfRestore')}</button>
-                    </div>
-                    {actionOutcome?.owner === 'panel' && <ActionOutcome outcome={actionOutcome} />}
-                  </div>
                 )}
                 {commandOpen && !noLivePane && (
                   <div className="si-command-layer" role="dialog" aria-label={t('session.commandBox')}>

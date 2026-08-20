@@ -6,17 +6,20 @@ scenarios:
       Drive the real dashboard console in a browser against a live backend. Starting from the session
       list, archive the SELECTED live Codex leaf through the product's own Command Box (`/archive`), then read
       the rendered DOM and API/resource census at each step: the header's three pills, the row leaving the default
-      graph/list/edges, the flat archive collection, and the offline archive card. Resume with the card's one
-      button and observe the same conversation returning through starting -> online. Capture process/runtime and
-      sibling shared-root evidence alongside `GET /api/sessions?all=1` and `GET /api/resources`.
+      graph/list/edges, the flat archive collection, and the archived Conversation surface with its persisted
+      timeline. Resume with the footer's one `取回` action and observe the same conversation returning through
+      starting -> online. Capture process/runtime and sibling shared-root evidence alongside
+      `GET /api/sessions?all=1` and `GET /api/resources`.
     expected: >
       Archive succeeds only after exact leaf/tmux/adapter cleanup: the record preserves worktree, branch, dirty
       bytes, and conversation identity while reading `archived:true`, `stopped:true`, `status:offline`,
       `liveness:offline`. The default API/graph/edges/subsession counts, maxActive occupancy, and active resource
       owners exclude it; the explicit history API shows it as a flat cold row with no status zones. The shared
-      app-server PID/start/socket and sibling loaded/new-turn reference remain unchanged. Resume is the card's
-      only exit and recreates the same conversation through starting -> online. A guard refusal is nonzero/409,
-      keeps the record unarchived and visible, and leaves all runtime/worktree/shared-root evidence unchanged.
+      app-server PID/start/socket and sibling loaded/new-turn reference remain unchanged. The selected archived row
+      renders its historical timeline in the ordinary Conversation shell, with a disabled composer and terminal
+      control; the footer's `取回` action recreates the same conversation through starting -> online. A guard refusal
+      is nonzero/409, keeps the record unarchived and visible, and leaves all runtime/worktree/shared-root evidence
+      unchanged.
     tags: [frontend-e2e]
   - name: shelving-costs-no-git-walk
     description: >
@@ -139,14 +142,15 @@ scenarios:
   - name: watch-wait-presence-through-archive-resume-close
     test: spec-dashboard/test/archive-shelf.e2e.mjs
     description: >
-      Against the same isolated backend and real Codex target as the browser runner, keep a real `spex session
-      watch`/`wait` process on the fixed selector while the product API/browser drives working -> archive/offline
-      -> resume/starting -> online -> close. Inspect the emitted event stream and served all-record rows.
+      Against the same isolated backend and real Codex target as the browser runner, keep a real
+      `spex session watch stream --idle` process on the fixed selector while the product API/browser drives
+      working -> archive/offline -> resume/starting -> online -> close. Inspect its event stream and the served
+      all-record rows at each state boundary.
     expected: >
-      Archive is observed as an offline transition and never as gone/closed; resume remains the same record and
-      conversation; only the subsequent true record/worktree removal emits one closed event and returns gone.
-      The monitor uses active-only events plus all-record presence and never infers existence from the default
-      active-only projection. The in-memory helper is only a narrow unit regression, not a YATU reading.
+      The all-record surface retains archive as an offline transition and resume as the same record and
+      conversation; only the subsequent true record/worktree removal makes the record absent. The stream emits
+      one closed event for that removal, while the archive and resume checks never infer existence from the
+      default active-only projection. The in-memory helper is only a narrow unit regression, not a YATU reading.
     tags: [backend-api, cli]
   - name: shelf-refresh-preserves-human-view
     description: >
@@ -156,8 +160,9 @@ scenarios:
     expected: >
       The star remains on with aria-pressed true across every refresh; the exact archived row stays uniquely
       visible and clickable with no status-zone or ops chrome; selecting it keeps the shelf open, marks that row
-      selected, and renders one separate archive card with one resume action. A real selected-id or selected-row
-      archived-state transition still automatically chooses the side that owns that selection.
+      selected, and renders the ordinary Conversation shell with historical timeline, disabled composer and
+      terminal control, and one footer resume action. A real selected-id or selected-row archived-state transition
+      still automatically chooses the side that owns that selection.
     tags: [frontend-e2e]
   - name: explicit-ls-distinguishes-terminal-close-from-never-existed
     description: >
@@ -184,7 +189,8 @@ helper is called to make either proof easy: the shelving act itself goes through
 human would type it, and every assertion reads rendered DOM or a served payload.
 
 The round trip is a **multi-step interaction flow**, so its evidence is a recording of the run with a
-step-map exported by the runner, not a still — a single frame could show the shelf card while saying nothing
-about whether the row actually left, came back, or whether the button was reachable at all. That last one is
-not hypothetical: the first run of this scenario failed because a live xterm layer sat over the card and
-swallowed the restore click while the card looked perfectly correct in a screenshot.
+step-map exported by the runner, not a still: a single frame can show the archived Conversation footer while
+saying nothing about whether the row actually left, came back, or whether the action was reachable at all.
+The historical shelf-card implementation once exposed the same proof gap when a live xterm layer swallowed its
+restore click; the current scenario therefore continues to exercise the real footer action rather than infer
+clickability from appearance.

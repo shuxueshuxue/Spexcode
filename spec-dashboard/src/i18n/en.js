@@ -633,6 +633,8 @@ export default {
     commandSend: 'send from Command Box',
     relaunch: 'relaunch',
     relaunchTitle: 'relaunch and resume this session',
+    offlineReadOnly: '⏻ agent offline · read only',
+    archivedReadOnly: '▤ archived · read only',
     merge: 'merge',
     relaunchResume: '⏵ relaunch & resume',
     merges: ({ n }) => `merged ×${n}`,

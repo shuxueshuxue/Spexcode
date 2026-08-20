@@ -131,7 +131,49 @@ const rangeFromAnchorToFocus = (anchor, focus, mode) => {
   return range
 }
 
-export default function TimelineChat({ s, sessions = [], active = true }) {
+function TimelineFooter({ state, active, inputRef, draft, setDraft, sending, send, sendErr, onRestore, actionOutcome, onComposerPress }) {
+  const t = useT()
+  const readOnly = state !== 'live'
+  return (
+    <footer className={`m-composer is-${state}`} data-footer-state={state}>
+      {sendErr && <div className="m-senderr">{sendErr}</div>}
+      <div className="m-composer-line">
+        <ComposerTextarea
+          ref={inputRef}
+          className="m-input"
+          data-focus-sink={active && !readOnly ? '' : undefined}
+          rows={1}
+          placeholder={t('mobile.inputPlaceholder')}
+          value={draft}
+          disabled={readOnly}
+          onMouseDownCapture={onComposerPress}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (!readOnly && e.key === 'Enter' && !e.shiftKey && !composingKey(e)) {
+              e.preventDefault(); e.stopPropagation(); send()
+            }
+          }}
+        />
+        <button className="m-send" disabled={readOnly || !draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>
+      </div>
+      {readOnly && (
+        <div className="m-coldline">
+          <span>{t(state === 'archived' ? 'session.archivedReadOnly' : 'session.offlineReadOnly')}</span>
+          <button type="button" className="m-coldline-action" disabled={actionOutcome?.phase === 'pending'} onClick={onRestore}>
+            {t(state === 'archived' ? 'session.shelfRestore' : 'session.relaunch')}
+          </button>
+        </div>
+      )}
+      {readOnly && actionOutcome && (
+        <div className={`si-action-outcome ${actionOutcome.phase}`} role={actionOutcome.phase === 'failed' ? 'alert' : 'status'}>
+          {actionOutcome.message}
+        </div>
+      )}
+    </footer>
+  )
+}
+
+export default function TimelineChat({ s, sessions = [], active = true, footerState = 'live', onRestore, actionOutcome }) {
   const t = useT()
   const isMobile = useIsMobile()
   const [events, setEvents] = useState(null)
@@ -168,11 +210,11 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
     return () => cancelAnimationFrame(focusFrame)
   }, [s.id, active, isMobile])
   useEffect(() => {
-    if (!active) return undefined
+    if (!active || footerState === 'archived') return undefined
     const iv = setInterval(load, 8000)
     return () => clearInterval(iv)
-  }, [load, active])
-  useEffect(() => { if (active) load() }, [s.status, s.note, load, active])
+  }, [load, active, footerState])
+  useEffect(() => { if (active && footerState !== 'archived') load() }, [s.status, s.note, load, active, footerState])
   // chat-style pinning that respects the thumb: follow new entries only while the reader is already at
   // the bottom — a reader parked up in history is never yanked down by a poll.
   const followTimelineTail = useCallback(() => {
@@ -351,7 +393,6 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
     }
   }
 
-  const offline = s.liveness === 'offline' || s.status === 'offline'
   return (
     <div className="tl-chat">
       <div className="m-timeline" ref={scrollRef} onScroll={onScroll}
@@ -374,28 +415,9 @@ export default function TimelineChat({ s, sessions = [], active = true }) {
           {t(`mobile.${copyStatus === 'copied' ? 'copied' : 'copyFailed'}`)}
         </div>
       )}
-      {offline && <div className="m-offline">{t('mobile.offlineHint')}</div>}
-      {sendErr && <div className="m-senderr">{sendErr}</div>}
-      <div className="m-composer">
-        <div className="m-composer-line">
-          <ComposerTextarea
-            ref={inputRef}
-            className="m-input"
-            data-focus-sink={active ? '' : undefined}
-            rows={1}
-            placeholder={t('mobile.inputPlaceholder')}
-            value={draft}
-            onMouseDownCapture={prepareComposerPress}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !composingKey(e)) {
-                e.preventDefault(); e.stopPropagation(); send()
-              }
-            }}
-          />
-          <button className="m-send" disabled={!draft.trim() || sending} onClick={send}>{t('mobile.send')}</button>
-        </div>
-      </div>
+      <TimelineFooter state={footerState} active={active} inputRef={inputRef} draft={draft} setDraft={setDraft}
+        sending={sending} send={send} sendErr={sendErr} onRestore={onRestore} actionOutcome={actionOutcome}
+        onComposerPress={prepareComposerPress} />
     </div>
   )
 }

@@ -40,6 +40,13 @@ documentation, so the vendored copies are traceable from the repository that hol
 Vendoring is transitional and states the condition that ends it; changing where a package installs from must never
 become a runtime fallback.
 
+Governance travels with the repository that defines it, not with the change. This repository stamps its commits
+with the node and session that justify them; the adopter's repository asks for something else, and its working copy
+answers to no session at all. Imposing the stamp there would put an identifier in front of readers who cannot resolve
+it, and buying that conformance by rewriting a commit would delete the very object the milestone's readings name as
+the state they measured. Evidence outranks format: the provenance chain — session, implementation commit, readings
+commit — is recorded on the governing side, where it can be resolved and where the obligation actually sits.
+
 Failures already present in the adopter's tree are not this milestone's to claim or to disown. Attribution is
 measured — the same tests, byte-identical between base and proposal, run in independently installed trees, compared
 by the identity of the failure set rather than its count — and what that measurement assigns to the base is handed

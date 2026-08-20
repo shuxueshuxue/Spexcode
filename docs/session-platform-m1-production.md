@@ -197,13 +197,65 @@ adopter 的错误话里带上 "read-only" / "database is locked" / "corrupt" 就
 类型错误由集成方逐包跑 `npm test`（它自己先 build）挡住。接线属于"真的有产品路径依赖它"的那个里程碑，不是现在。
 撤回后 `eval lint --changed` 的 stale 归零。
 
+### 4.3 Lane B — topology seam（`packages/session-topology`）与 Lane C — self-launch adopter（`packages/session-selflaunch`）
+
+| 门 | Lane B（合并 `9ae07e93e`） | Lane C（合并 `213bc46b4`） |
+|---|---|---|
+| ancestor / 窄 diff / 禁止路径 | PASS，21 文件全在文件面内 | PASS，30 文件全在文件面内 |
+| Node 22.21.0 vector（集成方独立复跑） | **15 / 15** | **26 / 26** |
+| `spex spec lint` | 0 error，新包 coverage 0 | 0 error，新包 coverage 0 |
+| installed 证据 | tarball 名+shasum、consumer 内 resolve、原子提交 1 边 3 消息、回滚 0/0 且 TopologyError 身份精确 | tarball 名+shasum、三条 consumer 内 resolve、`source-fallback=absent`、21 个独立 CLI 进程逐条命令/stdout/exit |
+| 集成方自写的独立复核 | 打两个包的 dist 直接跑：`recipients` = attach+subscribe 合流、事务内 1 边 + 2 条通知全可见、中途抛错后**两侧一起回滚**、成环拒绝穿过事务边界身份不变 | 见 §4.4 的跨层 YATU |
+
+**审查退回并已修复的一条（F-C1）**：`locality.ts` 在 `statfs` 抛 ENOENT 时 `return databasePath`。
+这是刻意设计（有 vector、spec 里也写了），理由的一半成立——父目录不存在时确实没有文件系统可分类，
+把更可操作的 `PROTOCOL_PATH_PARENT_MISSING` 留给协议是对的。但实现方式不对：**这个函数的契约是"建立 locality 前提"，
+正常返回就是在断言这个前提已经建立**，vector 名字写什么都不改变这一点。两个后果：TOCTOU（探测时父目录不存在→放行→
+期间它在 NFS 上被创建→协议在网络文件系统上开库，locality 从未判定），以及 `requireLocalDatabasePath` 是公开导出，
+另一个 adopter 调完它去做别的事就继承了乐观路径。冻结规则把"探测本身失败"列在拒绝项里，没有 ENOENT 豁免，
+而这条规则的失败模式恰恰是静默损坏。修法是改成抛 `PROTOCOL_PATH_PARENT_MISSING`——**用户可见行为一个字节没变**
+（同样的 stderr、同样的 exit 1、同样的 repair hint），变的只是这个函数再也不会在没建立前提的情况下正常返回。
+
+**Lane B 值得记一笔的两处**：`subscribe` 直接委托 `attach`（一个机制，不是两套加一个 switch）；成环检查是带
+`INDEXED BY` 的递归 CTE，在调用方事务内做完，而不是应用层遍历完再写。它还多加了两条我没要求但正确的 vector：
+「运行时表面没有任何拿走消息的路径」守住 §10.1 的裁决，「时钟回拨仍然合法」守住时间戳不作排序权威。
+
+### 4.4 跨层 high-level YATU：父节点六条 conformance scenario 全部测掉
+
+harness 是 `scripts/m1-conformance.mjs`（已提交，可复现）。它 `npm pack` 三个包 → 在**仓库之外**的
+`mktemp -d` 建干净 consumer → 只安装 tarball → 每个子进程都断言自己 resolve 到的路径落在该 consumer 的
+`node_modules` 内，**逃出去就直接失败**。理由与 lane A 那条 F2 一样：跑在 workspace 源码上会产出一份长得一模一样的
+成功记录，所以"装过了"必须是被测出来的。
+
+在 `8e72a597e` 上跑出 **48 条断言全过**，六条 scenario 的读数以该 commit 的 codeSha 归档（各带自己那一段窄证据）：
+
+| scenario | 这一轮实际测到的 |
+|---|---|
+| `installed-sqlite-package-contract` | 两个进程同一绝对路径、FIFO A→B、空队列 `null`、history 保留 dequeued 状态、tombstone 后 enqueue 报 retired |
+| `schema-migration-is-one-portable-authority` | 新建与重放收敛到一行 migration；改写 checksum → `PROTOCOL_SCHEMA_CHECKSUM_MISMATCH`；伪造未来代 → `PROTOCOL_SCHEMA_GENERATION_UNSUPPORTED`；**两者都在任何协议读之前失败**（读值为 null，不是空库） |
+| `fifo-idempotency-and-retirement` | 精确重放返回原行；改一字节冲突且**状态未变**；非空 retire 原子失败且队列完好；抽干后 retire，resurrect 与 later enqueue 都报 retired；history 仍可读 |
+| `concurrent-dequeue-has-one-commit-winner` | 四个独立进程按共享墙钟栅栏起跑：**恰好 1 个拿到、3 个拿到 `null`**（不是错误）；commit 前被 SIGKILL → 消息仍 pending；commit 后被 SIGKILL → 已出队且**永不回队** |
+| `same-database-composition-needs-no-outbox` | fixture 自有扩展表 + 0/1/多条通知各一次事务；在 mutation 之后、commit 之前强制回滚 → **扩展行与消息一起消失**；公开表面上没有 outbox/dispatcher/raw connection |
+| `explicit-path-opaque-data-and-lost-wake` | cwd、HOME、adopter config、databasePath 四处互不相同；相对路径被拒且不读 cwd；**诱饵 config 指向的库自始至终没被创建**；opaque 字节（含 NUL 与高位字节）与 header（含空值与 tab）逐字节往返；未知 kind 不被解释；**全程零 wake hint，后开的进程只查库就发现 pending** |
+
+额外一条不属于这六条、但属于 M1 的组合证明：topology mutation + 它要求的全部 enqueue 在一个事务里提交，
+回滚时边与消息一起消失，且 `TopologyError` 穿过事务边界身份不变——这条同时是 D-14 在真实组合里的闭环。
+
+**六条 scenario 的 `code:` 锚点已从 legacy 的 `packages/session-core/src/index.ts` 改指向新包入口**，
+理由写在 `eval.md` 正文里：读数必须挂在它真正触碰的那条 freshness 轴上。**节点的 `code:` 治理没有动**——
+哪个实现对产品是权威，是有 sabotage 与删除门的 cutover 决定，不是一个测量锚点可以宣布的（D-12 不变）。
+
+`spex eval lint --changed` 现在 **0 flagged**。
+
 ## 5. 仍然 OPEN
 
-- **父节点 `session-protocol` 的六条 conformance scenario 尚未测量**。它们描述的正是本阶段刚刚具备可测条件的东西
-  （installed 契约、迁移唯一权威、FIFO/幂等/退役、并发 dequeue 单一赢家、同库组合不需要 outbox、显式路径与 lost-wake）。
-  其中两条需要 lane B 的 topology 与 lane C 的 self-launch 回路才能完整测，所以统一放到 M1 收尾的 high-level YATU 里一次测完。
-  **注意**：这六条 scenario 的 `code:` 目前指向 legacy 的 `packages/session-core/src/index.ts`——那是它们被写下时的"未来实现"。
-  测量时必须同时把 scenario 的 `code:` 改指向新包入口，否则读数会挂在一条它根本没有触碰的 freshness 轴上。
-  这**只改 scenario 的 code 锚点，不动节点的 `code:` 治理**（D-12：父节点在 M6 cutover 前继续治理 legacy 入口）。
+- **本阶段的三个包在产品路径上没有任何 importer**，这是刻意的：它们是 M4/M5/M6 cutover 的被接入方，不是接入本身。
+  因此 M1 证明的是"这套东西自己成立"，**没有**证明任何一条 legacy 路径可以被替换——那要 sabotage + 正向 YATU + 物理删除
+  三件齐备，属于后续 lane。
+- **ZSwarm 仍然没有可执行证明**。本阶段没有改变这一点，也不该被读作改变了：仓库里依然没有 production importer。
+- **locality 的两个洞原样存在**：网络文件系统魔数从内核头转录、**从未在真实网络挂载上执行**（本机没有）；
+  macOS/Windows 没有 detector，缺失时一律拒绝（fail closed 是默认，不是遗漏）。唯一的越过方式是显式的
+  `--assume-local-storage` 旗标，它不能由环境变量或配置文件打开。
+- **root build 仍未接线**（§4.2）：等真的有产品路径依赖这三个包的那个里程碑。
 - 引擎契约 §13 的全部 OPEN 项原样保留：真实网络挂载上的 locality 判定、macOS/Windows detector、
   reader-blocks-writer 在真实 adopter 负载下的表现、sweep 节奏、retention/purge、备份运维、`ANALYZE` 维护、Rust 第二实现。

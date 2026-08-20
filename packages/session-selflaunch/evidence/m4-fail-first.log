@@ -1,0 +1,19 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: M4 fail-first: baseline has no materialized session-listen node
+    at file:///home/jeffry/spexcode/.worktrees/%E4%BD%A0%E6%98%AF-session-platform-M4-lane-D-materialized-self-55fe/[eval1]:1:130
+    at ModuleJob.run (node:internal/modules/esm/module_job:437:25)
+    at async node:internal/modules/esm/loader:246:26
+    at async ModuleLoader.executeModuleJob (node:internal/modules/esm/loader:243:20)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'surface: hook\nevents:\n- SessionStart\n- UserPromptSubmit\n',
+  expected: /session-listen/,
+  operator: 'match',
+  diff: 'simple'
+}
+
+Node.js v24.15.0

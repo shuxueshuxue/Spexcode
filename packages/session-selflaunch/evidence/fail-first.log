@@ -1,0 +1,27 @@
+TAP version 13
+# Subtest: a relative database path is refused without reading cwd
+not ok 1 - a relative database path is refused without reading cwd
+  ---
+  duration_ms: 8.083243
+  type: 'test'
+  location: '/home/jeffry/spexcode/.worktrees/你是-session-platform-生产实施-lane-C-最薄-self-launch-2864/packages/session-selflaunch/src/path.test.ts:1:111'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception: resolveDatabasePath accepted a relative path instead of raising PROTOCOL_PATH_NOT_ABSOLUTE'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  stack: |-
+    TestContext.<anonymous> (/home/jeffry/spexcode/.worktrees/你是-session-platform-生产实施-lane-C-最薄-self-launch-2864/packages/session-selflaunch/src/path.test.ts:14:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 366.447401

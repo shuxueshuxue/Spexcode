@@ -109,7 +109,26 @@ SIGKILL 消费者，然后断言 `listPending` 为空、下一次 `dequeue` 返�
 
 ### 6. 必须删除的 legacy
 
-M4 正向证明后删除 self-launch 对 G.1 L01 旧 pending queue、L02 timeline send authority、L03 未定义的 protocol cursor、L06 delivery lock，以及 G.2 R04 的固定 Spex root/path 假设；G.2 R07 的旧 global manifest fallback 需在 materialize 切换后按 M8 删除。M4 只删除 self-launch 正常路径的旧 reader/writer，M7 importer 之前保留隔离读取能力，M8 再清理 codecs/manifest/generated residue。`.session-locks` 中与 Git/harness 外部效果相关的部分（G.1 L07）不因 self-launch queue proof 被一并删除。
+**这一段原先的删除归属已被实测推翻，下面是更正后的版本。**（更正依据：`docs/session-platform-m4-inventory.md`，
+20 行 G.1/G.2 逐行判定，5 CONSUMER / 15 NO-CONSUMER / 0 NOT-MEASURED。）
+
+原文把 G.1 L01（旧 pending queue）、L02（timeline send authority）、L03（protocol cursor）、L06（delivery lock）
+的删除归给 M4。**实测这四行在本基线上没有 self-launch consumer**：`spec-cli/src/sessions.ts:4255-4264` 的
+`sendText` 先 `readRecord` 再接受，无记录直接拒绝，因此 self-launched 会话从来收不到消息，也就从未写过这四类文件。
+把它们记成"M4 已删除"等于把一条从来不存在的路径冒充成拆除完成，会让 M8 的最终审计拿到假账。
+**这四行的真实 consumer 是 governed 路径，删除归 M6，residue 归 M7/M8。**
+
+G.2 R04（固定 Spex root/path 假设）**确实是 self-launch consumer**，但**同样不属于 M4**：它承载的是
+materialized hook 自己的状态（`spec-cli/hooks/harness.sh:111-132` 推出 `<runtimeRoot>`，
+`.spec/spexcode/.plugins/core/spec-first/spec-first.sh:39` 与 `spec-of-file.sh:55` 在
+`<runtimeRoot>/sessions/<sid>` 下写 `spec-checked` / `spec-of-file-seen` 两个 sentinel），
+而 M4 的 listener 并不替代它们——不被替代的设施不能被删。同理 L05 的 legacy session-directory 形状、
+R05/R06/R07 也都是 CONSUMER 且未被 M4 替代。
+
+因此 **M4 的物理删除清单为空**，而这是被证明的空、不是没查：判据是"既被 self-launch 消费、又已被 M4 同行为替代"
+两个条件同时成立，本基线上没有任何一行满足。M4 交付的是新增能力加上"新路径不可达旧设施"的静态引用与
+file-access trace 证明；`.session-locks`（G.1 L07）里与 Git/harness 外部效果相关的部分同样不因任何 self-launch
+证明被一并删除。
 
 ## Spex governed
 

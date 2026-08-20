@@ -18,6 +18,11 @@ related:
   - packages/session-core/scripts/public-boundary.test.mjs
   - packages/session-core/package.json
   - packages/session-core/tsconfig.build.json
+  - packages/session-protocol/src/errors.ts
+  - packages/session-protocol/src/canonical.ts
+  - packages/session-protocol/src/schema.ts
+  - packages/session-protocol/src/engine.ts
+  - packages/session-protocol/src/index.ts
   - packages/spec-core/src/layout.ts
   - spec-cli/src/session-timeline.ts
   - spec-cli/src/sessions.ts

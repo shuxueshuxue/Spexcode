@@ -186,7 +186,7 @@
       <p class="eyebrow">Construction control · review draft</p>
       <h1>Session Platform 施工路线、Session 分配与检阅图</h1>
       <p class="lede">把总体设计变成可合并、可反证、可拆除、可回滚的施工序列。这里管理的不是任务数量，而是每个 semantic milestone 的唯一 writer、独立 reviewer、真实 adopter proof 和 legacy deletion gate。</p>
-      <div class="verdict">硬规则：任何 adopter milestone 都必须同时完成新路径接入、旧设施对抗式失效和物理删除。只增加新实现、不减少旧设施，不算重构完成。</div>
+      <div class="verdict">硬规则：任何 adopter milestone 都必须同时完成新路径接入、旧设施对抗式失效，以及<b>对实测目标集的物理删除</b>——<b>每一个实测到的目标都必须被删除</b>；当该 milestone 的实测目标集为<b>空</b>时，用可证伪的 inventory 加 file-access trace 关闭这道门，<b>零删除是测量结果，不是跳过</b>。目标集的判据固定为两个条件同时成立：<b>该设施被本 adopter 消费</b>，且<b>已被本 milestone 的新路径以同等行为替代</b>。只增加新实现、不减少旧设施，仍然不算重构完成；对 legacy 与 compatibility 的零容忍不变——dual-read、dual-write、fallback、永久 translation adapter、旧 env alias 与"临时"兼容再导出一律禁止。未被本 milestone 替代的 consumer 必须<b>点名归属</b>到真正持有它的后续 milestone，不得被顺手删除。</div>
     </div>
   </header>
 

@@ -1,0 +1,37 @@
+ASSERT fixture-path /tmp/spex-m4-self-launch.8eAkev/project
+ASSERT fixture-path /tmp/spex-m4-self-launch.8eAkev/store
+ASSERT fixture-path /tmp/spex-m4-self-launch.8eAkev/tmp
+ASSERT fixture-path /tmp/spex-m4-self-launch.8eAkev/db/sessions.sqlite
+STEP materialize
+materialized — content-hash 293d71d2dc6dd6ae7b0859cb1798458a95b7346cf2eea1de3447e57f84b91bca
+ASSERT runtime-path /tmp/spex-m4-self-launch.8eAkev/store/projects/-tmp-spex-m4-self-launch-8eAkev-project
+ASSERT runtime-path /tmp/spex-m4-self-launch.8eAkev/store/projects/-tmp-spex-m4-self-launch-8eAkev-project/trees/-tmp-spex-m4-self-launch-8eAkev-project
+MANIFEST /tmp/spex-m4-self-launch.8eAkev/store/projects/-tmp-spex-m4-self-launch-8eAkev-project/trees/-tmp-spex-m4-self-launch-8eAkev-project/hooks-manifest
+1:Notification	10	false	.spec/spexcode/.plugins/core/idle/idle.sh
+2:PostToolUse	10	false	.spec/spexcode/.plugins/core/spec-of-file/spec-of-file.sh
+3:PreToolUse	10	false	.spec/spexcode/.plugins/core/mark-active/mark-active.sh
+4:PreToolUse	20	true	.spec/spexcode/.plugins/core/spec-first/spec-first.sh
+5:Stop	10	true	.spec/spexcode/.plugins/core/stop-gate/stop-gate.sh
+6:StopFailure	10	false	.spec/spexcode/.plugins/core/session-fail/fail.sh
+7:UserPromptSubmit	10	false	.spec/spexcode/.plugins/core/mark-active/mark-active.sh
+
+EVENT SessionStart rc=0 expected=0
+
+EVENT UserPromptSubmit rc=0 expected=0
+{"decision":"block","reason":"Before accessing governed source spec-cli/src/hooks.ts, read its governing spec FIRST: .spec/spexcode/spec-cli/sessions/injected-context/hook-dispatch/spec.md [hook-dispatch]. Read the relevant NEIGHBORS too: the parent that scopes it, the siblings it borders, and the children that refine it. Then reconcile deliberately: change the spec if the intent is changing, or make the code honor it. The one forbidden move is code that silently diverges from its spec. (Fires once per session, at the first governed code read.)"}Before accessing governed source spec-cli/src/hooks.ts, read its governing spec FIRST: .spec/spexcode/spec-cli/sessions/injected-context/hook-dispatch/spec.md [hook-dispatch]. Read the relevant NEIGHBORS too: the parent that scopes it, the siblings it borders, and the children that refine it. Then reconcile deliberately: change the spec if the intent is changing, or make the code honor it. The one forbidden move is code that silently diverges from its spec. (Fires once per session, at the first governed code read.)
+EVENT PreToolUse rc=2 expected=2
+
+EVENT PreToolUse rc=0 expected=0
+
+EVENT PostToolUse rc=0 expected=0
+
+EVENT Stop rc=0 expected=0
+STEP self-launch-cli initialize
+{"sessionId":"self-launch-trace-codex","createdAtMs":1787200944299,"retiredAtMs":null}
+STEP self-launch-cli enqueue
+{"enqueueSeq":1,"messageId":"1afb4ef548cd1f72af1482bfa33fc3a2","targetSessionId":"self-launch-trace-codex","senderSessionId":null,"protocolVersion":1,"kind":"audit","headers":{},"idempotencyKey":"trace-1","payloadHash":"0af17f880c298579977ebb55f31cd3d961fa4ec59ef686d81e366e5f2f835286","enqueuedAtMs":1787200944421,"dequeuedAtMs":null,"bodyBase64":"bWVzc2FnZQ=="}
+STEP self-launch-cli pending
+[{"enqueueSeq":1,"messageId":"1afb4ef548cd1f72af1482bfa33fc3a2","targetSessionId":"self-launch-trace-codex","senderSessionId":null,"protocolVersion":1,"kind":"audit","headers":{},"idempotencyKey":"trace-1","payloadHash":"0af17f880c298579977ebb55f31cd3d961fa4ec59ef686d81e366e5f2f835286","enqueuedAtMs":1787200944421,"dequeuedAtMs":null,"bodyBase64":"bWVzc2FnZQ=="}]
+STEP self-launch-cli dequeue
+{"enqueueSeq":1,"messageId":"1afb4ef548cd1f72af1482bfa33fc3a2","targetSessionId":"self-launch-trace-codex","senderSessionId":null,"protocolVersion":1,"kind":"audit","headers":{},"idempotencyKey":"trace-1","payloadHash":"0af17f880c298579977ebb55f31cd3d961fa4ec59ef686d81e366e5f2f835286","enqueuedAtMs":1787200944421,"dequeuedAtMs":1787200944721,"bodyBase64":"bWVzc2FnZQ=="}
+ASSERT no-governed-record /tmp/spex-m4-self-launch.8eAkev/store/projects/-tmp-spex-m4-self-launch-8eAkev-project/sessions/self-launch-trace-codex/session.json

@@ -1,0 +1,6 @@
+F-D4 repaired wrong-capability gate
+exit=2
+stdout-bytes=0
+stderr=session-listen: required delivery capability 'base64 -d exact decoding' is unavailable; install compatible tooling or repair PATH before retrying
+pending=1
+assertions=5/5

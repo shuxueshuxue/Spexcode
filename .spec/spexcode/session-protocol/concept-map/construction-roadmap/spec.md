@@ -25,6 +25,18 @@ or hostile during a sabotage run, and physically remove their code, files, locks
 and compatibility branches in the same governed milestone. A milestone is incomplete while runtime dual-read,
 dual-write, fallback, or a permanent translation adapter remains.
 
+A facility enters a milestone's removal set only when both conditions hold: this adopter consumes it, and this
+milestone's new path already replaces its behaviour. Every facility that enters must be removed. A measured-empty
+removal set closes the same gate rather than excusing it, and it closes only on falsifiable evidence — an inventory
+that classifies each candidate with source-backed citations, and a kernel file-access trace whose calibration proves
+it can see the syscall class it counts. Zero removals is then a measurement, not a skipped step, and the milestone
+says so in one voice instead of reporting completion and incompleteness at once.
+
+The distinction matters because the two failure modes are opposite. Counting a dependency that never existed as one
+that was removed hands the final audit a false ledger. Deleting a consumed facility this milestone has not replaced
+breaks a live path in a milestone that owns neither its consumer nor its replacement. So a consumed facility that
+this milestone does not replace is named and assigned to the milestone that owns it, and is left standing here.
+
 The plan must show the dependency graph, maximum safe concurrency, ownership boundaries, checkpoint commits,
 review handoffs, YATU evidence, merge gates, rollback points, and the exact final demolition gate. Necessary legacy
 data conversion is a bounded one-way migration with explicit preconditions and verification; it is never imported

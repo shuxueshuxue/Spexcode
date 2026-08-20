@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { sessionHeadline, STATUS_COLOR, STATUS_GLYPH } from './session.js'
-import { loadSessionTimeline, loadSessionDetail, sendSessionText } from './data.js'
+import { loadSessionTimeline, loadSessionDetail, loadSessionTranscript, sendSessionText } from './data.js'
 import { useT } from './i18n/index.jsx'
 import { inertChromePress } from './focus.js'
 import { useIsMobile } from './useIsMobile.js'
@@ -14,6 +14,30 @@ import ExecutionTrace from './ExecutionTrace.jsx'
 const timeOf = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 const dayOf = (ts) => new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' })
 const dayKey = (ts) => new Date(ts).toDateString()
+const epochOf = (ts) => typeof ts === 'number' ? ts : Date.parse(ts)
+
+const transcriptCache = new Map()
+
+function transcriptKey(sessionId, from, to) { return `${sessionId}:${from}:${to}` }
+
+function TranscriptPayload({ data }) {
+  if (!data?.turns?.length) return <div className="m-transcript-empty">transcript 已读取：该区间没有 turn</div>
+  return <div className="m-transcript-flow">
+    {data.turns.map((turn, index) => (
+      <div className={`m-transcript-turn is-${turn.role}`} key={`${turn.id || turn.at}-${index}`}>
+        <div className="m-transcript-role">{turn.role}</div>
+        {turn.text && <div className="m-transcript-text"><RichText>{turn.text}</RichText></div>}
+        {turn.tools?.map((tool) => (
+          <details className="m-transcript-tool" key={tool.id}>
+            <summary><span>{tool.name}</span><span>▸ 输出 {tool.outputLines || 0} 行</span></summary>
+            <pre>{tool.output || '无输出'}</pre>
+          </details>
+        ))}
+      </div>
+    ))}
+    {data.truncated && <div className="m-transcript-truncated">transcript 已截断：省略 {data.omittedTurns || 0} turns、{data.omittedBytes || 0} bytes</div>}
+  </div>
+}
 
 // a poll answer is usually the SAME history — keep the old array identity then, so nothing downstream
 // (the pin effect above all) re-fires on a no-change tick. Append-only log: length + last entry decide.
@@ -182,12 +206,15 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   const [sending, setSending] = useState(false)
   const [sendErr, setSendErr] = useState(null)
   const [copyStatus, setCopyStatus] = useState(null)
+  const [expandedStatuses, setExpandedStatuses] = useState(() => new Set())
+  const [transcripts, setTranscripts] = useState(() => new Map())
   const scrollRef = useRef(null)
   const timelineContentRef = useRef(null)
   const inputRef = useRef(null)
   const selectionDragRef = useRef(null)
   const timelineRangeRef = useRef(null)
   const copyStatusTimerRef = useRef(null)
+  const transcriptNowRef = useRef(Date.now())
   const pinnedRef = useRef(true)   // is the reader at the newest entry? Only then does a refresh follow it.
 
   const load = useCallback(() => loadSessionTimeline(s.id).then((d) => {
@@ -195,7 +222,7 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
   }), [s.id])
   useEffect(() => {
     if (!active) return undefined
-    setEvents(null); setDetail(null); setCopyStatus(null); pinnedRef.current = true
+    setEvents(null); setDetail(null); setCopyStatus(null); setExpandedStatuses(new Set()); setTranscripts(new Map()); transcriptNowRef.current = Date.now(); pinnedRef.current = true
     load(); loadSessionDetail(s.id).then((d) => { if (d) setDetail(d) })
     return undefined
   }, [s.id, load, active])
@@ -355,6 +382,23 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     return peer ? sessionHeadline(peer) : from.slice(0, 8)
   }
 
+  const toggleTranscript = async (event, to) => {
+    const from = epochOf(event.ts)
+    const key = transcriptKey(s.id, from, to)
+    const next = new Set(expandedStatuses)
+    if (next.has(key)) { next.delete(key); setExpandedStatuses(next); return }
+    next.add(key); setExpandedStatuses(next)
+    const cached = transcriptCache.get(key)
+    if (cached) { setTranscripts((previous) => new Map(previous).set(key, cached)); return }
+    const pending = { state: 'loading' }
+    transcriptCache.set(key, pending)
+    setTranscripts((previous) => new Map(previous).set(key, pending))
+    const result = await loadSessionTranscript(s.id, from, to)
+    const value = result.ok ? { state: 'ready', data: result.data } : { state: 'error', error: result.error }
+    transcriptCache.set(key, value)
+    setTranscripts((previous) => new Map(previous).set(key, value))
+  }
+
   // day-separated render list, oldest first (the wire order)
   const rows = []
   let lastDay = null
@@ -362,6 +406,15 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
     if (dayKey(e.ts) !== lastDay) { lastDay = dayKey(e.ts); rows.push(<div className="m-day" key={`d${i}`}>{dayOf(e.ts)}</div>) }
     if (e.kind === 'status') {
       const d = e.display || e.status
+      const nextStatus = (events || []).slice(i + 1).find((candidate) => candidate.kind === 'status')
+      const transcriptFrom = epochOf(e.ts)
+      const transcriptTo = nextStatus ? epochOf(nextStatus.ts) : Math.max(transcriptFrom + 1, transcriptNowRef.current)
+      const transcriptId = transcriptKey(s.id, transcriptFrom, transcriptTo)
+      const transcript = transcripts.get(transcriptId)
+      const expanded = expandedStatuses.has(transcriptId)
+      const scale = transcript?.state === 'ready'
+        ? `${transcript.data.turns.length} turns · ${transcript.data.turns.reduce((count, turn) => count + (turn.tools?.length || 0), 0)} tools`
+        : 'transcript'
       rows.push(
         <div className="m-ev" key={i}>
           <div className="m-ev-head">
@@ -369,6 +422,12 @@ export default function TimelineChat({ s, sessions = [], active = true, footerSt
             <span className="m-ev-word" style={{ color: STATUS_COLOR[d] }}>{t(`status.${d}`)}</span>
             <span className="m-ev-time">{timeOf(e.ts)}</span>
           </div>
+          <button type="button" className="m-transcript-toggle" aria-expanded={expanded} onClick={() => toggleTranscript(e, transcriptTo)}>
+            <span>{expanded ? '▾' : '▸'} {scale}</span>
+          </button>
+          {expanded && transcript?.state === 'loading' && <div className="m-transcript-state">transcript 加载中…</div>}
+          {expanded && transcript?.state === 'error' && <div className="m-transcript-state is-error">transcript 已不可用：{transcript.error}</div>}
+          {expanded && transcript?.state === 'ready' && <TranscriptPayload data={transcript.data} />}
           {e.note && (
             <div className="m-ev-note">
               <RichText>{e.note}</RichText>

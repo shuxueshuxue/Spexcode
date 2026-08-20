@@ -251,6 +251,15 @@ export async function loadSessionTimeline(id) {
   return res.json()
 }
 
+// A status row is the durable index; its explicit interval addresses the native payload lazily.
+export async function loadSessionTranscript(id, from, to) {
+  const query = new URLSearchParams({ from: String(from), to: String(to) })
+  const res = await apiFetch(`${sessionUrl(id, 'transcript')}?${query}`, { cache: 'no-store' })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) return { ok: false, error: body?.error || `HTTP ${res.status}` }
+  return { ok: true, data: body }
+}
+
 // The execution stream is already normalized by the harness adapter. This client only decodes its compact
 // JSON projection; it never receives a transcript path or parses native tool envelopes.
 export function subscribeSessionExecution(id, onExecution) {

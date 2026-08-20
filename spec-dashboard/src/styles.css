@@ -2132,6 +2132,19 @@ body.is-session-dragging, body.is-session-dragging * { cursor: grabbing !importa
 .m-ev-glyph { flex: none; }
 .m-ev-word { font-weight: var(--weight-bold); }
 .m-ev-time { margin-left: auto; flex: none; font-size: var(--type-caption); color: var(--muted); }
+.m-transcript-toggle { display: flex; justify-content: flex-end; width: 100%; margin: 3px 0 0; padding: 0 2px; color: var(--muted); background: none; border: 0; font: inherit; font-size: var(--type-caption); cursor: pointer; }
+.m-transcript-toggle:hover { color: var(--blue); }
+.m-transcript-state, .m-transcript-empty, .m-transcript-truncated { margin: 5px 0 0 14px; padding: 6px 8px; color: var(--muted); background: var(--panel); border-left: 2px solid var(--line); font-size: var(--type-meta); overflow-wrap: anywhere; }
+.m-transcript-state.is-error { color: var(--red); }
+.m-transcript-flow { margin: 5px 0 0 14px; padding: 7px 9px; background: var(--panel); border-left: 2px solid var(--blue); }
+.m-transcript-turn { padding: 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.m-transcript-turn:last-child { border-bottom: 0; }
+.m-transcript-role { margin-bottom: 2px; color: var(--muted); font-size: var(--type-caption); text-transform: uppercase; }
+.m-transcript-text { color: var(--ink2); overflow-wrap: anywhere; }
+.m-transcript-tool { margin-top: 5px; border: 1px solid var(--line); }
+.m-transcript-tool summary { display: flex; justify-content: space-between; gap: 8px; padding: 4px 6px; color: var(--ink2); cursor: pointer; font-size: var(--type-meta); }
+.m-transcript-tool summary span:last-child { color: var(--muted); white-space: nowrap; }
+.m-transcript-tool pre { max-height: 220px; overflow: auto; margin: 0; padding: 6px; color: var(--ink); background: var(--term-bg); font: inherit; font-size: var(--type-meta); white-space: pre-wrap; overflow-wrap: anywhere; }
 .m-ev-note {
   margin: 4px 0 0 14px; padding: 8px 10px; font-size: var(--type-body); line-height: var(--leading-relaxed); color: var(--ink2);
   overflow-wrap: anywhere; background: var(--panel); border-left: 2px solid var(--line); border-radius: 0 6px 6px 0;

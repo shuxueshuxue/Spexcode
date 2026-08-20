@@ -121,7 +121,7 @@ test('live offline and archived conversations share one footer with cold input a
   assert.match(timelineChat, /disabled=\{readOnly\}/)
   assert.match(timelineChat, /data-focus-sink=\{active && !readOnly \? '' : undefined\}/)
   assert.match(timelineChat, /if \(!active \|\| footerState === 'archived'\) return undefined[\s\S]{0,100}setInterval\(load, 8000\)/)
-  assert.match(source, /footerState=\{session\.archived \? 'archived' : session\.liveness === 'offline'/)
+  assert.match(source, /footerState=\{sessionFooterState\(session\)\}/)
   assert.match(source, /disabled=\{readOnlyPane\}/)
   assert.doesNotMatch(source, /si-shelf-card|className="si-offline"/)
 })

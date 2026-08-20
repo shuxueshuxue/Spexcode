@@ -22,7 +22,7 @@ test('session noun-verb help projects the exact verb from the shared drawer defi
     { verb: 'send', usage: 'Usage: spex session send <SEL> "<msg>"', behavior: /LAST RESORT:[\s\S]*UNSTABLE[\s\S]*SEL = session id[\s\S]*PROJECT-BOUND/ },
     { verb: 'wait', usage: 'Usage: spex session wait [SEL…]', behavior: /EDGE-TRIGGERED[\s\S]*non-actionable\s+status into an actionable one[\s\S]*SEL = session id/ },
     { verb: 'new', usage: 'Usage: spex session new "<prompt>"', behavior: /--prompt-file[\s\S]*successful receipt[\s\S]*PROJECT-BOUND WRITES/ },
-    { verb: 'ls', usage: 'Usage: spex session ls [SEL…] [--children[=<PARENT-SEL>]]', behavior: /spex session ls --ssh <address> <FULL-SESSION-ID>[\s\S]*--children scopes it to the caller[\s\S]*closed is a successful answer[\s\S]*anchors one remote project[\s\S]*SEL = session id/ },
+    { verb: 'ls', usage: 'Usage: spex session ls [SEL…] [--children[=<PARENT-SEL>]]', behavior: /spex session ls --ssh <address> <FULL-SESSION-ID>[\s\S]*--children scopes it to the caller[\s\S]*Closed records are hidden[\s\S]*--all includes them[\s\S]*anchors one remote project[\s\S]*SEL = session id/ },
     { verb: 'done', usage: 'Usage: spex session done --propose merge|nothing|close', behavior: /merge.*review[\s\S]*ONLY declaration.*clickable merge[\s\S]*nothing.*trap[\s\S]*close.*close-pending[\s\S]*settled work[\s\S]*no outstanding human decision, follow-up, or inspection/ },
     { verb: 'park', usage: 'Usage: spex session park --note <what-you-await>', behavior: /parked[\s\S]*managed watch delivery[\s\S]*background task[\s\S]*asking/ },
     { verb: 'ask', usage: 'Usage: spex session ask --note <what-you-await>', behavior: /asking[\s\S]*human reply, direction, or decision[\s\S]*reported finding\/recommendation[\s\S]*handoff[\s\S]*parked/ },
@@ -80,7 +80,7 @@ test('bare session keeps the complete compatible drawer', () => {
   assert.match(result.stdout, /spex session new "<prompt>"/)
   assert.match(result.stdout, /spex session wait \[SEL…\]/)
   assert.match(result.stdout, /spex session send <SEL> "<msg>"/)
-  assert.match(result.stdout, /spex session unarchive <SEL>/)
+  assert.doesNotMatch(result.stdout, /spex session (?:archive|unarchive)\b/)
 })
 
 test('Stop teaching names every declaration face without changing the gate', () => {

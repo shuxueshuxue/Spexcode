@@ -14,7 +14,6 @@ const PARENT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const CHILD_WORKING = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const CHILD_ASKING = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const OTHER = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
-const CLOSED = 'deadbeef-dead-4bee-8bee-deadbeefdead'
 
 function session(id: string, parent: string | null, status: string) {
   return {
@@ -78,53 +77,6 @@ test('session ls projects parentage, a child scope, and status summary without s
     assert.equal(explicit.code, 0, explicit.stderr)
     assert.match(explicit.stdout, new RegExp(CHILD_WORKING.slice(0, 8)))
     assert.match(explicit.stdout, new RegExp(CHILD_ASKING.slice(0, 8)))
-  } finally {
-    app.close()
-    await once(app, 'close')
-  }
-})
-
-test('session ls names terminal close history instead of collapsing it into a never-existed miss', async () => {
-  const { app, api } = await server((req, res) => {
-    if (req.url === '/api/sessions?all=1') {
-      res.setHeader('content-type', 'application/json')
-      res.end('[]')
-      return
-    }
-    if (req.url === '/api/sessions/deadbeef/closure') {
-      res.setHeader('content-type', 'application/json')
-      res.setHeader('x-spexcode-close-history', 'v1')
-      res.end(JSON.stringify({ id: CLOSED, closedAt: '2026-08-11T04:00:00.000Z' }))
-      return
-    }
-    if (req.url === '/api/sessions/ffffffff/closure') {
-      res.writeHead(404, { 'content-type': 'application/json', 'x-spexcode-close-history': 'v1' })
-      res.end(JSON.stringify({ error: 'no terminal close history for this session' }))
-      return
-    }
-    if (req.url === '/api/sessions/abad1dea/closure') {
-      // An old backend has no closure route at all. Its generic 404 must not become a terminal-history miss.
-      res.writeHead(404, { 'content-type': 'application/json' })
-      res.end(JSON.stringify({ error: 'not found' }))
-      return
-    }
-    assert.fail(`unexpected request ${req.method} ${req.url}`)
-  })
-  try {
-    const closed = await runLs(['--all', 'deadbeef', '--api', api])
-    assert.equal(closed.code, 0, closed.stderr)
-    assert.equal(closed.stderr, '')
-    assert.match(closed.stdout, /deadbeef: closed at 2026-08-11T04:00:00.000Z/)
-
-    const absent = await runLs(['--all', 'ffffffff', '--api', api])
-    assert.equal(absent.code, 2)
-    assert.equal(absent.stdout, '')
-    assert.match(absent.stderr, /ffffffff was not found in this project's live, archive, or terminal-close history/)
-
-    const legacy = await runLs(['--all', 'abad1dea', '--api', api])
-    assert.equal(legacy.code, 1)
-    assert.equal(legacy.stdout, '')
-    assert.match(legacy.stderr, /backend does not support terminal close history; refusing to label abad1dea as never existed/)
   } finally {
     app.close()
     await once(app, 'close')

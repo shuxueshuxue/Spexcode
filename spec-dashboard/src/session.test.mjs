@@ -1,6 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { sessionAncestorIds, sessionPresentationOrder } from './session.js'
+import { sessionAncestorIds, sessionFooterState, sessionPresentationOrder } from './session.js'
+
+test('footer state keeps queued live and archived ahead of offline', () => {
+  assert.equal(sessionFooterState({ status: 'queued', liveness: 'offline' }), 'live')
+  assert.equal(sessionFooterState({ status: 'offline', liveness: 'offline' }), 'offline')
+  assert.equal(sessionFooterState({ archived: true, status: 'offline', liveness: 'offline' }), 'archived')
+})
 
 test('session ancestor path reveals every present nesting parent', () => {
   const sessions = [

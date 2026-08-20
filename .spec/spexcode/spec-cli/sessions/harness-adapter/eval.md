@@ -498,7 +498,7 @@ scenarios:
       path: spec-cli/src/harness.test.ts
       name: Codex cold proof reads turn presence from the collection census it already performs
     description: >-
-      Retire a real, long-lived Codex-backed session through `spex session archive` while the shared app-server
+      Close a real, long-lived Codex-backed session through `spex session close` while the shared app-server
       still holds its thread loaded and that thread's persisted rollout has grown large — the target measured
       here in the tens-to-hundreds of megabytes, against the census's fixed budget. Time the outcome and record
       which native question the cold proof asked of the app-server.
@@ -515,9 +515,9 @@ scenarios:
     code:
       - spec-cli/src/harness.ts#codexColdPreflightOnce
       - spec-cli/src/harness.ts#codexRolloutTurnSettlement
-    related: spec-cli/src/session-archive-cold-close.api.test.ts
+    related: spec-cli/src/session-close-active.api.test.ts
     test:
-      path: spec-cli/src/session-archive-cold-close.api.test.ts
+      path: spec-cli/src/session-close-active.api.test.ts
       name: CLI close settles an unknown Codex member from rollout without weakening active or missing-evidence refusals
     description: >-
       In an isolated project with a fixture Codex app-server and a real detached app-server owner, invoke the public
@@ -525,7 +525,7 @@ scenarios:
       live status unknown while the final JSONL rollout record is `event_msg`/`task_complete`; make a second target
       own a live active child; and make a third unknown member have no rollout at all.
     expected: >-
-      The terminal-rollout target closes and removes its record. The live active child still rejects close with the
+      The terminal-rollout target closes and retains its record. The live active child still rejects close with the
       exact existing `Codex subtree member <id> has an active turn` reason. The unknown member without terminal
       evidence still rejects and identifies both the absent determinate live Codex client state and missing rollout,
       with its record retained. The fixture mutates no pre-existing user session, worktree, branch, or app-server.

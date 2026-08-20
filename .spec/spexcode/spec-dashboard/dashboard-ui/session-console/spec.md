@@ -25,6 +25,8 @@ related:
   - spec-dashboard/test/command-box.e2e.mjs
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
+  - spec-dashboard/test/session-surface-cold-readable.e2e.mjs
+  - spec-dashboard/test/session-archive-drawer.e2e.mjs
 ---
 
 # session-console
@@ -65,13 +67,25 @@ the rest of the dashboard, so re-theming the app re-themes the console with it (
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
 dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]],
 with a dense 204px default) and a right area that
-**morphs** by what's focused. The list's **top button row** holds three equal compact pills above the session rows, kept out of the `↑/↓`
-path down to a session: the `＋` New Session button, the **archive** star ([[archive]] — permanently present,
-showing no numeric count), and a **Search** button, the click twin of the ⌥+/ palette
-([[session-search]] owns that contract). New and the archive door are mutually exclusive destinations, so opening
-the shelf clears New's visual active treatment without changing the selected tab. The list is bounded by the routed page's viewport: when its visible
-zones and rows exceed that height, the list owns the vertical scrollbar instead of growing behind the page
-pane's clipped edge.
+**morphs** by what's focused. The list's **top button row** holds two equal compact pills above the session rows,
+kept out of the `↑/↓` path down to a session: `＋` New Session and Search, the click twin of the ⌥+/ palette
+([[session-search]] owns that contract). The list is bounded by the routed page's viewport. Its working-board
+region owns the sidebar's only vertical scrollbar when the rows exceed the available height.
+
+The archive is a permanent **place**, not a list mode. A bottom-pinned `Archive N` bar remains visible even when
+`N` is zero; `N` is the complete count of closed session records, with no capacity number because close has
+already reclaimed the worktree. The bar's disclosure control expands a flat newest-closed-first preview in place,
+while its label routes the right pane to the full archive page. These are separate actions on one line. The preview
+shows as many recent rows as fit without exceeding one third of the sidebar height, followed by one `View all N`
+exit to the full page. It never scrolls and never creates a nested scrollport. When the available third cannot
+hold a useful preview plus its exit, disclosure routes directly to the full page. Selecting a preview row opens
+that closed session's ordinary read-only Conversation face.
+
+The archive page occupies the complete right pane. It reads the full closed-session index in one request, renders
+the newest-closed-first rows under sticky Today / Yesterday / calendar-date headings, and owns a search field that
+filters that complete index locally. Pagination is deliberately absent: the scrollbar represents the whole result
+set from its first paint. This page is the only archive-search entry; the global palette neither includes closed
+rows nor hints at hidden archive matches.
 
 The console list is the mutable home of its session forest ([[session-nesting]]). Dragging a row moves a
 full-row ghost, dims the original, and highlights a valid receiving parent; a nested row additionally exposes
@@ -85,6 +99,9 @@ The gesture is deliberately ordinary pointer drag rather than a tiny dedicated h
 will move, so the feedback must visibly be that row. Right-click keeps the complementary
 explicit `remove from parent` action for a nested row. Both paths call the one reparent endpoint and leave
 selection, terminal focus, and invalid/no-op drops alone.
+Dropping a working row on the permanent archive bar instead performs the row's one reversible `close` transition:
+the row leaves the working board and enters the archive in the same gesture. This direct placement has no confirm;
+close remains one action here because its retained record, branch, transcript, and archive ref make it reversible.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
@@ -131,26 +148,28 @@ including CLI and direct API use. This tab owns only the desktop chrome around i
 background fire) and never expands a plugin body itself.
 
 An existing session has one visible **base surface**. A pane-backed adapter offers two mutually exclusive
-base surfaces: its live interactive tmux **Terminal** (SessionTerm), which is the default input surface, and
-the shared `TimelineChat` **Conversation** over [[session-timeline]]. A headless adapter has no pane at any
-liveness and is always Conversation. The toolbar toggle next to the top-right files control changes a
+base surfaces while live: its interactive tmux **Terminal** (SessionTerm), which is the default input surface,
+and the shared `TimelineChat` **Conversation** over [[session-timeline]]. A headless adapter has no pane at any
+liveness and is always Conversation. The toolbar toggle next to the top-right files control changes a live
 pane-backed session between Terminal and Conversation; the icon always names the other destination, and no
-second terminal/conversation view is visible at once. The conversation stays mounted after its first visit while
-an explicit offline state puts the same relaunch panel in front, so resuming reveals the preserved history
-immediately. That conversation is the whole terminal-free console, with no [[message-stream]] native-event
-drill-down. The terminal mount and the relaunch panel key on **liveness, never the lifecycle
-label**: a session whose process is gone reads `offline` whatever its authored lifecycle (`asking`,
-`review`, `error`, …), so it never mounts a tmux client against a dead id (which would leak tmux's bare
-"no sessions" into the pane) — it shows the **relaunch panel** instead, offering to resume the same
-conversation (the transcript and the session's global record survive — see [[runtime]]). `queued` is the one exception: it
-has intentionally not launched, so it shows neither a terminal nor a relaunch, and self-starts as a slot
-frees. Liveness is not the only thing that can claim the surface: an **archived** session ([[archive]]) shows
-its archive card instead, keyed on the human's filing rather than on liveness, and that card OUTRANKS both —
-opening a session you filed away should answer "want it back?" in one button, not drop you into a terminal you
-deliberately put out of sight, so relaunch stands down and folds its button into the card. Whichever panel
-owns the surface, **the pane behind it must be hidden AND pointer-inert**, never merely covered: an
-absolutely-positioned live xterm otherwise sits on top and swallows the panel's own button while the panel
-looks perfectly correct. That was found twice, independently, once per panel. The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
+second terminal/conversation view is visible at once.
+
+Lifecycle does not create another right-pane face. **Every existing session, including offline and archived
+records, renders the same Conversation DOM: the same surface tabs, the same timeline body, and one shared footer.**
+For a live session that footer is only the enabled message composer. For an offline session it contains the
+same disabled, non-focusable composer followed by `⏻ agent 已离线 · 内容只读` and the ordinary relaunch
+action. For an archived session it contains that disabled composer followed by `▤ 已归档 · 内容只读` and the
+ordinary resume action. These are data states of one footer component, not separate panels. The timeline remains
+readable without restoring the agent; archived history is immutable and cannot receive later `sent` events, while
+an offline record may still be written by an external `spex session send`, so archived is the only state that reads
+once when selected and does not poll. A pane-backed offline or archived record keeps its Terminal tab visible but disabled, and activating
+that tab cannot leave Conversation. `queued` remains the one exception to offline relaunch: it has intentionally
+not launched and self-starts as a slot frees.
+
+That conversation is the whole terminal-free console, with no [[message-stream]] native-event drill-down. The
+terminal mount keys on **liveness, never the lifecycle label**: a session whose process is gone reads `offline`
+whatever its authored lifecycle (`asking`, `review`, `error`, …), so it never mounts a tmux client against a dead
+id (which would leak tmux's bare "no sessions" into the pane). The terminal pane is **flat**: it fills the right area directly — no inner bordered box, no title bar,
 no nested levels, and no permanently reserved second-input strip. Its own prompt and status line reach the
 pane's bottom edge. `Alt+I` suspends [[command-box]] over the lower middle without resizing or reflowing
 xterm; its fixed footer and upward growth belong to that temporary control surface. Above the pane, one
@@ -287,21 +306,21 @@ before a successful send clears the draft and closes the box. A `/` line
 may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every toolbar twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable
-worktree; `/archive` and `/unarchive` shelve and restore it without stopping anything ([[archive]] — exactly
-one of the pair is offered, keyed on `archived` alone); `/close` removes the worktree; `/merge` is offered
+worktree; `/close` performs the soft terminal transition into the permanent archive place ([[archive]]),
+removing the worktree while retaining the branch, record, and conversation; `/merge` is offered
 only for the live review proposal declared by `done --propose merge`; `/eval` opens the canonical
 session-scoped Evals page.
 Lifecycle actions consume both HTTP status and the structured `{ok,error}` body before the board reloads, so
 a refused stop/close/relaunch remains visible instead of reading as a successful background no-op. Command Box
 and lifecycle actions use one selected-session, right-pane action-outcome mechanism only while they are pending:
 Command Box owns `sending...` while open; an existing-session action owns `working...` in its selected
-action/relaunch panel. Settled delivery and failure publish once through [[transient-notices]], so neither an
+action surface. Settled delivery and failure publish once through [[transient-notices]], so neither an
 old refusal nor a success permanently spends console geometry. The left session list is navigation-only and
-renders no action alert. Bulk archive and close leave select mode immediately but aggregate every returned
+renders no action alert. Bulk close leaves select mode immediately but aggregates every returned
 refusal into that same selected-session result, so an HTTP conflict never exists only in browser tooling.
 **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
 reports `sending...`, while the latter reports the neutral `working...`; reusing delivery copy for relaunch,
-stop, archive, close, or merge would falsely claim the dashboard sent the agent a prompt.
+stop, close, or merge would falsely claim the dashboard sent the agent a prompt.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
 tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
 that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` stays

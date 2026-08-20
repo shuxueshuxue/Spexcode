@@ -868,6 +868,22 @@ test('a RETIRED session still receives: a message it cannot act on must still le
   })
 })
 
+test('a closed session refuses lifecycle writes as an explicit read-only state', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
+  seedSessionRecord(home)
+  await withHomeAsync(home, async () => {
+    const record = JSON.parse(readFileSync(sessionRecordPath(ID), 'utf8'))
+    writeFileSync(sessionRecordPath(ID), JSON.stringify({
+      ...record,
+      archived: true,
+      stopped: true,
+      cold_proof: 'cold-v1|opencode|timeline-via-test|no-resident-ref',
+      worktree_path: join(home, 'closed-worktree'),
+    }, null, 2) + '\n')
+    assert.throws(() => markState('active', { sessionId: ID }), /closed session .*read-only.*resume/i)
+  })
+})
+
 test('an unknown session id is the loud failure, and it records nothing', async () => {
   const home = mkdtempSync(join(tmpdir(), 'spex-timeline-'))
   await withHomeAsync(home, async () => {

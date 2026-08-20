@@ -4,14 +4,12 @@ import Modal from './Modal.jsx'
 import SessionAttach from './SessionAttach.jsx'
 import { apiFetch, loadSettings } from './data.js'
 import { sessionHeadline } from './session.js'
-import { archiveEligible } from './sessionCommands.js'
 import { useEscLayer } from './escStack.js'
 import { useT } from './i18n/index.jsx'
 
 export default function SessionContextMenu({ menu, onClose, onChanged, onLock, onMultiSelect, onDetach, onError }) {
   const t = useT()
   const [renaming, setRenaming] = useState(null)   // the session whose rename prompt is open | null
-  const [archiving, setArchiving] = useState(null) // the session whose archive-confirm prompt is open | null
   const [closing, setClosing] = useState(null)     // the session whose close-confirm prompt is open | null
   const [quarantining, setQuarantining] = useState(null) // corrupt row whose opaque record needs witnessed quarantine
   const [attaching, setAttaching] = useState(null) // the session whose attach modal is open | null ([[attach-menu]])
@@ -38,7 +36,6 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
   // press closes the topmost one, never the session panel behind it (the old bespoke window listener raced it).
   useEscLayer(!!menu, onClose)
   useEscLayer(!!renaming, () => setRenaming(null))
-  useEscLayer(!!archiving, () => setArchiving(null))
   useEscLayer(!!closing, () => setClosing(null))
   useEscLayer(!!quarantining, () => setQuarantining(null))
   // attach's own Esc layer lives inside SessionAttach (it owns the modal); nothing to peel here.
@@ -91,24 +88,6 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
       if (response.ok) return
       const body = await response.json().catch(() => null)
       onError?.(body?.error || `session resume refused (HTTP ${response.status})`)
-    }).catch((error) => onError?.(error instanceof Error ? error.message : String(error))).finally(() => onChanged?.())
-  }
-
-  const startArchive = (e) => {
-    e.stopPropagation()
-    setArchiving(menu.session)
-    onClose()
-  }
-
-  const confirmArchive = () => {
-    const { id } = archiving
-    setArchiving(null)
-    apiFetch(`/api/sessions/${id}/archive`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on: true }),
-    }).then(async (response) => {
-      const body = await response.json().catch(() => null)
-      if (!response.ok || body?.ok === false)
-        onError?.(body?.error || `session archive refused (HTTP ${response.status})`)
     }).catch((error) => onError?.(error instanceof Error ? error.message : String(error))).finally(() => onChanged?.())
   }
 
@@ -207,9 +186,6 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
           </ContextMenuGroup>
           <ContextMenuSeparator />
           <ContextMenuGroup>
-            {!menu.session.archived && archiveEligible(menu.session.status, false) && (
-              <ContextMenuItem icon="star" danger onClick={startArchive}>{t('sessionWindow.archive')}</ContextMenuItem>
-            )}
             <ContextMenuItem icon="trash" danger onClick={startClose}>{t('sessionWindow.close')}</ContextMenuItem>
           </ContextMenuGroup>
         </ContextMenu>
@@ -234,22 +210,6 @@ export default function SessionContextMenu({ menu, onClose, onChanged, onLock, o
               <button type="submit" className="sess-rename-btn sess-rename-save" disabled={busy}>{t('common.save')}</button>
             </div>
           </form>
-        </Modal>
-      )}
-      {archiving && (
-        <Modal
-          title={t('sessionWindow.archiveTitle', { name: sessionHeadline(archiving) })}
-          closeLabel={t('common.close')}
-          className="sess-rename-modal"
-          onClose={() => setArchiving(null)}
-        >
-          <div className="sess-confirm">
-            <p className="sess-confirm-msg">{t('sessionWindow.archiveConfirm')}</p>
-            <div className="sess-rename-actions">
-              <button type="button" className="sess-rename-btn" onClick={() => setArchiving(null)}>{t('common.cancel')}</button>
-              <button type="button" className="sess-rename-btn danger" onClick={confirmArchive} autoFocus>{t('sessionWindow.archive')}</button>
-            </div>
-          </div>
         </Modal>
       )}
       {closing && (

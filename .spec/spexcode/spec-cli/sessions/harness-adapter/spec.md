@@ -16,6 +16,7 @@ related:
   - spec-cli/src/materialize.ts
   - spec-cli/src/sessions.ts
   - spec-cli/src/session-declarations.ts
+  - spec-cli/src/transcript-reader.ts
   - spec-cli/src/harness.test.ts
   - spec-cli/hooks/harness.sh
   - spec-cli/templates/hooks/prepare-commit-msg
@@ -140,6 +141,10 @@ surface:
   and HTTP code consume only that normalized result and never branch on a harness id. The transcript is an
   ephemeral adapter observation, never a second SpexCode session record: [[message-stream]] owns the one
   conversation entry and its REST/SSE transport.
+- **readTranscript(thread, range)** — the durable payload seam ([[transcript-reader]]). Claude and Codex resolve
+  their native files and return bounded, interval-filtered turns with tool output; adapters without a reliable
+  native transcript return an explicit unsupported error. This reader is independent of runtime liveness and never
+  writes the session record or timeline.
 - **events / shim** — which lifecycle events to bind, and the per-harness hook shim that points each at the
   dispatcher (`.claude/settings.json` vs `.codex/hooks.json` vs pi's generated `.pi/extensions/spexcode.ts` —
   the shim's `content` is whatever FILE that harness discovers, not necessarily a hooks JSON; pi has no

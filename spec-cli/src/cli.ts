@@ -892,9 +892,9 @@ if (cmd === 'serve') {
     // the board comes from the backend (so it shows the sessions of whatever SPEXCODE_API_URL points at,
     // incl. a remote machine); selectSessions/formatTable are pure presentation, applied client-side.
     const { ownSessionId, resolveSession, selectChildren, selectSessions, formatTable } = await import('./sessions.js')
-    const { clientListSessions, clientListSessionsThroughPeer, clientSessionClosure } = await import('./client.js')
-    // The backend's default projection excludes cold archives. --all and an explicit selector request the
-    // history projection so an operator can still inspect or unarchive one deliberately.
+    const { clientListSessions, clientListSessionsThroughPeer } = await import('./client.js')
+    // The backend's default projection excludes closed records. --all and an explicit selector request the
+    // retained record projection so an operator can inspect or resume one deliberately.
     const selectors = positionals(4)
     rejectUnknownBackendFlags('spex session ls', 4, ['status', 'all', 'json', 'ssh', 'children'], ['children'])
     const peerAnchor = parseSessionPeerAnchor('ls', selectors)
@@ -939,17 +939,10 @@ if (cmd === 'serve') {
     const selected = selectSessions(scoped, peerAnchor ? [] : selectors)
     const picked = flag('status') ? selected.filter((session) => flag('status')!.split(',').includes(session.status)) : selected
     if (!peerAnchor && children === undefined && selectors.length === 1 && !selected.length && idLikeSelector(selectors[0])) {
-      const closure = await clientSessionClosure(selectors[0])
-      if (closure) {
-        const result = { id: closure.id, status: 'closed', closedAt: closure.closedAt }
-        console.log(has('json') ? JSON.stringify([result], null, 2) : `${closure.id.slice(0, 8)}: closed at ${closure.closedAt}`)
-      } else {
-        console.error(`spex session ls: ${selectors[0]} was not found in this project's live, archive, or terminal-close history`)
-        process.exit(2)
-      }
-    } else {
-      console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked, true, scope))
+      console.error(`spex session ls: ${selectors[0]} was not found in this project's session records`)
+      process.exit(2)
     }
+    console.log(has('json') ? JSON.stringify(picked, null, 2) : formatTable(picked, true, scope))
   } else if (sub === 'resources') {
     rejectUnknownBackendFlags('spex session resources', 4, ['json'])
     const { clientResources } = await import('./client.js')
@@ -1138,13 +1131,6 @@ if (cmd === 'serve') {
       const r = await c.clientInterrupt(full)
       console.log(r.ok ? `interrupted ${full}` : `interrupt failed: ${r.error}`)
       process.exit(r.ok ? 0 : 1)
-    } else if (sub === 'archive' || sub === 'unarchive') {
-      // ARCHIVING/legacy unarchive ([[archive]]) — archive exact-stops before filing; unarchive signposts to
-      // resume and recreates the same conversation.
-      const on = sub === 'archive'
-      const full = await resolveSelectorOrExit(id)
-      const ok = await c.clientArchive(full, on)
-      console.log(!ok ? `no such session ${full}` : `${on ? 'archived' : 'resumed'} ${full}`)
     } else if (sub === 'close') {
       const full = targetArgs?.sshAddress
         ? (FULL_SESSION_ID.test(id ?? '') ? id! : sessionTargetUsage('close', '--ssh requires a full session id, not a selector'))

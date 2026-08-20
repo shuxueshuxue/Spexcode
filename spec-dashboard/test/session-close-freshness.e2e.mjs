@@ -12,10 +12,8 @@ const root = resolve(here, '..', '..')
 const cliRoot = join(root, 'spec-cli')
 const dashboardRoot = join(root, 'spec-dashboard')
 const sharedRoot = resolve(root, '..', '..')
-const dependencyRoot = existsSync(join(cliRoot, 'node_modules')) ? root : sharedRoot
-const tsxCli = join(dependencyRoot, 'spec-cli', 'node_modules', 'tsx', 'dist', 'cli.mjs')
-const dependencyDashboardRoot = join(dependencyRoot, 'spec-dashboard')
-const dependencyModules = join(dependencyDashboardRoot, 'node_modules')
+const dependencyRoot = existsSync(join(root, 'node_modules', 'tsx', 'dist', 'cli.mjs')) ? root : sharedRoot
+const dependencyModules = join(dependencyRoot, 'node_modules')
 const playwrightPath = process.env.SPEXCODE_PLAYWRIGHT_PATH || '/home/jeffry/studio-harness/node_modules/playwright/index.mjs'
 const chromiumPath = process.env.CHROMIUM || '/snap/bin/chromium'
 const out = resolve(process.env.OUT || '/tmp/session-close-freshness-e2e')
@@ -101,7 +99,7 @@ try {
   const apiPort = await freePort()
   const uiPort = await freePort()
   const base = `http://127.0.0.1:${uiPort}`
-  backend = spawn(process.execPath, [tsxCli, join(cliRoot, 'src', 'index.ts')], {
+  backend = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(cliRoot, 'src', 'index.ts')], {
     cwd: project,
     env: {
       ...process.env,

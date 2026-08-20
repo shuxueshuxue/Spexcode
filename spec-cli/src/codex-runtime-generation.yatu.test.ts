@@ -4,7 +4,7 @@ import { chmodSync, copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSy
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { archiveSession, closeSession } from './sessions.js'
+import { closeSession } from './sessions.js'
 import { codexLoadedReferenceIds, codexStartThread, codexTurn } from './harness.js'
 import { bindCodexGeneration, ensureCodexCurrentGeneration, legacyCodexGenerationEndpoint, readCodexGenerationLedger, resolveCodexGenerationForSession, type CodexGenerationEndpoint } from './codex-runtime-generations.js'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
@@ -109,24 +109,10 @@ test('YATU: real Codex legacy 22/13/9 generation switch preserves protected refs
     assert.equal(beforeArchive.referenceIds.length, 22)
     const seeded = await codexTurn(legacy.socketPath, governed[0]!, 'Reply with exactly OK.', project)
     if (!seeded.ok) throw new Error(seeded.error)
-    let archived = false
-    let archiveError = ''
-    for (let attempt = 0; attempt < 60; attempt++) {
-      try { archived = await archiveSession(target) }
-      catch (error) { archiveError = error instanceof Error ? error.message : String(error) }
-      if (archived) break
-      await sleep(1000)
-    }
-    assert.equal(archived, true, archiveError || 'target did not become archivable')
-    const afterArchive = await codexLoadedReferenceIds(legacy.socketPath)
-    if (!afterArchive.ok) throw new Error(afterArchive.error)
-    assert.equal(afterArchive.ok, true)
-    assert.equal(afterArchive.referenceIds.includes(governed[0]!), false)
-    assert.ok(protectedUnowned.every((threadId) => afterArchive.referenceIds.includes(threadId)), 'all 9 unowned references survive target archive')
-    assert.ok(governed.slice(1, 6).every((threadId) => afterArchive.referenceIds.includes(threadId)), 'five protected governed sessions survive target archive')
     assert.equal(await closeSession(target), true)
-    assert.equal(existsSync(sessionStoreDir(target)), false)
+    assert.equal(existsSync(sessionStoreDir(target)), true, 'soft close retains the session record')
     assert.equal(existsSync(worktree), false)
+    assert.equal(execFileSync('git', ['-C', project, 'show-ref', '--verify', `refs/heads/${branch}`], { encoding: 'utf8' }).trim().endsWith(`refs/heads/${branch}`), true)
     const afterClose = await codexLoadedReferenceIds(legacy.socketPath)
     if (!afterClose.ok) throw new Error(afterClose.error)
     assert.equal(afterClose.ok, true)

@@ -1,190 +1,65 @@
 ---
 scenarios:
-  - name: shelve-and-restore-round-trip
-    test: spec-dashboard/test/archive-shelf.e2e.mjs
+  - name: close-dirty-work-round-trip
+    test: spec-cli/test/session-close-dirty.e2e.mjs
     description: >
-      Drive the real dashboard console in a browser against a live backend. Starting from the session
-      list, archive the SELECTED live Codex leaf through the product's own Command Box (`/archive`), then read
-      the rendered DOM and API/resource census at each step: the header's three pills, the row leaving the default
-      graph/list/edges, the flat archive collection, and the offline archive card. Resume with the card's one
-      button and observe the same conversation returning through starting -> online. Capture process/runtime and
-      sibling shared-root evidence alongside `GET /api/sessions?all=1` and `GET /api/resources`.
+      Through the real HTTP close and resume endpoints, create a session with tracked and untracked dirty
+      files, close it, inspect the archive ref/worktree/branch/record, then resume it.
     expected: >
-      Archive succeeds only after exact leaf/tmux/adapter cleanup: the record preserves worktree, branch, dirty
-      bytes, and conversation identity while reading `archived:true`, `stopped:true`, `status:offline`,
-      `liveness:offline`. The default API/graph/edges/subsession counts, maxActive occupancy, and active resource
-      owners exclude it; the explicit history API shows it as a flat cold row with no status zones. The shared
-      app-server PID/start/socket and sibling loaded/new-turn reference remain unchanged. Resume is the card's
-      only exit and recreates the same conversation through starting -> online. A guard refusal is nonzero/409,
-      keeps the record unarchived and visible, and leaves all runtime/worktree/shared-root evidence unchanged.
-    tags: [frontend-e2e]
-  - name: shelving-costs-no-git-walk
+      Close proves the exact cold stop, publishes refs/spex-archive/<id> before removing the worktree, keeps the
+      branch and record, and resume rebuilds the worktree with both dirty files unchanged before relaunching.
+    tags: [backend-api, cli]
+  - name: close-ref-publication-failure-is-loud
+    test: spec-cli/test/session-close-ref-failure.e2e.mjs
     description: >
-      Call the default `GET /api/graph` and the explicit `GET /api/sessions?all=1` and compare the same archived
-      record. The default graph is a working-set projection; the explicit history read is the cold archive view.
+      Make the archive ref update fail while closing a dirty session through the real HTTP endpoint.
     expected: >
-      A true cold archive is absent from default graph/list/hover/edges/subsession counts and active resources,
-      while the explicit history record is offline with `ops` empty. The adapter residency census is one
-      project-wide paginated loaded-ID read (O(pages), no per-thread `thread/read`); a legacy archived+live or
-      externally reloaded violation is instead projected archived:false with real liveness/status plus an
-      `archiveHazard` marker until an explicit repair. A dead PID plus socket with no live listener is a healthy
-      empty root, while a live or ambiguous root remains a visible hazard. Removing the archived active root is
-      carried by that same subtractive session splice: its overlays and empty ghosts disappear with the row, the
-      result equals an independent full oracle, and neither the immediate publication nor the next patrol starts a
-      Git/history build.
+      Close fails loudly and leaves the worktree, record, branch, and dirty bytes untouched; no close projection is
+      published and no resource is removed.
     tags: [backend-api]
-  - name: archive-cold-runtime-and-capacity
-    description: >
-      Against two real Codex sibling leaves on one project app-server, capture a pre-archive and post-archive
-      census through the default session API/graph/edges, `spex session resources --json`, and configured
-      `sessions.maxActive` queue capacity.
-    expected: >
-      The A census may show the archived-live hazard and shared-root guard loss. The B archive succeeds only with
-      exact target PID/start/argv/thread ownership and detached shared-root proof despite unrelated unowned refs;
-      target runtime/artifacts are gone, target is offline history-only, sibling leaf and shared app-server
-      identity/ref remain and can take a new turn, and capacity/resources no longer charge the target. A native
-      descendant created after preflight but before archive settlement is caught by the post-mutation census,
-      fails loud, and is compensated rather than filed as cold.
-    tags: [backend-api, cli]
-  - name: direct-live-close-cold-boundary
+  - name: close-refuses-an-active-turn
     test:
-      path: spec-cli/src/session-close-live-boundary.api.test.ts
-      name: public direct close reaches deletion only after the live target is cold
+      path: spec-cli/src/session-close-active.api.test.ts
+      name: close refuses active native turns and missing evidence while retaining records
     description: >
-      In an isolated project, start one live, exactly-owned Claude fixture with its real tmux pane, rendezvous
-      listener, PID artifact, worktree, and branch. Drive public HTTP close and capture the retained record plus
-      exact runtime facts at the worktree-removal boundary.
+      Drive close against a real backend fixture whose native adapter reports an active descendant turn.
     expected: >
-      Direct close first creates a cold archive boundary: before worktree deletion the record remains present
-      with archived:true and a target-bound cold proof, while the exact pane, PID, and rendezvous listener are
-      absent. Only then may close remove record, worktree, and branch.
+      Close refuses before any interrupt or deletion, naming the active turn and retaining every owned resource.
     tags: [backend-api, cli]
-  - name: terminal-close-retains-attribution-and-refuses-live-runtime
-    test:
-      path: spec-cli/src/session-archive-cold-close.api.test.ts
-      name: public close cold-retires a live owned runtime before deletion and refuses an unowned one
+  - name: legacy-archived-row-is-readable
+    test: spec-cli/test/session-close-legacy.e2e.mjs
     description: >
-      Drive public close against a live, owned runtime in an isolated project and intercept the owned worktree
-      removal only to inspect the product state immediately before it happens. Exercise an exact refusal and
-      compensation control in the same fixture. Read the append-only project close ledger after each call; the
-      Codex phase regression is covered alongside it by the close unit fixture.
+      Load an existing archived:true record with its historical coldProof and no worktree, then read and resume it
+      through the real backend.
     expected: >
-      Direct close first archives/cold-retires the exact live target. At the deletion boundary its runtime is
-      absent and its retained record is archived with a cold witness; only then are record, worktree, and branch
-      removed. An exact active native target is first interrupted through its adapter, then receives that same
-      fresh cold proof before deletion; an unowned, generation-swapped, unknown, or still-active target is refused.
-      A refused or compensated attempt keeps the runtime/record/worktree/branch intact and writes no
-      close-authorized event. Source is either user or an explicitly unverified session claim; forged
-      authoritative-looking or nonexistent identities never become trusted attribution.
-    tags: [backend-api, cli]
-  - name: archive-guard-failure-visible
-    test:
-      path: spec-cli/src/session-archive-cold-close.api.test.ts
-      name: public HTTP and CLI cold close retire only receipt-proven PID reuse
+      The legacy row projects as closed/offline, remains readable, and resume reconstructs its branch worktree and
+      launches the same conversation without requiring a new archive ref.
+    tags: [backend-api, frontend-e2e]
+  - name: close-index-time-is-explicit
+    test: spec-dashboard/test/session-archive-drawer.e2e.mjs
     description: >
-      Attempt archive through HTTP and CLI with unhealthy/undetached shared-root proof, ambiguous/unowned target
-      leaf, stale PID, or an artifact swap while the real resource census is live. Include a live PID whose current
-      start token differs from its strict session-leaf receipt, plus malformed PID/receipt evidence.
+      Close a real working session through the browser drop target, inspect the public all-sessions index, then add
+      a historical archived:true record with no closed_at and open the full archive page.
     expected: >
-      Archive is nonzero/HTTP 409, record remains projected archived:false/visible (or explicit archiveHazard),
-      and target/shared-root/worktree/branch are unchanged. A proven-cold close may retire a live PID artifact only
-      when a strict receipt proves that PID number now has a different start identity, and it never signals the
-      reused process. Malformed/cross-session receipts and unreadable identity remain unknown and refuse, as does a
-      live PID/start matching its receipt. No read projection performs an automatic repair.
-    tags: [backend-api, cli]
-  - name: target-scoped-shared-runtime-mutation-proof
+      The new close publishes an ISO closedAt written with its retained record and appears in the correct date group.
+      The historical row projects closedAt:null and appears in the final explicit Time unknown group without using
+      its creation time, sort key, timeline, or file metadata as a substitute.
+    tags: [backend-api, frontend-e2e, desktop]
+  - name: close-conversation-transcript-remains-readable
+    test: spec-dashboard/test/session-surface-cold-readable.e2e.mjs
     description: >
-      On one real shared Codex app-server, preserve several loaded governed and unowned sibling references while
-      archiving an exact unloaded target with no native descendants, then close its resulting cold row. In
-      refusal controls, retry an exact target that owns native descendants and a loaded target whose own fresh
-      turn state cannot be proven. Capture the shared process generation and protected reference IDs before and
-      after every public mutation.
+      Use real Chromium against a live backend to close a session, select its closed row, read its timeline, and
+      expand a transcript interval after the worktree has gone away.
     expected: >
-      The unloaded descendant-free target archives and then closes without waiting for or thread-reading unrelated
-      loaded siblings, even when the complete resource report times out on those siblings. Its record becomes cold
-      before close and its record/worktree/branch disappear only on close. Shared PID/start/isolation/socket and
-      every protected sibling reference remain unchanged. A brief target-census transport refusal retries the
-      complete proof and then closes only after a fresh valid census; a lasting transport failure, an unknown
-      target/member without a readable terminal rollout tail, or a loaded active target, any active or archived
-      native descendant, duplicate ownership, collection ambiguity, or generation mismatch refuses nonzero/409 with
-      target and shared evidence unchanged. A terminal rollout tail settles only that unknown member; it may not
-      countermand a live active verdict. The full resources projection remains available and honestly reports any
-      unrelated probe timeout; mutation does not obtain authority from it.
-    tags: [backend-api, cli]
-  - name: close-proven-cold-archive
-    test: spec-dashboard/test/archive-shelf.e2e.mjs
-    description: >
-      In the same isolated real Codex rig, archive the live target through the public surface and, while it is
-      still archived/offline, invoke explicit close. Preserve unrelated sibling references on the shared
-      app-server and inspect the target record, worktree, branch, tmux/PID/socket/thread artifacts, and shelf row.
-    expected: >
-      Close resolves the cold row from the all-record store, verifies its target-bound cold proof and continued
-      absence of every target-owned runtime, sends no signal, and permanently removes its record, worktree,
-      branch, and shelf row. Unrelated or unowned shared app-server references neither block nor disappear. A
-      reappeared, swapped, unreadable, or ambiguous target runtime fails nonzero/409 before deletion and leaves
-      the cold row and retained work intact. The cold proof performs no unrelated sibling `thread/read`.
-    tags: [frontend-e2e, backend-api, cli]
-  - name: close-never-launched-queue
-    description: >
-      With a prepared queued record whose launcher has never created a thread, PID, tmux window, or transport,
-      call public close while unrelated unowned references remain on the project shared runtime. Race one case
-      against the queue drainer and inject target PID/thread/dirty-work ambiguity in refusal controls.
-    expected: >
-      Close and the drainer serialize on the target. If close owns the still-queued record, it performs no
-      signal or shared-root ownership proof and removes the prompt, record, clean zero-ahead worktree, and branch
-      before capacity is released. If launch already won, live close owns teardown. Any target thread, live or
-      recycled PID, tmux/socket, ahead commit, or dirty work refuses before deletion and leaves the queue intact;
-      unrelated shared references survive either result.
-    tags: [backend-api, cli]
-  - name: watch-wait-presence-through-archive-resume-close
-    test: spec-dashboard/test/archive-shelf.e2e.mjs
-    description: >
-      Against the same isolated backend and real Codex target as the browser runner, keep a real `spex session
-      watch`/`wait` process on the fixed selector while the product API/browser drives working -> archive/offline
-      -> resume/starting -> online -> close. Inspect the emitted event stream and served all-record rows.
-    expected: >
-      Archive is observed as an offline transition and never as gone/closed; resume remains the same record and
-      conversation; only the subsequent true record/worktree removal emits one closed event and returns gone.
-      The monitor uses active-only events plus all-record presence and never infers existence from the default
-      active-only projection. The in-memory helper is only a narrow unit regression, not a YATU reading.
-    tags: [backend-api, cli]
-  - name: shelf-refresh-preserves-human-view
-    description: >
-      In a real Chromium session console, select an ordinary working row, open the archive star, and serve
-      several equivalent history refreshes that replace the archived-row objects without changing the selected
-      session id or either row's archived state. Then select the exact archived row through the rendered list.
-    expected: >
-      The star remains on with aria-pressed true across every refresh; the exact archived row stays uniquely
-      visible and clickable with no status-zone or ops chrome; selecting it keeps the shelf open, marks that row
-      selected, and renders one separate archive card with one resume action. A real selected-id or selected-row
-      archived-state transition still automatically chooses the side that owns that selection.
-    tags: [frontend-e2e]
-  - name: explicit-ls-distinguishes-terminal-close-from-never-existed
-    description: >
-      Through the real `spex session ls --all <id> --api <backend>` CLI path, use an empty board with one
-      id-addressed terminal-close history hit and a second id with neither record nor history. Then use a
-      backend which returns a generic, unmarked 404 for the closure route and prove it names the incompatible
-      backend rather than claiming the target never existed.
-    expected: >
-      The closed id exits zero and prints its close time; the never-existed id exits nonzero and names that it
-      missed live, archive, and terminal-close history. The normal board does not acquire a closed row, and an
-      ambiguous or unreadable ledger refuses rather than claiming absence.
-    tags: [cli, backend-api]
-    test:
-      path: spec-cli/src/session-ls-cli.test.ts
-      name: session ls names terminal close history instead of collapsing it into a never-existed miss
-    code: [spec-cli/src/sessions.ts, spec-cli/src/client.ts, spec-cli/src/index.ts, spec-cli/src/session-ls-cli.test.ts]
+      The closed row leaves the default board but remains in the archive index. Conversation keeps the same
+      disabled cold shell, transcript details load lazily once and cache on re-expand, and the footer resume action
+      reaches the real /resume endpoint.
+    tags: [frontend-e2e, desktop, backend-api]
 ---
 
-# eval — archive
+# eval — close
 
-YATU: measured through the surfaces a human actually touches — a real Chromium driving the real dashboard
-over a real backend for the console journey, and the real HTTP endpoint for the board-cost claim. No internal
-helper is called to make either proof easy: the shelving act itself goes through the Command Box exactly as a
-human would type it, and every assertion reads rendered DOM or a served payload.
-
-The round trip is a **multi-step interaction flow**, so its evidence is a recording of the run with a
-step-map exported by the runner, not a still — a single frame could show the shelf card while saying nothing
-about whether the row actually left, came back, or whether the button was reachable at all. That last one is
-not hypothetical: the first run of this scenario failed because a live xterm layer sat over the card and
-swallowed the restore click while the card looked perfectly correct in a screenshot.
+YATU: measure close through the real HTTP/CLI and Chromium surfaces. A close is a soft terminal transition: exact
+cold proof plus archive-ref publication, worktree removal, and retained branch/record/transcript. There is no
+permanent-delete action in this node. Historical `archived:true` rows are compatibility fixtures and are measured as
+closed projections.

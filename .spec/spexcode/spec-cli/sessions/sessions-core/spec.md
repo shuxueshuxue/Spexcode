@@ -97,9 +97,10 @@ text is served by the id-addressed record detail, which reads the stored prompt 
 a receipt for one ask and keeps it whole. So the list body stays proportional to the NUMBER of sessions
 rather than to the total length of what was asked — otherwise one long ask outweighs the entire rest of the
 board, on every poll and in the last-known-row cache, to serve a field no list reader consults.
-Terminal close removes that record by design, so its append-only audit ledger is not folded into the board or
-revived as a second session type. It may answer one id-addressed post-close diagnostic with the durable target
-id and close time; a malformed or ambiguous ledger is unknown, never a plausible absence.
+Close retains that record as the one archived session source and records its `closedAt` beside the archived bit in
+the same atomic record publication. The public projection carries the timestamp without a timeline read, so a
+complete archive index remains proportional only to record count. Older archived records with no timestamp project
+`null`; creation time, manual sort order, and filesystem metadata never impersonate the missing close fact.
 The sibling `launch` artifact is the authoritative resolved first-turn payload, not a best-effort prompt cache.
 The shared layer preserves it across queue drain and failed launch, blocks later delivery debt behind it, and
 hands it back only through the resolved adapter's no-native-identity recovery seam. The adapter completes launch

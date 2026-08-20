@@ -39,15 +39,14 @@ test('session toolbar keeps Eval docked to the Terminal or Conversation base bef
   const files = source.indexOf('<SessionFiles', actions)
   const surfaceSwitch = source.indexOf('surface-switch', files)
   assert.ok(actions > 0 && actions < files && files < surfaceSwitch, 'commands, Files, and the base-surface switch must share one right-side tool group')
-  assert.match(source, /onClick: \(\) => \{[\s\S]{0,260}selectSession\(s\.id\)/)
+  assert.match(source, /onClick: \(\) => \{[\s\S]{0,420}selectSession\(s\.id\)/)
   assert.match(source, /activeResource &&[\s\S]{0,240}data-resource-action="refresh"[\s\S]{0,160}refreshResource\(activeResource\)/)
   assert.match(source, /activeResource\?\.kind === 'file'[\s\S]{0,240}data-resource-action="download"[\s\S]{0,220}downloadFile\(activeResource\.sessionId, activeResource\.value\)[\s\S]{0,360}data-resource-action="copy"[\s\S]{0,180}copyFilePath\(activeResource\.value\)/)
   assert.match(source, /icon="x"[\s\S]{0,160}closeResource\(tab\)/)
   assert.match(source, /uiCmds\.filter\(\(c\) => c\.button && \(!activeResource && \(activeBaseSurface === 'terminal' \|\| c\.name !== 'merge'\)\)\)/)
   assert.match(source, /className="si-eval-tab sc-cyan"/)
   assert.doesNotMatch(source, /si-identity|si-th-name|identitySummary/)
-  assert.doesNotMatch(source, /sessionHeadline/)
-  assert.match(source, /href=\{active !== 'new' \? addressHash\(sessionEvalAddress\(active\)\) : null\}/)
+  assert.match(source, /href=\{sessionActive \? addressHash\(sessionEvalAddress\(active\)\) : null\}/)
   assert.doesNotMatch(source, /<EvalScopeDoor/)
 
   const baseTabs = source.indexOf('className="si-base-tabs"')
@@ -126,14 +125,20 @@ test('live offline and archived conversations share one footer with cold input a
   assert.doesNotMatch(source, /si-shelf-card|className="si-offline"/)
 })
 
-test('archive door stays icon-only regardless of archived session count', () => {
-  assert.match(source, /className=\{viewingShelf \? 'si-pill shelf on' : 'si-pill shelf'\}/)
-  assert.match(source, /name=\{viewingShelf \? 'star-filled' : 'star'\}/)
-  assert.doesNotMatch(source, /si-pill-count/)
-})
-
-test('archive door suppresses the New Session highlight while the shelf is open', () => {
-  assert.match(source, /className=\{active === 'new' && !viewingShelf \? 'si-pill new on' : 'si-pill new'\}/)
+test('archive is a permanent labelled place below the board, separate from the two top pills', () => {
+  const topStart = source.indexOf('<div className="si-toprow">')
+  const topRow = source.slice(topStart, source.indexOf('</div>', topStart) + 6)
+  assert.equal((topRow.match(/<button /g) || []).length, 2)
+  assert.match(topRow, /si-pill new/)
+  assert.match(topRow, /si-pill search/)
+  assert.doesNotMatch(topRow, /star|shelf|archive/)
+  assert.match(source, /data-archive-drawer/)
+  assert.match(source, /data-session-archive-drop data-archive-count=\{archivedSessions\.length\}/)
+  assert.match(source, /className="si-archive-toggle"[\s\S]{0,240}onClick=\{toggleArchive\}/)
+  assert.match(source, /className="si-archive-label" onClick=\{openArchivePage\}/)
+  assert.match(source, /<strong>\{archivedSessions\.length\}<\/strong>/)
+  assert.match(css, /\.si-archive-drawer\s*\{[^}]*overflow:\s*visible;/s)
+  assert.doesNotMatch(css, /\.si-archive-(?:drawer|preview)\s*\{[^}]*overflow-y:\s*(?:auto|scroll)/s)
 })
 
 test('session tree drag moves the whole row and can detach a nested session', () => {
@@ -166,10 +171,12 @@ test('session tree drag moves the whole row and can detach a nested session', ()
   assert.doesNotMatch(css, /\.si-session-drag-ghost > \.si-item/)
 })
 
-test('archive refresh cannot override a human shelf toggle without a selection transition', () => {
-  assert.match(source, /const selectedArchived = active !== 'new'[\s\S]{0,160}\.archived/)
-  assert.match(source, /setShowShelf\(selectedArchived\)[\s\S]{0,100}\}, \[open, active, selectedArchived\]\)/)
-  assert.doesNotMatch(source, /setShowShelf\(!!allSessions\.find[\s\S]{0,120}\[open, active, allSessions\]/)
+test('archive index loads whole once and disclosure remains human-owned', () => {
+  assert.match(source, /fetch\(apiUrl\('\/api\/sessions\?all=1'\)\)/)
+  assert.match(source, /if \(archiveRequestRef\.current\) return archiveRequestRef\.current/)
+  assert.match(source, /const \[archiveOpen, setArchiveOpen\] = useState\(false\)/)
+  assert.match(source, /setArchiveOpen\(\(value\) => !value\)/)
+  assert.doesNotMatch(source, /setArchiveOpen\([^)]*archived/)
 })
 
 test('close refusals remain visible instead of being swallowed by the background action', () => {
@@ -181,22 +188,22 @@ test('close refusals remain visible instead of being swallowed by the background
   assert.match(source, /function ActionOutcome\(\{ outcome \}\)/)
   assert.match(source, /setActionOutcome\(\{ owner, phase: 'failed'/)
   assert.match(source, /onError=\{\(message\) => \{[\s\S]{0,300}setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)/)
-  assert.doesNotMatch(source, /si-action-error|setActErr|<aside[^>]*>[\s\S]{0,400}ActionOutcome/)
+  assert.doesNotMatch(source, /si-action-error|setActErr|<aside[^>]*>\s*<ActionOutcome/)
 })
 
-test('bulk archive and close return every refusal to the shared action outcome', () => {
+test('bulk close returns every refusal to the shared action outcome', () => {
   assert.match(selectBar, /const body = await response\.json\(\)\.catch\(\(\) => null\)/)
   assert.match(selectBar, /!response\.ok \|\| body\?\.ok === false/)
   assert.match(selectBar, /onError\?\.\(failures\.join\('\\n'\)\)/)
-  assert.match(selectBar, /icon="star"[\s\S]{0,180}setConfirming\('archive'\)/)
   assert.match(selectBar, /icon="trash"[\s\S]{0,180}setConfirming\('close'\)/)
-  assert.match(selectBar, /`\/api\/sessions\/\$\{id\}\/\$\{verb\}`/)
+  assert.match(selectBar, /`\/api\/sessions\/\$\{id\}\/close`/)
+  assert.doesNotMatch(selectBar, /setConfirming\('archive'\)|\/archive/)
   assert.match(source, /<SessionSelectBar[\s\S]{0,300}onError=\{\(message\) => setActionOutcome\(\{ owner: 'panel', phase: 'failed', message \}\)\}/)
 })
 
 test('select mode reuses the whole-row pointer drag', () => {
   assert.match(source, /apiFetch\('\/api\/sessions\/reparent'/)
-  assert.match(source, /if \(event\.button !== 0 \|\| viewingShelf\) return/)
+  assert.match(source, /if \(event\.button !== 0\) return/)
   assert.match(source, /onMouseDown: \(e\) => startSessionDrag\(e, s\)/)
   assert.match(sessionWindow, /\{selecting && <span className=\{`si-check\$\{isPicked \? ' on' : ''\}`/)
   assert.doesNotMatch(source, /reparentDrag|si-drag-handle|draggable/)
@@ -206,14 +213,10 @@ test('select mode reuses the whole-row pointer drag', () => {
   assert.doesNotMatch(focus, /DRAG_PRESS_TARGETS/)
 })
 
-test('archive shares the right-click danger group and asks for confirmation', () => {
-  assert.match(contextMenu, /const \[archiving, setArchiving\] = useState\(null\)/)
-  assert.match(contextMenu, /<ContextMenuItem icon="star" danger onClick=\{startArchive\}>/)
+test('close remains the only right-click lifecycle removal and asks for confirmation', () => {
   assert.match(contextMenu, /<ContextMenuItem icon="trash" danger onClick=\{startClose\}>/)
-  assert.match(contextMenu, /apiFetch\(`\/api\/sessions\/\$\{id\}\/archive`/)
-  assert.match(contextMenu, /title=\{t\('sessionWindow\.archiveTitle'/)
-  assert.match(en, /archiveConfirm: 'This files the session out of the active working set/)
-  assert.match(zh, /archiveConfirm: '这会将会话移出活动工作区/)
+  assert.match(contextMenu, /title=\{t\('sessionWindow\.closeTitle'/)
+  assert.doesNotMatch(contextMenu, /startArchive|\/archive`|sessionWindow\.archiveTitle/)
 })
 
 test('only corrupt rows expose the witnessed quarantine control', () => {
@@ -233,7 +236,7 @@ test('cold archive rows render without paying for a git ops projection', () => {
 })
 
 test('session eval glance reuses the graph summary projection and review-state visual', () => {
-  assert.match(source, /sessionEvalDisplay\(active !== 'new' \? selSession\?\.evalSummary : null, boardLive\)/)
+  assert.match(source, /sessionEvalDisplay\(sessionActive \? selSession\?\.evalSummary : null, boardLive\)/)
   assert.match(source, /projection\.lastKnown\?\.value/)
   assert.doesNotMatch(source, /\/api\/sessions\/.*\/evals|setTimeout\(load, 15_000\)|useSessionEvalSummary/)
   assert.match(source, /<TabCount kind="eval" state="pass"/)
@@ -260,20 +263,20 @@ test('session eval glance reuses the graph summary projection and review-state v
 })
 
 test('command availability, icons, toolbar tools, and typed twins remain one registry result', () => {
-  const runners = Object.fromEntries(['command', 'eval', 'merge', 'relaunch', 'stop', 'archive', 'close'].map((name) => [name, () => name]))
+  const runners = Object.fromEntries(['command', 'eval', 'merge', 'relaunch', 'stop', 'close'].map((name) => [name, () => name]))
   const session = (status, liveness = 'online', proposal = null, archived = false, lifecycle = status === 'review' || status === 'done' || status === 'close-pending' ? 'awaiting' : 'active') => ({ status, liveness, proposal, archived, lifecycle })
   const names = (...args) => uiCommandsFor(session(...args), runners).map((command) => command.name)
   const typed = (...args) => uiCommandsFor(session(...args), runners).filter((command) => command.typed !== false && command.enabled).map((command) => command.name)
   const tools = (...args) => uiCommandsFor(session(...args), runners).filter((command) => command.button).map(({ name, icon, enabled }) => [name, icon, enabled])
 
-  assert.deepEqual(names('working'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
-  assert.deepEqual(names('review', 'online', 'merge'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
-  assert.deepEqual(names('done', 'online', 'nothing'), ['command', 'eval', 'merge', 'stop', 'archive', 'close'])
+  assert.deepEqual(names('working'), ['command', 'eval', 'merge', 'stop', 'close'])
+  assert.deepEqual(names('review', 'online', 'merge'), ['command', 'eval', 'merge', 'stop', 'close'])
+  assert.deepEqual(names('done', 'online', 'nothing'), ['command', 'eval', 'merge', 'stop', 'close'])
   assert.deepEqual(names('queued', 'offline'), ['eval', 'merge', 'close'])
-  assert.deepEqual(names('asking', 'offline'), ['eval', 'merge', 'relaunch', 'archive', 'close'])
-  assert.deepEqual(names('review', 'offline', 'merge'), ['eval', 'merge', 'relaunch', 'archive', 'close'])
-  assert.deepEqual(typed('asking', 'offline'), ['eval', 'archive', 'close'])
-  assert.deepEqual(typed('review', 'online', 'merge'), ['eval', 'merge', 'stop', 'archive', 'close'])
+  assert.deepEqual(names('asking', 'offline'), ['eval', 'merge', 'relaunch', 'close'])
+  assert.deepEqual(names('review', 'offline', 'merge'), ['eval', 'merge', 'relaunch', 'close'])
+  assert.deepEqual(typed('asking', 'offline'), ['eval', 'close'])
+  assert.deepEqual(typed('review', 'online', 'merge'), ['eval', 'merge', 'stop', 'close'])
   assert.deepEqual(tools('review', 'online', 'merge'), [['command', 'command', true], ['merge', 'git-merge', true]])
   assert.deepEqual(tools('done', 'online', 'nothing'), [['command', 'command', true], ['merge', 'git-merge', false]])
   assert.deepEqual(tools('asking', 'offline'), [['merge', 'git-merge', false], ['relaunch', 'rotate-ccw', true]])
@@ -282,19 +285,12 @@ test('command availability, icons, toolbar tools, and typed twins remain one reg
   assert.equal(mergeAvailability(session('close-pending', 'online', 'close')).disabledTitleKey, 'session.cmd.mergeUnavailableClose')
   assert.equal(mergeAvailability(session('working')).disabledTitleKey, 'session.cmd.mergeUnavailableNoProposal')
   assert.equal(mergeAvailability(session('review', 'offline', 'merge')).disabledTitleKey, 'session.cmd.mergeUnavailableLiveness')
-  // A cold archive is always offline and exposes no running-session actions. Its one disabled merge witness
+  // A closed session is always offline and exposes no running-session actions. Its one disabled merge witness
   // keeps the selected-session toolbar slot stable; recovery remains the only actionable archive control.
   assert.deepEqual(names('working', 'online', null, true), ['merge'])
   assert.deepEqual(names('asking', 'offline', null, true), ['merge'])
   assert.equal(mergeAvailability(session('review', 'online', 'merge', true)).disabledTitleKey, 'session.cmd.mergeUnavailableArchived')
-  for (const [st, lv] of [['working', 'online'], ['asking', 'offline'], ['queued', 'offline'], ['retired', 'offline'], ['corrupt', 'unknown'], ['review', 'online']]) {
-    for (const archived of [false, true]) {
-      const offered = names(st, lv, st === 'review' ? 'merge' : null, archived).filter((n) => n === 'archive' || n === 'unarchive')
-      assert.deepEqual(offered, archived ? [] : (['queued', 'retired', 'corrupt'].includes(st) ? [] : ['archive']), `${st}/${lv}/archived=${archived}`)
-    }
-  }
-  // neither shelving verb gets a toolbar twin — filing is deliberate, never one pixel from the terminal
-  assert.deepEqual(UI_COMMANDS.filter((c) => c.name === 'archive').map((c) => c.button), [false])
+  assert.equal(UI_COMMANDS.some((command) => command.name === 'archive' || command.name === 'unarchive'), false)
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').anchor, 'right')
   assert.equal(UI_COMMANDS.find((c) => c.name === 'command').typed, false)
   assert.match(source, /uiCommandsFor\(selSession, runners\)/)

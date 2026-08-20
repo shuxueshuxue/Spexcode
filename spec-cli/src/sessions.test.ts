@@ -1478,7 +1478,7 @@ test('launchPreflight refuses a launch that cannot succeed, naming which fact se
   const base: SessRec = {
     session: 'preflight-test', governed: true, worktreePath: join(home, 'gone'), branch: null, node: null,
     title: null, name: null, parent: null, status: 'idle', proposal: null, merges: 0, note: null,
-    sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, stopped: false, archived: false,
+    sortKey: null, createdAt: 1, harness: 'claude', harnessSessionId: null, stopped: false, archived: false, closedAt: null,
     launcher: null, launchCmd: '/bin/true', launchOwner: null,
   }
   try {
@@ -1528,7 +1528,7 @@ test('a failed creation-time materialize is reported loud and stamped on the rec
       session: 'mat-fail-test', governed: true, worktreePath: '/tmp/spex-mat-fail-worktree', branch: 'node/mat-fail',
       node: null, title: 'mat fail', name: null, parent: null,
       status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: 1,
-      harness: 'claude', harnessSessionId: null, stopped: false, archived: false,
+      harness: 'claude', harnessSessionId: null, stopped: false, archived: false, closedAt: null,
       launcher: 'reclaude', launchCmd: 'claude', launchOwner: null,
     }
     bootstrapMaterialize(rec, () => { throw new Error('materialize exploded') })
@@ -1626,7 +1626,7 @@ test('owned queues are public-authority leased and raw-state fenced from legacy 
   const base: SessRec = {
     session: 'owned-q', governed: true, worktreePath: '/wt/q', branch: 'node/q', node: null, title: null,
     name: null, parent: null, status: 'queued', proposal: null, merges: 0, note: null, sortKey: null,
-    createdAt: 1, harness: 'codex', harnessSessionId: null, stopped: false, archived: false, launcher: 'codex', launchCmd: 'codex',
+    createdAt: 1, harness: 'codex', harnessSessionId: null, stopped: false, archived: false, closedAt: null, launcher: 'codex', launchCmd: 'codex',
     launchOwner: publicAuthority,
   }
   assert.equal(rawLifecycleStatus(base), OWNED_QUEUE_RAW_STATUS)

@@ -83,6 +83,7 @@ export type Session = {
   launcher: string | null   // the launcher profile this session launched under ([[launcher-select]]); null only for old records predating launchers
   lifecycle: Lifecycle; proposal: Proposal | null; merges: number; status: DisplayStatus; liveness: Liveness; note: string | null
   archived: boolean   // cold storage ([[archive]]) — successful records are offline; default views exclude them
+  closedAt: string | null // exact close publication time; null on working and pre-field archived records
   archiveHazard?: string | null // explicit legacy/invariant violation; never hidden as a clean archive
   prompt: string | null; promptPreview: string | null; created: number; activity: string | null
   sortKey: number | null   // manual drag-reorder override ([[session-reorder]]); null = sort by `created`
@@ -188,7 +189,8 @@ export type SessRec = {
   status: Lifecycle; proposal: Proposal | null; merges: number; note: string | null
   sortKey: number | null; createdAt: number; harness: string; harnessSessionId: string | null
   stopped: boolean       // explicit human stop; liveness metadata, never an agent-authored lifecycle value
-  archived: boolean      // shelved by the human ([[archive]]) — only clean after coldProof is written
+  archived: boolean      // closed by the human ([[archive]]) — only clean after coldProof is written
+  closedAt: string | null // written atomically with archived:true; old archived records read as null
   coldProof?: string | null // durable exact leaf + adapter unload proof; missing on legacy archives => visible hazard
   adapterRecovery?: string | null // explicit adapter recovery state after an uncertain partial cold mutation
   launcher: string | null   // the launcher profile this session launches under ([[launcher-select]]); null only for old records predating launchers
@@ -200,7 +202,7 @@ export type SessRec = {
   base?: string | null   // explicit fork point the creator pinned; absent/null = the auto-detected source-of-truth branch
   launchReadinessPending?: LaunchReadinessPending | null // internal resume candidate; every public reader projects `original` until one final publish
 }
-type LaunchReadinessOriginal = Pick<SessRec, 'status' | 'proposal' | 'note' | 'stopped' | 'archived' | 'coldProof' | 'adapterRecovery'>
+type LaunchReadinessOriginal = Pick<SessRec, 'status' | 'proposal' | 'note' | 'stopped' | 'archived' | 'closedAt' | 'coldProof' | 'adapterRecovery'>
 type LaunchReadinessPending = { version: 1; startedAt: number; original: LaunchReadinessOriginal }
 export const OWNED_QUEUE_RAW_STATUS = 'launch-queued'
 
@@ -296,6 +298,9 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
   const pendingStatus = pendingRaw && isSessionLifecycle(pendingRaw.status) ? pendingRaw.status : null
   if (pendingRaw && !pendingStatus) throw new Error(`session '${raw.session_id}' launch readiness original has invalid lifecycle '${pendingRaw.status}'`)
   const pendingProposal = pendingRaw && isSessionProposal(pendingRaw.proposal) ? pendingRaw.proposal : null
+  if (raw.closed_at != null && raw.closed_at !== ''
+    && (typeof raw.closed_at !== 'string' || !Number.isFinite(Date.parse(raw.closed_at))))
+    throw new Error(`session '${raw.session_id}' has invalid closed_at`)
   if (pendingRaw?.proposal && !pendingProposal) throw new Error(`session '${raw.session_id}' launch readiness original has invalid proposal '${pendingRaw.proposal}'`)
   const zcodeChildSessionIds = raw.zcode_child_session_ids ?? []
   if (!Array.isArray(zcodeChildSessionIds)
@@ -310,7 +315,8 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
     harness: raw.harness || 'claude',   // records written before the harness field default to claude
     harnessSessionId: raw.harness_session_id || null,
     stopped: !!raw.stopped,             // records written before explicit stop tracking were not stopped
-    archived: !!raw.archived,           // records written before archive → absent → not shelved
+    archived: !!raw.archived,           // records written before close retention → absent → working
+    closedAt: typeof raw.closed_at === 'string' && raw.closed_at ? raw.closed_at : null,
     coldProof: raw.cold_proof || null,  // legacy archived rows have no proof and remain visible until re-archived
     adapterRecovery: raw.adapter_recovery || null,
     launcher: raw.launcher || null,     // records written before launchers → null → old-record fallback
@@ -326,6 +332,7 @@ export function fromRaw(raw: RawRecord & { launch_owner?: string }): SessRec {
       original: {
         status: pendingStatus!, proposal: pendingProposal, note: pendingRaw.note || null,
         stopped: pendingRaw.stopped, archived: pendingRaw.archived,
+        closedAt: pendingRaw.closed_at || null,
         coldProof: pendingRaw.cold_proof || null, adapterRecovery: pendingRaw.adapter_recovery || null,
       },
     } : null,
@@ -347,6 +354,7 @@ function launchReadinessPending(original: SessRec): LaunchReadinessPending {
       note: original.note,
       stopped: original.stopped,
       archived: original.archived,
+      closedAt: original.closedAt,
       coldProof: original.coldProof ?? null,
       adapterRecovery: original.adapterRecovery ?? null,
     },
@@ -380,6 +388,9 @@ function writeRecord(rec: SessRec): void {
     harness_session_id: rec.harnessSessionId ?? '',
     stopped: rec.stopped,
     archived: rec.archived,
+    // Pre-field records stay byte-shape compatible until a real close publishes the timestamp. In particular,
+    // a failed resume must be able to restore an old working record without inventing an empty metadata key.
+    ...(rec.closedAt ? { closed_at: rec.closedAt } : {}),
     cold_proof: rec.coldProof ?? '',
     adapter_recovery: rec.adapterRecovery ?? '',
     launcher: rec.launcher ?? '',
@@ -400,6 +411,7 @@ function writeRecord(rec: SessRec): void {
         note: rec.launchReadinessPending.original.note ?? '',
         stopped: rec.launchReadinessPending.original.stopped,
         archived: rec.launchReadinessPending.original.archived,
+        closed_at: rec.launchReadinessPending.original.closedAt,
         cold_proof: rec.launchReadinessPending.original.coldProof ?? '',
         adapter_recovery: rec.launchReadinessPending.original.adapterRecovery ?? '',
       },
@@ -1015,7 +1027,7 @@ function corruptSession(id: string, entry: { path: string; error: string }): Ses
     id, node: null, branch: null, path: '', label, title: label, raw: { name: null, title: null },
     parent: null, harness: defaultHarness.id, capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
-    note: corruptReason(entry), archived: false, prompt: null, promptPreview: null, created: 0,
+    note: corruptReason(entry), archived: false, closedAt: null, prompt: null, promptPreview: null, created: 0,
     activity: null, sortKey: null, archiveHazard: null, files: [], web: [],
   }
 }
@@ -1029,7 +1041,7 @@ export function toSession(rec: SessRec, status: DisplayStatus, lv: Liveness, act
   const pp = prompt ? oneLinePreview(prompt) : null
   const parts = { id: rec.session, name: rec.name, node: rec.node, title: rec.title, branch: rec.branch, activity: act, note: rec.note, promptPreview: pp }
   const harness = harnessById(rec.harness || defaultHarness.id)
-  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
+  return { id: rec.session, node: rec.node, branch: rec.branch, label: deriveLabel(parts), title: deriveTitle(parts), raw: { name: rec.name, title: rec.title }, path: rec.worktreePath, parent: rec.parent, harness: harness.id, capabilities: { headless: harness.headless }, launcher: rec.launcher, lifecycle: rec.status, proposal: rec.proposal, merges: rec.merges, note: rec.note, status, liveness: lv, archived: rec.archived, closedAt: rec.archived ? rec.closedAt : null, archiveHazard: null, prompt, promptPreview: pp, created: rec.createdAt, activity: act, sortKey: rec.sortKey, files: readSessionFiles(rec.session), web: readSessionWebs(rec.session), ...(rec.zcodeChildSessionIds?.length ? { zcodeChildSessionIds: [...rec.zcodeChildSessionIds] } : {}) }
 }
 
 export type ZCodeChildSessionLink = { sessionId: string; childSessionId: string; alreadyLinked: boolean }
@@ -2447,7 +2459,7 @@ async function prepareSession(prompt: string, parent: string | null, launcher: s
             session: id, governed: true, worktreePath: path, branch,
             node: ref || null, title, name, parent: parent && parent !== id ? parent : null,
             status: 'queued', proposal: null, merges: 0, note: null, sortKey: null, createdAt: Date.now(),
-            harness: h.id, harnessSessionId: null, stopped: false, archived: false, coldProof: null, adapterRecovery: null, launcher: chosen.name,
+            harness: h.id, harnessSessionId: null, stopped: false, archived: false, closedAt: null, coldProof: null, adapterRecovery: null, launcher: chosen.name,
             launchCmd: pinned, launchOwner: backendLaunchAuthority(), createRequestId: requestDigest, createPayloadHash: payloadHash,
             ...(base ? { base } : {}),
           }
@@ -2684,7 +2696,7 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   if (!wasArchived && wt.rec.adapterRecovery) {
     const recovery = await h.restoreRuntime?.(wt.rec)
     if (recovery && !recovery.ok) return { ok: false, refused: true, error: `session ${id}: recovery required before resume — ${recovery.reason}` }
-    writeRecord({ ...(readRecord(id) || wt.rec), adapterRecovery: null, coldProof: null, archived: false, stopped: true })
+    writeRecord({ ...(readRecord(id) || wt.rec), adapterRecovery: null, coldProof: null, archived: false, closedAt: null, stopped: true })
     wt = await findWorktree(id)
     if (!wt) return { ok: false, error: `session ${id} disappeared during adapter recovery` }
   }
@@ -2692,8 +2704,8 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
     // Make the durable row visible/offline before any adapter unarchive or launch RPC. Any later failure leaves
     // a retryable unarchived record rather than archived:true with a newly loaded target thread.
     const pendingRecovery = wt.rec.adapterRecovery || 'restore-runtime-pending'
-    writeRecord({ ...wt.rec, archived: false, stopped: true, coldProof: wt.rec.coldProof, adapterRecovery: pendingRecovery })
-    const visible = readRecord(id) || { ...wt.rec, archived: false, stopped: true, coldProof: wt.rec.coldProof, adapterRecovery: pendingRecovery }
+    writeRecord({ ...wt.rec, archived: false, closedAt: null, stopped: true, coldProof: wt.rec.coldProof, adapterRecovery: pendingRecovery })
+    const visible = readRecord(id) || { ...wt.rec, archived: false, closedAt: null, stopped: true, coldProof: wt.rec.coldProof, adapterRecovery: pendingRecovery }
     const restored = await h.restoreRuntime?.(visible)
     if (restored && !restored.ok) return { ok: false, refused: true, error: `session ${id}: ${restored.reason}` }
     writeRecord({ ...(readRecord(id) || visible), adapterRecovery: null, coldProof: null })
@@ -2704,8 +2716,8 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
   // fall through to a metadata-only no-op.
   // Archived sessions have no runtime by invariant. Resume first leaves cold storage, then the normal
   // starting -> online launch path recreates the same conversation.
-  const current = wasArchived ? (readRecord(id) || { ...wt.rec, archived: false, stopped: true, coldProof: null }) : wt.rec
-  const resumed: SessRec = { ...current, archived: false, coldProof: null, status: restingLifecycle(current.status), stopped: false }
+  const current = wasArchived ? (readRecord(id) || { ...wt.rec, archived: false, closedAt: null, stopped: true, coldProof: null }) : wt.rec
+  const resumed: SessRec = { ...current, archived: false, closedAt: null, coldProof: null, status: restingLifecycle(current.status), stopped: false }
   if (force || lv === 'offline') {
     let resumeTail: string
     try { resumeTail = h.resumeArg(wt.rec, readLaunchFile(id)).trim() }
@@ -2731,6 +2743,7 @@ async function resumeSessionUnlocked(id: string, opts: ResumeOptions = {}): Prom
     const candidate: SessRec = {
       ...latest,
       archived: false,
+      closedAt: null,
       coldProof: null,
       status: restingLifecycle(latest.status),
       stopped: false,
@@ -3669,7 +3682,14 @@ async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch:
   if (!retired && existsSync(wt.path)) archiveWorktreeState(id, wt.path)
   const latest = readRecord(id)
   if (!latest) throw new ResourceConflict(`refusing to finish close for ${id}: session record disappeared before publication`)
-  writeRecord({ ...latest, archived: true, stopped: true, coldProof: latest.coldProof || coldProofFor(latest), adapterRecovery: null })
+  writeRecord({
+    ...latest,
+    archived: true,
+    closedAt: latest.closedAt || new Date().toISOString(),
+    stopped: true,
+    coldProof: latest.coldProof || coldProofFor(latest),
+    adapterRecovery: null,
+  })
   let slot: string | null = null
   try { slot = existsSync(wt.path) ? treeSlotDir(wt.path) : null } catch { /* tree already unresolvable — nothing to key the slot by */ }
   if (existsSync(wt.path)) {

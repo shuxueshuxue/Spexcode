@@ -41,8 +41,11 @@ After cold proof, close writes the worktree tree (tracked and untracked files) a
 current branch tip, then atomically publishes `refs/spex-archive/<session-id>` and verifies that ref. A ref or
 commit failure aborts before worktree removal. Only after publication does it remove the worktree and its
 materialize slot. The branch and the global session store remain. The record is retained with `archived: true`,
-`stopped: true`, and a cold proof; list projection omits it from the working board while id-addressed record,
-timeline, transcript, and conversation reads remain available.
+`stopped: true`, a cold proof, and the same close transaction's ISO `closedAt`; list projection omits it from the
+working board while id-addressed record, timeline, transcript, and conversation reads remain available. Public
+session projection exposes that timestamp for a cheap complete archive index. Records closed before this field
+existed project `closedAt: null`; consumers identify their time as unknown rather than borrowing creation time,
+manual sort order, timeline reads, or filesystem metadata.
 
 **Resume is the inverse.** For a closed row whose worktree is absent, resume creates the recorded branch at the
 recorded path. If the archive ref exists, its diff against the branch tip is applied to the new worktree so all

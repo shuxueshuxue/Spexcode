@@ -26,6 +26,7 @@ related:
   - spec-dashboard/test/lifecycle-outcome.e2e.mjs
   - spec-dashboard/test/timeline-chat-composer.e2e.mjs
   - spec-dashboard/test/session-surface-cold-readable.e2e.mjs
+  - spec-dashboard/test/session-archive-drawer.e2e.mjs
 ---
 
 # session-console
@@ -66,13 +67,25 @@ the rest of the dashboard, so re-theming the app re-themes the console with it (
 remap). The one surface that stays dark on its own is the **embedded terminal** (`--term-bg`) — legitimately a
 dark terminal, whatever the app theme. Two panes: a left session list (its width user-draggable, [[resizable-panes]],
 with a dense 204px default) and a right area that
-**morphs** by what's focused. The list's **top button row** holds three equal compact pills above the session rows, kept out of the `↑/↓`
-path down to a session: the `＋` New Session button, the **archive** star ([[archive]] — permanently present,
-showing no numeric count), and a **Search** button, the click twin of the ⌥+/ palette
-([[session-search]] owns that contract). New and the archive door are mutually exclusive destinations, so opening
-the shelf clears New's visual active treatment without changing the selected tab. The list is bounded by the routed page's viewport: when its visible
-zones and rows exceed that height, the list owns the vertical scrollbar instead of growing behind the page
-pane's clipped edge.
+**morphs** by what's focused. The list's **top button row** holds two equal compact pills above the session rows,
+kept out of the `↑/↓` path down to a session: `＋` New Session and Search, the click twin of the ⌥+/ palette
+([[session-search]] owns that contract). The list is bounded by the routed page's viewport. Its working-board
+region owns the sidebar's only vertical scrollbar when the rows exceed the available height.
+
+The archive is a permanent **place**, not a list mode. A bottom-pinned `Archive N` bar remains visible even when
+`N` is zero; `N` is the complete count of closed session records, with no capacity number because close has
+already reclaimed the worktree. The bar's disclosure control expands a flat newest-closed-first preview in place,
+while its label routes the right pane to the full archive page. These are separate actions on one line. The preview
+shows as many recent rows as fit without exceeding one third of the sidebar height, followed by one `View all N`
+exit to the full page. It never scrolls and never creates a nested scrollport. When the available third cannot
+hold a useful preview plus its exit, disclosure routes directly to the full page. Selecting a preview row opens
+that closed session's ordinary read-only Conversation face.
+
+The archive page occupies the complete right pane. It reads the full closed-session index in one request, renders
+the newest-closed-first rows under sticky Today / Yesterday / calendar-date headings, and owns a search field that
+filters that complete index locally. Pagination is deliberately absent: the scrollbar represents the whole result
+set from its first paint. This page is the only archive-search entry; the global palette neither includes closed
+rows nor hints at hidden archive matches.
 
 The console list is the mutable home of its session forest ([[session-nesting]]). Dragging a row moves a
 full-row ghost, dims the original, and highlights a valid receiving parent; a nested row additionally exposes
@@ -86,6 +99,9 @@ The gesture is deliberately ordinary pointer drag rather than a tiny dedicated h
 will move, so the feedback must visibly be that row. Right-click keeps the complementary
 explicit `remove from parent` action for a nested row. Both paths call the one reparent endpoint and leave
 selection, terminal focus, and invalid/no-op drops alone.
+Dropping a working row on the permanent archive bar instead performs the row's one reversible `close` transition:
+the row leaves the working board and enters the archive in the same gesture. This direct placement has no confirm;
+close remains one action here because its retained record, branch, transcript, and archive ref make it reversible.
 
 **New Session** is a centred splash — the [[launch-hero]] block-letter wordmark — over an auto-growing
 input. Like every dashboard-authored composer, it uses [[composer]]'s `ComposerTextarea`, whose one
@@ -290,8 +306,8 @@ before a successful send clears the draft and closes the box. A `/` line
 may instead name a **board command**, intercepted client-side because sending that word to the agent cannot
 operate the board. One registry (`sessionCommands.js`) feeds those rows and every toolbar twin, sharing action,
 availability, identity colour, localized label, and icon. `/stop` stops the agent but keeps its resumable
-worktree; `/archive` and `/unarchive` shelve and restore it without stopping anything ([[archive]] — exactly
-one of the pair is offered, keyed on `archived` alone); `/close` removes the worktree; `/merge` is offered
+worktree; `/close` performs the soft terminal transition into the permanent archive place ([[archive]]),
+removing the worktree while retaining the branch, record, and conversation; `/merge` is offered
 only for the live review proposal declared by `done --propose merge`; `/eval` opens the canonical
 session-scoped Evals page.
 Lifecycle actions consume both HTTP status and the structured `{ok,error}` body before the board reloads, so
@@ -300,11 +316,11 @@ and lifecycle actions use one selected-session, right-pane action-outcome mechan
 Command Box owns `sending...` while open; an existing-session action owns `working...` in its selected
 action surface. Settled delivery and failure publish once through [[transient-notices]], so neither an
 old refusal nor a success permanently spends console geometry. The left session list is navigation-only and
-renders no action alert. Bulk archive and close leave select mode immediately but aggregate every returned
+renders no action alert. Bulk close leaves select mode immediately but aggregates every returned
 refusal into that same selected-session result, so an HTTP conflict never exists only in browser tooling.
 **Prompt delivery and a lifecycle transition remain distinct while pending:** the former
 reports `sending...`, while the latter reports the neutral `working...`; reusing delivery copy for relaunch,
-stop, archive, close, or merge would falsely claim the dashboard sent the agent a prompt.
+stop, close, or merge would falsely claim the dashboard sent the agent a prompt.
 There is no `/type`. Board commands lead the menu tagged `[ui]` and run on acceptance; live command presets
 tagged `[preset]` and harness commands follow as authoring rows that insert their token. Names deduplicate by
 that precedence. `[[node]]` resolves at send to the node id plus its live `spec.md` pointer; `@session` stays

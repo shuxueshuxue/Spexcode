@@ -186,9 +186,12 @@ test('selected nested session keeps its lead separated from the revealed headlin
   )
 })
 
-test('session sidebar owns a bounded vertical scrollport', () => {
+test('session sidebar bounds one working-board scrollport above the archive place', () => {
   assert.match(css, /\.si-page\s*\{[^}]*min-height:\s*0;/s)
-  assert.match(css, /\.si-list\s*\{[^}]*overflow-y:\s*auto;/s)
+  assert.match(css, /\.si-list\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;/s)
+  assert.match(css, /\.si-board-scroll\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s)
+  assert.match(css, /\.si-archive-drawer\s*\{[^}]*flex:\s*0 0 auto;[^}]*overflow:\s*visible;/s)
+  assert.doesNotMatch(css, /\.si-archive-(?:drawer|preview)\s*\{[^}]*overflow-y:\s*(?:auto|scroll)/s)
 })
 
 test('session sidebar defaults denser and caps selected headlines at three lines', () => {

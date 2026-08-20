@@ -35,13 +35,23 @@ scenarios:
       The legacy row projects as closed/offline, remains readable, and resume reconstructs its branch worktree and
       launches the same conversation without requiring a new archive ref.
     tags: [backend-api, frontend-e2e]
+  - name: close-index-time-is-explicit
+    test: spec-dashboard/test/session-archive-drawer.e2e.mjs
+    description: >
+      Close a real working session through the browser drop target, inspect the public all-sessions index, then add
+      a historical archived:true record with no closed_at and open the full archive page.
+    expected: >
+      The new close publishes an ISO closedAt written with its retained record and appears in the correct date group.
+      The historical row projects closedAt:null and appears in the final explicit Time unknown group without using
+      its creation time, sort key, timeline, or file metadata as a substitute.
+    tags: [backend-api, frontend-e2e, desktop]
   - name: close-conversation-transcript-remains-readable
     test: spec-dashboard/test/session-surface-cold-readable.e2e.mjs
     description: >
       Use real Chromium against a live backend to close a session, select its closed row, read its timeline, and
       expand a transcript interval after the worktree has gone away.
     expected: >
-      The closed row leaves the default board but remains in the shelf projection. Conversation keeps the same
+      The closed row leaves the default board but remains in the archive index. Conversation keeps the same
       disabled cold shell, transcript details load lazily once and cache on re-expand, and the footer resume action
       reaches the real /resume endpoint.
     tags: [frontend-e2e, desktop, backend-api]

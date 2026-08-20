@@ -22,7 +22,7 @@ scenarios:
     related: [spec-dashboard/src/TimelineChat.jsx, spec-dashboard/src/styles.css]
     description: >-
       In an isolated real backend, create terminal-capable sessions with persisted conversation entries, then
-      archive one and stop the other through the public session APIs. Select each row in a real Chromium dashboard,
+      close one and stop the other through the public session APIs. Select each row in a real Chromium dashboard,
       compare its rendered timeline with the public timeline endpoint, exercise the terminal control and lifecycle
       action, and count archived timeline requests for longer than one polling interval.
     expected: >-
@@ -120,8 +120,8 @@ scenarios:
   - name: board-command-parity
     tags: [frontend-e2e, desktop]
     description: >-
-      Across working, review, done, offline, queued, and ARCHIVED sessions compare toolbar tools with Command
-      Box board rows. Trigger Command Box, merge, relaunch, stop, archive/unarchive, close, and eval through
+      Across working, review, done, offline, and queued sessions compare toolbar tools with Command
+      Box board rows. Trigger Command Box, merge, relaunch, stop, close, and eval through
       each available surface.
     expected: >-
       One registry decides availability, icon, color, accessible label, and action. Every selected session
@@ -129,9 +129,9 @@ scenarios:
       and offered as `/merge`; each activation is one bodyless `POST /merge` with no review preflight or
       idempotency header. done/`nothing`, working, asking, close-pending, and offline states are muted,
       disabled, name their reason, and dispatch nothing. Command Box is the stable resident right-edge tool
-      while live; merge/relaunch sit to its left without moving merge. Stop, close, and the archive pair remain
-      Command Box-only typed verbs with no toolbar twin; of `/archive` and `/unarchive` exactly ONE is ever
-      offered, keyed on `archived` alone and never on lifecycle or liveness ([[archive]]). Eval is a permanent
+      while live; merge/relaunch sit to its left without moving merge. Stop and close remain Command Box-only
+      typed verbs with no toolbar twin; archived sessions are places in the left archive surface, not a command
+      mode. Eval is a permanent
       anchor plus `/eval`. Offline and queued sessions cannot open Command Box, and no `/type` or type tool exists.
   - name: modifier-arrows-switch-sessions
     tags: [frontend-e2e, desktop]
@@ -154,16 +154,32 @@ scenarios:
       tooltip/accessibility name and status metadata stays at the first-line top-right. No row overlap occurs.
   - name: session-sidebar-viewport-scroll
     tags: [frontend-e2e, desktop]
-    test: spec-dashboard/test/session-sidebar-scroll.e2e.mjs
+    test: spec-dashboard/test/session-archive-drawer.e2e.mjs
     code: spec-dashboard/src/styles.css
     related: spec-dashboard/src/SessionInterface.jsx
     description: >-
-      Render enough visible live session rows to exceed a 420px desktop viewport, then inspect the real
-      SessionInterface sidebar's bounds and scroll geometry in Chromium.
+      In an isolated real backend and prebuilt Chromium dashboard, render working rows plus a long closed index,
+      then inspect the complete SessionInterface sidebar and archive drawer geometry.
     expected: >-
-      The sidebar remains bounded inside the routed page and exposes its own vertical overflow: its bottom
-      stays within the viewport, its scrollHeight exceeds its clientHeight, and computed overflow-y is auto.
-      Rows remain reachable through that one sidebar scrollport instead of being clipped below the page.
+      The sidebar remains bounded inside the routed page. The working-board region owns its only vertical
+      scrollport; the permanent `Archive N` bar stays pinned below it, remains visible at zero, and the expanded
+      preview fits within one third of the sidebar height without its own overflow.
+  - name: archive-drawer-place-and-full-page
+    tags: [frontend-e2e, desktop, backend-api]
+    test: spec-dashboard/test/session-archive-drawer.e2e.mjs
+    code: spec-dashboard/src/SessionInterface.jsx
+    related: [spec-dashboard/src/styles.css, spec-dashboard/src/session.js]
+    description: >-
+      Through an isolated real backend and the prebuilt dashboard in Chromium, begin with no closed sessions,
+      create real working sessions, drag one row onto the permanent archive bar, expand the preview, open its
+      row, then add a long closed-index fixture and open and search the full archive page while counting requests.
+    expected: >-
+      The top row has only New and Search; the bottom `Archive 0` entry is still visible. The drawer has no
+      scrollport, shows only the newest rows that fit under one third of the sidebar, and leaves the working board
+      as the sidebar's single scroll container. Dropping a row on the bar issues one close without a dialog, moves
+      it into the archive, and its preview row opens the same read-only Conversation DOM. The full right-pane page
+      receives the complete closed index in one request, filters it with its own search field, and renders
+      newest-first rows beneath sticky date headings whose active heading remains fixed during scroll.
   - name: triage-zones-and-status-colour
     tags: [frontend-e2e, desktop]
     description: >-
@@ -274,12 +290,12 @@ scenarios:
   - name: row-context-and-external-reveal
     tags: [frontend-e2e, desktop]
     description: >-
-      Right-click a nested session row, exercise lock/rename/select/attach/archive/close availability, then open
+      Right-click a nested session row, exercise lock/rename/select/attach/close availability, then open
       a session hidden below collapsed ancestors from the graph node menu and an originator chip.
     expected: >-
-      The shared context menu exposes state-appropriate actions without stealing terminal focus: archive names
-      the move OUT of the row's current state (one item, never a pair) and acts with no confirm, while close
-      keeps its confirm — the prompt is earned by destroying work, not by being a right-click. External opens
+      The shared context menu exposes state-appropriate actions without stealing terminal focus. Close remains
+      the one lifecycle-removal command there; archive is a destination in the sidebar rather than a context-menu
+      verb. External opens
       unfold every present ancestor, reveal and select the row, and keep URL/session identity synchronized.
   - name: session-window-remains-bounded
     tags: [frontend-e2e, desktop]

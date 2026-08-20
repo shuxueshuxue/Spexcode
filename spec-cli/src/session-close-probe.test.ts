@@ -72,7 +72,9 @@ esac
     codexHarness.cleanupRuntime = async () => {}
     assert.equal(await closeSession(id), true)
     assert.equal(existsSync(sessionRecordPath(id)), true, 'the target close retains the record after the cold proof')
-    assert.equal(JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).archived, true, 'the retained row projects closed')
+    const retained = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    assert.equal(retained.archived, true, 'the retained row projects closed')
+    assert.equal(Number.isFinite(Date.parse(retained.closed_at)), true, 'the retained close publication carries an ISO closed_at')
     assert.equal(existsSync(worktree), false, 'the target close removes only the worktree')
     assert.notEqual(execFileSync('git', ['-C', project, 'branch', '--list', branch], { encoding: 'utf8' }).trim(), '', 'the target close retains the branch')
     assert.notEqual(execFileSync('git', ['-C', project, 'rev-parse', '--verify', `refs/spex-archive/${id}^{commit}`], { encoding: 'utf8' }).trim(), '', 'the target close publishes the archive ref')

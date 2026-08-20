@@ -48,6 +48,7 @@ try {
   const row = await fetch(`http://127.0.0.1:${port}/api/sessions/${id}`); assert.equal(row.status, 200)
   const rows = await fetch(`http://127.0.0.1:${port}/api/sessions?all=1`); assert.equal(rows.status, 200)
   const projected = (await rows.json()).find((entry) => entry.id === id); assert.equal(projected.archived, true)
+  assert.equal(projected.closedAt, null, 'pre-field archived records project an honest unknown close time')
   const resume = await fetch(`http://127.0.0.1:${port}/api/sessions/${id}/resume`, { method: 'POST', signal: AbortSignal.timeout(10000) })
   const resumeBody = await resume.text()
   assert.equal(existsSync(worktree), true, resumeBody)

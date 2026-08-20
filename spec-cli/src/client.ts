@@ -134,7 +134,7 @@ function corruptCachedSession(id: string, reason: string): Session {
     id, node: null, branch: null, path: '', label, title: label, raw: { name: null, title: null },
     parent: null, harness: 'unknown', capabilities: { headless: false }, launcher: null,
     lifecycle: 'active', proposal: null, merges: 0, status: 'corrupt', liveness: 'unknown',
-    note: `session record is unreadable: ${reason}`, archived: false, archiveHazard: null,
+    note: `session record is unreadable: ${reason}`, archived: false, closedAt: null, archiveHazard: null,
     prompt: null, promptPreview: null, created: 0, activity: null, sortKey: null,
   }
 }

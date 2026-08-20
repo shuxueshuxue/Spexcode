@@ -95,6 +95,41 @@ B 与 C 再并行分叉于含 A 的集成头。
 | **C** self-launch adopter | `packages/session-selflaunch/**`、`.spec/spexcode/session-runtime/self-launch/**` | 不 import spec-core / session-core；不做 daemon、不做 drain loop、不假设 Spex root |
 | **集成方** | 根 `package.json`、`spexcode.json`、`package-lock.json`、本文件与其 owning 节点 | 不替 writer 改代码；不替 evaluator 报数 |
 
+## 3.1 施工期观察（不属于本阶段的文件面，只如实记录，不代改）
+
+**观察 1：`spikes/sqlite-m2/stubs/run.mjs` 的判定依赖 Node 的测试报告格式，在 fleet 钉死的 Node 22 上把
+10 条已冻结决定全部误报成 UNGATED。**
+
+- 该 runner 用 `^✖ (.+?) \(\d` 提取失败的 vector 名（`stubs/run.mjs:37`）。那是 **spec reporter** 的行格式。
+  Node 22 的 `node --test` 在非 TTY 下默认 **TAP**，失败行是 `not ok 21 - <name>`，正则一条都匹配不到。
+- 更糟的是 TAP 仍然打印 `# tests N`，于是 `sawSummary` 为真（`stubs/run.mjs:39`、`:47`），
+  三态判定把这次"看不见失败"的运行记成**测过了的 UNGATED**，而不是 NOT MEASURED——
+  正好绕过了三态设计要防的那件事。
+- 实测两边，同一棵树、同一个 stub、同一条 vector：
+
+  ```
+  M2_ENGINE=../stubs/string-body-accepted.mjs node22 --test test/engine.test.mjs
+    → not ok 21 - body must be explicit bytes; a string is not an encoding the protocol guesses   # fail 1
+  M2_ENGINE=../stubs/string-body-accepted.mjs node24 --test test/engine.test.mjs
+    → ✖ body must be explicit bytes; a string is not an encoding the protocol guesses (31.6ms)    ℹ fail 1
+  ```
+
+  整套矩阵：Node 22 跑出 `gated 0/10 ungated 10`，Node 24 跑出 `gated 10/10 ungated 0`。
+- **结论：引擎与 vector 本身没问题**（两个解释器下 stub 都被同一条 vector 抓住，`# fail 1`），
+  出问题的是"门之门"的输出解析。集成账 §2 记录的 10/10 成立，但它只在 spec reporter 下可复现。
+- 处置：`spikes/**` 是已 parked 的 M2 lane 的文件面，按集成账 §4.2 立的规则**不代写**。
+  修法是把提取改成同时认 TAP 与 spec 两种格式（或显式 `--test-reporter=spec`），由该 lane owner 执行。
+  在那之前，任何人复跑反例矩阵**必须用 spec reporter**，否则读到的 0/10 是假的。
+
+**观察 2：本机 `claude` 全局安装丢了 native binary，claude 系 launcher 全部起不来。**
+
+- `claude --version` 报 `Error: claude native binary not installed`（postinstall 未跑或 optional 依赖没下）；
+  `reclaude` 因此在 launch 时报 `reclaude: launch claude: exec format error`，session 卡在
+  `queued launch readiness failed: adapter liveness did not become ready`。`claude-glm` 用同一个二进制，同样不可用。
+- 这不是 session 创建链路的问题（后端 `/health` 正常，创建、worktree、tmux 都到位），是被启动的二进制坏了。
+- 处置：本阶段三条 lane 一律用 `--launcher codex`（本机 `defaultLauncher`，实测健康）。
+  修 claude 安装（`node <global>/@anthropic-ai/claude-code/install.cjs`）是舰队工具链的事，不在本里程碑内。
+
 ## 4. 门禁与结果
 
 （集成阶段填写。每一门都由集成方在合并树上独立执行，不采信 lane 自述。）

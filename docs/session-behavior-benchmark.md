@@ -29,10 +29,10 @@ which defines tasks as real terminal environments with task instructions and ind
 The parent did not invent a worker tree for either task. This is correct behavior: decomposition is not itself a
 goal, and a single session can complete a task without creating unnecessary coordination state.
 
-### Forced Swarm, adopted consumer, SQLite recovery
+### Forced Swarm, adopted consumer, read-only worker behavior
 
 The same `sqlite-db-truncate` task was run in a consumer containing a real `spexcode.json`. The parent was required
-to dispatch three isolated workers and then synthesize the result.
+to dispatch three isolated workers and then synthesize the result. The model chose investigation-only roles.
 
 Observed facts:
 
@@ -42,7 +42,7 @@ Observed facts:
 - The child worktrees remained isolated and contained their investigation artifacts.
 - The parent and all three children were still represented in the durable database after the CLI process exited.
 - Each child was `need_review` / `awaiting` with a `merge` proposal, because none had created a commit.
-- The CLI exited with code 1 and reported `worker(s) were dispatched but committed nothing`.
+- The CLI reported `worker(s) were dispatched but committed nothing` and did not claim delivery.
 
 This is not a lost-message result. The protocol and topology observations agree, and the parent obtained enough
 information to produce the correct artifact. It is a delivery-contract result: an isolated worker with no commit is
@@ -57,6 +57,30 @@ boundary that must remain explicit:
 2. A read-only/research worker is a different contract. If that role is intended, the protocol needs an explicit
    result kind; silently treating a no-commit isolated worker as delivered would be incorrect.
 
+### Forced Swarm, adopted consumer, write-oriented collection
+
+The same fixture was then run as a write task. Three isolated workers committed concrete artifacts: a binary
+carver (`18a1794`), a SQLite rebuild/query path (`ef2eaf1`), and an independent verifier (`568aff8`). The parent
+collected them with `cherry-pick -x`, regenerated the final artifacts in the main workspace, and produced commit
+`6544ce2`.
+
+Independent verification passed:
+
+- `recover.json`: 8/8 known rows, plus 2 extra rows, exact `{word, number}` shape;
+- binary carve, SQL query on a repaired database, and an independent `sqlite3` query all returned the same 10 rows;
+- `PRAGMA integrity_check` returned `ok`; the input database hash was unchanged; the main worktree was clean.
+
+The durable state exposed the important boundary. The protocol had three topology edges and 9/9 messages dequeued,
+but after the parent resolved an add/add `recover.json` conflict and regenerated outputs, `git cherry` reported
+`-` only for the carver and `+` for the rebuilder and verifier. The database therefore still showed all three
+children as `need_review` / `awaiting` with `merge` proposals, and the parent as `active`, even though the useful
+code and final artifact were present in the main workspace.
+
+This is not message loss. It is a delivery projection mismatch: semantic collection after conflict resolution is
+broader than the current patch-equivalence receipt. The current contract is conservatively correct not to mark those
+workers `merged`, but it cannot express “the useful portions were collected and the conflicting artifact was
+reconciled.” That is the next correctness decision, not a reason to add a fallback.
+
 ### Existing layered product run
 
 An earlier real recursive run produced the topology `parent -> alpha -> beta`. The parent and both child records were
@@ -66,11 +90,12 @@ it is not evidence that the hierarchy or mailbox failed.
 
 ## Current conclusion
 
-The tested core behavior is coherent for the write-task contract: no message loss, no phantom topology edge, and no
-false `merged` state. The strongest red signal is intentionally loud: the CLI refuses to return success while an
-isolated worker's work has not been delivered.
+The tested protocol behavior is coherent: no message loss, no phantom topology edge, and no false `merged` state.
+The strongest product signal is now narrower: after a real write task succeeds and conflict resolution changes the
+patch shape, session state stays open instead of silently claiming delivery. That is a correct conservative result,
+but it leaves a real user-visible task unfinished in the session ledger.
 
-The next correctness benchmark is a forced Swarm write task whose workers each commit a concrete artifact and whose
-parent collects those commits. That run must prove the complete user story: worker commits, parent collection,
-durable `merged` states, zero pending protocol messages, and verifier success. It is the required follow-up before
-changing session-core or the Swarm state model.
+Before changing session-core, the contract must choose one of two explicit semantics: require conflict-free
+artifact ownership so patch-equivalent collection remains the only receipt, or add a first-class reconciliation
+receipt that records the parent commit and the worker commits it subsumes. The benchmark already proves why a silent
+fallback or a blind `merged` write would be wrong.

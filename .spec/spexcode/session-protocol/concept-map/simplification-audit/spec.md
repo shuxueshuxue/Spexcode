@@ -92,6 +92,16 @@ the residue a passing gate would leave behind — state that the gate's own sele
 where a suspicion of duplication turns out not to survive contact with the tree. Both outcomes are results: a
 cleared area tells a later reader that the surface was examined rather than skipped.
 
-Where the material's own evidence discipline forbids rewriting a file, the smallest fix is additive. A finding whose
-proposal would rename or overwrite an original failure record is not the smallest fix but a different defect, so
-the audit proposes the added record instead and says which rule made that the only available shape.
+Where the material's own evidence discipline forbids rewriting a file, a finding whose proposal would rename or
+overwrite an original record is not the smallest fix but a different defect. Adding a record is not automatically
+the answer either: before proposing to write a fact down, the audit checks whether that fact is already recorded
+somewhere the material already maintains, because a further copy of an already-recorded fact is precisely the
+defect this audit exists to find. When the fact is already held, the smallest fix subtracts the unreferenced copy
+rather than adding a better one, and the entry says which existing record carries the fact and who owns the file
+being retracted. An audit that proposes an addition where a subtraction was available has failed its own standard,
+so a corrected proposal is recorded as a correction rather than quietly replaced.
+
+Each proposal names the owner who can act on it, because a finding filed against the wrong owner cannot be acted on
+and reads as unowned work. Ownership follows the file the fix touches, not the lane that found the defect: a gap in
+a deletion gate's coverage belongs to that gate's owner even when an unrelated audit proved it, and an evidence
+directory belongs to whoever maintains that evidence. The audit itself never takes the fix.

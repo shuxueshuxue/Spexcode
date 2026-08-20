@@ -3,6 +3,10 @@ title: session-topology
 status: active
 hue: 280
 desc: The relation model for opaque session addresses; it resolves associations and recipients without storing or delivering messages.
+related:
+  - .spec/spexcode/session-topology/topology-schema/spec.md
+  - .spec/spexcode/session-topology/topology-errors/spec.md
+  - .spec/spexcode/session-topology/topology-package-entry/spec.md
 ---
 # session-topology
 

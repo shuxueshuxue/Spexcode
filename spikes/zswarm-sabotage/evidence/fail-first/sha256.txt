@@ -1,0 +1,2 @@
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  spikes/zswarm-sabotage/evidence/fail-first/stdout.txt
+d3031e056e5cabc7c0c4d41398252823d4b93dd08324c6a9d3a65e8ad47ba2e0  spikes/zswarm-sabotage/evidence/fail-first/stderr.txt

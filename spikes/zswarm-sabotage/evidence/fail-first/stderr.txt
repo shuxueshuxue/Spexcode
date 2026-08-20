@@ -1,0 +1,9 @@
+AssertionError [ERR_ASSERTION]: poisoned-sabotage legacy file syscall hits:
+3543025 openat(AT_FDCWD, "/tmp/m5-zswarm-adopter-mOa12h/legacy-poisoned/sessions/z-parent/session.json", O_RDONLY|O_CLOEXEC) = 21
+
+1 !== 0
+
+    at equal (file:///home/jeffry/spexcode/.worktrees/%E4%BD%A0%E6%98%AF-M5-lane-I-ZSwarm-adopter-cut-in-d840/scripts/m5-zswarm-adopter.mjs:39:10)
+    at runTracedScenario (file:///home/jeffry/spexcode/.worktrees/%E4%BD%A0%E6%98%AF-M5-lane-I-ZSwarm-adopter-cut-in-d840/scripts/m5-zswarm-adopter.mjs:186:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async main (file:///home/jeffry/spexcode/.worktrees/%E4%BD%A0%E6%98%AF-M5-lane-I-ZSwarm-adopter-cut-in-d840/scripts/m5-zswarm-adopter.mjs:303:25)

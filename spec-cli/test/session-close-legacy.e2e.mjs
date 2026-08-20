@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { dirname, fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const run = (cwd, args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim()
 const root = mkdtempSync(join(tmpdir(), 'spex-soft-close-proof-'))
@@ -36,7 +36,7 @@ const port = 18987 + (process.pid % 1000)
 const tmuxSocket = `proof-${process.pid}`
 const env = { ...process.env, HOME: root, PORT: String(port), SPEXCODE_HOME: home, SPEXCODE_TMUX: tmuxSocket }
 const repo = dirname(dirname(fileURLToPath(import.meta.url)))
-const backend = spawn(process.execPath, [tsx, join(repo, 'spec-cli', 'src', 'index.ts')], { cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'] })
+const backend = spawn(process.execPath, [tsx, join(repo, 'src', 'index.ts')], { cwd: project, env, stdio: ['ignore', 'pipe', 'pipe'] })
 let backendErr = ''; backend.stderr.on('data', chunk => { backendErr += String(chunk) })
 const wait = async (url) => { for (let i = 0; i < 100; i++) { try { if ((await fetch(url)).ok) return } catch {} await new Promise(r => setTimeout(r, 50)) } throw new Error('backend did not start') }
 try {
@@ -61,4 +61,5 @@ try {
   try { execFileSync('tmux', ['-L', tmuxSocket, 'kill-session', '-t', id], { stdio: 'ignore' }) } catch {}
   backend.kill('SIGTERM')
   await Promise.race([new Promise(resolve => backend.once('exit', resolve)), new Promise(resolve => setTimeout(resolve, 2000))])
+  rmSync(root, { recursive: true, force: true })
 }

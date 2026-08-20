@@ -2588,15 +2588,20 @@ const archiveRef = (id: string): string => `refs/spex-archive/${id}`
 
 function archiveWorktreeState(id: string, path: string): string {
   const root = mainRoot()
-  const parent = git(['-C', path, 'rev-parse', 'HEAD']).trim()
-  git(['-C', path, 'add', '-A'])
-  const tree = git(['-C', path, 'write-tree']).trim()
-  const commit = git(['-C', path, '-c', 'user.name=SpexCode', '-c', 'user.email=spexcode@localhost', 'commit-tree', tree, '-p', parent, '-m', `spex close archive ${id}`]).trim()
-  if (!/^[0-9a-f]{40,64}$/.test(commit)) throw new ResourceConflict(`refusing to close ${id}: archive commit was malformed`)
-  git(['-C', root, 'update-ref', archiveRef(id), commit])
-  const stored = git(['-C', root, 'rev-parse', '--verify', `${archiveRef(id)}^{commit}`]).trim()
-  if (stored !== commit) throw new ResourceConflict(`refusing to close ${id}: archive ref publication was not verified`)
-  return commit
+  try {
+    const parent = git(['-C', path, 'rev-parse', 'HEAD']).trim()
+    git(['-C', path, 'add', '-A'])
+    const tree = git(['-C', path, 'write-tree']).trim()
+    const commit = git(['-C', path, '-c', 'user.name=SpexCode', '-c', 'user.email=spexcode@localhost', 'commit-tree', tree, '-p', parent, '-m', `spex close archive ${id}`]).trim()
+    if (!/^[0-9a-f]{40,64}$/.test(commit)) throw new Error('archive commit was malformed')
+    git(['-C', root, 'update-ref', archiveRef(id), commit])
+    const stored = git(['-C', root, 'rev-parse', '--verify', `${archiveRef(id)}^{commit}`]).trim()
+    if (stored !== commit) throw new Error('archive ref publication was not verified')
+    return commit
+  } catch (error) {
+    const detail = error instanceof Error ? error.message.split('\n')[0] : String(error)
+    throw new ResourceConflict(`refusing to close ${id}: could not publish ${archiveRef(id)}${detail ? ` - ${detail}` : ''}`)
+  }
 }
 
 async function restoreArchivedWorktree(id: string, rec: SessRec): Promise<void> {

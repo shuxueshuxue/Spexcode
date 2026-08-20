@@ -232,10 +232,17 @@ test('close refuses active native turns and missing evidence while retaining rec
     const activeRecord = writeRecord(activeId, activeThread)
     threads.set(activeThread, { id: activeThread, presence: 'idle', archived: false, loaded: true })
     threads.set(activeChild, { id: activeChild, presence: 'active', archived: false, loaded: true, parentThreadId: activeThread })
+    const activeBefore = readFileSync(activeRecord, 'utf8')
     const active = await runCli(['session', 'close', activeId, '--api', base], project, env)
     assert.notEqual(active.code, 0)
     assert.match(`${active.stdout}\n${active.stderr}`, new RegExp(`Codex subtree member ${activeChild} has an active turn`))
     assert.equal(existsSync(activeRecord), true, 'a live native active turn keeps the exact old refusal and record')
+    assert.equal(readFileSync(activeRecord, 'utf8'), activeBefore, 'active-turn refusal does not rewrite the record')
+    assert.equal(existsSync(join(fixture, `${activeId}-worktree`)), true, 'active-turn refusal keeps the worktree')
+    assert.match(spawnSync('git', ['show-ref', '--verify', `refs/heads/node/${activeId}`], { cwd: project, encoding: 'utf8' }).stdout,
+      new RegExp(`refs/heads/node/${activeId}`), 'active-turn refusal keeps the branch')
+    assert.notEqual(spawnSync('git', ['show-ref', '--verify', '--quiet', `refs/spex-archive/${activeId}`], { cwd: project }).status, 0,
+      'active-turn refusal publishes no archive ref')
 
     const missingId = 'rollout-missing-close'
     const missingThread = 'rollout-missing-thread'

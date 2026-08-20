@@ -1,6 +1,7 @@
 ---
 scenarios:
   - name: close-dirty-work-round-trip
+    test: spec-cli/test/session-close-dirty.e2e.mjs
     description: >
       Through the real HTTP close and resume endpoints, create a session with tracked and untracked dirty
       files, close it, inspect the archive ref/worktree/branch/record, then resume it.
@@ -9,6 +10,7 @@ scenarios:
       branch and record, and resume rebuilds the worktree with both dirty files unchanged before relaunching.
     tags: [backend-api, cli]
   - name: close-ref-publication-failure-is-loud
+    test: spec-cli/test/session-close-ref-failure.e2e.mjs
     description: >
       Make the archive ref update fail while closing a dirty session through the real HTTP endpoint.
     expected: >
@@ -16,12 +18,16 @@ scenarios:
       published and no resource is removed.
     tags: [backend-api]
   - name: close-refuses-an-active-turn
+    test:
+      path: spec-cli/src/session-close-active.api.test.ts
+      name: close refuses active native turns and missing evidence while retaining records
     description: >
       Drive close against a real backend fixture whose native adapter reports an active descendant turn.
     expected: >
       Close refuses before any interrupt or deletion, naming the active turn and retaining every owned resource.
     tags: [backend-api, cli]
   - name: legacy-archived-row-is-readable
+    test: spec-cli/test/session-close-legacy.e2e.mjs
     description: >
       Load an existing archived:true record with its historical coldProof and no worktree, then read and resume it
       through the real backend.

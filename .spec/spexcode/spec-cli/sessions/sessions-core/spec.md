@@ -233,7 +233,8 @@ future record-only control-plane seam; it must not be approximated by skipping t
 second process terminator. Any other read failure still throws:
 a transient fault must read as neither. **Retired** is the third integrity reading, derived not stored: the
 recorded worktree is gone, so there is nothing left to be active *in*. It is terminal — no lifecycle writer may
-put it back to `active`/`idle`, no launch is assembled for it, only `close` remains.
+put it back to `active`/`idle`, and no delayed launch-readiness observer may replace its frozen note after the
+worktree disappears. No launch is assembled for it; only `close` remains.
 
 The leaf-ownership guard that gates every stop distinguishes **a dead leaf from an unprovable one**. Both look
 alike from the recorded pid — neither yields a start identity — but they call for opposite answers. A pid that

@@ -1555,7 +1555,7 @@ function noteQueuedLaunchFailureUnlocked(id: string, error: unknown): void {
   const note = `queued launch readiness failed: ${reason}`
   console.error(`spex: session ${id}: ${note}`)
   const rec = readRecord(id)
-  if (rec && rec.note !== note) writeRecord({ ...rec, note })
+  if (rec && !retirementReason(rec) && rec.note !== note) writeRecord({ ...rec, note })
 }
 
 function observeQueuedLaunchReadiness(id: string, harness: Harness): void {

@@ -193,11 +193,12 @@ scenarios:
     description: >
       Take a governed record whose work already merged and whose worktree AND branch are both gone (the
       manual-retirement end state), then push every revival path at it: the lifecycle hooks' `active`/`idle`
-      writers, a typed declaration, and `resume`.
+      writers, a typed declaration, and `resume`. Race retirement against the original launch's delayed
+      readiness observer so that its failure callback arrives only after the worktree disappears.
     expected: |
       The session reads as retired on the list, and every revival path refuses with that reason: it never
-      returns to `active`/`idle`, no launch script is regenerated for it, and no resume launch runs. `close`
-      remains available to retire the record itself.
+      returns to `active`/`idle`, no delayed readiness failure replaces its frozen note, no launch script is
+      regenerated for it, and no resume launch runs. `close` remains available to retire the record itself.
     code: spec-cli/src/sessions.ts
     test: spec-cli/src/session-record-integrity.test.ts
 ---

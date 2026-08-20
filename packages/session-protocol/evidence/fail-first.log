@@ -1,0 +1,27 @@
+TAP version 13
+# Subtest: open rejects a relative database path before consulting process state
+not ok 1 - open rejects a relative database path before consulting process state
+  ---
+  duration_ms: 2.47936
+  type: 'test'
+  location: '/home/jeffry/spexcode/.worktrees/你是-session-platform-生产实施-lane-A-protocol-core-94f5/packages/session-protocol/src/fail-first.test.ts:1:119'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception: openProtocol accepted a relative database path instead of raising PROTOCOL_PATH_NOT_ABSOLUTE'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  stack: |-
+    TestContext.<anonymous> (/home/jeffry/spexcode/.worktrees/你是-session-platform-生产实施-lane-A-protocol-core-94f5/packages/session-protocol/src/fail-first.test.ts:7:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 387.39122

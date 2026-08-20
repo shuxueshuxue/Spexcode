@@ -216,3 +216,37 @@ diff 相对 base 为 13 files / +1020 / −183。收口判定 **PASS**。
 4. 合并后 `third_party/spexcode` 的退出条件挂到 M9。
 
 **明确不做**：不推进 M6；不代替对方合并；不因为"文件系统可写"就把提案当既成事实。
+
+## 5. 跨仓 ownership / provenance（z-code commit 不带 Spex trailer 的原因与替代记录）
+
+本仓的落地纪律要求每个 commit 带 `Spec:` / `Session:` trailer。**z-code 那两个 commit 没有带，这是裁决过的，不是遗漏。**
+
+三条理由，按重要性排：
+
+1. **目标仓的契约不是这条。** z-code 自己的 AGENTS 只要求 Conventional Commits。
+   往别人的仓库里塞我们的治理格式，是把自己的流程当成通用规范。
+2. **那个 clone 不是 Spex governed 项目**，trailer 里的 `Session:` 在对方仓库里指不到任何东西，
+   写了也只是一串对读者无意义的 uuid。
+3. **改写会毁掉已经正确归档的证据。** 三条 reading 的 `codeSha` 精确指向 `3b1d53e26`；
+   为补 trailer 而 amend 会让那个对象消失，readings 立刻指向不存在的 commit——
+   为了形式合规去破坏实质证据，方向反了。
+
+**所以 provenance 记在这里**，由本仓承担它该承担的那部分记录责任：
+
+| 环节 | 标识 |
+|---|---|
+| 实施 session（Spex 侧 owner） | `a1c2f851-3905-4c89-ada7-028c94e1ccd0` |
+| 实现 commit（z-code） | `3b1d53e267fbd5344c5d607e75ff7fd7d2169eee` |
+| readings sidecar commit（z-code） | `d97c3e87e1784e306a3cbde4020d65fa73ac8a00` |
+
+三条 reading 全部以**实现 commit** 为 `codeSha`（不是 sidecar 自己），scenario 文本在测量前已冻结
+（sidecar 对 `eval.md` 的改动为 0），且三条各自持有**不同的 scenarioHash 与不同的 evidence transcript**：
+
+| scenario | scenarioHash | evidence |
+|---|---|---|
+| `split-session-protocol-cross-process` | `fe2cea8ae18c8214…` | `5f9c7492bbb8fd84…` |
+| `split-session-protocol-production-composition` | `de4d1c13a462a787…` | `b28722f55c7224b8…` |
+| `split-session-protocol-canonical-metadata` | `5f67cc8330c4654e…` | `dcfca456e44d0847…` |
+
+三个 hash 两两不同这件事本身是有意义的：它排除了"用同一个内部 helper 断言三次、冒充三条产品测量"这种做法。
+z-code 侧 `spex eval lint` 的 missing 从 4 降到 1，剩下那 1 条是 base 既有，不属于本次。

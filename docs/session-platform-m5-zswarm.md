@@ -162,14 +162,19 @@ z-code 提案把 `@spexcode/session-core` 从 `apps/zcode-cli/packages/bootstrap
 
 ### 3.3 z-code 提案侧（clone 收口）
 
-clone `/home/jeffry/zcode-m5`，分支 `m5/zswarm-protocol-cutover`，HEAD `65f710f59`：
-`b9b3fa701` 是祖先且 base..HEAD **恰好 1 个 commit**；`git status` 含 untracked **为 0**；
+**最终状态**（这是当前真相，下面的历史快照不要当成现状读）：
+clone `/home/jeffry/zcode-m5`，分支 `m5/zswarm-protocol-cutover`，HEAD
+`d97c3e87e1784e306a3cbde4020d65fa73ac8a00`：`b9b3fa701` 是祖先且 base..HEAD **恰好 2 个 commit**
+（实现 `3b1d53e26` + readings sidecar `d97c3e87e`，顺序即此）；`git status` 含 untracked **为 0**；
 `.git` 锁文件不存在；活 checkout `/home/jeffry/zcode` 的 branch/HEAD/dirty 三项未变。
-diff 相对 base 为 13 files / +1020 / −183。收口判定 **PASS**。
+diff 相对 base 为 **23 files / +1749 / −222**。收口判定 **PASS**。
 
-（HEAD 从上一轮的 `ab465113d` 变成 `65f710f59` 是一次 amend —— 提案被我打回后由 owner 重做。
-仍然满足"base→proposal、恰好 1 commit"，但它是**改写**不是追加，所以在这里写明，不藏在"HEAD 只前进"里。
-上一轮的 post 快照因此作废，本轮重新采样。）
+**历史快照（已被上面取代，仅记录过程，不是现状）**：本提案在 review 过程中先后停在
+`ab465113d` → `65f710f59`（各为 1 commit、13 files / +1020 / −183）→ `3b1d53e26` → 最终 `d97c3e87e`。
+前两次 HEAD 变化是 **amend 改写**而非追加（提案被打回后由 owner 重做），每次改写都让上一轮的 post 快照作废、
+必须重新采样；最后一步 `3b1d53e26 → d97c3e87e` 是**追加** sidecar，不是改写。
+把这段留成历史而不是删掉，是因为"这条分支被改写过几次、哪几次"本身是收口证据的一部分；
+但它必须写成历史，不能继续用现状口吻站着——那正是这份账在 M4 上栽过的坑。
 
 `--- 上一节所列探针限制在此依然成立 ---` 见 §2.4：foreign-writer 探针只覆盖 cwd 在 clone 内的长生命周期写者；
 短生命周期、用绝对路径从别处写的写者仍是 **NOT-PROVEN**。收口靠的是"J 是唯一被授权的写者 + 稳定快照 + 锁文件检查"，

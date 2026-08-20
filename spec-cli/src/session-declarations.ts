@@ -100,7 +100,7 @@ export async function runSessionDeclaration(verb: DeclarationVerb, argv: readonl
       const result = await (await import('./review-acceptance.js')).runReviewAcceptance({
         onProgress: (line) => console.error(`[review acceptance] ${line}`),
       })
-      acceptance = result.report
+      acceptance = result.configured ? result.report : ''
       if (!result.ok) {
         console.error(acceptance)
         console.error('review declaration refused: fix the attributable failures, or use `spex session ask --note <finding>` to hand them upward')

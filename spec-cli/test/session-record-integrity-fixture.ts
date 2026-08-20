@@ -537,6 +537,9 @@ async function notesRoundTrip(home: string): Promise<void> {
     assert.ok(existsSync(rec), 'the governed record exists in the global store')
 
     // ---- entry 1: the PROPOSAL note, written by the real CLI declaration verb -------------------------
+    writeFileSync(join(created.path, 'review-change.txt'), 'record integrity review\n')
+    await pexec('git', ['add', 'review-change.txt'], { cwd: created.path })
+    await pexec('git', ['commit', '-qm', 'fixture review change'], { cwd: created.path })
     await spex(created.path, 'session', 'done', '--propose', 'merge', '--note', NASTY, '--session', id)
     assert.ok(parses(), `after a proposal note the record is still valid JSON:\n${readRaw()}`)
     let session = await readSession(id)

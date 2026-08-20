@@ -102,6 +102,9 @@ test('merge dispatch gives the agent the short local landing flow', { timeout: 1
       'fixture session online',
     )
     const worktree = detail.path as string
+    writeFileSync(join(worktree, 'review-change.txt'), 'ready to land\n')
+    git(worktree, 'add', 'review-change.txt')
+    git(worktree, 'commit', '-qm', 'fixture review change')
 
     const beforeProposal = await request(base, `/api/sessions/${id}/merge`, { method: 'POST' })
     assert.deepEqual({ status: beforeProposal.status, code: beforeProposal.body.code }, { status: 409, code: 'session_merge_not_proposed' })

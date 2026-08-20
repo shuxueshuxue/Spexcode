@@ -15,6 +15,9 @@ related:
   - package.json
   - spexcode.json
   - spec-cli/src/review-acceptance.test.ts
+  - spec-cli/src/session-merge-dispatch.api.test.ts
+  - spec-cli/src/session-record-integrity.test.ts
+  - spec-cli/test/session-record-integrity-fixture.ts
 ---
 
 # review acceptance
@@ -33,8 +36,8 @@ The project declares one ordered review suite in committed `spexcode.json`: a pr
 named commands, and a repeat count of at least two. Type checking is one command in that same suite, not an
 optional parallel ritual. The repository's root `package.json` exposes `typecheck`, so both a person and the
 automatic gate execute the same type-contract check. A project with no review suite keeps the legacy declaration
-path; once the project opts in, `done --propose merge` is the non-optional caller and no worker must remember a
-second command.
+path without appending a synthetic acceptance summary to the worker's note; once the project opts in,
+`done --propose merge` is the non-optional caller and no worker must remember a second command.
 
 The cost and variance are measured facts, not hypothetical optimization pressure. On this repository the
 `spec-cli` suite took about **270 seconds for one run**. On the same `main` code, separate single runs observed

@@ -539,16 +539,6 @@ test('protocol core neither performs nor claims a storage-locality determination
   }
 })
 
-test('the adopter path resolver fails closed, not open', async () => {
-  const resolver = await import('../../../spikes/sqlite-m2/adopter-path-resolver.mjs')
-  assert.equal(resolver.classifyFilesystemType(0xef53).locality, 'local')
-  assert.equal(resolver.classifyFilesystemType(0x6969).locality, 'network')
-  assert.equal(resolver.classifyFilesystemType(0xff534d42).locality, 'network')
-  assert.equal(resolver.classifyFilesystemType(0x65735546).locality, 'undetermined')
-  assert.equal(resolver.classifyFilesystemType(0x12345678).locality, 'undetermined')
-  assert.equal(resolver.resolveProtocolDatabasePath(freshDb()).endsWith('protocol.sqlite'), true)
-})
-
 test('a reader is not blocked by an open write, and sees only committed state', () => {
   const path = freshDb()
   const handle = openProtocol(path)

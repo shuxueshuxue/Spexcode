@@ -5,7 +5,7 @@ scenarios:
     test: spec-cli/src/transcript-reader.test.ts
     code: spec-cli/src/transcript-reader.ts
     description: Read real-shaped Claude JSONL and Codex rollout fixtures through the persistent adapter reader with a bounded epoch interval.
-    expected: Only records inside the requested interval become normalized turns, tool output is joined without native envelopes, and caps report omitted turns/bytes.
+    expected: Only records inside the requested interval become normalized turns, parallel tool results are all joined without native envelopes, orphan output bytes are reported as omitted, and caps or timestamp disorder report honest truncation.
   - name: loud-transcript-failures
     tags: [backend-api]
     test: spec-cli/src/transcript-reader.test.ts

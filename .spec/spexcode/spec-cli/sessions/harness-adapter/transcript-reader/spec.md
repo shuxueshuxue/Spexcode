@@ -25,6 +25,11 @@ milliseconds with `from < to`; an unknown or unmanaged session is a 404, an inva
 harness without this capability returns an explicit unsupported error rather than an empty transcript. A missing,
 deleted, unreadable, malformed, or timestamp-less native file is an explicit unavailable response.
 
-The reader is bounded: the response caps turns and tool output bytes and reports `truncated`, `omittedTurns`, and
-`omittedBytes` when the cap was reached. A status row in the dashboard supplies the interval and fetches it only
-when expanded. The transcript remains a payload, never a field in `timeline.ndjson` or `session.json`.
+The reader is bounded: the response caps turns and tool output bytes and reports `truncated`, `omittedTurns`,
+`omittedBytes`, and `outOfOrderEvents` whenever payload was omitted or the native timestamp order crosses back into
+or before the requested range. Every
+tool result in one native event is matched independently. A result whose call lies outside the interval may be
+omitted, but its bytes are counted rather than silently represented as an empty result. After passing `to`, the
+reader scans a fixed lookahead window for timestamp disorder before stopping, so the cold tail remains bounded.
+A status row in the dashboard supplies the interval and fetches it only when expanded. The transcript remains a
+payload, never a field in `timeline.ndjson` or `session.json`.

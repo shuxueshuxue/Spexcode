@@ -25,6 +25,7 @@ export type TranscriptRead = Readonly<{
   truncated: boolean
   omittedTurns: number
   omittedBytes: number
+  outOfOrderEvents: number
 }>
 
 export class TranscriptReadError extends Error {
@@ -36,6 +37,7 @@ export class TranscriptReadError extends Error {
 
 const MAX_TURNS = 200
 const MAX_OUTPUT_BYTES = 64 * 1024
+const POST_RANGE_LOOKAHEAD_LINES = 256
 
 const object = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
@@ -73,7 +75,7 @@ const lineCount = (value: string): number => value ? value.split(/\r?\n/).length
 
 type MutableTool = { id: string; name: string; input?: string; output?: string; outputLines: number; outputBytes: number }
 type MutableTurn = { id: string | null; at: number; role: 'user' | 'assistant'; text?: string; tools: MutableTool[] }
-type ParsedEvent = { at: number | null; turn: MutableTurn | null; toolOutput?: { id: string; text: string } }
+type ParsedEvent = { at: number | null; turn: MutableTurn | null; toolOutputs?: readonly { id: string; text: string }[] }
 
 function claudeEvent(value: unknown): ParsedEvent | null {
   const entry = object(value)
@@ -91,7 +93,7 @@ function claudeEvent(value: unknown): ParsedEvent | null {
       const id = string(b?.tool_use_id)
       return b?.type === 'tool_result' && id ? [{ id, text: compact(b?.content ?? '') }] : []
     })
-    if (outputs.length) return { at: eventAt, turn: null, toolOutput: outputs[0] }
+    if (outputs.length) return { at: eventAt, turn: null, toolOutputs: outputs }
     if (text) return { at: eventAt, turn: { id: idOf(entry) ?? idOf(message), at: eventAt, role: 'user', text, tools: [] } }
   }
   if (entry.type === 'assistant' && message.role === 'assistant') {
@@ -132,7 +134,7 @@ function codexEvent(value: unknown): ParsedEvent | null {
   if (entry.type === 'response_item' && (type === 'custom_tool_call_output' || type === 'function_call_output')) {
     const id = string(payload.call_id ?? payload.id)
     const output = payload.output ?? payload.result ?? ''
-    return id ? { at: eventAt, turn: null, toolOutput: { id, text: compact(output) } } : null
+    return id ? { at: eventAt, turn: null, toolOutputs: [{ id, text: compact(output) }] } : null
   }
   return null
 }
@@ -153,9 +155,11 @@ export async function readTranscript(harness: string, threadId: string, range: T
   const turns: MutableTurn[] = []
   const byTool = new Map<string, MutableTool>()
   let sawTimestamp = false
-  let parsedRecords = 0
   let omittedTurns = 0
   let omittedBytes = 0
+  let outOfOrderEvents = 0
+  let lookingPastRange = false
+  let postRangeLines = 0
   const input = createReadStream(path, { encoding: 'utf8', highWaterMark: 64 * 1024 })
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
@@ -164,29 +168,40 @@ export async function readTranscript(harness: string, threadId: string, range: T
       let value: unknown
       try { value = JSON.parse(line) } catch (error) { throw new TranscriptReadError('invalid', `${harness} transcript cannot be parsed: ${error instanceof Error ? error.message : String(error)}`) }
       const event = parse(value)
-      if (!event) continue
-      if (event.at !== null) sawTimestamp = true
-      // Native transcript files append chronologically. Once the first timestamp is past the requested
-      // interval the remaining bytes cannot contribute payload, so stop without parsing the cold tail.
-      if (event.at !== null && event.at > range.to) break
-      if (event.at === null || event.at < range.from || event.at > range.to) continue
-      parsedRecords++
-      if (event.toolOutput) {
-        const tool = byTool.get(event.toolOutput.id)
-        if (!tool) continue
-        const bytes = Buffer.byteLength(event.toolOutput.text)
-        tool.outputBytes += bytes
-        tool.outputLines += lineCount(event.toolOutput.text)
-        if (tool.output === undefined) tool.output = ''
-        const remaining = Math.max(0, MAX_OUTPUT_BYTES - Buffer.byteLength(tool.output))
-        tool.output += event.toolOutput.text.slice(0, remaining)
-        if (bytes > remaining) omittedBytes += bytes - remaining
-        continue
+      const stopAfterLine = lookingPastRange && ++postRangeLines >= POST_RANGE_LOOKAHEAD_LINES
+      const eventAt = event?.at
+      const hasTimestamp = eventAt !== null && eventAt !== undefined
+      if (hasTimestamp) sawTimestamp = true
+      if (!lookingPastRange && hasTimestamp && eventAt > range.to) {
+        lookingPastRange = true
+      } else if (lookingPastRange && hasTimestamp && eventAt <= range.to) {
+        outOfOrderEvents++
       }
-      if (!event.turn) continue
-      if (turns.length >= MAX_TURNS) { omittedTurns++; continue }
-      turns.push(event.turn)
-      for (const tool of event.turn.tools) byTool.set(tool.id, tool)
+      if (hasTimestamp && eventAt >= range.from && eventAt <= range.to) {
+        if (event.toolOutputs) {
+          for (const output of event.toolOutputs) {
+            const bytes = Buffer.byteLength(output.text)
+            const tool = byTool.get(output.id)
+            if (!tool) {
+              omittedBytes += bytes
+              continue
+            }
+            tool.outputBytes += bytes
+            tool.outputLines += lineCount(output.text)
+            if (tool.output === undefined) tool.output = ''
+            const remaining = Math.max(0, MAX_OUTPUT_BYTES - Buffer.byteLength(tool.output))
+            tool.output += output.text.slice(0, remaining)
+            if (bytes > remaining) omittedBytes += bytes - remaining
+          }
+        } else if (event.turn) {
+          if (turns.length >= MAX_TURNS) omittedTurns++
+          else {
+            turns.push(event.turn)
+            for (const tool of event.turn.tools) byTool.set(tool.id, tool)
+          }
+        }
+      }
+      if (stopAfterLine) break
     }
   } catch (error) {
     if (error instanceof TranscriptReadError) throw error
@@ -197,7 +212,15 @@ export async function readTranscript(harness: string, threadId: string, range: T
     ...turn,
     tools: turn.tools.length ? turn.tools.map((tool) => ({ ...tool })) : undefined,
   }))
-  return { from: range.from, to: range.to, turns: normalized, truncated: omittedTurns > 0 || omittedBytes > 0, omittedTurns, omittedBytes }
+  return {
+    from: range.from,
+    to: range.to,
+    turns: normalized,
+    truncated: omittedTurns > 0 || omittedBytes > 0 || outOfOrderEvents > 0,
+    omittedTurns,
+    omittedBytes,
+    outOfOrderEvents,
+  }
 }
 
 export async function readClaudeTranscript(threadId: string, range: TranscriptRange): Promise<TranscriptRead> {

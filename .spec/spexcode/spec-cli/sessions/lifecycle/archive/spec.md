@@ -11,6 +11,8 @@ related:
   - spec-cli/src/index.ts
   - packages/spec-core/src/graph.ts
   - spec-cli/src/session-close-active.api.test.ts
+  - spec-cli/src/session-close-live-boundary.api.test.ts
+  - spec-cli/src/session-close-probe.test.ts
   - spec-cli/test/session-close-dirty.e2e.mjs
   - spec-cli/test/session-close-ref-failure.e2e.mjs
   - spec-cli/test/session-close-legacy.e2e.mjs

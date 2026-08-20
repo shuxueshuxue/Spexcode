@@ -6,8 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { codexHarness } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
-import { closeSession, sendText } from './sessions.js'
-import { drain, pendingMessages } from '@spexcode/session-core'
+import { closeSession } from './sessions.js'
 import { runtimeRoot, sessionArtifactPath, sessionRecordPath, sessionStoreDir } from '@spexcode/spec-core'
 
 test('close uses a target tmux probe when the global listing is busy', { concurrency: false }, async () => {
@@ -17,14 +16,11 @@ test('close uses a target tmux probe when the global listing is busy', { concurr
   const originalShared = codexHarness.sharedRuntimes
   const originalColdPreflight = codexHarness.coldPreflight
   const originalColdRuntime = codexHarness.coldRuntime
-  const originalColdRetirementPreflight = codexHarness.coldRetirementPreflight
   const originalCleanup = codexHarness.cleanupRuntime
-  const originalInterrupt = codexHarness.interrupt
   const home = mkdtempSync(join(tmpdir(), `spex-close-target-probe-${process.pid}-`))
   const project = join(home, 'project')
   const bin = join(home, 'bin')
   const id = `close-target-probe-${process.pid}`
-  const recipient = `close-delivery-recipient-${process.pid}`
   const thread = `close-target-thread-${process.pid}`
   const worktree = join(home, 'worktree')
   const branch = `node/${id}`
@@ -65,16 +61,6 @@ esac
       merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: thread,
       stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
     }, null, 2)}\n`)
-    mkdirSync(sessionStoreDir(recipient), { recursive: true })
-    writeFileSync(sessionRecordPath(recipient), `${JSON.stringify({
-      session_id: recipient, governed: true, worktree_path: worktree, branch: '',
-      node: 'delivery-queue', title: '', name: '', parent: '', status: 'active', proposal: 'close',
-      merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex', harness_session_id: '',
-      stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex', launch_cmd: 'codex', launch_owner: '',
-    }, null, 2)}\n`)
-    writeFileSync(sessionArtifactPath(recipient, 'pending.json'), JSON.stringify([
-      { mid: 'queued-before-close', text: 'stale continue', from: id },
-    ]) + '\n')
     leaf = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', thread], { stdio: 'ignore' })
     for (let attempt = 0; attempt < 50 && !processStartToken(leaf.pid!); attempt++)
       await new Promise((resolve) => setTimeout(resolve, 20))
@@ -83,24 +69,19 @@ esac
     codexHarness.sharedRuntimes = () => []
     codexHarness.coldPreflight = async () => ({ ok: true, receipt: Object.freeze({ fixture: 'target-probe' }) })
     codexHarness.coldRuntime = async () => ({ ok: true })
-    codexHarness.coldRetirementPreflight = async () => ({ ok: true, alreadyCold: true })
     codexHarness.cleanupRuntime = async () => {}
-    codexHarness.interrupt = async () => ({ ok: true })
     assert.equal(await closeSession(id), true)
-    assert.equal(existsSync(sessionStoreDir(id)), false, 'the target close removes the record after the cold proof')
-    assert.equal((await sendText(recipient, 'late continue', id)).ok, false, 'a closed sender cannot append new outbound work')
-    const handed: string[] = []
-    await drain(recipient, async (message) => { handed.push(message.mid); return true })
-    assert.deepEqual(handed, [], 'a queued command from the closed sender is never handed to the recipient')
-    assert.deepEqual(pendingMessages(recipient), [], 'the sweep consumes revoked debt so it cannot block later mail')
+    assert.equal(existsSync(sessionRecordPath(id)), true, 'the target close retains the record after the cold proof')
+    assert.equal(JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).archived, true, 'the retained row projects closed')
+    assert.equal(existsSync(worktree), false, 'the target close removes only the worktree')
+    assert.notEqual(execFileSync('git', ['-C', project, 'branch', '--list', branch], { encoding: 'utf8' }).trim(), '', 'the target close retains the branch')
+    assert.notEqual(execFileSync('git', ['-C', project, 'rev-parse', '--verify', `refs/spex-archive/${id}^{commit}`], { encoding: 'utf8' }).trim(), '', 'the target close publishes the archive ref')
     assert.equal(runtimeRoot(), join(home, 'projects', project.replace(/[/.]/g, '-')))
   } finally {
     codexHarness.sharedRuntimes = originalShared
     codexHarness.coldPreflight = originalColdPreflight
     codexHarness.coldRuntime = originalColdRuntime
-    codexHarness.coldRetirementPreflight = originalColdRetirementPreflight
     codexHarness.cleanupRuntime = originalCleanup
-    codexHarness.interrupt = originalInterrupt
     if (leaf?.pid && processStartToken(leaf.pid)) {
       try { process.kill(leaf.pid, 'SIGKILL') } catch { /* already exited */ }
     }

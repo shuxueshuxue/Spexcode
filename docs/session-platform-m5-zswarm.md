@@ -129,4 +129,91 @@ realpath、branch、`b9b3fa701` 是祖先、HEAD、`git status --porcelain`（**
 
 ## 3. 门禁与结果
 
-（施工阶段填写。）
+两侧各自独立跑门，结果各自记在本节；跨仓的那条绑定单独列出来，因为它是"两个仓库在说同一件事"的唯一硬证据。
+
+### 3.1 spexcode 侧（本仓 HEAD）
+
+| 门 | 结果 |
+|---|---|
+| `spex spec lint` | 0 error / 12 warning（warning 全是既有 coverage/drift，阻塞门只看 error） |
+| `spex eval lint --changed` | 0 node flagged（0 malformed / 0 stale / 0 missing / 0 coverage gap） |
+| `scripts/m5-zswarm-adopter.mjs` | 122 assertions；`forbiddenGraphCount: 0`；`protocolAdopterColumns: []` |
+| `scripts/m4-self-launch-yatu.mjs` | 17 assertions |
+| `scripts/m1-conformance.mjs` | 48 assertions |
+
+m5 三种破坏模式（old store missing / read-only / poisoned）都是 `legacyFileSyscallHits: 0`，
+分别落在 628 / 628 / 634 行真实 file syscall 上。这个 0 之所以算数，是因为同一次运行里的标定段
+`poisonPathHits: 1` —— 追踪器**当场演示过它能看见 legacy 路径**，然后才在正式段报 0。
+没有这条标定，"0 命中"和"追踪器瞎了"是同一个输出。
+
+### 3.2 跨仓绑定：z-code 里躺的那两个包，就是本仓门禁量到的那两个包
+
+z-code 提案把 `@spexcode/session-core` 从 `apps/zcode-cli/packages/bootstrap/package.json` 换成
+`third_party/spexcode` 下两个 `file:` tarball。它们的 SHA-256 与 §3.1 中 m5 门禁**本次运行**打包量到的值逐字节相同：
+
+| 包 | SHA-256 | 两侧一致 |
+|---|---|---|
+| `@spexcode/session-protocol@0.6.7` | `fc173f191baccbfb72b1bb7f7127dabbb9182d695d9f81920a116b556be343fa` | ✓ |
+| `@spexcode/session-topology@0.6.7` | `61fb674e465956289c416fedf1b535e2f56873e84bffe6c91620af85fc29fef8` | ✓ |
+
+同一对哈希、加上产出它们的 spexcode 源码 commit `581941d9d5c0ccf962acfd07cd24aea186c84158`、
+以及"M9 发布后换 registry 依赖并删除 `third_party/spexcode`"的退出条件，都写在 **z-code 自己的**
+`docs/swarm-session-protocol.md` 里 —— 不是只记在本账里。否则那两个 tgz 在对方仓库里就是两坨无出处的二进制。
+
+### 3.3 z-code 提案侧（clone 收口）
+
+clone `/home/jeffry/zcode-m5`，分支 `m5/zswarm-protocol-cutover`，HEAD `65f710f59`：
+`b9b3fa701` 是祖先且 base..HEAD **恰好 1 个 commit**；`git status` 含 untracked **为 0**；
+`.git` 锁文件不存在；活 checkout `/home/jeffry/zcode` 的 branch/HEAD/dirty 三项未变。
+diff 相对 base 为 13 files / +1020 / −183。收口判定 **PASS**。
+
+（HEAD 从上一轮的 `ab465113d` 变成 `65f710f59` 是一次 amend —— 提案被我打回后由 owner 重做。
+仍然满足"base→proposal、恰好 1 commit"，但它是**改写**不是追加，所以在这里写明，不藏在"HEAD 只前进"里。
+上一轮的 post 快照因此作废，本轮重新采样。）
+
+`--- 上一节所列探针限制在此依然成立 ---` 见 §2.4：foreign-writer 探针只覆盖 cwd 在 clone 内的长生命周期写者；
+短生命周期、用绝对路径从别处写的写者仍是 **NOT-PROVEN**。收口靠的是"J 是唯一被授权的写者 + 稳定快照 + 锁文件检查"，
+不是靠那个 0。
+
+### 3.4 九个失败的归属：实测同集，不是"看起来无关"
+
+提案改了 `apps/zcode-cli/packages/bootstrap/src/app/create-app.ts`（`365df0b`→`eedd915`），
+内容是**一处调用点**从 `createSwarmSessionProtocolPort()` 变成显式传绝对 `databasePath`
+（`join(cliStorageRoot, "swarm-sessions.sqlite")`）—— 与协议契约"databasePath 必须显式绝对、不许有隐式默认"一致。
+
+`create-app.ts` 是共享装配点，所以"九个失败与本次改动无关"必须实测，不能靠直觉。做法是在 base 与 proposal
+两棵**各自独立安装**的树上跑同样五个测试文件：
+
+- 对照变量成立：五个测试文件在 `b9b3fa701` 与 HEAD 之间**逐字节未变**（blob `c5b9f41` / `d703096` / `1b744f2` /
+  `423af6f` / `71b1ad2`）。我用"文件名解析到唯一路径再比 blob"独立复核过，并配了一个负对照证明该比较**会**报不等 ——
+  第一次我用 `git diff --stat` 加 glob 复核，那条命令在"glob 没匹配到任何文件"时同样输出空，
+  与"文件确实没变"不可区分，是同一类代理缺陷，作废重做。
+- 结果：两侧都是 135 total / 126 pass / 9 fail，按表序 1/1/1/1/5 分布；
+  排序后的 `(file, fullName)` 失败集两侧 SHA-256 同为 `52952e06a036184baca2f3a40aa539cb25f6c4c9e29067320344b85adf450abd`。
+
+**所以这九个失败是 base 既有，不是本次 cutover 引入的。** 它们属于 z-code，本 campaign 不修、也不假装没看见 ——
+落地计划里作为已知项交回对方。
+
+一处要说准的：我另做的"五个失败测试是否直接引用 create-app"扫描结果是 0 引用，但那只是**直接引用**扫描，
+**传递可达性未测**。归属结论站在上面那次实测同集上，不站在这个扫描上。
+
+## 4. 跨仓落地计划（前置条件先于步骤）
+
+**前置条件（不满足就不落）**：
+
+1. **z-code 侧的合并需要对方所有者同意。** 依据是对方仓库自己的 `AGENTS.md:15`：
+   "如果是设计缺陷需要和我沟通，不要自作主张。" 换掉整个会话持久化层属于设计层变更。
+   本 campaign 授权的是**实现**，不是**代对方合并**。所以 `m5/zswarm-protocol-cutover` 是**提案分支**。
+2. **顺序是 spexcode 先、z-code 后。** z-code 装的是本仓打出的 tarball，本仓这边一动，那两个哈希就失效。
+3. **vendoring 是 M9 前的过渡态**，退出条件已写进对方文档（发布后换 registry 依赖并删 `third_party/spexcode`）。
+   换安装源不等于加运行时 fallback —— 这一条必须在换的时候仍然成立。
+
+**步骤**：
+
+1. 本仓 M5 产物按常规原子落地（已跑完 §3.1 全门）。
+2. 带着 §3.2 的哈希表与 §3.4 的归属结论，把提案分支交给 z-code 所有者评审。
+3. 对方同意后再合并；合并前按本仓惯例重跑一次对方侧门，因为 base 可能已经前移。
+4. 合并后 `third_party/spexcode` 的退出条件挂到 M9。
+
+**明确不做**：不推进 M6；不代替对方合并；不因为"文件系统可写"就把提案当既成事实。
+

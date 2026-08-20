@@ -56,3 +56,11 @@ a scope qualifier that only the duplicate carries; where such a qualifier exists
 move before the duplicate can go. Verification surfaces get the same treatment: independent counts that measure
 different surfaces stay independent, because a baseline where they diverge is proof that collapsing them would let
 one surface stand in for the rest.
+
+The audit records where its own instruments came from, held to the standard of evidence it demands of its findings.
+A reader who cannot tell which review lenses were applied, at which version, cannot tell a clean surface from an
+unexamined one. So the provenance names each instrument's resolved location and version and the command that shows
+them, and where an instrument was read but deliberately not followed as written, it names the deviation and the
+rule that required it. An instrument installed by other than its recommended path says which path it took and why:
+the real failure output when one was observed, and, when the recommended path was never reachable from this
+environment, that fact stated plainly rather than a failure the audit did not witness.

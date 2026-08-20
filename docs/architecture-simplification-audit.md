@@ -85,3 +85,70 @@ HTML 与 concept-map 的正文；以及全部历史证据。上表凡涉及这�
 
 有一处被明确判为导航缺陷而非冗余，故不进上表：`docs/session-platform-m2-integration.md` 的章节顺序是
 §4.1（`:77`）→ §4.3（`:106`）→ §4.2（`:121`），编号与出现次序不一致。它不产生第二份事实，改它属排版而非减法。
+
+## Skill provenance
+
+这次审查用了两把工具，来源都可复核。
+
+**`/simplify`——磁盘上没有对应文件，随 CLI 编译进二进制。** Skill 工具报告的路径是 `bundled:simplify`，
+不是文件系统路径；`~/.claude/skills` 与 `~/.claude-glm/skills` 两个目录下都没有 simplify 条目
+（前者只有 `deslop` 与 `shuorenhua` 两条软链，后者只有 `shuorenhua`）。它来自装好的 CLI 包，这点可以直接验：
+
+```
+$ claude --version
+2.1.236 (Claude Code)
+
+$ grep -m1 '"version"' \
+    ~/.nvm/versions/node/v22.21.0/lib/node_modules/@anthropic-ai/claude-code/package.json
+  "version": "2.1.236",
+
+$ grep -a -o -m2 "4 cleanup agents in parallel" \
+    ~/.nvm/versions/node/v22.21.0/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe
+4 cleanup agents in parallel
+4 cleanup agents in parallel
+```
+
+命中两次是对的：该串在 skill 正文里出现两次，一次在首行摘要
+（`/simplify → 4 cleanup agents in parallel → apply the fixes`），一次在 `## Phase 1` 的标题里。
+`find` 在整个包树下找不到任何 `*simplify*` 文件，所以正文只存在于二进制内。
+
+读到的与用到的不是一回事，这点必须写明。skill 正文要求并发起四个 review agent，再**直接应用修复**。
+本会话的操作规则禁止未经请求调用 agent，任务本身也禁止改动被审对象。所以四个角度（复用、简化、效率、层次，
+见上一节）是当透镜用的，由一个审查者逐份读，一条修复也没有应用。这个偏离是刻意的，不是没读到。
+
+**shuorenhua v2.3.0——软链安装，跟随 upstream。**
+
+```
+$ ls -l ~/.claude-glm/skills/
+lrwxrwxrwx 1 jeffry jeffry 23  8月 20 07:48 shuorenhua -> /home/jeffry/shuorenhua
+
+$ git -C /home/jeffry/shuorenhua remote -v
+origin	https://github.com/MrGeDiao/shuorenhua.git (fetch)
+origin	https://github.com/MrGeDiao/shuorenhua.git (push)
+
+$ git -C /home/jeffry/shuorenhua rev-parse HEAD
+a9145e38875f116d65235a728cd0048b7c3d9003
+
+$ git -C /home/jeffry/shuorenhua describe --tags --exact-match HEAD
+v2.3.0
+
+$ git -C /home/jeffry/shuorenhua rev-list --left-right --count HEAD...origin/main
+0	0
+```
+
+HEAD 即 `origin/main`，落在 tag `v2.3.0` 上，commit 时间 `2026-08-14T12:23:18+08:00`，工作树干净。
+
+**为什么走的不是推荐的方式 1。** `install/claude-code.md:6` 的方式 1 是
+`/plugin marketplace add MrGeDiao/shuorenhua`——一条交互式 slash command，本会话无法以工具调用触发，
+所以它**没有被执行过，也就没有它的失败输出可以贴**；这是能力边界，不是它报了错。
+退到 `install/claude-code.md:41-45` 的方式 4「跟随更新」，即
+`ln -s "$PWD/shuorenhua" ~/.claude/skills/shuorenhua`，正合该仓库 `AGENTS.md:22` 那条
+「永远不要往 skills 目录拷贝文件」。两个配置目录下都建了这条软链；本会话经 `claude-glm` 启动，
+`CLAUDE_CONFIG_DIR=$HOME/.claude-glm`，所以生效的是 `~/.claude-glm/skills/shuorenhua`。
+
+**按其要求落到本文的哪几处。** 场景取 `docs`（`SKILL.md:76-82`：操作文档、技术说明、事故复盘，
+默认档位 `minimal`）。无源引用按 `audit-only` 处理（`SKILL.md:113`、`:340`），所以本文没有一句
+「研究表明」「数据显示」式的转述，每条结论都钉在 `file:line` 上。protected spans（`SKILL.md:40`、`:119-120`）
+覆盖了本文绝大部分正文——数字、日期、版本号、commit sha、命令、路径、字段名、错误码、vector 名与 stub 名
+一字不改，这正是上表能被逐条复核的前提。用户指定的七字段行格式**覆盖** skill 的默认输出契约，
+而这条覆盖是 skill 自己给的：`SKILL.md:279` 写明用户当前要求与项目既有规则优先于它的默认规则。

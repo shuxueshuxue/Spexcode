@@ -16,7 +16,12 @@ body is decoded and emitted as the harness's `hookSpecificOutput.additionalConte
 receives it without a resident process or wake-hint dependency. An empty queue is a successful no-op and emits no
 stdout. The hook never derives a database path: the adopter CLI owns path resolution and locality checks.
 
-Every external delivery tool is checked before `dequeue`, so a broken PATH cannot consume a message. The opaque body
+Every external delivery tool and each non-default operation it supplies is proven with a fixed result vector before
+`dequeue`, so a binary that exists but lacks or misimplements the required flag cannot consume a message. In
+particular, `base64 -d` must decode `QQ==` to exactly the one byte `0x41`; checking only its exit status would admit a
+shim that merely copies input. `-d` is used because GNU base64 on Linux and base64 on both fleet Macs running macOS
+15.6.1 were measured to decode that vector correctly; this is an observed common capability, not a platform legend.
+The opaque body
 is decoded to a temporary file, validated as UTF-8, and rejected loudly (with its `messageId` and original
 `bodyBase64`) when it contains NUL or other JSON-hostile control bytes. Clean text is escaped with the existing awk
 toolchain without command substitution, preserving embedded and trailing newlines; a non-empty body can never become

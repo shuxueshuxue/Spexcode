@@ -1,0 +1,6 @@
+F-D4 fail-first (old clean-head listener)
+exit=2
+stdout-bytes=0
+stderr=session-listen: spex-session dequeue returned invalid bodyBase64
+pending=0
+assertions=4/4

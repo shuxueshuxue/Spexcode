@@ -32,6 +32,17 @@ scenarios:
       byte-for-byte, including its trailing newline, and the fake header field cannot displace the real bodyBase64.
       The rejecting `head` shim is never needed: the event still succeeds with the original body, so no non-POSIX
       capability is hidden behind an existence-only preflight.
+  - name: decoder-capability-is-proven-before-consumption
+    tags: [cli]
+    description: >-
+      Put a base64 shim first on PATH that rejects the old `--decode` spelling and accepts `-d` with exit zero but
+      copies its input unchanged. Against the old listener, retain the fail-first assertion showing dequeue committed
+      before decode failed. Against the repaired listener, run the same pending message and shim through the hook.
+    expected: >-
+      The fail-first half is discriminating: old code exits nonzero with empty stdout and pending=0. Repaired code
+      probes `QQ==` before dequeue, compares the actual bytes rather than trusting exit zero, exits 2 with a compatible
+      tooling/PATH repair entrypoint, emits no stdout, and leaves the message pending. The production invocation uses
+      `base64 -d`, the spelling measured to decode the fixed byte correctly on Linux and both fleet Macs.
   - name: listener-resolves-only-the-adopter-cli-seam
     tags: [cli]
     description: >-

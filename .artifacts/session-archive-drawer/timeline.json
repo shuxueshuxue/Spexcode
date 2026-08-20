@@ -1,0 +1,30 @@
+{
+  "v": 2,
+  "axis": "time",
+  "events": [
+    {
+      "at": 3603,
+      "step": "two real sessions created against the isolated backend"
+    },
+    {
+      "at": 6447,
+      "step": "permanent Archive 0 place visible with no star pill"
+    },
+    {
+      "at": 7333,
+      "step": "one drag closed the real row without confirmation and published closedAt"
+    },
+    {
+      "at": 7839,
+      "step": "bounded drawer has no scroll and opens the retained read-only Conversation"
+    },
+    {
+      "at": 8689,
+      "step": "global Option-slash search contains neither archived rows nor an archive hint"
+    },
+    {
+      "at": 9723,
+      "step": "full archive page groups by closedAt, pins dates, searches locally, and keeps one honest index request"
+    }
+  ]
+}

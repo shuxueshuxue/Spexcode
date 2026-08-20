@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "closeId": "e991dfbd-3915-4ae7-8e0b-fa5c23353dec",
+  "controlId": "6f4e16e3-94f8-4908-ad98-3634289b5e78",
+  "legacyId": "archive-proof-legacy-unknown-time",
+  "artifacts": [
+    "archive-drawer.png",
+    "archive-page.png",
+    "archive-page-unknown.png",
+    "global-search-excludes-archive.png",
+    "session-archive-drawer.webm"
+  ]
+}

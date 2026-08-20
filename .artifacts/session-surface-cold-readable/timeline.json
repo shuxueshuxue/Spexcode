@@ -1,0 +1,26 @@
+{
+  "v": 2,
+  "axis": "time",
+  "events": [
+    {
+      "at": 4241,
+      "step": "real sessions prepared through create, input, close, and stop APIs"
+    },
+    {
+      "at": 8163,
+      "step": "archived timeline readable with disabled composer and terminal control"
+    },
+    {
+      "at": 16915,
+      "step": "archived timeline remained at one request beyond a polling interval"
+    },
+    {
+      "at": 18817,
+      "step": "offline session uses the same shell with relaunch copy"
+    },
+    {
+      "at": 19691,
+      "step": "both footer actions reached the real resume endpoint"
+    }
+  ]
+}

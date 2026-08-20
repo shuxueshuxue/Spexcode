@@ -294,3 +294,65 @@ throw 站点 18/18、九条模板 throw 逐字一致、typeof 7/7、STRICT 2/2�
 上线后跑：Node 24.14 default adapter 的 fixed drive、SMB network drive、production composition 三项。
 **Linux 上的 win32 注入测试明确不冒充 Windows runtime proof**——它证明的是"适配器被告知 win32 时行为正确"，
 不是"Windows 上确实如此"。
+
+## 9. J 的最终证据整合（本节由本账 owner 整合，不是把 J 的分支合过来覆盖）
+
+J 的 Spex 分支上有一份同名 ledger，带着 §6–§8 没有覆盖的原始测量。语义整合到这里，
+`§2.4` / `§4` / `§5` 原样保留。**不 merge J 的分支**——那会用它的版本覆盖掉本账特有的 clone 手工补偿、
+跨仓落地计划与 provenance；owner 文件由 owner 整合，这是本 campaign 一开始就定下的规矩。
+
+### 9.1 一处必须当场解决的矛盾：聚合 turbo 门
+
+J 的 ledger 写着 `CLI turbo 23/23 pass`。父侧独立核对说聚合门**根本没跑起来**，因为那个 clone 是裁剪安装、缺 `turbo`。
+两句话不能同时进账，所以我去量了：
+
+    apps/zcode-cli/node_modules/.bin/turbo   → 不存在
+    pnpm exec turbo run typecheck            → ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL: Command "turbo" not found
+
+（`turbo` 只在仓库根的 `node_modules/.bin` 下，而 `test` / `typecheck` 脚本是从 `apps/zcode-cli` 里跑 `turbo run …` 的。）
+
+**结论：以父侧为准。`turbo 23/23` 在当前 clone 状态下不可复现，因此本账不记它为通过。**
+J 可能是在更早的完整安装状态下跑到过，但我们要落地的是**现在这个状态**，
+一条在待落地状态下跑不起来的门，不能写成绿的。§6 的三分法（跑过并通过 / 未执行 / 跑不了因此不声称）据此成立，
+`聚合 typecheck/lint` 归入**未执行**。
+
+### 9.2 fail-first 原始测量（J 产出，哈希照录）
+
+| 轮次 | 结果 |
+|---|---|
+| 原始 fail-first | 66 行 / 2,411 bytes，SHA-256 `e3b13b63…` |
+| J-3/J-4/J-6 | 旧实现上 3 条自有断言稳定失败（locality 调用 0 次；de/sv 跨进程 replay conflict；production `createZCodeApp` locality 调用 0 次）。stdout/stderr/exit = `626e3702…` / `3344e5f8…` / `4355a46b…` |
+| J-7 | 字段合法、`text` 内嵌裸 `0xff` 的 message 在非 fatal 实现上错误通过。stdout/stderr/exit = `898014a8…` / `b1ca1938…` / `4355a46b…` |
+
+`4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865` 是 `sha256("1\n")`，即 exit 1。
+
+### 9.3 clean consumer 与 sabotage（J 产出）
+
+clean consumer 在产品仓之外，只从本提案的两个 tarball 安装；graph/manifests 恰为
+`@spexcode/session-protocol@0.6.7` 与 `@spexcode/session-topology@0.6.7`，
+`@spexcode/session-core` / `@spexcode/spec-cli` / `spexcode` 三者计数均为 0。
+result `8710b38c…`、dependency tree `e3409770…`、两个 tarball `fc173f19…` / `61fb674e…`。
+
+sabotage 三态各 1/1 pass，只读能力先实测为 `EACCES`；命令固定
+`/usr/bin/strace -f -qq -e trace=%file,%process`。**标定是这组数字能成立的前提**：
+32 条 file syscall 且以真实 `openat` 命中 poison 文件 1 条（不是只命中 `execve` argv）。
+缺失/只读/投毒各 45,630 / 45,533 / 45,802 条 file syscall，排除 `execve` 后 legacy 根路径命中**均为 0**。
+计数 JSON `80677b81…`；三份 raw trace `900e201c…` / `4a8aca4d…` / `a290ffee…`，
+**只存在 `/home/jeffry/spexcode-base` 的证据目录，不在产品树**（这条纪律来自 M4 的教训）。
+
+### 9.4 完整套件与九个失败（J 产出，与 §3.4 结论一致）
+
+bootstrap 完整套件 93 files / 1,288 tests = 1,276 pass + 9 fail + 3 skip，JSON `48f9fd55…`。
+九个失败分布 marketplace import 1 / session title event 1 / v4 gateway 1 / v4 native boundary 1 / telemetry lifecycle 5，
+**没有一个是 ZSwarm 测试**。归属证据见 §3.4，两条独立路径（J 的与我的）得到同一结论。
+
+### 9.5 未测清单（最终状态）
+
+- `NOT-MEASURED(macOS runtime)`：Darwin allowlist 按 XNU 历史 filesystem type 编号实现，无 macOS runner；未知类型 fail closed。
+- `DEFERRED(actual Windows Node/PowerShell runtime; currently unreachable)`：见 §8。
+- `NOT-MEASURED(native provider-backed worker lifecycle)`：跨进程门的 worker 是独立 Node fixture，
+  production composition 门用注入模型；需要真实 provider 的完整 native worker lifecycle 未启动。
+- `spex eval lint --changed`：clone 无 `main` ref，changed scope 建立不了，**不声称通过**；完整 eval lint 已跑，
+  只剩 base 既有 5 malformed / 2 stale / 1 missing。
+- lsof 已用真实 open-file 固定向量标定；clone 下写 FD 命中 0。另有旧 z-code worktree 进程经硬链接映射到
+  clone 的 node_modules inode，但只显示 `mem`/`txt`、cwd 不在 clone、无写入。

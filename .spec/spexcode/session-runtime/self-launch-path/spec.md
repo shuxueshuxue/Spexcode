@@ -18,5 +18,5 @@ there is no config-file read; it does not invent a project-local or implicit con
 
 Every selected value must already be absolute. A relative value is refused as written and is never resolved against
 the working directory. The resolver reads no Git metadata or project state, imports no Spex product package, and
-creates no directory. A missing parent is deliberately left for the protocol to report as
-`PROTOCOL_PATH_PARENT_MISSING`, preserving the repair path instead of turning a typo into a plausible new store.
+creates no directory. A missing parent is refused before protocol open as `PROTOCOL_PATH_PARENT_MISSING`, preserving
+the same repair path instead of turning a typo into a plausible new store or returning without a locality verdict.

@@ -93,8 +93,10 @@ export function requireLocalDatabasePathWithDetector(
   try {
     type = detector.statfsType(parent)
   } catch (error) {
-    // @@@missing-parent - It cannot open, so preserve the protocol's more actionable path error.
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return databasePath
+    // @@@missing-parent - Preserve the actionable path error without pretending locality was established.
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+      throw new DatabasePathError('PROTOCOL_PATH_PARENT_MISSING', `database parent directory does not exist: ${parent}`, error)
+    }
     throw new LocalityError('LOCALITY_PROBE_FAILED', `could not determine the filesystem of ${parent}`, error)
   }
 

@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 
-type DatabasePathErrorCode = 'PROTOCOL_PATH_NOT_ABSOLUTE' | 'PROTOCOL_PATH_INVALID'
+type DatabasePathErrorCode =
+  | 'PROTOCOL_PATH_NOT_ABSOLUTE'
+  | 'PROTOCOL_PATH_INVALID'
+  | 'PROTOCOL_PATH_PARENT_MISSING'
 
 export class DatabasePathError extends Error {
   readonly code: DatabasePathErrorCode

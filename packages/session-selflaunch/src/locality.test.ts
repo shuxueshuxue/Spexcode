@@ -73,11 +73,19 @@ test('a failed probe refuses and preserves its cause', () => {
   assert.equal(error.cause, cause)
 })
 
-test('a missing parent is left for the protocol path gate without pretending it is local', () => {
+test('a missing parent fails with the protocol path code without pretending it is local', () => {
   const missing = Object.assign(new Error('missing'), { code: 'ENOENT' })
-  assert.equal(requireLocalDatabasePathWithDetector(databasePath, {}, {
-    platform: 'linux', statfsType: () => { throw missing },
-  }), databasePath)
+  assert.throws(
+    () => requireLocalDatabasePathWithDetector(databasePath, {}, {
+      platform: 'linux', statfsType: () => { throw missing },
+    }),
+    (error: unknown) => (
+      error instanceof DatabasePathError
+      && error.code === 'PROTOCOL_PATH_PARENT_MISSING'
+      && error.message === 'database parent directory does not exist: /var/lib/spexcode'
+      && error.cause === missing
+    ),
+  )
 })
 
 test('assumeLocal bypasses only locality probing, never absolute-path validation', () => {

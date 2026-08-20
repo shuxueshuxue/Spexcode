@@ -132,8 +132,55 @@ B 与 C 再并行分叉于含 A 的集成头。
 
 ## 4. 门禁与结果
 
-（集成阶段填写。每一门都由集成方在合并树上独立执行，不采信 lane 自述。）
+每一门都由集成方在**合并后的树**上独立执行，不采信 lane 自述。
+
+### 4.1 Lane A — protocol core（`packages/session-protocol`）
+
+分支 head `07213110e`，以 no-ff 合并为 `084d525b6`。
+
+| 门 | 结果 |
+|---|---|
+| ancestor gate（集成头 `25dc46f6a` 是分支祖先） | PASS（lane 自己用普通 merge 并入并保留 merge commit `b384919db`，未 rebase） |
+| 窄 diff（改动是否越出独占文件面） | PASS，31 个文件全部在 `packages/session-protocol/**` 与 `.spec/spexcode/session-protocol/**` 内 |
+| 禁止路径（lockfile churn / `bin/spex.mjs` / legacy） | PASS，`packages/session-core/**` 与 `spec-cli/src/sessions.ts` 零改动 |
+| Node 22.21.0 / SQLite 3.50.4 全套 vector（集成方独立复跑） | **64 / 64**（44 engine + 10 concurrency + 9 production + 1 fail-first） |
+| DDL 与冻结契约 §5 逐字节比对 | **一致，0 行差异**（用文档的 SQL 块独立比对，非采信自述） |
+| 生产源码禁止模式（`realpath` / `path.resolve` / `mkdir` / `statfs` / `process.platform` / `quick_check` / `journal_mode=` / `spec-core` / 产品词汇） | 各 **0** 命中 |
+| 规范字节与契约 §6.2 逐字段核对 | 一致；`message_id` 与 `idempotency_key` 正确排除在 preimage 之外 |
+| 跨进程 vector 是否真跨进程 | PASS，真 `spawn`；`follow` / `drain` 的终止条件绑在语义上（收满 N、抽到空），不是墙钟 |
+| `npm run build` | PASS |
+| `spex spec lint` | **0 error**，新包 coverage 警告 **0** |
+| `spex eval lint --changed` | 新增的五个源文件叶节点 0 malformed / 0 stale / 0 missing / 0 coverage |
+| installed 读数（clean consumer，仓库之外） | PASS，`resolvedFrom=/var/tmp/session-protocol-consumer-*/node_modules/@spexcode/session-protocol/dist/index.js`，tarball sha256 `5d98a581…`，六操作 + 2 写 1 读跨进程；证据 `e9efe1ef…` |
+| fail-first 不可变 | PASS，`c9554661…` 未被重跑结果覆盖；被取代的读数 `be5470a2…` 保留而非删除 |
+
+**审查退回并已修复的三条**：① `engine.test.ts` 一条 vector 从 `spikes/sqlite-m2/adopter-path-resolver.mjs` import，
+让生产证明依赖一条已 parked lane 的一次性 spike，且测的是本包不拥有的 adopter resolver（lane C 拥有）——**纯删除**，
+不补替代，因为该包该有的那半条（"生产源码不含 locality 探测"，扫全体生产源文件并断言 population size）已经在
+`production.test.ts` 里；② 首版 installed 读数只在证据里写了一句 `"surface": "installed tarball…"`，
+如果那轮其实跑的是 workspace 源码，导出的 JSON 会一模一样——补 `resolvedFrom` 与 `tarballSha256` 后，
+"装过了"才是可核对的事实；③ 同步集成头后在合并树上重证。
+
+**两处收紧，审查接受**：`retire` 的 pending 探测也用 `INDEXED BY` 钉死（spike 没有）；`openProtocol` 无条件检查父目录
+（spike 只在可写时查，而契约 §7 的表述本就没有只读豁免）。另有一处实质改进：`protocolVersion` 被限制在无符号 32 位内——
+它在 preimage 里按 `u32be` 序列化，不限制的话 `2^32+1` 与 `1` 会哈希成同一个值。
+
+### 4.2 一条被否决的集成期改动：root build 不接线
+
+集成时曾把 `packages/session-protocol` 加进根 `package.json` 的 build 链，随后**撤回**。理由是它让
+`packaging` 节点的三条读数（`clean-install-cli-starts`、`omit-optional-l0-adopter`、`dev-loop-launch-no-prefix-leak`，
+`code: package.json`）全部变 stale，而**发布产物集合并没有变**：`files` 与 `scripts.prepack` 都没动，
+根 build 只是开发期便利。本阶段新包在产品路径上没有任何 importer（这是刻意的），
+类型错误由集成方逐包跑 `npm test`（它自己先 build）挡住。接线属于"真的有产品路径依赖它"的那个里程碑，不是现在。
+撤回后 `eval lint --changed` 的 stale 归零。
 
 ## 5. 仍然 OPEN
 
-（集成阶段填写。）
+- **父节点 `session-protocol` 的六条 conformance scenario 尚未测量**。它们描述的正是本阶段刚刚具备可测条件的东西
+  （installed 契约、迁移唯一权威、FIFO/幂等/退役、并发 dequeue 单一赢家、同库组合不需要 outbox、显式路径与 lost-wake）。
+  其中两条需要 lane B 的 topology 与 lane C 的 self-launch 回路才能完整测，所以统一放到 M1 收尾的 high-level YATU 里一次测完。
+  **注意**：这六条 scenario 的 `code:` 目前指向 legacy 的 `packages/session-core/src/index.ts`——那是它们被写下时的"未来实现"。
+  测量时必须同时把 scenario 的 `code:` 改指向新包入口，否则读数会挂在一条它根本没有触碰的 freshness 轴上。
+  这**只改 scenario 的 code 锚点，不动节点的 `code:` 治理**（D-12：父节点在 M6 cutover 前继续治理 legacy 入口）。
+- 引擎契约 §13 的全部 OPEN 项原样保留：真实网络挂载上的 locality 判定、macOS/Windows detector、
+  reader-blocks-writer 在真实 adopter 负载下的表现、sweep 节奏、retention/purge、备份运维、`ANALYZE` 维护、Rust 第二实现。

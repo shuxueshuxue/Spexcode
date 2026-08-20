@@ -18,4 +18,7 @@ and the shared transaction surface admits only SQL plus protocol enqueue.
 
 The engine exposes no connection or partial operation. Re-entering a protocol write from a shared transaction is a
 composition error with a direct repair instruction, and asynchronous transaction bodies are refused before commit.
+An exception raised by the transaction body belongs to its caller: the engine rolls back and rethrows that same
+value without interpreting its type, code, or message. Failures from transaction control and the SQL operations
+mediated by the transaction object remain protocol failures and retain the protocol's stable error classification.
 Storage placement and locality are caller preconditions and have no implementation in this module.

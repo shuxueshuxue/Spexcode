@@ -78,7 +78,9 @@ export function parseRelation(raws: string[], relation: 'code' | 'related'): Rel
   return { entries: order.map((p) => ({ path: p, selectors: byPath.get(p)!.selectors })), problems }
 }
 
-// ---- extractor: ts-ast (the designated extractor for the JS family) ----
+// ---- legacy extractor: ts-ast ----
+// Kept as a public compatibility helper only. The production language registry below routes every shipped
+// language through Tree-sitter WASM and never selects this host-dependent path.
 // Parse-only via the HOST project's own typescript, so the parse matches what the project itself compiles
 // with. If it cannot resolve, ready() returns a loud unverified verdict and lint skips these anchors
 // without crashing (no bundled compiler, regex fallback, or fake pass for JS).
@@ -164,10 +166,8 @@ export function tsAstExtractor(root: string): Extractor {
 }
 
 // ---- extractor: heuristic(langSpec) — a generic regex engine fed LANGUAGE DATA, not language branches ----
-// The designated extractor for languages described by a LangSpec row; adding a language = adding a data
-// row + a registry entry (never a new engine). The JS family is deliberately NOT routed here (its
-// designated extractor is ts-ast above); JS_LANG_R5B below exists as the validated reference row for the
-// engine's shape and for the external benchmark to score.
+// Compatibility helper for callers that previously supplied indentation language rows. Shipped languages
+// use Tree-sitter rows below; this engine is not part of the production registry.
 export type LangSpec = {
   id: string
   extensions: string[]
@@ -321,9 +321,7 @@ export function heuristicExtractor(spec: LangSpec): Extractor {
   }
 }
 
-// The validated JS-family reference row (R5b: name precision 99.7% / recall 100% / range 98.9% on the
-// 41-file oracle) — NOT registered for JS (ts-ast is designated); kept as the engine's reference shape
-// and the benchmark's scoring subject.
+// Historical JS-family reference row retained for compatibility callers; not a production registry row.
 export const JS_LANG_R5B: LangSpec = {
   id: 'heuristic-js',
   extensions: [...JS_EXTS],
@@ -342,9 +340,7 @@ export const JS_LANG_R5B: LangSpec = {
   boundary: /^(?:[A-Za-z_$]|\/\/|\/\*)/,
 }
 
-// Python is a LangSpec DATA row over the same generic engine: declaration names come from patterns;
-// significant indentation supplies lexical qualification and ranges. It is intentionally structural,
-// not a Python runtime or full grammar (the user-facing boundary is documented by [[code-anchor]]).
+// Historical Python row retained for compatibility callers; Tree-sitter owns shipped Python anchors.
 const PY_ID = String.raw`[\p{ID_Start}_][\p{ID_Continue}_]*`
 export const PYTHON_LANG: LangSpec = {
   id: 'heuristic-python',
@@ -464,10 +460,11 @@ function tsTreeUnits(root: TreeSitterNode): Unit[] {
 
 function pythonTreeUnits(root: TreeSitterNode): Unit[] {
   const units: Unit[] = []
+  type Scope = { name: string; classLike: boolean }
   const definition = (node: TreeSitterNode): TreeSitterNode | null => node.type === 'decorated_definition'
     ? nodeChildren(node).find((child) => child.type === 'function_definition' || child.type === 'class_definition') ?? null
     : node
-  const visitContainer = (container: TreeSitterNode, scopes: string[]) => {
+  const visitContainer = (container: TreeSitterNode, scopes: Scope[]) => {
     for (const child of nodeChildren(container)) {
       const inner = definition(child)
       if (!inner || (inner.type !== 'function_definition' && inner.type !== 'class_definition')) {
@@ -475,12 +472,12 @@ function pythonTreeUnits(root: TreeSitterNode): Unit[] {
         continue
       }
       const name = nodeText(nodeField(inner, 'name'))
-      const qualified = [...scopes, name].filter(Boolean).join('.')
+      const qualified = [...scopes.map((scope) => scope.name), name].filter(Boolean).join('.')
       const wrapperStart = child.type === 'decorated_definition' ? child.startPosition.row + 1 : undefined
-      const kind = inner.type === 'class_definition' ? 'class' : (scopes.length && scopes[scopes.length - 1] ? 'method' : 'function')
-      units.push({ name: qualified, kind, ...nodeLineRange(inner, wrapperStart), ...(kind === 'class' ? {} : {}) })
+      const kind = inner.type === 'class_definition' ? 'class' : (scopes.at(-1)?.classLike ? 'method' : 'function')
+      units.push({ name: qualified, kind, ...nodeLineRange(inner, wrapperStart) })
       const body = nodeField(inner, 'body')
-      if (body) visitContainer(body, [...scopes, name])
+      if (body) visitContainer(body, [...scopes, { name, classLike: inner.type === 'class_definition' }])
     }
   }
   visitContainer(root, [])
@@ -489,8 +486,13 @@ function pythonTreeUnits(root: TreeSitterNode): Unit[] {
 
 function goTreeUnits(root: TreeSitterNode): Unit[] {
   const units: Unit[] = []
-  for (const node of root.descendantsOfType?.(['function_declaration', 'method_declaration', 'type_declaration']) ?? []) {
-    if (node.type === 'function_declaration') {
+  for (const node of root.descendantsOfType?.(['const_declaration', 'function_declaration', 'method_declaration', 'type_declaration']) ?? []) {
+    if (node.type === 'const_declaration') {
+      for (const spec of nodeChildren(node).filter((child) => child.type === 'const_spec')) {
+        const name = nodeText(nodeField(spec, 'name')) || nodeText(nodeChildren(spec)[0])
+        if (name) units.push({ name, kind: 'const-data', ...nodeLineRange(spec) })
+      }
+    } else if (node.type === 'function_declaration') {
       units.push({ name: nodeText(nodeField(node, 'name')), kind: 'function', ...nodeLineRange(node) })
     } else if (node.type === 'method_declaration') {
       const receiver = nodeField(node, 'receiver')
@@ -502,7 +504,9 @@ function goTreeUnits(root: TreeSitterNode): Unit[] {
     } else {
       for (const spec of nodeChildren(node).filter((child) => child.type === 'type_spec')) {
         const name = nodeText(nodeField(spec, 'name')) || nodeText(nodeChildren(spec)[0])
-        if (name) units.push({ name, kind: 'class', ...nodeLineRange(spec) })
+        const shape = nodeChildren(spec).find((child) => ['struct_type', 'interface_type'].includes(child.type))
+        const kind = shape?.type === 'struct_type' ? 'struct' : shape?.type === 'interface_type' ? 'interface' : 'type'
+        if (name) units.push({ name, kind, ...nodeLineRange(spec) })
       }
     }
   }
@@ -519,14 +523,17 @@ function rustImplName(node: TreeSitterNode): string {
 
 function rustTreeUnits(root: TreeSitterNode): Unit[] {
   const units: Unit[] = []
-  for (const node of root.descendantsOfType?.(['function_item', 'struct_item', 'enum_item', 'trait_item']) ?? []) {
+  for (const node of root.descendantsOfType?.(['const_item', 'function_item', 'struct_item', 'enum_item', 'trait_item']) ?? []) {
     const name = nodeText(nodeField(node, 'name')) || nodeText(nodeChildren(node).find((child) => child.type === 'type_identifier'))
     if (!name) continue
     const parent = node.parent
     let impl: TreeSitterNode | null = parent
     while (impl && impl.type !== 'impl_item' && impl.type !== 'source_file') impl = impl.parent
     const implName = impl?.type === 'impl_item' ? rustImplName(impl) : ''
-    const kind = node.type === 'function_item' ? (implName ? 'method' : 'function') : 'class'
+    const kind = node.type === 'function_item' ? (implName ? 'method' : 'function')
+      : node.type === 'const_item' ? 'const-data'
+        : node.type === 'struct_item' ? 'struct'
+          : node.type === 'enum_item' ? 'enum' : 'trait'
     units.push({ name: implName && node.type === 'function_item' ? `${implName}.${name}` : name, kind, ...nodeLineRange(node) })
   }
   return units
@@ -538,12 +545,18 @@ function javaTreeUnits(root: TreeSitterNode): Unit[] {
     const name = nodeText(nodeField(node, 'name')) || nodeText(nodeChildren(node).find((child) => child.type === 'identifier'))
     if (!name) return
     const qualified = [...scopes, name].join('.')
-    units.push({ name: qualified, kind: node.type === 'class_declaration' ? 'class' : 'class', ...nodeLineRange(node) })
+    const kind = node.type === 'class_declaration' ? 'class' : node.type === 'interface_declaration' ? 'interface' : 'enum'
+    units.push({ name: qualified, kind, ...nodeLineRange(node) })
     const body = nodeField(node, 'body')
     for (const child of nodeChildren(body)) {
-      if (child.type === 'method_declaration' || child.type === 'constructor_declaration') {
+      if (child.type === 'field_declaration' && /\bfinal\b/u.test(nodeText(child))) {
+        for (const variable of nodeChildren(child).filter((part) => part.type === 'variable_declarator')) {
+          const field = nodeText(nodeField(variable, 'name')) || nodeText(nodeChildren(variable).find((part) => part.type === 'identifier'))
+          if (field) units.push({ name: `${qualified}.${field}`, kind: 'const-data', ...nodeLineRange(child) })
+        }
+      } else if (child.type === 'method_declaration' || child.type === 'constructor_declaration') {
         const method = nodeText(nodeField(child, 'name')) || nodeText(nodeChildren(child).find((part) => part.type === 'identifier'))
-        if (method) units.push({ name: `${qualified}.${method}`, kind: child.type === 'constructor_declaration' ? 'constructor' : 'method', ...nodeLineRange(child) })
+        if (method) units.push({ name: `${qualified}.${child.type === 'constructor_declaration' ? 'constructor' : method}`, kind: 'method', ...nodeLineRange(child) })
       } else if (child.type.endsWith('_declaration') && ['class_declaration', 'interface_declaration', 'enum_declaration'].includes(child.type)) visitClass(child, [...scopes, name])
     }
   }
@@ -559,21 +572,26 @@ function javaTreeUnits(root: TreeSitterNode): Unit[] {
 
 function rubyTreeUnits(root: TreeSitterNode): Unit[] {
   const units: Unit[] = []
-  const nameOf = (node: TreeSitterNode): string => nodeText(nodeField(node, 'name')) || nodeText(nodeChildren(node).find((child) => ['constant', 'identifier'].includes(child.type)))
-  const visit = (container: TreeSitterNode, scopes: string[]) => {
+  type Scope = { name: string; kind: 'class' | 'module' }
+  const rubyName = (name: string): string => name.replaceAll('::', '.')
+  const nameOf = (node: TreeSitterNode): string => rubyName(nodeText(nodeField(node, 'name')) || nodeText(nodeChildren(node).find((child) => ['constant', 'identifier'].includes(child.type))))
+  const visit = (container: TreeSitterNode, scopes: Scope[]) => {
     for (const child of nodeChildren(container)) {
       if (child.type === 'class' || child.type === 'module') {
         const name = nameOf(child)
         if (!name) continue
-        const qualified = [...scopes, name].join('.')
+        const qualified = [...scopes.map((scope) => scope.name), name].join('.')
         units.push({ name: qualified, kind: child.type === 'class' ? 'class' : 'module', ...nodeLineRange(child) })
-        visit(nodeField(child, 'body') ?? child, [...scopes, name])
+        visit(nodeField(child, 'body') ?? child, [...scopes, { name, kind: child.type }])
+      } else if (child.type === 'assignment' && nodeField(child, 'left')?.type === 'constant') {
+        const name = rubyName(nodeText(nodeField(child, 'left')))
+        if (name) units.push({ name: [...scopes.map((scope) => scope.name), name].join('.'), kind: 'const-data', ...nodeLineRange(child) })
       } else if (child.type === 'method' || child.type === 'singleton_method') {
         const name = nameOf(child)
         if (!name) continue
-        const receiver = child.type === 'singleton_method' ? nodeText(nodeField(child, 'object')) : ''
-        const qualified = receiver && receiver !== 'self' ? `${receiver}.${name}` : [...scopes, name].join('.')
-        units.push({ name: qualified, kind: 'method', ...nodeLineRange(child) })
+        const receiver = child.type === 'singleton_method' ? rubyName(nodeText(nodeField(child, 'object'))) : ''
+        const qualified = receiver && receiver !== 'self' ? `${receiver}.${name}` : [...scopes.map((scope) => scope.name), name].join('.')
+        units.push({ name: qualified, kind: child.type === 'singleton_method' || scopes.length ? 'method' : 'function', ...nodeLineRange(child) })
       } else visit(child, scopes)
     }
   }
@@ -623,9 +641,7 @@ export function treeSitterExtractor(row: TreeSitterLanguageRow): Extractor {
 }
 
 // ---- registry: extension -> its ONE designated extractor ----
-// The registry's shape is the Extractor INTERFACE, not any engine: a future language row may be a
-// heuristicExtractor(LangSpec) or a web-tree-sitter extractor carrying its own wasm-grammar/query
-// config — whatever the implementation needs rides inside its own factory, never in the registry.
+// The registry is one Tree-sitter language adapter: every shipped extension is a grammar DATA row.
 export function extractors(root: string): Extractor[] {
   void root
   return TREE_SITTER_ROWS.map(treeSitterExtractor)

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
-import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, tsAstExtractor, extractors, extractorFor, resolveAnchor } from '@spexcode/spec-core'
+import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, extractors, extractorFor, resolveAnchor } from '@spexcode/spec-core'
 import { historyEventCachePathForTests } from '@spexcode/spec-core'
 
 const freshAnchors = (tag: string) =>
@@ -88,26 +88,16 @@ test('a selector on a glob is a loud problem (a selector scopes ONE real file)',
   assert.match(r.problems[0], /glob/)
 })
 
-// ---- ts-ast readiness: governed repository -> loud unverified skip ----
+const treeSitter = (extension = 'ts') => extractorFor(extractors(ROOT), extension)!
 
-test('ts-ast resolves the governed repository typescript', () => {
-  const x = tsAstExtractor(ROOT)
-
-  assert.equal(x.ready(), true)
-  assert.deepEqual(x.extract('export function applyRate() {\n  return 1\n}\n', 'src/calc.ts'), [
+test('Tree-sitter is shipped with SpexCode rather than resolved from the governed project', async () => {
+  const adopter = mkdtempSync(join(tmpdir(), 'spex-adopter-no-compiler-'))
+  const x = extractorFor(extractors(adopter), 'ts')!
+  assert.equal(await x.ready(), true)
+  assert.deepEqual(await x.extract('export function applyRate() {\n  return 1\n}\n', 'src/calc.ts'), [
     { name: 'applyRate', kind: 'function', start: 1, end: 3 },
   ])
-})
-
-test('ts-ast reports a loud unverified skip without throwing when the governed repository has no typescript', () => {
-  const adopter = mkdtempSync(join(tmpdir(), 'spex-adopter-no-ts-'))
-  const x = tsAstExtractor(adopter)
-
-  let ready: ReturnType<typeof x.ready>
-  assert.doesNotThrow(() => { ready = x.ready() })
-  assert.notEqual(ready!, true, 'missing extractors must never be reported as ready')
-  assert.match(ready! as string, /JS-family anchors were skipped and remain unverified/)
-  assert.match(ready! as string, /npm i -D typescript@5/)
+  rmSync(adopter, { recursive: true, force: true })
 })
 
 test('the Tree-sitter registry extracts the shared declaration vocabulary for every shipped language', async () => {
@@ -127,19 +117,19 @@ test('the Tree-sitter registry extracts the shared declaration vocabulary for ev
       { name: 'run', kind: 'function', start: 5, end: 6 },
     ]],
     ['go', 'type (\n  Command struct{}\n  Runner interface{}\n)\nfunc (c *Command) SetArgs() {}\nfunc Run() {}\n', 'src/command.go', [
-      { name: 'Command', kind: 'class', start: 2, end: 2 },
-      { name: 'Runner', kind: 'class', start: 3, end: 3 },
+      { name: 'Command', kind: 'struct', start: 2, end: 2 },
+      { name: 'Runner', kind: 'interface', start: 3, end: 3 },
       { name: 'Command.SetArgs', kind: 'method', start: 5, end: 5 },
       { name: 'Run', kind: 'function', start: 6, end: 6 },
     ]],
     ['rs', 'struct Command;\nimpl Command { fn set_args(&self) {} }\nfn run() {}\n', 'src/command.rs', [
-      { name: 'Command', kind: 'class', start: 1, end: 1 },
+      { name: 'Command', kind: 'struct', start: 1, end: 1 },
       { name: 'Command.set_args', kind: 'method', start: 2, end: 2 },
       { name: 'run', kind: 'function', start: 3, end: 3 },
     ]],
     ['java', 'class Command { Command() {} void run() {} void run(int x) {} }\n', 'src/Command.java', [
       { name: 'Command', kind: 'class', start: 1, end: 1 },
-      { name: 'Command.Command', kind: 'constructor', start: 1, end: 1 },
+      { name: 'Command.constructor', kind: 'method', start: 1, end: 1 },
       { name: 'Command.run', kind: 'method', start: 1, end: 1 },
       { name: 'Command.run', kind: 'method', start: 1, end: 1 },
     ]],
@@ -205,7 +195,7 @@ test('multi-selector hits across file revisions: a commit counts ONCE and unpars
   writeFileSync(join(root, 'src/x.ts'), 'export function f( {{{\n')
   g('add', '-A'); g('commit', '-qm', 'c5'); const c5 = g('rev-parse', 'HEAD')
 
-  const x = tsAstExtractor(ROOT) // resolves this governed repo's TypeScript; content comes from the fixture's git
+  const x = treeSitter() // content comes from the fixture's git; the parser is the production registry row
   const hits = await anchorHitCommits(root, [c2, c3, c4, c5].map((commit) => ({ commit, historicalPath: 'src/x.ts', parents: [] })), ['f', 'g'], [x])
   assert.deepEqual(hits.map((h) => ({ commit: h.commit, selectors: h.selectors, unparseable: !!h.unparseable })), [
     { commit: c2, selectors: ['f'], unparseable: false },
@@ -233,7 +223,7 @@ test('anchor query batch reads one shared immutable window for distinct selector
     writeFileSync(join(bin, 'git'), `#!/bin/sh\nprintf x >> ${count}\nexec /usr/bin/git \"$@\"\n`)
     chmodSync(join(bin, 'git'), 0o755)
     process.env.PATH = `${bin}:${oldPath}`
-    const x = tsAstExtractor(ROOT)
+    const x = treeSitter()
     const win = [{ commit: change, historicalPath: 'src/x.ts', parents: [] }]
     const hits = await anchorHitQueries(root, [{ win, symbols: ['f'] }, { win, symbols: ['g'] }], [x])
     assert.deepEqual(hits.map((rows) => rows.map((row) => row.selectors)), [[['f']], [['g']]])
@@ -267,7 +257,7 @@ test('a repeated read costs the MOVEMENT, and a commit git was never asked about
     writeFileSync(join(bin, 'git'), `#!/bin/sh\nprintf '%s\\n' "$*" >> ${argv}\nexec /usr/bin/git "$@"\n`)
     chmodSync(join(bin, 'git'), 0o755)
     process.env.PATH = `${bin}:${oldPath}`
-    const x = tsAstExtractor(ROOT)
+    const x = treeSitter()
     const event = (commit: string) => ({ commit, historicalPath: 'src/repeat.ts', parents: [] })
     ledgerPath = historyEventCachePathForTests(root)
 
@@ -363,7 +353,7 @@ test('a replaced commit object and a regrafted parent are different hunk facts, 
     writeFileSync(join(root, 'src/i.ts'), unit('f', '11') + unit('g', '22'))
     g('add', '-A'); g('commit', '-qm', 'g moves'); const movesG = g('rev-parse', 'HEAD')
     const mod = await import('@spexcode/spec-core')
-    const x = tsAstExtractor(ROOT)
+    const x = treeSitter()
     const ask = async (event: any) => (await mod.anchorHitQueries(root, [{ win: [event], symbols: ['f'] }], [x]))[0].map((r) => r.selectors)
 
     // (1) ordered PARENT identity, via a REAL graft. Git answers "what did this commit change" from its own
@@ -462,7 +452,7 @@ test('an ambient color.ui cannot blank the hunk parse into a silent zero-drift v
 })
 
 test('historical extractor memo stays stable across order and same-process repetition', { skip: !gitAvailable() && 'git not available' }, async () => {
-  const source = 'export const f = <T>(x: T) => x\n'
+  const source = 'export const f = <number>value\n'
   for (const order of [['src/same.tsx', 'src/same.ts'], ['src/same.ts', 'src/same.tsx']]) {
     const root = mkdtempSync(join(tmpdir(), 'spex-anchor-memo-key-'))
     const g = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
@@ -472,14 +462,14 @@ test('historical extractor memo stays stable across order and same-process repet
       for (const path of order) writeFileSync(join(root, path), source)
       g('add', '-A'); g('commit', '-qm', 'same bytes')
       const commit = g('rev-parse', 'HEAD')
-      const x = tsAstExtractor(ROOT)
+      const regs = extractors(ROOT)
       for (const path of order) {
-        const hits = await anchorHitCommits(root, [{ commit, historicalPath: path, parents: [] }], ['f'], [x])
+        const hits = await anchorHitCommits(root, [{ commit, historicalPath: path, parents: [] }], ['f'], regs)
         if (path.endsWith('.tsx')) assert.equal(hits[0]?.unparseable !== undefined, true, 'TSX must retain its parse error')
         else assert.equal(hits[0]?.unparseable, undefined, 'TS must not inherit the TSX memo result')
       }
       for (const path of [...order].reverse()) {
-        const hits = await anchorHitCommits(root, [{ commit, historicalPath: path, parents: [] }], ['f'], [x])
+        const hits = await anchorHitCommits(root, [{ commit, historicalPath: path, parents: [] }], ['f'], regs)
         if (path.endsWith('.tsx')) assert.equal(hits[0]?.unparseable !== undefined, true, 'repeat TSX query must stay conservative')
         else assert.equal(hits[0]?.unparseable, undefined, 'repeat TS query must stay parseable')
       }

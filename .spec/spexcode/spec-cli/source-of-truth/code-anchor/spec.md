@@ -335,10 +335,12 @@ never a truncated or rejected one.
 
 The Tree-sitter rows preserve one shared declaration vocabulary. TypeScript/TSX expose top-level functions,
 classes and class methods, simple variable declarations, enums, interfaces, and type aliases; Python
-exposes `def`, `async def`, and classes with lexical qualification; Go exposes functions and receiver
-methods (`Command.SetArgs`); Rust exposes functions and impl methods (`Command.set_args`); Java exposes
-classes, constructors, and methods (so overloads remain ambiguous); and Ruby exposes methods, singleton
-methods, classes, and modules. Decorators and declaration ranges come from the syntax nodes. Dynamic
+exposes `def`, `async def`, and classes with lexical qualification; Go exposes constants, types, functions,
+and receiver methods (`Command.SetArgs`); Rust exposes constants, structs, enums, traits, functions, and
+impl methods (`Command.set_args`); Java exposes classes, final fields, constructors as `Class.constructor`,
+and methods (so overloads remain ambiguous); and Ruby exposes constants, methods, singleton methods,
+classes, and modules with enclosing class/module qualification. Decorators and declaration ranges come from
+the syntax nodes. Dynamic
 callables, imported aliases, macro-generated declarations, and runtime-attached methods remain outside the
 capability. Unsupported names fail as dead anchors, and duplicate qualified declarations stay ambiguous
 through the same language-agnostic resolver used by every extractor.

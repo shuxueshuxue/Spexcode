@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -14,12 +14,11 @@ import { tsxBin } from './tsx-bin.js'
 // related, through the REAL `spex spec lint` in throwaway git repos (real stderr + exit code, never
 // engine internals): multi-hit dedupe, cross-file one-govern, duplicate/mix integrity, owners
 // exclusion, the scopedCodeMiss setting (default warn / ignore), related selector hit vs miss, bare
-// compatibility, Python's LangSpec row, and loud unsupported/unavailable-extractor degradation.
+// compatibility, Tree-sitter Python rows, and loud unsupported/unavailable-extractor degradation.
 
 const SRC = dirname(fileURLToPath(import.meta.url))
 const CLI = join(SRC, 'cli.ts')
 const TSX = tsxBin(join(SRC, '..'))
-const NODE_MODULES = dirname(dirname(dirname(TSX)))
 
 function gitAvailable(): boolean {
   try { execFileSync('git', ['--version'], { stdio: 'ignore' }); return true } catch { return false }
@@ -38,12 +37,10 @@ type Fx = {
 }
 // a governed fixture repo: src/calc.ts + a .spec tree; each node's spec.md and the source land in ONE
 // seed commit (the node's v1), so follow-up commits shape each scenario's drift window.
-function fixture(hostTypescript = true): Fx {
+function fixture(): Fx {
   const proj = mkdtempSync(join(tmpdir(), 'spex-scoped-'))
   const g = (...args: string[]) => execFileSync('git', ['-C', proj, ...args], { encoding: 'utf8' }).trim()
   g('init', '-q', '-b', 'main'); g('config', 'user.email', 't@t.co'); g('config', 'user.name', 't')
-  // Most cases exercise host-first resolution; readiness degradation cases deliberately omit it.
-  if (hostTypescript) symlinkSync(NODE_MODULES, join(proj, 'node_modules'))
   writeFileSync(join(proj, '.gitignore'), 'node_modules\n')
   writeFileSync(join(proj, 'spexcode.json'), JSON.stringify({ lint: { governedRoots: ['src'] } }) + '\n')
   mkdirSync(join(proj, 'src'))
@@ -202,7 +199,7 @@ class Outer:
             return "work-${suffix}"
 `
 
-test('Python LangSpec resolves module/async/method/nested names and their drift through the real CLI', { skip }, () => {
+test('Tree-sitter Python resolves module/async/method/nested names and their drift through the real CLI', { skip }, () => {
   const fx = fixture()
   writeFileSync(join(fx.proj, 'src/tool.py'), PYTHON('v1'))
   fx.node('py', [
@@ -250,24 +247,43 @@ test('Python dead and duplicate qualified symbols keep the generic loud integrit
 
 test('a selector on a language with no designated extractor errors and stays explicitly unverified', { skip }, () => {
   const fx = fixture()
-  writeFileSync(join(fx.proj, 'src/tool.rb'), 'def f\nend\n')
-  fx.node('ruby', 'code:\n  - src/tool.rb#f')
+  writeFileSync(join(fx.proj, 'src/tool.swift'), 'func f() {}\n')
+  fx.node('swift', 'code:\n  - src/tool.swift#f')
   fx.commit('v1')
   const { code, out } = fx.lint()
   assert.equal(code, 1)
-  assert.match(out, /integrity: 'ruby' anchors src\/tool\.rb#f.*no extractor is designated.*skipped and remains unverified/)
+  assert.match(out, /integrity: 'swift' anchors src\/tool\.swift#f.*no extractor is designated.*skipped and remains unverified/)
 })
 
-test('when the governed repository has no TypeScript, lint reports the skipped anchor and continues other checks', { skip }, async () => {
-  const fx = fixture(false)
+test('a Tree-sitter anchor does not require TypeScript in the governed repository', { skip }, async () => {
+  const fx = fixture()
   fx.node('calc', 'code:\n  - src/calc.ts#applyRate')
   fx.node('broken', 'related:\n  - src/missing.ts')
   fx.commit('v1')
   const findings = await specLint(fx.proj, extractors(fx.proj))
-  const unavailable = findings.find((f) => f.msg.includes("anchor extractor 'ts-ast' cannot run"))
-  assert.equal(unavailable?.level, 'error')
-  assert.match(unavailable?.msg ?? '', /JS-family anchors were skipped and remain unverified/)
+  assert.ok(!findings.some((f) => f.msg.includes('anchor extractor') && f.level === 'error'))
   assert.ok(findings.some((f) => f.msg.includes("spec 'broken' lists a missing related file")), 'lint must continue after skipping unavailable anchors')
+})
+
+test('the real CLI resolves shipped Tree-sitter anchors across every supported language', { skip }, () => {
+  const fx = fixture()
+  const files: Array<[string, string, string, string]> = [
+    ['tsx', 'src/view.tsx', 'export function View() { return <div /> }\n', 'View'],
+    ['python', 'src/service.py', 'class Service:\n    def run(self):\n        return 1\n', 'Service.run'],
+    ['go', 'src/service.go', 'package sample\ntype Service struct{}\nfunc (Service) Run() {}\n', 'Service.Run'],
+    ['rust', 'src/service.rs', 'struct Service;\nimpl Service { fn run(&self) {} }\n', 'Service.run'],
+    ['java', 'src/Service.java', 'class Service { void add() {} }\n', 'Service.add'],
+    ['ruby', 'src/service.rb', 'module Sample\n  class Calculator\n    def add; end\n  end\nend\n', 'Sample.Calculator.add'],
+  ]
+  fx.node('typescript', 'code:\n  - src/calc.ts#applyRate')
+  for (const [id, path, source, selector] of files) {
+    writeFileSync(join(fx.proj, path), source)
+    fx.node(id, `code:\n  - ${path}#${selector}`)
+  }
+  fx.commit('seven language anchors')
+  const { code, out } = fx.lint()
+  assert.equal(code, 0, out)
+  assert.ok(!out.includes('unverifiable') && !out.includes('no extractor is designated'), out)
 })
 
 test('lint is idempotent across process-local index resets', { skip }, async () => {

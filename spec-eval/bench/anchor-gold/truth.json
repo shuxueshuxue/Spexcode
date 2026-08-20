@@ -21,7 +21,7 @@
     {"id": "python-basic", "units": [
       {"name": "load", "kind": "function", "start": 3, "end": 4},
       {"name": "Service", "kind": "class", "start": 6, "end": 14},
-      {"name": "Service.__init__", "kind": "method", "start": 10, "end": 12},
+      {"name": "Service.__init__", "kind": "method", "start": 10, "end": 11},
       {"name": "Service.run", "kind": "method", "start": 13, "end": 14},
       {"name": "outer", "kind": "function", "start": 16, "end": 19},
       {"name": "outer.inner", "kind": "function", "start": 17, "end": 18}
@@ -49,10 +49,11 @@
       {"name": "Calculator.add", "kind": "method", "start": 13, "end": 15}
     ]},
     {"id": "ruby-basic", "units": [
-      {"name": "VERSION", "kind": "const-data", "start": 2, "end": 2},
-      {"name": "Calculator", "kind": "class", "start": 4, "end": 12},
-      {"name": "Calculator.initialize", "kind": "method", "start": 5, "end": 7},
-      {"name": "Calculator.add", "kind": "method", "start": 9, "end": 11},
+      {"name": "Sample", "kind": "module", "start": 1, "end": 13},
+      {"name": "Sample.VERSION", "kind": "const-data", "start": 2, "end": 2},
+      {"name": "Sample.Calculator", "kind": "class", "start": 4, "end": 12},
+      {"name": "Sample.Calculator.initialize", "kind": "method", "start": 5, "end": 7},
+      {"name": "Sample.Calculator.add", "kind": "method", "start": 9, "end": 11},
       {"name": "normalize", "kind": "function", "start": 15, "end": 17}
     ]},
     {"id": "ts-ambiguous", "ambiguity": {"duplicate": 2}, "units": [

@@ -39,4 +39,7 @@ extractor at runtime and reports name `precision`/`recall`, exact inclusive line
 bad-syntax refusal per language. Missing extension claims are reported as `UNSUPPORTED`, never as a pass.
 
 The truth file is the source of the expected ranges. Ranges are 1-based and inclusive, matching the
-`Unit` contract in [[code-anchor]]. Existing snapshots are immutable; corpus growth adds a new id.
+`Unit` contract in [[code-anchor]]. The scorer awaits extractor readiness and each extraction, so a lazy
+runtime changes no score semantics. `--strict` requires exact name multisets and ranges as well as ambiguity
+and malformed-source refusal; it cannot report a partial language as a release pass. Existing snapshots are
+immutable; corpus growth adds a new id.

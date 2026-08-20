@@ -9,8 +9,8 @@ type Unit = { name: string; kind: string; start: number; end: number; typeOnly?:
 type Extractor = {
   id: string
   claims?: (ext: string) => boolean
-  ready?: () => true | string
-  extract: (content: string, filename: string) => Unit[]
+  ready?: () => true | string | Promise<true | string>
+  extract: (content: string, filename: string) => Unit[] | Promise<Unit[]>
 }
 type Entry = { id: string; language: string; filename: string; snapshot: string; parse: 'ok' | 'fail' }
 type Truth = { id: string; units: Unit[]; parse?: 'ok' | 'fail'; ambiguity?: Record<string, number> }
@@ -64,7 +64,7 @@ async function loadExtractors(): Promise<{ extractors: Extractor[]; source: stri
   const source = requested ? (isAbsolute(requested) ? requested : resolve(process.cwd(), requested)) : resolve(ROOT, 'packages/spec-core/src/anchors.ts')
   try {
     const mod: any = await import(pathToFileURL(source).href)
-    if (typeof mod.extractors === 'function') return { extractors: mod.extractors(ROOT), source }
+    if (typeof mod.extractors === 'function') return { extractors: await mod.extractors(ROOT), source }
     if (typeof mod.extract === 'function') return { extractors: [{ id: mod.id ?? 'custom', extract: mod.extract, claims: () => true }], source }
     if (mod.default && typeof mod.default.extract === 'function') return { extractors: [mod.default], source }
     throw new Error(`module ${source} exports neither extractors() nor extract()`)
@@ -104,7 +104,7 @@ for (const entry of manifest.entries) {
     metrics.unsupported++
     continue
   }
-  const ready = x.ready?.() ?? true
+  const ready = await (x.ready?.() ?? true)
   if (ready !== true) {
     console.log(`${entry.id}: NOT READY (${ready})`)
     metrics.unsupported++
@@ -113,7 +113,7 @@ for (const entry of manifest.entries) {
   const content = readFileSync(resolve(corpusDir, entry.snapshot), 'utf8')
   let found: Unit[] = []
   let threw = false
-  try { found = x.extract(content, entry.filename) } catch { threw = true }
+  try { found = await x.extract(content, entry.filename) } catch { threw = true }
   if (entry.parse === 'fail') {
     metrics.syntaxTotal++
     if (threw) metrics.syntax++
@@ -124,6 +124,10 @@ for (const entry of manifest.entries) {
   const scored = scoreUnits(truth.units, found)
   metrics.tp += scored.tp; metrics.fp += scored.fp; metrics.fn += scored.fn
   metrics.exact += scored.exactRange; metrics.matched += scored.matched
+  if (strict && (scored.fp || scored.fn || scored.exactRange !== scored.matched)) {
+    failures++
+    console.log(`${entry.id}: UNITS expected=${JSON.stringify(truth.units)} found=${JSON.stringify(found)}`)
+  }
   const expectedAmbiguity = truth.ambiguity ?? {}
   const foundCounts = counts(found)
   const ambiguityNames = Object.keys(expectedAmbiguity)
@@ -141,7 +145,7 @@ for (const language of manifest.languages) {
   console.log(`${language.padEnd(14)} ${pct(m.tp, m.tp + m.fp).padStart(9)} ${pct(m.tp, m.tp + m.fn).padStart(7)} ${pct(m.exact, m.matched).padStart(11)} ${m.ambiguityTotal ? `${m.ambiguity}/${m.ambiguityTotal}`.padStart(10) : '       n/a'} ${m.syntaxTotal ? `${m.syntax}/${m.syntaxTotal}`.padStart(10) : '       n/a'} ${String(m.unsupported).padStart(11)}`)
 }
 
-if (process.argv.includes('--strict')) {
+if (strict) {
   const missing = [...totals.entries()].filter(([, m]) => m.unsupported).map(([language]) => language)
   if (missing.length) { console.log(`\nstrict: missing extractor claims for ${missing.join(', ')}`); failures++ }
 }

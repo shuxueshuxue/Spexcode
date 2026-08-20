@@ -72,8 +72,9 @@ FRONTMATTER (YAML between the opening and closing --- lines; every field optiona
            duplicates, globs/directories with a selector, and dead/ambiguous units all error loud. A
            selector-scoped governor claims units, not the file, so it stays out of the \`owners\` bound
            (spex spec owner still displays it, marked "(scoped)"). Anchors are optional.
-           Python \`.py\`/\`.pyi\` anchors recognize structural \`def\`, \`async def\`, and \`class\`
-           declarations. Methods and nested declarations use lexical qualified names such as
+           Tree-sitter-backed \`.ts\`/\`.tsx\`/\`.py\`/\`.go\`/\`.rs\`/\`.java\`/\`.rb\` anchors recognize
+           structural function, method, class, interface, enum, and type declarations. Methods and nested
+           declarations use lexical qualified names such as
            \`Class.method\`, \`outer.inner\`, or \`Outer.Inner.method\`; attached decorators belong to
            the declaration's range. Runtime-created/assigned callables, imported aliases, and generated
            names are outside this declaration extractor and therefore resolve as dead anchors.

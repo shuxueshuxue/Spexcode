@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 
-import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, tsAstExtractor } from '@spexcode/spec-core'
+import { parseRelation, anchorHitCommits, anchorHitQueries, diffHunkRanges, selectorsHitRanges, tsAstExtractor, extractors, extractorFor, resolveAnchor } from '@spexcode/spec-core'
 import { historyEventCachePathForTests } from '@spexcode/spec-core'
 
 const freshAnchors = (tag: string) =>
@@ -108,6 +108,74 @@ test('ts-ast reports a loud unverified skip without throwing when the governed r
   assert.notEqual(ready!, true, 'missing extractors must never be reported as ready')
   assert.match(ready! as string, /JS-family anchors were skipped and remain unverified/)
   assert.match(ready! as string, /npm i -D typescript@5/)
+})
+
+test('the Tree-sitter registry extracts the shared declaration vocabulary for every shipped language', async () => {
+  const regs = extractors(ROOT)
+  const cases: Array<[string, string, string, unknown[]]> = [
+    ['ts', 'export class Box { get() { return 1 } }\nexport function run() { return 2 }\n', 'src/box.ts', [
+      { name: 'Box', kind: 'class', start: 1, end: 1 },
+      { name: 'Box.get', kind: 'method', start: 1, end: 1 },
+      { name: 'run', kind: 'function', start: 2, end: 2 },
+    ]],
+    ['tsx', 'export function View() { return <div /> }\n', 'src/view.tsx', [
+      { name: 'View', kind: 'function', start: 1, end: 1 },
+    ]],
+    ['py', 'class Box:\n    def get(self):\n        return 1\n\ndef run():\n    return 2\n', 'src/box.py', [
+      { name: 'Box', kind: 'class', start: 1, end: 3 },
+      { name: 'Box.get', kind: 'method', start: 2, end: 3 },
+      { name: 'run', kind: 'function', start: 5, end: 6 },
+    ]],
+    ['go', 'type (\n  Command struct{}\n  Runner interface{}\n)\nfunc (c *Command) SetArgs() {}\nfunc Run() {}\n', 'src/command.go', [
+      { name: 'Command', kind: 'class', start: 2, end: 2 },
+      { name: 'Runner', kind: 'class', start: 3, end: 3 },
+      { name: 'Command.SetArgs', kind: 'method', start: 5, end: 5 },
+      { name: 'Run', kind: 'function', start: 6, end: 6 },
+    ]],
+    ['rs', 'struct Command;\nimpl Command { fn set_args(&self) {} }\nfn run() {}\n', 'src/command.rs', [
+      { name: 'Command', kind: 'class', start: 1, end: 1 },
+      { name: 'Command.set_args', kind: 'method', start: 2, end: 2 },
+      { name: 'run', kind: 'function', start: 3, end: 3 },
+    ]],
+    ['java', 'class Command { Command() {} void run() {} void run(int x) {} }\n', 'src/Command.java', [
+      { name: 'Command', kind: 'class', start: 1, end: 1 },
+      { name: 'Command.Command', kind: 'constructor', start: 1, end: 1 },
+      { name: 'Command.run', kind: 'method', start: 1, end: 1 },
+      { name: 'Command.run', kind: 'method', start: 1, end: 1 },
+    ]],
+    ['rb', 'class Command\n  def run; end\n  def self.go; end\nend\ndef Foo.stop; end\n', 'src/command.rb', [
+      { name: 'Command', kind: 'class', start: 1, end: 4 },
+      { name: 'Command.run', kind: 'method', start: 2, end: 2 },
+      { name: 'Command.go', kind: 'method', start: 3, end: 3 },
+      { name: 'Foo.stop', kind: 'method', start: 5, end: 5 },
+    ]],
+  ]
+  for (const [ext, source, filename, expected] of cases) {
+    const x = extractorFor(regs, ext)
+    assert.ok(x, `missing extractor for .${ext}`)
+    assert.equal(await x!.ready(), true)
+    assert.deepEqual(await x!.extract(source, filename), expected, ext)
+  }
+  const java = extractorFor(regs, 'java')!
+  const units = await java.extract(cases.find(([ext]) => ext === 'java')![1] as string, 'src/Command.java')
+  assert.deepEqual(resolveAnchor(units, 'Command.run'), { ambiguous: 2 })
+})
+
+test('Tree-sitter extractors reject syntax recovery instead of returning partial anchors', async () => {
+  const regs = extractors(ROOT)
+  const malformed: Array<[string, string]> = [
+    ['ts', 'export function x( {'],
+    ['tsx', 'export function x() { return <div>;'],
+    ['py', 'def x(:\n pass'],
+    ['go', 'func x( {'],
+    ['rs', 'fn x( {'],
+    ['java', 'class X { void x( {'],
+    ['rb', 'def x( end'],
+  ]
+  for (const [ext, source] of malformed) {
+    const x = extractorFor(regs, ext)!
+    await assert.rejects(() => x.extract(source, `broken.${ext}`), /Tree-sitter syntax errors/, ext)
+  }
 })
 
 // ---- anchorHitCommits: historical file revisions, OR semantics, per-commit dedupe ----

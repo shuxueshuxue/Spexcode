@@ -361,10 +361,10 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
         if (pending && !changed.some((file) => relationClaimsPath(path, file))) continue
         const x = extractorFor(regs, extOf(path))
         if (!x) {
-          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — anchor validation was skipped and remains unverified; add a LangSpec row (anchors.ts) or drop the selector(s)` } })
+          anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `'${s.id}' anchors ${path}#${selectors.join(', #')} (${relation}:), but no extractor is designated for '.${extOf(path)}' files — anchor validation was skipped and remains unverified; add a Tree-sitter language row (anchors.ts) or drop the selector(s)` } })
           continue
         }
-        const ready = x.ready()
+        const ready = await x.ready()
         if (ready !== true) {
           // once per (extractor, reason), even across several anchored nodes — one repair, one message.
           if (!readyWarned.has(x.id + ready)) { readyWarned.add(x.id + ready); anchorSteps.push({ finding: { level: 'error', rule: 'integrity', msg: `anchor extractor '${x.id}' cannot run: ${ready}` } }) }
@@ -379,7 +379,7 @@ async function specLintInLedger(root: string, regs: ReturnType<typeof extractors
         try {
           const source = textAtTip(path)
           if (source === null) throw new Error(`candidate tree has no file '${path}'`)
-          units = x.extract(source, path)
+          units = await x.extract(source, path)
         } catch (e: any) {
           anchorSteps.push({ finding: { level: 'error', rule: 'integrity', spec: s.id, file: path, msg: `anchor ${path}#${selectors.join(', #')} ('${s.id}') is unverifiable — the current file does not parse: ${e?.message ?? e}` } })
           continue

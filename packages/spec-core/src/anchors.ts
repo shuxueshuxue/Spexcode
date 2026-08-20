@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 import { git, gitRequiredA, gitObjectFormat, isGitObjectId, batchRevisionOids, batchBlobTexts, combinedDiffOwnedChanges, driftPathWindow, readImmutableHunkFacts, persistImmutableHunkFacts, withEventLedgerBuild, type DiffLineRange, type DriftIndex, type DriftPathEvent, type ImmutableHunkRanges } from './git.js'
 
@@ -20,10 +20,10 @@ export type Extractor = {
   claims(ext: string): boolean
   // true = usable here. A string is WHY it cannot run — lint turns that into a visible error and
   // skips the affected anchors as unverified while continuing the other checks (never a crash or fake pass).
-  ready(): true | string
+  ready(): true | string | Promise<true | string>
   // PURE function of its arguments (importable by an external benchmark/scorer as-is). Throws when the
   // content cannot be parsed — the caller maps that to a conservative verdict, never a silent skip.
-  extract(content: string, filename: string): Unit[]
+  extract(content: string, filename: string): Unit[] | Promise<Unit[]>
   // Every input that can affect extract() must be represented here before its result enters the memo.
   memoKey: (filename: string) => string
 }
@@ -362,15 +362,276 @@ export const PYTHON_LANG: LangSpec = {
   boundary: /^\S/,
 }
 
+// ---- extractor: tree-sitter-wasm ----
+// The runtime is intentionally lazy: unanchored projects do not pay to initialize WASM, and a missing
+// package/grammar becomes the same loud unavailable-extractor finding as every other readiness failure.
+type TreeSitterNode = any
+export type TreeSitterLanguageRow = {
+  id: string
+  extensions: string[]
+  grammar: string
+  schema: string
+  units(root: TreeSitterNode): Unit[]
+}
+
+let treeSitterModulePromise: Promise<any> | undefined
+let treeSitterInitPromise: Promise<any> | undefined
+const treeSitterLanguagePromises = new Map<string, Promise<any>>()
+
+function treeSitterRuntimePath(): string {
+  const require = createRequire(import.meta.url)
+  return require.resolve('@vscode/tree-sitter-wasm')
+}
+
+async function treeSitterModule(): Promise<any> {
+  if (!treeSitterModulePromise) treeSitterModulePromise = import(treeSitterRuntimePath()).then((m) => m.default ?? m)
+  return treeSitterModulePromise
+}
+
+async function treeSitterLanguage(row: TreeSitterLanguageRow): Promise<any> {
+  const existing = treeSitterLanguagePromises.get(row.grammar)
+  if (existing) return existing
+  const pending = (async () => {
+    const mod = await treeSitterModule()
+    if (!treeSitterInitPromise) {
+      const runtime = dirname(treeSitterRuntimePath())
+      treeSitterInitPromise = mod.Parser.init({ locateFile: (file: string) => join(runtime, file) }).then(() => mod)
+    }
+    await treeSitterInitPromise
+    return mod.Language.load(join(dirname(treeSitterRuntimePath()), `tree-sitter-${row.grammar}.wasm`))
+  })()
+  treeSitterLanguagePromises.set(row.grammar, pending)
+  return pending
+}
+
+const nodeField = (node: TreeSitterNode, field: string): TreeSitterNode | null => node?.childForFieldName?.(field) ?? null
+const nodeChildren = (node: TreeSitterNode): TreeSitterNode[] => (node?.namedChildren ?? []).filter(Boolean)
+const nodeAllChildren = (node: TreeSitterNode): TreeSitterNode[] => (node?.children ?? []).filter(Boolean)
+const nodeText = (node: TreeSitterNode | null | undefined): string => node?.text ?? ''
+const treeHasSyntaxError = (root: TreeSitterNode): boolean => {
+  if (root?.hasError) return true
+  const pending = [root]
+  while (pending.length) {
+    const node = pending.pop()!
+    if (node.isError || node.isMissing) return true
+    pending.push(...nodeAllChildren(node))
+  }
+  return false
+}
+const nodeLineRange = (node: TreeSitterNode, start = node.startPosition.row + 1, end = node.endPosition.row + 1): Pick<Unit, 'start' | 'end'> => ({ start, end })
+const simpleName = (node: TreeSitterNode | null | undefined): string => nodeText(node).replace(/^\s+|\s+$/g, '')
+const lastTypeName = (text: string): string => {
+  const clean = text.replace(/^\s*\(/, '').replace(/\)\s*$/, '').replace(/^\s*[*&]+/, '')
+  const base = clean.split(/[.[\]<>\s]/, 1)[0]
+  return (base.split('.').pop() ?? base).replace(/[^\p{L}\p{N}_$]/gu, '')
+}
+
+function tsTreeUnits(root: TreeSitterNode): Unit[] {
+  const units: Unit[] = []
+  const add = (name: string, kind: string, node: TreeSitterNode, typeOnly = false, start?: number) => {
+    if (!name) return
+    units.push({ name, kind, ...nodeLineRange(node, start), ...(typeOnly ? { typeOnly: true } : {}) })
+  }
+  const methodUnits = (className: string, body: TreeSitterNode | null) => {
+    for (const member of nodeChildren(body)) {
+      if (member.type !== 'method_definition' || !nodeField(member, 'body')) continue
+      const name = nodeText(nodeField(member, 'name')) || nodeText(member.namedChildren?.[0]) || '(computed)'
+      add(`${className}.${name === 'constructor' ? 'constructor' : name}`, 'method', member)
+    }
+  }
+  for (const raw of nodeChildren(root)) {
+    const top = raw.type === 'export_statement' ? nodeChildren(raw) : [raw]
+    for (const node of top) {
+      if (node.type === 'function_declaration') add(nodeText(nodeField(node, 'name')), 'function', node)
+      else if (node.type === 'class_declaration') {
+        const name = nodeText(nodeField(node, 'name'))
+        add(name, 'class', node)
+        methodUnits(name, nodeField(node, 'body'))
+      } else if (node.type === 'lexical_declaration' || node.type === 'variable_declaration') {
+        for (const decl of nodeChildren(node).filter((child) => child.type === 'variable_declarator')) {
+          const name = nodeText(nodeField(decl, 'name'))
+          if (!/^[A-Za-z_$][\w$]*$/u.test(name)) continue
+          const value = nodeField(decl, 'value')
+          add(name, value?.type === 'arrow_function' || value?.type === 'function' ? 'const-fn' : 'const-data', node)
+        }
+      } else if (node.type === 'enum_declaration') add(nodeText(nodeField(node, 'name')), 'enum', node)
+      else if (node.type === 'interface_declaration') add(nodeText(nodeField(node, 'name')), 'interface', node, true)
+      else if (node.type === 'type_alias_declaration') add(nodeText(nodeField(node, 'name')), 'type', node, true)
+    }
+  }
+  return units
+}
+
+function pythonTreeUnits(root: TreeSitterNode): Unit[] {
+  const units: Unit[] = []
+  const definition = (node: TreeSitterNode): TreeSitterNode | null => node.type === 'decorated_definition'
+    ? nodeChildren(node).find((child) => child.type === 'function_definition' || child.type === 'class_definition') ?? null
+    : node
+  const visitContainer = (container: TreeSitterNode, scopes: string[]) => {
+    for (const child of nodeChildren(container)) {
+      const inner = definition(child)
+      if (!inner || (inner.type !== 'function_definition' && inner.type !== 'class_definition')) {
+        visitContainer(child, scopes)
+        continue
+      }
+      const name = nodeText(nodeField(inner, 'name'))
+      const qualified = [...scopes, name].filter(Boolean).join('.')
+      const wrapperStart = child.type === 'decorated_definition' ? child.startPosition.row + 1 : undefined
+      const kind = inner.type === 'class_definition' ? 'class' : (scopes.length && scopes[scopes.length - 1] ? 'method' : 'function')
+      units.push({ name: qualified, kind, ...nodeLineRange(inner, wrapperStart), ...(kind === 'class' ? {} : {}) })
+      const body = nodeField(inner, 'body')
+      if (body) visitContainer(body, [...scopes, name])
+    }
+  }
+  visitContainer(root, [])
+  return units
+}
+
+function goTreeUnits(root: TreeSitterNode): Unit[] {
+  const units: Unit[] = []
+  for (const node of root.descendantsOfType?.(['function_declaration', 'method_declaration', 'type_declaration']) ?? []) {
+    if (node.type === 'function_declaration') {
+      units.push({ name: nodeText(nodeField(node, 'name')), kind: 'function', ...nodeLineRange(node) })
+    } else if (node.type === 'method_declaration') {
+      const receiver = nodeField(node, 'receiver')
+      const parameter = nodeChildren(receiver).find((child) => child.type === 'parameter_declaration')
+      const receiverType = nodeField(parameter, 'type') ?? nodeChildren(parameter)[1]
+      const receiverName = lastTypeName(nodeText(receiverType))
+      const methodName = nodeText(nodeField(node, 'name'))
+      units.push({ name: receiverName ? `${receiverName}.${methodName}` : methodName, kind: 'method', ...nodeLineRange(node) })
+    } else {
+      for (const spec of nodeChildren(node).filter((child) => child.type === 'type_spec')) {
+        const name = nodeText(nodeField(spec, 'name')) || nodeText(nodeChildren(spec)[0])
+        if (name) units.push({ name, kind: 'class', ...nodeLineRange(spec) })
+      }
+    }
+  }
+  return units
+}
+
+function rustImplName(node: TreeSitterNode): string {
+  const header = nodeText(node).split('{', 1)[0]
+  const forMatch = header.match(/\bfor\s+([A-Za-z_][\w:]*)/u)
+  if (forMatch) return forMatch[1].split('::').pop() ?? forMatch[1]
+  const names = nodeChildren(node).filter((child) => child.type === 'type_identifier' || child.type === 'scoped_type_identifier')
+  return lastTypeName(nodeText(names[0]))
+}
+
+function rustTreeUnits(root: TreeSitterNode): Unit[] {
+  const units: Unit[] = []
+  for (const node of root.descendantsOfType?.(['function_item', 'struct_item', 'enum_item', 'trait_item']) ?? []) {
+    const name = nodeText(nodeField(node, 'name')) || nodeText(nodeChildren(node).find((child) => child.type === 'type_identifier'))
+    if (!name) continue
+    const parent = node.parent
+    let impl: TreeSitterNode | null = parent
+    while (impl && impl.type !== 'impl_item' && impl.type !== 'source_file') impl = impl.parent
+    const implName = impl?.type === 'impl_item' ? rustImplName(impl) : ''
+    const kind = node.type === 'function_item' ? (implName ? 'method' : 'function') : 'class'
+    units.push({ name: implName && node.type === 'function_item' ? `${implName}.${name}` : name, kind, ...nodeLineRange(node) })
+  }
+  return units
+}
+
+function javaTreeUnits(root: TreeSitterNode): Unit[] {
+  const units: Unit[] = []
+  const visitClass = (node: TreeSitterNode, scopes: string[]) => {
+    const name = nodeText(nodeField(node, 'name')) || nodeText(nodeChildren(node).find((child) => child.type === 'identifier'))
+    if (!name) return
+    const qualified = [...scopes, name].join('.')
+    units.push({ name: qualified, kind: node.type === 'class_declaration' ? 'class' : 'class', ...nodeLineRange(node) })
+    const body = nodeField(node, 'body')
+    for (const child of nodeChildren(body)) {
+      if (child.type === 'method_declaration' || child.type === 'constructor_declaration') {
+        const method = nodeText(nodeField(child, 'name')) || nodeText(nodeChildren(child).find((part) => part.type === 'identifier'))
+        if (method) units.push({ name: `${qualified}.${method}`, kind: child.type === 'constructor_declaration' ? 'constructor' : 'method', ...nodeLineRange(child) })
+      } else if (child.type.endsWith('_declaration') && ['class_declaration', 'interface_declaration', 'enum_declaration'].includes(child.type)) visitClass(child, [...scopes, name])
+    }
+  }
+  const walk = (node: TreeSitterNode) => {
+    for (const child of nodeChildren(node)) {
+      if (['class_declaration', 'interface_declaration', 'enum_declaration'].includes(child.type)) visitClass(child, [])
+      else walk(child)
+    }
+  }
+  walk(root)
+  return units
+}
+
+function rubyTreeUnits(root: TreeSitterNode): Unit[] {
+  const units: Unit[] = []
+  const nameOf = (node: TreeSitterNode): string => nodeText(nodeField(node, 'name')) || nodeText(nodeChildren(node).find((child) => ['constant', 'identifier'].includes(child.type)))
+  const visit = (container: TreeSitterNode, scopes: string[]) => {
+    for (const child of nodeChildren(container)) {
+      if (child.type === 'class' || child.type === 'module') {
+        const name = nameOf(child)
+        if (!name) continue
+        const qualified = [...scopes, name].join('.')
+        units.push({ name: qualified, kind: child.type === 'class' ? 'class' : 'module', ...nodeLineRange(child) })
+        visit(nodeField(child, 'body') ?? child, [...scopes, name])
+      } else if (child.type === 'method' || child.type === 'singleton_method') {
+        const name = nameOf(child)
+        if (!name) continue
+        const receiver = child.type === 'singleton_method' ? nodeText(nodeField(child, 'object')) : ''
+        const qualified = receiver && receiver !== 'self' ? `${receiver}.${name}` : [...scopes, name].join('.')
+        units.push({ name: qualified, kind: 'method', ...nodeLineRange(child) })
+      } else visit(child, scopes)
+    }
+  }
+  visit(root, [])
+  return units
+}
+
+export const TREE_SITTER_ROWS: TreeSitterLanguageRow[] = [
+  { id: 'tree-sitter-typescript', extensions: ['ts', 'mts', 'cts'], grammar: 'typescript', schema: 'ts-v1', units: tsTreeUnits },
+  { id: 'tree-sitter-tsx', extensions: ['tsx'], grammar: 'tsx', schema: 'tsx-v1', units: tsTreeUnits },
+  { id: 'tree-sitter-javascript', extensions: ['js', 'jsx', 'mjs', 'cjs'], grammar: 'javascript', schema: 'js-v1', units: tsTreeUnits },
+  { id: 'tree-sitter-python', extensions: ['py', 'pyi'], grammar: 'python', schema: 'python-v1', units: pythonTreeUnits },
+  { id: 'tree-sitter-go', extensions: ['go'], grammar: 'go', schema: 'go-v1', units: goTreeUnits },
+  { id: 'tree-sitter-rust', extensions: ['rs'], grammar: 'rust', schema: 'rust-v1', units: rustTreeUnits },
+  { id: 'tree-sitter-java', extensions: ['java'], grammar: 'java', schema: 'java-v1', units: javaTreeUnits },
+  { id: 'tree-sitter-ruby', extensions: ['rb'], grammar: 'ruby', schema: 'ruby-v1', units: rubyTreeUnits },
+]
+
+export function treeSitterExtractor(row: TreeSitterLanguageRow): Extractor {
+  let readiness: true | string | undefined
+  const getLanguage = () => treeSitterLanguage(row)
+  return {
+    id: row.id,
+    claims: (ext) => row.extensions.includes(ext),
+    async ready() {
+      if (readiness !== undefined) return readiness
+      try { await getLanguage(); readiness = true }
+      catch (error: any) { readiness = `Tree-sitter extractor '${row.id}' cannot load grammar '${row.grammar}': ${error?.message ?? String(error)} — reinstall SpexCode or remove the #anchor` }
+      return readiness
+    },
+    async extract(content, filename) {
+      const language = await getLanguage()
+      const mod = await treeSitterModule()
+      const parser = new mod.Parser().setLanguage(language)
+      let tree: any
+      try {
+        tree = parser.parse(content)
+        if (!tree?.rootNode || treeHasSyntaxError(tree.rootNode)) throw new Error(`${filename} has Tree-sitter syntax errors`)
+        return row.units(tree.rootNode)
+      } finally {
+        tree?.delete?.()
+        parser.delete?.()
+      }
+    },
+    memoKey(filename) { return JSON.stringify({ schema: 'tree-sitter-wasm-v1', row: row.id, grammar: row.grammar, rowSchema: row.schema, filename }) },
+  }
+}
+
 // ---- registry: extension -> its ONE designated extractor ----
 // The registry's shape is the Extractor INTERFACE, not any engine: a future language row may be a
 // heuristicExtractor(LangSpec) or a web-tree-sitter extractor carrying its own wasm-grammar/query
 // config — whatever the implementation needs rides inside its own factory, never in the registry.
 export function extractors(root: string): Extractor[] {
-  return [tsAstExtractor(root), ...[PYTHON_LANG].map(heuristicExtractor)]
+  void root
+  return TREE_SITTER_ROWS.map(treeSitterExtractor)
 }
 // first claiming extractor IS the designation (the registry order defines it); null = no anchor support
-// for this language yet (lint ERRORS — the remedy is a LangSpec data row, or dropping the anchor).
+// for this language yet (lint ERRORS — the remedy is a Tree-sitter language row, or dropping the anchor).
 export function extractorFor(regs: Extractor[], ext: string): Extractor | null {
   return regs.find((x) => x.claims(ext)) ?? null
 }
@@ -442,7 +703,7 @@ async function unitsAtFileRevision(commit: string, path: string, x: Extractor, o
   if (hit) return hit
   if (text === undefined) throw new Error(`git cat-file --batch omitted object ${oid} for ${commit}:${path}`)
   let result: FileRevisionUnits
-  try { result = { units: x.extract(text, path) } } catch (e: any) { result = { unparseable: e?.message ?? String(e) } }
+  try { result = { units: await x.extract(text, path) } } catch (e: any) { result = { unparseable: e?.message ?? String(e) } }
   if (fileRevisionUnitMemo.size >= MEMO_MAX) fileRevisionUnitMemo.clear()
   fileRevisionUnitMemo.set(key, result)
   return result
@@ -641,7 +902,7 @@ async function runAnchorQueriesInLedger(root: string, queries: AnchorHitQuery[],
       if (units.has(key)) continue
       const ref = revisions.get(key)!, oid = oidByRef.get(key) ?? null
       const x = extractorFor(regs, extOf(ref.path))
-      const ready = x?.ready()
+      const ready = x ? await x.ready() : undefined
       if (!x || ready !== true) {
         units.set(key, { unparseable: !x ? `no designated extractor for ${ref.path}` : String(ready) })
         continue

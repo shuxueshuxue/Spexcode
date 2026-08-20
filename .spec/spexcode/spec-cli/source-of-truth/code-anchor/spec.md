@@ -11,6 +11,8 @@ code:
   - packages/spec-core/src/anchors.ts#anchorHitExists
   - packages/spec-core/src/anchors.ts#anchorHitCommits
   - packages/spec-core/src/anchors.ts#resolveAnchor
+  - packages/spec-core/src/anchors.ts#treeSitterExtractor
+  - packages/spec-core/src/anchors.ts#treeSitterLanguage
   - packages/spec-core/src/anchors.ts#unitsAtFileRevision
   - packages/spec-core/src/anchors.ts#fileRevisionMemoKey
   - packages/spec-core/src/anchors.ts#hunksAt
@@ -241,26 +243,24 @@ move the version, and an uncovered hook path or explicit bypass can still land f
 
 **Extraction is a language seam.** Extractors are pure `(content, filename) → units` functions (no
 git, no cache, no fs — importable by an external scorer as-is), and every extension maps to exactly
-ONE designated extractor — no cross-language or cross-engine fallback. The JS family's designated
-extractor is `ts-ast`, backed by the governed repository's own TypeScript module so its parse matches the
-project's compiler. TypeScript is an OPTIONAL host capability, not SpexCode runtime cargo: repositories
-that use JS anchors normally already carry it, while Python and unanchored-JS adopters do not pay for a
-compiler they never invoke. The host candidate is probed through the actual parse API, not mere
-resolvability; an incompatible API is an error rather than a silent switch to another parser version.
-When the governed repository provides no usable TypeScript, lint emits an explicit `integrity` error (with a
-diagnostic naming the extractor and repair), skips JS-family anchor extraction, and continues the
-remaining checks; the non-zero result is a non-verification signal (never a silent or falsely passing
-anchor result), and the process does not throw. Other languages arrive as DATA rows to a generic engine (the heuristic
-declaration/boundary patterns today; a row may carry whatever config its engine needs — e.g. a
-tree-sitter grammar — so adding a language never adds a branch). Everything language-agnostic — immutable
-file-revision memoization, dead/ambiguous resolution, hunk∩range — lives outside the seam. A memo key
-includes every input to the pure extractor: object-hash algorithm and blob oid, filename semantics
-(including script kind), extractor/schema identity, host parser identity, and normalized parser configuration;
-same bytes under `.ts` and `.tsx` therefore never share a result by oid alone, and the result is independent
-of call order. Within one READ — a lint run, a board build, a CLI scan — every live anchored window is
-handed to the engine at once: it reads a
-historical `(commit,path)` image, its blob, and an ordinary `(commit,path)` hunk once, then applies each
-node's own selector set and emits findings in declaration order.
+ONE designated extractor — no cross-language or cross-engine fallback. The precise extractor for every
+shipped language is the same Tree-sitter WASM engine; a language is a DATA row carrying its grammar,
+extension set, declaration-node rules, qualified-name rules, and extractor schema. The initial rows are
+TypeScript/TSX, Python, Go, Rust, Java, and Ruby. Adding a language adds a row and grammar asset, never a
+new resolver branch. The runtime and grammar assets are SpexCode package inputs, so adopters do not need
+the language's compiler or a host parser dependency. The runtime is initialized lazily; an unavailable
+runtime, missing grammar, incompatible grammar ABI, or parse error is an explicit `integrity` error and
+leaves the affected anchors unverified rather than silently selecting another parser or returning a fake
+pass. Tree-sitter's error-recovery tree is therefore rejected when its root reports `hasError`.
+
+The extractor contract stays language-agnostic above the seam: immutable file-revision memoization,
+dead/ambiguous resolution, and hunk∩range all live outside it. A memo key includes every input to the
+extractor: object-hash algorithm and blob oid, filename semantics (including script kind), extractor/schema
+identity, grammar/runtime identity, and normalized query configuration; same bytes under `.ts` and `.tsx`
+therefore never share a result by oid alone, and the result is independent of call order. Within one READ
+— a lint run, a board build, a CLI scan — every live anchored window is handed to the engine at once: it
+reads a historical `(commit,path)` image, its blob, and an ordinary `(commit,path)` hunk once, then applies
+each node's own selector set and emits findings in declaration order.
 
 **Two consumers ask two different questions of this engine, and they enter through different doors rather
 than through one call carrying a mode flag.** ENUMERATION — spec drift and exact impact — IS the per-commit,
@@ -333,12 +333,12 @@ rather than widening one process's argument vector or output: object reads and p
 split into bounded requests whose results are order-independent, so a wider corpus costs more requests and
 never a truncated or rejected one.
 
-Python is one such data row, designated for `.py` and `.pyi`. Its structural vocabulary is ordinary
-`def`, `async def`, and `class` declarations: module functions keep their bare name, while methods and
-nested declarations use their lexical qualified name (`Class.method`, `outer.inner`,
-`Outer.Inner.method`). Significant indentation supplies scope and unit boundaries, including decorator
-lines immediately attached to a declaration. This is deliberately a declaration extractor, not a
-Python runtime or full grammar: lambdas and callables assigned or attached dynamically, imported aliases,
-generated names, and declarations whose name is not on the first physical header line are outside the
+The Tree-sitter rows preserve one shared declaration vocabulary. TypeScript/TSX expose top-level functions,
+classes and class methods, simple variable declarations, enums, interfaces, and type aliases; Python
+exposes `def`, `async def`, and classes with lexical qualification; Go exposes functions and receiver
+methods (`Command.SetArgs`); Rust exposes functions and impl methods (`Command.set_args`); Java exposes
+classes, constructors, and methods (so overloads remain ambiguous); and Ruby exposes methods, singleton
+methods, classes, and modules. Decorators and declaration ranges come from the syntax nodes. Dynamic
+callables, imported aliases, macro-generated declarations, and runtime-attached methods remain outside the
 capability. Unsupported names fail as dead anchors, and duplicate qualified declarations stay ambiguous
 through the same language-agnostic resolver used by every extractor.

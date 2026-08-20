@@ -1245,7 +1245,7 @@ esac
 })
 
 
-test('public close cancels a clean never-launched queue without entering the unrelated shared-runtime guard', serial, async () => {
+test('public close files queued and unbound rows without entering the unrelated shared-runtime guard', serial, async () => {
   const previousHome = process.env.SPEXCODE_HOME
   const previousCwd = process.cwd()
   const originalShared = codexHarness.sharedRuntimes
@@ -1292,8 +1292,9 @@ test('public close cancels a clean never-launched queue without entering the unr
     const clean = prepare('clean')
     assert.equal(await closeSession(clean.id), true)
     assert.equal(existsSync(clean.path), false, 'queue close removes the prepared worktree')
-    assert.equal(existsSync(sessionStoreDir(clean.id)), false, 'queue close removes record and prepared prompt')
-    assert.equal(execFileSync('git', ['-C', main, 'branch', '--list', clean.branch], { encoding: 'utf8' }).trim(), '', 'queue close removes the prepared branch')
+    assert.equal(existsSync(sessionRecordPath(clean.id)), true, 'queue close retains its record')
+    assert.notEqual(execFileSync('git', ['-C', main, 'branch', '--list', clean.branch], { encoding: 'utf8' }).trim(), '', 'queue close retains the prepared branch')
+    assert.notEqual(execFileSync('git', ['-C', main, 'rev-parse', '--verify', `refs/spex-archive/${clean.id}^{commit}`], { encoding: 'utf8' }).trim(), '', 'queue close publishes its archive ref')
     assert.equal(cleanupCalls, 0, 'never-launched queue close does not invoke adapter cleanup')
 
     const unbound = prepare('unbound')
@@ -1302,7 +1303,8 @@ test('public close cancels a clean never-launched queue without entering the unr
     rmSync(sessionArtifactPath(unbound.id, 'launch'))
     assert.equal(await closeSession(unbound.id), true)
     assert.equal(existsSync(unbound.path), false, 'unbound launch residue close removes the clean worktree')
-    assert.equal(existsSync(sessionStoreDir(unbound.id)), false, 'unbound launch residue close removes its record')
+    assert.equal(existsSync(sessionRecordPath(unbound.id)), true, 'unbound launch residue close retains its record')
+    assert.notEqual(execFileSync('git', ['-C', main, 'branch', '--list', unbound.branch], { encoding: 'utf8' }).trim(), '', 'unbound launch residue close retains its branch')
     assert.equal(cleanupCalls, 1, 'unbound residue cleanup reaches only its adapter-local cleanup seam')
 
     const unboundDirty = prepare('unbound-dirty')
@@ -1310,15 +1312,17 @@ test('public close cancels a clean never-launched queue without entering the unr
     writeFileSync(sessionRecordPath(unboundDirty.id), `${JSON.stringify({ ...dirtyRaw, status: 'active', launch_owner: '' }, null, 2)}\n`)
     rmSync(sessionArtifactPath(unboundDirty.id, 'launch'))
     writeFileSync(join(unboundDirty.path, 'uncommitted.txt'), 'owned work\n')
-    await assert.rejects(closeSession(unboundDirty.id), /unbound worktree has dirty work/)
-    assert.equal(existsSync(sessionRecordPath(unboundDirty.id)), true, 'dirty unbound residue preserves its record')
-    assert.equal(existsSync(unboundDirty.path), true, 'dirty unbound residue preserves its worktree')
+    assert.equal(await closeSession(unboundDirty.id), true)
+    assert.equal(execFileSync('git', ['-C', main, 'show', `refs/spex-archive/${unboundDirty.id}:uncommitted.txt`], { encoding: 'utf8' }), 'owned work\n', 'dirty unbound work is preserved in its archive ref')
+    assert.equal(existsSync(sessionRecordPath(unboundDirty.id)), true, 'dirty unbound residue retains its record')
+    assert.equal(existsSync(unboundDirty.path), false, 'dirty unbound residue removes its filed worktree')
 
     const dirty = prepare('dirty')
     writeFileSync(join(dirty.path, 'uncommitted.txt'), 'owned work\n')
-    await assert.rejects(closeSession(dirty.id), /prepared worktree has dirty work/)
-    assert.equal(existsSync(sessionRecordPath(dirty.id)), true, 'dirty-work ambiguity preserves the queued record')
-    assert.equal(existsSync(dirty.path), true, 'dirty-work ambiguity preserves the worktree')
+    assert.equal(await closeSession(dirty.id), true)
+    assert.equal(execFileSync('git', ['-C', main, 'show', `refs/spex-archive/${dirty.id}:uncommitted.txt`], { encoding: 'utf8' }), 'owned work\n', 'dirty queued work is preserved in its archive ref')
+    assert.equal(existsSync(sessionRecordPath(dirty.id)), true, 'dirty queued close retains its record')
+    assert.equal(existsSync(dirty.path), false, 'dirty queued close removes its filed worktree')
 
     const threaded = prepare('threaded', `unexpected-thread-${process.pid}`)
     await assert.rejects(closeSession(threaded.id), /record has a target thread or is no longer queued/)
@@ -1331,8 +1335,9 @@ test('public close cancels a clean never-launched queue without entering the unr
 
     const ahead = prepare('ahead')
     execFileSync('git', ['-c', 'user.name=Queue Close Fixture', '-c', 'user.email=queue-close@example.test', '-C', ahead.path, 'commit', '--allow-empty', '-q', '-m', 'fixture: owned queue work'])
-    await assert.rejects(closeSession(ahead.id), /prepared branch is 1 commit\(s\) ahead/)
-    assert.equal(existsSync(sessionRecordPath(ahead.id)), true, 'ahead-work ambiguity preserves the queued record')
+    assert.equal(await closeSession(ahead.id), true)
+    assert.equal(existsSync(sessionRecordPath(ahead.id)), true, 'ahead queued close retains its record')
+    assert.notEqual(execFileSync('git', ['-C', main, 'branch', '--list', ahead.branch], { encoding: 'utf8' }).trim(), '', 'ahead queued close retains its branch')
 
     const socket = prepare('socket')
     const socketPath = stampRvSock(socket.id, home)
@@ -1348,14 +1353,6 @@ test('public close cancels a clean never-launched queue without entering the unr
       rmSync(socketPath, { force: true })
     }
 
-    const deletionFailure = prepare('deletion-failure')
-    chmodSync(sessionStoreDir(deletionFailure.id), 0o500)
-    try {
-      await assert.rejects(closeSession(deletionFailure.id), /session record\/prompt removal failed/)
-      assert.equal(existsSync(sessionStoreDir(deletionFailure.id)), true, 'close cannot report success after incomplete store/prompt removal')
-    } finally {
-      chmodSync(sessionStoreDir(deletionFailure.id), 0o700)
-    }
   } finally {
     codexHarness.sharedRuntimes = originalShared
     codexHarness.cleanupRuntime = originalCleanup

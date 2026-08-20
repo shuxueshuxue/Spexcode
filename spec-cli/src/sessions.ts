@@ -263,11 +263,11 @@ export function withSessionRecordLockSync<T>(id: string, body: () => T): T {
 }
 const withRecordLockSync = withSessionRecordLockSync
 // Synchronous terminal input is another product turn-entry path. The PTY bridge uses this narrow seam to
-// enqueue input while holding the same durable record lock as archive, so an archive preflight cannot pass idle
+// enqueue input while holding the same durable record lock as close, so a close preflight cannot pass idle
 // and then race a just-queued TUI turn.
 export function withSessionInputLock<T>(id: string, body: () => T): T | null {
   // PTY input is synchronous. A single non-blocking open is the only safe barrier: EEXIST rejects this input
-  // regardless of owner PID, so a same-process async archive can never be frozen behind Atomics.wait.
+  // regardless of owner PID, so a same-process async close can never be frozen behind Atomics.wait.
   const release = trySessionRecordLockSync(id)
   if (!release) return null
   try { return body() } finally { release() }
@@ -3485,7 +3485,7 @@ async function stopAgentProcess(id: string, rec: SessRec | null, requireCold = f
   await harness.cleanupRuntime(rec)
   if (requireCold) {
     const cold = await harness.coldRuntime?.(rec, coldReceipt)
-    if (cold && !cold.ok) throw new ResourceConflict(`refusing to archive ${id}: ${cold.reason}`)
+    if (cold && !cold.ok) throw new ResourceConflict(`refusing to close ${id}: ${cold.reason}`)
   }
 }
 
@@ -3614,7 +3614,7 @@ async function coldStopSessionUnlocked(id: string): Promise<boolean> {
 // A never-launched queue owns only prepared disk state. The transition/record locks around close serialize
 // this check with startQueued: whichever wins decides whether the record is still a queue or has become live.
 // No shared-runtime probe belongs here because a valid prepared row has no adapter thread to look up.
-async function assertQueuedRetirementSafe(id: string, rec: SessRec, path: string, branch: string | null): Promise<void> {
+async function assertQueuedCloseSafe(id: string, rec: SessRec): Promise<void> {
   if (rec.status !== 'queued' || rec.harnessSessionId)
     throw new ResourceConflict(`refusing to close queued session ${id}: the record has a target thread or is no longer queued`)
   if (rec.adapterRecovery || launching.has(id))
@@ -3636,7 +3636,7 @@ async function assertQueuedRetirementSafe(id: string, rec: SessRec, path: string
 
 // A launch may leave its row active before Codex publishes the native thread binding. This close path owns
 // only the record's dead local launch residue; an unbound app-server peer stays unowned and untouched.
-async function assertUnboundRetirementSafe(id: string, rec: SessRec, path: string, branch: string | null): Promise<void> {
+async function assertUnboundCloseSafe(id: string, rec: SessRec): Promise<void> {
   if (harnessById(rec.harness || defaultHarness.id).exactNativeTargetId(rec) || rec.status === 'queued' || rec.archived)
     throw new ResourceConflict(`refusing to close unbound session ${id}: it is not an unbound live-record residue`)
   if (rec.adapterRecovery || rec.launchReadinessPending || launching.has(id) || existsSync(sessionArtifactPath(id, 'launch')))
@@ -3654,13 +3654,13 @@ async function assertUnboundRetirementSafe(id: string, rec: SessRec, path: strin
     throw new ResourceConflict(`refusing to close unbound session ${id}: ${leaf.state === 'unknown' ? leaf.reason : 'target leaf identity is live or ambiguous'}`)
 }
 
-async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch: string | null; rec: SessRec }, _source: CloseSource, unboundRetired = false): Promise<boolean> {
+async function closeOwnedSessionUnlocked(id: string, wt: { path: string; branch: string | null; rec: SessRec }, _source: CloseSource, unboundStopped = false): Promise<boolean> {
   const root = mainRoot()
   const receiptFailure = publishedSessionCandidateReceiptRetirementFailure(wt.rec, root)
-  if (receiptFailure) throw new ResourceConflict(`refusing destructive close for ${id}: ${receiptFailure}; public record and resources remain the authority fence`)
+  if (receiptFailure) throw new ResourceConflict(`refusing close for ${id}: ${receiptFailure}; public record and resources remain the authority fence`)
   const retired = !!retirementReason(wt.rec)
-  if (!retired && wt.rec.status === 'queued') await assertQueuedRetirementSafe(id, wt.rec, wt.path, wt.branch)
-  if (!retired && !unboundRetired && wt.rec.status !== 'queued') {
+  if (!retired && wt.rec.status === 'queued') await assertQueuedCloseSafe(id, wt.rec)
+  if (!retired && !unboundStopped && wt.rec.status !== 'queued') {
     await coldStopSessionUnlocked(id)
     wt = (await findWorktree(id)) || wt
   }
@@ -3695,18 +3695,18 @@ async function closeSessionUnlocked(id: string, source: CloseSource): Promise<bo
     try { await stopAgentProcess(id, null) }
     catch (error) { guard = error instanceof Error ? error.message : String(error) }
     throw new SessionRecordUnusable('corrupt', id,
-      `refusing destructive close for ${id}: the unreadable record proves no adapter, leaf, worktree, or branch owner (${guard}). ${evidence}. Runtime remains at ${runtime}; worktree and branch ownership is unknown and was not touched; no process signal or deletion was attempted.`)
+      `refusing close for ${id}: the unreadable record proves no adapter, leaf, worktree, or branch owner (${guard}). ${evidence}. Runtime remains at ${runtime}; worktree and branch ownership is unknown and was not touched; no process signal or deletion was attempted.`)
   }
   if (!wt) return false
-  let unboundRetired = false
+  let unboundStopped = false
   if (!retirementReason(wt.rec) && !wt.rec.archived && wt.rec.status !== 'queued') {
     const harness = harnessById(wt.rec.harness || defaultHarness.id)
     if (!harness.exactNativeTargetId(wt.rec)) {
-      await assertUnboundRetirementSafe(id, wt.rec, wt.path, wt.branch)
+      await assertUnboundCloseSafe(id, wt.rec)
       await tmuxOk(['kill-session', '-t', id])
-      await assertTargetTmuxAbsent(id, 'after unbound residue retirement')
+      await assertTargetTmuxAbsent(id, 'after unbound residue close')
       await harness.cleanupRuntime(wt.rec)
-      unboundRetired = true
+      unboundStopped = true
     } else {
       // closeOwnedSessionUnlocked performs the one exact cold-stop proof immediately before archive-ref
       // publication. Keeping that seam in one place prevents a second adapter mutation on retry.
@@ -3714,8 +3714,8 @@ async function closeSessionUnlocked(id: string, source: CloseSource): Promise<bo
   }
   const target = wt
   return target.branch
-    ? withRecordLock(sessionCandidateLockId(target.path, target.branch), () => closeOwnedSessionUnlocked(id, target, source, unboundRetired))
-    : closeOwnedSessionUnlocked(id, target, source, unboundRetired)
+    ? withRecordLock(sessionCandidateLockId(target.path, target.branch), () => closeOwnedSessionUnlocked(id, target, source, unboundStopped))
+    : closeOwnedSessionUnlocked(id, target, source, unboundStopped)
 }
 export const closeSession = (id: string, rawSource?: unknown): Promise<boolean> => {
   const source = normalizeCloseSource(rawSource)

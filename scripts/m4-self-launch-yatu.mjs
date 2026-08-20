@@ -148,6 +148,43 @@ check(pending.length === 0, 'the message is no longer pending — at-most-once d
 const again = fire('UserPromptSubmit', sid)
 check(again.status === 0 && again.stdout.trim() === '', 'an empty queue emits nothing and is a successful no-op')
 
+// ---------------------------------------------------------------- a decoder that is present but incapable
+// The listener consumes at-most-once and renders afterwards, so every tool it needs to render must be proven
+// CAPABLE before the dequeue, not merely present. This vector is the durable form of that guarantee: without
+// it the protection lives only in a log of a run that already happened, and nothing fails when it regresses.
+//
+// The shim is the nastier of the two failure shapes: it ACCEPTS the decode option and exits 0, but passes its
+// input through unchanged. An exit-code-only probe accepts it and then delivers base64 text as if it were the
+// body; only comparing decoded bytes against a known vector catches it.
+{
+  const shimDir = join(root, 'copy-through-bin')
+  mkdirSync(shimDir, { recursive: true })
+  const shim = join(shimDir, 'base64')
+  writeFileSync(shim, '#!/bin/sh\nfor a in "$@"; do case "$a" in -d|-D|--decode) cat; exit 0;; esac; done\nexec /usr/bin/base64 "$@"\n')
+  spawnSync('chmod', ['+x', shim])
+
+  const doomed = run(cli, ['enqueue', '--session-id', sid, '--kind', 'note.v1', '--body', 'must outlive a broken decoder'], { env: adopterEnv })
+  const doomedId = JSON.parse(doomed.stdout).messageId
+
+  const blocked = run('bash', [dispatch, 'claude', 'UserPromptSubmit'], {
+    env: { ...adopterEnv, SPEX: `${process.execPath} ${spex}`, CLAUDE_PROJECT_DIR: proj, PATH: `${shimDir}:${process.env.PATH}` },
+    input: JSON.stringify({ session_id: sid, hook_event_name: 'UserPromptSubmit', cwd: proj }),
+    allowFail: true,
+  })
+  check(blocked.status === 2, `a present-but-incapable decoder blocks loudly (exit ${blocked.status})`)
+  check(blocked.stdout.trim() === '', `it emits no harness input at all (stdout ${JSON.stringify(blocked.stdout)})`)
+  check(/capability/i.test(blocked.stderr), `its stderr names the capability and its repair: ${blocked.stderr.trim().slice(0, 90)}`)
+
+  const survived = JSON.parse(run(cli, ['pending', '--session-id', sid], { env: adopterEnv }).stdout)
+  check(survived.length === 1 && survived[0].messageId === doomedId,
+    `the message is still PENDING after the refusal — it was never consumed (${survived.length} pending)`)
+
+  // Leave the queue as the rest of the run expects: the same message delivers once the decoder is sound.
+  const recovered = fire('UserPromptSubmit', sid)
+  check(recovered.status === 0 && JSON.parse(recovered.stdout).hookSpecificOutput.additionalContext === 'must outlive a broken decoder',
+    'and it delivers intact once a capable decoder is on PATH')
+}
+
 // ---------------------------------------------------------------- the loop needs no governed record
 const sessionsDir = join(runtimeRoot, 'sessions', sid)
 check(!existsSync(join(sessionsDir, 'session.json')),

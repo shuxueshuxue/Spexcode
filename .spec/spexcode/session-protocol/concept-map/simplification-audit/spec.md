@@ -14,6 +14,8 @@ related:
   - .spec/spexcode/session-protocol/concept-map/m2-integration/spec.md
   - .spec/spexcode/session-protocol/sqlite-engine/spec.md
   - .spec/spexcode/session-runtime/adopter-cutin/spec.md
+  - .spec/spexcode/session-runtime/spec.md
+  - .spec/spexcode/session-topology/spec.md
 ---
 # architecture-simplification-audit
 
@@ -64,3 +66,32 @@ them, and where an instrument was read but deliberately not followed as written,
 rule that required it. An instrument installed by other than its recommended path says which path it took and why:
 the real failure output when one was observed, and, when the recommended path was never reachable from this
 environment, that fact stated plainly rather than a failure the audit did not witness.
+
+The audit reads the architecture the review set describes, not only the documents that describe it. Those are two
+different questions, and the second one needs a different admissibility rule: a document can be judged against its
+own text, while an architectural element can only be judged against what exists. So every architectural claim is
+labelled by the kind of thing it rests on, distinguishing code that runs at the reviewed head from a frozen contract
+that has no implementation yet and from a spike proof that is executable but not on the product path. Reading a
+planned facility as an existing one is how a subtraction pass invents redundancy that nobody can find, and it
+inverts the finding: an element that does not exist yet cannot be over-built, only over-specified.
+
+An architectural finding names the user-observable semantic that breaks when the element is deleted. Where nothing
+breaks, the entry says so and carries the proof of absence — that no caller reaches it — because "no consequence"
+is the strongest form of a redundancy claim and therefore the one that must be evidenced, not assumed. This is
+what keeps an architecture audit from degenerating into a preference for fewer parts.
+
+Duplication is judged against who writes a fact, not against how many places mention it. The audit therefore
+establishes the single writer of each piece of state before it proposes any merge, because two readers of one
+authority are not duplication while two writers are, and the difference is invisible in a file listing. Two
+mechanisms that look interchangeable stay separate when each one holds a distinct cross-process or recovery
+guarantee; where a comment already records the failure that produced the split, that record is evidence and the
+merge proposal fails on it.
+
+The audit does not restate a duplication that an existing deletion gate already names. Its contribution there is
+the residue a passing gate would leave behind — state that the gate's own selectors do not reach — and the areas
+where a suspicion of duplication turns out not to survive contact with the tree. Both outcomes are results: a
+cleared area tells a later reader that the surface was examined rather than skipped.
+
+Where the material's own evidence discipline forbids rewriting a file, the smallest fix is additive. A finding whose
+proposal would rename or overwrite an original failure record is not the smallest fix but a different defect, so
+the audit proposes the added record instead and says which rule made that the only available shape.

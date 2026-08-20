@@ -361,3 +361,29 @@ bootstrap 完整套件 93 files / 1,288 tests = 1,276 pass + 9 fail + 3 skip，J
   只剩 base 既有 5 malformed / 2 stale / 1 missing。
 - lsof 已用真实 open-file 固定向量标定；clone 下写 FD 命中 0。另有旧 z-code worktree 进程经硬链接映射到
   clone 的 node_modules inode，但只显示 `mem`/`txt`、cwd 不在 clone、无写入。
+
+## 10. 落地前必须知道的一条继承状态：git.ts 的 Tree-sitter anchor 报错
+
+**结论先写**：`packages/spec-core/src/git.ts` 上的 3 个 Tree-sitter anchor parse error 是**从 base 继承的**，
+不是 M5 引入的，也**不由 M5 lane 修**。current main `b8bd72fde` 已由
+`48228dd02 fix: keep governed TypeScript parseable by Tree-sitter` 修掉，main lint 0 error。
+落地时由父侧把 current main 原子同步进落地分支后重跑，预期即清。
+
+**M5 自身与它无关，这条是量过的**：自 M4 基线 `0b8b5c93d` 起，本分支对 `packages/spec-core` 的改动文件数为 **0**；
+`git.ts` 的 blob 与基线逐字节相同（`081f4e8ae`）。`48228dd02` **不在**本分支祖先里（实测）。
+
+**所以从现在起不要再说"旧 head lint = 0"**：正确措辞是
+**old-head lint = 3 inherited / current-main sync expected to clear**。
+
+### 10.1 我在这条上判错过一次，记在这里
+
+lane J 报这个现象时，我在干净树上连跑两次 `spex spec lint`，两次都是 0 error、
+且 `tree-sitter|anchor|parse` 提及数为 0，于是我写了"复现不了，不当作产品缺陷"。**那个判断是错的。**
+
+错在哪里：我的测量本身没错——我跑的那条命令确实没有输出这些错误；
+错在**我把"我这条路径没看到"直接升格成了"它不存在"**。这几个 error 走的是另一条路径
+（anchor 判定，J 是在 ack 之后的提交路径上撞见的），我那次扫描根本没覆盖到它。
+这正是本 campaign 一路在打的同一个毛病——**结论不能超出产生它的那次扫描的覆盖范围**——
+只不过这次是我自己犯的，而且我还用它去否定了一个真实的报告。
+
+J 报得对，而且它没有越界去改那个共享文件，这点也是对的。

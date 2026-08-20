@@ -40,6 +40,12 @@ documentation, so the vendored copies are traceable from the repository that hol
 Vendoring is transitional and states the condition that ends it; changing where a package installs from must never
 become a runtime fallback.
 
+A gate that could not start is not a gate that passed. The two are indistinguishable in a report, because
+both produce no errors, so the milestone's record separates what ran and passed from what never executed and from
+what cannot be computed at all in the state being landed. The same rule decides between conflicting accounts: a
+result that cannot be reproduced against the state actually being landed does not enter the record as green, however
+faithfully it was observed earlier under different conditions.
+
 Governance travels with the repository that defines it, not with the change. This repository stamps its commits
 with the node and session that justify them; the adopter's repository asks for something else, and its working copy
 answers to no session at all. Imposing the stamp there would put an identifier in front of readers who cannot resolve

@@ -1,0 +1,74 @@
+node v22.21.0 sqlite 3.50.4
+consumer /tmp/session-selflaunch-installed-QFws0D/consumer
+tarball @spexcode/session-protocol spexcode-session-protocol-0.6.7.tgz shasum=a4717b5e0146f0d9cd2a3697cd48ee764a267d26 integrity=sha512-rZriCa/Z3cjMI/fmkvANAh/snvd+9hPWt6B82ZucQnFc8CH5wUg/9RPPf3Hh3jkMWC+ZSvmu2CSIDgFiiDcQTw==
+tarball @spexcode/session-selflaunch spexcode-session-selflaunch-0.6.7.tgz shasum=25b454bcd05aa53558e377b892122e381852ad24 integrity=sha512-p92/yta1PykL0o0UeIGZwTzEgg3qmzFcynHh1FkammoMe3J8OuHXpVtYljjwsAYCWae5/zW1oezGd29xoRcm+g==
+resolve protocol /tmp/session-selflaunch-installed-QFws0D/consumer/node_modules/@spexcode/session-protocol/package.json
+resolve selflaunch /tmp/session-selflaunch-installed-QFws0D/consumer/node_modules/@spexcode/session-selflaunch/package.json
+resolve bin /tmp/session-selflaunch-installed-QFws0D/consumer/node_modules/@spexcode/session-selflaunch/bin/spex-session.mjs
+public exports ["LocalityError","requireLocalDatabasePath","resolveDatabasePath"]
+install source-fallback=absent
+$ spex-session initialize --session-id path-explicit --database-path /tmp/session-selflaunch-installed-QFws0D/path-precedence/explicit/sessions.sqlite
+stdout {"sessionId":"path-explicit","createdAtMs":1787198750004,"retiredAtMs":null}
+exit 0
+$ spex-session initialize --session-id path-environment
+stdout {"sessionId":"path-environment","createdAtMs":1787198750097,"retiredAtMs":null}
+exit 0
+$ spex-session initialize --session-id path-config
+stdout {"sessionId":"path-config","createdAtMs":1787198750190,"retiredAtMs":null}
+exit 0
+$ spex-session initialize --session-id path-default
+stdout {"sessionId":"path-default","createdAtMs":1787198750270,"retiredAtMs":null}
+exit 0
+$ spex-session initialize --session-id relative --database-path relative.sqlite
+stderr spex-session: PROTOCOL_PATH_NOT_ABSOLUTE: databasePath must be absolute and is never resolved from cwd
+exit 1
+$ spex-session initialize --session-id missing --database-path /tmp/session-selflaunch-installed-QFws0D/path-precedence/missing/child/sessions.sqlite
+stderr spex-session: PROTOCOL_PATH_PARENT_MISSING: database parent directory does not exist: /tmp/session-selflaunch-installed-QFws0D/path-precedence/missing/child; create the parent directory or choose --database-path with an existing parent
+exit 1
+$ spex-session initialize --session-id offline-target --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout {"sessionId":"offline-target","createdAtMs":1787198750476,"retiredAtMs":null}
+exit 0
+$ spex-session enqueue --session-id offline-target --kind letter.v1 --body A --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout {"enqueueSeq":1,"messageId":"1f8c67043f849b366c1e46da03822f85","targetSessionId":"offline-target","senderSessionId":null,"protocolVersion":1,"kind":"letter.v1","headers":{},"idempotencyKey":null,"payloadHash":"5250a8aa15cd2b0e43bf5f81b96dd7a4e9a12b577944017b9802672712fe961c","enqueuedAtMs":1787198750548,"dequeuedAtMs":null,"bodyBase64":"QQ=="}
+exit 0
+$ spex-session enqueue --session-id offline-target --kind letter.v1 --body B --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout {"enqueueSeq":2,"messageId":"62454ed85bc0210412cc19ccebf7ba18","targetSessionId":"offline-target","senderSessionId":null,"protocolVersion":1,"kind":"letter.v1","headers":{},"idempotencyKey":null,"payloadHash":"302a305b1c7a740b1e24ace858a581f1fe5b593fd55c2088b4195fd7d9651a76","enqueuedAtMs":1787198750622,"dequeuedAtMs":null,"bodyBase64":"Qg=="}
+exit 0
+$ spex-session pending --session-id offline-target --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout [{"enqueueSeq":1,"messageId":"1f8c67043f849b366c1e46da03822f85","targetSessionId":"offline-target","senderSessionId":null,"protocolVersion":1,"kind":"letter.v1","headers":{},"idempotencyKey":null,"payloadHash":"5250a8aa15cd2b0e43bf5f81b96dd7a4e9a12b577944017b9802672712fe961c","enqueuedAtMs":1787198750548,"dequeuedAtMs":null,"bodyBase64":"QQ=="},{"enqueueSeq":2,"messageId":"62454ed85bc0210412cc19ccebf7ba18","targetSessionId":"offline-target","senderSessionId":null,"protocolVersion":1,"kind":"letter.v1","headers":{},"idempotencyKey":null,"payloadHash":"302a305b1c7a740b1e24ace858a581f1fe5b593fd55c2088b4195fd7d9651a76","enqueuedAtMs":1787198750622,"dequeuedAtMs":null,"bodyBase64":"Qg=="}]
+exit 0
+$ spex-session dequeue --session-id offline-target --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout {"enqueueSeq":1,"messageId":"1f8c67043f849b366c1e46da03822f85","targetSessionId":"offline-target","senderSessionId":null,"protocolVersion":1,"kind":"letter.v1","headers":{},"idempotencyKey":null,"payloadHash":"5250a8aa15cd2b0e43bf5f81b96dd7a4e9a12b577944017b9802672712fe961c","enqueuedAtMs":1787198750548,"dequeuedAtMs":1787198750775,"bodyBase64":"QQ=="}
+exit 0
+$ spex-session dequeue --session-id offline-target --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout {"enqueueSeq":2,"messageId":"62454ed85bc0210412cc19ccebf7ba18","targetSessionId":"offline-target","senderSessionId":null,"protocolVersion":1,"kind":"letter.v1","headers":{},"idempotencyKey":null,"payloadHash":"302a305b1c7a740b1e24ace858a581f1fe5b593fd55c2088b4195fd7d9651a76","enqueuedAtMs":1787198750622,"dequeuedAtMs":1787198750887,"bodyBase64":"Qg=="}
+exit 0
+$ spex-session dequeue --session-id offline-target --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout null
+exit 0
+$ spex-session enqueue --session-id offline-target --kind idempotent.v1 --body same --idempotency-key exact-replay --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout {"enqueueSeq":3,"messageId":"206cca5980a5a269f88e457e437dc205","targetSessionId":"offline-target","senderSessionId":null,"protocolVersion":1,"kind":"idempotent.v1","headers":{},"idempotencyKey":"exact-replay","payloadHash":"be655c2cd34ae81de8be97c52f9f6fb99084f22c9f7fa805c6bad234463ad76f","enqueuedAtMs":1787198751013,"dequeuedAtMs":null,"bodyBase64":"c2FtZQ=="}
+exit 0
+$ spex-session enqueue --session-id offline-target --kind idempotent.v1 --body same --idempotency-key exact-replay --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout {"enqueueSeq":3,"messageId":"206cca5980a5a269f88e457e437dc205","targetSessionId":"offline-target","senderSessionId":null,"protocolVersion":1,"kind":"idempotent.v1","headers":{},"idempotencyKey":"exact-replay","payloadHash":"be655c2cd34ae81de8be97c52f9f6fb99084f22c9f7fa805c6bad234463ad76f","enqueuedAtMs":1787198751013,"dequeuedAtMs":null,"bodyBase64":"c2FtZQ=="}
+exit 0
+$ spex-session enqueue --session-id offline-target --kind idempotent.v1 --body same! --idempotency-key exact-replay --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stderr spex-session: PROTOCOL_IDEMPOTENCY_CONFLICT: idempotency key exact-replay was reused with different message bytes
+exit 1
+$ spex-session dequeue --session-id offline-target --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout {"enqueueSeq":3,"messageId":"206cca5980a5a269f88e457e437dc205","targetSessionId":"offline-target","senderSessionId":null,"protocolVersion":1,"kind":"idempotent.v1","headers":{},"idempotencyKey":"exact-replay","payloadHash":"be655c2cd34ae81de8be97c52f9f6fb99084f22c9f7fa805c6bad234463ad76f","enqueuedAtMs":1787198751013,"dequeuedAtMs":1787198751219,"bodyBase64":"c2FtZQ=="}
+exit 0
+$ spex-session enqueue --session-id offline-target --kind restart.v1 --body survives --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout {"enqueueSeq":4,"messageId":"d2cc2550d13dac15f36a9c9ac4e04f79","targetSessionId":"offline-target","senderSessionId":null,"protocolVersion":1,"kind":"restart.v1","headers":{},"idempotencyKey":null,"payloadHash":"089f2ad1fb848a23b85166bb41659448a846aca764933d925db6672a9696ee01","enqueuedAtMs":1787198751297,"dequeuedAtMs":null,"bodyBase64":"c3Vydml2ZXM="}
+exit 0
+assert resident-processes=0 wake-hints=0 after enqueue process exited
+$ spex-session dequeue --session-id offline-target --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout {"enqueueSeq":4,"messageId":"d2cc2550d13dac15f36a9c9ac4e04f79","targetSessionId":"offline-target","senderSessionId":null,"protocolVersion":1,"kind":"restart.v1","headers":{},"idempotencyKey":null,"payloadHash":"089f2ad1fb848a23b85166bb41659448a846aca764933d925db6672a9696ee01","enqueuedAtMs":1787198751297,"dequeuedAtMs":1787198751380,"bodyBase64":"c3Vydml2ZXM="}
+exit 0
+$ spex-session dequeue --session-id offline-target --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stdout null
+exit 0
+$ spex-session enqueue --session-id offline-target --kind invalid.v1 --body x --message-id producer-owned --database-path /tmp/session-selflaunch-installed-QFws0D/main-loop/sessions.sqlite
+stderr spex-session: USAGE: unknown option --message-id
+exit 2
+installed-yatu assertions=passed

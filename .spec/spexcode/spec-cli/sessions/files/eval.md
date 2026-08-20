@@ -31,7 +31,7 @@ scenarios:
       the bytes currently at that path, including the post-publication edit,
       proving that the list is a live reference rather than a snapshot. Clicking outside the transient dropdown
       dismisses it.
-  - name: preview-refuses-untrusted-or-oversized-files-loudly
+  - name: preview-refuses-unsupported-or-oversized-files-loudly
     tags: [frontend-e2e, backend-api]
     test: spec-dashboard/test/session-files.e2e.mjs
     description: >-
@@ -39,7 +39,7 @@ scenarios:
       dashboard resource tab and backend route, attempt each preview without using download.
     expected: >-
       Unsupported extensions receive a named 415 directing the human to download, and files over 2 MiB receive
-      a named 413 stating the preview ceiling and actual size. No unsupported markup enters the dashboard DOM,
+      a named 413 stating the preview ceiling and actual size. No unsupported bytes enter the dashboard DOM,
       and neither response silently truncates or downloads the file.
   - name: markdown-previews-select-and-start-at-the-top
     tags: [frontend-e2e, backend-api]
@@ -51,15 +51,16 @@ scenarios:
       The single resource-tab surface renders restricted Markdown, not a raw preformatted source dump; raw HTML
       remains inert text. The first rendered content is visible at scroll position zero, and the human can select
       and copy document text without the hidden terminal consuming the gesture.
-  - name: html-previews-rendered-in-a-script-free-frame
+  - name: html-previews-run-with-full-browser-capabilities
     tags: [frontend-e2e, backend-api]
     test: spec-dashboard/test/session-files.e2e.mjs
     description: >-
-      Publish a real `.html` file through the CLI, open it from the selected session's files menu, and inspect
-      the resulting resource tab in Chromium.
+      Publish a real interactive `.html` file through the CLI, open it from the selected session's files menu,
+      click its controls, and inspect its iframe permissions and parent-document access in Chromium.
     expected: >-
-      The file renders as HTML inside the resource tab instead of a raw source `<pre>`. The preview is a sandboxed
-      iframe without script execution or dashboard DOM access, while the adjacent download action remains available.
+      The file renders as HTML inside the resource tab instead of a raw source `<pre>`. The iframe has no sandbox
+      or referrer-policy restriction, its scripts execute, its controls update the document, and it can access the
+      same-origin dashboard DOM. The adjacent download action remains available.
   - name: download-is-authorized-and-missing-paths-fail-loud
     tags: [backend-api]
     test: spec-cli/src/session-files.api.test.ts

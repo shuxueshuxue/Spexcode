@@ -483,13 +483,13 @@ already interrupted, while a generation change, unreadable turn, or still-active
   fed to `codex-launch` (which would mint a NEW thread whose first message is the marker text).
   An adapter that mints native identity during launch declares `launchPayloadProof`. Product lifecycle then
   retains the authoritative `launch` artifact after transport submission and gates later delivery behind it.
-  The adapter stages a narrow shared proof receipt only after it has proven the native id plus first prompt
+  The adapter stages a narrow shared launch receipt only after it has established the native id plus first prompt
   durability. Codex does so after `thread/start`, confirmed `turn/start`, and rollout discovery; the session
   lifecycle owner validates the exact payload receipt, binds the id, and consumes both artifacts under the
   record lock. Adapter
   rows without this capability keep their existing transport-accepted consumption rule. This is one capability
   seam, not a Codex branch in session or queue policy.
-  This receipt is the final identity-plus-first-rollout proof. The generic adapter `launchReady` fence that
+  This receipt is the final identity-plus-first-rollout commit. The generic adapter `launchReady` fence that
   follows it measures post-commit runtime liveness; its failure records a retryable liveness error but never
   restores the first-turn payload or clears the proven identity, so recovery addresses the same native thread.
   The adapter also declares its own **settled launch failures** — the patterns of ITS output for a launch that
@@ -686,6 +686,9 @@ The Codex impl of the adapter must encode these (measured against a real self-la
   own app-server. Each SpexCode project has ONE project-scoped `codex app-server --listen unix://<project sock>`
   (started once, reused). The app-server and the visible `codex --remote unix://<sock> resume <tid>` TUI **share
   that one socket, so they MUST be the SAME codex install** — a version split across the socket breaks the
+  handoff. The remote TUI also receives `--cd <worktree-cwd>` explicitly: with `tui.resume_cwd = "current"`,
+  Codex refuses a remote workspace that has no `--cd`, so the generated command must quote the pane's `$PWD`
+  as one argument (including worktree paths containing spaces).
   `thread/start`→resume handoff (the app-server on one version creates a thread a differently-versioned resume
   can't find, and an old-enough app-server can't serve `--remote unix://` at all). So the app-server command is
   **DERIVED from the in-effect launcher `codexCmd`'s binary** (its first shell token, dropping args like

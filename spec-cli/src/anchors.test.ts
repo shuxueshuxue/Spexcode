@@ -11,6 +11,7 @@ import { historyEventCachePathForTests } from '@spexcode/spec-core'
 
 const freshAnchors = (tag: string) =>
   import(new URL(`anchors.js?${tag}`, import.meta.resolve('@spexcode/spec-core')).href) as Promise<typeof import('@spexcode/spec-core')>
+type AnchorQueryModule = Pick<typeof import('@spexcode/spec-core'), 'anchorHitQueries'>
 
 // [[code-anchor]] — the structured relation grammar (ONE parser for code: and related:) and the
 // multi-selector hit engine: selectors on one base file are OR'd, a commit counts ONCE, and each hit
@@ -367,7 +368,7 @@ test('a same-process diff.algorithm flip cannot change or freeze an anchor verdi
   const { root, g, win, moved } = await discriminatingFixture((git) => git('config', 'diff.algorithm', 'myers'))
   try {
     const mod = await import('@spexcode/spec-core')
-    const ask = async (m: typeof mod) => (await m.anchorHitQueries(root, [{ win, symbols: ['f'] }], [line3Extractor as any]))[0].map((r) => r.selectors)
+    const ask = async (m: AnchorQueryModule) => (await m.anchorHitQueries(root, [{ win, symbols: ['f'] }], [line3Extractor as any]))[0].map((r) => r.selectors)
     const underMyers = await ask(mod)
     g('config', 'diff.algorithm', 'histogram')
     const underHistogram = await ask(mod)
@@ -382,7 +383,7 @@ test('an ambient color.ui cannot blank the hunk parse into a silent zero-drift v
   const { root, g, win, moved } = await discriminatingFixture((git) => git('config', 'color.ui', 'always'))
   try {
     const mod = await import('@spexcode/spec-core')
-    const ask = async (m: typeof mod) => (await m.anchorHitQueries(root, [{ win, symbols: ['f'] }], [line3Extractor as any]))[0].map((r) => r.selectors)
+    const ask = async (m: AnchorQueryModule) => (await m.anchorHitQueries(root, [{ win, symbols: ['f'] }], [line3Extractor as any]))[0].map((r) => r.selectors)
     const colored = await ask(mod)
     g('config', '--unset', 'color.ui')
     const plain = await ask(mod)

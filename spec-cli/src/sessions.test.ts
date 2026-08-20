@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { once } from 'node:events'
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { claudeHarness, codexHarness, codexHeadlessHarness, sessionIdentityEnvVars, stampRvSock, type SharedRuntimeProbe } from './harness.js'
 import { processStartToken } from '@spexcode/spec-core'
 import { spawnDetachedRuntime } from './runtime-ownership.js'
-import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, drainQueue, drainSession, findSessionClosure, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
+import { OWNED_QUEUE_RAW_STATUS, archiveSession, backendLaunchAuthority, bootstrapMaterialize, canDrainQueued, closeSession, composeCommandPrompt, drainQueue, drainSession, existingHarnessLaunchTarget, findSessionClosure, fromRaw, turnFailureNote, turnFailureRetryDelay, installSessionLeafProcessProbeForTest, launchPreflight, launchScript, launchShellCommand, listSessions, markHarnessSessionId, markTurnFailure, markHeadlessTurnFailure, parseSessionLeafReceipt, rawLifecycleStatus, resolveCommandPrompt, resumeSession, sendText, sessionCreateRequest, sessionLeafReceiptCandidate, sessionLeafReceiptIdentityState, spawnerClause, stageHarnessLaunchProof, stopSession, type Session, type SessRec } from './sessions.js'
 import { gitCommonDir, mainRoot, runtimeRoot, sessionRecordPath, sessionArtifactPath, sessionStoreDir } from '@spexcode/spec-core'
 import { readTimeline } from './session-timeline.js'
 import { readCodexGenerationLedger } from './codex-runtime-generations.js'
@@ -168,6 +168,53 @@ test('Codex registration does not persist an unbound thread when exact generatio
   }
 })
 
+test('Codex launch retry reuses a staged native target after the first payload is consumed', serial, () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const previousGeneration = process.env.SPEXCODE_CODEX_GENERATION
+  const home = mkdtempSync(join(tmpdir(), 'spex-codex-retry-target-'))
+  const id = `codex-retry-target-${process.pid}`
+  const worktree = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  const payload = 'authoritative first turn'
+  process.env.SPEXCODE_HOME = home
+  delete process.env.SPEXCODE_CODEX_GENERATION
+  try {
+    mkdirSync(sessionStoreDir(id), { recursive: true })
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify({
+      session_id: id, governed: true, worktree_path: worktree, branch: 'main', node: '', title: '', name: '', parent: '',
+      status: 'active', proposal: '', merges: 0, note: '', sortkey: '', createdAt: Date.now(), harness: 'codex',
+      harness_session_id: '', stopped: false, archived: false, cold_proof: '', adapter_recovery: '', launcher: 'codex',
+      launch_cmd: 'codex', launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
+    }, null, 2)}\n`)
+    writeFileSync(sessionArtifactPath(id, 'launch'), payload)
+    assert.equal(stageHarnessLaunchProof(id, 'thread-retry', payload), true)
+    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'a retry can use the staged receipt before its record commit')
+
+    // This is the exact failure window from the report: the lifecycle owner consumed `launch`, but the retry
+    // entered codex-launch before (or while) it bound the staged receipt.
+    rmSync(sessionArtifactPath(id, 'launch'))
+    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'a consumed payload still leaves the staged receipt reusable')
+
+    const currentReceipt = sessionArtifactPath(id, 'launch.receipt')
+    const legacyReceipt = sessionArtifactPath(id, 'launch.proof')
+    copyFileSync(currentReceipt, legacyReceipt)
+    rmSync(currentReceipt)
+    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'a one-release legacy receipt remains reusable after upgrade')
+    assert.equal(existsSync(currentReceipt), false, 'compatibility reads the legacy receipt instead of writing a second artifact')
+
+    const record = JSON.parse(readFileSync(sessionRecordPath(id), 'utf8'))
+    record.harness_session_id = 'thread-retry'
+    writeFileSync(sessionRecordPath(id), `${JSON.stringify(record, null, 2)}\n`)
+    rmSync(legacyReceipt)
+    assert.equal(existingHarnessLaunchTarget(id), 'thread-retry', 'after receipt consumption the durable identity remains authoritative')
+  } finally {
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    if (previousGeneration === undefined) delete process.env.SPEXCODE_CODEX_GENERATION
+    else process.env.SPEXCODE_CODEX_GENERATION = previousGeneration
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
 test('session-create API rejects stale fields before entering the transaction', serial, async () => {
   const stale = await sessionCreateRequest({ prompt: 'probe', launcher: 'claude', mode: 'headless' })
   assert.deepEqual(stale, { status: 400, error: 'unknown session-create field: mode' })
@@ -231,6 +278,27 @@ test('launchScript registers the agent pid before exec and preserves tricky quot
   }
 })
 
+test('launch transport keeps a launch.sh path with spaces and quotes as one shell argument', serial, () => {
+  const previousHome = process.env.SPEXCODE_HOME
+  const home = mkdtempSync(join(tmpdir(), 'spex-launch-home-'))
+  const spaced = mkdtempSync(join(tmpdir(), "spex launch 'path'-"))
+  process.env.SPEXCODE_HOME = home
+  const oneShotHarness = { ...claudeHarness, launchOneShot: true, launchCmd: () => 'true' }
+  try {
+    const generated = launchScript('shell-path-test', '', oneShotHarness, 'true')
+    const copied = join(spaced, 'launch.sh')
+    copyFileSync(generated, copied)
+    const command = launchShellCommand(copied)
+    assert.match(command, /^bash '/, 'the path is quoted for the shell')
+    assert.equal(execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' }), '')
+  } finally {
+    if (previousHome === undefined) delete process.env.SPEXCODE_HOME
+    else process.env.SPEXCODE_HOME = previousHome
+    rmSync(home, { recursive: true, force: true })
+    rmSync(spaced, { recursive: true, force: true })
+  }
+})
+
 function writeResumeFixtureRecord(id: string, worktree: string, launchCmd: string): void {
   mkdirSync(sessionStoreDir(id), { recursive: true })
   writeFileSync(sessionRecordPath(id), `${JSON.stringify({
@@ -258,6 +326,20 @@ fi
 exit 0
 `)
   chmodSync(tmux, 0o755)
+}
+
+async function waitForFixtureLaunchExit(launchPidPath: string): Promise<void> {
+  if (!existsSync(launchPidPath)) return
+  const pid = Number(readFileSync(launchPidPath, 'utf8').trim())
+  if (!Number.isInteger(pid) || pid <= 0) return
+  await waitUntil(() => {
+    try {
+      process.kill(pid, 0)
+      return false
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === 'ESRCH'
+    }
+  }, `fixture launch ${pid} to exit`, 2_000)
 }
 
 test('no-thread resume replays the authoritative launch payload before later durable sends', { timeout: 20_000, concurrency: false }, async () => {
@@ -324,7 +406,7 @@ exec sleep 30
     assert.equal(existsSync(commandPath), false, 'missing authoritative payload refuses before any launch transport')
     writeFileSync(sessionArtifactPath(id, 'launch'), resolvedLaunch)
 
-    const proofPath = sessionArtifactPath(id, 'launch.proof')
+    const proofPath = sessionArtifactPath(id, 'launch.receipt')
 
     codexHarness.launchCmd = () => helper
     codexHarness.deliver = async (_rec, text) => { handedOver.push(text); return { ok: true } }
@@ -355,7 +437,7 @@ exec sleep 30
     assert.equal(stageHarnessLaunchProof(id, 'thread-recovered', resolvedLaunch), true,
       'the adapter may retry the exact same durable proof')
     assert.throws(() => stageHarnessLaunchProof(id, 'another-thread', resolvedLaunch),
-      /refusing to replace native launch proof/)
+      /refusing to replace native launch receipt/)
     const postProofFailure = await pending
     pending = null
     assert.equal(postProofFailure.ok, false)
@@ -453,7 +535,7 @@ exec sleep 30
     launch_cmd: helper, launch_owner: '', create_request_id: '', create_payload_hash: '', launch_readiness_pending: '',
   }, null, 2)}\n`)
 
-  const proofPath = sessionArtifactPath(id, 'launch.proof')
+  const proofPath = sessionArtifactPath(id, 'launch.receipt')
   const proof = (overrides: Record<string, unknown> = {}) => ({
     version: 1, sessionId: id, harnessId: 'codex', harnessSessionId: 'thread-queued',
     launchPayloadHash: createHash('sha256').update(launchPayload).digest('hex'), generationId: null,
@@ -482,7 +564,7 @@ exec sleep 30
       rmSync(proofPath)
     }
 
-    await rejectProof('{broken', /native launch proof .* unreadable/)
+    await rejectProof('{broken', /native launch receipt .* unreadable/)
     await rejectProof(`${JSON.stringify(proof({ sessionId: 'wrong-session' }))}\n`, /governed adapter identity/)
     await rejectProof(`${JSON.stringify(proof({ harnessId: 'codex-headless' }))}\n`, /governed adapter identity/)
     await rejectProof(`${JSON.stringify(proof({ launchPayloadHash: 'wrong-payload' }))}\n`, /authoritative resolved launch payload/)
@@ -496,7 +578,7 @@ exec sleep 30
     assert.deepEqual(await sendText(id, 'later durable task'), { ok: true })
     assert.deepEqual(handedOver, [])
     assert.equal(stageHarnessLaunchProof(id, 'thread-queued', launchPayload), true)
-    assert.throws(() => stageHarnessLaunchProof(id, 'wrong-thread', launchPayload), /refusing to replace native launch proof/)
+    assert.throws(() => stageHarnessLaunchProof(id, 'wrong-thread', launchPayload), /refusing to replace native launch receipt/)
     await waitUntil(() => /forced post-proof queued liveness rejection/.test(
       JSON.parse(readFileSync(sessionRecordPath(id), 'utf8')).note || ''), 'post-proof queued liveness note')
     await sleep(0)
@@ -791,7 +873,9 @@ test('resume missing, failed, or invalidated readiness preserves the stopped off
     execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'add', '.'], { cwd: project })
     execFileSync('git', ['-c', 'user.name=resume-fixture', '-c', 'user.email=resume@example.test', 'commit', '-qm', 'fixture'], { cwd: project })
     process.env.SPEXCODE_HOME = home
-    const bin = join(home, 'bin'); writeResumeTmuxFixture(bin, join(home, 'tmux-command'), join(home, 'launch.pid'))
+    const bin = join(home, 'bin')
+    const launchPidPath = join(home, 'launch.pid')
+    writeResumeTmuxFixture(bin, join(home, 'tmux-command'), launchPidPath)
     process.env.PATH = `${bin}:${previousPath}`
     const id = `resume-ready-${outcome}-${process.pid}`
     assertIsolatedResumeStore(home, id)
@@ -830,6 +914,7 @@ test('resume missing, failed, or invalidated readiness preserves the stopped off
       if (previousHome === undefined) delete process.env.SPEXCODE_HOME
       else process.env.SPEXCODE_HOME = previousHome
       process.env.PATH = previousPath
+      await waitForFixtureLaunchExit(launchPidPath)
       rmSync(home, { recursive: true, force: true })
       assert.equal(existsSync(home), false, `${outcome} resume fixture root is removed exactly`)
       assertLiveSessionsUnchanged(liveBefore, `${outcome} resume fixture`)

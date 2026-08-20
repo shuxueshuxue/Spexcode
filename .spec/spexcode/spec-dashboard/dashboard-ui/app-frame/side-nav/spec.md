@@ -105,8 +105,8 @@ restores the list.
   rows remain native same-tab links; an explicitly offline row is a disabled status item with no project
   URL, so selecting a stopped backend cannot send the shell into a dead scope. It never adds a Projects rail page
   or mounts project management inside the scoped shell. When the catalog is denied the chip still names
-  the current project but carries no menu, so a direct-project guest never sees the fleet or any global
-  admin affordance: the gate is absence of data, not a hidden element.
+  the current project and becomes a single `/projects` login door; it never opens a fleet menu or leaks
+  catalog rows. A direct-project guest therefore gets an explicit repair path without seeing global data.
 - **One global ⌥ vocabulary; Esc never switches pages.** Page switching is the **⌥ command family**,
   window-global on every page: `⌥1..⌥5` jump straight to a page in rail order (graph · sessions · evals ·
   issues · settings — the rail tooltips carry the hints), `⌥N` to the New Session composer, `⌥F` to the

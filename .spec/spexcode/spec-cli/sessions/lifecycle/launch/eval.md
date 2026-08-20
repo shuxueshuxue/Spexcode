@@ -16,6 +16,17 @@ scenarios:
       reaches `active`, and lands a commit whose trailer names ITS OWN record. The failure this locks:
       github#76, where a shared daemon's inherited id reached workers' commits and 48 of them in the SpexCode
       repo name a session that no longer exists.
+  - name: launch-script-path-is-shell-safe
+    tags: [backend-api, cli]
+    description: >
+      Generate a real backend-owned `launch.sh`, place the file under a path containing whitespace and a single
+      quote, and execute the exact `bash` command the backend types into the worker pane.
+    expected: >
+      The command quotes the complete script path as one shell argument and executes successfully. A path such
+      as `/Users/example/Library/Mobile Documents/.../launch.sh` must never be split at `Mobile Documents`,
+      and a single quote in the path must remain safe as well.
+    code: spec-cli/src/sessions.ts
+    test: spec-cli/src/sessions.test.ts
   - name: launch-prompt-may-begin-with-a-hyphen
     tags: [backend-api, cli]
     code: spec-cli/src/sessions.ts

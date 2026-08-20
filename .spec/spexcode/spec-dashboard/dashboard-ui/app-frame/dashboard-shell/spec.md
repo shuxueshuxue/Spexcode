@@ -125,7 +125,7 @@ never an eternal spinner — the pre-first-board window is the only reader; once
 refetch keeps the last good board and the stream/poll below keep retrying on their own. The **catalog
 projection keeps last-good the same way**: it is identity-bearing, so a blipped poll (an `absent` answer
 after a proven catalog — a gateway restart mid-poll) never regresses a resolved identity to the anonymous
-default; a fresh `ok` or `denied` always applies — denied is an answer, a mid-session lock must re-gate.
+default; a fresh `ok` or `denied` always applies — denied is an answer, a mid-session lock must re-gate. Once a catalog read answers `denied`, the shell pauses its retry poll until the credential gate reports an unlock; an answered authorization failure is not a five-second error loop.
 
 **Push-first board — freshest-issued wins.** The shell keeps the board fresh through three paths. The
 primary is the **delta subscription** ([[graph-stream]]/[[graph-delta]]): whole boards arrive over the push

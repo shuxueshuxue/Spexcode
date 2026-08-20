@@ -26,9 +26,12 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   immutable guidance bundle remains reproducible), the **[[release-publish]] producer test** (the complete
   public package set remains version-locked, ordered, and guarded against direct publication), the
   **`tsc --noEmit`** type check on the CLI package, the session-core protocol suite, the CLI package's complete **unit/integration suite**, and
-  one data-driven **production clean-init matrix**. The suite runs from the package directory after both root
-  and package installs, so subprocess fixtures resolve the same local `tsx`/TypeScript that production-facing
-  tests invoke; a green workflow cannot coexist with a known main-branch unit failure.
+  one data-driven **production clean-init matrix**. CI first installs each package-local lockfile, then applies
+  the canonical root workspace install and builds the internal packages before lint. That order keeps each
+  package's dependency plan valid while making the root workspace links resolve to emitted internal `dist`
+  entries. The suite runs from the package directory after both root and package installs, so subprocess
+  fixtures resolve the same local `tsx`/TypeScript that production-facing tests invoke; a green workflow cannot
+  coexist with a known main-branch unit failure.
   The matrix builds and installs the npm tarball, proves the installed `spex` starts, then crosses Python and
   TypeScript projects with Claude-only and Codex-only delivery in disposable real git repositories. Every row
   goes through the actual `spex init` and `spex materialize` CLI surfaces and checks the whole deterministic
@@ -39,7 +42,8 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   while untracked source is not; init's receipt
   names only artifacts it actually planted for the selected harness; the starter launcher is that harness's
   plain command with no automatic-permission flags; the seeded plugin tree is the canonical [[init-preset]]
-  projection byte-for-byte and mode-for-mode; no held-back, private-machine, or SpexCode-project text leaks into
+  projection byte-for-byte and mode-for-mode after omitting only hook subtrees whose declared events are
+  unavailable from every selected native adapter; no held-back, private-machine, or SpexCode-project text leaks into
   the adopter; and `spex spec lint` finishes with zero errors. It never starts a harness, attempts login, or
   reaches a harness/network service — session launch is beyond this gate. Every failed child command is
   reported with its captured stdout and stderr as separate, labelled sections; the production install itself
@@ -49,8 +53,9 @@ CI is the **non-bypassable** layer that runs on the forge, not on a developer's 
   A bare tarball install cannot honestly rely on those artifacts alone: dependency ranges make npm request
   registry packuments even when every selected tarball is cached. The lock-driven `npm ci --offline` proves the
   packed package and its exact production graph install with no registry access instead of depending on warm,
-  machine-local metadata. When the packed manifest contains a `file:` workspace dependency, the smoke harness
-  rewrites that lock entry to the dependency's path inside the packed root before the offline install; it must never
+  machine-local metadata. When the source lock represents a bundled root dependency through a `file:` path or
+  workspace link, the smoke harness replaces that source-checkout boundary with the packed-root artifact before the
+  offline install; it must never
   ask the consumer for a sibling from the source checkout. The adoption leg also runs a negative control: the
   installed managed hook rejects a direct commit on `main`, preserves the staged source tree, and only the explicit
   adoption allowance may create the seed commit containing `.spec` and `spexcode.json`.

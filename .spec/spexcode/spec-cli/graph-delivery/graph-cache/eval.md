@@ -242,6 +242,19 @@ scenarios:
       generation remains owed for cheap convergence. A sessions splice does not walk full topology inputs, stale
       reads do not manufacture a full beside a held splice, and a patrol-owned full retains patrol attribution
       through the early session frame without amplifying into a patrol successor treadmill.
+  - name: direct-cold-graph-read-settles
+    tags: [cli]
+    code: spec-cli/src/graphCache.ts
+    related:
+      - spec-cli/src/workspace-precondition.cli.test.ts
+    description: >-
+      From a newly created non-Git directory, start a fresh tsx child that imports graphCache and calls
+      readBoard(), attaching success and rejection handlers that emit the result. Capture the child exit
+      status, stdout, and stderr without any server, watcher, or test-runner handle keeping Node alive.
+    expected: >-
+      The direct cold read remains alive through its deferred producer and settles with the shared
+      GitWorkspaceError naming the canonical workspace and git-init repair. It must not silently exit while
+      the returned Promise is still pending.
   - name: cold-board-batches-freshness-per-read
     tags: [backend-api]
     code: packages/spec-core/src/graph.ts

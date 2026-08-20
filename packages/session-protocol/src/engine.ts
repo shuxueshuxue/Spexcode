@@ -307,13 +307,21 @@ function buildHandle(
     exec(sql, ...params) {
       requireSql(sql)
       requireSqlParams(params)
-      const result = database.prepare(sql).run(...params)
-      return { changes: Number(result.changes), lastInsertRowid: Number(result.lastInsertRowid) }
+      try {
+        const result = database.prepare(sql).run(...params)
+        return { changes: Number(result.changes), lastInsertRowid: Number(result.lastInsertRowid) }
+      } catch (error) {
+        rethrowProtocolError(error)
+      }
     },
     query(sql, ...params) {
       requireSql(sql)
       requireSqlParams(params)
-      return database.prepare(sql).all(...params)
+      try {
+        return database.prepare(sql).all(...params)
+      } catch (error) {
+        rethrowProtocolError(error)
+      }
     },
     enqueue(sessionId, message) {
       requireSessionId(sessionId)
@@ -429,16 +437,22 @@ function buildHandle(
         rethrowProtocolError(error)
       }
       transactionActive = true
+      let value: T
       try {
-        const value = body(transaction)
+        value = body(transaction)
         if (value && typeof (value as { then?: unknown }).then === 'function') {
           fail('PROTOCOL_TRANSACTION_INVALID', 'a transaction body must not return a promise; use tx.enqueue')
         }
+      } catch (error) {
         transactionActive = false
+        try { database.exec('ROLLBACK') } catch {}
+        throw error
+      }
+      transactionActive = false
+      try {
         database.exec('COMMIT')
         return value
       } catch (error) {
-        transactionActive = false
         try { database.exec('ROLLBACK') } catch {}
         rethrowProtocolError(error)
       }

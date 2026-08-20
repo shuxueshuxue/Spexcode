@@ -213,8 +213,26 @@ cursor 的静息态是一个单调数——两者连表示法都不同构。**�
 与一条自带三个幂等键的发布路径（`:301-375`）。它不是"看着重复"，它就是重复，而且是可以立刻收掉的那种：
 产品侧至今没有任何 importer（`docs/session-legacy-deletion-gate.md:227`），spec 已排定第 4 步删除它
 （`.spec/spexcode/session-runtime/spec.md:61-62`），第 1 步还禁止留兼容再导出、别名、双读或回退。
-**判定：可合并，且此 head 上合并成本为零。删后语义：没有一条破坏——没有产品调用者，也没有 API 路由经过它。**
+**⚠ 本条判定已被 M5 侦察推翻一半，见下方更正。原判定（保留原文以便对照）：可合并，且此 head 上合并成本为零；
+删后语义没有一条破坏——没有产品调用者，也没有 API 路由经过它。**
 这条 fail-first 的作用是划出对照线：AFF-1 与 AFF-2 的重复各自扛着一条跨进程或恢复语义，这一条什么都不扛。
+
+**更正（M5，实测）。** 前半句仍然成立：**本仓库内的 importer 依然为零**，本文当时的扫描没有错。
+被推翻的是从它推出的那两句结论——**"没有产品调用者"与"删除成本为零"**。产品调用者存在，只是在另一个仓库：
+
+- `/home/jeffry/zcode` @ `codex/swarm-five-integrated` `b9b3fa701`；
+- `apps/zcode-cli/packages/bootstrap/package.json:24` 声明 `"@spexcode/session-core": "0.6.7"`；
+- `apps/zcode-cli/packages/bootstrap/src/swarm-session-protocol.ts:1-8` **import 全部六个 bridge 导出**
+  （`drain`、`publishRuntimeSessionState`、`readRuntimeSession`、`registerRuntimeSession`、
+  `runtimeSessionNotification`、`runtimeSessionChildren`）；
+- ZSwarm 自己的 spec `.spec/zcode/swarm-orchestration/session-protocol/spec.md` 明写：swarm session 用
+  `@spexcode/session-core` 承载 session record、timeline、parent watch、pending queue、cursor 及其 locks。
+
+**所以合并成本不是零，而是一次跨仓 adopter 迁移**（路线图 M5），在它完成之前删除这座桥会打断一个活着的外部产品。
+
+这条更正本身就是本文方法论的一个反例，值得留在这里：本文的扫描范围是**本仓库**，结论也只该说到本仓库为止；
+`docs/session-legacy-deletion-gate.md:227` 当时写的是 **unproven**（诚实的"没测到"），而本条把它读成了
+**absent**（"不存在"）并据以推出零成本。**「测得 0」与「没测」混用一次，就足以让一条拆除计划建立在不存在的前提上。**
 
 ### 逐条清单（架构层）
 

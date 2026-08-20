@@ -111,3 +111,12 @@ Each proposal names the owner who can act on it, because a finding filed against
 and reads as unowned work. Ownership follows the file the fix touches, not the lane that found the defect: a gap in
 a deletion gate's coverage belongs to that gate's owner even when an unrelated audit proved it, and an evidence
 directory belongs to whoever maintains that evidence. The audit itself never takes the fix.
+
+A conclusion may not travel further than the scan that produced it. This audit reads one repository, so a finding
+that something has no importer here is exactly that and no more; reading it as "has no caller anywhere", and then as
+"costs nothing to delete", crosses from a measurement into an assumption about the world. That is the same collapse
+the campaign forbids elsewhere — a measured zero and an unmeasured surface treated as one thing — and it happened
+here: a downstream deletion cost of zero was derived from a source that said only "unproven". Where a later
+measurement contradicts such a conclusion, the audit keeps the original wording visible, marks which half survived,
+and states the cost that actually applies, because a silently rewritten judgement teaches nothing about how it was
+reached.

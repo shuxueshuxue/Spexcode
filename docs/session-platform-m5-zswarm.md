@@ -372,8 +372,19 @@ bootstrap 完整套件 93 files / 1,288 tests = 1,276 pass + 9 fail + 3 skip，J
 **M5 自身与它无关，这条是量过的**：自 M4 基线 `0b8b5c93d` 起，本分支对 `packages/spec-core` 的改动文件数为 **0**；
 `git.ts` 的 blob 与基线逐字节相同（`081f4e8ae`）。`48228dd02` **不在**本分支祖先里（实测）。
 
-**所以从现在起不要再说"旧 head lint = 0"**：正确措辞是
-**old-head lint = 3 inherited / current-main sync expected to clear**。
+**根因已量清，不是随机，也不是"某个 head 的 lint 就是 3"**：差异取决于**跑的是哪一份 dist**。
+
+  在本 worktree 跑 `./spec-cli/bin/spex.mjs`（加载本 worktree 的 dist）      → **0 error**
+  同一 cwd 跑 `/home/jeffry/spexcode/spec-cli/bin/spex.mjs`（加载 main 的 dist） → **稳定 3 error**
+
+两个 launcher 文件 sha 相同，但各自按自身路径加载**本 checkout 的 dist**。
+也就是 **旧 `git.ts` 源码 × main 那份更严格的解析路径 = 3 error**；main 自己的 `git.ts` 已被
+`48228dd02` 修过，所以 main 自身 lint 0。
+
+**因此措辞要连工具一起说，光说 head 是不完整的**：
+**old-head source × current-main dist = 3 inherited；用 branch-local launcher 跑则 0；
+父侧把 current main 原子同步进落地分支后，用 synced branch-local launcher 重跑即清。**
+本节前一版只写了"old-head lint = 3 inherited"，那句话在用 branch-local launcher 时是假的，已按上面更正。
 
 ### 10.1 我在这条上判错过一次，记在这里
 

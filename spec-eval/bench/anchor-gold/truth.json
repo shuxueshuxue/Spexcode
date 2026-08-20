@@ -1,0 +1,95 @@
+{
+  "schema": "anchor-gold-truth-v1",
+  "unitRange": "1-based inclusive source lines; start/end are exact declaration ranges",
+  "entries": [
+    {"id": "ts-basic", "units": [
+      {"name": "Config", "kind": "interface", "start": 1, "end": 3, "typeOnly": true},
+      {"name": "answer", "kind": "const-data", "start": 5, "end": 5},
+      {"name": "transform", "kind": "const-fn", "start": 7, "end": 9},
+      {"name": "compute", "kind": "function", "start": 11, "end": 13},
+      {"name": "Box", "kind": "class", "start": 15, "end": 21},
+      {"name": "Box.constructor", "kind": "method", "start": 16, "end": 16},
+      {"name": "Box.double", "kind": "method", "start": 18, "end": 20},
+      {"name": "Alias", "kind": "type", "start": 23, "end": 23, "typeOnly": true}
+    ]},
+    {"id": "tsx-basic", "units": [
+      {"name": "PanelProps", "kind": "interface", "start": 3, "end": 5, "typeOnly": true},
+      {"name": "label", "kind": "const-data", "start": 7, "end": 7},
+      {"name": "Panel", "kind": "function", "start": 9, "end": 11},
+      {"name": "renderPanel", "kind": "const-fn", "start": 13, "end": 13}
+    ]},
+    {"id": "python-basic", "units": [
+      {"name": "load", "kind": "function", "start": 3, "end": 4},
+      {"name": "Service", "kind": "class", "start": 6, "end": 14},
+      {"name": "Service.__init__", "kind": "method", "start": 10, "end": 12},
+      {"name": "Service.run", "kind": "method", "start": 13, "end": 14},
+      {"name": "outer", "kind": "function", "start": 16, "end": 19},
+      {"name": "outer.inner", "kind": "function", "start": 17, "end": 18}
+    ]},
+    {"id": "go-basic", "units": [
+      {"name": "Version", "kind": "const-data", "start": 3, "end": 3},
+      {"name": "Config", "kind": "struct", "start": 5, "end": 7},
+      {"name": "Add", "kind": "function", "start": 9, "end": 11},
+      {"name": "Service", "kind": "struct", "start": 13, "end": 13},
+      {"name": "Service.Run", "kind": "method", "start": 15, "end": 17}
+    ]},
+    {"id": "rust-basic", "units": [
+      {"name": "LIMIT", "kind": "const-data", "start": 1, "end": 1},
+      {"name": "Config", "kind": "struct", "start": 3, "end": 5},
+      {"name": "Mode", "kind": "enum", "start": 7, "end": 10},
+      {"name": "add", "kind": "function", "start": 12, "end": 14},
+      {"name": "Service", "kind": "struct", "start": 16, "end": 16},
+      {"name": "Service.run", "kind": "method", "start": 19, "end": 21}
+    ]},
+    {"id": "java-basic", "units": [
+      {"name": "Calculator", "kind": "class", "start": 3, "end": 16},
+      {"name": "Calculator.LIMIT", "kind": "const-data", "start": 4, "end": 4},
+      {"name": "Calculator.constructor", "kind": "method", "start": 6, "end": 7},
+      {"name": "Calculator.add", "kind": "method", "start": 9, "end": 11},
+      {"name": "Calculator.add", "kind": "method", "start": 13, "end": 15}
+    ]},
+    {"id": "ruby-basic", "units": [
+      {"name": "VERSION", "kind": "const-data", "start": 2, "end": 2},
+      {"name": "Calculator", "kind": "class", "start": 4, "end": 12},
+      {"name": "Calculator.initialize", "kind": "method", "start": 5, "end": 7},
+      {"name": "Calculator.add", "kind": "method", "start": 9, "end": 11},
+      {"name": "normalize", "kind": "function", "start": 15, "end": 17}
+    ]},
+    {"id": "ts-ambiguous", "ambiguity": {"duplicate": 2}, "units": [
+      {"name": "duplicate", "kind": "function", "start": 1, "end": 3},
+      {"name": "duplicate", "kind": "function", "start": 5, "end": 7}
+    ]},
+    {"id": "tsx-ambiguous", "ambiguity": {"duplicate": 2}, "units": [
+      {"name": "duplicate", "kind": "function", "start": 1, "end": 3},
+      {"name": "duplicate", "kind": "function", "start": 5, "end": 7}
+    ]},
+    {"id": "python-ambiguous", "ambiguity": {"duplicate": 2}, "units": [
+      {"name": "duplicate", "kind": "function", "start": 1, "end": 2},
+      {"name": "duplicate", "kind": "function", "start": 4, "end": 5}
+    ]},
+    {"id": "go-ambiguous", "ambiguity": {"duplicate": 2}, "units": [
+      {"name": "duplicate", "kind": "function", "start": 3, "end": 5},
+      {"name": "duplicate", "kind": "function", "start": 7, "end": 9}
+    ]},
+    {"id": "rust-ambiguous", "ambiguity": {"duplicate": 2}, "units": [
+      {"name": "duplicate", "kind": "function", "start": 1, "end": 3},
+      {"name": "duplicate", "kind": "function", "start": 5, "end": 7}
+    ]},
+    {"id": "java-ambiguous", "ambiguity": {"Overloads.duplicate": 2}, "units": [
+      {"name": "Overloads", "kind": "class", "start": 1, "end": 9},
+      {"name": "Overloads.duplicate", "kind": "method", "start": 2, "end": 4},
+      {"name": "Overloads.duplicate", "kind": "method", "start": 6, "end": 8}
+    ]},
+    {"id": "ruby-ambiguous", "ambiguity": {"duplicate": 2}, "units": [
+      {"name": "duplicate", "kind": "function", "start": 1, "end": 3},
+      {"name": "duplicate", "kind": "function", "start": 5, "end": 7}
+    ]},
+    {"id": "ts-bad", "parse": "fail", "units": []},
+    {"id": "tsx-bad", "parse": "fail", "units": []},
+    {"id": "python-bad", "parse": "fail", "units": []},
+    {"id": "go-bad", "parse": "fail", "units": []},
+    {"id": "rust-bad", "parse": "fail", "units": []},
+    {"id": "java-bad", "parse": "fail", "units": []},
+    {"id": "ruby-bad", "parse": "fail", "units": []}
+  ]
+}

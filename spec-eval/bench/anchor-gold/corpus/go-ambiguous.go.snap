@@ -1,0 +1,9 @@
+package sample
+
+func duplicate(value int) int {
+	return value
+}
+
+func duplicate(value string) string {
+	return value
+}

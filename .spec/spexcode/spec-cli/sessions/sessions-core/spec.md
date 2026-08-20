@@ -101,6 +101,8 @@ Close retains that record as the one archived session source and records its `cl
 the same atomic record publication. The public projection carries the timestamp without a timeline read, so a
 complete archive index remains proportional only to record count. Older archived records with no timestamp project
 `null`; creation time, manual sort order, and filesystem metadata never impersonate the missing close fact.
+An archived record is a retained, read-only fact: lifecycle writers reject it with an explicit closed/read-only
+reason rather than attempting to read its removed worktree and leaking a materialization error.
 The sibling `launch` artifact is the authoritative resolved first-turn payload, not a best-effort prompt cache.
 The shared layer preserves it across queue drain and failed launch, blocks later delivery debt behind it, and
 hands it back only through the resolved adapter's no-native-identity recovery seam. The adapter completes launch

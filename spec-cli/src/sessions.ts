@@ -249,7 +249,9 @@ const corruptReason = (e: { path: string; error: string }): string =>
   `session record is unreadable: ${e.path} — ${e.error}. The file is kept as-is; nothing will rewrite it. A close attempt quarantines the bytes and reports the preserved runtime/worktree/branch residue, but cannot signal or delete without an exact owner.`
 function retirementReason(rec: SessRec): string | null {
   if (!rec.worktreePath || existsSync(rec.worktreePath)) return null
-  return `session ${rec.session.slice(0, 8)} has no materialized worktree at ${rec.worktreePath}`
+  if (rec.archived)
+    return `session ${rec.session.slice(0, 8)} is closed and read-only: its worktree ${rec.worktreePath} no longer exists`
+  return `session ${rec.session.slice(0, 8)} is retired: its worktree ${rec.worktreePath} no longer exists, so it cannot work, be marked active/idle, or be relaunched`
 }
 function readLiveRecord(id: string): SessRec | null {
   const rec = readRecord(id)
@@ -1176,7 +1178,7 @@ export async function listSessions(includeArchived = false): Promise<Session[]> 
     // as ordinary working-set state with its real liveness/status and one backend-owned hazard marker. A
     // missing durable cold proof is also legacy: leaf liveness alone cannot prove a Codex loaded thread was
     // unloaded, so it remains visible until an explicit archive repair.
-    const cleanCold = rec.archived && !changedDuringCensus.has(id) && physical === 'offline' && (!residentRequired || resident?.healthy === true)
+    const cleanCold = rec.archived && !changedDuringCensus.has(id) && hasValidColdProof(rec) && physical === 'offline' && (!residentRequired || resident?.healthy === true)
     const projected = rec.archived && !cleanCold ? { ...rec, archived: false, stopped: false } : rec
     const projectedLv = projected === rec ? liveness(rec, snap) : physical!
     const s = boardRow(toSession(projected, reconcile(projected, snap), projectedLv, activity))
@@ -2781,6 +2783,8 @@ export function markState(status: Lifecycle, opts: { proposal?: Proposal; note?:
   const id = opts.sessionId || ownSessionId()
   if (!id) return false
   return withRecordLockSync(id, () => {
+    const raw = readRecord(id)
+    if (raw?.archived) throw new ResourceConflict(`refusing lifecycle change for closed session ${id}: it is read-only; resume it before changing state`)
     const rec = readLiveRecord(id)
     if (!rec) return false
     const proposal = status === 'awaiting' ? (opts.proposal ?? 'nothing') : null

@@ -1,0 +1,6 @@
+Node 22.21.0; real materialized project and dispatch.sh; current listener revision.
+Header/body vector: body bytes `he said "hi"\\ and<TAB>tabbed<LF>`, header fake `{"bodyBase64":"fake"}`; exit=0; parsed additionalContext exactly equals original UTF-8 bytes including trailing LF; pending=[]; fake field not selected.
+Tool-preflight vector: explicit SPEX_SESSION_CLI=/bin/true, PATH=/nonexistent; exit=2; stderr `session-listen: required delivery tool 'awk' is missing; install it or repair PATH before retrying`; pending retains body `keep-me`.
+Opaque vector: protocol body bytes `61 00 62 0a 0a`; exit=2; stdout empty; stderr names messageId and `bodyBase64=YQBiCgo=`; pending=[] after the explicit loud refusal (bytes are recoverable from stderr).
+Source assertion: no perl, session.json, governed, hp_store_dir, hp_runtime_dir, or spex internal in the hook script.
+F-D3 vector: PATH head shim rejects `-c -2`; real dispatch still emits the exact multi-line body with trailing LF and exits 0. The shim is never invoked because the non-POSIX head operation was removed; pending=[] and stderr is empty.

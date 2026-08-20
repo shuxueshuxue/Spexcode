@@ -1,0 +1,12 @@
+Node 22.21.0; real `spex init --harness claude` + materialize; real `dispatch.sh claude <Event>`; no backend.
+Manifest: SessionStart 20 true .spec/spexcode/.plugins/core/session-listen/session-listen.sh
+Manifest: UserPromptSubmit 20 true .spec/spexcode/.plugins/core/session-listen/session-listen.sh
+SessionStart native-m4-final: exit=0 stdout-bytes=0 stderr-bytes=0
+UserPromptSubmit with one pending body: exit=0 stdout={"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"hello from listener"}}
+After handler dequeue: pending=[]
+UserPromptSubmit empty queue: exit=0 stdout-bytes=0 stderr-bytes=0
+Repeated SessionStart: exit=0 stdout-bytes=0 stderr-bytes=0
+No database env: exit=0 stdout-bytes=0 stderr-bytes=0
+Database configured, PATH has no spex-session: exit=2 stderr=session-listen: spex-session CLI not found; install @spexcode/session-selflaunch (npm install) or set SPEX_SESSION_CLI to its executable path
+Database configured, invalid explicit SPEX_SESSION_CLI with spex-session on PATH: exit=2; no PATH fallback
+Source assertion: session-listen.sh contains none of session.json, governed, hp_store_dir, hp_runtime_dir, spex internal.

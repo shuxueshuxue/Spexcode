@@ -1,0 +1,22 @@
+# Verbatim syscall lines selected from the inventory traces at product commit ca51f4ca5281439bbc45933402e502069100a5a0.
+2076884 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/project/packages/session-core/dist/index.js", O_RDONLY|O_CLOEXEC) = 20
+2076884 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/project/packages/session-core/dist/internal.js", O_RDONLY|O_CLOEXEC) = 20
+2076884 access("/tmp/spex-m4-self-launch-canonical.fKhk1p/project/spexcode.json", F_OK) = 0
+2076884 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/store/projects/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/trees/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/hooks-manifest", O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666) = 20
+2076884 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/project/CLAUDE.md", O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666) = 20
+2076884 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/project/.codex/hooks.json", O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666) = 20
+2076884 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/project/.gitignore", O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666) = 20
+2076884 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/project/.git/spexcode/contract-filter.sh", O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666) = 20
+2076884 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/store/projects/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/harness-selection-v1", O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0666) = 20
+2077095 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/store/projects/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/trees/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/hooks-manifest", O_RDONLY|O_NOCTTY) = 3
+2077123 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/store/projects/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/trees/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/harnesses", O_RDONLY|O_NOCTTY) = 3
+2077220 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/store/projects/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/sessions/*/session.json", O_RDONLY|O_NOCTTY) = -1 ENOENT (No such file or directory)
+2077222 execve("/usr/bin/grep", ["grep", "-q", "^[[:space:]]*\"governed\"[[:space:]]*:[[:space:]]*true,\\?$", "/tmp/spex-m4-self-launch-canonical.fKhk1p/store/projects/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/sessions/self-launch-trace-codex/session.json"], 0x63ec85c10800 /* 91 vars */) = 0
+2077222 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/store/projects/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/sessions/self-launch-trace-codex/session.json", O_RDONLY|O_NOCTTY) = -1 ENOENT (No such file or directory)
+2077376 execve("/usr/bin/mkdir", ["mkdir", "-p", "/tmp/spex-m4-self-launch-canonical.fKhk1p/store/projects/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/sessions/self-launch-trace-codex"], 0x564fc297d550 /* 91 vars */) = 0
+2077296 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/store/projects/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/sessions/self-launch-trace-codex/spec-checked", O_WRONLY|O_CREAT|O_TRUNC, 0666) = 3
+2077514 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/store/projects/-tmp-spex-m4-self-launch-canonical-fKhk1p-project/sessions/self-launch-trace-codex/spec-of-file-seen", O_WRONLY|O_CREAT|O_APPEND, 0666) = 3
+2077162 openat(AT_FDCWD, "/tmp/.spex-hook-2077129.err", O_WRONLY|O_CREAT|O_TRUNC, 0666) = 3
+2077659 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/db/sessions.sqlite", O_RDWR|O_CREAT|O_NOFOLLOW|O_CLOEXEC, 0644) = 20
+2077659 openat(AT_FDCWD, "/tmp/spex-m4-self-launch-canonical.fKhk1p/db/sessions.sqlite-journal", O_RDWR|O_CREAT|O_NOFOLLOW|O_CLOEXEC, 0644) = 21
+2064337 statx(AT_FDCWD, "/home/jeffry/spexcode/spec-cli/src/contract-filter.ts", AT_STATX_SYNC_AS_STAT, STATX_ALL, {stx_mask=STATX_ALL|STATX_MNT_ID, stx_attributes=0, stx_mode=S_IFREG|0664, stx_size=11604, ...}) = 0

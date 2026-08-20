@@ -1,5 +1,23 @@
 ---
 scenarios:
+  - name: adopter-owned-files-survive-adoption
+    tags: [cli]
+    code:
+      - spec-cli/src/harness.ts
+    description: >-
+      In a fresh git repo that PREDATES SpexCode, hand-write the two files adoption lands on top of: a
+      `.claude/settings.json` carrying the user's own permissions, env, statusLine and a PreToolUse hook, and
+      a `.claude/skills/distill/SKILL.md` whose name collides with a skill SpexCode generates. Run the real
+      `spex init --harness claude`, then `spex materialize` twice more, then `spex uninstall`. Read the two
+      files back at each step.
+    expected: >-
+      After init the settings.json still carries every key and hook the user wrote, with SpexCode's
+      dispatch.sh entries merged in beside them (their PreToolUse group intact and first); the colliding
+      skill is byte-identical and the collision was REPORTED, not resolved silently. Repeat materializes
+      replace our entries rather than accumulate them (exactly one dispatch.sh entry per event). After
+      uninstall the settings.json is semantically identical to the one they wrote — the file is never deleted
+      while it carries their content — and the colliding skill is still byte-identical. Zero of the adopter's
+      bytes are lost at any step.
   - name: non-git-workspace-is-actionable
     tags: [cli]
     test:

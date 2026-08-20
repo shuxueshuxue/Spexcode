@@ -169,6 +169,14 @@ test('Tree-sitter extractors reject syntax recovery instead of returning partial
   }
 })
 
+test('Tree-sitter parses the current governed TypeScript source before anchor resolution', async () => {
+  const x = treeSitter()
+  await assert.doesNotReject(() => x.extract(
+    readFileSync(join(ROOT, 'packages/spec-core/src/git.ts'), 'utf8'),
+    'packages/spec-core/src/git.ts',
+  ))
+})
+
 // ---- anchorHitCommits: historical file revisions, OR semantics, per-commit dedupe ----
 
 function gitAvailable(): boolean {

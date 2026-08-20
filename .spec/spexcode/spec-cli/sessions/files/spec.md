@@ -30,14 +30,20 @@ the target, so a listed path remains a live reference and may point anywhere the
 
 The agent-facing porcelain is `spex session files add <path>`, `spex session files ls`, and
 `spex session files retract <path>`. `add` resolves a relative input against the caller's current
-directory and stores the resulting absolute path exactly once; `ls` reads the list; `retract` removes that
-exact resolved path. The spelling follows the shared CLI vocabulary: `add` appends a record, `ls` reads a
+directory and stores the resulting absolute path exactly once, but only while it names a readable regular file;
+a missing, unreadable, or non-file target is refused before the list changes. `ls` reads every registered path
+and marks a target that has since disappeared or become unreadable as invalid rather than printing it like a
+working handoff; `retract` removes that exact resolved path. The spelling follows the shared CLI vocabulary: `add` appends a record, `ls` reads a
 collection, and `retract` withdraws the author's published record. All three operate on the calling agent's
 session, so an agent needs only its artifact path to publish it.
 
 The reference is intentionally host-local. An absolute path preserves the location the posting agent meant
 even when a later CLI command has another cwd; a copied session record on another machine cannot make that
 path portable, and therefore reports a missing file rather than silently resolving a different local path.
+Raw run artifacts default to a persistent directory outside the product repository. Putting them in the
+worktree makes the merge-readiness dirty-tree gate demand that generated evidence be committed as product
+source, while this repository deliberately does not accept raw run artifacts. Before review, the publisher
+checks every registered path still exists; `ls` is the product read that makes a broken handoff visible.
 
 ## download is the only byte transfer
 

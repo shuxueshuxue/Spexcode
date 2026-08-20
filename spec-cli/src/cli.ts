@@ -70,7 +70,7 @@ async function assertDaemonDependencies(command: 'spex serve' | 'spex dashboard'
 // (loadConfig on a malformed spexcode.json) surfaces as uncaughtException, not unhandledRejection, so BOTH
 // paths route through the same printer.
 function fatal(e: unknown): never {
-  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError', 'DashboardAssetError', 'GitWorkspaceError'].includes(e.name)) console.error(`spex: ${e.message}`)
+  if (e instanceof Error && ['BackendError', 'ConfigError', 'UsageError', 'GuardError', 'DashboardAssetError', 'GitWorkspaceError', 'SessionFileError'].includes(e.name)) console.error(`spex: ${e.message}`)
   else console.error(e)
   process.exit(1)
 }
@@ -99,7 +99,7 @@ function flushExit(code = 0): Promise<never> {
 }
 const has = (name: string) => process.argv.includes(`--${name}`)
 // bare positionals after argv index `from`, skipping flags and their values (selectors for ls/watch).
-const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--ssh', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
+const VALUE_FLAGS = new Set(['--status', '--as', '--interval', '--propose', '--note', '--node', '--prompt', '--prompt-file', '--timeout', '--reason', '--out', '--content-dir', '--password', '--tls-cert', '--tls-key', '--harness', '--launcher', '--harness-session', '--port', '--api', '--api-port', '--host', '--preset', '--limit', '--session', '--depth', '--focus', '--keys', '--ssh', '--allow-stop', '--allow-resume', '--ttl-ms', '--wait-ms', '--adapter', '--thread', '--tmux', '--worktree', '--branch', '--to', '--name', '--base', '--candidate', '--path', '--owner', '--details', '--variant', '--cli', '--count', '--ids'])
 const EXPLICIT_BACKEND_ROUTE_FLAGS = ['api', 'port', 'password', 'insecure'] as const
 const EXPLICIT_BACKEND_VALUE_FLAGS = EXPLICIT_BACKEND_ROUTE_FLAGS
   .filter((name) => VALUE_FLAGS.has(`--${name}`))
@@ -964,7 +964,7 @@ if (cmd === 'serve') {
     }
     const files = await import('./session-files.js')
     if (verb === 'ls') {
-      for (const file of files.listSessionFiles(id)) console.log(file)
+      for (const file of files.inspectSessionFiles(id)) console.log(file.valid ? file.path : `INVALID ${file.path} — ${file.reason}`)
     } else if (verb === 'add') {
       const result = files.addSessionFile(id, path!, withSessionRecordLockSync)
       console.log(result.added ? `posted ${result.path}` : `already posted ${result.path}`)
@@ -1490,6 +1490,15 @@ if (cmd === 'serve') {
     if (r.ready) { console.log('ready'); process.exit(0) }
     console.log(r.reason)
     process.exit(1)
+  } else if (sub === 'review-gate') {
+    const { runReviewAcceptance } = await import('./review-acceptance.js')
+    const result = await runReviewAcceptance({
+      candidate: flag('candidate'),
+      base: flag('base'),
+      onProgress: (line) => console.error(`[review acceptance] ${line}`),
+    })
+    console.log(has('json') ? JSON.stringify(result, null, 2) : result.report)
+    process.exit(result.ok ? 0 : 1)
   } else if (sub === 'hook-prompt') {
     // The internal render seam shared by hook handlers and GuidanceCatalog. The hooks call it only on branches
     // that already emit model-facing text; their hot no-op paths remain pure shell.

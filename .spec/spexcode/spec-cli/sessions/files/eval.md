@@ -6,12 +6,14 @@ scenarios:
     description: >-
       In an isolated initialized project, create a real session with the public CLI, write an artifact outside
       its worktree, then run the public `spex session files add`, `ls`, and `retract` commands from that
-      session's worktree. Inspect the dedicated session `files.json` and the artifact before and after each
-      operation.
+      session's worktree. Also attempt to add a missing path, and delete a successfully registered artifact
+      before listing it again. Inspect the dedicated session `files.json` and the artifact around each operation.
     expected: >-
-      `add` records one absolute path in the session-owned list without changing the artifact's bytes or
-      location; `ls` reports that path; and `retract` removes only that entry. A relative input resolves from
-      the posting CLI's cwd. No artifact copy, upload, staging file, or worktree-local session state appears.
+      `add` records one readable regular file as an absolute path without changing its bytes or location, and
+      refuses a missing, unreadable, or non-file target before mutating the list. `ls` reports the live path,
+      then marks the registered path `INVALID` after its target disappears instead of presenting a dead link as
+      usable; `retract` removes only that entry. A relative input resolves from the posting CLI's cwd. No artifact
+      copy, upload, staging file, or worktree-local session state appears.
   - name: dashboard-shows-live-files-and-downloads-current-bytes
     tags: [frontend-e2e, backend-api]
     test: spec-dashboard/test/session-files.e2e.mjs

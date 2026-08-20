@@ -90,6 +90,9 @@ the agent from one verb, picked by an optional topic:
   commands remain authored profiles, never silent defaults. The sessions section names the worker cap's default, precedence,
   and the important meaning of "active": it counts compute slots, not total session rows, so human-waiting
   sessions do not block launches.
+  The review section mirrors [[review-acceptance]]'s repeated suite, exact-checkout preparation, cache
+  provenance, and evidence-bearing flaky expiry fields; it teaches configuration, while the declaration
+  remains the automatic caller.
   It mirrors the project `Config` type in `layout.ts` (the single source of truth — the manual
   restates the type's own field comments, it does not invent fields, and it omits fields the type keeps
   only as retired compat for the loud notice). Its uploads section names every transfer number, says that
@@ -104,7 +107,8 @@ the agent from one verb, picked by an optional topic:
   how the [[content-filter]] behaves on a host-tracked contract file, and the forgetting-law guarantees
   (any-order switching, `spex uninstall` as the empty policy).
 - **`files` → the agent-to-human PATH handoff.** The three `session files` verbs, the live and host-local
-  meaning of a posted absolute path, and the dashboard's click-time preview/download. It states the safe
+  meaning of a posted absolute path, add-time readable-file check, list-time invalid marker, the default
+  persistent evidence location outside the product repository, and the dashboard's click-time preview/download. It states the safe
   preview types and 2 MiB refusal ceiling rather than implying every file can render, and distinguishes this
   from [[file-attach]] so an agent does not upload an artifact merely to hand it back.
 - **`web` → the agent-to-human LOOPBACK handoff.** The three `session web` verbs, their explicit-port

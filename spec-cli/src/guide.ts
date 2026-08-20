@@ -372,6 +372,21 @@ Example:
 A launcher \`cmd\` that is a HOST-SPECIFIC ABSOLUTE PATH belongs in spexcode.local.json — the committed file
 must stay free of machine paths.
 
+── REVIEW ACCEPTANCE (spexcode.json — portable project proof) ──
+  review.runs             repeat count for BOTH candidate and main; must be >= 2.
+  review.setup            optional preparation command run in every fresh exact-commit checkout.
+  review.timeoutMs        default timeout for each setup/suite command.
+  review.suites[]         ordered { id, command, format, timeoutMs? } rows. format is "tap" for named
+                          test outcomes or "exit" for checks such as typecheck.
+  review.flaky[]          temporary candidate-difference exemptions. Each names suite::test, paired pass/fail
+                          observations on one full SHA with timestamps + durable sources, and BOTH expiry
+                          limits: expiresAfterDays and expiresAfterBaselineCollections.
+When configured, \`spex session done --propose merge\` runs this automatically. Candidate and main each run the
+configured count; main is cached outside the repository by exact SHA + suite config + runtime. Every declaration
+states fresh/cached provenance, SHA, collection time, and run counts. Flaky failures remain printed even when
+subtracted, and expire unless a later repeated baseline records another pass/fail flip. \`ask\`, \`park\`, and
+close-pending never run or wait on this gate.
+
 ── RESOURCE GOVERNANCE (spexcode.json — portable project budgets) ──
   resources.sessionRssMiB      resident-memory budget per governed session. Default 1024.
   resources.backendRssMiB      resident-memory budget for a backend/shared runtime owner. Default 2048.
@@ -628,15 +643,20 @@ Use the session's file list when an artifact belongs in the human's hands:
   spex session files retract <path>  withdraw one path
 
 Posting resolves a relative path from your current directory and records its absolute path beside the global
-session record. It copies, moves, stages, and uploads NOTHING. The path is live: editing the file after
+session record only after proving it is a readable regular file. It copies, moves, stages, and uploads NOTHING. The path is live: editing the file after
 posting changes what the human downloads. The reference is host-local; opening the session elsewhere cannot
 make its path point at another machine's file.
+
+Put raw run artifacts in a persistent directory OUTSIDE the product repository by default. A worktree artifact
+makes merge readiness report a dirty tree and pressures generated proof into the product commit. Before review,
+run \`spex session files ls\`: a target that disappeared or became unreadable is printed as \`INVALID\` and must be
+recreated or retracted; a valid path prints normally.
 
 The session page's top-right files icon is grey while the list is empty. Once live, it opens the posted list;
 choosing a path previews its current text or raster-image bytes in a pop-out, while the adjacent download tool
 downloads it through the backend at that moment. Previews are limited to 2 MiB, text and PNG/JPEG/GIF/WebP;
-other types and larger files say to download instead. A missing, moved, or unreadable target stays listed but
-reports that it no longer exists. The backend refuses a preview or download for any path not on that session's
+other types and larger files say to download instead. A missing, moved, or unreadable target stays listed and is
+marked invalid by the CLI; preview/download reports that it no longer exists. The backend refuses a preview or download for any path not on that session's
 list.
 
 This is the reverse of a dashboard attachment: [[file-attach]] sends human bytes to an agent. Files publishes

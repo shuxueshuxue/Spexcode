@@ -398,3 +398,52 @@ lane J 报这个现象时，我在干净树上连跑两次 `spex spec lint`，�
 只不过这次是我自己犯的，而且我还用它去否定了一个真实的报告。
 
 J 报得对，而且它没有越界去改那个共享文件，这点也是对的。
+
+## 11. 更正一条归因：活 checkout 与 proposal 不是"冲突"，是两条无共同祖先的历史
+
+人类批准了不 push 的本地合并后，父侧在 clone 里建了 `local/codex-swarm-five-integrated-m5` → `d97c3e87e`
+（`b9b3fa701` 纯 FF、base..ref 恰好 2 commits，我复核过），并清理了预演 refs/worktree。
+同时记录活 checkout 的 `codex/swarm-worktree-isolation@113c78e76` 与 proposal "因独立删除/API 变更发生真实冲突"，
+已回滚保持 clean。**回滚这个处置是对的，但那句归因不成立**，实测如下。
+
+### 11.1 测到的
+
+    git merge-tree --write-tree 113c78e76 d97c3e87e
+      → fatal: refusing to merge unrelated histories
+    git merge-base 113c78e76 b9b3fa701
+      → 空
+
+往根上查：
+
+| 分支 | 根 commit | 所属 |
+|---|---|---|
+| proposal 基线 `b9b3fa701` | `e9504d008` | 被 `origin/codex/swarm-five-integrated` 包含 |
+| 活 checkout `113c78e76` | **`113c78e76` 自己** | 单 commit 的**孤儿历史** |
+
+加 `--allow-unrelated-histories` 强制合，得到 **2245 条 CONFLICT，几乎全是 add/add**，
+连 `.agents/skills/…` 这类与 ZSwarm 毫无关系的文件都在冲突列表里。
+
+### 11.2 为什么这个数字不能当作"产品文件真实冲突"
+
+2245 是**把两棵不相干的树硬贴在一起的必然产物**——同名文件在两侧各自独立存在，于是逐个 add/add。
+它**不含任何关于 ZSwarm 改动是否与该 lane 兼容的信息**。
+把它读成"proposal 与该分支有真实冲突"，会把一个血脉归属问题误诊成一个冲突解决问题。
+
+### 11.3 顺带记一条判据本身的坑
+
+我第一次跑 `merge-tree` 拿到 **exit=128**，差点当成"冲突已证实"。
+**128 是命令失败/拒绝，不是冲突判据**；merge-tree 报冲突时是 **exit 1**。
+是读了 stderr 才看到 `refusing to merge unrelated histories`。
+"非零退出"本身不说明退出的理由——这与本账 §6 那条"跑不起来的门不是通过的门"是同一件事的另一面：
+**一个状态码在你读懂它之前，不是证据。**
+
+### 11.4 因此 §4 第 3 步的说法要收紧
+
+§4 写的是"合并前重跑对方侧门，因为 base 可能已经前移"。按上面的测量，**问题不是前移，是分叉到了另一条根**。
+所以真正待决的既不是"base 前移"也不是"冲突待解决"，而是一个归属决定：
+
+**z-code 的 swarm 工作延续哪条血脉**——proposal 所基于的 `e9504d008` 那条
+（`origin/codex/swarm-five-integrated`），还是活 checkout 现在这条单 commit 孤儿分支。
+
+这个决定属于 z-code owner，不属于本 campaign。在它作出之前，"把 proposal 合进活 checkout 当前分支"
+这句话本身没有可执行的含义。

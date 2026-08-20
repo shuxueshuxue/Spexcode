@@ -33,6 +33,32 @@ M0 的 G.1 L09 写着「本仓库没有 production importer……external ZSwarm
   ZSwarm 侧的删除是 z-code 的改动，需要该仓的所有权；本 lane 交付精确 kill list 与已证可用的替代物，
   使那一步成为机械改动，但**不代它落刀**——跨产品单方面改源码不是集成方的权限。
 
+## 2.1 跨仓落地前必须先说的一件事：ZSwarm 不在 z-code 的 source-of-truth 分支上
+
+授权跨仓实现之后，我先去定位"真实 source-of-truth branch 的最新可复核 head"。实测结果与直觉相反：
+
+| 事实 | 证据 |
+|---|---|
+| z-code 声明的主干是 `zcode-spec` | `/home/jeffry/zcode` 的 `spexcode.json` → `"mainBranch": "zcode-spec"` |
+| 本机有它，作为远程跟踪引用 | `refs/remotes/origin/zcode-spec` @ `7a6db2350`（2026-08-15） |
+| origin 指向 mbp 的权威 checkout | `ssh://mbp-tail/Users/jeffryglm/Codebase/temp/z-code` |
+| **主干上没有任何 swarm 源文件** | `git ls-tree -r origin/zcode-spec \| grep -i swarm` → **0** |
+| swarm 只在一条未合并的特性分支上 | `codex/swarm-five-integrated` @ `b9b3fa701`（2026-08-16），**领先主干 1433 个提交，未合并** |
+
+**这决定了迁移只能落在哪一支。** 若从 `origin/zcode-spec` 开分支，那里**根本没有 ZSwarm adapter**——
+在一条从未有过 importer 的分支上"实现迁移"，等于凭空造一个 importer，而那正是本里程碑明令禁止的事
+（禁令的理由与"不得在本仓编造 importer"完全相同：迁移必须有被迁移物）。
+
+因此本 lane 的取舍是：**承载 ZSwarm 的那条分支就是 ZSwarm 这项工作的可复核 head**——
+`codex/swarm-five-integrated` @ `b9b3fa701`，它同时是全部 swarm 分支里最新的一条。
+迁移分支从它开出，不从 `zcode-spec` 开。这条选择连同上表一并记录，因为它推翻的是一个合理但错误的默认假设，
+而不是一个可有可无的细节：**主干与"这项工作的真实基线"在这个仓库里并不是同一个东西。**
+
+一并记录两条尚未测量的事实，不猜：
+- `origin/zcode-spec` 是本机的远程跟踪快照（2026-08-15），**未向 mbp 重新 fetch**，mbp 上是否已前进 `NOT-MEASURED`；
+- swarm 分支是否已在 mbp 上以别的名字合并进主干，`NOT-MEASURED`。
+两者都不影响上面的取舍（迁移物只存在于 swarm 分支），但影响最终跨仓落地时的合并目标，落地计划里必须先复测。
+
 ## 3. 门禁与结果
 
 （施工阶段填写。）
